@@ -319,6 +319,47 @@ public class CatalogLineageResource {
             .filter(ds -> matchChanged(ds != null ? ds.getLastModifiedDate() : null, changedSince))
             .count();
 
+        long odsNodeCount = filteredNodes
+            .values()
+            .stream()
+            .filter(ds -> "ODS".equals(normalizeLayer(ds != null ? ds.getWarehouseLayer() : null)))
+            .count();
+        long sourceNodeCount = nodeDtos
+            .stream()
+            .filter(node -> "source".equalsIgnoreCase(stringValue(node.get("kind"))))
+            .count();
+        List<String> lineageEvidenceReasons = new ArrayList<>();
+        if (datasetEdges.isEmpty()) {
+            lineageEvidenceReasons.add("TABLE_LINEAGE_EVIDENCE_MISSING");
+        }
+        if (upstreamEnabled && odsNodeCount == 0 && sourceNodeCount == 0) {
+            lineageEvidenceReasons.add("UPSTREAM_SOURCE_OR_ODS_EVIDENCE_MISSING");
+        }
+        if (withColumns && columnLineages.isEmpty()) {
+            lineageEvidenceReasons.add("COLUMN_LINEAGE_EVIDENCE_MISSING");
+        }
+        String lineageEvidenceState = datasetEdges.isEmpty()
+            ? "MISSING"
+            : lineageEvidenceReasons.isEmpty()
+                ? "COMPLETE"
+                : "PARTIAL";
+        Map<String, Object> lineageEvidence = new LinkedHashMap<>();
+        lineageEvidence.put("state", lineageEvidenceState);
+        lineageEvidence.put("reasonCodes", List.copyOf(lineageEvidenceReasons));
+        lineageEvidence.put("tableLineageCount", datasetEdges.size());
+        lineageEvidence.put("columnLineageCount", columnLineages.size());
+        lineageEvidence.put("odsNodeCount", odsNodeCount);
+        lineageEvidence.put("sourceNodeCount", sourceNodeCount);
+        lineageEvidence.put("columnEvidenceRequested", withColumns);
+        lineageEvidence.put(
+            "message",
+            switch (lineageEvidenceState) {
+                case "COMPLETE" -> "当前快照已包含表级、上游边界和字段级血缘证据。";
+                case "PARTIAL" -> "当前快照的血缘证据不完整，请根据原因码补齐源/ODS 或字段证据。";
+                default -> "当前快照没有可证明的表级血缘关系。";
+            }
+        );
+
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("datasetId", datasetId.toString());
         payload.put("direction", dir);
@@ -354,6 +395,7 @@ public class CatalogLineageResource {
         payload.put("nodes", nodeDtos);
         payload.put("edges", edgeDtos);
         payload.put("columnLineages", columnLineages);
+        payload.put("lineageEvidence", lineageEvidence);
         audit.auditAction(
             "CATALOG_LINEAGE_IMPACT_VIEW",
             AuditStage.SUCCESS,

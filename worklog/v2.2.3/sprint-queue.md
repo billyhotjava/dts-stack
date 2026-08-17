@@ -2015,3 +2015,28 @@
 **执行顺序**: F0 → F1/T01 ∥ F2 ∥ F3/T01 → F1/T02 → F3/T02 → F4 → F5 → F6；编码全部结束后集中执行一次真实 E2E。
 **关键决策**: `CatalogAssetType + CatalogAssetKey` 仍是唯一资产身份；`CatalogAssetRegistrationService` 是稳定物理资产唯一 command boundary；工程质量与治理数据质量分离；发布命令只保存 rule/version/binding/run 引用和 checksum；OpenMetadata 故障不删除 DTS 资产；不新增菜单、页面、资产/血缘/质量/发布台账。
 **已知风险**: 本地 367 个目录资产对应 0 条语义投影，43 个 serving projection 全部 SYNC_PENDING，字段血缘为 0，117 条质量运行全部失败且只覆盖 1 个 dataset；存量 apply、UI 与最终验收在 F0 关闭前不得开始。
+
+## Sprint-94: 治理型商业智能主线收敛 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-94-202608-governed-bi-convergence`
+**时间盒**: 2026-08-17 ～ 2026-09-18（25 个工作日）
+**状态**: BLOCKED（G0 未过：Sprint-94 当前登录/API 尚未复验；Chrome 95 未验；A1～A4 与目标环境观测来源未取得；后端聚焦测试被 root-owned `target/` 阻断；GitNexus indexed=`76d9657`、current=`a0a9fc0`，仍 stale）
+**类型**: Architecture Convergence / Full-stack / UI Productization
+**目标**: 业务分析人员从平台已发布、已治理的 DWS/ADS 数据集出发，在统一查询、安全和版本链中创建分析、编排并发布看板；发布受众由平台统一登记。
+**依赖**: 复用 QueryDataset、CatalogAssetKey/BI_DATASET、Analytics Card/Dashboard/Revision、QueryExecutionFacade 与平台 BiReportLink；承接 Sprint-13 薄语义层方向和 Sprint-45 页面断链审计；`CatalogAssetRegistrationService` 仅负责物理 DATASET observation，QueryDataset 逻辑身份复用既有 mapping/access/classification/report-link seam（见 `assets/dependency-boundary.md`）；不新增菜单、数据集/分析/权限/发布平行 owner，Sprint-92 预留范围不变。
+
+**2026-08-17 范围裁剪**: 原 F5 已移出活跃 Feature，契约交接到 `assets/deferred-scope-handoff.md`。Metabase 仿造功能改为**渐进退役**（S0 盘点/冻结/建立观测口 → S1 只读兼容准备 → S2 兼容重定向 → S3 迁移 apply → S4 物理退役），本 Sprint 只做 S0：产出 32 条静态路由、动态菜单和后端旧写 surface 分母，登记逐项 source/window/value-or-UNKNOWN 与观测起点，新建产物入口收敛到 canonical；**不重定向、不关闭旧写、不迁移、不删除**。不存在的历史调用量不得伪造，连续 14 天观测可读前不得进入 S1。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与兼容盘点（含退役 S0） | P0 | 3 | READY（T01/T02 READY，T03 BLOCKED） |
+| F1-分析数据集唯一主线 | P0 | 2 | DRAFT |
+| F2-自助分析设计服务 | P0 | 2 | DRAFT |
+| F3-统一分析运行网关与权限 | P0 | 2 | DRAFT |
+| F4-看板版本发布与受众 | P0 | 2 | DRAFT |
+| F6-集中验证发布与运维 | P0 | 2 | BLOCKED（T01 BLOCKED，T02 DRAFT） |
+
+**统计**: READY=2，DRAFT=9，BLOCKED=2，IN_PROGRESS=0，DONE=0（共 **13 Task**；顺延范围不在 `features/`，不参与统计）。
+**执行顺序**: F0 → F1 → F2 → F3 → F4 → F6；编码完成后只运行一次集中三角色 Chrome 95 纵向 E2E，失败仅针对断点重跑。
+**关键决策**: 平台 QueryDataset 是 BI 数据集唯一 owner；QueryDatasetVersion 发布时保存不可变 semantic snapshot/checksum；逻辑 BI_DATASET 不进入物理 `CatalogAssetRegistrationService.observe`；新建分析以 `dts.analysis/v1` 复用 `analytics_card`；`CardEditorRoutePage` 保留兼容分流并新增 analysis 分支；`AnalysisQueryGateway` 收口语义/分析/看板查询；`analytics_revision` 承载发布版本；`bi_report_link` 承载受众；权限只用 `read/write/export`；首轮 Expand-only，无 DROP。
+**已知风险**: 当前 Analytics Card/有效 Dashboard/Database/Semantic Model/VDS 与平台 Query Dataset 均为 0，只有 1 个 Screen/1 条 BI 登记；Security 仍有 broad permitAll；32 条路由调用量及目标环境容量均 UNKNOWN 且尚无确认的历史来源；`SemanticCardEditorPage` 被 5 条路由共用；`ScreenWarmupService:152` 作为 S3 owner 的精确临时例外；与 Sprint-93 时间盒完全重叠；13 Task 仍超期则触发二次裁剪（F4/T02 顺延，不压缩 F6 验收）。

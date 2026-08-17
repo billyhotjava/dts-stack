@@ -123,6 +123,26 @@ export type ModelSpecStageGate = {
 	blockers: ModelSpecGateBlocker[];
 };
 
+export type ModelServingSyncStatus = {
+	modelSpecId: string;
+	catalogAssetKey?: string | null;
+	syncStatus: "NOT_REGISTERED" | "SYNC_PENDING" | "SYNCED" | "SYNC_FAILED";
+	syncAttempts: number;
+	lastSyncError?: string | null;
+	nextSyncAt?: string | null;
+	updatedAt?: string | null;
+	version: number;
+	servingReady: boolean;
+	latestPublishedRef?: Record<string, unknown> | null;
+	servingRef?: Record<string, unknown> | null;
+};
+
+export type ModelServingSyncRetryResult = {
+	status: ModelServingSyncStatus;
+	replayed: boolean;
+	correlationId?: string | null;
+};
+
 export type ModelSpecReclassificationPreview = {
 	eligible: boolean;
 	fromType: ModelSpecType;
@@ -291,6 +311,19 @@ export const getModelSpecRevision = (id: string, revision: number) =>
 export const getModelSpecStageGates = (id: string) =>
 	api.get<ModelSpecStageGate[]>({
 		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(id)}/stage-gates`,
+		_skipErrorToast: true,
+	} as any);
+
+export const getModelServingSyncStatus = (id: string) =>
+	api.get<ModelServingSyncStatus>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(id)}/serving-sync`,
+		_skipErrorToast: true,
+	} as any);
+
+export const retryModelServingSync = (status: ModelServingSyncStatus) =>
+	api.post<ModelServingSyncRetryResult>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(status.modelSpecId)}/serving-sync/retry`,
+		headers: { "If-Match": `"model-serving-sync:${status.modelSpecId}:${status.version}"` },
 		_skipErrorToast: true,
 	} as any);
 
@@ -726,6 +759,39 @@ export type ReleaseCandidateEntryEvidence = {
 	repairCode?: string | null;
 };
 
+export type ReleaseCandidateGovernanceQualityEvidence = {
+	assetKey: string;
+	ruleId?: string | null;
+	ruleVersionId?: string | null;
+	bindingId?: string | null;
+	runId?: string | null;
+	status: string;
+	finishedAt?: string | null;
+	evidenceChecksum?: string | null;
+	violations: string[];
+};
+
+export type ReleaseCandidateGovernanceQuality = {
+	required: boolean;
+	state: ReleaseCandidateEvidenceState;
+	code?: string | null;
+	message?: string | null;
+	maxAgeSeconds: number;
+	evidence: ReleaseCandidateGovernanceQualityEvidence[];
+};
+
+export type GovernanceQualityRerunResult = {
+	candidateId: string;
+	replayed: boolean;
+	runs: Array<{
+		ruleId: string;
+		ruleVersionId: string;
+		bindingId: string;
+		runId: string;
+		status: string;
+	}>;
+};
+
 export type ModelMaterializationStatus = {
 	modelSpecId: string;
 	candidateId: string;
@@ -748,6 +814,7 @@ export type ReleaseCandidateWorkbench = {
 	candidate: ReleaseCandidate | null;
 	evidence: ReleaseCandidateEvidenceSummary[];
 	entryEvidence: ReleaseCandidateEntryEvidence[];
+	governanceQuality?: ReleaseCandidateGovernanceQuality | null;
 	primaryBlocker: ReleaseCandidateBlocker | null;
 	allowedActions: ReleaseCandidateWorkspaceAction[];
 	etag: string | null;
@@ -1061,6 +1128,17 @@ export const runReleaseCandidateQuality = (
 	idempotencyKey: string,
 	reason: string,
 ) => runReleaseCandidateCommand(planId, expected, idempotencyKey, reason, "/quality");
+
+export const rerunReleaseCandidateGovernanceQuality = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+) =>
+	api.post<GovernanceQualityRerunResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, "/governance-quality/runs"),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		_skipErrorToast: true,
+	} as any);
 
 export const submitReleaseCandidateReview = (
 	planId: string,

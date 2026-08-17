@@ -42,7 +42,7 @@ public class CatalogResourceHelper {
     public static final Set<String> SUPPORTED_CLASSIFICATION_LEVELS = Set.copyOf(CLASSIFICATION_LEVEL_ORDER);
     public static final List<String> ISSUE_OPEN_STATUSES = List.of("OPEN", "NEW", "IN_PROGRESS", "PROCESSING", "REOPENED");
     public static final List<String> ISSUE_CLOSED_STATUSES = List.of("CLOSED", "RESOLVED");
-    public static final List<String> QUALITY_PASS_STATUSES = List.of("SUCCESS", "PASSED", "COMPLETED");
+    public static final List<String> QUALITY_PASS_STATUSES = List.of("SUCCESS", "SUCCEEDED", "PASSED", "COMPLETED");
     public static final List<String> QUALITY_FAIL_STATUSES = List.of("FAILED", "ERROR");
     public static final int GOVERNANCE_TREND_DAYS = 7;
 

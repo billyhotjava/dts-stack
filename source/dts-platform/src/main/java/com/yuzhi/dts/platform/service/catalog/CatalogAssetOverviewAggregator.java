@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.catalog;
 
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService.AssetSummary;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -43,12 +44,52 @@ public final class CatalogAssetOverviewAggregator {
         int tagCoveragePercent,
         Map<String, Long> byLayer,
         Map<String, Long> governanceStatusCounts,
+        Map<String, Long> eligibilityCounts,
         List<MatrixCell> matrix,
         Map<String, DomainStats> byDomain,
         Map<String, Long> domainCountByLayer,
         int scanned,
-        boolean truncated
-    ) {}
+        boolean truncated,
+        Instant asOf
+    ) {
+        public AssetOverview(
+            long total,
+            long unclassified,
+            long missingDomain,
+            long stale,
+            long attention,
+            long tagged,
+            long untagged,
+            int tagCoveragePercent,
+            Map<String, Long> byLayer,
+            Map<String, Long> governanceStatusCounts,
+            List<MatrixCell> matrix,
+            Map<String, DomainStats> byDomain,
+            Map<String, Long> domainCountByLayer,
+            int scanned,
+            boolean truncated
+        ) {
+            this(
+                total,
+                unclassified,
+                missingDomain,
+                stale,
+                attention,
+                tagged,
+                untagged,
+                tagCoveragePercent,
+                byLayer,
+                governanceStatusCounts,
+                Map.of(),
+                matrix,
+                byDomain,
+                domainCountByLayer,
+                scanned,
+                truncated,
+                null
+            );
+        }
+    }
 
     public static AssetOverview aggregate(List<AssetSummary> rows, int scanned, boolean truncated) {
         long unclassified = 0;
@@ -58,7 +99,9 @@ public final class CatalogAssetOverviewAggregator {
         long tagged = 0;
         Map<String, Long> byLayer = new LinkedHashMap<>();
         Map<String, Long> governanceStatusCounts = new LinkedHashMap<>();
+        Map<String, Long> eligibilityCounts = new LinkedHashMap<>();
         Map<String, long[]> matrixCells = new LinkedHashMap<>();
+        Instant asOf = null;
 
         for (AssetSummary row : rows) {
             boolean rowUnclassified = !StringUtils.hasText(row.classification());
@@ -76,6 +119,13 @@ public final class CatalogAssetOverviewAggregator {
             if (!row.assetTags().isEmpty()) tagged++;
             if (StringUtils.hasText(governanceStatus)) {
                 governanceStatusCounts.merge(governanceStatus, 1L, Long::sum);
+            }
+            String eligibility = normalizeUpper(row.consumptionEligibility());
+            if (StringUtils.hasText(eligibility)) {
+                eligibilityCounts.merge(eligibility, 1L, Long::sum);
+            }
+            if (row.projectionUpdatedAt() != null && (asOf == null || row.projectionUpdatedAt().isAfter(asOf))) {
+                asOf = row.projectionUpdatedAt();
             }
 
             String layer = normalizeLayer(row.warehouseLayer());
@@ -130,11 +180,13 @@ public final class CatalogAssetOverviewAggregator {
             tagCoveragePercent,
             byLayer,
             governanceStatusCounts,
+            eligibilityCounts,
             matrix,
             byDomain,
             domainCountByLayer,
             scanned,
-            truncated
+            truncated,
+            asOf
         );
     }
 

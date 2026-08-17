@@ -2,7 +2,7 @@ package com.yuzhi.dts.platform.service.modeling.serving;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 
 /** Self-healing driver for Catalog serving projection to Analytics convergence. */
 @Component
-@ConditionalOnProperty(prefix = "dts.analytics", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnExpression("${dts.analytics.enabled:true} && ${dts.modeling.catalog.semantic-sync-enabled:true}")
 public class CatalogModelSemanticSyncWorker {
 
     private static final Logger LOG = LoggerFactory.getLogger(CatalogModelSemanticSyncWorker.class);

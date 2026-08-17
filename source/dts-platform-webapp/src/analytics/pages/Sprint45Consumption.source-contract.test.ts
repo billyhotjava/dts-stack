@@ -23,10 +23,11 @@ test("Sprint-45 metrics entry is owned by the prototype modeling surface", () =>
 	assert.doesNotMatch(STATIC_ROUTES_SOURCE, /<iframe/);
 });
 
-test("Sprint-45 BI data and question pages connect dataset selection to analysis and report creation", () => {
-	for (const label of ["选择数据集", "预览", "创建问题", "创建报表"]) {
+test("BI data catalog connects governed dataset selection to analysis creation", () => {
+	for (const label of ["选择数据集", "已发布分析数据集", "查看契约", "创建分析", "契约校验值"]) {
 		assert.match(DATA_SOURCE, new RegExp(label));
 	}
+	assert.doesNotMatch(DATA_SOURCE, /jdbcUrl|dbId=/);
 	for (const label of ["新建问题", "运行", "保存", "生成图表"]) {
 		assert.match(QUESTIONS_SOURCE, new RegExp(label));
 	}

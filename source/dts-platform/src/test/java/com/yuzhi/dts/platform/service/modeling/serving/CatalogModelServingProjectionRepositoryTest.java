@@ -24,6 +24,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
 
 class CatalogModelServingProjectionRepositoryTest {
@@ -50,11 +51,62 @@ class CatalogModelServingProjectionRepositoryTest {
         assertThat(sql.getValue())
             .contains("for update skip locked")
             .contains("serving_ref is not null")
-            .contains("sync_attempts < 5")
+            .contains("sync_attempts < 6")
             .contains("sync_status = 'SYNC_PENDING'")
             .contains("sync_status = 'SYNC_FAILED'");
         assertThat(arguments.getValue()[2]).isEqualTo(100);
         assertThat(arguments.getValue()[3]).isEqualTo(Timestamp.from(NOW.plus(Duration.ofMinutes(2))));
+    }
+
+    @Test
+    void resolvesDatasetDeliveryThroughTheServingPhysicalAssetInsteadOfAnImpossibleDatasetProjection() {
+        JdbcTemplate jdbc = org.mockito.Mockito.mock(JdbcTemplate.class);
+        CatalogModelServingProjectionRepository repository = new CatalogModelServingProjectionRepository(
+            jdbc,
+            new ObjectMapper().findAndRegisterModules()
+        );
+        String datasetKey = "source:one/schema:public/table:orders";
+
+        repository.findSyncStatesByAssetKeys(CatalogAssetType.DATASET, List.of(datasetKey));
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).query(sql.capture(), any(RowCallbackHandler.class), arguments.capture());
+        assertThat(sql.getValue())
+            .contains("semantics.asset_key as requested_asset_key")
+            .contains("join catalog_asset_semantic_projection semantics")
+            .contains("projection.serving_ref ->> 'physicalAssetId'")
+            .contains("semantics.resource_id")
+            .doesNotContain("projection.catalog_asset_type = 'DATASET'");
+        assertThat(arguments.getValue()).containsExactly(datasetKey);
+    }
+
+    @Test
+    void manualRetryUsesVersionCasResetsOnlySyncStateAndInvalidatesAnInFlightReceipt() {
+        JdbcTemplate jdbc = org.mockito.Mockito.mock(JdbcTemplate.class);
+        CatalogModelServingProjectionRepository repository = new CatalogModelServingProjectionRepository(
+            jdbc,
+            new ObjectMapper().findAndRegisterModules()
+        );
+        when(jdbc.update(anyString(), any(Object[].class))).thenReturn(1);
+
+        boolean updated = repository.requestSyncRetry(TENANT, MODEL_ID, 7);
+
+        assertThat(updated).isTrue();
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> arguments = ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).update(sql.capture(), arguments.capture());
+        assertThat(sql.getValue())
+            .contains("sync_status = 'SYNC_PENDING'")
+            .contains("sync_attempts = 0")
+            .contains("last_sync_error = null")
+            .contains("next_sync_at = null")
+            .contains("version = version + 1")
+            .contains("sync_status = 'SYNC_FAILED'")
+            .contains("serving_ref is not null")
+            .doesNotContain("latest_published_ref =")
+            .doesNotContain("serving_ref =");
+        assertThat(arguments.getValue()).containsExactly(TENANT, MODEL_ID, 7L);
     }
 
     @Test

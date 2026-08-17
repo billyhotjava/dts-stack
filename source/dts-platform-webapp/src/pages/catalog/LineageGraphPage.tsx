@@ -14,6 +14,7 @@ import {
 	type ImpactNode,
 	type ImpactResult,
 	type LayoutDirection,
+	lineageEvidenceDescription,
 	LineageDataFilters,
 	type LineageDirection,
 	LineageNodeDrawer,
@@ -71,6 +72,7 @@ export default function LineageGraphPage() {
 		() => (Array.isArray(impact?.columnLineages) ? (impact?.columnLineages ?? []) : []),
 		[impact?.columnLineages],
 	);
+	const lineageEvidence = impact?.lineageEvidence;
 
 	const loadDatasets = async () => {
 		try {
@@ -310,10 +312,19 @@ ${svgNodes}
 				/>
 			) : null}
 			{selectedId ? (
-				<Card
-					loading={loading}
-					bodyStyle={{ padding: 0 }}
-					title={
+				<>
+					{lineageEvidence && lineageEvidence.state !== "COMPLETE" ? (
+						<Alert
+							description={`${lineageEvidenceDescription(lineageEvidence)}。图中只呈现已有证据。`}
+							message="血缘证据不完整"
+							showIcon
+							type={lineageEvidence.state === "MISSING" ? "error" : "warning"}
+						/>
+					) : null}
+					<Card
+						loading={loading}
+						bodyStyle={{ padding: 0 }}
+						title={
 						<Space size={16}>
 							<Typography.Text>血缘图</Typography.Text>
 							<Space size={6}>
@@ -337,20 +348,21 @@ ${svgNodes}
 								)}
 							</Space>
 						</Space>
-					}
-				>
-					<LineageGraph
-						nodes={nodes}
-						edges={edges}
-						columnLineages={lineageColumns}
-						showColumns={showColumns}
-						height={540}
-						layoutDirection={layoutDirection}
-						selectedNodeId={selectedNode?.id ?? null}
-						emptyText="暂无血缘节点"
-						onNodeClick={(node) => setSelectedNode(node)}
-					/>
-				</Card>
+						}
+					>
+						<LineageGraph
+							nodes={nodes}
+							edges={edges}
+							columnLineages={lineageColumns}
+							showColumns={showColumns}
+							height={540}
+							layoutDirection={layoutDirection}
+							selectedNodeId={selectedNode?.id ?? null}
+							emptyText="暂无血缘节点"
+							onNodeClick={(node) => setSelectedNode(node)}
+						/>
+					</Card>
+				</>
 			) : null}
 			<LineageNodeDrawer selectedNode={selectedNode} onClose={() => setSelectedNode(null)} />
 		</div>

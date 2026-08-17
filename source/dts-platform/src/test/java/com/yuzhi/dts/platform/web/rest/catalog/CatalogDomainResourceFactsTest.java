@@ -18,13 +18,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetRegistrationService;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticStore.StatsBucket;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticStore.StatsSnapshot;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetStatsProjectionView;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.Freshness;
-import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.GovernanceReadiness;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetOverviewAggregator;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainCommandService;
 import com.yuzhi.dts.platform.service.catalog.CatalogDomainVisibilityService;
 import java.util.List;
@@ -32,7 +27,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
@@ -46,7 +40,7 @@ class CatalogDomainResourceFactsTest {
     private final CatalogDatasetRepository datasetRepository = mock(CatalogDatasetRepository.class);
     private final AuditService auditService = mock(AuditService.class);
     private final CatalogDomainVisibilityService visibilityService = mock(CatalogDomainVisibilityService.class);
-    private final CatalogAssetRegistrationService assetRegistrationService = mock(CatalogAssetRegistrationService.class);
+    private final CatalogAssetPortalService assetPortalService = mock(CatalogAssetPortalService.class);
     private final CatalogResourceHelper helper = mock(CatalogResourceHelper.class);
     private final ArchitectureDictionaryWriteGuard writeGuard = mock(ArchitectureDictionaryWriteGuard.class);
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
@@ -64,7 +58,7 @@ class CatalogDomainResourceFactsTest {
             datasetRepository,
             auditService,
             visibilityService,
-            assetRegistrationService,
+            assetPortalService,
             helper,
             commandService
         );
@@ -96,33 +90,44 @@ class CatalogDomainResourceFactsTest {
     }
 
     @Test
-    void treeStatsReadTheBoundedProjectionAndExposeFreshnessEvidence() {
+    void treeStatsUseTheSameVisibilityScopedLedgerAsTheAssetList() {
         UUID domainId = UUID.randomUUID();
         CatalogDomain domain = domain(domainId, ACTIVE, PUBLIC);
         domain.setName("项目域");
         when(visibilityService.findAllVisible()).thenReturn(List.of(domain));
-        Instant asOf = Instant.parse("2026-08-10T08:00:00Z");
-        when(assetRegistrationService.stats(null))
-            .thenReturn(
-                new StatsSnapshot(
-                    List.of(new StatsBucket(domainId, "DWD", CatalogAssetType.DATASET, GovernanceReadiness.GOVERNED, 4)),
-                    4,
-                    asOf,
-                    Freshness.FRESH,
-                    false,
-                    "FRESH"
-                )
-            );
+        CatalogAssetOverviewAggregator.AssetOverview overview = new CatalogAssetOverviewAggregator.AssetOverview(
+            4,
+            0,
+            0,
+            0,
+            1,
+            0,
+            4,
+            0,
+            Map.of("DWD", 4L),
+            Map.of("GOVERNED", 4L),
+            List.of(new CatalogAssetOverviewAggregator.MatrixCell("DWD", domainId.toString(), 4, 1)),
+            Map.of(domainId.toString(), new CatalogAssetOverviewAggregator.DomainStats(4, 1)),
+            Map.of("DWD", 1L),
+            4,
+            false
+        );
+        when(assetPortalService.domainStats(null)).thenReturn(overview);
 
         @SuppressWarnings("unchecked")
         Map<String, Object> payload = (Map<String, Object>) resource.getDomainTree(true, null).getData();
-        CatalogAssetStatsProjectionView stats = (CatalogAssetStatsProjectionView) payload.get("stats");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> stats = (Map<String, Object>) payload.get("stats");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> all = (Map<String, Object>) stats.get("all");
+        @SuppressWarnings("unchecked")
+        Map<String, CatalogAssetOverviewAggregator.DomainStats> byDomain =
+            (Map<String, CatalogAssetOverviewAggregator.DomainStats>) stats.get("byDomain");
 
-        assertThat(stats.all().total()).isEqualTo(4);
-        assertThat(stats.byDomain().get(domainId.toString()).total()).isEqualTo(4);
-        assertThat(stats.freshness()).isEqualTo(Freshness.FRESH);
-        assertThat(stats.approximate()).isFalse();
-        verify(assetRegistrationService).stats(null);
+        assertThat(all).containsEntry("total", 4L).containsEntry("attention", 1L);
+        assertThat(byDomain.get(domainId.toString()).total()).isEqualTo(4);
+        assertThat(stats).containsEntry("freshness", "FRESH").containsEntry("approximate", false);
+        verify(assetPortalService).domainStats(null);
     }
 
     @Test

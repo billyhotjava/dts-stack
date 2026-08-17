@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260817_03_query_dataset_semantic_contract_expand" author="platform">
+        <preConditions onFail="HALT">
+            <tableExists tableName="query_dataset_version"/>
+        </preConditions>
+        <addColumn tableName="query_dataset_version">
+            <column name="semantic_contract_schema" type="varchar(64)"/>
+            <column name="semantic_contract_version" type="varchar(64)"/>
+            <column name="semantic_contract_json" type="jsonb"/>
+            <column name="semantic_contract_checksum" type="varchar(64)"/>
+            <column name="contract_snapshot_status" type="varchar(32)" defaultValue="UNRESOLVED">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>
+            ALTER TABLE query_dataset_version
+                ADD CONSTRAINT ck_query_dataset_contract_snapshot_status
+                CHECK (contract_snapshot_status IN ('READY', 'UNRESOLVED'));
+            ALTER TABLE query_dataset_version
+                ADD CONSTRAINT ck_query_dataset_contract_checksum
+                CHECK (semantic_contract_checksum IS NULL OR semantic_contract_checksum ~ '^[0-9a-f]{64}$');
+        </sql>
+        <createIndex tableName="query_dataset_version" indexName="idx_query_dataset_version_published_contract">
+            <column name="status"/>
+            <column name="contract_snapshot_status"/>
+            <column name="dataset_id"/>
+            <column name="version_no"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="query_dataset_version" indexName="idx_query_dataset_version_published_contract"/>
+            <sql>
+                ALTER TABLE query_dataset_version DROP CONSTRAINT IF EXISTS ck_query_dataset_contract_checksum;
+                ALTER TABLE query_dataset_version DROP CONSTRAINT IF EXISTS ck_query_dataset_contract_snapshot_status;
+            </sql>
+            <dropColumn tableName="query_dataset_version" columnName="contract_snapshot_status"/>
+            <dropColumn tableName="query_dataset_version" columnName="semantic_contract_checksum"/>
+            <dropColumn tableName="query_dataset_version" columnName="semantic_contract_json"/>
+            <dropColumn tableName="query_dataset_version" columnName="semantic_contract_version"/>
+            <dropColumn tableName="query_dataset_version" columnName="semantic_contract_schema"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

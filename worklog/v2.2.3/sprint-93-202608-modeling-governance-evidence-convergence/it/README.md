@@ -8,15 +8,15 @@
 | IT-02 | 发布推进同一资产 | 发布不创建第二 dataset；publication/serving 状态按证据推进 | PASS（受控样本） |
 | IT-03 | 存量补齐 | preview/apply/rollback；歧义 fail-closed；回滚不覆盖漂移版本 | PENDING |
 | IT-04 | 服务投影消费 | outbox → SYNCED；超时/失败重试；旧 version 不覆盖新 ref | PARTIAL（真实 BI 消费通过，故障注入待测） |
-| IT-05 | QualityEvidence Port | pass/fail/running/missing/expired/mismatch 全部结构化判定 | PENDING |
-| IT-06 | 发布质量 UI | 工程质量与治理质量分栏；候选钉定 rule/version/binding/run/checksum | PENDING |
-| IT-07 | 模型血缘 | ODS→DWD→DWS→ADS 表级和字段级边可查，来源/验证/有效期正确 | PENDING |
+| IT-05 | QualityEvidence Port | pass/fail/running/missing/expired/mismatch 全部结构化判定 | PASS（自动化状态矩阵 + 真实缺证据样本） |
+| IT-06 | 发布质量 UI | 工程质量与治理质量分栏；候选钉定 rule/version/binding/run/checksum | PASS（受控样本） |
+| IT-07 | 模型血缘 | ODS→DWD→DWS→ADS 表级和字段级边可查，来源/验证/有效期正确 | PARTIAL（DWD→DWS→ADS 表级 3 边通过；ODS/字段边缺失） |
 | IT-08 | OM 故障降级 | OM 不可用时资产仍可查，技术同步显示失败且可重试 | PENDING |
-| IT-09 | 治理页面一致性 | 概览、目录、详情数字/状态/业务归属数据域一致，深链可达 | PARTIAL（受控样本一致，全局统计待复核） |
+| IT-09 | 治理页面一致性 | 概览、目录、详情数字/状态/业务归属数据域一致，深链可达 | PASS（当前可见范围 49 条，分页与详情复验通过） |
 | IT-10 | 二次物化 | 模型数和资产数不增加；candidate/attempt/observation 增加；servingRef 推进 | PASS（受控样本） |
 | IT-11 | 权限与审计 | xiezm 所级管理员正向通过；部门越权失败；审计动作有分类 | PARTIAL（xiezm 创建/删除通过，负向与审计待测） |
 | IT-12 | 发布/回滚/可运维 | 镜像、迁移、feature flag、告警、runbook、回滚演练完整 | PARTIAL（健康与回滚镜像通过，演练待执行） |
-| IT-13 | Chrome 95 集中验收 | 真实登录；空/加载/错误/成功；console/network 无未解释异常 | PENDING |
+| IT-13 | Chrome 95 集中验收 | 真实登录；空/加载/错误/成功；console/network 无未解释异常 | PARTIAL（Chrome 95 目标构建和窄屏通过，真实 Chrome 95 待测） |
 
 ## 集中执行顺序
 
@@ -43,3 +43,23 @@
 - 同一 public 关系的目录搜索收敛为 1 条规范资产，详情为 `ACTIVE / GOVERNED`，contract 为 `consumable=true`。
 - BI 看板继续读取 `2026-08-12 / 1,834.38`；模型、资产、看板页面 console error=0。
 - 当前证据为受控样本和 Chrome 150；全量统计、故障注入、权限负向、回滚演练和 Chrome 95 不在本次通过范围。
+
+## 2026-08-17 治理质量、血缘与页面口径复验
+
+- 详细过程与结果：[`evidence/20260817-governance-quality-lineage-consistency.md`](evidence/20260817-governance-quality-lineage-consistency.md)。
+- xiezm 的资产、质量、血缘和元数据只读入口均可达且无 403；所级管理员正向读取继续通过。
+- 质量主链未闭合：同一资产没有治理质量运行，质量报告显示“暂无有效检测结果”，但资产详情显示 `100/HEALTHY`，发布候选仍把 `QUALITY_RUN` 判为 `PASSED`。
+- 血缘仅完成 DWD→DWS→ADS 的 3 条表级 `VERIFIED` 边；ODS 和字段级边缺失，切换字段血缘还会丢失 datasetId。
+- 治理页面无筛选口径分别为 308、49、53；资产目录第 1、2 页均为 `total=53` 但 `content=[]`，IT-09 从 PARTIAL 更新为 FAIL。
+- 本轮仍为 Chrome 150，只读测试；OM 故障注入、部门越权负向、回滚演练和 Chrome 95 未执行。
+
+## 2026-08-17 修复后集中复验
+
+- 修复后证据追加在 [`evidence/20260817-governance-quality-lineage-consistency.md`](evidence/20260817-governance-quality-lineage-consistency.md) 的“修复后复验”章节；原失败证据继续保留为基线。
+- 资产概览、目录和域统计统一到当前账号可见资产集合，总量均为 49；目录第 1、2 页各返回 10 条真实记录，不再出现 `total>0/content=[]`。
+- 无治理质量运行时显示“待质量校验”，不再伪造 `100/HEALTHY`；候选发布界面已拆分“工程验证”和“治理数据质量”，缺证据时明确阻断并展示 dataset、规则版本、绑定、运行和 checksum。
+- “配置质量规则”深链保留 datasetId，真实点击进入质量规则目录且无 403。
+- DTS 原生资产详情显示 `GOVERNED / DTS_NATIVE`，不再被 OpenMetadata 映射待确认状态阻断。
+- 血缘 API 返回 7 个节点、6 条 `VERIFIED` 关系，并以 `PARTIAL + UPSTREAM_SOURCE_OR_ODS_EVIDENCE_MISSING + COLUMN_LINEAGE_EVIDENCE_MISSING` 明确暴露剩余数据证据缺口；不再虚构 ODS 或字段边。
+- 非默认筛选 `UPSTREAM/depth=5` 在“血缘图谱”与“字段血缘”间切换后完整保留；`BOTH/depth=3` 作为默认值会从规范化 URL 省略，但语义不变。
+- 900px 视口下发布弹窗和血缘页无页面级横向溢出；Chrome 控制台 error=0，当前关键 API 均为 200。真实浏览器仍为 Chrome 150，因此 IT-13 只更新为 PARTIAL。

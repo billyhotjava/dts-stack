@@ -23,6 +23,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Cre
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryEvidenceView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceState;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.GovernanceQualitySummaryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.RelationEvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.MaterializationAttemptView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ScopeEntryCommand;
@@ -30,6 +31,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Tra
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.QualityEvidencePort.QualityEvidence;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -83,6 +85,9 @@ class ModelReleaseCandidateApplicationServiceTest {
     @Mock
     private ModelReleaseCandidatePreflightService preflight;
 
+    @Mock
+    private CandidateGovernanceQualityEvidenceService governanceQuality;
+
     private ModelReleaseCandidateApplicationService service;
 
     @BeforeEach
@@ -97,7 +102,8 @@ class ModelReleaseCandidateApplicationServiceTest {
             publicationCoordinator,
             rollbackCommits,
             workbenchEvidence,
-            preflight
+            preflight,
+            governanceQuality
         );
         lenient().when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
         lenient()
@@ -913,6 +919,83 @@ class ModelReleaseCandidateApplicationServiceTest {
     }
 
     @Test
+    void missingBlockingGovernanceQualityRemovesPublishAndExplainsTheBlocker() {
+        CandidateView qualityPassed = candidate(
+            DeliveryStatus.QUALITY_PASSED,
+            List.of(entry(DeliveryStatus.QUALITY_PASSED))
+        );
+        when(dutyResolver.currentDuties())
+            .thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER, DeliveryActorRole.RELEASE_OPERATOR));
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(qualityPassed));
+        when(governanceQuality.evaluate(qualityPassed))
+            .thenReturn(
+                new GovernanceQualitySummaryView(
+                    true,
+                    EvidenceState.FAILED,
+                    "MODEL_SPEC_GOVERNANCE_QUALITY_MISSING",
+                    "当前物理资产缺少治理质量运行证据",
+                    300,
+                    List.of()
+                )
+            );
+
+        var workspace = service.workspace(TENANT, ACTOR, PLAN_ID);
+
+        assertThat(workspace.state()).isEqualTo(WorkbenchState.BLOCKED);
+        assertThat(workspace.allowedActions()).doesNotContain(WorkspaceAction.PUBLISH);
+        assertThat(workspace.primaryBlocker().code()).isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_MISSING");
+        assertThat(workspace.governanceQuality().required()).isTrue();
+    }
+
+    @Test
+    void publishCommandCannotBypassTheBlockingGovernanceQualityGate() {
+        CandidateView approved = candidate(
+            DeliveryStatus.APPROVED,
+            List.of(entry(DeliveryStatus.APPROVED)),
+            new DeliveryAuditView(
+                "creator",
+                NOW.minusSeconds(180),
+                "submitter",
+                NOW.minusSeconds(120),
+                "reviewer",
+                NOW.minusSeconds(60),
+                null,
+                null
+            )
+        );
+        when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.RELEASE_OPERATOR));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(approved));
+        when(governanceQuality.requirePublishableSnapshot(approved))
+            .thenThrow(
+                new ModelReleaseCandidateException(
+                    "MODEL_SPEC_GOVERNANCE_QUALITY_MISSING",
+                    "治理质量证据缺失",
+                    ModelReleaseCandidateException.Kind.UNPROCESSABLE
+                )
+            );
+
+        assertThatThrownBy(() ->
+            service.publish(
+                TENANT,
+                ACTOR,
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "quality-gated-publish",
+                "publish only after governance quality passes"
+            )
+        )
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error ->
+                assertThat(((ModelReleaseCandidateException) error).code())
+                    .isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_MISSING")
+            );
+        verifyNoInteractions(publicationAdmission, publicationCoordinator);
+        verify(commands, never()).transition(any(), any(), any(), any());
+        verify(commands, never()).transitionWithQualityEvidence(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void dataOwnerCanDirectlyPublishOwnPendingCandidateWithoutApproval() {
         DeliveryAuditView submitted = new DeliveryAuditView(
             "creator",
@@ -958,7 +1041,9 @@ class ModelReleaseCandidateApplicationServiceTest {
             );
         when(repository.find(TENANT, CANDIDATE_ID))
             .thenReturn(Optional.of(pending));
-        when(commands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+        CandidateQualityEvidenceSnapshot qualitySnapshot = qualitySnapshot(pending);
+        when(governanceQuality.requirePublishableSnapshot(pending)).thenReturn(qualitySnapshot);
+        when(commands.transitionWithQualityEvidence(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any(), eq(qualitySnapshot)))
             .thenReturn(new CommandResult(publishing, false, List.of()));
         when(
             publicationCoordinator.publish(
@@ -1148,7 +1233,9 @@ class ModelReleaseCandidateApplicationServiceTest {
         );
         when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.RELEASE_OPERATOR));
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(approved));
-        when(commands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+        CandidateQualityEvidenceSnapshot qualitySnapshot = qualitySnapshot(approved);
+        when(governanceQuality.requirePublishableSnapshot(approved)).thenReturn(qualitySnapshot);
+        when(commands.transitionWithQualityEvidence(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any(), eq(qualitySnapshot)))
             .thenReturn(new CommandResult(publishing, false, List.of()));
         when(
             publicationCoordinator.publish(
@@ -1174,7 +1261,13 @@ class ModelReleaseCandidateApplicationServiceTest {
         assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.PUBLISHED);
         InOrder order = org.mockito.Mockito.inOrder(publicationAdmission, commands, publicationCoordinator);
         order.verify(publicationAdmission).requireAllowed(approved);
-        order.verify(commands).transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any());
+        order.verify(commands).transitionWithQualityEvidence(
+            eq(TENANT),
+            eq(ACTOR),
+            eq(CANDIDATE_ID),
+            any(),
+            eq(qualitySnapshot)
+        );
         order
             .verify(publicationCoordinator)
             .publish(TENANT, ACTOR, publishing, "publish-key", "publish approved release");
@@ -1470,6 +1563,30 @@ class ModelReleaseCandidateApplicationServiceTest {
             0,
             "primary"
         );
+    }
+
+    private static CandidateQualityEvidenceSnapshot qualitySnapshot(CandidateView candidate) {
+        GovernanceQualitySummaryView summary = new GovernanceQualitySummaryView(
+            true,
+            EvidenceState.PASSED,
+            null,
+            null,
+            300,
+            List.of(
+                new QualityEvidence(
+                    "70000000-0000-0000-0000-000000000001",
+                    UUID.fromString("70000000-0000-0000-0000-000000000002"),
+                    UUID.fromString("70000000-0000-0000-0000-000000000003"),
+                    UUID.fromString("70000000-0000-0000-0000-000000000004"),
+                    UUID.fromString("70000000-0000-0000-0000-000000000005"),
+                    "SUCCEEDED",
+                    NOW.minusSeconds(5),
+                    "d".repeat(64),
+                    List.of()
+                )
+            )
+        );
+        return CandidateQualityEvidenceSnapshot.captureLegacy(candidate, summary);
     }
 
     private static DeliveryAuditView audit() {

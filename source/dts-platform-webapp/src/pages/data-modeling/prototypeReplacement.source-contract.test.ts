@@ -196,6 +196,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const advancedDbtWorkspace = read("./prototype/AdvancedDbtWorkspace.tsx");
 		const modelPublishDialog = read("./prototype/ModelPublishDialog.tsx");
 		const modelReleaseWorkflow = read("./prototype/ModelReleaseWorkflowPanel.tsx");
+		const modelSpecApi = read("../../api/modelSpecApi.ts");
 		const reverse = read("./prototype/ReverseModelingPage.tsx");
 		const tools = read("./prototype/ToolsPage.tsx");
 		const toolWorkflows = read("../../features/modeling/navigation/dataModelingToolWorkflows.ts");
@@ -249,7 +250,10 @@ describe("prototype-owned data modeling frontend", () => {
 			/createReleaseCandidate|lockReleaseCandidate|retryReleaseCandidate|rematerializeReleaseCandidate|publishReleaseCandidate/,
 		);
 		expect(modelPublishDialog).toMatch(/getPlanExecutionWorkspace|ModelReleaseWorkflowPanel/);
-		expect(modelReleaseWorkflow).toMatch(/候选发布流程|运行质量检查|发布登记|上线就绪|无需另行审批/);
+		expect(modelSpecApi).toMatch(/ReleaseCandidateGovernanceQuality|governanceQuality/);
+		expect(modelPublishDialog).toMatch(/governanceQuality=\{workspace\?\.governanceQuality \|\| null\}/);
+		expect(modelReleaseWorkflow).toMatch(/候选发布流程|工程验证|治理数据质量|发布登记|上线就绪|无需另行审批/);
+		expect(modelReleaseWorkflow).toMatch(/ruleVersionId|bindingId|runId|evidenceChecksum|violations/);
 		expect(modelReleaseWorkflow).toMatch(/PUBLISHED|ONLINE|latestRelation/);
 		expect(modelDialogs.trimEnd().split("\n").length).toBeLessThanOrEqual(850);
 		expect(advancedDbtWorkspace).toMatch(/state: "COMMITTED"|创建新草稿/);

@@ -1,7 +1,7 @@
 # F4：元数据与血缘证据贯通
 
 **优先级**：P0
-**状态**：DRAFT（依赖 Sprint-89/90 与真实 manifest）
+**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / REAL_FIELD_EVIDENCE_PENDING
 
 ## 目标
 
@@ -25,13 +25,13 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 将模型物化和 dbt 证据接入既有元数据血缘 seam | P0 | DRAFT | Sprint-89 F1/F2、Sprint-90 F1、F1/T01、F0 真实 manifest |
+| T01 | 将模型物化和 dbt 证据接入既有元数据血缘 seam | P0 | IMPLEMENTATION_COMPLETE | IT-07/08 真实证据待执行 |
 
 ## Definition of Ready
 
 - [x] 表/字段血缘和 OM 边界已定义。
-- [ ] Sprint-90 字段有效期/匹配修复基线固定。
-- [ ] 真实 manifest、skip reason 和物化链样本可用。
+- [x] Sprint-90 字段有效期/匹配 seam 已复用，未新增第二 owner。
+- [x] manifest 解析、skip reason 和物化链契约已实现；真实字段样本由 IT-07 验证。
 
 ## 完成标准
 

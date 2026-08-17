@@ -8,13 +8,18 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.DbtProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnLineage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogSchemaDriftEvent;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
@@ -22,6 +27,7 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationPropagationJobService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceChannel;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ProducerKind;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract;
@@ -82,6 +88,9 @@ class DbtAssetSyncServiceTest {
 
     @Mock
     private CatalogPhysicalDatasetObservationAdapter assetObservation;
+
+    @Mock
+    private CatalogSchemaDriftEventRepository schemaDriftEventRepository;
 
     @TempDir
     Path tempDir;
@@ -157,6 +166,254 @@ class DbtAssetSyncServiceTest {
             ),
             org.mockito.ArgumentMatchers.any(java.time.Instant.class)
         );
+    }
+
+    @Test
+    void lifecycleBoundModelReusesPublishedDatasetAndVerifiedTableLineageForColumnEvidence() throws Exception {
+        java.util.UUID targetSourceId = java.util.UUID.fromString("90000000-0000-0000-0000-000000000001");
+        writeArtifacts(
+            """
+            {
+              "metadata":{"invocation_id":"run-orders","generated_at":"2026-07-24T08:00:00Z","project_name":"dts"},
+              "sources":{
+                "source.dts.source_orders":{
+                  "resource_type":"source","name":"source_orders","database":"warehouse","schema":"ods","identifier":"source_orders",
+                  "columns":{"order_id":{"name":"order_id","data_type":"bigint"}}
+                }
+              },
+              "nodes":{
+                "model.dts.orders":{
+                  "resource_type":"model","name":"orders","database":"warehouse","schema":"dwd","identifier":"orders_relation",
+                  "original_file_path":"models/dwd/orders.sql","raw_code":"select order_id from source_orders",
+                  "compiled_code":"select source_orders.order_id as order_id from source_orders",
+                  "columns":{"order_id":{"name":"order_id","data_type":"bigint"}},
+                  "config":{"materialized":"table","meta":{"tenantId":"tenant-a","modelSpecId":"10000000-0000-0000-0000-000000000001","revision":7,"modelChecksum":"sha256:model-v7","implementationRevision":3,"implementationChecksum":"sha256:implementation-v3","projectKey":"dts","layer":"DWD"}},
+                  "depends_on":{"nodes":["source.dts.source_orders"]}
+                }
+              }
+            }
+            """,
+            """
+            {"metadata":{"invocation_id":"run-orders","generated_at":"2026-07-24T08:00:00Z"},"results":[{"unique_id":"model.dts.orders","status":"success"}]}
+            """
+        );
+
+        CatalogDataset source = dataset(java.util.UUID.randomUUID(), null, "ods", "source_orders");
+        CatalogDataset target = dataset(java.util.UUID.randomUUID(), targetSourceId, "dwd", "orders_relation");
+        CatalogTableSchema sourceTable = table(source, "source_orders");
+        CatalogTableSchema targetTable = table(target, "orders_relation");
+        CatalogColumnSchema sourceColumn = column(sourceTable, "order_id");
+        CatalogColumnSchema targetColumn = column(targetTable, "order_id");
+        CatalogDatasetLineage verified = new CatalogDatasetLineage();
+        verified.setId(java.util.UUID.randomUUID());
+        verified.setUpstreamDatasetId(source.getId());
+        verified.setDownstreamDatasetId(target.getId());
+        verified.setRelationType("MODEL_DEPENDENCY");
+        verified.setVerificationStatus("VERIFIED");
+
+        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("ods", "source_orders"))
+            .thenReturn(Optional.of(source));
+        when(datasetRepository.save(source)).thenReturn(source);
+        when(tableRepository.findFirstByDatasetAndNameIgnoreCase(source, "source_orders"))
+            .thenReturn(Optional.of(sourceTable));
+        when(datasetRepository.findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("dwd", "orders_relation"))
+            .thenReturn(List.of(target));
+        when(tableRepository.findByDataset(target)).thenReturn(List.of(targetTable));
+        when(columnRepository.findByTable(sourceTable)).thenReturn(List.of(sourceColumn));
+        when(columnRepository.findByTable(targetTable)).thenReturn(List.of(targetColumn));
+        when(
+            lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
+                source.getId(),
+                target.getId(),
+                "MODEL_DEPENDENCY"
+            )
+        ).thenReturn(Optional.of(verified));
+        when(columnLineageRepository.findByDownstreamDatasetIdAndRelationTypeIgnoreCase(target.getId(), "DBT"))
+            .thenReturn(List.of());
+        when(columnLineageRepository.save(any(CatalogColumnLineage.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(lineageJobRepository.findByJobKey(any())).thenReturn(Optional.empty());
+        when(lineageJobRepository.save(any())).thenAnswer(invocation -> {
+            var job = (com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob) invocation.getArgument(0);
+            job.setId(java.util.UUID.randomUUID());
+            return job;
+        });
+
+        ModelLifecycleContract.ImplementationView implementation = currentImplementation();
+        when(lifecycleRepository.findImplementation("tenant-a", implementation.modelSpecId()))
+            .thenReturn(Optional.of(implementation));
+        ModelSpecContract.ModelSpecView modelSpec = org.mockito.Mockito.mock(ModelSpecContract.ModelSpecView.class);
+        when(modelSpec.planId()).thenReturn(implementation.planId());
+        when(modelSpec.revision()).thenReturn(implementation.revision());
+        when(modelSpec.checksum()).thenReturn(implementation.modelChecksum());
+        when(modelSpec.implementationMode()).thenReturn(ModelSpecContract.ImplementationMode.DBT_MANAGED);
+        when(modelSpecReader.get("tenant-a", implementation.modelSpecId())).thenReturn(modelSpec);
+
+        DbtAssetSyncService.DbtAssetSyncResult result = service(targetSourceId).syncFromManifest(tempDir.toString());
+
+        assertThat(result.synced()).isTrue();
+        assertThat(result.stats().getLineageCreated()).isZero();
+        assertThat(result.stats().getColumnLineageCreated()).isEqualTo(1);
+        org.mockito.ArgumentCaptor<CatalogColumnLineage> captured = org.mockito.ArgumentCaptor.forClass(CatalogColumnLineage.class);
+        verify(columnLineageRepository).save(captured.capture());
+        assertThat(captured.getValue().getDatasetLineageId()).isEqualTo(verified.getId());
+        assertThat(captured.getValue().getRelationType()).isEqualTo("DBT");
+        verify(lineageRepository, never()).save(any(CatalogDatasetLineage.class));
+        verify(datasetRepository, never()).save(target);
+        verify(tableRepository, never()).save(targetTable);
+    }
+
+    @Test
+    void replayingManifestReusesTheCurrentDbtLineageEdge() throws Exception {
+        writeArtifacts(
+            """
+            {
+              "metadata":{"invocation_id":"run-replay","generated_at":"2026-08-17T08:00:00Z","project_name":"dts"},
+              "sources":{"source.dts.source_orders":{"resource_type":"source","name":"source_orders","database":"warehouse","schema":"ods","identifier":"source_orders"}},
+              "nodes":{"model.dts.orders":{"resource_type":"model","name":"orders","database":"warehouse","schema":"dwd","identifier":"orders","config":{"materialized":"table"},"depends_on":{"nodes":["source.dts.source_orders"]}}}
+            }
+            """,
+            """
+            {"metadata":{"invocation_id":"run-replay","generated_at":"2026-08-17T08:00:00Z"},"results":[{"unique_id":"model.dts.orders","status":"success"}]}
+            """
+        );
+        CatalogDataset source = dataset(java.util.UUID.randomUUID(), null, "ods", "source_orders");
+        CatalogDataset target = dataset(java.util.UUID.randomUUID(), null, "dwd", "orders");
+        CatalogTableSchema sourceTable = table(source, "source_orders");
+        CatalogTableSchema targetTable = table(target, "orders");
+        CatalogDatasetLineage current = new CatalogDatasetLineage();
+        current.setId(java.util.UUID.randomUUID());
+        current.setUpstreamDatasetId(source.getId());
+        current.setDownstreamDatasetId(target.getId());
+        current.setRelationType("DBT");
+        current.setVerificationStatus("DECLARED");
+
+        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("ods", "source_orders"))
+            .thenReturn(Optional.of(source));
+        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("dwd", "orders"))
+            .thenReturn(Optional.of(target));
+        when(datasetRepository.save(any(CatalogDataset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tableRepository.findFirstByDatasetAndNameIgnoreCase(source, "source_orders")).thenReturn(Optional.of(sourceTable));
+        when(tableRepository.findFirstByDatasetAndNameIgnoreCase(target, "orders")).thenReturn(Optional.of(targetTable));
+        when(lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(target.getId(), "DBT"))
+            .thenReturn(List.of(current));
+        when(
+            lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
+                source.getId(),
+                target.getId(),
+                "DBT"
+            )
+        ).thenReturn(Optional.of(current));
+        when(lineageRepository.save(current)).thenReturn(current);
+        when(lineageJobRepository.findByJobKey(any())).thenReturn(Optional.empty());
+        when(lineageJobRepository.save(any())).thenAnswer(invocation -> {
+            var job = (com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob) invocation.getArgument(0);
+            job.setId(java.util.UUID.randomUUID());
+            return job;
+        });
+
+        DbtAssetSyncService.DbtAssetSyncResult result = service().syncFromManifest(tempDir.toString());
+
+        assertThat(result.synced()).isTrue();
+        assertThat(result.stats().getLineageCreated()).isZero();
+        assertThat(result.stats().getLineageRemoved()).isZero();
+        verify(lineageRepository).save(current);
+    }
+
+    @Test
+    void automatedManifestSyncDoesNotExpireAUserVerifiedDbtLineageEdge() throws Exception {
+        writeArtifacts(
+            """
+            {
+              "metadata":{"invocation_id":"run-without-dependency","generated_at":"2026-08-17T08:00:00Z","project_name":"dts"},
+              "nodes":{"model.dts.orders":{"resource_type":"model","name":"orders","database":"warehouse","schema":"dwd","identifier":"orders","config":{"materialized":"table"},"depends_on":{"nodes":[]}}},
+              "sources":{}
+            }
+            """,
+            """
+            {"metadata":{"invocation_id":"run-without-dependency","generated_at":"2026-08-17T08:00:00Z"},"results":[{"unique_id":"model.dts.orders","status":"success"}]}
+            """
+        );
+        CatalogDataset target = dataset(java.util.UUID.randomUUID(), null, "dwd", "orders");
+        CatalogTableSchema targetTable = table(target, "orders");
+        CatalogDatasetLineage verified = new CatalogDatasetLineage();
+        verified.setId(java.util.UUID.randomUUID());
+        verified.setUpstreamDatasetId(java.util.UUID.randomUUID());
+        verified.setDownstreamDatasetId(target.getId());
+        verified.setRelationType("DBT");
+        verified.setVerificationStatus("VERIFIED");
+
+        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("dwd", "orders"))
+            .thenReturn(Optional.of(target));
+        when(datasetRepository.save(target)).thenReturn(target);
+        when(tableRepository.findFirstByDatasetAndNameIgnoreCase(target, "orders")).thenReturn(Optional.of(targetTable));
+        when(lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(target.getId(), "DBT"))
+            .thenReturn(List.of(verified));
+        when(lineageJobRepository.findByJobKey(any())).thenReturn(Optional.empty());
+        when(lineageJobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        DbtAssetSyncService.DbtAssetSyncResult result = service().syncFromManifest(tempDir.toString());
+
+        assertThat(result.synced()).isTrue();
+        assertThat(result.stats().getLineageRemoved()).isZero();
+        assertThat(verified.getValidTo()).isNull();
+        verify(lineageRepository, never()).save(verified);
+    }
+
+    @Test
+    void changedManifestSchemaCreatesOneOpenDriftIssueAcrossReplay() throws Exception {
+        writeArtifacts(
+            """
+            {
+              "metadata":{"invocation_id":"run-schema-drift","generated_at":"2026-08-17T08:00:00Z","project_name":"dts"},
+              "nodes":{"model.dts.orders":{"resource_type":"model","name":"orders","database":"warehouse","schema":"dwd","identifier":"orders","columns":{"order_id":{"name":"order_id","data_type":"varchar(64)"}},"config":{"materialized":"table"},"depends_on":{"nodes":[]}}},
+              "sources":{}
+            }
+            """,
+            """
+            {"metadata":{"invocation_id":"run-schema-drift","generated_at":"2026-08-17T08:00:00Z"},"results":[{"unique_id":"model.dts.orders","status":"success"}]}
+            """
+        );
+        CatalogDataset target = dataset(java.util.UUID.randomUUID(), null, "dwd", "orders");
+        CatalogTableSchema targetTable = table(target, "orders");
+        CatalogColumnSchema existingColumn = column(targetTable, "order_id");
+        existingColumn.setDataType("bigint");
+        existingColumn.setNullable(Boolean.FALSE);
+        existingColumn.setStatus(CatalogColumnSyncService.STATUS_ACTIVE);
+        CatalogSchemaDriftEvent replayMarker = new CatalogSchemaDriftEvent();
+        replayMarker.setDatasetId(target.getId());
+        replayMarker.setIntegration("DBT");
+
+        when(datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase("dwd", "orders"))
+            .thenReturn(Optional.of(target));
+        when(datasetRepository.save(target)).thenReturn(target);
+        when(tableRepository.findFirstByDatasetAndNameIgnoreCase(target, "orders")).thenReturn(Optional.of(targetTable));
+        when(columnRepository.findByTable(targetTable)).thenReturn(List.of(existingColumn));
+        when(columnSyncService.parseManifestColumns(any())).thenReturn(
+            List.of(new CatalogColumnSyncService.ColumnSpec("order_id", "varchar(64)", null, null, null, null, null, null))
+        );
+        when(lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(target.getId(), "DBT"))
+            .thenReturn(List.of());
+        when(columnLineageRepository.findByDownstreamDatasetIdAndRelationTypeIgnoreCase(target.getId(), "DBT"))
+            .thenReturn(List.of());
+        when(lineageJobRepository.findByJobKey(any())).thenReturn(Optional.empty());
+        when(lineageJobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(schemaDriftEventRepository.findTop200ByRunIdOrderByCreatedDateDesc(any()))
+            .thenReturn(List.of(), List.of(replayMarker));
+
+        DbtAssetSyncService service = service();
+        DbtAssetSyncService.DbtAssetSyncResult first = service.syncFromManifest(tempDir.toString());
+        DbtAssetSyncService.DbtAssetSyncResult replay = service.syncFromManifest(tempDir.toString());
+
+        assertThat(first.stats().getSchemaDriftIssues()).isEqualTo(1);
+        assertThat(replay.stats().getSchemaDriftIssues()).isZero();
+        org.mockito.ArgumentCaptor<CatalogSchemaDriftEvent> captured = org.mockito.ArgumentCaptor.forClass(
+            CatalogSchemaDriftEvent.class
+        );
+        verify(schemaDriftEventRepository).save(captured.capture());
+        assertThat(captured.getValue().getIntegration()).isEqualTo("DBT");
+        assertThat(captured.getValue().getDatasetId()).isEqualTo(target.getId());
+        assertThat(captured.getValue().getChangedCount()).isEqualTo(1);
+        assertThat(captured.getValue().getTicketStatus()).isEqualTo(CatalogSchemaDriftEvent.TICKET_OPEN);
     }
 
     @Test
@@ -572,7 +829,9 @@ class DbtAssetSyncServiceTest {
             modelSpecReader,
             auditService,
             propagationJobService,
-            assetObservation
+            assetObservation,
+            new SchemaDriftDetector(new ObjectMapper()),
+            schemaDriftEventRepository
         );
     }
 
@@ -596,6 +855,33 @@ class DbtAssetSyncServiceTest {
             "\",\"materializedTruth\":true,\"physicalAssetVerified\":true,\"artifactState\":\"CURRENT\"}"
         );
         return dataset;
+    }
+
+    private static CatalogDataset dataset(java.util.UUID id, java.util.UUID sourceId, String schema, String name) {
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(id);
+        dataset.setSourceId(sourceId);
+        dataset.setHiveDatabase(schema);
+        dataset.setHiveTable(name);
+        dataset.setName(name);
+        dataset.setEnabled(true);
+        return dataset;
+    }
+
+    private static CatalogTableSchema table(CatalogDataset dataset, String name) {
+        CatalogTableSchema table = new CatalogTableSchema();
+        table.setId(java.util.UUID.randomUUID());
+        table.setDataset(dataset);
+        table.setName(name);
+        return table;
+    }
+
+    private static CatalogColumnSchema column(CatalogTableSchema table, String name) {
+        CatalogColumnSchema column = new CatalogColumnSchema();
+        column.setId(java.util.UUID.randomUUID());
+        column.setTable(table);
+        column.setName(name);
+        return column;
     }
 
     private String workspaceKey() {

@@ -7,6 +7,7 @@ import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contract
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
 import { ModelImplementationBindingFields } from "./ModelImplementationBindingFields";
 import { ModelMaterializationStatusCard } from "./ModelMaterializationStatus";
+import { ModelServingSyncStatus } from "./ModelServingSyncStatus";
 import type { WorkbenchDialog } from "./ModelWorkbenchDialog";
 import {
 	DIMENSION_STORAGE_OPTIONS,
@@ -668,6 +669,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					<span>所有权 {representation?.ownershipMode || selectedModel.implementationMode}</span>
 					<span>可视化 {representation?.visualizationCapability || "读取中"}</span>
 					<span>漂移 {representation?.driftStatus || "—"}</span>
+					<ModelServingSyncStatus canMaintain={canMaintain} modelSpecId={selectedModel.id} />
 				</div>
 			) : null}
 			{representationFailure ? <div className="dmx-capability-note">{representationFailure}</div> : null}

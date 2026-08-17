@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetAsset;
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetVersion;
+import com.yuzhi.dts.platform.domain.explore.ResultSet;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetVersionRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
@@ -20,6 +21,9 @@ import com.yuzhi.dts.platform.service.catalog.CanonicalModelIdentityReadPort.Mod
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DeriveCommand;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DerivationResult;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.ResolvedSource;
+import com.yuzhi.dts.platform.service.sql.QueryDatasetContractSnapshotAssembler.Snapshot;
 import com.yuzhi.dts.platform.service.sql.dto.PublishQueryDatasetRequest;
 import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetResponse;
 import java.util.List;
@@ -57,6 +61,9 @@ class QueryDatasetServiceTest {
 
     @Mock
     private CatalogConsumerClassificationService consumerClassificationService;
+
+    @Mock
+    private QueryDatasetContractSnapshotAssembler contractSnapshotAssembler;
 
     @InjectMocks
     private QueryDatasetService service;
@@ -129,6 +136,12 @@ class QueryDatasetServiceTest {
         when(versionRepository.findByDataset_IdAndVersionNo(datasetId, 1)).thenReturn(Optional.of(version));
         when(canonicalModelIdentityReadPort.findDbtModelsByResourceNames(Set.of("fct_budget_execution")))
             .thenReturn(Map.of("fct_budget_execution", model));
+        ResultSet resultSet = resultSet(version);
+        DerivationResult classification = classification(datasetId, model);
+        when(consumerClassificationService.derive(any(DeriveCommand.class))).thenReturn(classification);
+        when(resultSetRepository.findById(resultSet.getId())).thenReturn(Optional.of(resultSet));
+        when(contractSnapshotAssembler.assemble(dataset, version, resultSet, Map.of("fct_budget_execution", model), classification))
+            .thenReturn(new Snapshot("dts.query-dataset-contract/v1", "r3", "READY", "{\"dimensions\":[]}", "a".repeat(64)));
         when(versionRepository.findByDataset_IdOrderByVersionNoDesc(datasetId)).thenReturn(List.of(version));
         when(versionRepository.save(any(QueryDatasetVersion.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(assetRepository.save(any(QueryDatasetAsset.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -140,6 +153,11 @@ class QueryDatasetServiceTest {
         assertThat(command.getValue().upstreams())
             .singleElement()
             .satisfies(upstream -> assertThat(upstream.subjectKey()).isEqualTo(CatalogAssetKey.dbtModel(model.dbtUniqueId(), model.modelName())));
+        assertThat(version.getSemanticContractSchema()).isEqualTo("dts.query-dataset-contract/v1");
+        assertThat(version.getSemanticContractVersion()).isEqualTo("r3");
+        assertThat(version.getSemanticContractJson()).isEqualTo("{\"dimensions\":[]}");
+        assertThat(version.getSemanticContractChecksum()).isEqualTo("a".repeat(64));
+        assertThat(version.getContractSnapshotStatus()).isEqualTo("READY");
     }
 
     @Test
@@ -177,7 +195,29 @@ class QueryDatasetServiceTest {
         version.setVersionNo(1);
         version.setStatus("DRAFT");
         version.setSqlText(sql);
+        version.setResultSetId(UUID.randomUUID());
         return version;
+    }
+
+    private ResultSet resultSet(QueryDatasetVersion version) {
+        ResultSet resultSet = new ResultSet();
+        resultSet.setId(version.getResultSetId());
+        resultSet.setColumns("project_code,total_amount");
+        return resultSet;
+    }
+
+    private DerivationResult classification(UUID datasetId, ModelIdentity model) {
+        UUID snapshotId = UUID.randomUUID();
+        return new DerivationResult(
+            "REPORT",
+            CatalogAssetKey.biDataset(datasetId),
+            "DATA_INTERNAL",
+            snapshotId,
+            1,
+            List.of(new ResolvedSource("ASSET", model.assetKey(), snapshotId, 1, "DATA_INTERNAL")),
+            null,
+            List.of()
+        );
     }
 
     private QueryDatasetAsset asset(String name, String ownerDept, String createdBy, boolean enabled) {

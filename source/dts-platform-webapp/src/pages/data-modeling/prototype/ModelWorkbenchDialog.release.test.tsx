@@ -567,7 +567,7 @@ describe("release and materialization dispatch", () => {
 		);
 		await flush();
 		await act(async () => button("发布模型")?.click());
-		await act(async () => button("运行质量检查")?.click());
+		await act(async () => button("运行工程验证")?.click());
 
 		expect(apiMocks.startPublicationIntent).toHaveBeenCalledWith(model.id, built, "idem-1", "从模型工作台发布");
 		expect(apiMocks.runQualityCandidate).not.toHaveBeenCalled();
@@ -596,7 +596,8 @@ describe("release and materialization dispatch", () => {
 		await act(async () => button("发布模型")?.click());
 
 		expect(container.textContent).toContain("候选发布流程");
-		expect(container.textContent).toContain("质量检查");
+		expect(container.textContent).toContain("工程验证");
+		expect(container.textContent).toContain("治理数据质量");
 		expect(container.textContent).toContain("发布登记");
 		expect(container.textContent).toContain("上线就绪");
 		expect(container.textContent).toContain("无需另行审批");
@@ -882,7 +883,7 @@ describe("release and materialization dispatch", () => {
 	});
 
 	it.each([
-		["BUILT", "RUN_QUALITY", "运行质量检查", "runQualityCandidate"],
+		["BUILT", "RUN_QUALITY", "运行工程验证", "runQualityCandidate"],
 		["QUALITY_PASSED", "SUBMIT_REVIEW", "提交发布评审", "submitReviewCandidate"],
 		["REVIEW_PENDING", "APPROVE", "审核通过", "approveCandidate"],
 		["REVIEW_PENDING", "REJECT", "驳回", "rejectCandidate"],

@@ -22,6 +22,8 @@ import com.yuzhi.dts.analytics.service.QueryMetricsService;
 import com.yuzhi.dts.analytics.service.QueryTraceService;
 import com.yuzhi.dts.analytics.service.AssetListFilterService;
 import com.yuzhi.dts.analytics.service.RevisionService;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.service.semantic.SemanticQueryService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
@@ -73,6 +75,7 @@ public class CardResource {
     private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
     private final AnalyticsAssetAccessRegistrar assetAccessRegistrar;
+    private final AnalysisQueryGateway analysisQueryGateway;
 
     public CardResource(
             AnalyticsSessionService sessionService,
@@ -91,7 +94,8 @@ public class CardResource {
             SemanticQueryService semanticQueryService,
             AnalyticsConsumerClassificationService classificationService,
             ObjectMapper objectMapper,
-            AnalyticsAssetAccessRegistrar assetAccessRegistrar) {
+            AnalyticsAssetAccessRegistrar assetAccessRegistrar,
+            AnalysisQueryGateway analysisQueryGateway) {
         this.sessionService = sessionService;
         this.cardRepository = cardRepository;
         this.bookmarkRepository = bookmarkRepository;
@@ -109,6 +113,7 @@ public class CardResource {
         this.classificationService = classificationService;
         this.objectMapper = objectMapper;
         this.assetAccessRegistrar = assetAccessRegistrar;
+        this.analysisQueryGateway = analysisQueryGateway;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -184,7 +189,7 @@ public class CardResource {
         revisionService.recordCardRevision(card, user.get().getId(), false);
         assetAccessRegistrar.register("CARD", card.getId(), user.get(), request);
 
-        List<Map<String, Object>> resultMetadata = computeResultMetadata(card, PlatformContext.from(request));
+        List<Map<String, Object>> resultMetadata = computeResultMetadata(card, request);
         return ResponseEntity.ok(toCardResponse(card, resultMetadata, false));
     }
 
@@ -198,7 +203,7 @@ public class CardResource {
         boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "card", id).isPresent();
         return cardRepository.findById(id).map(card -> {
                     activityService.recordView(user.get().getId(), "card", id);
-                    return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card, PlatformContext.from(request)), favorite));
+                    return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card, request), favorite));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -254,7 +259,7 @@ public class CardResource {
         revisionService.recordCardRevision(card, user.get().getId(), false);
 
         boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "card", id).isPresent();
-        return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card, PlatformContext.from(request)), favorite));
+        return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card, request), favorite));
     }
 
     @DeleteMapping(path = "/{id}")
@@ -412,9 +417,16 @@ public class CardResource {
                     jsonQuery.put("query", prepared.mbql());
                 }
 
-                DatasetQueryService.DatasetResult result =
-                        queryExecutionFacade.executeWithCompliance(prepared, traceAttempts::add);
-                long runningTimeMs = System.currentTimeMillis() - startedMillis;
+                AnalyticsUser actor = sessionService.resolveUser(request).orElseThrow(() -> new IllegalArgumentException("Authentication required"));
+                AnalysisQueryGateway.GatewayExecution gatewayExecution = analysisQueryGateway.executePrepared(
+                    actor,
+                    prepared,
+                    AnalysisRequestContext.from(request),
+                    "legacy-card:" + cardId,
+                    prepared.constraints().maxResults()
+                );
+                DatasetQueryService.DatasetResult result = gatewayExecution.datasetResult();
+                long runningTimeMs = gatewayExecution.result().durationMs();
 
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("rows", result.rows());
@@ -606,7 +618,15 @@ public class CardResource {
                         body,
                         null,
                         exportConstraints);
-                result = queryExecutionFacade.executeWithCompliance(prepared);
+                AnalyticsUser actor = sessionService.resolveUser(request).orElseThrow(() -> new IllegalArgumentException("Authentication required"));
+                result = analysisQueryGateway.executePrepared(
+                    actor,
+                    prepared,
+                    AnalysisRequestContext.from(request),
+                    "legacy-card-export:" + cardId,
+                    10000,
+                    true
+                ).datasetResult();
             }
 
             // Set response headers
@@ -774,6 +794,8 @@ public class CardResource {
         response.put("parameter_mappings", List.of());
         response.put("display", card.getDisplay());
         response.put("type", card.getCardType());
+        response.put("lifecycle_status", card.getLifecycleStatus());
+        response.put("published_revision_id", card.getPublishedRevisionId());
         response.put("entity_id", card.getEntityId());
         response.put("collection_preview", true);
         response.put("last-edit-info", Map.of("timestamp", card.getUpdatedAt(), "id", card.getCreatorId()));
@@ -799,13 +821,13 @@ public class CardResource {
         return creator;
     }
 
-    private List<Map<String, Object>> computeResultMetadata(AnalyticsCard card, PlatformContext context) {
+    private List<Map<String, Object>> computeResultMetadata(AnalyticsCard card, HttpServletRequest request) {
         try {
             JsonNode datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
             if (isSemanticDatasetQuery(datasetQuery)) {
                 return semanticQueryService.previewCardColumns(
                     extractSemanticQuery(datasetQuery),
-                    context == null ? new PlatformContext(null, "CONFIDENTIAL", null) : context
+                    PlatformContext.from(request)
                 );
             }
             QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
@@ -813,7 +835,14 @@ public class CardResource {
                     null,
                     null,
                     DatasetQueryService.DatasetConstraints.defaults());
-            DatasetQueryService.DatasetResult result = queryExecutionFacade.executeRaw(prepared);
+            AnalyticsUser actor = sessionService.resolveUser(request).orElseThrow(() -> new IllegalArgumentException("Authentication required"));
+            DatasetQueryService.DatasetResult result = analysisQueryGateway.executePrepared(
+                actor,
+                prepared,
+                AnalysisRequestContext.from(request),
+                "legacy-card-metadata:" + card.getId(),
+                prepared.constraints().maxResults()
+            ).datasetResult();
             return result.resultsMetadataColumns();
         } catch (Exception e) {
             return List.of();

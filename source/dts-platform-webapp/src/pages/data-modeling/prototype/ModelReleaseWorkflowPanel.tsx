@@ -3,9 +3,10 @@ import type {
 	PlanExecutionBinding,
 	ReleaseCandidate,
 	ReleaseCandidateEvidenceSummary,
+	ReleaseCandidateGovernanceQuality,
 	ReleaseCandidateLifecycleAction,
 } from "@/api/modelSpecApi";
-import { Status } from "./PrototypePrimitives";
+import { Button, Status } from "./PrototypePrimitives";
 
 type ReleaseWorkflowAction = Extract<
 	ReleaseCandidateLifecycleAction,
@@ -75,6 +76,18 @@ const stepState = (
 	return "waiting";
 };
 
+const governanceStepState = (
+	candidate: ReleaseCandidate | null,
+	governanceQuality: ReleaseCandidateGovernanceQuality | null,
+): WorkflowStepState => {
+	if (!candidate || !governanceQuality) return "waiting";
+	if (governanceQuality.state === "PASSED") return "passed";
+	if (governanceQuality.state === "RUNNING") return "active";
+	if (governanceQuality.state === "FAILED" || governanceQuality.state === "STALE") return "failed";
+	if (governanceQuality.required && reached(candidate, "QUALITY_PASSED")) return "failed";
+	return "waiting";
+};
+
 const stepText = (state: WorkflowStepState) => {
 	if (state === "passed") return "已完成";
 	if (state === "active") return "处理中";
@@ -91,12 +104,18 @@ const stepIcon = (state: WorkflowStepState) => {
 	return <Circle size={12} />;
 };
 
-const handoffText = (candidate: ReleaseCandidate | null, actions: ReleaseWorkflowAction[]) => {
-	if (!candidate) return "先完成物化构建，系统才会开放质量检查。";
-	if (actions.includes("RUN_QUALITY")) return "当前由模型维护者运行质量检查。";
+const handoffText = (
+	candidate: ReleaseCandidate | null,
+	actions: ReleaseWorkflowAction[],
+	governanceQuality: ReleaseCandidateGovernanceQuality | null,
+) => {
+	if (!candidate) return "先完成物化构建，系统才会开放工程验证。";
+	if (actions.includes("RUN_QUALITY")) return "当前由模型维护者运行工程验证。";
+	if (governanceQuality?.required && governanceQuality.state !== "PASSED" && reached(candidate, "QUALITY_PASSED"))
+		return governanceQuality.message || "工程验证已通过，请先补齐治理数据质量证据。";
 	if (actions.includes("PUBLISH") && !candidate.audit?.approvedBy)
-		return "质量检查已通过，数据管理员可在职责范围内直接发布，无需另行审批。";
-	if (actions.includes("SUBMIT_REVIEW")) return "质量已通过，请提交发布评审。";
+		return "工程验证与治理数据质量均已通过，数据管理员可在职责范围内直接发布，无需另行审批。";
+	if (actions.includes("SUBMIT_REVIEW")) return "工程验证与治理数据质量均已通过，请提交发布评审。";
 	if (candidate.status === "REVIEW_PENDING" && !actions.some((action) => action === "APPROVE" || action === "REJECT"))
 		return "等待独立发布审核人处理；提交人不能审核自己的候选。";
 	if (actions.includes("APPROVE") || actions.includes("REJECT")) return "当前由独立发布审核人通过或驳回。";
@@ -122,19 +141,56 @@ const onlineText = (candidate: ReleaseCandidate | null, binding: PlanExecutionBi
 
 const evidenceText = (evidence: ReleaseCandidateEvidenceSummary[]) => {
 	const failed = evidence.filter((item) => item.state === "FAILED" || item.state === "STALE");
-	if (failed.length) return failed.map((item) => `${item.type}：${item.message || item.code || item.state}`).join("；");
+	if (failed.length)
+		return failed
+			.map((item) => `${item.type === "QUALITY_RUN" ? "工程验证" : item.type}：${item.message || item.code || item.state}`)
+			.join("；");
 	const passed = evidence.filter((item) => item.state === "PASSED").length;
 	return evidence.length ? `${passed}/${evidence.length} 项证据已通过` : "尚无发布证据";
+};
+
+const governanceQualityText = (governanceQuality: ReleaseCandidateGovernanceQuality | null) => {
+	if (!governanceQuality) return "工程验证通过后读取规则版本、绑定和运行证据。";
+	if (governanceQuality.state === "PASSED") return "规则版本、资产绑定和有效运行证据均已通过。";
+	return governanceQuality.message || governanceQuality.code || "治理数据质量证据尚未就绪。";
+};
+
+const canRerunGovernanceQuality = (governanceQuality: ReleaseCandidateGovernanceQuality | null) =>
+	Boolean(
+		governanceQuality &&
+			(governanceQuality.state === "FAILED" || governanceQuality.state === "STALE") &&
+			governanceQuality.evidence.some(
+				(item) =>
+					item.ruleId &&
+					item.ruleVersionId &&
+					item.bindingId &&
+					item.violations.some((violation) => ["MISSING", "FAILED", "ERROR", "EXPIRED"].includes(violation)) &&
+					!item.violations.some((violation) =>
+						["ASSET_MISMATCH", "VERSION_MISMATCH", "BINDING_MISMATCH"].includes(violation),
+					),
+			),
+	);
+
+const formatTime = (value?: string | null) => {
+	if (!value) return "—";
+	const parsed = new Date(value);
+	return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("zh-CN", { hour12: false });
 };
 
 export function ModelReleaseWorkflowPanel({
 	candidate,
 	evidence,
+	governanceQuality,
+	governanceQualityRerunning = false,
+	onRerunGovernanceQuality,
 	releaseActions,
 	binding,
 }: {
 	candidate: ReleaseCandidate | null;
 	evidence: ReleaseCandidateEvidenceSummary[];
+	governanceQuality: ReleaseCandidateGovernanceQuality | null;
+	governanceQualityRerunning?: boolean;
+	onRerunGovernanceQuality?: () => void;
 	releaseActions: ReleaseWorkflowAction[];
 	binding: PlanExecutionBinding | null;
 }) {
@@ -147,7 +203,8 @@ export function ModelReleaseWorkflowPanel({
 				releaseActions.some((action) => action === "SUBMIT_REVIEW" || action === "APPROVE" || action === "REJECT")));
 	const steps = [
 		{ key: "build" as const, label: "构建", state: stepState(candidate, "build", binding) },
-		{ key: "quality" as const, label: "质量检查", state: stepState(candidate, "quality", binding) },
+		{ key: "quality" as const, label: "工程验证", state: stepState(candidate, "quality", binding) },
+		{ key: "governance-quality" as const, label: "治理数据质量", state: governanceStepState(candidate, governanceQuality) },
 		...(reviewRequired
 			? [{ key: "review" as const, label: "发布评审", state: stepState(candidate, "review", binding) }]
 			: []),
@@ -155,6 +212,7 @@ export function ModelReleaseWorkflowPanel({
 		{ key: "online" as const, label: "上线就绪", state: stepState(candidate, "online", binding) },
 	];
 	const online = onlineText(candidate, binding);
+	const governanceRerunnable = Boolean(onRerunGovernanceQuality && canRerunGovernanceQuality(governanceQuality));
 	return (
 		<div className="dmx-release-workflow">
 			<div className="dmx-release-workflow__heading">
@@ -183,11 +241,57 @@ export function ModelReleaseWorkflowPanel({
 				<ShieldCheck size={18} />
 				<div>
 					<strong>当前责任</strong>
-					<p>{handoffText(candidate, releaseActions)}</p>
+					<p>{handoffText(candidate, releaseActions, governanceQuality)}</p>
 					{candidate?.audit?.submittedBy ? <small>提交人：{candidate.audit.submittedBy}</small> : null}
 					{candidate?.audit?.approvedBy ? <small>审核人：{candidate.audit.approvedBy}</small> : null}
 					{candidate?.audit?.publishedBy ? <small>发布人：{candidate.audit.publishedBy}</small> : null}
 				</div>
+			</div>
+			<div className="dmx-governance-quality">
+				<div className="dmx-governance-quality__heading">
+					<div>
+						<span>治理数据质量证据</span>
+						<strong>{governanceQuality?.required ? "发布门禁" : "提示项"}</strong>
+					</div>
+					<div className="dmx-governance-quality__actions">
+						{governanceQuality?.evidence[0]?.runId ? (
+							<a href={`#/governance/rules/runs/${encodeURIComponent(governanceQuality.evidence[0].runId)}`}>
+								查看质量运行
+							</a>
+						) : governanceQuality?.evidence[0]?.assetKey ? (
+							<a
+								href={`#/governance/rules/catalog?datasetId=${encodeURIComponent(governanceQuality.evidence[0].assetKey)}`}
+							>
+								配置质量规则
+							</a>
+						) : null}
+						{governanceRerunnable ? (
+							<Button disabled={governanceQualityRerunning} onClick={onRerunGovernanceQuality} type="link">
+								{governanceQualityRerunning ? "正在创建新运行…" : "重新运行治理质量"}
+							</Button>
+						) : null}
+					</div>
+				</div>
+				<p>{governanceQualityText(governanceQuality)}</p>
+				{governanceQuality ? (
+					<small>有效期：{governanceQuality.maxAgeSeconds} 秒 · 状态：{governanceQuality.state}</small>
+				) : null}
+				{governanceQuality?.evidence.length ? (
+					<ul>
+						{governanceQuality.evidence.map((item, index) => (
+							<li key={`${item.assetKey}-${item.ruleVersionId || index}`}>
+								<strong>{item.status}</strong>
+								<span>资产 {item.assetKey}</span>
+								<span>规则版本 {item.ruleVersionId || "—"}</span>
+								<span>绑定 {item.bindingId || "—"}</span>
+								<span>运行 {item.runId || "—"}</span>
+								<span>完成 {formatTime(item.finishedAt)}</span>
+								<span>校验和 {item.evidenceChecksum || "—"}</span>
+								{item.violations.length ? <em>{item.violations.join("、")}</em> : null}
+							</li>
+						))}
+					</ul>
+				) : null}
 			</div>
 			<div className="dmx-release-readiness">
 				<div>

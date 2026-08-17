@@ -27,6 +27,10 @@ import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.AssetListFilterService;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.service.semantic.SemanticQueryService;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
+import com.yuzhi.dts.analytics.service.publication.AnalysisPublicationService.PublicationCommand;
+import com.yuzhi.dts.analytics.service.publication.DashboardPublicationService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
@@ -76,6 +80,8 @@ public class DashboardResource {
     private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
     private final AnalyticsAssetAccessRegistrar assetAccessRegistrar;
+    private final AnalysisQueryGateway analysisQueryGateway;
+    private final DashboardPublicationService publicationService;
 
     public DashboardResource(
             AnalyticsSessionService sessionService,
@@ -95,7 +101,9 @@ public class DashboardResource {
             AssetListFilterService assetListFilterService,
             AnalyticsConsumerClassificationService classificationService,
             ObjectMapper objectMapper,
-            AnalyticsAssetAccessRegistrar assetAccessRegistrar) {
+            AnalyticsAssetAccessRegistrar assetAccessRegistrar,
+            AnalysisQueryGateway analysisQueryGateway,
+            DashboardPublicationService publicationService) {
         this.sessionService = sessionService;
         this.dashboardRepository = dashboardRepository;
         this.dashboardCardRepository = dashboardCardRepository;
@@ -114,6 +122,8 @@ public class DashboardResource {
         this.classificationService = classificationService;
         this.objectMapper = objectMapper;
         this.assetAccessRegistrar = assetAccessRegistrar;
+        this.analysisQueryGateway = analysisQueryGateway;
+        this.publicationService = publicationService;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -178,6 +188,11 @@ public class DashboardResource {
         if (dashboard == null) {
             return ResponseEntity.notFound().build();
         }
+        if (!isMaintainer(dashboard, user.get())
+                && (!"PUBLISHED".equals(dashboard.getLifecycleStatus())
+                    || !"AVAILABLE".equals(dashboard.getRegistrationStatus()))) {
+            return ResponseEntity.notFound().build();
+        }
         boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "dashboard", id).isPresent();
         List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(id);
         activityService.recordView(user.get().getId(), "dashboard", id);
@@ -194,6 +209,18 @@ public class DashboardResource {
         AnalyticsDashboard dashboard = dashboardRepository.findById(id).orElse(null);
         if (dashboard == null) {
             return ResponseEntity.notFound().build();
+        }
+        boolean restoring = "ARCHIVED".equals(dashboard.getLifecycleStatus())
+            && body != null
+            && body.has("archived")
+            && !body.path("archived").asBoolean(true);
+        if (restoring) {
+            dashboard.setLifecycleStatus("DRAFT");
+            dashboard.setPublishedRevisionId(null);
+            dashboard.setRegistrationStatus("NOT_REGISTERED");
+        } else {
+            ResponseEntity<?> immutable = requireDraft(dashboard);
+            if (immutable != null) return immutable;
         }
 
         if (body != null && body.has("name")) {
@@ -233,10 +260,9 @@ public class DashboardResource {
         if (dashboard == null) {
             return ResponseEntity.notFound().build();
         }
-        dashboard.setArchived(true);
-        dashboardRepository.save(dashboard);
-        List<AnalyticsDashboardCard> dashcards = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(id);
-        MetabaseAuth.currentUser(sessionService, request).ifPresent(u -> revisionService.recordDashboardRevision(dashboard, dashcards, u.getId(), false));
+        Optional<AnalyticsUser> actor = MetabaseAuth.currentUser(sessionService, request);
+        if (actor.isEmpty()) return ResponseEntity.status(401).build();
+        publicationService.archiveRegistration(dashboard, actor.get());
         return ResponseEntity.noContent().build();
     }
 
@@ -257,6 +283,8 @@ public class DashboardResource {
         if (dashboard == null) {
             return ResponseEntity.notFound().build();
         }
+        ResponseEntity<?> immutable = requireDraft(dashboard);
+        if (immutable != null) return immutable;
 
         if (dashboardNode != null && dashboardNode.has("name")) {
             String name = trimToNull(dashboardNode.path("name").asText(null));
@@ -449,9 +477,12 @@ public class DashboardResource {
         if (auth.isPresent()) {
             return auth.get();
         }
-        if (!dashboardRepository.existsById(dashboardId)) {
+        AnalyticsDashboard dashboard = dashboardRepository.findById(dashboardId).orElse(null);
+        if (dashboard == null) {
             return ResponseEntity.notFound().build();
         }
+        ResponseEntity<?> immutable = requireDraft(dashboard);
+        if (immutable != null) return immutable;
         Long cardId = body == null ? null : resolveCardId(body);
         if (cardId == null || cardId <= 0 || cardRepository.findById(cardId).isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("error", "card_id is required"));
@@ -474,6 +505,54 @@ public class DashboardResource {
         dashcard = dashboardCardRepository.save(dashcard);
         classificationService.deriveDashboard(dashboardId);
         return ResponseEntity.ok(toDashcardResponse(dashcard, true));
+    }
+
+    @PostMapping(path = "/{id}/validate", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> validatePublication(
+            @PathVariable("id") long id,
+            @RequestBody(required = false) PublicationCommand command,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> actor = MetabaseAuth.currentUser(sessionService, request);
+        if (actor.isEmpty()) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(publicationService.validate(id, actor.get(), command));
+    }
+
+    @PostMapping(path = "/{id}/publish", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> publish(
+            @PathVariable("id") long id,
+            @RequestBody PublicationCommand command,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> actor = MetabaseAuth.currentUser(sessionService, request);
+        if (actor.isEmpty()) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(publicationService.publish(id, actor.get(), command));
+    }
+
+    @GetMapping(path = "/{id}/versions", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> versions(@PathVariable("id") long id, HttpServletRequest request) {
+        Optional<AnalyticsUser> actor = MetabaseAuth.currentUser(sessionService, request);
+        if (actor.isEmpty()) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(publicationService.versions(id, actor.get()));
+    }
+
+    @PostMapping(path = "/{id}/versions/{revisionId}/draft", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> createDraftFromVersion(
+            @PathVariable("id") long id,
+            @PathVariable("revisionId") long revisionId,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> actor = MetabaseAuth.currentUser(sessionService, request);
+        if (actor.isEmpty()) return ResponseEntity.status(401).build();
+        DashboardPublicationService.DraftResult result = publicationService.createDraftFromVersion(
+            id, revisionId, actor.get()
+        );
+        assetAccessRegistrar.register("DASHBOARD", result.dashboard().getId(), actor.get(), request);
+        return ResponseEntity.ok(toDashboardDetail(result.dashboard(), result.dashcards(), false));
+    }
+
+    @PostMapping(path = "/{id}/registration/retry", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> retryRegistration(@PathVariable("id") long id, HttpServletRequest request) {
+        Optional<AnalyticsUser> actor = MetabaseAuth.currentUser(sessionService, request);
+        if (actor.isEmpty()) return ResponseEntity.status(401).build();
+        return ResponseEntity.ok(Map.of("queued", publicationService.retryRegistration(id, actor.get())));
     }
 
     @Transactional(readOnly = true, noRollbackFor = Exception.class)
@@ -750,6 +829,17 @@ public class DashboardResource {
             return auth.get();
         }
 
+        AnalyticsDashboard dashboard = dashboardRepository.findById(dashboardId).orElse(null);
+        Optional<AnalyticsUser> actor = MetabaseAuth.currentUser(sessionService, request);
+        if (dashboard == null || actor.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        if (!isMaintainer(dashboard, actor.get())
+                && (!"PUBLISHED".equals(dashboard.getLifecycleStatus())
+                    || !"AVAILABLE".equals(dashboard.getRegistrationStatus()))) {
+            return ResponseEntity.notFound().build();
+        }
+
         AnalyticsDashboardCard dashcard = dashboardCardRepository.findById(dashcardId).orElse(null);
         if (dashcard == null || dashcard.getDashboardId() == null || dashcard.getDashboardId() != dashboardId || dashcard.getCardId() == null || dashcard.getCardId() != cardId) {
             return ResponseEntity.notFound().build();
@@ -832,8 +922,16 @@ public class DashboardResource {
                 jsonQuery.put("query", prepared.mbql());
             }
 
-            DatasetQueryService.DatasetResult result = queryExecutionFacade.executeWithCompliance(prepared);
-            long runningTimeMs = System.currentTimeMillis() - startedMillis;
+            AnalyticsUser executionActor = actor.get();
+            AnalysisQueryGateway.GatewayExecution gatewayExecution = analysisQueryGateway.executePrepared(
+                executionActor,
+                prepared,
+                AnalysisRequestContext.from(request),
+                "legacy-dashboard:" + dashboardId + ":card:" + cardId,
+                prepared.constraints().maxResults()
+            );
+            DatasetQueryService.DatasetResult result = gatewayExecution.datasetResult();
+            long runningTimeMs = gatewayExecution.result().durationMs();
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("rows", result.rows());
@@ -1035,10 +1133,28 @@ public class DashboardResource {
         map.put("creator_id", dashboard.getCreatorId());
         map.put("created_at", dashboard.getCreatedAt());
         map.put("updated_at", dashboard.getUpdatedAt());
+        map.put("lifecycle_status", dashboard.getLifecycleStatus());
+        map.put("published_revision_id", dashboard.getPublishedRevisionId());
+        map.put("registration_status", dashboard.getRegistrationStatus());
+        map.put("version_no", dashboard.getDashboardVersion());
         map.put("can_write", true);
         map.put("public_uuid", publicLinkService.publicUuidFor(PublicLinkService.MODEL_DASHBOARD, dashboard.getId()).orElse(null));
         map.put("favorite", favorite);
         return map;
+    }
+
+    private ResponseEntity<?> requireDraft(AnalyticsDashboard dashboard) {
+        if (dashboard != null && !"DRAFT".equals(dashboard.getLifecycleStatus())) {
+            return ResponseEntity.status(409).body(Map.of(
+                "errorCode", "DASHBOARD_PUBLISHED_IMMUTABLE",
+                "message", "published or archived dashboard cannot be edited in place"
+            ));
+        }
+        return null;
+    }
+
+    private boolean isMaintainer(AnalyticsDashboard dashboard, AnalyticsUser actor) {
+        return actor != null && (actor.isSuperuser() || actor.getId().equals(dashboard.getCreatorId()));
     }
 
     private Map<String, Object> toDashboardDetail(AnalyticsDashboard dashboard, List<AnalyticsDashboardCard> dashcards, boolean favorite) {

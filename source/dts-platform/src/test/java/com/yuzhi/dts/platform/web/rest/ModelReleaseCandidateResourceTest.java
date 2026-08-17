@@ -18,6 +18,9 @@ import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.CandidateGovernanceQualityRerunService;
+import com.yuzhi.dts.platform.service.modeling.CandidateGovernanceQualityRerunService.RerunResult;
+import com.yuzhi.dts.platform.service.modeling.GovernanceQualityRerunPort.QualityRunRef;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.BlockerView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
@@ -75,6 +78,9 @@ class ModelReleaseCandidateResourceTest {
     private ModelReleaseCandidateApplicationService service;
 
     @MockBean
+    private CandidateGovernanceQualityRerunService governanceQualityReruns;
+
+    @MockBean
     private WarehousePlanActorProvider actorProvider;
 
     @MockBean
@@ -88,6 +94,49 @@ class ModelReleaseCandidateResourceTest {
 
     @MockBean
     private com.yuzhi.dts.platform.service.audit.AuditService auditService;
+
+    @Test
+    void governanceQualityRerunUsesCandidateCasAndReturnsCreatedRuns() throws Exception {
+        UUID runId = UUID.fromString("90000000-0000-0000-0000-000000000001");
+        UUID ruleId = UUID.fromString("90000000-0000-0000-0000-000000000002");
+        UUID versionId = UUID.fromString("90000000-0000-0000-0000-000000000003");
+        UUID bindingId = UUID.fromString("90000000-0000-0000-0000-000000000004");
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(governanceQualityReruns.rerun("server-tenant", "xiezm", PLAN_ID, CANDIDATE_ID, 4, "retry-1", "INST"))
+            .thenReturn(
+                new RerunResult(
+                    CANDIDATE_ID,
+                    false,
+                    List.of(new QualityRunRef(ruleId, versionId, bindingId, runId, "QUEUED"))
+                )
+            );
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/governance-quality/runs",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "retry-1")
+                    .header("X-Active-Dept", "INST")
+            )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.candidateId").value(CANDIDATE_ID.toString()))
+            .andExpect(jsonPath("$.data.replayed").value(false))
+            .andExpect(jsonPath("$.data.runs[0].runId").value(runId.toString()));
+
+        verify(governanceQualityReruns).rerun(
+            "server-tenant",
+            "xiezm",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "retry-1",
+            "INST"
+        );
+    }
 
     @Test
     void workspaceUsesServerTenantAndReturnsOneAggregateWithStrongEtag() throws Exception {

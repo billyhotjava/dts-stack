@@ -289,10 +289,11 @@ export default function MetadataManagementPage() {
 				),
 		},
 		{
-			title: "主题域",
+			title: "业务归属数据域",
 			dataIndex: "domain",
 			width: 160,
-			render: (_: unknown, row: MetadataAssetRow) => row.domain || row.domainId || <Tag color="orange">缺主题域</Tag>,
+			render: (_: unknown, row: MetadataAssetRow) =>
+				row.domain || row.domainId || <Tag color="orange">缺业务归属数据域</Tag>,
 		},
 		{
 			title: "映射",
@@ -408,7 +409,7 @@ export default function MetadataManagementPage() {
 				/>
 				<MetricTile
 					icon={<LinkOutlined />}
-					label="当前页缺主题域"
+					label="当前页缺业务归属数据域"
 					value={stats.missingDomain}
 					tone="text-amber-600"
 					footnote={`第 ${pageState.page} 页`}

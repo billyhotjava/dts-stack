@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0052-01-analysis-revision-publication-expand" author="codex">
+        <addColumn tableName="analytics_revision">
+            <column name="version_no" type="int"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="published_at" type="timestamp with time zone"/>
+            <column name="dependency_snapshot_json" type="text"/>
+            <column name="contract_checksum" type="varchar(64)"/>
+        </addColumn>
+        <sql>
+            UPDATE analytics_revision current_revision
+               SET version_no = (
+                       SELECT COUNT(*)
+                         FROM analytics_revision older_revision
+                        WHERE older_revision.model = current_revision.model
+                          AND older_revision.model_id = current_revision.model_id
+                          AND older_revision.id &lt;= current_revision.id
+                   ),
+                   status = 'DRAFT'
+             WHERE version_no IS NULL OR status IS NULL;
+            ALTER TABLE analytics_revision ALTER COLUMN version_no SET NOT NULL;
+            ALTER TABLE analytics_revision ALTER COLUMN status SET NOT NULL;
+            ALTER TABLE analytics_revision
+                ADD CONSTRAINT ck_analytics_revision_status
+                CHECK (status IN ('DRAFT', 'PUBLISHED', 'SUPERSEDED'));
+        </sql>
+        <addUniqueConstraint tableName="analytics_revision"
+            columnNames="model,model_id,version_no"
+            constraintName="uk_analytics_revision_model_version"/>
+        <sql>
+            CREATE UNIQUE INDEX uk_analytics_revision_current_published
+                ON analytics_revision(model, model_id)
+             WHERE status = 'PUBLISHED';
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS uk_analytics_revision_current_published;</sql>
+            <dropUniqueConstraint tableName="analytics_revision" constraintName="uk_analytics_revision_model_version"/>
+            <sql>ALTER TABLE analytics_revision DROP CONSTRAINT IF EXISTS ck_analytics_revision_status;</sql>
+            <dropColumn tableName="analytics_revision" columnName="contract_checksum"/>
+            <dropColumn tableName="analytics_revision" columnName="dependency_snapshot_json"/>
+            <dropColumn tableName="analytics_revision" columnName="published_at"/>
+            <dropColumn tableName="analytics_revision" columnName="status"/>
+            <dropColumn tableName="analytics_revision" columnName="version_no"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="0052-02-dashboard-publication-expand" author="codex">
+        <addColumn tableName="analytics_dashboard">
+            <column name="lifecycle_status" type="varchar(32)" defaultValue="DRAFT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="published_revision_id" type="bigint"/>
+            <column name="registration_status" type="varchar(32)" defaultValue="NOT_REGISTERED">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_no" type="bigint" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>
+            UPDATE analytics_dashboard
+               SET lifecycle_status = CASE WHEN archived THEN 'ARCHIVED' ELSE 'DRAFT' END,
+                   registration_status = 'NOT_REGISTERED'
+             WHERE lifecycle_status IS NULL OR registration_status IS NULL;
+            ALTER TABLE analytics_dashboard
+                ADD CONSTRAINT ck_analytics_dashboard_lifecycle
+                CHECK (lifecycle_status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED'));
+            ALTER TABLE analytics_dashboard
+                ADD CONSTRAINT ck_analytics_dashboard_registration
+                CHECK (registration_status IN ('NOT_REGISTERED', 'PENDING_REGISTRATION', 'AVAILABLE', 'REGISTRATION_FAILED', 'DISABLED'));
+        </sql>
+        <createIndex tableName="analytics_dashboard" indexName="idx_dashboard_publication">
+            <column name="lifecycle_status"/>
+            <column name="registration_status"/>
+            <column name="published_revision_id"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="analytics_dashboard" indexName="idx_dashboard_publication"/>
+            <sql>
+                ALTER TABLE analytics_dashboard DROP CONSTRAINT IF EXISTS ck_analytics_dashboard_registration;
+                ALTER TABLE analytics_dashboard DROP CONSTRAINT IF EXISTS ck_analytics_dashboard_lifecycle;
+            </sql>
+            <dropColumn tableName="analytics_dashboard" columnName="version_no"/>
+            <dropColumn tableName="analytics_dashboard" columnName="registration_status"/>
+            <dropColumn tableName="analytics_dashboard" columnName="published_revision_id"/>
+            <dropColumn tableName="analytics_dashboard" columnName="lifecycle_status"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="0052-03-report-registration-outbox" author="codex">
+        <createTable tableName="analytics_report_registration_outbox">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="aggregate_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="aggregate_id" type="bigint"><constraints nullable="false"/></column>
+            <column name="asset_version" type="bigint"><constraints nullable="false"/></column>
+            <column name="event_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="payload_json" type="text"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)" defaultValue="PENDING"><constraints nullable="false"/></column>
+            <column name="attempts" type="int" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="next_attempt_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="last_error" type="varchar(512)"/>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="updated_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="analytics_report_registration_outbox"
+            columnNames="aggregate_type,aggregate_id,asset_version,event_type"
+            constraintName="uk_report_registration_outbox_event"/>
+        <createIndex tableName="analytics_report_registration_outbox" indexName="idx_report_registration_outbox_pending">
+            <column name="status"/>
+            <column name="next_attempt_at"/>
+        </createIndex>
+        <rollback>
+            <dropTable tableName="analytics_report_registration_outbox"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

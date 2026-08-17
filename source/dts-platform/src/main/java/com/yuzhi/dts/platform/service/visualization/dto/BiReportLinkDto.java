@@ -23,5 +23,9 @@ public record BiReportLinkDto(
     Instant lastVisitedAt,
     String owner,
     Instant updatedAt,
-    String bizDomain
+    String bizDomain,
+    String assetType,
+    String assetKey,
+    Long assetVersion,
+    String reconcileStatus
 ) {}

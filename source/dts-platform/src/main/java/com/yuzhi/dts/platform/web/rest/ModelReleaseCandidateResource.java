@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateApplicationService;
+import com.yuzhi.dts.platform.service.modeling.CandidateGovernanceQualityRerunService;
+import com.yuzhi.dts.platform.service.modeling.CandidateGovernanceQualityRerunService.RerunResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CreateCandidateCommand;
@@ -46,15 +48,18 @@ public class ModelReleaseCandidateResource {
     );
 
     private final ModelReleaseCandidateApplicationService service;
+    private final CandidateGovernanceQualityRerunService governanceQualityReruns;
     private final WarehousePlanActorProvider actorProvider;
     private final String serverTenantId;
 
     public ModelReleaseCandidateResource(
         ModelReleaseCandidateApplicationService service,
+        CandidateGovernanceQualityRerunService governanceQualityReruns,
         WarehousePlanActorProvider actorProvider,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.service = service;
+        this.governanceQualityReruns = governanceQualityReruns;
         this.actorProvider = actorProvider;
         this.serverTenantId = serverTenantId;
     }
@@ -348,6 +353,27 @@ public class ModelReleaseCandidateResource {
                 requiredRequest(request, "quality request").reason()
             )
         );
+    }
+
+    @PostMapping("/{candidateId}/governance-quality/runs")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<RerunResult>> rerunGovernanceQuality(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        RerunResult result = governanceQualityReruns.rerun(
+            serverTenantId,
+            actorId(),
+            planId,
+            candidateId,
+            expectedVersion(candidateId, ifMatch),
+            requiredIdempotencyKey(idempotencyKey),
+            activeDept
+        );
+        return ResponseEntity.status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED).body(ApiResponses.ok(result));
     }
 
     @PostMapping("/{candidateId}/reviews")

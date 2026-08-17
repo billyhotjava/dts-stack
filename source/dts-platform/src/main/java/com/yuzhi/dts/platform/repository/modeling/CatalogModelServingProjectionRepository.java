@@ -14,7 +14,11 @@ import com.yuzhi.dts.platform.service.modeling.serving.PhysicalPreviewContract.R
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -266,6 +270,109 @@ public class CatalogModelServingProjectionRepository {
             .findFirst();
     }
 
+    /** Reads the durable delivery state without widening the published/serving projection contract. */
+    @Transactional(readOnly = true)
+    public Optional<ServingSyncState> findSyncState(String tenantId, UUID modelSpecId) {
+        return jdbcTemplate
+            .query(
+                """
+                select tenant_id, model_spec_id, catalog_asset_type, catalog_asset_key,
+                       latest_published_ref::text, serving_ref::text, version,
+                       sync_status, sync_attempts, last_sync_error, next_sync_at, updated_at
+                  from modeling_catalog_model_serving_projection
+                 where tenant_id = ? and model_spec_id = ?
+                """,
+                (row, rowNumber) -> new ServingSyncState(
+                    mapProjection(row),
+                    row.getInt("sync_attempts"),
+                    row.getString("last_sync_error"),
+                    row.getTimestamp("next_sync_at") == null
+                        ? null
+                        : row.getTimestamp("next_sync_at").toInstant()
+                ),
+                tenantId,
+                modelSpecId
+            )
+            .stream()
+            .findFirst();
+    }
+
+    /** Reads serving delivery evidence for a bounded asset page in one query. Existing CAS write paths are untouched. */
+    @Transactional(readOnly = true)
+    public Map<String, List<ServingSyncState>> findSyncStatesByAssetKeys(
+        CatalogAssetType assetType,
+        Collection<String> assetKeys
+    ) {
+        if (assetType == null || assetKeys == null || assetKeys.isEmpty()) {
+            return Map.of();
+        }
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        for (String assetKey : assetKeys) {
+            if (assetKey != null && !assetKey.isBlank()) {
+                keys.add(assetKey.trim());
+            }
+        }
+        if (keys.isEmpty()) {
+            return Map.of();
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(keys.size(), "?"));
+        List<Object> arguments = new java.util.ArrayList<>(keys.size() + 1);
+        String sql;
+        if (CatalogAssetType.DATASET == assetType) {
+            sql =
+                """
+                select semantics.asset_key as requested_asset_key,
+                       projection.tenant_id, projection.model_spec_id,
+                       projection.catalog_asset_type, projection.catalog_asset_key,
+                       projection.latest_published_ref::text,
+                       projection.serving_ref::text, projection.version,
+                       projection.sync_status, projection.sync_attempts,
+                       projection.last_sync_error, projection.next_sync_at,
+                       projection.updated_at
+                  from modeling_catalog_model_serving_projection projection
+                  join catalog_asset_semantic_projection semantics
+                    on semantics.asset_type = 'DATASET'
+                   and semantics.resource_id = case
+                         when projection.serving_ref ->> 'physicalAssetId'
+                              ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                         then (projection.serving_ref ->> 'physicalAssetId')::uuid
+                         else null
+                       end
+                 where projection.serving_ref is not null
+                   and semantics.asset_key in (
+                """ + placeholders + ") order by semantics.asset_key, projection.updated_at desc, projection.model_spec_id";
+            arguments.addAll(keys);
+        } else {
+            sql =
+                """
+                select catalog_asset_key as requested_asset_key,
+                       tenant_id, model_spec_id, catalog_asset_type, catalog_asset_key,
+                       latest_published_ref::text, serving_ref::text, version,
+                       sync_status, sync_attempts, last_sync_error, next_sync_at, updated_at
+                  from modeling_catalog_model_serving_projection
+                 where catalog_asset_type = ? and catalog_asset_key in (
+                """ + placeholders + ") order by catalog_asset_key, updated_at desc, model_spec_id";
+            arguments.add(assetType.name());
+            arguments.addAll(keys);
+        }
+        Map<String, List<ServingSyncState>> states = new LinkedHashMap<>();
+        jdbcTemplate.query(
+            sql,
+            row -> {
+                ServingSyncState state = new ServingSyncState(
+                    mapProjection(row),
+                    row.getInt("sync_attempts"),
+                    row.getString("last_sync_error"),
+                    row.getTimestamp("next_sync_at") == null ? null : row.getTimestamp("next_sync_at").toInstant()
+                );
+                states.computeIfAbsent(row.getString("requested_asset_key"), ignored -> new java.util.ArrayList<>()).add(state);
+            },
+            arguments.toArray()
+        );
+        states.replaceAll((key, value) -> List.copyOf(value));
+        return Map.copyOf(states);
+    }
+
     @Transactional(readOnly = true)
     public Optional<RelationEvidence> findRelationEvidence(String tenantId, UUID evidenceId) {
         return jdbcTemplate
@@ -362,7 +469,7 @@ public class CatalogModelServingProjectionRepository {
                 select tenant_id, model_spec_id
                   from modeling_catalog_model_serving_projection
                  where serving_ref is not null
-                   and sync_attempts < 5
+                   and sync_attempts < 6
                    and (
                        (sync_status = 'SYNC_PENDING' and (next_sync_at is null or next_sync_at <= ?))
                        or
@@ -417,6 +524,27 @@ public class CatalogModelServingProjectionRepository {
                set sync_status = 'SYNCED', last_sync_error = null,
                    next_sync_at = null, updated_at = current_timestamp
              where tenant_id = ? and model_spec_id = ? and version = ?
+            """,
+            tenantId,
+            modelSpecId,
+            expectedVersion
+        ) == 1;
+    }
+
+    /**
+     * Starts a new delivery cycle for a failed row. Incrementing the projection version makes any
+     * receipt held by an older worker stale while preserving both canonical pointer documents.
+     */
+    @Transactional
+    public boolean requestSyncRetry(String tenantId, UUID modelSpecId, long expectedVersion) {
+        return jdbcTemplate.update(
+            """
+            update modeling_catalog_model_serving_projection
+               set sync_status = 'SYNC_PENDING', sync_attempts = 0,
+                   last_sync_error = null, next_sync_at = null,
+                   version = version + 1, updated_at = current_timestamp
+             where tenant_id = ? and model_spec_id = ? and version = ?
+               and sync_status = 'SYNC_FAILED' and serving_ref is not null
             """,
             tenantId,
             modelSpecId,
@@ -711,6 +839,13 @@ public class CatalogModelServingProjectionRepository {
     private record PromotionEvidence(RelationEvidence relation, UUID physicalAssetId, UUID sourceId) {}
 
     public record SyncCandidate(ModelServingProjection projection, int syncAttempts) {}
+
+    public record ServingSyncState(
+        ModelServingProjection projection,
+        int syncAttempts,
+        String lastSyncError,
+        Instant nextSyncAt
+    ) {}
 
     public record ProjectionMutation(
         boolean latestPublishedChanged,

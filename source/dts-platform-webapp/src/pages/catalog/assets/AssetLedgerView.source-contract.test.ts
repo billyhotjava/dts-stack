@@ -28,7 +28,7 @@ test("asset rows navigate to the canonical detail page and expose no inline acti
 	assert.match(SOURCE, /title: "资产名称"/);
 	assert.match(SOURCE, /title: "数据源类型"/);
 	assert.match(SOURCE, /title: "来源系统"/);
-	assert.match(SOURCE, /title: "主题域"/);
+	assert.match(SOURCE, /title: "业务归属数据域"/);
 	assert.match(SOURCE, /title: "数据分层"/);
 	assert.match(SOURCE, /title: "密级"/);
 	assert.match(SOURCE, /title: "责任归属"/);

@@ -65,6 +65,18 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
     @Column(name = "biz_domain", length = 64)
     private String bizDomain;
 
+    @Column(name = "asset_type", length = 32)
+    private String assetType;
+
+    @Column(name = "asset_key", length = 128)
+    private String assetKey;
+
+    @Column(name = "asset_version")
+    private Long assetVersion;
+
+    @Column(name = "reconcile_status", nullable = false, length = 32)
+    private String reconcileStatus = "SYNCED";
+
     /**
      * Sprint-17: marker for rows synced from dts-analytics screens vs manual ones.
      * Sprint-17.1 hotfix: marked @Transient because the corresponding column may
@@ -203,6 +215,38 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
 
     public void setBizDomain(String bizDomain) {
         this.bizDomain = bizDomain;
+    }
+
+    public String getAssetType() {
+        return assetType;
+    }
+
+    public void setAssetType(String assetType) {
+        this.assetType = assetType;
+    }
+
+    public String getAssetKey() {
+        return assetKey;
+    }
+
+    public void setAssetKey(String assetKey) {
+        this.assetKey = assetKey;
+    }
+
+    public Long getAssetVersion() {
+        return assetVersion;
+    }
+
+    public void setAssetVersion(Long assetVersion) {
+        this.assetVersion = assetVersion;
+    }
+
+    public String getReconcileStatus() {
+        return reconcileStatus;
+    }
+
+    public void setReconcileStatus(String reconcileStatus) {
+        this.reconcileStatus = reconcileStatus;
     }
 
     public String getSource() {

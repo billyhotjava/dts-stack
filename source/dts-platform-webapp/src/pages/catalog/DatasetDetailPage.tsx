@@ -11,6 +11,7 @@ import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useRouter } from "@/routes/hooks";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
 import { AssetClassificationFactPanel } from "./assets/AssetClassificationFactPanel";
+import { AssetDeliveryEligibilityNotice, AssetDeliveryStatusItems } from "./assets/AssetDeliveryStatusPanel";
 import { AssetLifecycleWorkbenchDrawer } from "./assets/AssetLifecycleWorkbenchDrawer";
 import type { AssetRow } from "./assets/assetPageShared";
 import {
@@ -69,6 +70,13 @@ const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 		columnCount: asset.columnCount,
 		securityPolicyRefs: asset.securityPolicyRefs,
 		metadataSource: asset.metadataSource,
+		statusAxes: asset.statusAxes,
+		consumptionEligibility: asset.consumptionEligibility || "CONDITIONAL",
+		eligibilityReasons: Array.isArray(asset.eligibilityReasons) ? asset.eligibilityReasons : [],
+		projectionUpdatedAt: asset.projectionUpdatedAt,
+		modelRefs: Array.isArray(asset.modelRefs) ? asset.modelRefs : [],
+		servingSync: asset.servingSync || { status: "NOT_APPLICABLE", attempts: 0 },
+		qualityStatus: asset.qualityStatus || "UNKNOWN",
 		__fqn: asset.fqn,
 		__legacyDatasetId: asset.legacyDatasetId,
 		__columns: Array.isArray(detail?.columns) ? detail.columns : [],
@@ -490,7 +498,6 @@ function DatasetOverviewTab({
 		: [];
 	const tags: any[] = Array.isArray(dataset.__tags) ? dataset.__tags : [];
 	const profile = resolveProfileSummary(dataset.__profileJson);
-
 	return (
 		<div className="space-y-3 py-2">
 			{dataset.metadataSource === "openmetadata" && <Tag color="blue">OpenMetadata主目录</Tag>}
@@ -515,6 +522,7 @@ function DatasetOverviewTab({
 				<Descriptions.Item label="资产来源">
 					{assetContract?.metadataSource ?? dataset.metadataSource ?? "-"}
 				</Descriptions.Item>
+				<AssetDeliveryStatusItems dataset={dataset} />
 				{profile.rowCount != null && (
 					<Descriptions.Item label="数据行数">{profile.rowCount.toLocaleString()}</Descriptions.Item>
 				)}
@@ -540,6 +548,7 @@ function DatasetOverviewTab({
 			{missingFields.length ? (
 				<Alert type="warning" showIcon message="治理字段待补齐" description={missingFields.join("、")} />
 			) : null}
+			<AssetDeliveryEligibilityNotice dataset={dataset} />
 			{dataset.matchReason ? <Alert type="info" showIcon message="映射说明" description={dataset.matchReason} /> : null}
 			{dataset.description && (
 				<div className="text-sm text-slate-600 rounded border border-slate-100 bg-slate-50 p-3">

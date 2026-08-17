@@ -6,6 +6,8 @@ package com.yuzhi.dts.platform.service.modeling;
  */
 public interface ModelGovernancePolicyPort {
 
+    long DEFAULT_QUALITY_EVIDENCE_MAX_AGE_SECONDS = 86_400L;
+
     Policy resolve();
 
     enum StandardCoverage {
@@ -23,17 +25,29 @@ public interface ModelGovernancePolicyPort {
         boolean available,
         StandardCoverage standardCoverage,
         QualityGate qualityGate,
+        long qualityEvidenceMaxAgeSeconds,
         String reasonCode
     ) {
         public static Policy available(StandardCoverage standardCoverage, QualityGate qualityGate) {
+            return available(standardCoverage, qualityGate, DEFAULT_QUALITY_EVIDENCE_MAX_AGE_SECONDS);
+        }
+
+        public static Policy available(
+            StandardCoverage standardCoverage,
+            QualityGate qualityGate,
+            long qualityEvidenceMaxAgeSeconds
+        ) {
             if (standardCoverage == null || qualityGate == null) {
                 throw new IllegalArgumentException("Resolved governance policy values are required");
             }
-            return new Policy(true, standardCoverage, qualityGate, null);
+            if (qualityEvidenceMaxAgeSeconds < 1) {
+                throw new IllegalArgumentException("qualityEvidenceMaxAgeSeconds must be positive");
+            }
+            return new Policy(true, standardCoverage, qualityGate, qualityEvidenceMaxAgeSeconds, null);
         }
 
         public static Policy unavailable(String reasonCode) {
-            return new Policy(false, null, null, reasonCode);
+            return new Policy(false, null, null, DEFAULT_QUALITY_EVIDENCE_MAX_AGE_SECONDS, reasonCode);
         }
     }
 }

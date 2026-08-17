@@ -20,6 +20,7 @@ import {
 	rejectReleaseCandidateReview,
 	rematerializeReleaseCandidate,
 	repairPlanExecutionBinding,
+	rerunReleaseCandidateGovernanceQuality,
 	retryReleaseCandidate,
 	retryReleaseCandidateRegistration,
 	rollbackReleaseCandidate,
@@ -65,7 +66,7 @@ const RELEASE_WORKFLOW_ACTIONS: ReleaseWorkflowAction[] = [
 ];
 
 const RELEASE_ACTION_LABELS: Record<ReleaseWorkflowAction, string> = {
-	RUN_QUALITY: "运行质量检查",
+	RUN_QUALITY: "运行工程验证",
 	SUBMIT_REVIEW: "提交发布评审",
 	APPROVE: "审核通过",
 	REJECT: "驳回",
@@ -115,7 +116,7 @@ export function ModelPublishDialog({
 	const [workspace, setWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
 	const [materializations, setMaterializations] = useState<ModelMaterializationStatus[]>([]);
 	const [executionWorkspace, setExecutionWorkspace] = useState<PlanExecutionWorkspace | null>(null);
-	const [busy, setBusy] = useState<"load" | "build" | "release" | "run" | "">("load");
+	const [busy, setBusy] = useState<"load" | "build" | "release" | "governance-quality" | "run" | "">("load");
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
 	const [failure, setFailure] = useState<string>("");
 	const selection = useMemo(() => Array.from(new Map(models.map((model) => [model.id, model])).values()), [models]);
@@ -338,6 +339,19 @@ export function ModelPublishDialog({
 			setActiveReleaseAction(null);
 		}
 	};
+	const rerunGovernanceQuality = async () => {
+		if (!canMaintain || !planId || !scopedCandidate) return;
+		setBusy("governance-quality");
+		setFailure("");
+		try {
+			await rerunReleaseCandidateGovernanceQuality(planId, scopedCandidate, crypto.randomUUID());
+			await load();
+		} catch (error) {
+			setFailure(normalizeModelingRequestFailure(error, "治理数据质量未能重新运行。").message);
+		} finally {
+			setBusy("");
+		}
+	};
 	const runOperationalBinding = async () => {
 		if (!planId || !executionBinding?.allowedActions.includes("RUN_NOW")) return;
 		setBusy("run");
@@ -485,13 +499,16 @@ export function ModelPublishDialog({
 						<>
 							<h3>{batch ? "批量发布流程" : "发布模型"}</h3>
 							<p className="dmx-capability-note">
-								构建和质量检查通过后，数据管理员可在职责范围内直接发布；旧候选仍兼容评审流程。发布登记完成不代表运行计划已经上线。
+									构建、工程验证和治理数据质量通过后，数据管理员可在职责范围内直接发布；旧候选仍兼容评审流程。发布登记完成不代表运行计划已经上线。
 							</p>
 							<ModelReleaseWorkflowPanel
 								binding={executionBinding}
-								candidate={scopedCandidate}
-								evidence={workspace?.evidence || []}
-								releaseActions={releaseActions}
+									candidate={scopedCandidate}
+									evidence={workspace?.evidence || []}
+									governanceQuality={workspace?.governanceQuality || null}
+									governanceQualityRerunning={busy === "governance-quality"}
+									onRerunGovernanceQuality={canMaintain ? () => void rerunGovernanceQuality() : undefined}
+									releaseActions={releaseActions}
 							/>
 							<label>
 								<span>操作说明</span>

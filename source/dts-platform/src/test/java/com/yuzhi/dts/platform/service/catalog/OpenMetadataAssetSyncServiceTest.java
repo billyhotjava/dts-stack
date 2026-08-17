@@ -123,6 +123,23 @@ class OpenMetadataAssetSyncServiceTest {
     }
 
     @Test
+    void unavailableOpenMetadataLeavesTheDtsCatalogCacheUntouched() {
+        org.mockito.Mockito.reset(assetRepository, mappingRepository, extensionRepository);
+        when(client.listTables(anyInt(), anyString())).thenReturn(Optional.empty());
+
+        OpenMetadataAssetSyncService.SyncResult result = service.syncTables(50);
+
+        assertThat(result.enabled()).isTrue();
+        assertThat(result.assetCount()).isZero();
+        assertThat(result.failedCount()).isEqualTo(1);
+        assertThat(result.message()).contains("OpenMetadata").contains("重试");
+        org.mockito.Mockito.verify(assetRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verify(columnRepository, org.mockito.Mockito.never()).deleteByAsset(any());
+        org.mockito.Mockito.verify(mappingRepository, org.mockito.Mockito.never()).save(any());
+        org.mockito.Mockito.verify(extensionRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
     void matchedAssetSeedsOnlyMissingGovernanceFields() {
         CatalogDataset dataset = dataset("44444444-4444-4444-4444-444444444444", "source-a");
         dataset.setClassification("DATA_PUBLIC");

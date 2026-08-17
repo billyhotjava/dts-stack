@@ -1,391 +1,386 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import {
-	analyticsApi,
-	type PlatformDataSourceItem,
-	type DatabaseListItem,
-	type CurrentUser,
-	type MyUploadItem,
-} from "../api/analyticsApi";
-import { PageSection } from "../components/PageContainer/PageContainer";
+	getPublishedQueryDataset,
+	listPublishedQueryDatasets,
+	type AnalysisDatasetDetail,
+	type AnalysisDatasetPage,
+	type AnalysisDatasetSummary,
+} from "@/api/sql-workbench";
 import { PageHeader } from "@/components/page-header";
-import { Tag, Button, Input, Modal, message, Space, Tooltip } from "antd";
-import { actionColumn, CompactTable } from "@/components/table";
+import { CompactTable } from "@/components/table";
+import { useUserRoles } from "@/store/userStore";
 import type { ColumnsType } from "antd/es/table";
-import UploadedDataEditor from "../components/UploadedDataEditor";
+import {
+	Alert,
+	Button,
+	Descriptions,
+	Drawer,
+	Empty,
+	Input,
+	Select,
+	Space,
+	Spin,
+	Tag,
+	Tooltip,
+	Typography,
+} from "antd";
+import { PageSection } from "../components/PageContainer/PageContainer";
+import { canPromoteSemanticModel } from "./semantic/semanticAccess";
 
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
-/** Platform data source row enriched with matched analytics DB id */
-type DataLakeRow = PlatformDataSourceItem & {
-	analyticsDbId?: number;
+type ErrorState = {
+	message: string;
+	correlationId?: string;
 };
 
-/* ------------------------------------------------------------------ */
-/*  Component                                                          */
-/* ------------------------------------------------------------------ */
+function positiveInt(value: string | null, fallback: number): number {
+	const parsed = Number(value);
+	return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function errorState(error: unknown): ErrorState {
+	const candidate = error as {
+		message?: string;
+		response?: { data?: { message?: string; detail?: string; correlationId?: string }; headers?: Record<string, string> };
+	};
+	return {
+		message: candidate.response?.data?.detail || candidate.response?.data?.message || candidate.message || "数据集目录暂时不可用",
+		correlationId:
+			candidate.response?.data?.correlationId ||
+			candidate.response?.headers?.["x-correlation-id"] ||
+			candidate.response?.headers?.["x-request-id"],
+	};
+}
+
+function formatTime(value?: string | null): string {
+	return value ? new Date(value).toLocaleString("zh-CN") : "-";
+}
 
 export default function DataPage() {
-	// --- user / permissions ---
-	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-	const isDataAdmin = currentUser?.is_data_admin || currentUser?.is_superuser || false;
+	const navigate = useNavigate();
+	const roles = useUserRoles();
+	const canCreateAnalysis = canPromoteSemanticModel(roles);
+	const [searchParams, setSearchParams] = useSearchParams();
+	const page = positiveInt(searchParams.get("page"), 1);
+	const pageSize = positiveInt(searchParams.get("size"), DEFAULT_PAGE_SIZE);
+	const keyword = searchParams.get("keyword") || "";
+	const ownerDept = searchParams.get("ownerDept") || "";
+	const bizDomain = searchParams.get("bizDomain") || "";
+	const warehouseLayer = searchParams.get("warehouseLayer") || "";
+	const classification = searchParams.get("classification") || "";
 
-	// --- data lake list ---
-	const [platformSources, setPlatformSources] = useState<PlatformDataSourceItem[]>([]);
-	const [databases, setDatabases] = useState<DatabaseListItem[]>([]);
-	const [lakeLoading, setLakeLoading] = useState(true);
-	const [lakeSearch, setLakeSearch] = useState("");
+	const [searchText, setSearchText] = useState(keyword);
+	const [ownerText, setOwnerText] = useState(ownerDept);
+	const [domainText, setDomainText] = useState(bizDomain);
+	const [result, setResult] = useState<AnalysisDatasetPage | null>(null);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<ErrorState | null>(null);
+	const [selected, setSelected] = useState<AnalysisDatasetSummary | null>(null);
+	const [detail, setDetail] = useState<AnalysisDatasetDetail | null>(null);
+	const [detailLoading, setDetailLoading] = useState(false);
+	const [detailError, setDetailError] = useState<ErrorState | null>(null);
 
-	// --- my uploads ---
-	const [dataLakeId, setDataLakeId] = useState<number | null>(null);
-	const [uploads, setUploads] = useState<MyUploadItem[]>([]);
-	const [uploadsLoading, setUploadsLoading] = useState(true);
-	const [uploadsSearch, setUploadsSearch] = useState("");
+	const updateLocation = useCallback(
+		(values: Record<string, string | number | undefined>, resetPage = true) => {
+			const next = new URLSearchParams(searchParams);
+			for (const [key, value] of Object.entries(values)) {
+				if (value === undefined || value === "") next.delete(key);
+				else next.set(key, String(value));
+			}
+			if (resetPage) next.set("page", "1");
+			setSearchParams(next, { replace: true });
+		},
+		[searchParams, setSearchParams],
+	);
 
-	// --- upload modal ---
-	const [uploadModalOpen, setUploadModalOpen] = useState(false);
+	const load = useCallback(async () => {
+		setLoading(true);
+		setError(null);
+		try {
+			const response = await listPublishedQueryDatasets({
+				page: page - 1,
+				size: pageSize,
+				keyword: keyword || undefined,
+				ownerDept: ownerDept || undefined,
+				bizDomain: bizDomain || undefined,
+				warehouseLayer: warehouseLayer || undefined,
+				classification: classification || undefined,
+			});
+			setResult(response);
+		} catch (requestError) {
+			setResult(null);
+			setError(errorState(requestError));
+		} finally {
+			setLoading(false);
+		}
+	}, [bizDomain, classification, keyword, ownerDept, page, pageSize, warehouseLayer]);
 
-	// --- sync loading per source ---
-	const [syncingId, setSyncingId] = useState<string | null>(null);
+	useEffect(() => {
+		void load();
+	}, [load]);
 
-	/* ---------- loaders ---------- */
+	useEffect(() => {
+		setSearchText(keyword);
+		setOwnerText(ownerDept);
+		setDomainText(bizDomain);
+	}, [bizDomain, keyword, ownerDept]);
 
-	const loadLakeData = useCallback(() => {
-		setLakeLoading(true);
-		Promise.all([analyticsApi.listPlatformDataSources(), analyticsApi.listDatabases()])
-			.then(([sources, dbResp]) => {
-				setPlatformSources(sources ?? []);
-				const dbs = dbResp.data ?? [];
-				setDatabases(dbs);
-				// find the is_system database for uploads
-				const systemDb = dbs.find((d) => d.is_system);
-				if (systemDb) setDataLakeId(systemDb.id);
-			})
-			.catch((e) => {
-				console.error("Failed to load data lake sources:", e);
-			})
-			.finally(() => setLakeLoading(false));
+	const openContract = useCallback(async (dataset: AnalysisDatasetSummary) => {
+		setSelected(dataset);
+		setDetail(null);
+		setDetailError(null);
+		setDetailLoading(true);
+		try {
+			setDetail(await getPublishedQueryDataset(dataset.datasetId, dataset.version));
+		} catch (requestError) {
+			setDetailError(errorState(requestError));
+		} finally {
+			setDetailLoading(false);
+		}
 	}, []);
 
-	const loadUploads = useCallback(() => {
-		if (dataLakeId == null) {
-			setUploadsLoading(false);
-			return;
-		}
-		setUploadsLoading(true);
-		analyticsApi
-			.listMyUploads(dataLakeId)
-			.then((items) => setUploads(items ?? []))
-			.catch((e) => {
-				console.error("Failed to load uploads:", e);
-			})
-			.finally(() => setUploadsLoading(false));
-	}, [dataLakeId]);
+	const createAnalysis = useCallback(
+		(dataset: AnalysisDatasetSummary) => {
+			navigate(
+				`/bi/questions/new?datasetId=${encodeURIComponent(dataset.datasetId)}&version=${dataset.version}&checksum=${encodeURIComponent(dataset.contractChecksum)}`,
+			);
+		},
+		[navigate],
+	);
 
-	useEffect(() => {
-		analyticsApi
-			.getCurrentUser()
-			.then(setCurrentUser)
-			.catch(() => {});
-		loadLakeData();
-	}, [loadLakeData]);
-
-	useEffect(() => {
-		loadUploads();
-	}, [loadUploads]);
-
-	/* ---------- derived data ---------- */
-
-	/** Map platform source name -> analytics database id */
-	const dbByName = useMemo(() => {
-		const map = new Map<string, DatabaseListItem>();
-		for (const db of databases) {
-			if (db.name) map.set(db.name, db);
-		}
-		return map;
-	}, [databases]);
-
-	const lakeRows: DataLakeRow[] = useMemo(() => {
-		const keyword = lakeSearch.trim().toLowerCase();
-		return platformSources
-			.map((src) => ({
-				...src,
-				analyticsDbId: src.name ? dbByName.get(src.name)?.id : undefined,
-			}))
-			.filter((row) => {
-				if (!keyword) return true;
-				return (
-					(row.name ?? "").toLowerCase().includes(keyword) ||
-					(row.type ?? "").toLowerCase().includes(keyword) ||
-					(row.jdbcUrl ?? "").toLowerCase().includes(keyword)
-				);
-			});
-	}, [platformSources, dbByName, lakeSearch]);
-
-	const filteredUploads = useMemo(() => {
-		const keyword = uploadsSearch.trim().toLowerCase();
-		if (!keyword) return uploads;
-		return uploads.filter(
-			(u) =>
-				u.name.toLowerCase().includes(keyword) ||
-				(u.display_name ?? "").toLowerCase().includes(keyword) ||
-				(u.schema ?? "").toLowerCase().includes(keyword),
-		);
-	}, [uploads, uploadsSearch]);
-
-	/* ---------- actions ---------- */
-
-	const handleSync = async (row: DataLakeRow) => {
-		if (!row.analyticsDbId) {
-			message.warning("该数据源尚未在分析平台中注册，无法同步");
-			return;
-		}
-		setSyncingId(row.id);
-		try {
-			await analyticsApi.syncDatabaseSchema(row.analyticsDbId);
-			message.success(`已触发「${row.name}」的元数据同步`);
-		} catch (e) {
-			console.error("Sync failed:", e);
-		} finally {
-			setSyncingId(null);
-		}
-	};
-
-	const handleDeleteUpload = (record: MyUploadItem) => {
-		if (dataLakeId == null) return;
-		Modal.confirm({
-			title: "确认删除",
-			content: `确定要删除上传表「${record.display_name || record.name}」吗？此操作不可恢复。`,
-			okText: "删除",
-			okType: "danger",
-			cancelText: "取消",
-			onOk: async () => {
-				try {
-					await analyticsApi.deleteUploadTable(dataLakeId, record.name);
-					message.success("删除成功");
-					loadUploads();
-				} catch (e) {
-					console.error("Delete upload failed:", e);
-				}
-			},
-		});
-	};
-
-	const handleUploadComplete = async (result: { tableName: string; schema: string; rowCount: number }) => {
-		setUploadModalOpen(false);
-		message.success(`上传成功：${result.tableName}（${result.rowCount} 行）`);
-		loadUploads();
-		// also sync schema so the table is queryable
-		if (dataLakeId != null) {
-			try {
-				await analyticsApi.syncDatabaseSchema(dataLakeId);
-			} catch {
-				// silent — sync is best-effort after upload
-			}
-		}
-	};
-
-	/* ---------- table columns ---------- */
-
-	const lakeColumns: ColumnsType<DataLakeRow> = useMemo(
+	const columns: ColumnsType<AnalysisDatasetSummary> = useMemo(
 		() => [
 			{
-				title: "名称",
+				title: "数据集",
 				dataIndex: "name",
-				sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 				key: "name",
-				ellipsis: true,
-				render: (name: string | undefined) => name ?? "-",
+				minWidth: 220,
+				render: (name: string, row) => (
+					<div>
+						<Typography.Text strong>{name}</Typography.Text>
+						{row.description ? (
+							<Typography.Paragraph type="secondary" ellipsis={{ rows: 1 }} className="!mb-0 !mt-1">
+								{row.description}
+							</Typography.Paragraph>
+						) : null}
+					</div>
+				),
+			},
+			{ title: "版本", dataIndex: "version", key: "version", width: 82, render: (value: number) => `v${value}` },
+			{
+				title: "分层",
+				dataIndex: "warehouseLayer",
+				key: "warehouseLayer",
+				width: 86,
+				render: (value: string) => <Tag color={value === "ADS" ? "blue" : "cyan"}>{value}</Tag>,
 			},
 			{
-				title: "类型",
-				dataIndex: "type",
-				key: "type",
-				width: 120,
-				render: (type: string | undefined) => (type ? <Tag>{type}</Tag> : "-"),
+				title: "密级",
+				dataIndex: "classification",
+				key: "classification",
+				width: 140,
+				render: (value?: string | null) => <Tag color="gold">{value || "未标注"}</Tag>,
 			},
+			{ title: "责任部门", dataIndex: "ownerDept", key: "ownerDept", width: 150, render: (value) => value || "-" },
 			{
-				title: "连接地址",
-				dataIndex: "jdbcUrl",
-				key: "jdbcUrl",
+				title: "语义模型",
+				dataIndex: "semanticModelNames",
+				key: "semanticModelNames",
+				minWidth: 180,
 				ellipsis: true,
-				render: (url: string | undefined) => (
-					<Tooltip title={url}>
-						<span className="text-text-secondary text-[length:var(--font-size-sm)]">{url ?? "-"}</span>
+				render: (values: string[]) => (
+					<Tooltip title={(values || []).join("、")}>
+						<span>{values?.length ? values.join("、") : "-"}</span>
 					</Tooltip>
 				),
 			},
+			{ title: "刷新策略", dataIndex: "refreshStrategy", key: "refreshStrategy", width: 110 },
 			{
-				title: "状态",
-				dataIndex: "status",
-				key: "status",
-				width: 100,
-				render: (status: string | undefined | null) => {
-					if (!status) return "-";
-					const color = status === "ACTIVE" || status === "active" ? "green" : "default";
-					return <Tag color={color}>{status}</Tag>;
-				},
-			},
-			actionColumn<DataLakeRow>(
-				(row) => [
-					{
-						key: "sync",
-						label: "同步元数据",
-						hidden: !isDataAdmin,
-						loading: syncingId === row.id,
-						disabled: !row.analyticsDbId,
-						onClick: () => handleSync(row),
-					},
-					{
-						key: "select",
-						label: "选择数据集",
-						disabled: !row.analyticsDbId,
-						href: row.analyticsDbId ? `/bi/data/${row.analyticsDbId}` : undefined,
-					},
-					{
-						key: "preview",
-						label: "预览",
-						disabled: !row.analyticsDbId,
-						href: row.analyticsDbId ? `/bi/data/${row.analyticsDbId}` : undefined,
-					},
-					{
-						key: "question",
-						label: "创建问题",
-						disabled: !row.analyticsDbId,
-						href: row.analyticsDbId ? `/bi/questions/new?dbId=${row.analyticsDbId}` : undefined,
-					},
-					{
-						key: "dashboard",
-						label: "创建报表",
-						disabled: !row.analyticsDbId,
-						href: row.analyticsDbId ? `/bi/dashboards/new?dbId=${row.analyticsDbId}` : undefined,
-					},
-				],
-				{ width: 360, fixed: false },
-			),
-		],
-		[isDataAdmin, syncingId],
-	);
-
-	const uploadColumns: ColumnsType<MyUploadItem> = useMemo(
-		() => [
-			{
-				title: "表名",
-				dataIndex: "name",
-				sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
-				key: "name",
-				ellipsis: true,
-			},
-			{
-				title: "显示名",
-				dataIndex: "display_name",
-				key: "display_name",
-				ellipsis: true,
-				render: (v: string | undefined) => v ?? "-",
-			},
-			{
-				title: "模式",
-				dataIndex: "schema",
-				key: "schema",
-				width: 140,
-				render: (v: string | undefined) => v ?? "-",
-			},
-			{
-				title: "上传时间",
-				dataIndex: "created_at",
-				key: "created_at",
+				title: "更新时间",
+				dataIndex: "updatedAt",
+				key: "updatedAt",
 				width: 180,
-				render: (v: string | undefined) => (v ? new Date(v).toLocaleString("zh-CN") : "-"),
+				render: formatTime,
 			},
-			actionColumn<MyUploadItem>(
-				(record) => [
-					{
-						key: "view",
-						label: "查看",
-						hidden: dataLakeId == null,
-						href: dataLakeId != null ? `/bi/data/${dataLakeId}` : undefined,
-					},
-					{ key: "delete", label: "删除", danger: true, onClick: () => handleDeleteUpload(record) },
-				],
-				{ width: 140, fixed: false },
-			),
+			{
+				title: "操作",
+				key: "actions",
+				width: 190,
+				fixed: "right",
+				render: (_, row) => (
+					<Space size={4}>
+						<Button type="link" onClick={() => void openContract(row)}>
+							查看契约
+						</Button>
+						<Tooltip title={canCreateAnalysis ? undefined : "当前角色没有分析写入权限"}>
+							<Button type="link" disabled={!canCreateAnalysis} onClick={() => createAnalysis(row)}>
+								创建分析
+							</Button>
+						</Tooltip>
+					</Space>
+				),
+			},
 		],
-		[dataLakeId],
+		[canCreateAnalysis, createAnalysis, openContract],
 	);
 
-	/* ---------- render ---------- */
+	const hasFilters = Boolean(keyword || ownerDept || bizDomain || warehouseLayer || classification);
+	const emptyText = hasFilters ? "没有符合筛选条件的数据集" : "暂无已发布数据集";
 
 	return (
 		<div className="space-y-4">
-			<PageHeader title="BI 数据 / 选择数据集" />
-
-			{/* --- Data Lake List --- */}
+			<div>
+				<PageHeader title="BI 数据 / 选择数据集" />
+				<p className="mt-1 text-sm text-text-secondary">从平台已发布且治理就绪的数据集中创建可追溯分析。</p>
+			</div>
 			<PageSection
-				title="数据湖列表"
-				description="平台已注册的数据源列表"
-				actions={
+				title="已发布分析数据集"
+				description="仅展示已钉定版本、语义契约和密级策略的 DWS / ADS 数据集。"
+			>
+				<Space wrap className="mb-4" size={12}>
 					<Input.Search
-						placeholder="搜索数据源..."
+						aria-label="搜索数据集"
+						placeholder="搜索名称或语义模型"
 						allowClear
-						style={{ width: 240 }}
-						value={lakeSearch}
-						onChange={(e) => setLakeSearch(e.target.value)}
+						value={searchText}
+						style={{ width: 260 }}
+						onChange={(event) => setSearchText(event.target.value)}
+						onSearch={(value) => updateLocation({ keyword: value.trim() })}
 					/>
-				}
-			>
-				<CompactTable<DataLakeRow>
-					rowKey="id"
-					columns={lakeColumns}
-					dataSource={lakeRows}
-					loading={lakeLoading}
-					pagination={false}
-					size="middle"
-					locale={{ emptyText: "暂无数据源" }}
-				/>
-			</PageSection>
+					<Input
+						aria-label="责任部门"
+						placeholder="责任部门"
+						allowClear
+						value={ownerText}
+						style={{ width: 150 }}
+						onChange={(event) => setOwnerText(event.target.value)}
+						onPressEnter={() => updateLocation({ ownerDept: ownerText.trim() })}
+						onBlur={() => updateLocation({ ownerDept: ownerText.trim() })}
+					/>
+					<Input
+						aria-label="业务域"
+						placeholder="业务域"
+						allowClear
+						value={domainText}
+						style={{ width: 150 }}
+						onChange={(event) => setDomainText(event.target.value)}
+						onPressEnter={() => updateLocation({ bizDomain: domainText.trim() })}
+						onBlur={() => updateLocation({ bizDomain: domainText.trim() })}
+					/>
+					<Select
+						aria-label="数仓分层"
+						placeholder="数仓分层"
+						allowClear
+						value={warehouseLayer || undefined}
+						style={{ width: 130 }}
+						options={[{ value: "DWS", label: "DWS" }, { value: "ADS", label: "ADS" }]}
+						onChange={(value) => updateLocation({ warehouseLayer: value })}
+					/>
+					<Select
+						aria-label="数据密级"
+						placeholder="数据密级"
+						allowClear
+						value={classification || undefined}
+						style={{ width: 160 }}
+						options={[
+							{ value: "DATA_PUBLIC", label: "公开" },
+							{ value: "DATA_INTERNAL", label: "内部" },
+							{ value: "DATA_SENSITIVE", label: "敏感" },
+							{ value: "DATA_RESTRICTED", label: "受限" },
+						]}
+						onChange={(value) => updateLocation({ classification: value })}
+					/>
+				</Space>
 
-			{/* --- My Uploads --- */}
-			<PageSection
-				title="我的上传"
-				description="您上传的 CSV / Excel 数据表"
-				actions={
-					<Space>
-						<Input.Search
-							placeholder="搜索上传表..."
-							allowClear
-							style={{ width: 240 }}
-							value={uploadsSearch}
-							onChange={(e) => setUploadsSearch(e.target.value)}
+				{error ? (
+					<Alert
+						type="error"
+						showIcon
+						message="数据集加载失败"
+						description={error.correlationId ? `${error.message}（请求号：${error.correlationId}）` : error.message}
+						action={<Button onClick={() => void load()}>重新加载</Button>}
+					/>
+				) : (
+					<Spin spinning={loading} tip="加载已发布数据集">
+						<CompactTable<AnalysisDatasetSummary>
+							rowKey={(row) => `${row.datasetId}:${row.version}:${row.contractChecksum}`}
+							columns={columns}
+							dataSource={result?.items || []}
+							scroll={{ x: 1320 }}
+							locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} /> }}
+							pagination={{
+								current: page,
+								pageSize,
+								total: result?.totalElements || 0,
+								showSizeChanger: true,
+								pageSizeOptions: PAGE_SIZE_OPTIONS,
+								showTotal: (total) => `共 ${total} 个数据集`,
+								onChange: (nextPage, nextSize) => {
+									if (nextSize !== pageSize) updateLocation({ size: nextSize, page: 1 }, false);
+									else updateLocation({ page: nextPage }, false);
+								},
+							}}
 						/>
-						<Button type="primary" disabled={dataLakeId == null} onClick={() => setUploadModalOpen(true)}>
-							上传 Excel/CSV
-						</Button>
-					</Space>
-				}
-			>
-				<CompactTable<MyUploadItem>
-					rowKey="id"
-					columns={uploadColumns}
-					dataSource={filteredUploads}
-					loading={uploadsLoading}
-					pagination={false}
-					size="middle"
-					locale={{ emptyText: "暂无上传数据" }}
-				/>
+					</Spin>
+				)}
 			</PageSection>
 
-			{/* --- Upload Modal --- */}
-			<Modal
-				title="上传数据"
-				open={uploadModalOpen}
-				onCancel={() => setUploadModalOpen(false)}
+			<Drawer
+				title={selected ? `数据集契约 · ${selected.name}` : "数据集契约"}
+				open={Boolean(selected)}
 				width={720}
 				destroyOnClose
-				footer={null}
+				onClose={() => {
+					setSelected(null);
+					setDetail(null);
+					setDetailError(null);
+				}}
 			>
-				{dataLakeId != null && <UploadedDataEditor databaseId={dataLakeId} onComplete={handleUploadComplete} />}
-			</Modal>
+				<Spin spinning={detailLoading} tip="加载契约详情">
+					{detailError ? (
+						<Alert
+							type="error"
+							showIcon
+							message="契约详情加载失败"
+							description={detailError.correlationId ? `${detailError.message}（请求号：${detailError.correlationId}）` : detailError.message}
+						/>
+					) : detail ? (
+						<Space direction="vertical" size={20} className="w-full">
+							<Descriptions bordered size="small" column={2}>
+								<Descriptions.Item label="数据集版本">v{detail.dataset.version}</Descriptions.Item>
+								<Descriptions.Item label="契约版本">{detail.dataset.semanticContractVersion}</Descriptions.Item>
+								<Descriptions.Item label="数仓分层">{detail.dataset.warehouseLayer}</Descriptions.Item>
+								<Descriptions.Item label="数据密级">{detail.dataset.classification || "未标注"}</Descriptions.Item>
+								<Descriptions.Item label="责任部门">{detail.dataset.ownerDept || "-"}</Descriptions.Item>
+								<Descriptions.Item label="刷新策略">{detail.dataset.refreshStrategy}</Descriptions.Item>
+								<Descriptions.Item label="语义模型" span={2}>
+									{detail.dataset.semanticModelNames.join("、") || "-"}
+								</Descriptions.Item>
+								<Descriptions.Item label="契约校验值" span={2}>
+									<Typography.Text copyable code>{detail.dataset.contractChecksum}</Typography.Text>
+								</Descriptions.Item>
+							</Descriptions>
+							<div>
+								<Typography.Title level={5}>可分析字段</Typography.Title>
+								<CompactTable
+									rowKey="code"
+									size="small"
+									pagination={false}
+									dataSource={detail.dimensions}
+									columns={[
+										{ title: "字段编码", dataIndex: "code", key: "code" },
+										{ title: "业务名称", dataIndex: "label", key: "label" },
+										{ title: "数据类型", dataIndex: "dataType", key: "dataType", width: 120 },
+									]}
+								/>
+							</div>
+						</Space>
+					) : null}
+				</Spin>
+			</Drawer>
 		</div>
 	);
 }

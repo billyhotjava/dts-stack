@@ -2,7 +2,9 @@ package com.yuzhi.dts.platform.service.catalog;
 
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.*;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +22,13 @@ public interface CatalogAssetSemanticStore {
     );
 
     Optional<AssetSemanticsView> find(CatalogAssetType assetType, String assetKey, Instant now);
+
+    /** Bounded read projection used by asset-list pages; implementations must fetch the supplied keys in one query. */
+    Map<String, AssetStatusSnapshot> findStatusSnapshots(
+        CatalogAssetType assetType,
+        Collection<String> assetKeys,
+        Instant now
+    );
 
     StatsSnapshot stats(UUID domainId, Instant now);
 
@@ -69,6 +78,18 @@ public interface CatalogAssetSemanticStore {
             evidence = evidence == null ? List.of() : List.copyOf(evidence);
         }
     }
+
+    record AssetStatusSnapshot(
+        CatalogAssetType assetType,
+        String assetKey,
+        UUID resourceId,
+        StatusAxes statusAxes,
+        Boolean qualityGatePassed,
+        Boolean permissionGatePassed,
+        ConsumptionEligibility eligibility,
+        long projectionVersion,
+        Instant asOf
+    ) {}
 
     record StatsBucket(
         UUID domainId,

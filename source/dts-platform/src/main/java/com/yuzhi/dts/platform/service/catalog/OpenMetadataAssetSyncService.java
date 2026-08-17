@@ -83,7 +83,16 @@ public class OpenMetadataAssetSyncService {
         }
         Optional<Map<String, Object>> response = client.listTables(limit, props.getTableFields());
         if (response.isEmpty()) {
-            return new SyncResult(true, "OpenMetadata 未返回表数据", 0, 0, 0, 0, 0, 0);
+            return new SyncResult(
+                true,
+                "OpenMetadata 连接失败或未返回有效响应，请稍后重试",
+                0,
+                0,
+                0,
+                0,
+                1,
+                0
+            );
         }
         List<Map<String, Object>> tables = parseTableList(response.orElseThrow());
         int upserted = 0;

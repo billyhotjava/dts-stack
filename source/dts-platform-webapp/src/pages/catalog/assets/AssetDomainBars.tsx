@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { Chart } from "@/components/chart";
 import { UNASSIGNED_DOMAIN_KEY } from "./assetPageShared";
 
-// Sprint-88 F2/T02：主题域 Top6 横向堆叠条形图（正常/待处置）。
+// Sprint-88 F2/T02：业务归属数据域 Top6 横向堆叠条形图（正常/待处置）。
 // 条形可点 → /catalog/search?view=table&domain=<uuid | __UNASSIGNED__>
 export type AssetDomainBarsProps = {
 	byDomain?: Record<string, { total: number; attention: number }>;
@@ -26,14 +26,14 @@ export function AssetDomainBars({
 	truncated = false,
 	loading = false,
 	onBarClick,
-	title = "主题域分布 Top 6",
+	title = "业务归属数据域分布 Top 6",
 	dataTestId,
 }: AssetDomainBarsProps) {
 	const rows = useMemo(() => {
 		const listed = Object.entries(byDomain)
 			.map(([id, stats]) => ({
 				key: id,
-				name: domainNames.get(id) || "未知主题域",
+				name: domainNames.get(id) || "未知业务归属数据域",
 				total: Number(stats?.total || 0),
 				attention: Number(stats?.attention || 0),
 			}))
@@ -103,7 +103,7 @@ export function AssetDomainBars({
 		return <div className="flex h-[260px] items-center justify-center text-sm text-slate-400">当前范围内暂无资产</div>;
 	}
 
-	const summaryText = `主题域分布：${rows.map((row) => `${row.name} ${row.total}`).join("，")}`;
+	const summaryText = `业务归属数据域分布：${rows.map((row) => `${row.name} ${row.total}`).join("，")}`;
 
 	return (
 		<div className="rounded-xl border border-slate-200 bg-white p-4" data-testid={dataTestId}>

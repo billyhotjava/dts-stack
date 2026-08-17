@@ -117,6 +117,10 @@ class ReportsResourceWebMvcTest {
                     null,
                     "system",
                     Instant.now(),
+                    null,
+                    null,
+                    null,
+                    null,
                     null
                 )
             )
@@ -186,6 +190,10 @@ class ReportsResourceWebMvcTest {
                     null,
                     "owner",
                     Instant.now(),
+                    null,
+                    null,
+                    null,
+                    null,
                     null
                 )
             );

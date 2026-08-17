@@ -194,28 +194,34 @@ public class CatalogGovernanceWorkbenchService {
         return jdbcTemplate.query(
             """
             select issue_type, issue_status, subject_ref, error_message, occurred_at,
-                   responsible_owner, responsible_dept, dataset_id
+                   responsible_owner, responsible_dept, dataset_id, model_spec_id
               from (
                     select 'LINEAGE_PROPAGATION'::varchar as issue_type, j.status as issue_status,
                            j.target_asset_key as subject_ref, j.last_error as error_message,
                            coalesce(j.last_modified_date, j.created_date) as occurred_at,
                            d.owner as responsible_owner, d.owner_dept as responsible_dept,
-                           j.target_dataset_id as dataset_id
+                           j.target_dataset_id as dataset_id, null::uuid as model_spec_id
                       from catalog_classification_propagation_job j
                       join catalog_dataset d on d.id=j.target_dataset_id
                      where j.status in ('BLOCKED','FAILED','RETRY')
                     union all
                     select 'CONSUMER_RECOMPUTE', status, consumer_type || ':' || consumer_key,
                            last_error, coalesce(last_modified_date, created_date),
-                           null, null, null
+                           null, null, null, null
                       from catalog_classification_consumer_job
                      where status in ('BLOCKED','FAILED','RETRY','PENDING')
                     union all
                     select 'CACHE_INVALIDATION', status, aggregate_key, last_error,
                            coalesce(last_modified_date, created_date),
-                           null, null, null
+                           null, null, null, null
                       from catalog_classification_invalidation_outbox
                      where status in ('FAILED','RETRY','PENDING')
+                    union all
+                    select 'SEMANTIC_DELIVERY', sync_status, catalog_asset_key,
+                           last_sync_error, updated_at,
+                           null, null, null, model_spec_id
+                      from modeling_catalog_model_serving_projection
+                     where sync_status='SYNC_FAILED' and next_sync_at is null
               ) issues
              order by occurred_at desc nulls last
              limit ?
@@ -228,7 +234,11 @@ public class CatalogGovernanceWorkbenchService {
                 instant(rs, "occurred_at"),
                 rs.getString("responsible_owner"),
                 rs.getString("responsible_dept"),
-                repairRoute(rs.getString("issue_type"), rs.getObject("dataset_id", UUID.class))
+                repairRoute(
+                    rs.getString("issue_type"),
+                    rs.getObject("dataset_id", UUID.class),
+                    rs.getObject("model_spec_id", UUID.class)
+                )
             ),
             safeLimit
         );
@@ -319,10 +329,14 @@ public class CatalogGovernanceWorkbenchService {
         }
     }
 
-    private static String repairRoute(String issueType, UUID datasetId) {
-        return "LINEAGE_PROPAGATION".equals(issueType) && datasetId != null
-            ? "/catalog/datasets/" + datasetId + "?tab=lineage-impact"
-            : "/catalog/assets?view=table";
+    private static String repairRoute(String issueType, UUID datasetId, UUID modelSpecId) {
+        if ("LINEAGE_PROPAGATION".equals(issueType) && datasetId != null) {
+            return "/catalog/datasets/" + datasetId + "?tab=lineage-impact";
+        }
+        if ("SEMANTIC_DELIVERY".equals(issueType) && modelSpecId != null) {
+            return "/modeling/models/" + modelSpecId + "?activeStage=logical&tab=design";
+        }
+        return "/catalog/assets?view=table";
     }
 
     public record SubjectRequest(String subjectType, String subjectKey) {}

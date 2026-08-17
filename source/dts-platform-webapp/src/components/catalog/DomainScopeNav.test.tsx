@@ -186,9 +186,9 @@ describe("DomainScopeNav", () => {
 		expect(container.querySelector('[data-testid="domain-scope-total-all"]')?.textContent).toBe("≥126");
 	});
 
-	it("无主题域时给出创建引导，全部资产与未归域仍渲染", () => {
+	it("无业务归属数据域时给出创建引导，全部资产与未归域仍渲染", () => {
 		render(<DomainScopeNav nodes={[]} value={undefined} onChange={() => undefined} />);
-		expect(container.textContent).toContain("尚未创建主题域");
+		expect(container.textContent).toContain("尚未创建业务归属数据域");
 		expect(container.querySelector('[data-testid="domain-scope-row-all"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="domain-scope-row-unassigned"]')).not.toBeNull();
 	});

@@ -608,6 +608,7 @@
                         <testInclude>**/service/governance/QualityDashboardAuthorizationTest.java</testInclude>
                         <testInclude>**/service/governance/QualityReportExportServiceTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServiceExecutableDefinitionTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityRunServicePinnedTriggerTest.java</testInclude>
                         <testInclude>**/service/governance/QualityScoreServiceTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunOutcomeSemanticsTest.java</testInclude>
                         <testInclude>**/service/governance/SqlTemplateRendererTest.java</testInclude>
@@ -644,6 +645,8 @@
                         <testInclude>**/service/governance/DefaultLakeDatasetGuardTest.java</testInclude>
                         <testInclude>**/service/sql/SqlMetadataServiceCacheTest.java</testInclude>
                         <testInclude>**/service/sql/QueryDatasetServiceTest.java</testInclude>
+                        <testInclude>**/service/sql/QueryDatasetContractSnapshotAssemblerTest.java</testInclude>
+                        <testInclude>**/service/sql/PublishedQueryDatasetServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleImportedDbtImplementationTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
@@ -659,6 +662,9 @@
                         <testInclude>**/service/modeling/ModelMaterializationStartServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PostgresPhysicalRelationInspectorTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/CandidateGovernanceQualityEvidenceServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/CandidateGovernanceQualityRerunServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/JdbcGovernanceQualityEvidenceAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidatePreflightServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationAdmissionServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationCommitServiceTest.java</testInclude>
@@ -822,6 +828,7 @@
                         <testInclude>**/service/catalog/CodeAssetGrantWriterTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogExternalAssetIdentity*.java</testInclude>
                         <testInclude>**/service/catalog/CatalogTag*.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetStatusViewServiceTest.java</testInclude>
                         <testInclude>**/service/infra/JdbcClassificationLifecycleIT.java</testInclude>
                         <testInclude>**/service/infra/Sprint89JdbcCatalogSyncRollbackIT.java</testInclude>
                         <testInclude>**/security/ServiceDependencyAuthenticationFilterTest.java</testInclude>
@@ -832,12 +839,14 @@
                         <testInclude>**/web/rest/catalog/CatalogDomainResourceAuditTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogDomainResourceFactsTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogDomainResourceWebMvcTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogGovernanceResourceTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogTag*.java</testInclude>
                         <testInclude>**/web/rest/internal/CatalogExternalAssetIdentity*.java</testInclude>
                         <testInclude>**/web/rest/internal/DbtRuntimeProfile*.java</testInclude>
                         <testInclude>**/web/rest/internal/ModelMaterializationRunInternalResourceTest.java</testInclude>
                         <testInclude>**/web/rest/internal/ModelMaterializationRuntimeSpecInternalResourceTest.java</testInclude>
                         <testInclude>**/web/rest/internal/RollbackInvalidationCompletionContractTest.java</testInclude>
+                        <testInclude>**/service/visualization/ReportRegistrationServiceTest.java</testInclude>
                     </testIncludes>
                     <testExcludes>
                         <!-- TODO: restore when cf5ff765 session refactor tests are updated -->

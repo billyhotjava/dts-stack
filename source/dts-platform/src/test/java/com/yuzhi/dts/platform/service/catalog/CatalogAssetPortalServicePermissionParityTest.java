@@ -776,8 +776,15 @@ class CatalogAssetPortalServicePermissionParityTest {
 
         when(assetRepository.findAll(any(Specification.class), any(PageRequest.class)))
             .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 10), 0));
+        List<CatalogDataset> datasets = java.util.Collections.nCopies(41, dataset);
         when(datasetRepository.findAll(any(Specification.class), any(PageRequest.class)))
-            .thenReturn(new PageImpl<>(List.of(dataset), PageRequest.of(0, 10), 50));
+            .thenAnswer(invocation -> {
+                PageRequest pageRequest = invocation.getArgument(1);
+                int from = Math.toIntExact(pageRequest.getOffset());
+                int to = Math.min(from + pageRequest.getPageSize(), datasets.size());
+                List<CatalogDataset> content = from >= datasets.size() ? List.of() : datasets.subList(from, to);
+                return new PageImpl<>(content, pageRequest, datasets.size());
+            });
         when(accessChecker.canRead(dataset)).thenReturn(true);
         when(accessChecker.departmentAllowed(dataset, "D01")).thenReturn(true);
         when(assetTagService.listAssetTags(any())).thenReturn(Map.of());
@@ -797,14 +804,14 @@ class CatalogAssetPortalServicePermissionParityTest {
                 null,
                 null,
                 false,
-                0,
+                4,
                 10
             ),
             "D01"
         );
 
         assertThat(result.content()).hasSize(1);
-        assertThat(result.total()).isEqualTo(50);
+        assertThat(result.total()).isEqualTo(41);
         assertThat(result.content().get(0).syncStatus()).isEqualTo("STALE");
     }
 

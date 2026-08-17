@@ -8,8 +8,10 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.io.Serializable;
 import java.time.Instant;
+import java.util.UUID;
 
 @Entity
 @Table(name = "analytics_card")
@@ -49,6 +51,28 @@ public class AnalyticsCard implements Serializable {
 
     @Column(name = "card_type", nullable = false, length = 32)
     private String cardType = "question";
+
+    @Column(name = "query_dataset_id", columnDefinition = "uuid")
+    private UUID queryDatasetId;
+
+    @Column(name = "query_dataset_version")
+    private Integer queryDatasetVersion;
+
+    @Column(name = "semantic_contract_version", length = 64)
+    private String semanticContractVersion;
+
+    @Column(name = "lifecycle_status", nullable = false, length = 32)
+    private String lifecycleStatus = "DRAFT";
+
+    @Column(name = "published_revision_id")
+    private Long publishedRevisionId;
+
+    @Version
+    @Column(name = "version_no", nullable = false)
+    private Long analysisVersion = 0L;
+
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
 
     @Column(name = "creator_id")
     private Long creatorId;
@@ -147,6 +171,62 @@ public class AnalyticsCard implements Serializable {
         this.cardType = cardType;
     }
 
+    public UUID getQueryDatasetId() {
+        return queryDatasetId;
+    }
+
+    public void setQueryDatasetId(UUID queryDatasetId) {
+        this.queryDatasetId = queryDatasetId;
+    }
+
+    public Integer getQueryDatasetVersion() {
+        return queryDatasetVersion;
+    }
+
+    public void setQueryDatasetVersion(Integer queryDatasetVersion) {
+        this.queryDatasetVersion = queryDatasetVersion;
+    }
+
+    public String getSemanticContractVersion() {
+        return semanticContractVersion;
+    }
+
+    public void setSemanticContractVersion(String semanticContractVersion) {
+        this.semanticContractVersion = semanticContractVersion;
+    }
+
+    public String getLifecycleStatus() {
+        return lifecycleStatus;
+    }
+
+    public void setLifecycleStatus(String lifecycleStatus) {
+        this.lifecycleStatus = lifecycleStatus;
+    }
+
+    public Long getPublishedRevisionId() {
+        return publishedRevisionId;
+    }
+
+    public void setPublishedRevisionId(Long publishedRevisionId) {
+        this.publishedRevisionId = publishedRevisionId;
+    }
+
+    public Long getAnalysisVersion() {
+        return analysisVersion;
+    }
+
+    public void setAnalysisVersion(Long analysisVersion) {
+        this.analysisVersion = analysisVersion;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
+    }
+
     public Long getCreatorId() {
         return creatorId;
     }
@@ -177,4 +257,3 @@ public class AnalyticsCard implements Serializable {
         updatedAt = Instant.now();
     }
 }
-

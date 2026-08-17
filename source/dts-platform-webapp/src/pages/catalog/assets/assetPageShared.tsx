@@ -30,6 +30,32 @@ export type AssetRow = {
 	assetType?: string;
 	assetKey?: string;
 	assetTags?: CatalogTagDto[];
+	statusAxes?: {
+		discovery?: string;
+		governance?: string;
+		publication?: string;
+		serving?: string;
+		lifecycle?: string;
+	};
+	consumptionEligibility?: string;
+	eligibilityReasons?: string[];
+	projectionUpdatedAt?: string;
+	modelRefs?: Array<{
+		tenantId?: string;
+		modelSpecId?: string;
+		modelRevision?: number;
+		candidateId?: string;
+		candidateVersion?: number;
+		serving?: boolean;
+	}>;
+	servingSync?: {
+		status?: string;
+		attempts?: number;
+		lastError?: string;
+		nextAttemptAt?: string;
+		updatedAt?: string;
+	};
+	qualityStatus?: string;
 };
 
 export type DomainNode = { id?: string; name?: string; code?: string; children?: DomainNode[] };

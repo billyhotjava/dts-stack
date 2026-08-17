@@ -119,7 +119,7 @@ const toEditDefaults = (record: ReportLink): FormValues => ({
 });
 
 const renderClassificationTag = (value?: string | null) => {
-	const key = String(value || "").toUpperCase();
+	const key = String(value || "").toUpperCase().replace(/^DATA_/, "");
 	const color =
 		key === "PUBLIC"
 			? "green"
@@ -365,6 +365,26 @@ export default function Page({ embedded }: Props) {
 				render: (value: string) => (value ? <Tag color="blue">{value}</Tag> : <Text type="secondary">-</Text>),
 			},
 			{
+				title: "受管资产",
+				dataIndex: "assetKey",
+				width: 210,
+				render: (_value, record) => record.assetType && record.assetKey ? (
+					<Space direction="vertical" size={0}>
+						<Tag color="geekblue">{record.assetType}</Tag>
+						<Text type="secondary" ellipsis style={{ maxWidth: 190 }}>{record.assetKey}</Text>
+						<Text type="secondary" style={{ fontSize: 12 }}>发布版本 v{record.assetVersion ?? "-"}</Text>
+					</Space>
+				) : <Text type="secondary">手工链接</Text>,
+			},
+			{
+				title: "同步",
+				dataIndex: "reconcileStatus",
+				width: 110,
+				render: (value: string | null | undefined, record) => record.assetKey
+					? <Tag color={value === "SYNCED" ? "green" : "gold"}>{value || "PENDING"}</Tag>
+					: <Text type="secondary">-</Text>,
+			},
+			{
 				title: "密级",
 				dataIndex: "classification",
 				width: 120,
@@ -414,7 +434,11 @@ export default function Page({ embedded }: Props) {
 				dataIndex: "enabled",
 				width: 120,
 				render: (value: boolean, record) => (
-					<Switch checked={value !== false} onChange={(checked) => handleToggle(record, checked)} />
+					<Switch
+						checked={value !== false}
+						disabled={Boolean(record.assetType && record.assetKey)}
+						onChange={(checked) => handleToggle(record, checked)}
+					/>
 				),
 			},
 			{
@@ -440,16 +464,16 @@ export default function Page({ embedded }: Props) {
 				render: (value: string) => (value ? new Date(value).toLocaleString() : "-"),
 			},
 			actionColumn<ReportLink>(
-				(record) => [
+			(record) => [
 					{ key: "open", label: "打开", tooltip: "打开", onClick: () => handleOpen(record) },
-					{ key: "edit", label: "编辑", tooltip: "编辑", onClick: () => openEdit(record) },
-					{ key: "disable", label: "删除", tooltip: "停用", danger: true, onClick: () => handleDisable(record) },
+					{ key: "edit", label: "编辑", tooltip: "受管资产请在仪表板发布端维护", hidden: Boolean(record.assetType && record.assetKey), onClick: () => openEdit(record) },
+					{ key: "disable", label: "删除", tooltip: "停用", hidden: Boolean(record.assetType && record.assetKey), danger: true, onClick: () => handleDisable(record) },
 					{
 						key: "purge",
 						label: "物理删除",
 						tooltip: "物理删除",
 						danger: true,
-						hidden: !hasPurgePermission,
+						hidden: !hasPurgePermission || Boolean(record.assetType && record.assetKey),
 						onClick: () => handlePurge(record),
 					},
 				],

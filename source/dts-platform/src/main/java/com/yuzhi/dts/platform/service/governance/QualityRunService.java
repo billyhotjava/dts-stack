@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
@@ -138,6 +139,43 @@ public class QualityRunService {
         return triggerInternal(request, "scheduler", null, false, true, false);
     }
 
+    /**
+     * Runs the exact rule version pinned by a release candidate. The trigger reference is server generated and
+     * provides durable replay semantics while the caller serializes commands on the warehouse-plan lock.
+     */
+    @Transactional
+    public List<QualityRunDto> triggerPinnedAuthorized(
+        QualityRunTriggerRequest request,
+        UUID ruleVersionId,
+        String actor,
+        String activeDeptHeader,
+        String triggerRef
+    ) {
+        if (ruleVersionId == null) throw new IllegalArgumentException("缺少规则版本ID");
+        if (triggerRef == null || triggerRef.isBlank() || triggerRef.length() > 128) {
+            throw new IllegalArgumentException("质量运行幂等标识无效");
+        }
+        String normalizedTriggerRef = triggerRef.trim();
+        List<GovQualityRun> replay = runRepository.findByTriggerRefOrderByCreatedDateAsc(normalizedTriggerRef);
+        if (!replay.isEmpty()) {
+            replay.forEach(run -> qualityDatasetReadGuard.requireReadable(run.getDatasetId(), activeDeptHeader));
+            return replay
+                .stream()
+                .map(run -> qualityRunQueryService.toSafeDto(run, metricRepository.findByRunId(run.getId())))
+                .toList();
+        }
+        return triggerInternal(
+            request,
+            actor,
+            activeDeptHeader,
+            true,
+            false,
+            false,
+            ruleVersionId,
+            normalizedTriggerRef
+        );
+    }
+
     private List<QualityRunDto> triggerInternal(
         QualityRunTriggerRequest request,
         String actor,
@@ -145,6 +183,28 @@ public class QualityRunService {
         boolean enforceUserAccess,
         boolean scheduledInvocation,
         boolean trustedIngestionInvocation
+    ) {
+        return triggerInternal(
+            request,
+            actor,
+            activeDeptHeader,
+            enforceUserAccess,
+            scheduledInvocation,
+            trustedIngestionInvocation,
+            null,
+            null
+        );
+    }
+
+    private List<QualityRunDto> triggerInternal(
+        QualityRunTriggerRequest request,
+        String actor,
+        String activeDeptHeader,
+        boolean enforceUserAccess,
+        boolean scheduledInvocation,
+        boolean trustedIngestionInvocation,
+        UUID pinnedRuleVersionId,
+        String triggerRef
     ) {
         if (!properties.getQuality().isEnabled()) {
             throw new IllegalStateException("质量检测功能已禁用");
@@ -160,7 +220,9 @@ public class QualityRunService {
             trustedIngestionInvocation
         );
         GovRule rule = resolveRule(request.getRuleId());
-        GovRuleVersion version = resolveVersion(rule);
+        GovRuleVersion version = pinnedRuleVersionId == null
+            ? resolveVersion(rule)
+            : resolvePinnedVersion(rule, pinnedRuleVersionId);
         if (resolveStatements(version).isEmpty()) {
             throw new IllegalArgumentException("质量规则未配置可执行检测语句，请先编辑并发布规则");
         }
@@ -186,7 +248,7 @@ public class QualityRunService {
             run.setBinding(binding);
             run.setDatasetId(binding.getDatasetId());
             run.setTriggerType(triggerType);
-            run.setTriggerRef(actor);
+            run.setTriggerRef(triggerRef == null ? actor : triggerRef);
             run.setStatus("QUEUED");
             run.setSeverity(rule.getSeverity());
             run.setDataLevel(rule.getDataLevel());
@@ -504,6 +566,20 @@ public class QualityRunService {
         }
         if (version == null) {
             throw new IllegalStateException("规则尚无可执行的已发布版本");
+        }
+        return version;
+    }
+
+    private GovRuleVersion resolvePinnedVersion(GovRule rule, UUID ruleVersionId) {
+        GovRuleVersion version = versionRepository
+            .findById(ruleVersionId)
+            .orElseThrow(() -> new IllegalArgumentException("未找到候选版本钉定的质量规则版本"));
+        if (version.getRule() == null || !rule.getId().equals(version.getRule().getId())) {
+            throw new IllegalArgumentException("钉定规则版本与质量规则不匹配");
+        }
+        String status = StringUtils.trimToEmpty(version.getStatus()).toUpperCase(java.util.Locale.ROOT);
+        if (!Set.of("PUBLISHED", "ARCHIVED").contains(status)) {
+            throw new IllegalStateException("候选版本钉定的质量规则版本不可执行");
         }
         return version;
     }

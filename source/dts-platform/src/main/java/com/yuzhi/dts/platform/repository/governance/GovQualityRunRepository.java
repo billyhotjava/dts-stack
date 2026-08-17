@@ -25,4 +25,8 @@ public interface GovQualityRunRepository extends JpaRepository<GovQualityRun, UU
     List<GovQualityRun> findByDatasetIdNotIn(java.util.Collection<UUID> datasetIds, Pageable pageable);
 
     List<GovQualityRun> findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(UUID datasetId, Instant since);
+
+    List<GovQualityRun> findByTriggerRefOrderByCreatedDateAsc(String triggerRef);
+
+    List<GovQualityRun> findByTriggerRefStartingWithOrderByCreatedDateAsc(String triggerRefPrefix);
 }

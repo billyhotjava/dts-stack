@@ -267,4 +267,6 @@
     <include file="config/liquibase/changelog/20260815_01_model_release_candidate_published_history.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260817_01_model_release_candidate_published_claim_release.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260817_02_model_published_catalog_lifecycle.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260817_03_query_dataset_semantic_contract.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260817_04_bi_report_asset_registration.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

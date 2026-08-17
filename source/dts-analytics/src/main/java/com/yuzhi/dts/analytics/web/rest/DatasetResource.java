@@ -1,11 +1,17 @@
 package com.yuzhi.dts.analytics.web.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
 import com.yuzhi.dts.analytics.service.QueryCacheService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryPermissionService;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisDependencyException;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryTimeoutException;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisRateLimitException;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.web.rest.errors.ApiError;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
@@ -41,16 +47,19 @@ public class DatasetResource {
     private final QueryCacheService queryCacheService;
     private final QueryPermissionService queryPermissionService;
     private final QueryExecutionFacade queryExecutionFacade;
+    private final AnalysisQueryGateway analysisQueryGateway;
 
     public DatasetResource(
             AnalyticsSessionService sessionService,
             QueryCacheService queryCacheService,
             QueryPermissionService queryPermissionService,
-            QueryExecutionFacade queryExecutionFacade) {
+            QueryExecutionFacade queryExecutionFacade,
+            AnalysisQueryGateway analysisQueryGateway) {
         this.sessionService = sessionService;
         this.queryCacheService = queryCacheService;
         this.queryPermissionService = queryPermissionService;
         this.queryExecutionFacade = queryExecutionFacade;
+        this.analysisQueryGateway = analysisQueryGateway;
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -132,24 +141,17 @@ public class DatasetResource {
                 jsonQuery.put("query", prepared.mbql());
             }
 
-            // Try to get from cache first (unless skipping cache)
-            DatasetQueryService.DatasetResult result;
-            boolean cached = false;
-            if (!skipCache) {
-                Optional<DatasetQueryService.DatasetResult> cachedResult = queryCacheService.get(databaseId, body,
-                        userId);
-                if (cachedResult.isPresent()) {
-                    result = cachedResult.get();
-                    cached = true;
-                } else {
-                    result = queryExecutionFacade.executeRaw(prepared);
-                    queryCacheService.put(databaseId, body, userId, result);
-                }
-            } else {
-                result = queryExecutionFacade.executeRaw(prepared);
-            }
-
-            result = queryExecutionFacade.applyCompliance(result);
+            AnalyticsUser actor = sessionService.resolveUser(request).orElseThrow(() -> new IllegalArgumentException("Authentication required"));
+            AnalysisQueryGateway.GatewayExecution gatewayExecution = analysisQueryGateway.executePrepared(
+                actor,
+                prepared,
+                AnalysisRequestContext.from(request),
+                "legacy-dataset",
+                constraints.maxResults(),
+                skipCache
+            );
+            DatasetQueryService.DatasetResult result = gatewayExecution.datasetResult();
+            boolean cached = gatewayExecution.result().cacheHit();
 
             long runningTimeMs = System.currentTimeMillis() - startedMillis;
 
@@ -181,12 +183,26 @@ public class DatasetResource {
                     e.getMessage(),
                     false,
                     request);
-        } catch (SQLException e) {
+        } catch (AnalysisRateLimitException e) {
             return buildApiError(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "QUERY_EXEC_FAILED",
-                    "Error executing query: " + e.getMessage(),
-                    false,
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "ANALYSIS_QUERY_LIMIT_EXCEEDED",
+                    e.getMessage(),
+                    true,
+                    request);
+        } catch (AnalysisQueryTimeoutException e) {
+            return buildApiError(
+                    HttpStatus.GATEWAY_TIMEOUT,
+                    "ANALYSIS_QUERY_TIMEOUT",
+                    e.getMessage(),
+                    true,
+                    request);
+        } catch (AnalysisDependencyException e) {
+            return buildApiError(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    e.getErrorCode(),
+                    "Query dependency unavailable",
+                    true,
                     request);
         }
     }

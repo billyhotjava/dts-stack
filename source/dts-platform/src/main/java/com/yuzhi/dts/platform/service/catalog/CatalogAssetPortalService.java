@@ -24,6 +24,10 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.catalog.dto.AssetRef;
 import com.yuzhi.dts.platform.service.catalog.dto.CatalogTagDto;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.GovernanceReadiness;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.StatusAxes;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetStatusViewService.AssetDeliveryStatus;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetStatusViewService.ModelRef;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetStatusViewService.ServingSync;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
@@ -39,11 +43,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.commons.codec.digest.DigestUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -75,6 +81,12 @@ public class CatalogAssetPortalService {
      */
     private static final int VISIBILITY_SAMPLE_WINDOW = 200;
 
+    /**
+     * legacy 可见性无法完全下推到 SQL；按有界批次扫描后再分页，避免不可见原始行占用页面槽位。
+     * 本地常规规模只需一次查询，超过批次时继续顺序扫描，不产生逐资产查询。
+     */
+    private static final int LEGACY_VISIBILITY_BATCH_SIZE = 5_000;
+
     private enum VisibilityScope {
         CONSUMER,
         GOVERNANCE_INTAKE,
@@ -93,6 +105,7 @@ public class CatalogAssetPortalService {
     private final CatalogClassificationService classificationService;
     private final CatalogAssetTagService assetTagService;
     private final CatalogAssetRegistrationService assetRegistrationService;
+    private final CatalogAssetStatusViewService assetStatusViewService;
 
     public CatalogAssetPortalService(
         OpenMetadataAssetCacheRepository assetRepository,
@@ -109,6 +122,41 @@ public class CatalogAssetPortalService {
         CatalogAssetTagService assetTagService,
         CatalogAssetRegistrationService assetRegistrationService
     ) {
+        this(
+            assetRepository,
+            columnRepository,
+            lineageRepository,
+            extensionRepository,
+            mappingRepository,
+            datasetRepository,
+            domainRepository,
+            tableSchemaRepository,
+            catalogColumnSchemaRepository,
+            accessChecker,
+            classificationService,
+            assetTagService,
+            assetRegistrationService,
+            null
+        );
+    }
+
+    @Autowired
+    public CatalogAssetPortalService(
+        OpenMetadataAssetCacheRepository assetRepository,
+        OpenMetadataColumnCacheRepository columnRepository,
+        OpenMetadataLineageCacheRepository lineageRepository,
+        CatalogAssetExtensionRepository extensionRepository,
+        CatalogAssetMappingRepository mappingRepository,
+        CatalogDatasetRepository datasetRepository,
+        CatalogDomainRepository domainRepository,
+        CatalogTableSchemaRepository tableSchemaRepository,
+        CatalogColumnSchemaRepository catalogColumnSchemaRepository,
+        AccessChecker accessChecker,
+        CatalogClassificationService classificationService,
+        CatalogAssetTagService assetTagService,
+        CatalogAssetRegistrationService assetRegistrationService,
+        @Nullable CatalogAssetStatusViewService assetStatusViewService
+    ) {
         this.assetRepository = assetRepository;
         this.columnRepository = columnRepository;
         this.lineageRepository = lineageRepository;
@@ -122,6 +170,7 @@ public class CatalogAssetPortalService {
         this.classificationService = classificationService;
         this.assetTagService = assetTagService;
         this.assetRegistrationService = assetRegistrationService;
+        this.assetStatusViewService = assetStatusViewService;
     }
 
     /**
@@ -221,29 +270,6 @@ public class CatalogAssetPortalService {
         return scaleVisible(visible, sample.getNumberOfElements(), rawTotal);
     }
 
-    /** legacy 侧的可见资产总数，同样按固定窗口测量，与页码无关。 */
-    private long estimateVisibleLegacyTotal(
-        AssetQuery query,
-        String activeDept,
-        List<UUID> excludedIds,
-        long rawTotal,
-        VisibilityScope visibilityScope
-    ) {
-        if (rawTotal <= 0) {
-            return 0;
-        }
-        int sampleSize = (int) Math.min(rawTotal, VISIBILITY_SAMPLE_WINDOW);
-        Sort sort = Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"));
-        Page<CatalogDataset> sample = datasetRepository.findAll(buildLegacySpec(query), PageRequest.of(0, sampleSize, sort));
-        long visible = sample
-            .getContent()
-            .stream()
-            .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
-            .filter(dataset -> isVisible(null, dataset, activeDept, visibilityScope))
-            .count();
-        return scaleVisible(visible, sample.getNumberOfElements(), rawTotal);
-    }
-
     /** 把窗口内观测到的可见比例放大到全量；窗口覆盖全部数据时即为精确值。 */
     private long scaleVisible(long visibleInSample, int sampleSize, long rawTotal) {
         if (sampleSize <= 0) {
@@ -256,7 +282,7 @@ public class CatalogAssetPortalService {
     }
 
     public AssetPage listAssets(AssetQuery query, String activeDept) {
-        if (!query.tagIds().isEmpty()) {
+        if (!query.tagIds().isEmpty() || query.hasOperationalFilters()) {
             return listAssetsByTags(query, activeDept);
         }
         return listAssetsWithoutTagFilter(query, activeDept, VisibilityScope.CONSUMER);
@@ -308,7 +334,7 @@ public class CatalogAssetPortalService {
         if (!legacyPage.content().isEmpty()) {
             items.addAll(legacyPage.content());
         }
-        items = hydrateAssetTags(items);
+        items = hydrateAssetSummaries(items);
         long openMetadataTotal = estimateVisibleOpenMetadataTotal(
             query,
             activeDept,
@@ -338,7 +364,7 @@ public class CatalogAssetPortalService {
         ) {
             throw new ResponseStatusException(
                 HttpStatus.UNPROCESSABLE_ENTITY,
-                "标签筛选候选超过 5000，请增加关键词、数据域或其他基础条件"
+                "标签或状态筛选候选超过 5000，请增加关键词、数据域或其他基础条件"
             );
         }
         var openMetadataSort = Sort.by(Sort.Direction.DESC, "lastSyncedAt")
@@ -368,33 +394,32 @@ public class CatalogAssetPortalService {
             AssetSummary summary = toLegacySummary(dataset);
             candidates.putIfAbsent(assetIdentity(summary), summary);
         }
-        Set<String> matchingAssetKeys =
-            assetTagService.findMatchingAssetKeysWithin(
-                "DATASET",
-                candidates
-                    .values()
-                    .stream()
-                    .map(AssetSummary::assetKey)
-                    .toList(),
-                query.tagIds()
-            );
-        if (matchingAssetKeys.isEmpty()) {
-            return new AssetPage(
-                List.of(),
-                0,
-                page,
-                size,
-                0,
-                "openmetadata-cache+dts-catalog"
-            );
+        if (!query.tagIds().isEmpty()) {
+            Set<String> matchingAssetKeys =
+                assetTagService.findMatchingAssetKeysWithin(
+                    "DATASET",
+                    candidates
+                        .values()
+                        .stream()
+                        .map(AssetSummary::assetKey)
+                        .toList(),
+                    query.tagIds()
+                );
+            if (matchingAssetKeys.isEmpty()) {
+                return new AssetPage(
+                    List.of(),
+                    0,
+                    page,
+                    size,
+                    0,
+                    "openmetadata-cache+dts-catalog"
+                );
+            }
+            candidates.values().removeIf(summary -> !matchingAssetKeys.contains(summary.assetKey()));
         }
-        candidates
-            .values()
-            .removeIf(summary ->
-                !matchingAssetKeys.contains(summary.assetKey())
-            );
 
-        List<AssetSummary> filtered = new ArrayList<>(candidates.values());
+        List<AssetSummary> filtered = new ArrayList<>(hydrateAssetStatus(new ArrayList<>(candidates.values())));
+        filtered.removeIf(summary -> !matchesOperationalFilters(summary, query));
         filtered.sort(assetSummaryComparator());
         long offset = (long) page * size;
         int fromIndex = offset >= filtered.size() ? filtered.size() : (int) offset;
@@ -485,40 +510,30 @@ public class CatalogAssetPortalService {
         VisibilityScope visibilityScope
     ) {
         Sort sort = Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"));
-        // 取数窗口 = offset + limit。大页码会让窗口变得很大，但 legacyOffset 只有在页码
-        // 越过 OpenMetadata 全部行之后才增长，而 MAX_PAGE_INDEX 已把 page 钳到 10 万，
-        // 窗口上界因此有限。用 count 先算总数再短路虽能收窄窗口，却给每次调用都加一次
-        // count 查询，与「每次地图加载已跑两轮全量扫描」的成本问题相悖，得不偿失。
-        int fetchSize = Math.max(1, offset + Math.max(limit, 1));
-        Page<CatalogDataset> legacyPage = datasetRepository.findAll(buildLegacySpec(query), PageRequest.of(0, fetchSize, sort));
-        // offset 数的是「过滤前」的槽位（与 OM 侧用未过滤总数做边界保持一致），
-        // 所以 skip 必须作用在原始行上。若先过滤再 skip，被隐藏的行会让 offset 多跳过
-        // 同样数量的可见行，那些行在任何页码下都取不到。
-        List<CatalogDataset> raw = legacyPage.getContent();
-        List<AssetSummary> items = raw
-            .stream()
-            .skip(offset)
-            .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
-            .filter(dataset -> isVisible(null, dataset, activeDept, visibilityScope))
-            .limit(Math.max(0, limit))
-            .map(this::toLegacySummary)
-            .toList();
+        List<CatalogDataset> raw = new ArrayList<>();
+        int rawPageNumber = 0;
+        Page<CatalogDataset> rawPage;
+        do {
+            rawPage = datasetRepository.findAll(
+                buildLegacySpec(query),
+                PageRequest.of(rawPageNumber, LEGACY_VISIBILITY_BATCH_SIZE, sort)
+            );
+            raw.addAll(rawPage.getContent());
+            rawPageNumber++;
+        } while (rawPage.hasNext());
+
         List<CatalogDataset> visible = raw
             .stream()
             .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
             .filter(dataset -> isVisible(null, dataset, activeDept, visibilityScope))
             .toList();
-        // 已知限制（非本次引入，但影响不止于显示）：
-        // hidden 按当前取数窗口观测，而窗口大小随 offset 变化——OM-only 的页上 fetchSize 可低至 1，
-        // 此时整个 legacy 总数取决于那一行是否可见，波动幅度不是「小幅」而是可达数千。
-        // hidden 还会吸收被 excludedIds 移除的行（即已关联到 OM 资产的数据集），使波动进一步放大。
-        // 更要紧的是：overview() 用这个 total 作为扫描循环的终止条件，因此它同时影响 truncated
-        // 是否被正确判定——不是纯展示字段。
-        // 精确化需要对整个 legacy 结果集重跑一遍 canRead（扩展/映射/legacy 三方解析 + JWT 密级回退链，
-        // 无法下推到 SQL），即一次额外的全量枚举，与「每次地图加载已跑两轮全量扫描」的成本问题直接冲突。
-        // 故记录为已知限制。若要修，应连同该成本问题一并设计（例如缓存 domainStats）。
-        long total = estimateVisibleLegacyTotal(query, activeDept, excludedIds, legacyPage.getTotalElements(), visibilityScope);
-        return new AssetPage(items, total, 0, fetchSize, items.size(), "dts-catalog");
+        List<AssetSummary> items = visible
+            .stream()
+            .skip(Math.max(0, offset))
+            .limit(Math.max(0, limit))
+            .map(this::toLegacySummary)
+            .toList();
+        return new AssetPage(items, visible.size(), 0, LEGACY_VISIBILITY_BATCH_SIZE, items.size(), "dts-catalog");
     }
 
     public AssetDetail getAsset(UUID id, String activeDept) {
@@ -534,7 +549,7 @@ public class CatalogAssetPortalService {
             ) {
                 throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
             }
-            AssetSummary summary = hydrateAssetTags(List.of(toLegacySummary(legacy))).get(0);
+            AssetSummary summary = hydrateAssetSummaries(List.of(toLegacySummary(legacy))).get(0);
             return new AssetDetail(summary, List.of(), null, null);
         }
         OpenMetadataAssetCache asset = assetOptional.orElseThrow();
@@ -548,7 +563,7 @@ public class CatalogAssetPortalService {
         ) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "资产不存在或无权访问");
         }
-        AssetSummary summary = hydrateAssetTags(List.of(toSummary(asset, extension, mapping, legacy))).get(0);
+        AssetSummary summary = hydrateAssetSummaries(List.of(toSummary(asset, extension, mapping, legacy))).get(0);
         if (!consumerReadable) {
             return new AssetDetail(summary, List.of(), null, null);
         }
@@ -719,7 +734,7 @@ public class CatalogAssetPortalService {
         }
         extension.setGovernanceStatus(resolveGovernanceStatus(extension));
         extensionRepository.save(extension);
-        AssetSummary summary = hydrateAssetTags(List.of(toSummary(asset, extension, mapping, legacy))).get(0);
+        AssetSummary summary = hydrateAssetSummaries(List.of(toSummary(asset, extension, mapping, legacy))).get(0);
         synchronizeGovernanceProjection(summary);
         if (!canRead(extension, legacy, activeDept)) {
             return new AssetDetail(summary, List.of(), null, null);
@@ -770,7 +785,7 @@ public class CatalogAssetPortalService {
             }
         }
         CatalogDataset saved = datasetRepository.save(legacy);
-        AssetSummary summary = hydrateAssetTags(List.of(toLegacySummary(saved))).get(0);
+        AssetSummary summary = hydrateAssetSummaries(List.of(toLegacySummary(saved))).get(0);
         synchronizeGovernanceProjection(summary);
         return new AssetDetail(summary, List.of(), null, null);
     }
@@ -1334,6 +1349,47 @@ public class CatalogAssetPortalService {
             .toList();
     }
 
+    private List<AssetSummary> hydrateAssetSummaries(List<AssetSummary> summaries) {
+        return hydrateAssetStatus(hydrateAssetTags(summaries));
+    }
+
+    private List<AssetSummary> hydrateAssetStatus(List<AssetSummary> summaries) {
+        if (summaries == null || summaries.isEmpty()) {
+            return List.of();
+        }
+        List<AssetRef> refs = summaries
+            .stream()
+            .filter(summary -> StringUtils.hasText(summary.assetType()) && StringUtils.hasText(summary.assetKey()))
+            .map(summary -> new AssetRef(summary.assetType(), summary.assetKey()))
+            .toList();
+        Map<AssetRef, AssetDeliveryStatus> statuses = assetStatusViewService == null
+            ? Map.of()
+            : assetStatusViewService.read(refs);
+        return summaries
+            .stream()
+            .map(summary -> {
+                AssetRef ref = StringUtils.hasText(summary.assetType()) && StringUtils.hasText(summary.assetKey())
+                    ? new AssetRef(summary.assetType().trim().toUpperCase(Locale.ROOT), summary.assetKey().trim())
+                    : null;
+                AssetDeliveryStatus status = ref == null
+                    ? AssetDeliveryStatus.missing("ASSET_IDENTITY_INCOMPLETE")
+                    : statuses.getOrDefault(ref, AssetDeliveryStatus.missing("ASSET_SEMANTICS_MISSING"));
+                return summary.withDeliveryStatus(status);
+            })
+            .toList();
+    }
+
+    private boolean matchesOperationalFilters(AssetSummary summary, AssetQuery query) {
+        return matchesFilter(query.eligibility(), summary.consumptionEligibility()) &&
+            matchesFilter(query.servingStatus(), summary.servingSync() == null ? null : summary.servingSync().status()) &&
+            matchesFilter(query.qualityStatus(), summary.qualityStatus());
+    }
+
+    private boolean matchesFilter(String expected, String actual) {
+        return !StringUtils.hasText(expected) ||
+            (StringUtils.hasText(actual) && expected.trim().equalsIgnoreCase(actual.trim()));
+    }
+
     private String assetIdentity(AssetSummary summary) {
         return summary.assetType() + "\u0000" + summary.assetKey();
     }
@@ -1489,7 +1545,10 @@ public class CatalogAssetPortalService {
         int page,
         int size,
         Boolean unclassified,
-        Boolean stale
+        Boolean stale,
+        String eligibility,
+        String servingStatus,
+        String qualityStatus
     ) {
         public AssetQuery {
             tagIds = tagIds == null ? List.of() : List.copyOf(tagIds);
@@ -1497,7 +1556,56 @@ public class CatalogAssetPortalService {
 
         /** 无任何筛选的全局查询，用于概览统计。 */
         public static AssetQuery unscoped() {
-            return new AssetQuery(null, null, null, null, null, null, null, null, null, null, null, null, false, List.of(), 0, 200, null, null);
+            return new AssetQuery(null, null, null, null, null, null, null, null, null, null, null, null, false, List.of(), 0, 200, null, null, null, null, null);
+        }
+
+        public boolean hasOperationalFilters() {
+            return StringUtils.hasText(eligibility) || StringUtils.hasText(servingStatus) || StringUtils.hasText(qualityStatus);
+        }
+
+        public AssetQuery(
+            String keyword,
+            String service,
+            String type,
+            String database,
+            String schema,
+            String syncStatus,
+            String classification,
+            String warehouseLayer,
+            String ownerDept,
+            String governanceStatus,
+            String matchStatus,
+            UUID domainId,
+            boolean domainUnassigned,
+            List<UUID> tagIds,
+            int page,
+            int size,
+            Boolean unclassified,
+            Boolean stale
+        ) {
+            this(
+                keyword,
+                service,
+                type,
+                database,
+                schema,
+                syncStatus,
+                classification,
+                warehouseLayer,
+                ownerDept,
+                governanceStatus,
+                matchStatus,
+                domainId,
+                domainUnassigned,
+                tagIds,
+                page,
+                size,
+                unclassified,
+                stale,
+                null,
+                null,
+                null
+            );
         }
 
         public AssetQuery(
@@ -1535,6 +1643,9 @@ public class CatalogAssetPortalService {
                 page,
                 size,
                 null,
+                null,
+                null,
+                null,
                 null
             );
         }
@@ -1571,10 +1682,93 @@ public class CatalogAssetPortalService {
         String metadataSource,
         String assetType,
         String assetKey,
-        List<CatalogTagDto> assetTags
+        List<CatalogTagDto> assetTags,
+        StatusAxes statusAxes,
+        String consumptionEligibility,
+        List<String> eligibilityReasons,
+        java.time.Instant projectionUpdatedAt,
+        List<ModelRef> modelRefs,
+        ServingSync servingSync,
+        String qualityStatus
     ) {
         public AssetSummary {
             assetTags = assetTags == null ? List.of() : List.copyOf(assetTags);
+            consumptionEligibility = StringUtils.hasText(consumptionEligibility) ? consumptionEligibility : "CONDITIONAL";
+            eligibilityReasons = eligibilityReasons == null ? List.of() : List.copyOf(eligibilityReasons);
+            modelRefs = modelRefs == null ? List.of() : List.copyOf(modelRefs);
+            servingSync = servingSync == null ? new ServingSync("NOT_APPLICABLE", 0, null, null, null) : servingSync;
+            qualityStatus = StringUtils.hasText(qualityStatus) ? qualityStatus : "UNKNOWN";
+        }
+
+        public AssetSummary(
+            UUID id,
+            String omEntityId,
+            String fqn,
+            String type,
+            String service,
+            String database,
+            String schema,
+            String table,
+            String displayName,
+            String classification,
+            String warehouseLayer,
+            String ownerDept,
+            String owner,
+            UUID domainId,
+            String lifecycleStatus,
+            String description,
+            String governanceStatus,
+            String matchStatus,
+            String matchReason,
+            UUID legacyDatasetId,
+            String securityPolicyRefs,
+            Integer columnCount,
+            String syncStatus,
+            String syncMessage,
+            java.time.Instant lastSyncedAt,
+            String metadataSource,
+            String assetType,
+            String assetKey,
+            List<CatalogTagDto> assetTags
+        ) {
+            this(
+                id,
+                omEntityId,
+                fqn,
+                type,
+                service,
+                database,
+                schema,
+                table,
+                displayName,
+                classification,
+                warehouseLayer,
+                ownerDept,
+                owner,
+                domainId,
+                lifecycleStatus,
+                description,
+                governanceStatus,
+                matchStatus,
+                matchReason,
+                legacyDatasetId,
+                securityPolicyRefs,
+                columnCount,
+                syncStatus,
+                syncMessage,
+                lastSyncedAt,
+                metadataSource,
+                assetType,
+                assetKey,
+                assetTags,
+                null,
+                "CONDITIONAL",
+                List.of("ASSET_SEMANTICS_MISSING"),
+                null,
+                List.of(),
+                new ServingSync("NOT_APPLICABLE", 0, null, null, null),
+                "UNKNOWN"
+            );
         }
 
         public AssetSummary(
@@ -1668,7 +1862,58 @@ public class CatalogAssetPortalService {
                 metadataSource,
                 assetType,
                 assetKey,
-                tags
+                tags,
+                statusAxes,
+                consumptionEligibility,
+                eligibilityReasons,
+                projectionUpdatedAt,
+                modelRefs,
+                servingSync,
+                qualityStatus
+            );
+        }
+
+        public AssetSummary withDeliveryStatus(AssetDeliveryStatus status) {
+            AssetDeliveryStatus resolved = status == null
+                ? AssetDeliveryStatus.missing("ASSET_SEMANTICS_MISSING")
+                : status;
+            return new AssetSummary(
+                id,
+                omEntityId,
+                fqn,
+                type,
+                service,
+                database,
+                schema,
+                table,
+                displayName,
+                classification,
+                warehouseLayer,
+                ownerDept,
+                owner,
+                domainId,
+                lifecycleStatus,
+                description,
+                governanceStatus,
+                matchStatus,
+                matchReason,
+                legacyDatasetId,
+                securityPolicyRefs,
+                columnCount,
+                syncStatus,
+                syncMessage,
+                lastSyncedAt,
+                metadataSource,
+                assetType,
+                assetKey,
+                assetTags,
+                resolved.statusAxes(),
+                resolved.consumptionEligibility(),
+                resolved.eligibilityReasons(),
+                resolved.projectionUpdatedAt(),
+                resolved.modelRefs(),
+                resolved.servingSync(),
+                resolved.qualityStatus()
             );
         }
     }

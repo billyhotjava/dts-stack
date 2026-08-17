@@ -361,6 +361,29 @@ public class ModelReleaseCandidateRepository {
             .findFirst();
     }
 
+    /** Returns the newest immutable command snapshot that pinned engineering and governance quality evidence. */
+    public Optional<CommandEventView> findLatestQualityEvidenceSnapshot(String tenantId, UUID candidateId) {
+        if (tenantId == null || tenantId.isBlank() || candidateId == null) return Optional.empty();
+        return jdbcTemplate
+            .query(
+                """
+                select id, tenant_id, candidate_id, plan_id, candidate_version, event_type,
+                       from_status, to_status, actor_id, occurred_at, reason, idempotency_key,
+                       request_hash, response_snapshot::text as response_snapshot
+                  from modeling_model_release_candidate_command
+                 where tenant_id = ? and candidate_id = ?
+                   and response_snapshot ->> 'combinedEvidenceChecksum' is not null
+                 order by candidate_version desc, occurred_at desc, id desc
+                 limit 1
+                """,
+                (row, rowNumber) -> mapCommand(row),
+                tenantId.trim(),
+                candidateId
+            )
+            .stream()
+            .findFirst();
+    }
+
     public Map<UUID, CurrentModelReference> findCurrentModelReferences(
         String tenantId,
         UUID planId,

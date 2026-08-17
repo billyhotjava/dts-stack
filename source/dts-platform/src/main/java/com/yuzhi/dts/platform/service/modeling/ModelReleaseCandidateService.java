@@ -2,10 +2,12 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository.IdempotencyCollisionException;
@@ -38,6 +40,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -562,7 +565,36 @@ public class ModelReleaseCandidateService {
             command,
             CommandEventType.STATUS_CHANGED,
             true,
-            false
+            false,
+            null
+        );
+    }
+
+    /** Commits one quality/release transition together with its immutable evidence references. */
+    @Transactional
+    public CommandResult transitionWithQualityEvidence(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        TransitionCommand command,
+        CandidateQualityEvidenceSnapshot evidenceSnapshot
+    ) {
+        if (
+            command == null ||
+            !Set.of(DeliveryStatus.QUALITY_PASSED, DeliveryStatus.PUBLISHING).contains(command.targetStatus())
+        ) {
+            throw invalid("quality evidence can only accompany QUALITY_PASSED or PUBLISHING transitions");
+        }
+        if (evidenceSnapshot == null) throw invalid("quality evidence snapshot is required");
+        return transition(
+            tenantId,
+            actorId,
+            candidateId,
+            command,
+            CommandEventType.STATUS_CHANGED,
+            true,
+            false,
+            evidenceSnapshot
         );
     }
 
@@ -584,7 +616,8 @@ public class ModelReleaseCandidateService {
             command,
             CommandEventType.STATUS_CHANGED,
             true,
-            true
+            true,
+            null
         );
     }
 
@@ -606,7 +639,8 @@ public class ModelReleaseCandidateService {
             command,
             CommandEventType.STATUS_CHANGED,
             false,
-            false
+            false,
+            null
         );
     }
 
@@ -632,7 +666,8 @@ public class ModelReleaseCandidateService {
             command,
             CommandEventType.PUBLICATION_REQUESTED,
             true,
-            false
+            false,
+            null
         );
     }
 
@@ -643,7 +678,8 @@ public class ModelReleaseCandidateService {
         TransitionCommand command,
         CommandEventType requestedEventType,
         boolean auditStatusChange,
-        boolean explicitRematerialization
+        boolean explicitRematerialization,
+        CandidateQualityEvidenceSnapshot evidenceSnapshot
     ) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
@@ -662,6 +698,9 @@ public class ModelReleaseCandidateService {
 
         CandidateView current = repository.find(tenant, candidateId).orElseThrow(() -> notFound(candidateId));
         requireExpectedVersion(current, command.expectedVersion());
+        if (evidenceSnapshot != null && !current.id().equals(evidenceSnapshot.candidateId())) {
+            throw invalid("quality evidence snapshot belongs to another candidate");
+        }
         if (explicitRematerialization && current.status() != DeliveryStatus.BUILT) {
             throw new ModelReleaseCandidateException(
                 "MODEL_RELEASE_CANDIDATE_REMATERIALIZATION_NOT_ALLOWED",
@@ -766,7 +805,8 @@ public class ModelReleaseCandidateService {
             reason,
             command.idempotencyKey(),
             requestHash,
-            result
+            result,
+            target == command.targetStatus() ? evidenceSnapshot : null
         );
         int updated;
         try {
@@ -969,7 +1009,10 @@ public class ModelReleaseCandidateService {
             throw idempotencyConflict(idempotencyKey, existing.candidateId());
         }
         try {
-            CommandResult original = objectMapper.readValue(existing.responseSnapshot(), CommandResult.class);
+            CommandResult original = objectMapper
+                .readerFor(CommandResult.class)
+                .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .readValue(existing.responseSnapshot());
             CandidateView candidate = original.candidate();
             if (
                 !existing.tenantId().equals(candidate.tenantId()) ||
@@ -1173,6 +1216,34 @@ public class ModelReleaseCandidateService {
         String requestHash,
         CommandResult result
     ) {
+        return event(
+            tenantId,
+            candidate,
+            eventType,
+            fromStatus,
+            actorId,
+            occurredAt,
+            reason,
+            idempotencyKey,
+            requestHash,
+            result,
+            null
+        );
+    }
+
+    private CommandEventView event(
+        String tenantId,
+        CandidateView candidate,
+        CommandEventType eventType,
+        DeliveryStatus fromStatus,
+        String actorId,
+        Instant occurredAt,
+        String reason,
+        String idempotencyKey,
+        String requestHash,
+        CommandResult result,
+        CandidateQualityEvidenceSnapshot evidenceSnapshot
+    ) {
         return new CommandEventView(
             idGenerator.get(),
             tenantId,
@@ -1187,7 +1258,7 @@ public class ModelReleaseCandidateService {
             reason,
             idempotencyKey,
             requestHash,
-            write(result)
+            write(result, evidenceSnapshot)
         );
     }
 
@@ -1370,8 +1441,15 @@ public class ModelReleaseCandidateService {
     }
 
     private String write(CommandResult result) {
+        return write(result, null);
+    }
+
+    private String write(CommandResult result, CandidateQualityEvidenceSnapshot evidenceSnapshot) {
         try {
-            return canonicalWriter.writeValueAsString(result);
+            if (evidenceSnapshot == null) return canonicalWriter.writeValueAsString(result);
+            ObjectNode response = objectMapper.valueToTree(result);
+            evidenceSnapshot.appendTo(response, objectMapper);
+            return canonicalWriter.writeValueAsString(response);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Cannot serialize release-candidate command result", exception);
         }

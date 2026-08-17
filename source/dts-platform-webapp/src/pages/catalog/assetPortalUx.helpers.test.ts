@@ -31,6 +31,19 @@ describe("assetPortalUx helpers", () => {
 		expect(readiness.reasons).toContain("仅有主目录缓存，尚未沉淀为 DTS 治理资产");
 	});
 
+	it("treats DTS-native assets as resolved without an OpenMetadata mapping", () => {
+		const readiness = resolveAssetReadiness({
+			classification: "INTERNAL",
+			domainId: "domain-1",
+			ownerDept: "D001",
+			governanceStatus: "GOVERNED",
+			matchStatus: "DTS_NATIVE",
+			metadataSource: "dts-catalog",
+		});
+
+		expect(readiness).toEqual({ state: "READY", label: "可引用", color: "green", reasons: [] });
+	});
+
 	it("builds an asset grant URL that deep-links into the new-request flow", () => {
 		expect(buildAssetGrantUrl({ assetType: "TABLE", assetId: "dwd.project/detail" })).toBe(
 			"/security/dataset-access-approval?action=new&assetType=TABLE&assetId=dwd.project%2Fdetail",

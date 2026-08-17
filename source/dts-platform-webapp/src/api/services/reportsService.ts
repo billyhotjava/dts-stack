@@ -6,6 +6,10 @@ export type ReportLink = {
 	title: string;
 	engine: string;
 	reportType?: string | null;
+	assetType?: string | null;
+	assetKey?: string | null;
+	assetVersion?: number | null;
+	reconcileStatus?: string | null;
 	deptCodes?: string[];
 	roleCodes?: string[];
 	classification: string;

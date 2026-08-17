@@ -186,4 +186,47 @@ class CatalogLineageResourceImpactTest {
         org.mockito.Mockito.verify(columnLineageRepository, org.mockito.Mockito.never())
             .findByDatasetLineageIdInAt(any(), any());
     }
+
+    @Test
+    void impactReportsMissingTableUpstreamAndColumnEvidenceWithoutInventingEdges() {
+        Instant at = Instant.parse("2026-08-01T00:00:00Z");
+        CatalogDataset root = dataset(rootId);
+        root.setWarehouseLayer("DWD");
+        when(datasetRepository.findById(rootId)).thenReturn(Optional.of(root));
+        when(accessChecker.canRead(any())).thenReturn(true);
+        when(accessChecker.departmentAllowed(any(), any())).thenReturn(true);
+        when(lineageRepository.findByEitherSideAt(eq(rootId), eq(at))).thenReturn(List.of());
+
+        Map<String, Object> payload = resource.impact(
+            rootId,
+            "UPSTREAM",
+            3,
+            null,
+            null,
+            null,
+            null,
+            true,
+            true,
+            at.toString(),
+            null
+        ).getData();
+
+        assertThat(payload.get("edges")).isEqualTo(List.of());
+        assertThat(payload.get("columnLineages")).isEqualTo(List.of());
+        assertThat(payload.get("lineageEvidence"))
+            .isInstanceOfSatisfying(Map.class, evidence -> {
+                assertThat(evidence.get("state")).isEqualTo("MISSING");
+                assertThat(evidence.get("reasonCodes"))
+                    .isEqualTo(
+                        List.of(
+                            "TABLE_LINEAGE_EVIDENCE_MISSING",
+                            "UPSTREAM_SOURCE_OR_ODS_EVIDENCE_MISSING",
+                            "COLUMN_LINEAGE_EVIDENCE_MISSING"
+                        )
+                    );
+                assertThat(evidence.get("tableLineageCount")).isEqualTo(0);
+                assertThat(evidence.get("columnLineageCount")).isEqualTo(0);
+            });
+        verify(columnLineageRepository, org.mockito.Mockito.never()).findByDatasetLineageIdInAt(any(), any());
+    }
 }

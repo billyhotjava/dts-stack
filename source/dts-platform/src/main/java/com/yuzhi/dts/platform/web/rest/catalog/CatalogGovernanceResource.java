@@ -197,14 +197,18 @@ public class CatalogGovernanceResource {
             })
             .toList();
 
-        int healthScore = 100;
-        healthScore -= Math.min(40, (int) failRuns * 8);
-        healthScore -= Math.min(30, (int) issueOpen * 2);
-        healthScore -= Math.min(20, (int) overdueIssue * 5);
-        if (failRuns == 0 && passRuns > 0) {
-            healthScore = Math.min(100, healthScore + 5);
+        Integer healthScore = null;
+        String healthLevel = "UNKNOWN";
+        if (totalRuns > 0) {
+            healthScore = 100;
+            healthScore -= Math.min(40, (int) failRuns * 8);
+            healthScore -= Math.min(30, (int) issueOpen * 2);
+            healthScore -= Math.min(20, (int) overdueIssue * 5);
+            if (failRuns == 0 && passRuns > 0) {
+                healthScore = Math.min(100, healthScore + 5);
+            }
+            healthLevel = healthScore >= 80 ? "HEALTHY" : healthScore >= 60 ? "WARN" : "RISK";
         }
-        String healthLevel = healthScore >= 80 ? "HEALTHY" : healthScore >= 60 ? "WARN" : "RISK";
 
         Map<String, Object> quality = new LinkedHashMap<>();
         quality.put("totalRuns", totalRuns);
@@ -213,6 +217,7 @@ public class CatalogGovernanceResource {
         quality.put("runningRuns", runningRuns);
         quality.put("latestRunAt", latestRun != null ? latestRun.getCreatedDate() : null);
         quality.put("latestStatus", latestRun != null ? helper.normalizeUpper(latestRun.getStatus()) : null);
+        quality.put("evidenceState", totalRuns > 0 ? "AVAILABLE" : "MISSING");
         quality.put("failureTop", failureTop);
         quality.put("trend", new ArrayList<>(trend.values()));
 

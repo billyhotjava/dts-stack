@@ -52,6 +52,8 @@ public class RevisionService {
         revision.setUserId(userId);
         revision.setReversion(isReversion);
         revision.setObjectJson(toCardObject(card));
+        revision.setVersionNo(revisionRepository.findMaxVersionNo(MODEL_CARD, card.getId()) + 1);
+        revision.setStatus("DRAFT");
         return revisionRepository.save(revision);
     }
 
@@ -62,6 +64,8 @@ public class RevisionService {
         revision.setUserId(userId);
         revision.setReversion(isReversion);
         revision.setObjectJson(toDashboardObject(dashboard, dashcards));
+        revision.setVersionNo(revisionRepository.findMaxVersionNo(MODEL_DASHBOARD, dashboard.getId()) + 1);
+        revision.setStatus("DRAFT");
         return revisionRepository.save(revision);
     }
 
@@ -276,4 +280,3 @@ public class RevisionService {
         return java.util.stream.StreamSupport.stream(arrayNode.spliterator(), false).toList();
     }
 }
-

@@ -54,6 +54,7 @@ export type GovernanceHealth = {
 	healthScore?: number;
 	healthLevel?: string;
 	quality?: {
+		evidenceState?: "AVAILABLE" | "MISSING";
 		totalRuns?: number;
 		passRuns?: number;
 		failRuns?: number;

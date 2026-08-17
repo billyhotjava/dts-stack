@@ -92,6 +92,9 @@ export type CatalogAssetV2Query = {
 	domainUnassigned?: boolean;
 	unclassified?: boolean;
 	stale?: boolean;
+	eligibility?: string;
+	servingStatus?: string;
+	qualityStatus?: string;
 	page?: number;
 	size?: number;
 };

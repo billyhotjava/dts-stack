@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Collapse, Space, Statistic, Tag } from "antd";
+import { useSearchParams } from "react-router";
 import { CompactTable } from "@/components/table";
 import { EmptyState } from "@/components/empty-state";
 import { getCatalogLineageImpact } from "@/api/platformApi";
@@ -10,6 +11,7 @@ import {
 	type ImpactNode,
 	type ImpactResult,
 	layerColor,
+	lineageEvidenceDescription,
 	LineageDataFilters,
 	type LineageDirection,
 	LineageNodeDrawer,
@@ -22,19 +24,33 @@ import {
 } from "./lineageShared";
 
 export default function LineageImpactPage() {
+	const [searchParams, setSearchParams] = useSearchParams();
 	const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
-	const [selectedId, setSelectedId] = useState<string>();
-	const [direction, setDirection] = useState<LineageDirection>("BOTH");
-	const [depth, setDepth] = useState(3);
-	const [projectName, setProjectName] = useState("");
-	const [layerFilters, setLayerFilters] = useState<string[]>([]);
-	const [changedWithinHours, setChangedWithinHours] = useState(0);
-	const [snapshotAt, setSnapshotAt] = useState("");
+	const [selectedId, setSelectedId] = useState<string | undefined>(() => searchParams.get("datasetId") || undefined);
+	const [direction, setDirection] = useState<LineageDirection>(() =>
+		searchParams.get("direction") === "UPSTREAM" || searchParams.get("direction") === "DOWNSTREAM"
+			? (searchParams.get("direction") as LineageDirection)
+			: "BOTH",
+	);
+	const [depth, setDepth] = useState(() => {
+		const raw = Number(searchParams.get("depth") || 3);
+		return Number.isFinite(raw) && raw >= 1 && raw <= 10 ? raw : 3;
+	});
+	const [projectName, setProjectName] = useState(() => searchParams.get("project") || "");
+	const [layerFilters, setLayerFilters] = useState<string[]>(() =>
+		(searchParams.get("layers") || "").split(",").filter(Boolean),
+	);
+	const [changedWithinHours, setChangedWithinHours] = useState(() => {
+		const raw = Number(searchParams.get("changed") || 0);
+		return Number.isFinite(raw) && raw >= 0 ? raw : 0;
+	});
+	const [snapshotAt, setSnapshotAt] = useState(() => searchParams.get("at") || "");
 	const [keyword, setKeyword] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [impact, setImpact] = useState<ImpactResult | null>(null);
 	const [selectedNode, setSelectedNode] = useState<ImpactNode | null>(null);
 	const { nodes, edges, columnLineages } = useLineageData(impact, keyword);
+	const lineageEvidence = impact?.lineageEvidence;
 	const datasetOptions = useMemo(() => datasets.map((item) => ({ label: item.name, value: item.id })), [datasets]);
 
 	const loadDatasets = async () => {
@@ -79,6 +95,36 @@ export default function LineageImpactPage() {
 	useEffect(() => {
 		void loadImpact();
 	}, [selectedId, direction, depth, projectName, layerFilters, changedWithinHours, snapshotAt]);
+
+	useEffect(() => {
+		const params = new URLSearchParams(searchParams);
+		if (selectedId) params.set("datasetId", selectedId);
+		else params.delete("datasetId");
+		if (direction !== "BOTH") params.set("direction", direction);
+		else params.delete("direction");
+		if (depth !== 3) params.set("depth", String(depth));
+		else params.delete("depth");
+		if (projectName.trim()) params.set("project", projectName.trim());
+		else params.delete("project");
+		if (layerFilters.length) params.set("layers", layerFilters.join(","));
+		else params.delete("layers");
+		if (changedWithinHours > 0) params.set("changed", String(changedWithinHours));
+		else params.delete("changed");
+		if (snapshotAt) params.set("at", toIsoInstant(snapshotAt) || snapshotAt);
+		else params.delete("at");
+		const next = params.toString();
+		if (next !== searchParams.toString()) setSearchParams(params, { replace: true });
+	}, [
+		selectedId,
+		direction,
+		depth,
+		projectName,
+		layerFilters,
+		changedWithinHours,
+		snapshotAt,
+		searchParams,
+		setSearchParams,
+	]);
 
 	const layerGroupItems = useMemo(() => {
 		const groups = new Map<string, ImpactNode[]>();
@@ -136,6 +182,14 @@ export default function LineageImpactPage() {
 
 			{selectedId ? (
 				<>
+					{lineageEvidence && lineageEvidence.state !== "COMPLETE" ? (
+						<Alert
+							description={`${lineageEvidenceDescription(lineageEvidence)}。当前快照只展示已有证据，不补造 ODS 或字段关系。`}
+							message="血缘证据不完整"
+							showIcon
+							type={lineageEvidence.state === "MISSING" ? "error" : "warning"}
+						/>
+					) : null}
 					<Card title="影响概览" loading={loading}>
 						<Space size={24} wrap>
 							<Statistic title="节点数" value={Number(impact?.nodeCount || nodes.length)} />

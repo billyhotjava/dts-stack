@@ -38,7 +38,7 @@ test("overview is a zero-input statistics dashboard with a single search exit", 
 });
 
 test("the layer matrix and gap panel are removed", () => {
-	assert.doesNotMatch(PAGE, /分层×主题域矩阵/);
+	assert.doesNotMatch(PAGE, /分层×业务归属数据域矩阵/);
 	assert.doesNotMatch(PAGE, /asset-overview-matrix/);
 	assert.doesNotMatch(PAGE, /matrixHeatTone/);
 	assert.doesNotMatch(PAGE, /MERGED_DOMAIN_KEY/);

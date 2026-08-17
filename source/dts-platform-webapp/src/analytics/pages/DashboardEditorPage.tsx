@@ -7,10 +7,13 @@ import {
 	type CollectionListItem,
 	type DashboardCard,
 	type DashboardDetail,
+	type DashboardPublicationAudience,
+	type DashboardPublicationValidation,
 	type DashboardQueryResponse,
+	type DashboardVersion,
 } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Input, Select, Modal, message, Spin } from "antd";
+import { Alert, Button, Card, Drawer, Empty, Input, Select, Modal, message, Space, Spin, Tag, Typography } from "antd";
 import { PlusOutlined, } from "@ant-design/icons";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { useDashboardCrossFilter } from "../hooks/useDashboardCrossFilter";
@@ -19,6 +22,8 @@ import { DashboardEditorGrid } from "./dashboard/DashboardEditorGrid";
 import { DashboardFilterBar, type DashboardParameter } from "./dashboard/DashboardFilterBar";
 import { CardPickerModal } from "./dashboard/CardPickerModal";
 import type { SeriesClickParams } from "../components/charts";
+
+const { Text } = Typography;
 
 type LoadState<T> =
 	| { state: "loading" }
@@ -43,6 +48,10 @@ function toDashboardParams(d: DashboardDetail): DashboardParameter[] {
 		.filter((p) => p.id);
 }
 
+function publicationErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : "仪表板发布请求失败";
+}
+
 export default function DashboardEditorPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const navigate = useNavigate();
@@ -65,6 +74,22 @@ export default function DashboardEditorPage() {
 	const [isEditing, setIsEditing] = useState(true);
 	const [saveState, setSaveState] = useState<LoadState<DashboardDetail> | null>(null);
 	const [cardPickerOpen, setCardPickerOpen] = useState(false);
+	const [publishOpen, setPublishOpen] = useState(false);
+	const [publicationBusy, setPublicationBusy] = useState(false);
+	const [publicationError, setPublicationError] = useState<string | null>(null);
+	const [publicationValidation, setPublicationValidation] = useState<DashboardPublicationValidation | null>(null);
+	const [audience, setAudience] = useState<DashboardPublicationAudience>({
+		deptCodes: [],
+		roleCodes: [],
+		classification: "DATA_INTERNAL",
+		expiresAt: null,
+	});
+	const [versionsOpen, setVersionsOpen] = useState(false);
+	const [versionsLoading, setVersionsLoading] = useState(false);
+	const [versions, setVersions] = useState<DashboardVersion[]>([]);
+
+	const dashboardValue = dashboard?.state === "loaded" ? dashboard.value : null;
+	const canModify = !dashboardValue?.lifecycle_status || dashboardValue.lifecycle_status === "DRAFT";
 
 	// Card query results
 	const [cardResults, setCardResults] = useState<Record<number, LoadState<DashboardQueryResponse>>>({});
@@ -107,6 +132,7 @@ export default function DashboardEditorPage() {
 				setCollectionId(typeof d.collection_id === "number" ? d.collection_id : null);
 				setDashcards(toEditableDashcards(d));
 				setParameters(toDashboardParams(d));
+				setIsEditing(!d.lifecycle_status || d.lifecycle_status === "DRAFT");
 			})
 			.catch((e) => !cancelled && setDashboard({ state: "error", error: e }));
 		return () => { cancelled = true; };
@@ -220,6 +246,8 @@ export default function DashboardEditorPage() {
 
 	// Add cards from picker
 	const handleAddCards = useCallback((cards: CardListItem[]) => {
+		const accepted = cards.slice(0, Math.max(0, 50 - dashcards.length));
+		if (accepted.length < cards.length) message.warning("仪表板最多允许 50 个分析组件");
 		setDashcards((prev) => {
 			let maxBottom = 0;
 			for (const dc of prev) {
@@ -227,7 +255,7 @@ export default function DashboardEditorPage() {
 				if (bottom > maxBottom) maxBottom = bottom;
 			}
 
-			const newCards: DashboardCard[] = cards.map((c, i) => ({
+			const newCards: DashboardCard[] = accepted.map((c, i) => ({
 				id: -(Date.now() + i), // Negative temp id
 				card_id: c.id,
 				row: maxBottom,
@@ -249,7 +277,7 @@ export default function DashboardEditorPage() {
 
 			return [...prev, ...newCards];
 		});
-	}, []);
+	}, [dashcards.length]);
 
 	// Series click handler (for cross-filter)
 	const handleSeriesClick = useCallback(
@@ -271,6 +299,10 @@ export default function DashboardEditorPage() {
 
 	// Add new parameter
 	const handleAddParam = useCallback(() => {
+		if (parameters.length >= 20) {
+			message.warning("仪表板最多允许 20 个筛选参数");
+			return;
+		}
 		const id = `param_${Date.now()}`;
 		Modal.confirm({
 			title: t(locale, "dashboards.addFilter"),
@@ -318,6 +350,7 @@ export default function DashboardEditorPage() {
 
 	// Save
 	const save = async () => {
+		if (!canModify) return;
 		const trimmedName = name.trim();
 		if (!trimmedName) return;
 		setSaveState({ state: "loading" });
@@ -366,6 +399,110 @@ export default function DashboardEditorPage() {
 		}
 	};
 
+	const publicationPayload = (): DashboardPublicationAudience => ({
+		...audience,
+		expiresAt: audience.expiresAt ? new Date(audience.expiresAt).toISOString() : null,
+	});
+
+	const validatePublication = async (): Promise<DashboardPublicationValidation | null> => {
+		if (!dashboardId) {
+			setPublicationError("请先保存仪表板草稿，再进行发布校验。");
+			return null;
+		}
+		setPublicationBusy(true);
+		setPublicationError(null);
+		try {
+			const result = await analyticsApi.validateDashboardPublication(dashboardId, publicationPayload());
+			setPublicationValidation(result);
+			return result;
+		} catch (error) {
+			setPublicationError(publicationErrorMessage(error));
+			return null;
+		} finally {
+			setPublicationBusy(false);
+		}
+	};
+
+	const openPublication = () => {
+		setPublishOpen(true);
+		setPublicationValidation(null);
+		setPublicationError(null);
+		if (dashboardId) void validatePublication();
+	};
+
+	const publish = async () => {
+		if (!dashboardId) return;
+		const checked = await validatePublication();
+		if (!checked?.valid) return;
+		setPublicationBusy(true);
+		try {
+			const result = await analyticsApi.publishDashboard(dashboardId, publicationPayload());
+			setDashboard((current) => current?.state === "loaded"
+				? {
+					state: "loaded",
+					value: {
+						...current.value,
+						lifecycle_status: result.lifecycleStatus,
+						published_revision_id: result.revisionId,
+						registration_status: result.registrationStatus,
+						version_no: result.versionNo,
+					},
+				}
+				: current);
+			setIsEditing(false);
+			setPublishOpen(false);
+			message.success(`仪表板已发布为 v${result.versionNo}，正在注册业务入口`);
+		} catch (error) {
+			setPublicationError(publicationErrorMessage(error));
+		} finally {
+			setPublicationBusy(false);
+		}
+	};
+
+	const openVersions = async () => {
+		if (!dashboardId) return;
+		setVersionsOpen(true);
+		setVersionsLoading(true);
+		try {
+			setVersions(await analyticsApi.listDashboardVersions(dashboardId));
+		} catch (error) {
+			message.error(publicationErrorMessage(error));
+		} finally {
+			setVersionsLoading(false);
+		}
+	};
+
+	const createDraftFromVersion = async (revisionId: number) => {
+		if (!dashboardId) return;
+		setVersionsLoading(true);
+		try {
+			const draft = await analyticsApi.createDashboardDraftFromVersion(dashboardId, revisionId);
+			message.success("已从历史版本创建独立草稿");
+			navigate(`/bi/dashboards/${draft.id}`);
+		} catch (error) {
+			message.error(publicationErrorMessage(error));
+		} finally {
+			setVersionsLoading(false);
+		}
+	};
+
+	const retryRegistration = async () => {
+		if (!dashboardId) return;
+		try {
+			const result = await analyticsApi.retryDashboardRegistration(dashboardId);
+			if (!result.queued) {
+				message.info("当前发布版本没有可重试的注册任务");
+				return;
+			}
+			setDashboard((current) => current?.state === "loaded"
+				? { state: "loaded", value: { ...current.value, registration_status: "PENDING_REGISTRATION" } }
+				: current);
+			message.success("已重新提交业务入口注册");
+		} catch (error) {
+			message.error(publicationErrorMessage(error));
+		}
+	};
+
 	// Existing card ids for picker exclusion
 	const existingCardIds = useMemo(() => {
 		return new Set(dashcards.map((dc) => dc.card_id).filter((id): id is number => typeof id === "number"));
@@ -404,29 +541,40 @@ export default function DashboardEditorPage() {
 		<div className="space-y-4">
 			<div data-testid="analytics-dashboard-editor">
 				{/* Top toolbar */}
-				<div className="flex items-center gap-3 mb-4 flex-wrap">
-					<Link to="/bi/dashboards">
-						<Button type="text">
-							{t(locale, "dashboards.backToList")}
-						</Button>
-					</Link>
+				<div className="mb-4 flex flex-col gap-3">
+					<div className="flex min-w-0 items-center gap-3">
+						<Link className="shrink-0" to="/bi/dashboards">
+							<Button type="text">
+								{t(locale, "dashboards.backToList")}
+							</Button>
+						</Link>
 
-					<div className="flex-1 min-w-0">
-						{isEditing ? (
-							<Input
-								value={name}
-								onChange={(e) => setName(e.target.value)}
-								placeholder={t(locale, "dashboards.untitled")}
-								variant="borderless"
-								className="text-lg font-semibold"
-								style={{ fontSize: 18, fontWeight: 600 }}
-							/>
-						) : (
-							<h2 className="text-lg font-semibold truncate m-0">{name || t(locale, "dashboards.untitled")}</h2>
-						)}
+						<div className="flex min-w-0 flex-1 items-center gap-2">
+							{isEditing && canModify ? (
+								<Input
+									value={name}
+									onChange={(e) => setName(e.target.value)}
+									placeholder={t(locale, "dashboards.untitled")}
+									variant="borderless"
+									className="min-w-0 flex-1 text-lg font-semibold"
+									style={{ fontSize: 18, fontWeight: 600 }}
+								/>
+							) : (
+								<h2 className="m-0 min-w-0 flex-1 truncate text-lg font-semibold">{name || t(locale, "dashboards.untitled")}</h2>
+							)}
+							<div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+								{dashboardValue?.lifecycle_status && <Tag>{dashboardValue.lifecycle_status}</Tag>}
+								{dashboardValue?.registration_status && (
+									<Tag color={dashboardValue.registration_status === "AVAILABLE" ? "green" : dashboardValue.registration_status === "REGISTRATION_FAILED" ? "red" : "gold"}>
+										{dashboardValue.registration_status}
+									</Tag>
+								)}
+							</div>
+						</div>
 					</div>
 
-					{isEditing && (
+					<div className="flex flex-wrap items-center gap-3">
+					{isEditing && canModify && (
 						<Select
 							value={collectionId ? String(collectionId) : ""}
 							onChange={(value) => setCollectionId(value ? Number.parseInt(value, 10) || null : null)}
@@ -440,31 +588,49 @@ export default function DashboardEditorPage() {
 
 					<Button
 						onClick={() => setCardPickerOpen(true)}
-						disabled={allCards.state !== "loaded" || !isEditing}
+						disabled={allCards.state !== "loaded" || !isEditing || !canModify || dashcards.length >= 50}
 					>
 						{t(locale, "dashboards.addCard")}
 					</Button>
 
 					<Button
 						onClick={() => setIsEditing(!isEditing)}
+						disabled={!canModify}
 					>
 						{isEditing ? t(locale, "dashboards.preview") : t(locale, "dashboards.editing")}
 					</Button>
 
+					{dashboardId && <Button onClick={() => void openVersions()}>版本历史</Button>}
+					{dashboardId && canModify && <Button onClick={openPublication}>校验</Button>}
+					{dashboardId && canModify && <Button type="primary" ghost onClick={openPublication}>发布</Button>}
+					{dashboardValue?.registration_status === "REGISTRATION_FAILED" && (
+						<Button danger onClick={() => void retryRegistration()}>重试注册</Button>
+					)}
+
 					<Button
 						type="primary"
 						onClick={save}
-						disabled={!name.trim() || saveState?.state === "loading"}
+						disabled={!canModify || !name.trim() || saveState?.state === "loading"}
 						loading={saveState?.state === "loading"}
 					>
-						{t(locale, "dashboards.save")}
+						保存草稿
 					</Button>
+					</div>
 				</div>
 
 				{/* Errors */}
 				{collections.state === "error" && <div className="mb-3"><ErrorNotice locale={locale} error={collections.error} /></div>}
 				{allCards.state === "error" && <div className="mb-3"><ErrorNotice locale={locale} error={allCards.error} /></div>}
 				{saveState?.state === "error" && <div className="mb-3"><ErrorNotice locale={locale} error={saveState.error} /></div>}
+				{!canModify && (
+					<Alert className="mb-3" type="info" showIcon message="已发布仪表板不可原位修改" description="需要调整时，请从版本历史创建独立草稿。" />
+				)}
+				{dashboardValue?.registration_status === "PENDING_REGISTRATION" && (
+					<Alert className="mb-3" type="warning" showIcon message="业务入口正在注册" description="注册完成前，普通消费者不会看到或执行该仪表板。" />
+				)}
+				{dashboardValue?.registration_status === "REGISTRATION_FAILED" && (
+					<Alert className="mb-3" type="error" showIcon message="业务入口注册失败" description="发布版本仍保留，可重试注册且不会重复创建入口。" />
+				)}
 
 				{/* Cross-filter indicator */}
 				{crossFilter.activeFilter && !isEditing && (
@@ -486,7 +652,7 @@ export default function DashboardEditorPage() {
 					paramValues={paramValues}
 					paramOptions={paramOptions}
 					onParamChange={handleParamChange}
-					isEditing={isEditing}
+					isEditing={isEditing && canModify}
 					locale={locale}
 					onAddParam={handleAddParam}
 					onRemoveParam={handleRemoveParam}
@@ -497,12 +663,12 @@ export default function DashboardEditorPage() {
 					<div className="flex flex-col items-center justify-center min-h-[300px] border-2 border-dashed border-gray-300 rounded-lg text-gray-400">
 						<PlusOutlined className="text-3xl mb-2" />
 						<p className="text-sm">{t(locale, "dashboards.noCards")}</p>
-						{isEditing && (
+						{isEditing && canModify && (
 							<Button
 								type="primary"
 								ghost
 								onClick={() => setCardPickerOpen(true)}
-								disabled={allCards.state !== "loaded"}
+								disabled={allCards.state !== "loaded" || dashcards.length >= 50}
 								className="mt-2"
 							>
 								{t(locale, "dashboards.addCard")}
@@ -513,7 +679,7 @@ export default function DashboardEditorPage() {
 					<DashboardEditorGrid
 						dashcards={dashcards}
 						cardResults={cardResults}
-						isEditing={isEditing}
+						isEditing={isEditing && canModify}
 						locale={locale}
 						onLayoutChange={handleLayoutChange}
 						onRemoveCard={handleRemoveCard}
@@ -530,10 +696,134 @@ export default function DashboardEditorPage() {
 						open={cardPickerOpen}
 						onClose={() => setCardPickerOpen(false)}
 						onAdd={handleAddCards}
-						allCards={allCards.value}
+						allCards={allCards.value.filter((card) =>
+							card.type === "analysis"
+							&& card.lifecycle_status === "PUBLISHED"
+							&& typeof card.published_revision_id === "number"
+						)}
 						existingCardIds={existingCardIds}
 					/>
 				)}
+
+				<Drawer
+					title="发布仪表板"
+					open={publishOpen}
+					width={580}
+					onClose={() => setPublishOpen(false)}
+					extra={(
+						<Space>
+							<Button loading={publicationBusy} onClick={() => void validatePublication()}>重新校验</Button>
+							<Button
+								type="primary"
+								loading={publicationBusy}
+								disabled={!publicationValidation?.valid}
+								onClick={() => void publish()}
+							>
+								确认发布
+							</Button>
+						</Space>
+					)}
+				>
+					<Space direction="vertical" size={16} style={{ width: "100%" }}>
+						<Alert
+							type="info"
+							showIcon
+							message="发布后将钉定分析版本、参数映射与查询预算"
+							description={`当前 ${dashcards.length}/50 个分析组件，${parameters.length}/20 个筛选参数。业务入口注册成功后才会对消费者开放。`}
+						/>
+						<div>
+							<Text strong>可见部门</Text>
+							<Select
+								mode="tags"
+								value={audience.deptCodes}
+								onChange={(deptCodes) => { setAudience((value) => ({ ...value, deptCodes })); setPublicationValidation(null); }}
+								placeholder="输入部门编码后回车"
+								style={{ width: "100%" }}
+							/>
+						</div>
+						<div>
+							<Text strong>可见角色</Text>
+							<Select
+								mode="tags"
+								value={audience.roleCodes}
+								onChange={(roleCodes) => { setAudience((value) => ({ ...value, roleCodes })); setPublicationValidation(null); }}
+								placeholder="输入角色编码后回车"
+								style={{ width: "100%" }}
+							/>
+						</div>
+						<div>
+							<Text strong>发布密级</Text>
+							<Select
+								value={audience.classification}
+								onChange={(classification) => { setAudience((value) => ({ ...value, classification })); setPublicationValidation(null); }}
+								options={[
+									{ label: "公开", value: "DATA_PUBLIC" },
+									{ label: "内部", value: "DATA_INTERNAL" },
+									{ label: "保密", value: "DATA_CONFIDENTIAL" },
+									{ label: "敏感", value: "DATA_SENSITIVE" },
+									{ label: "秘密", value: "DATA_SECRET" },
+								]}
+								style={{ width: "100%" }}
+							/>
+						</div>
+						<div>
+							<Text strong>有效期（可选）</Text>
+							<Input
+								type="datetime-local"
+								value={audience.expiresAt ?? ""}
+								onChange={(event) => { setAudience((value) => ({ ...value, expiresAt: event.target.value || null })); setPublicationValidation(null); }}
+							/>
+						</div>
+						{publicationError && <Alert type="error" showIcon message="发布校验失败" description={publicationError} />}
+						{publicationValidation && (
+							<>
+								<Alert
+									type={publicationValidation.valid ? "success" : "error"}
+									showIcon
+									message={publicationValidation.valid ? "校验通过，可以发布" : "存在发布阻断项"}
+								/>
+								{publicationValidation.blockers.map((blocker) => (
+									<Alert key={`${blocker.code}-${blocker.path}`} type="error" showIcon message={blocker.code} description={`${blocker.path}：${blocker.message}`} />
+								))}
+								{publicationValidation.warnings.map((warning) => (
+									<Alert key={`${warning.code}-${warning.path}`} type="warning" showIcon message={warning.code} description={`${warning.path}：${warning.message}`} />
+								))}
+								<Card size="small" title="依赖快照">
+									<pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 260, overflow: "auto" }}>
+										{JSON.stringify(publicationValidation.dependencySnapshot, null, 2)}
+									</pre>
+								</Card>
+							</>
+						)}
+					</Space>
+				</Drawer>
+
+				<Modal
+					title="版本历史"
+					open={versionsOpen}
+					footer={null}
+					width={720}
+					onCancel={() => setVersionsOpen(false)}
+				>
+					<Spin spinning={versionsLoading}>
+						<Space direction="vertical" size={8} style={{ width: "100%" }}>
+							{versions.length === 0 && !versionsLoading ? <Empty description="暂无发布版本" /> : null}
+							{versions.map((version) => (
+								<Card
+									key={version.revisionId}
+									size="small"
+									title={<Space><Text strong>v{version.versionNo}</Text><Tag>{version.status}</Tag></Space>}
+									extra={<Button size="small" onClick={() => void createDraftFromVersion(version.revisionId)}>基于此版本创建草稿</Button>}
+								>
+									<Text type="secondary">
+										{version.publishedAt ? new Date(version.publishedAt).toLocaleString() : new Date(version.createdAt).toLocaleString()}
+										{" · "}{version.contractChecksum ?? "无校验值"}
+									</Text>
+								</Card>
+							))}
+						</Space>
+					</Spin>
+				</Modal>
 			</div>
 		</div>
 	);

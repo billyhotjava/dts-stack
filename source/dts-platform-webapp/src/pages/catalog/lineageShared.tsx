@@ -9,7 +9,7 @@ import {
 import { Button, Descriptions, Drawer, Input, Segmented, Select, Space, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useMemo } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { listDatasets } from "@/api/platformApi";
 import {
@@ -23,6 +23,7 @@ import {
 	type ImpactNode,
 	type ImpactResult,
 	type ImpactStats,
+	lineageEvidenceDescription,
 	type LayoutDirection,
 	type LineageDiffResult,
 	type LineageDirection,
@@ -47,6 +48,7 @@ export {
 	type ImpactNode,
 	type ImpactResult,
 	type ImpactStats,
+	lineageEvidenceDescription,
 	type LayoutDirection,
 	layerColor,
 	type LineageDiffResult,
@@ -63,10 +65,15 @@ export {
 
 export function LineageSectionNav({ section }: { section: LineageSection }) {
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
 	return (
 		<Segmented
 			value={section}
-			onChange={(value) => navigate(lineageSectionMeta[value as LineageSection].path)}
+			onChange={(value) => {
+				const path = lineageSectionMeta[value as LineageSection].path;
+				const query = searchParams.toString();
+				navigate(query ? `${path}?${query}` : path);
+			}}
 			options={lineageSections.map((key) => ({ label: lineageSectionMeta[key].title, value: key }))}
 		/>
 	);

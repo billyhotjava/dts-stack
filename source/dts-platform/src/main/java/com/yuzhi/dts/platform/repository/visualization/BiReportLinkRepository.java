@@ -14,6 +14,8 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
 
     Optional<BiReportLink> findFirstByCodeIgnoreCase(String code);
 
+    Optional<BiReportLink> findByEngineAndAssetTypeAndAssetKey(String engine, String assetType, String assetKey);
+
     /**
      * Platform-side permission checks for analytics screens use the synced
      * report-link row as the authoritative metadata copy.

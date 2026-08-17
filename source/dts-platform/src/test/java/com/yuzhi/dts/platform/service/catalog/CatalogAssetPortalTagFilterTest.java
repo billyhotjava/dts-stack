@@ -22,6 +22,8 @@ import com.yuzhi.dts.platform.repository.catalog.OpenMetadataColumnCacheReposito
 import com.yuzhi.dts.platform.repository.catalog.OpenMetadataLineageCacheRepository;
 import com.yuzhi.dts.platform.service.catalog.dto.AssetRef;
 import com.yuzhi.dts.platform.service.catalog.dto.CatalogTagDto;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetStatusViewService.AssetDeliveryStatus;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetStatusViewService.ServingSync;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import java.time.Instant;
 import java.util.List;
@@ -271,6 +273,89 @@ class CatalogAssetPortalTagFilterTest {
     }
 
     @Test
+    void operationalFiltersUseOneBoundedStatusBatchBeforePagination() {
+        OpenMetadataAssetCache eligible = openMetadataAsset(
+            "svc.db.public.eligible",
+            "eligible",
+            Instant.parse("2026-07-25T02:00:00Z")
+        );
+        OpenMetadataAssetCache blocked = openMetadataAsset(
+            "svc.db.public.blocked",
+            "blocked",
+            Instant.parse("2026-07-25T01:00:00Z")
+        );
+        CatalogAssetExtension eligibleExtension = enabledExtension();
+        eligibleExtension.setOmAsset(eligible);
+        CatalogAssetExtension blockedExtension = enabledExtension();
+        blockedExtension.setOmAsset(blocked);
+        String eligibleKey = CatalogAssetKey.openMetadataDataset(eligible);
+        String blockedKey = CatalogAssetKey.openMetadataDataset(blocked);
+        AssetRef eligibleRef = new AssetRef("DATASET", eligibleKey);
+        AssetRef blockedRef = new AssetRef("DATASET", blockedKey);
+        CatalogAssetStatusViewService statusViewService = org.mockito.Mockito.mock(CatalogAssetStatusViewService.class);
+        CatalogAssetPortalService statusAwareService = new CatalogAssetPortalService(
+            assetRepository,
+            columnRepository,
+            lineageRepository,
+            extensionRepository,
+            mappingRepository,
+            datasetRepository,
+            domainRepository,
+            tableSchemaRepository,
+            catalogColumnSchemaRepository,
+            accessChecker,
+            classificationService,
+            assetTagService,
+            assetRegistrationService,
+            statusViewService
+        );
+        when(assetRepository.count(any(Specification.class))).thenReturn(2L);
+        when(datasetRepository.count(any(Specification.class))).thenReturn(0L);
+        when(assetRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(List.of(eligible, blocked));
+        when(datasetRepository.findAll(any(Specification.class), any(Sort.class))).thenReturn(List.of());
+        when(extensionRepository.findByOmAssetIn(List.of(eligible, blocked)))
+            .thenReturn(List.of(eligibleExtension, blockedExtension));
+        when(mappingRepository.findByNormalizedFqnIn(any())).thenReturn(List.of());
+        when(accessChecker.canRead(any(CatalogDataset.class))).thenReturn(true);
+        when(accessChecker.departmentAllowed(any(CatalogDataset.class), any())).thenReturn(true);
+        when(assetTagService.listAssetTags(List.of(eligibleRef))).thenReturn(Map.of());
+        when(statusViewService.read(List.of(eligibleRef, blockedRef)))
+            .thenReturn(
+                Map.of(
+                    eligibleRef,
+                    new AssetDeliveryStatus(
+                        null,
+                        "ELIGIBLE",
+                        List.of(),
+                        Instant.parse("2026-07-25T02:01:00Z"),
+                        List.of(),
+                        new ServingSync("SYNCED", 0, null, null, Instant.parse("2026-07-25T02:01:00Z")),
+                        "PASSED"
+                    ),
+                    blockedRef,
+                    new AssetDeliveryStatus(
+                        null,
+                        "BLOCKED",
+                        List.of("QUALITY_GATE_FAILED"),
+                        Instant.parse("2026-07-25T01:01:00Z"),
+                        List.of(),
+                        new ServingSync("SYNC_FAILED", 2, "timeout", null, Instant.parse("2026-07-25T01:01:00Z")),
+                        "FAILED"
+                    )
+                )
+            );
+
+        CatalogAssetPortalService.AssetPage page = statusAwareService.listAssets(
+            operationalQuery("ELIGIBLE", "SYNCED", "PASSED"),
+            "D01"
+        );
+
+        assertThat(page.total()).isEqualTo(1);
+        assertThat(page.content()).extracting(CatalogAssetPortalService.AssetSummary::assetKey).containsExactly(eligibleKey);
+        verify(statusViewService).read(List.of(eligibleRef, blockedRef));
+    }
+
+    @Test
     void detailUsesTheSameMappedCanonicalKeyAndStructuredTagsAsTheList() {
         UUID tagId = UUID.randomUUID();
         CatalogDataset mappedLegacy = legacyDataset("mapped-orders");
@@ -321,6 +406,36 @@ class CatalogAssetPortalTagFilterTest {
             size,
             null,
             null
+        );
+    }
+
+    private CatalogAssetPortalService.AssetQuery operationalQuery(
+        String eligibility,
+        String servingStatus,
+        String qualityStatus
+    ) {
+        return new CatalogAssetPortalService.AssetQuery(
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            List.of(),
+            0,
+            20,
+            null,
+            null,
+            eligibility,
+            servingStatus,
+            qualityStatus
         );
     }
 

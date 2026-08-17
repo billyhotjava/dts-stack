@@ -8,6 +8,8 @@ type AssetGovernanceOverviewProps = {
 };
 
 export function AssetGovernanceOverview({ governanceHealth, impact, onNavigate }: AssetGovernanceOverviewProps) {
+	const hasQualityEvidence =
+		governanceHealth?.quality?.evidenceState === "AVAILABLE" || Number(governanceHealth?.quality?.totalRuns ?? 0) > 0;
 	return (
 		<>
 			<div className="grid gap-3 md:grid-cols-3">
@@ -34,7 +36,7 @@ export function AssetGovernanceOverview({ governanceHealth, impact, onNavigate }
 					>
 						{governanceHealth?.healthLevel || "UNKNOWN"}
 					</Tag>
-					<span>健康分 {Number(governanceHealth?.healthScore ?? 0)}</span>
+					<span>健康分 {hasQualityEvidence && governanceHealth?.healthScore != null ? governanceHealth.healthScore : "未评分"}</span>
 				</div>
 				<div className="mb-2 text-xs text-slate-600">
 					质量运行：总 {Number(governanceHealth?.quality?.totalRuns ?? 0)} / 成功{" "}
@@ -51,8 +53,10 @@ export function AssetGovernanceOverview({ governanceHealth, impact, onNavigate }
 								{item.category || "UNKNOWN"}: {Number(item.count || 0)}
 							</Tag>
 						))
-					) : (
+					) : hasQualityEvidence ? (
 						<Tag color="green">近期开窗内无失败分类</Tag>
+					) : (
+						<Tag>暂无治理质量证据</Tag>
 					)}
 				</div>
 				<Space size={8} wrap>

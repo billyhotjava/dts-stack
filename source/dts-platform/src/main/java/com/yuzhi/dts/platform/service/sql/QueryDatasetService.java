@@ -21,7 +21,9 @@ import com.yuzhi.dts.platform.service.catalog.CanonicalModelIdentityReadPort;
 import com.yuzhi.dts.platform.service.catalog.CanonicalModelIdentityReadPort.ModelIdentity;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DeriveCommand;
+import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DerivationResult;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.SubjectRef;
+import com.yuzhi.dts.platform.service.sql.QueryDatasetContractSnapshotAssembler.Snapshot;
 import java.lang.reflect.Array;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -52,6 +54,7 @@ public class QueryDatasetService {
     private final ResultSetRepository resultSetRepository;
     private final CanonicalModelIdentityReadPort canonicalModelIdentityReadPort;
     private final CatalogConsumerClassificationService consumerClassificationService;
+    private final QueryDatasetContractSnapshotAssembler contractSnapshotAssembler;
 
     public QueryDatasetService(
         QueryDatasetAssetRepository assetRepository,
@@ -59,7 +62,8 @@ public class QueryDatasetService {
         QueryExecutionRepository executionRepository,
         ResultSetRepository resultSetRepository,
         CanonicalModelIdentityReadPort canonicalModelIdentityReadPort,
-        CatalogConsumerClassificationService consumerClassificationService
+        CatalogConsumerClassificationService consumerClassificationService,
+        QueryDatasetContractSnapshotAssembler contractSnapshotAssembler
     ) {
         this.assetRepository = assetRepository;
         this.versionRepository = versionRepository;
@@ -67,6 +71,7 @@ public class QueryDatasetService {
         this.resultSetRepository = resultSetRepository;
         this.canonicalModelIdentityReadPort = canonicalModelIdentityReadPort;
         this.consumerClassificationService = consumerClassificationService;
+        this.contractSnapshotAssembler = contractSnapshotAssembler;
     }
 
     @Transactional(readOnly = true)
@@ -186,7 +191,25 @@ public class QueryDatasetService {
         assertWritable(asset, resolveActiveDept(activeDeptHeader));
 
         QueryDatasetVersion target = resolveTargetVersion(datasetId, request != null ? request.versionNo() : null);
-        requireDerivedClassification(asset, target.getSqlText());
+        if ("PUBLISHED".equalsIgnoreCase(target.getStatus())) {
+            if ("READY".equalsIgnoreCase(target.getContractSnapshotStatus())) {
+                return toVersionDto(target);
+            }
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "已发布版本缺少可用的语义契约快照");
+        }
+        if ("ARCHIVED".equalsIgnoreCase(target.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "归档版本不能直接重新发布");
+        }
+
+        Snapshot snapshot = requireDerivedClassification(asset, target);
+        if (!"READY".equals(snapshot.status())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "查询数据集语义契约不完整，无法发布");
+        }
+        target.setSemanticContractSchema(snapshot.schema());
+        target.setSemanticContractVersion(snapshot.version());
+        target.setSemanticContractJson(snapshot.contractJson());
+        target.setSemanticContractChecksum(snapshot.checksum());
+        target.setContractSnapshotStatus(snapshot.status());
 
         List<QueryDatasetVersion> versions = versionRepository.findByDataset_IdOrderByVersionNoDesc(datasetId);
         for (QueryDatasetVersion version : versions) {
@@ -216,8 +239,8 @@ public class QueryDatasetService {
         return toVersionDto(target);
     }
 
-    private void requireDerivedClassification(QueryDatasetAsset asset, String sqlText) {
-        Set<String> names = extractReferencedModels(sqlText);
+    private Snapshot requireDerivedClassification(QueryDatasetAsset asset, QueryDatasetVersion version) {
+        Set<String> names = extractReferencedModels(version.getSqlText());
         Map<String, ModelIdentity> models = canonicalModelIdentityReadPort.findDbtModelsByResourceNames(names);
         List<SubjectRef> upstreams = names
             .stream()
@@ -237,7 +260,7 @@ public class QueryDatasetService {
                 "查询数据集存在未解析的模型来源，无法确定发布密级"
             );
         }
-        consumerClassificationService.derive(
+        DerivationResult classification = consumerClassificationService.derive(
             new DeriveCommand(
                 "REPORT",
                 CatalogAssetKey.biDataset(asset.getId()),
@@ -246,6 +269,14 @@ public class QueryDatasetService {
                 "query-dataset:" + asset.getId()
             )
         );
+        UUID resultSetId = version.getResultSetId();
+        if (resultSetId == null) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "查询数据集版本缺少结果字段快照");
+        }
+        ResultSet resultSet = resultSetRepository
+            .findById(resultSetId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "查询数据集版本结果字段快照不存在"));
+        return contractSnapshotAssembler.assemble(asset, version, resultSet, models, classification);
     }
 
     public QueryDatasetResponse archive(UUID datasetId, String activeDeptHeader) {

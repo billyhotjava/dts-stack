@@ -34,11 +34,30 @@ public class AnalyticsRevision implements Serializable {
     @Column(name = "object_json", nullable = false, columnDefinition = "text")
     private String objectJson;
 
+    @Column(name = "version_no", nullable = false)
+    private Integer versionNo;
+
+    @Column(name = "status", nullable = false, length = 32)
+    private String status;
+
+    @Column(name = "published_at")
+    private Instant publishedAt;
+
+    @Column(name = "dependency_snapshot_json", columnDefinition = "text")
+    private String dependencySnapshotJson;
+
+    @Column(name = "contract_checksum", length = 64)
+    private String contractChecksum;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
     public Long getId() {
         return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public String getModel() {
@@ -81,6 +100,46 @@ public class AnalyticsRevision implements Serializable {
         this.objectJson = objectJson;
     }
 
+    public Integer getVersionNo() {
+        return versionNo;
+    }
+
+    public void setVersionNo(Integer versionNo) {
+        this.versionNo = versionNo;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public Instant getPublishedAt() {
+        return publishedAt;
+    }
+
+    public void setPublishedAt(Instant publishedAt) {
+        this.publishedAt = publishedAt;
+    }
+
+    public String getDependencySnapshotJson() {
+        return dependencySnapshotJson;
+    }
+
+    public void setDependencySnapshotJson(String dependencySnapshotJson) {
+        this.dependencySnapshotJson = dependencySnapshotJson;
+    }
+
+    public String getContractChecksum() {
+        return contractChecksum;
+    }
+
+    public void setContractChecksum(String contractChecksum) {
+        this.contractChecksum = contractChecksum;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -90,6 +149,11 @@ public class AnalyticsRevision implements Serializable {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+        if (versionNo == null) {
+            versionNo = 1;
+        }
+        if (status == null || status.isBlank()) {
+            status = "DRAFT";
+        }
     }
 }
-

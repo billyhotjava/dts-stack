@@ -1,7 +1,7 @@
 # F3：治理质量证据桥接
 
 **优先级**：P0
-**状态**：DRAFT（T01 READY；T02 依赖 T01）
+**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / REAL_SAMPLE_IT_PENDING
 
 ## 目标
 
@@ -24,14 +24,14 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 实现版本钉定的 QualityEvidence Port | P0 | READY | F0 样本用于 IT |
-| T02 | 接入 StageGate、发布命令与质量双栏 UI | P0 | DRAFT | T01、F1 datasetId 稳定 |
+| T01 | 实现版本钉定的 QualityEvidence Port | P0 | IMPLEMENTATION_COMPLETE | F0 样本用于 IT |
+| T02 | 接入 StageGate、发布命令与质量双栏 UI | P0 | IMPLEMENTATION_COMPLETE | IT-06 待执行 |
 
 ## Definition of Ready
 
 - [x] Port 字段、有效性、查询预算和错误语义已钉定。
 - [x] 明确不复制治理质量表。
-- [ ] T02 等待 T01 DTO 和真实 pass/fail/expired 样本。
+- [x] T02 已消费 T01 DTO；真实 pass/fail/expired 样本留给集中 IT。
 
 ## 完成标准
 

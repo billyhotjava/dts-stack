@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.analytics.domain.AnalyticsCard;
+import com.yuzhi.dts.analytics.domain.AnalyticsDashboard;
 import com.yuzhi.dts.analytics.domain.AnalyticsDashboardCard;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsBookmarkRepository;
@@ -27,6 +28,8 @@ import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.service.semantic.SemanticQueryService;
+import com.yuzhi.dts.analytics.service.publication.DashboardPublicationService;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +43,7 @@ class DashboardResourceSemanticQueryTest {
     void saved_semantic_card_executes_through_the_semantic_query_service() throws Exception {
         AnalyticsSessionService sessions = mock(AnalyticsSessionService.class);
         AnalyticsDashboardCardRepository dashboardCards = mock(AnalyticsDashboardCardRepository.class);
+        AnalyticsDashboardRepository dashboards = mock(AnalyticsDashboardRepository.class);
         AnalyticsCardRepository cards = mock(AnalyticsCardRepository.class);
         AnalyticsConsumerClassificationService classifications = mock(AnalyticsConsumerClassificationService.class);
         QueryExecutionFacade queryExecution = mock(QueryExecutionFacade.class);
@@ -55,6 +59,10 @@ class DashboardResourceSemanticQueryTest {
         dashboardCard.setDashboardId(2L);
         dashboardCard.setCardId(3L);
         when(dashboardCards.findById(1L)).thenReturn(Optional.of(dashboardCard));
+        AnalyticsDashboard dashboard = new AnalyticsDashboard();
+        dashboard.setId(2L);
+        dashboard.setCreatorId(7L);
+        when(dashboards.findById(2L)).thenReturn(Optional.of(dashboard));
 
         AnalyticsCard card = new AnalyticsCard();
         card.setId(3L);
@@ -93,7 +101,7 @@ class DashboardResourceSemanticQueryTest {
 
         DashboardResource resource = new DashboardResource(
             sessions,
-            mock(AnalyticsDashboardRepository.class),
+            dashboards,
             dashboardCards,
             mock(AnalyticsBookmarkRepository.class),
             cards,
@@ -109,7 +117,9 @@ class DashboardResourceSemanticQueryTest {
             mock(AssetListFilterService.class),
             classifications,
             new ObjectMapper(),
-            mock(AnalyticsAssetAccessRegistrar.class)
+            mock(AnalyticsAssetAccessRegistrar.class),
+            mock(AnalysisQueryGateway.class),
+            mock(DashboardPublicationService.class)
         );
 
         ResponseEntity<?> response = resource.dashcardQuery(2L, 1L, 3L, new ObjectMapper().readTree("{}"), request);

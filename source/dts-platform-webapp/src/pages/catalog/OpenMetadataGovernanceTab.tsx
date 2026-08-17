@@ -181,7 +181,7 @@ export function OpenMetadataGovernanceTab({
 						<Form.Item
 							label="业务归属数据域"
 							name="domainId"
-							extra="用于资产目录归属、检索筛选和治理统计；不等同于数据建模中的主题域。"
+							extra="用于资产目录归属、检索筛选和治理统计；不等同于数据建模中的应用主题域。"
 						>
 							<Select
 								showSearch

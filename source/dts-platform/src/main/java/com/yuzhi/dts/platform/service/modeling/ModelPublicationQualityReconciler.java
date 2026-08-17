@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepositor
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.GovernanceQualitySummaryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import java.util.List;
 import java.util.Objects;
@@ -30,11 +31,13 @@ public class ModelPublicationQualityReconciler {
     private final ModelPublicationQualityEvidenceRepository evidence;
     private final ModelReleaseCandidateRepository candidates;
     private final ModelReleaseCandidateService commands;
+    private final CandidateGovernanceQualityEvidenceService governanceQuality;
 
     public ModelPublicationQualityReconciler(
         ModelPublicationQualityEvidenceRepository evidence,
         ModelReleaseCandidateRepository candidates,
-        ModelReleaseCandidateService commands
+        ModelReleaseCandidateService commands,
+        CandidateGovernanceQualityEvidenceService governanceQuality
     ) {
         this.evidence = Objects.requireNonNull(
             evidence,
@@ -47,6 +50,10 @@ public class ModelPublicationQualityReconciler {
         this.commands = Objects.requireNonNull(
             commands,
             "commands is required"
+        );
+        this.governanceQuality = Objects.requireNonNull(
+            governanceQuality,
+            "governanceQuality is required"
         );
     }
 
@@ -105,17 +112,46 @@ public class ModelPublicationQualityReconciler {
             ? "Canonical Airflow dbt build and tests completed with verified relations"
             : failureReason(item);
         try {
-            CommandResult command = commands.transition(
-                candidate.tenantId(),
-                SERVICE_ACTOR,
-                candidate.id(),
-                new TransitionCommand(
-                    candidate.version(),
-                    target,
-                    qualityResultKey(item.qualityCommandEventId()),
-                    reason
-                )
+            TransitionCommand transition = new TransitionCommand(
+                candidate.version(),
+                target,
+                qualityResultKey(item.qualityCommandEventId()),
+                reason
             );
+            CommandResult command;
+            if (state == EvidenceState.PASSED) {
+                GovernanceQualitySummaryView governance = governanceQuality.evaluateLive(candidate);
+                if (governance.required() && !governance.passed()) {
+                    return blocked(
+                        candidate.id(),
+                        governance.code() == null
+                            ? "MODEL_SPEC_GOVERNANCE_QUALITY_REQUIRED"
+                            : governance.code()
+                    );
+                }
+                CandidateQualityEvidenceSnapshot snapshot = CandidateQualityEvidenceSnapshot.capture(
+                    candidate,
+                    item.pipelineRunGroupId(),
+                    item.candidateEntryCount(),
+                    item.runCount(),
+                    item.verifiedCount(),
+                    governance
+                );
+                command = commands.transitionWithQualityEvidence(
+                    candidate.tenantId(),
+                    SERVICE_ACTOR,
+                    candidate.id(),
+                    transition,
+                    snapshot
+                );
+            } else {
+                command = commands.transition(
+                    candidate.tenantId(),
+                    SERVICE_ACTOR,
+                    candidate.id(),
+                    transition
+                );
+            }
             if (command.candidate().status() == DeliveryStatus.STALE) {
                 return blocked(
                     candidate.id(),

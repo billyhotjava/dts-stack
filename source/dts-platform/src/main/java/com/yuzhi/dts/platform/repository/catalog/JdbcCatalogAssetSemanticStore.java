@@ -13,7 +13,11 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -242,6 +246,59 @@ public class JdbcCatalogAssetSemanticStore implements CatalogAssetSemanticStore 
                 row.updatedAt()
             )
         );
+    }
+
+    @Override
+    public Map<String, AssetStatusSnapshot> findStatusSnapshots(
+        CatalogAssetType assetType,
+        Collection<String> assetKeys,
+        Instant now
+    ) {
+        if (assetType == null || assetKeys == null || assetKeys.isEmpty()) {
+            return Map.of();
+        }
+        LinkedHashSet<String> keys = new LinkedHashSet<>();
+        for (String assetKey : assetKeys) {
+            if (assetKey != null && !assetKey.isBlank()) {
+                keys.add(assetKey.trim());
+            }
+        }
+        if (keys.isEmpty()) {
+            return Map.of();
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(keys.size(), "?"));
+        List<Object> arguments = new java.util.ArrayList<>(keys.size() + 1);
+        arguments.add(assetType.name());
+        arguments.addAll(keys);
+        List<ProjectionRow> rows = jdbc.query(
+            "SELECT * FROM catalog_asset_semantic_projection WHERE asset_type = ? AND asset_key IN (" + placeholders + ")",
+            this::mapProjection,
+            arguments.toArray()
+        );
+        Map<String, AssetStatusSnapshot> snapshots = new LinkedHashMap<>();
+        for (ProjectionRow row : rows) {
+            StatusAxes axes = new StatusAxes(row.discovery(), row.governance(), row.publication(), row.serving(), row.lifecycle());
+            ConsumptionEligibility eligibility = new ConsumptionEligibility(
+                row.eligibilityDecision(),
+                readReasonCodes(row.eligibilityReasons()),
+                row.eligibilityEvaluatedAt()
+            );
+            snapshots.put(
+                row.assetKey(),
+                new AssetStatusSnapshot(
+                    row.assetType(),
+                    row.assetKey(),
+                    row.resourceId(),
+                    axes,
+                    row.qualityGatePassed(),
+                    row.permissionGatePassed(),
+                    eligibility,
+                    row.version(),
+                    row.updatedAt()
+                )
+            );
+        }
+        return Map.copyOf(snapshots);
     }
 
     @Override

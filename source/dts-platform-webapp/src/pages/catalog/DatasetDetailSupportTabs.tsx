@@ -127,14 +127,17 @@ export function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
 	}
 
 	const score = health?.healthScore ?? health?.quality?.healthScore;
+	const hasQualityEvidence = health?.quality?.evidenceState === "AVAILABLE" || Number(health?.quality?.totalRuns ?? 0) > 0;
 	return (
 		<div className="space-y-4 py-2 text-sm">
-			{score != null && (
+			{hasQualityEvidence && score != null ? (
 				<div className="flex items-center gap-2">
 					<span className="text-slate-500">健康分：</span>
 					<span className="text-lg font-bold text-blue-600">{score}</span>
 					{health?.healthLevel && <Tag>{health.healthLevel}</Tag>}
 				</div>
+			) : (
+				<Alert type="info" showIcon message="暂无治理质量证据" description="请先为该资产运行已绑定的数据质量规则。" />
 			)}
 			{health?.quality?.totalRuns != null && (
 				<div className="grid grid-cols-3 gap-3">
@@ -152,7 +155,6 @@ export function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
 					</div>
 				</div>
 			)}
-			{!score && !health?.quality && <div className="text-slate-500">暂无治理健康数据。</div>}
 			{indicators.length > 0 && (
 				<div>
 					<div className="mb-2 font-medium text-slate-700">关联指标（{indicators.length}）</div>

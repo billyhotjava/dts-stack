@@ -9,7 +9,7 @@ import { AssetDomainBars } from "./assets/AssetDomainBars";
 import { AssetGovernanceDonut } from "./assets/AssetGovernanceDonut";
 import { buildDomainScopeNodes, MetricTile, UNASSIGNED_DOMAIN_KEY } from "./assets/assetPageShared";
 
-// Sprint-88：资产概览 = 一屏统计仪表盘（KPI 四卡 + 治理状态环形 + 主题域条形）。
+// Sprint-88：资产概览 = 一屏统计仪表盘（KPI 四卡 + 治理状态环形 + 业务归属数据域条形）。
 // 唯一出口 = /catalog/search?view=table；分层矩阵与待处置清单已按 ADR-88-03/05 移除。
 export default function AssetOverviewPage() {
 	const router = useRouter();
@@ -95,7 +95,7 @@ export default function AssetOverviewPage() {
 						: {};
 			const result = (await getCatalogAssetsOverview(scope)) as any;
 			setOverview(result || null);
-			setLastUpdatedAt(new Date());
+			setLastUpdatedAt(result?.asOf ? new Date(result.asOf) : new Date());
 		} catch {
 			// error toast handled by global interceptor
 		} finally {
@@ -128,8 +128,8 @@ export default function AssetOverviewPage() {
 	const scopeLabel = domain
 		? domain === UNASSIGNED_DOMAIN_KEY
 			? "未归域"
-			: domainMap.get(domain) || "当前主题域"
-		: "全部主题域";
+			: domainMap.get(domain) || "当前业务归属数据域"
+		: "全部业务归属数据域";
 	const lastUpdatedText = useMemo(
 		() => (lastUpdatedAt ? lastUpdatedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) : "—"),
 		[lastUpdatedAt],
@@ -153,6 +153,9 @@ export default function AssetOverviewPage() {
 	const unclassified = Number(overview?.unclassified ?? 0);
 	const tagged = Number(overview?.tagged ?? 0);
 	const tagCoverage = Number(overview?.tagCoveragePercent ?? 0);
+	const eligible = Number(overview?.eligibilityCounts?.ELIGIBLE ?? 0);
+	const conditional = Number(overview?.eligibilityCounts?.CONDITIONAL ?? 0);
+	const blocked = Number(overview?.eligibilityCounts?.BLOCKED ?? 0);
 	const num = (value: number) => `${truncated ? "≥" : ""}${value}`;
 
 	return (
@@ -215,14 +218,14 @@ export default function AssetOverviewPage() {
 							icon={<DatabaseOutlined />}
 							label="资产总量"
 							value={num(total)}
-							footnote={`${domainMap.size} 个主题域`}
+							footnote={`可消费 ${num(eligible)} · ${domainMap.size} 个数据域`}
 						/>
 						<div data-testid="kpi-attention">
 							<MetricTile
 								icon={<WarningOutlined />}
 								label="待处置"
 								value={num(attention)}
-								footnote={`占比 ${total > 0 ? Math.round((attention / total) * 100) : 0}%`}
+								footnote={`有条件 ${num(conditional)} · 阻断 ${num(blocked)}`}
 								tone="text-amber-600"
 							/>
 						</div>

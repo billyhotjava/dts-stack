@@ -701,6 +701,17 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+.dmx-serving-sync-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+.dmx-serving-sync-status .ant-btn {
+	height: auto;
+	padding: 0 3px;
+	font-size: 11px;
+}
 
 .dmx-editor-toolbar,
 .dmx-metric-toolbar {
@@ -943,7 +954,7 @@
 }
 .dmx-release-steps {
 	display: grid;
-	grid-template-columns: repeat(5, minmax(92px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
 	gap: 0;
 	margin: 18px 0;
 	padding: 0;
@@ -1041,6 +1052,83 @@
 }
 .dmx-release-handoff small {
 	color: #647a9d;
+}
+.dmx-governance-quality {
+	display: grid;
+	gap: 7px;
+	margin-top: 10px;
+	padding: 11px 13px;
+	border: 1px solid #d8e2f1;
+	border-radius: 4px;
+	background: #fff;
+}
+.dmx-governance-quality__heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+.dmx-governance-quality__heading > div {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.dmx-governance-quality__heading span,
+.dmx-governance-quality > small {
+	color: var(--dmx-muted);
+	font-size: 11px;
+}
+.dmx-governance-quality__heading strong {
+	padding: 2px 7px;
+	border-radius: 10px;
+	background: var(--dmx-blue-soft);
+	color: var(--dmx-blue);
+	font-size: 11px;
+}
+.dmx-governance-quality__heading a {
+	color: var(--dmx-blue);
+	font-size: 12px;
+	text-decoration: none;
+}
+.dmx-governance-quality__actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.dmx-governance-quality__actions .ant-btn-link {
+	height: auto;
+	padding: 0;
+	font-size: 12px;
+}
+.dmx-governance-quality > p {
+	margin: 0;
+	color: #40516a;
+	font-size: 12px;
+}
+.dmx-governance-quality ul {
+	display: grid;
+	gap: 6px;
+	margin: 2px 0 0;
+	padding: 0;
+	list-style: none;
+}
+.dmx-governance-quality li {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 3px 12px;
+	padding-top: 6px;
+	border-top: 1px solid #edf1f6;
+	color: #66758b;
+	font-size: 11px;
+}
+.dmx-governance-quality li strong,
+.dmx-governance-quality li em {
+	width: 100%;
+}
+.dmx-governance-quality li em {
+	color: var(--dmx-danger);
+	font-style: normal;
 }
 .dmx-release-readiness {
 	display: grid;

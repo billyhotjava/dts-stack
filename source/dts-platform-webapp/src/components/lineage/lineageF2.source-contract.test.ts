@@ -4,6 +4,8 @@ import test from "node:test";
 
 const COMPONENT_SOURCE = readFileSync(new URL("./LineageGraph.tsx", import.meta.url), "utf8");
 const PAGE_SOURCE = readFileSync(new URL("../../pages/catalog/LineageGraphPage.tsx", import.meta.url), "utf8");
+const SHARED_SOURCE = readFileSync(new URL("../../pages/catalog/lineageShared.tsx", import.meta.url), "utf8");
+const COLUMNS_SOURCE = readFileSync(new URL("../../pages/catalog/LineageColumnsPage.tsx", import.meta.url), "utf8");
 
 test("lineage graph component depends on the contract module instead of page modules", () => {
 	assert.doesNotMatch(COMPONENT_SOURCE, /from "\.\.\/\.\.\/pages/);
@@ -29,4 +31,12 @@ test("lineage graph page keeps every filter in URL and consumes dataset deep lin
 	assert.match(PAGE_SOURCE, /searchParams\.get\("columns"\)/);
 	assert.match(PAGE_SOURCE, /params\.set\("datasetId", selectedId\)/);
 	assert.match(PAGE_SOURCE, /setSearchParams\(params, \{ replace: true \}\)/);
+});
+
+test("lineage section navigation and columns page preserve the selected dataset context", () => {
+	assert.match(SHARED_SOURCE, /useSearchParams\(\)/);
+	assert.match(SHARED_SOURCE, /searchParams\.toString\(\)/);
+	assert.match(SHARED_SOURCE, /navigate\(query \? `\$\{path\}\?\$\{query\}` : path\)/);
+	assert.match(COLUMNS_SOURCE, /searchParams\.get\("datasetId"\)/);
+	assert.match(COLUMNS_SOURCE, /params\.set\("datasetId", selectedId\)/);
 });

@@ -1,7 +1,7 @@
 # F2：模型服务投影闭环
 
 **优先级**：P0
-**状态**：READY
+**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / IT-04_PENDING
 
 ## 目标
 
@@ -24,7 +24,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 实现耐久同步 worker、重试与对账 | P0 | READY | F1/T01 可并行，联调依赖 F1 |
+| T01 | 实现耐久同步 worker、重试与对账 | P0 | IMPLEMENTATION_COMPLETE | IT-04 故障注入待执行 |
 
 ## Definition of Ready
 

@@ -623,6 +623,45 @@ public final class ModelReleaseCandidateContract {
         }
     }
 
+    /** Governance data-quality evidence is separate from dbt build/test engineering evidence. */
+    public record GovernanceQualitySummaryView(
+        boolean required,
+        EvidenceState state,
+        String code,
+        String message,
+        long maxAgeSeconds,
+        List<QualityEvidencePort.QualityEvidence> evidence
+    ) {
+        public GovernanceQualitySummaryView {
+            if (state == null) throw new IllegalArgumentException("state is required");
+            code = optionalText(code);
+            message = optionalText(message);
+            if ((code == null) != (message == null)) {
+                throw new IllegalArgumentException("governance quality code and message must be provided together");
+            }
+            if (maxAgeSeconds < 1) throw new IllegalArgumentException("maxAgeSeconds must be positive");
+            evidence = List.copyOf(evidence == null ? List.of() : evidence);
+            if (evidence.stream().anyMatch(item -> item == null)) {
+                throw new IllegalArgumentException("governance quality evidence must not contain null items");
+            }
+        }
+
+        public static GovernanceQualitySummaryView notEvaluated() {
+            return new GovernanceQualitySummaryView(
+                false,
+                EvidenceState.UNAVAILABLE,
+                "MODEL_SPEC_GOVERNANCE_QUALITY_NOT_EVALUATED",
+                "Governance quality evidence is available after a physical build",
+                ModelGovernancePolicyPort.DEFAULT_QUALITY_EVIDENCE_MAX_AGE_SECONDS,
+                List.of()
+            );
+        }
+
+        public boolean passed() {
+            return state == EvidenceState.PASSED && !evidence.isEmpty() && evidence.stream().allMatch(QualityEvidencePort.QualityEvidence::passed);
+        }
+    }
+
     /** One aggregate response is sufficient to render the plan delivery workbench first screen. */
     public record WorkbenchView(
         UUID planId,
@@ -630,6 +669,7 @@ public final class ModelReleaseCandidateContract {
         CandidateView candidate,
         List<EvidenceSummaryView> evidence,
         List<EntryEvidenceView> entryEvidence,
+        GovernanceQualitySummaryView governanceQuality,
         BlockerView primaryBlocker,
         List<WorkspaceAction> allowedActions,
         String etag
@@ -643,7 +683,40 @@ public final class ModelReleaseCandidateContract {
             List<WorkspaceAction> allowedActions,
             String etag
         ) {
-            this(planId, state, candidate, evidence, List.of(), primaryBlocker, allowedActions, etag);
+            this(
+                planId,
+                state,
+                candidate,
+                evidence,
+                List.of(),
+                GovernanceQualitySummaryView.notEvaluated(),
+                primaryBlocker,
+                allowedActions,
+                etag
+            );
+        }
+
+        public WorkbenchView(
+            UUID planId,
+            WorkbenchState state,
+            CandidateView candidate,
+            List<EvidenceSummaryView> evidence,
+            List<EntryEvidenceView> entryEvidence,
+            BlockerView primaryBlocker,
+            List<WorkspaceAction> allowedActions,
+            String etag
+        ) {
+            this(
+                planId,
+                state,
+                candidate,
+                evidence,
+                entryEvidence,
+                GovernanceQualitySummaryView.notEvaluated(),
+                primaryBlocker,
+                allowedActions,
+                etag
+            );
         }
 
         public WorkbenchView {
@@ -688,6 +761,9 @@ public final class ModelReleaseCandidateContract {
                 );
             }
             entryEvidence = List.copyOf(entryItems);
+            governanceQuality = governanceQuality == null
+                ? GovernanceQualitySummaryView.notEvaluated()
+                : governanceQuality;
             List<WorkspaceAction> actions = allowedActions == null ? List.of() : allowedActions;
             if (actions.stream().anyMatch(action -> action == null) || actions.stream().distinct().count() != actions.size()) {
                 throw new IllegalArgumentException("allowedActions must be unique and non-null");

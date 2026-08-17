@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.io.Serializable;
 import java.time.Instant;
 
@@ -40,6 +41,19 @@ public class AnalyticsDashboard implements Serializable {
 
     @Column(name = "parameters_json", columnDefinition = "text")
     private String parametersJson;
+
+    @Column(name = "lifecycle_status", nullable = false, length = 32)
+    private String lifecycleStatus = "DRAFT";
+
+    @Column(name = "published_revision_id")
+    private Long publishedRevisionId;
+
+    @Column(name = "registration_status", nullable = false, length = 32)
+    private String registrationStatus = "NOT_REGISTERED";
+
+    @Version
+    @Column(name = "version_no", nullable = false)
+    private Long dashboardVersion = 0L;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -111,6 +125,38 @@ public class AnalyticsDashboard implements Serializable {
         this.parametersJson = parametersJson;
     }
 
+    public String getLifecycleStatus() {
+        return lifecycleStatus;
+    }
+
+    public void setLifecycleStatus(String lifecycleStatus) {
+        this.lifecycleStatus = lifecycleStatus;
+    }
+
+    public Long getPublishedRevisionId() {
+        return publishedRevisionId;
+    }
+
+    public void setPublishedRevisionId(Long publishedRevisionId) {
+        this.publishedRevisionId = publishedRevisionId;
+    }
+
+    public String getRegistrationStatus() {
+        return registrationStatus;
+    }
+
+    public void setRegistrationStatus(String registrationStatus) {
+        this.registrationStatus = registrationStatus;
+    }
+
+    public Long getDashboardVersion() {
+        return dashboardVersion;
+    }
+
+    public void setDashboardVersion(Long dashboardVersion) {
+        this.dashboardVersion = dashboardVersion;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
     }
@@ -133,4 +179,3 @@ public class AnalyticsDashboard implements Serializable {
         updatedAt = Instant.now();
     }
 }
-

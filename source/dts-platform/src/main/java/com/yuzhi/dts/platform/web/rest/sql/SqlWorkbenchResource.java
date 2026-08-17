@@ -3,6 +3,8 @@ package com.yuzhi.dts.platform.web.rest.sql;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.sql.QueryDatasetService;
+import com.yuzhi.dts.platform.service.sql.PublishedQueryDatasetService;
+import com.yuzhi.dts.platform.service.sql.PublishedQueryDatasetService.PublishedQueryDatasetQuery;
 import com.yuzhi.dts.platform.service.sql.SavedQueryService;
 import com.yuzhi.dts.platform.service.sql.SqlCatalogService;
 import com.yuzhi.dts.platform.service.sql.SqlExecutionService;
@@ -13,6 +15,8 @@ import com.yuzhi.dts.platform.service.sql.dto.CreateQueryDatasetVersionRequest;
 import com.yuzhi.dts.platform.service.sql.dto.PublishQueryDatasetRequest;
 import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetResponse;
 import com.yuzhi.dts.platform.service.sql.dto.QueryDatasetVersionResponse;
+import com.yuzhi.dts.platform.service.sql.dto.AnalysisDatasetDetail;
+import com.yuzhi.dts.platform.service.sql.dto.AnalysisDatasetPage;
 import com.yuzhi.dts.platform.service.sql.dto.SavedQueryRequest;
 import com.yuzhi.dts.platform.service.sql.dto.SavedQueryResponse;
 import com.yuzhi.dts.platform.service.sql.dto.SqlCatalogNode;
@@ -52,6 +56,7 @@ public class SqlWorkbenchResource {
     private final SqlMetadataService metadataService;
     private final SavedQueryService savedQueryService;
     private final QueryDatasetService queryDatasetService;
+    private final PublishedQueryDatasetService publishedQueryDatasetService;
     private final AuditService auditService;
 
     public SqlWorkbenchResource(
@@ -61,6 +66,7 @@ public class SqlWorkbenchResource {
         SqlMetadataService metadataService,
         SavedQueryService savedQueryService,
         QueryDatasetService queryDatasetService,
+        PublishedQueryDatasetService publishedQueryDatasetService,
         AuditService auditService
     ) {
         this.catalogService = catalogService;
@@ -69,6 +75,7 @@ public class SqlWorkbenchResource {
         this.metadataService = metadataService;
         this.savedQueryService = savedQueryService;
         this.queryDatasetService = queryDatasetService;
+        this.publishedQueryDatasetService = publishedQueryDatasetService;
         this.auditService = auditService;
     }
 
@@ -195,6 +202,40 @@ public class SqlWorkbenchResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         return ApiResponses.ok(queryDatasetService.list(activeDept));
+    }
+
+    @GetMapping("/query-datasets/published")
+    public ApiResponse<AnalysisDatasetPage> listPublishedQueryDatasets(
+        @RequestParam(name = "page", defaultValue = "0") int page,
+        @RequestParam(name = "size", defaultValue = "20") int size,
+        @RequestParam(name = "keyword", required = false) String keyword,
+        @RequestParam(name = "bizDomain", required = false) String bizDomain,
+        @RequestParam(name = "ownerDept", required = false) String ownerDept,
+        @RequestParam(name = "warehouseLayer", required = false) String warehouseLayer,
+        @RequestParam(name = "classification", required = false) String classification,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
+        Principal principal
+    ) {
+        AnalysisDatasetPage response = publishedQueryDatasetService.list(
+            new PublishedQueryDatasetQuery(page, size, keyword, bizDomain, ownerDept, warehouseLayer, classification),
+            activeDept
+        );
+        auditService.auditAction(
+            "SQL_WORKBENCH_PUBLISHED_QUERY_DATASET_READ",
+            AuditStage.SUCCESS,
+            principal != null ? principal.getName() : "anonymous",
+            Map.of("page", page, "size", size)
+        );
+        return ApiResponses.ok(response);
+    }
+
+    @GetMapping("/query-datasets/{id}/published/{version}")
+    public ApiResponse<AnalysisDatasetDetail> getPublishedQueryDataset(
+        @PathVariable UUID id,
+        @PathVariable int version,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        return ApiResponses.ok(publishedQueryDatasetService.publishedDetail(id, version, activeDept));
     }
 
     @GetMapping("/query-datasets/{id}/versions")

@@ -57,3 +57,11 @@ test("plan-owned release candidate lifecycle exposes create lock retry and publi
 	assert.match(source, /releaseCandidateItemUrl\(planId, expected\.id, "\/publish"\)/);
 	assert.match(source, /headers: releaseCandidateWriteHeaders\(idempotencyKey, expected\)/);
 });
+
+test("semantic serving delivery exposes status and version-CAS retry without changing model CAS", () => {
+	const source = readFileSync(API_URL, "utf8");
+	assert.match(source, /export const getModelServingSyncStatus/);
+	assert.match(source, /export const retryModelServingSync/);
+	assert.match(source, /serving-sync\/retry/);
+	assert.match(source, /model-serving-sync:/);
+});

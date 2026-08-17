@@ -1,7 +1,7 @@
 # T02：接入 StageGate、发布命令与质量双栏 UI
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / IT-06_PENDING
 **依赖**：F3/T01、F1/T01、F0/T01 样本
 
 ## 目标
@@ -32,14 +32,14 @@ dts-platform stage gate/candidate application/DTO；dts-platform-webapp 发布�
 
 ## 验证（RED→GREEN）
 
-- [ ] dbt test 通过但治理质量缺失时仍阻塞。
-- [ ] 治理质量通过但 compile/build 失败时仍阻塞。
-- [ ] 证据全通过后 self-publish 和 legacy review 两条路径均兼容。
-- [ ] 重试产生新 runId，历史 candidate snapshot 不变。
+- [x] dbt test 通过但治理质量缺失时仍阻塞。
+- [x] 治理质量通过但 compile/build 失败时仍阻塞。
+- [x] 证据全通过后 self-publish 和 legacy review 两条路径均兼容。
+- [x] 重试产生新 runId，历史 candidate snapshot 不变。
 - [ ] UI 四态、深链、权限和 Chrome 95 验证。
 
 ## Definition of Done
 
-- [ ] 两类质量语义、DTO、页面和审计完全分离。
+- [x] 两类质量语义、DTO、页面和审计完全分离。
 - [ ] IT-05/06 通过，无前端伪造 passed。
-- [ ] 旧候选和旧 API 可读取，Expand/Contract 可回滚。
+- [x] 旧候选和旧 API 可读取，Expand/Contract 可回滚。

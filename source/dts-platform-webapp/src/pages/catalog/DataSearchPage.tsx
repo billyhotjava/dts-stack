@@ -18,6 +18,9 @@ type AssetDirectoryFilters = {
 	classification?: string;
 	warehouseLayer?: string;
 	governanceStatus?: string;
+	eligibility?: string;
+	servingStatus?: string;
+	qualityStatus?: string;
 	unclassified: boolean;
 	stale: boolean;
 	tagIds: string[];
@@ -47,6 +50,25 @@ const LAYER_OPTIONS = [
 	{ label: "ADS", value: "ADS" },
 ];
 
+const ELIGIBILITY_OPTIONS = [
+	{ label: "可消费", value: "ELIGIBLE" },
+	{ label: "有条件可消费", value: "CONDITIONAL" },
+	{ label: "不可消费", value: "BLOCKED" },
+];
+
+const SERVING_STATUS_OPTIONS = [
+	{ label: "已同步", value: "SYNCED" },
+	{ label: "同步中", value: "SYNC_PENDING" },
+	{ label: "同步失败", value: "SYNC_FAILED" },
+	{ label: "不适用", value: "NOT_APPLICABLE" },
+];
+
+const QUALITY_STATUS_OPTIONS = [
+	{ label: "已通过", value: "PASSED" },
+	{ label: "未通过", value: "FAILED" },
+	{ label: "暂无证据", value: "UNKNOWN" },
+];
+
 const FILTER_PARAM_KEYS = [
 	"keyword",
 	"domain",
@@ -55,6 +77,9 @@ const FILTER_PARAM_KEYS = [
 	"classification",
 	"layer",
 	"governance",
+	"eligibility",
+	"servingStatus",
+	"qualityStatus",
 	"unclassified",
 	"stale",
 	"view",
@@ -70,6 +95,9 @@ function readUrlFilters(searchParams: URLSearchParams): AssetDirectoryFilters {
 		classification: concreteParam(searchParams.get("classification")),
 		warehouseLayer: concreteParam(searchParams.get("layer")),
 		governanceStatus: concreteParam(searchParams.get("governance")),
+		eligibility: concreteParam(searchParams.get("eligibility")),
+		servingStatus: concreteParam(searchParams.get("servingStatus")),
+		qualityStatus: concreteParam(searchParams.get("qualityStatus")),
 		unclassified: searchParams.get("unclassified") === "1",
 		stale: searchParams.get("stale") === "1",
 		tagIds: ASSET_PORTAL_V2_ENABLED ? readTagIds(searchParams) : [],
@@ -97,6 +125,13 @@ function normalizeAssetRows(payload: any): AssetDirectoryRow[] {
 		owner: item.owner || item.businessOwner || undefined,
 		ownerDept: item.ownerDept || undefined,
 		governanceStatus: item.governanceStatus || undefined,
+		statusAxes: item.statusAxes || undefined,
+		consumptionEligibility: item.consumptionEligibility || "CONDITIONAL",
+		eligibilityReasons: Array.isArray(item.eligibilityReasons) ? item.eligibilityReasons : [],
+		projectionUpdatedAt: item.projectionUpdatedAt || undefined,
+		modelRefs: Array.isArray(item.modelRefs) ? item.modelRefs : [],
+		servingSync: item.servingSync || { status: "NOT_APPLICABLE", attempts: 0 },
+		qualityStatus: item.qualityStatus || "UNKNOWN",
 		lifecycleStatus: item.lifecycleStatus || undefined,
 		matchStatus: item.matchStatus || undefined,
 		metadataSource: item.metadataSource || "assets-v2",
@@ -128,6 +163,9 @@ function DataAssetDirectoryPage() {
 	const [datasetType, setDatasetType] = useState<string | undefined>(undefined);
 	const [classification, setClassification] = useState<string | undefined>(undefined);
 	const [warehouseLayer, setWarehouseLayer] = useState<string | undefined>(undefined);
+	const [eligibility, setEligibility] = useState<string | undefined>(undefined);
+	const [servingStatus, setServingStatus] = useState<string | undefined>(undefined);
+	const [qualityStatus, setQualityStatus] = useState<string | undefined>(undefined);
 	const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [assetRows, setAssetRows] = useState<AssetDirectoryRow[]>([]);
@@ -146,7 +184,7 @@ function DataAssetDirectoryPage() {
 						.filter((item: { id: string; name: string }) => item.id && item.name),
 				);
 			} catch {
-				// 全局请求拦截器负责错误提示；目录仍可展示无主题域名称的资产。
+				// 全局请求拦截器负责错误提示；目录仍可展示未设置业务归属数据域的资产。
 			}
 		})();
 	}, []);
@@ -154,7 +192,7 @@ function DataAssetDirectoryPage() {
 	const domainOptions = useMemo(() => {
 		const options = domains.map((item) => ({ label: item.name, value: item.id }));
 		if (domain && !options.some((option) => option.value === domain)) {
-			options.push({ label: domains.find((item) => item.id === domain)?.name || "当前主题域", value: domain });
+			options.push({ label: domains.find((item) => item.id === domain)?.name || "当前业务归属数据域", value: domain });
 		}
 		return options;
 	}, [domains, domain]);
@@ -175,6 +213,9 @@ function DataAssetDirectoryPage() {
 						classification: filters.classification,
 						warehouseLayer: filters.warehouseLayer,
 						governanceStatus: filters.governanceStatus,
+						eligibility: filters.eligibility,
+						servingStatus: filters.servingStatus,
+						qualityStatus: filters.qualityStatus,
 						unclassified: filters.unclassified,
 						stale: filters.stale,
 					},
@@ -205,6 +246,9 @@ function DataAssetDirectoryPage() {
 		setDatasetType(urlFilters.datasetType);
 		setClassification(urlFilters.classification);
 		setWarehouseLayer(urlFilters.warehouseLayer);
+		setEligibility(urlFilters.eligibility);
+		setServingStatus(urlFilters.servingStatus);
+		setQualityStatus(urlFilters.qualityStatus);
 		setSelectedTagIds(urlFilters.tagIds);
 		void loadAssets(urlFilters, 1, LEDGER_PAGE_SIZE);
 	}, [loadAssets, urlFilters]);
@@ -217,6 +261,9 @@ function DataAssetDirectoryPage() {
 		next.delete("assetType");
 		setFilterParam(next, "classification", classification);
 		setFilterParam(next, "layer", warehouseLayer);
+		setFilterParam(next, "eligibility", eligibility);
+		setFilterParam(next, "servingStatus", servingStatus);
+		setFilterParam(next, "qualityStatus", qualityStatus);
 		next.delete("view");
 		const tagged = writeTagIds(next, selectedTagIds);
 		if (tagged.toString() === searchParams.toString()) {
@@ -228,6 +275,9 @@ function DataAssetDirectoryPage() {
 					datasetType,
 					classification,
 					warehouseLayer,
+					eligibility,
+					servingStatus,
+					qualityStatus,
 					tagIds: selectedTagIds,
 				},
 				1,
@@ -244,6 +294,9 @@ function DataAssetDirectoryPage() {
 		setDatasetType(undefined);
 		setClassification(undefined);
 		setWarehouseLayer(undefined);
+		setEligibility(undefined);
+		setServingStatus(undefined);
+		setQualityStatus(undefined);
 		setSelectedTagIds([]);
 		const params = new URLSearchParams(searchParams);
 		for (const key of FILTER_PARAM_KEYS) params.delete(key);
@@ -271,7 +324,7 @@ function DataAssetDirectoryPage() {
 			<PageHeader title="数据资产目录" />
 
 			<Card size="small" className="min-w-0" styles={{ body: { padding: 12 } }}>
-				<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+				<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
 					<Input.Search
 						id="catalog-search-keyword"
 						aria-label="关键词"
@@ -283,11 +336,11 @@ function DataAssetDirectoryPage() {
 					/>
 					<Select
 						id="catalog-search-domain"
-						aria-label="主题域"
+						aria-label="业务归属数据域"
 						allowClear
 						showSearch
 						optionFilterProp="label"
-						placeholder="主题域"
+						placeholder="业务归属数据域"
 						value={domain}
 						onChange={setDomain}
 						options={domainOptions}
@@ -318,6 +371,33 @@ function DataAssetDirectoryPage() {
 						value={warehouseLayer}
 						onChange={setWarehouseLayer}
 						options={LAYER_OPTIONS}
+					/>
+					<Select
+						id="catalog-search-eligibility"
+						aria-label="消费资格"
+						allowClear
+						placeholder="消费资格"
+						value={eligibility}
+						onChange={setEligibility}
+						options={ELIGIBILITY_OPTIONS}
+					/>
+					<Select
+						id="catalog-search-serving-status"
+						aria-label="服务状态"
+						allowClear
+						placeholder="服务状态"
+						value={servingStatus}
+						onChange={setServingStatus}
+						options={SERVING_STATUS_OPTIONS}
+					/>
+					<Select
+						id="catalog-search-quality-status"
+						aria-label="质量状态"
+						allowClear
+						placeholder="质量状态"
+						value={qualityStatus}
+						onChange={setQualityStatus}
+						options={QUALITY_STATUS_OPTIONS}
 					/>
 					<AssetTagFilter
 						compact

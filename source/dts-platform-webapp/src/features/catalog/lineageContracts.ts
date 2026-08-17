@@ -87,6 +87,17 @@ export type ImpactStats = {
 	columnLineageCount?: number;
 };
 
+export type LineageEvidence = {
+	state: "COMPLETE" | "PARTIAL" | "MISSING";
+	reasonCodes: string[];
+	tableLineageCount: number;
+	columnLineageCount: number;
+	odsNodeCount: number;
+	sourceNodeCount: number;
+	columnEvidenceRequested: boolean;
+	message?: string;
+};
+
 export type ImpactResult = {
 	datasetId?: string;
 	direction?: string;
@@ -106,6 +117,19 @@ export type ImpactResult = {
 	nodes?: ImpactNode[];
 	edges?: ImpactEdge[];
 	columnLineages?: ColumnLineage[];
+	lineageEvidence?: LineageEvidence;
+};
+
+const LINEAGE_EVIDENCE_REASON_TEXT: Record<string, string> = {
+	TABLE_LINEAGE_EVIDENCE_MISSING: "缺少表级血缘",
+	UPSTREAM_SOURCE_OR_ODS_EVIDENCE_MISSING: "未发现上游源系统或 ODS 证据",
+	COLUMN_LINEAGE_EVIDENCE_MISSING: "缺少字段级血缘",
+};
+
+export const lineageEvidenceDescription = (evidence?: LineageEvidence) => {
+	if (!evidence) return "服务端尚未返回血缘证据诊断。";
+	const reasons = evidence.reasonCodes.map((code) => LINEAGE_EVIDENCE_REASON_TEXT[code] || code);
+	return reasons.length ? reasons.join("；") : evidence.message || "当前快照的血缘证据完整。";
 };
 
 export type LineageDiffResult = {

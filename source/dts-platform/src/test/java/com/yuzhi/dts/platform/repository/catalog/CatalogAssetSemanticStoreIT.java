@@ -13,6 +13,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import liquibase.Contexts;
@@ -165,6 +166,22 @@ class CatalogAssetSemanticStoreIT {
         assertThat(reconciliation.assetCount()).isEqualTo(1);
         assertThat(reconciliation.bucketCount()).isEqualTo(1);
         assertThat(store.stats(null, NOW.plusSeconds(121)).total()).isEqualTo(1);
+    }
+
+    @Test
+    void batchStatusReadReturnsOnlyRegisteredKeysWithoutPerAssetLookups() {
+        transaction.execute(status -> store.register(admittedPlan("scan-1", GovernanceReadiness.GOVERNED, domainId), NOW));
+
+        var snapshots = store.findStatusSnapshots(
+            CatalogAssetType.DATASET,
+            List.of(assetKey(), "source:missing/schema:public/table:missing"),
+            NOW.plusSeconds(1)
+        );
+
+        assertThat(snapshots).containsOnlyKeys(assetKey());
+        assertThat(snapshots.get(assetKey()).statusAxes().publication()).isEqualTo(PublicationState.PUBLISHED);
+        assertThat(snapshots.get(assetKey()).eligibility().decision()).isEqualTo(EligibilityDecision.ELIGIBLE);
+        assertThat(snapshots.get(assetKey()).qualityGatePassed()).isTrue();
     }
 
     private RegistrationPlan admittedPlan(String evidenceRef, GovernanceReadiness governance, UUID domain) {

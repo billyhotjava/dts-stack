@@ -23,6 +23,8 @@ import com.yuzhi.dts.analytics.service.QueryMetricsService;
 import com.yuzhi.dts.analytics.service.QueryTraceService;
 import com.yuzhi.dts.analytics.service.ScreenPermissionService;
 import com.yuzhi.dts.analytics.service.semantic.SemanticQueryService;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
@@ -62,6 +64,7 @@ public class PublicResource {
     private final ScreenPermissionService screenPermissionService;
     private final SemanticQueryService semanticQueryService;
     private final ObjectMapper objectMapper;
+    private final AnalysisQueryGateway analysisQueryGateway;
 
     public PublicResource(
             AnalyticsSessionService sessionService,
@@ -77,7 +80,8 @@ public class PublicResource {
             ProjectCockpitService projectCockpitService,
             ScreenPermissionService screenPermissionService,
             SemanticQueryService semanticQueryService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AnalysisQueryGateway analysisQueryGateway) {
         this.sessionService = sessionService;
         this.publicLinkService = publicLinkService;
         this.cardRepository = cardRepository;
@@ -92,6 +96,7 @@ public class PublicResource {
         this.screenPermissionService = screenPermissionService;
         this.semanticQueryService = semanticQueryService;
         this.objectMapper = objectMapper;
+        this.analysisQueryGateway = analysisQueryGateway;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -441,9 +446,15 @@ public class PublicResource {
                     jsonQuery.put("query", prepared.mbql());
                 }
 
-                DatasetQueryService.DatasetResult result =
-                        queryExecutionFacade.executeWithCompliance(prepared, traceAttempts::add);
-                long runningTimeMs = System.currentTimeMillis() - startedMillis;
+                AnalysisQueryGateway.GatewayExecution gatewayExecution = analysisQueryGateway.executePrepared(
+                    gatewayActor(request),
+                    prepared,
+                    AnalysisRequestContext.from(request),
+                    "public-card:" + card.getId(),
+                    prepared.constraints().maxResults()
+                );
+                DatasetQueryService.DatasetResult result = gatewayExecution.datasetResult();
+                long runningTimeMs = gatewayExecution.result().durationMs();
 
                 Map<String, Object> data = new LinkedHashMap<>();
                 data.put("rows", result.rows());
@@ -521,6 +532,17 @@ public class PublicResource {
                     durationNanos / 1_000_000,
                     tracePayload);
         }
+    }
+
+    private AnalyticsUser gatewayActor(HttpServletRequest request) {
+        return sessionService.resolveUser(request).orElseGet(() -> {
+            AnalyticsUser actor = new AnalyticsUser();
+            long stableId = -1L - Math.abs((long) String.valueOf(request == null ? "public" : request.getRequestURI()).hashCode());
+            actor.setId(stableId);
+            actor.setEmail("approved-public-share");
+            actor.setActive(true);
+            return actor;
+        });
     }
 
     private boolean isSemanticDatasetQuery(JsonNode datasetQuery) {

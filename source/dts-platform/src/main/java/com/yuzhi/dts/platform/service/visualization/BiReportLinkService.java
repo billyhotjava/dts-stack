@@ -421,7 +421,11 @@ public class BiReportLinkService {
             r.getLastVisitedAt(),
             r.getCreatedBy(),
             r.getLastModifiedDate(),
-            r.getBizDomain()
+            r.getBizDomain(),
+            r.getAssetType(),
+            r.getAssetKey(),
+            r.getAssetVersion(),
+            r.getReconcileStatus()
         );
     }
 

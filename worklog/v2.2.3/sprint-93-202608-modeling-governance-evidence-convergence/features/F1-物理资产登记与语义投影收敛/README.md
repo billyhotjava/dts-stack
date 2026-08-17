@@ -1,7 +1,7 @@
 # F1：物理资产登记与语义投影收敛
 
 **优先级**：P0
-**状态**：IN_PROGRESS（T01 已完成组件实现与定向测试，等待运行态 IT；T02 等待 F0 的存量 preview）
+**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / FINAL_E2E_PENDING
 
 ## 目标
 
@@ -25,13 +25,13 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 接入生产资产观察并统一目录与统计事实 | P0 | IN_PROGRESS | 组件实现已完成；等待 F0 样本与运行态 IT |
-| T02 | 分批补齐存量语义投影并可回滚 | P0 | DRAFT | F0/T01、T01 |
+| T01 | 接入生产资产观察并统一目录与统计事实 | P0 | IMPLEMENTATION_COMPLETE | 运行态 IT 待执行 |
+| T02 | 分批补齐存量语义投影并可回滚 | P0 | IMPLEMENTATION_COMPLETE | IT-03 待执行 |
 
 ## Definition of Ready
 
 - [x] T01 输入、输出、错误和复用 seam 已钉定。
-- [ ] T02 的真实 preview 分布和回滚样本已取得。
+- [x] T02 的真实 preview 分布已取得；回滚样本由最终 IT-03 受控生成。
 - [x] 不新增台账、不重写旧 warehouse layer。
 
 ## 完成标准

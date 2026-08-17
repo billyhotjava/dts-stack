@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Dri
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryEvidenceView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceSummaryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.GovernanceQualitySummaryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ModelMaterializationStatusView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.MaterializationAttemptView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.RelationEvidenceState;
@@ -57,6 +58,7 @@ public class ModelReleaseCandidateApplicationService {
     private final CandidateRollbackCommitService rollbackCommits;
     private final ReleaseCandidateWorkbenchEvidencePort workbenchEvidence;
     private final ModelReleaseCandidatePreflightService preflight;
+    private final CandidateGovernanceQualityEvidenceService governanceQuality;
 
     public ModelReleaseCandidateApplicationService(
         ModelReleaseCandidateRepository repository,
@@ -68,7 +70,8 @@ public class ModelReleaseCandidateApplicationService {
         CandidatePublicationCoordinator publicationCoordinator,
         CandidateRollbackCommitService rollbackCommits,
         ReleaseCandidateWorkbenchEvidencePort workbenchEvidence,
-        ModelReleaseCandidatePreflightService preflight
+        ModelReleaseCandidatePreflightService preflight,
+        CandidateGovernanceQualityEvidenceService governanceQuality
     ) {
         this.repository = repository;
         this.commands = commands;
@@ -80,6 +83,7 @@ public class ModelReleaseCandidateApplicationService {
         this.rollbackCommits = rollbackCommits;
         this.workbenchEvidence = workbenchEvidence;
         this.preflight = preflight;
+        this.governanceQuality = governanceQuality;
     }
 
     @Transactional(readOnly = true)
@@ -611,8 +615,9 @@ public class ModelReleaseCandidateApplicationService {
                 )
             );
         }
+        CandidateQualityEvidenceSnapshot qualitySnapshot = governanceQuality.requirePublishableSnapshot(candidate);
         publicationAdmission.requireAllowed(candidate);
-        CommandResult publishing = commands.transition(
+        CommandResult publishing = commands.transitionWithQualityEvidence(
             access.tenantId(),
             access.actorId(),
             candidate.id(),
@@ -621,7 +626,8 @@ public class ModelReleaseCandidateApplicationService {
                 DeliveryStatus.PUBLISHING,
                 idempotencyKey,
                 reason
-            )
+            ),
+            qualitySnapshot
         );
         return roleAware(
             publicationCoordinator.publish(
@@ -1021,16 +1027,35 @@ public class ModelReleaseCandidateApplicationService {
         List<EntryEvidenceView> entries = entryEvidence == null
             ? List.of()
             : List.copyOf(entryEvidence);
+        GovernanceQualitySummaryView evaluated = governanceQuality == null
+            ? null
+            : governanceQuality.evaluate(view.candidate());
+        GovernanceQualitySummaryView governance = evaluated == null
+            ? GovernanceQualitySummaryView.notEvaluated()
+            : evaluated;
+        boolean publicationBlocked = governance.required() && !governance.passed() && publicationReady(view.candidate());
+        List<WorkspaceAction> actions = publicationBlocked
+            ? view.allowedActions().stream().filter(action -> action != WorkspaceAction.PUBLISH).toList()
+            : view.allowedActions();
         return new WorkbenchView(
             view.planId(),
-            view.state(),
+            publicationBlocked ? WorkbenchState.BLOCKED : view.state(),
             view.candidate(),
             evidence(view.candidate(), entries),
             entries,
-            view.primaryBlocker(),
-            view.allowedActions(),
+            governance,
+            publicationBlocked ? new BlockerView(governance.code(), governance.message()) : view.primaryBlocker(),
+            actions,
             view.etag()
         );
+    }
+
+    private static boolean publicationReady(CandidateView candidate) {
+        return candidate != null && Set.of(
+            DeliveryStatus.QUALITY_PASSED,
+            DeliveryStatus.REVIEW_PENDING,
+            DeliveryStatus.APPROVED
+        ).contains(candidate.status());
     }
 
     private List<EvidenceSummaryView> evidence(

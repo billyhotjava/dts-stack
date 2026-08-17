@@ -29,14 +29,14 @@ public class CatalogAssetNormalizationMigrationResource {
         this.migrations = migrations;
     }
 
-    @GetMapping("/preview")
+    @GetMapping({ "/preview", "/semantic-projection/preview" })
     public ApiResponse<CatalogAssetNormalizationMigrationService.Preview> preview(
         @RequestParam(name = "limit", defaultValue = "100") int limit
     ) {
         return ApiResponses.ok(migrations.preview(limit));
     }
 
-    @PostMapping("/apply")
+    @PostMapping({ "/apply", "/semantic-projection/apply" })
     public ApiResponse<CatalogAssetNormalizationMigrationService.ApplyResult> apply(
         @RequestBody ApplyRequest request,
         @RequestHeader(name = "X-Correlation-Id", required = false) String correlationId
@@ -51,7 +51,7 @@ public class CatalogAssetNormalizationMigrationResource {
         );
     }
 
-    @PostMapping("/{batchId}/rollback")
+    @PostMapping({ "/{batchId}/rollback", "/semantic-projection/{batchId}/rollback" })
     public ApiResponse<CatalogAssetNormalizationMigrationService.RollbackResult> rollback(@PathVariable UUID batchId) {
         return ApiResponses.ok(migrations.rollback(batchId));
     }

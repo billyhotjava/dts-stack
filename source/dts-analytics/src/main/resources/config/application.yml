@@ -35,8 +35,17 @@ application:
     environment: dev
 
 analytics:
+  bi-features:
+    governed-bi-enabled: ${DTS_ANALYTICS_GOVERNED_BI_ENABLED:true}
+    legacy-card-write-enabled: ${DTS_ANALYTICS_LEGACY_CARD_WRITE_ENABLED:true}
   local-iam:
     read-only: ${ANALYTICS_LOCAL_IAM_READ_ONLY:true}
+  public-sharing:
+    enabled: ${ANALYTICS_PUBLIC_SHARING_ENABLED:false}
+  query-budget:
+    user-concurrency: ${ANALYTICS_QUERY_USER_CONCURRENCY:3}
+    department-concurrency: ${ANALYTICS_QUERY_DEPARTMENT_CONCURRENCY:20}
+    global-concurrency: ${ANALYTICS_QUERY_GLOBAL_CONCURRENCY:100}
 
 dts:
   analytics:

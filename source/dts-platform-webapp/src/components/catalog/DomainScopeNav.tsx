@@ -8,7 +8,7 @@ import { UNASSIGNED_DOMAIN_KEY } from "@/pages/catalog/assets/assetPageShared";
 export type DomainScopeStats = { total: number; attention: number };
 
 export type DomainScopeNode = {
-	/** null 表示该主题域缺少标识，不能作为筛选条件 */
+	/** null 表示该业务归属数据域缺少标识，不能作为筛选条件 */
 	id: string | null;
 	name: string;
 	code?: string;
@@ -189,8 +189,8 @@ export function DomainScopeNav({
 						data-testid="domain-scope-search"
 						value={keyword}
 						onChange={(event) => setKeyword(event.target.value)}
-						placeholder="搜索主题域…"
-						aria-label="搜索主题域"
+						placeholder="搜索业务归属数据域…"
+						aria-label="搜索业务归属数据域"
 						className="w-full border-0 text-xs outline-none placeholder:text-slate-400"
 					/>
 				</div>
@@ -205,7 +205,7 @@ export function DomainScopeNav({
 				onSelect={() => onChange(undefined)}
 			/>
 
-			<div className="mt-3 px-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">主题域</div>
+			<div className="mt-3 px-2 text-[11px] font-medium uppercase tracking-wide text-slate-400">业务归属数据域</div>
 			<div className="mt-1">
 				{shownNodes.length ? (
 					<div className="space-y-0.5">
@@ -217,7 +217,7 @@ export function DomainScopeNav({
 								stats={node.stats}
 								selected={node.id !== null && node.id === value}
 								disabled={node.id === null}
-								title={node.id === null ? "该主题域缺少标识，无法作为筛选条件" : undefined}
+								title={node.id === null ? "该业务归属数据域缺少标识，无法作为筛选条件" : undefined}
 								truncated={truncated}
 								onSelect={node.id === null ? undefined : () => onChange(node.id ?? undefined)}
 							/>
@@ -245,7 +245,7 @@ export function DomainScopeNav({
 										stats={node.stats}
 										selected={node.id !== null && node.id === value}
 										disabled={node.id === null}
-										title={node.id === null ? "该主题域缺少标识，无法作为筛选条件" : undefined}
+										title={node.id === null ? "该业务归属数据域缺少标识，无法作为筛选条件" : undefined}
 										truncated={truncated}
 										onSelect={node.id === null ? undefined : () => onChange(node.id ?? undefined)}
 									/>
@@ -255,12 +255,12 @@ export function DomainScopeNav({
 				) : (
 					<div className="px-2 py-3 text-xs text-slate-400">
 						{keyword ? (
-							"没有匹配的主题域"
+							"没有匹配的业务归属数据域"
 						) : (
 							<>
-								尚未创建主题域，请先在
+								尚未创建业务归属数据域，请先在
 								<a href="/governance/subjects" className="mx-1 text-blue-600 hover:underline">
-									治理主题域
+									业务归属数据域治理
 								</a>
 								中创建。
 							</>

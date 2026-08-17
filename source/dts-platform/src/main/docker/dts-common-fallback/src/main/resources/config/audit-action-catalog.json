@@ -1351,6 +1351,41 @@
               "supportsFlow": true
             },
             {
+              "code": "MODELING_SEMANTIC_SYNC_RETRY",
+              "display": "重试模型目录同步",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "MODELING_SEMANTIC_SYNC_TERMINAL_FAILURE",
+              "display": "模型目录同步终态失败",
+              "phases": [
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_ASSET_SEMANTIC_BACKFILL_APPLY",
+              "display": "应用资产语义投影补齐批次",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "CATALOG_ASSET_SEMANTIC_BACKFILL_ROLLBACK",
+              "display": "回滚资产语义投影补齐批次",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
               "code": "MODELING_DBT_IMPORT_FORWARD_UNDO",
               "display": "前向撤销 dbt 模型导入",
               "phases": [

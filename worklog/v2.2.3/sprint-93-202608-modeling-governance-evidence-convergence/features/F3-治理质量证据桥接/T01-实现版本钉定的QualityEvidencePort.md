@@ -1,7 +1,7 @@
 # T01：实现版本钉定的 QualityEvidence Port
 
 **优先级**：P0
-**状态**：READY
+**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / IT-05_PENDING
 **依赖**：F0/T01 提供真实质量样本用于最终 IT
 
 ## 目标
@@ -28,14 +28,14 @@ dts-platform quality query adapter、modeling port、批量 repository 与 Testc
 
 ## 验证（RED→GREEN）
 
-- [ ] 每种 violation 参数化测试。
-- [ ] latest version 变化不改变 pinned evidence。
-- [ ] asset/version/binding/run 串线全部拒绝。
+- [x] 每种 violation 参数化测试。
+- [x] latest version 变化不改变 pinned evidence。
+- [x] asset/version/binding/run 串线全部拒绝。
 - [ ] 查询次数 ≤8，目标索引经 EXPLAIN 验证。
-- [ ] 相同输入 checksum 稳定。
+- [x] 相同输入 checksum 稳定。
 
 ## Definition of Done
 
-- [ ] Port 不复制质量事实、不依赖模板数量。
-- [ ] Modeling 不直接引用 governance repository/entity。
+- [x] Port 不复制质量事实、不依赖模板数量。
+- [x] Modeling 不直接引用 governance repository/entity。
 - [ ] IT-05 有真实 pass/fail/expired 证据。

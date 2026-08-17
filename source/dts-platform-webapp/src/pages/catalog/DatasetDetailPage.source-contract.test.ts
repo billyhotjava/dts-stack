@@ -24,10 +24,7 @@ test("dataset detail page consumes assets-v2 as the single source of truth", () 
 
 test("dataset detail page keeps asset identity separate from business description", () => {
 	assert.match(SOURCE, /__fqn: asset\.fqn/);
-	assert.match(
-		SOURCE,
-		/securityPolicyRefs: asset\.securityPolicyRefs,\s+metadataSource: asset\.metadataSource,\s+__fqn: asset\.fqn/,
-	);
+	assert.match(SOURCE, /securityPolicyRefs: asset\.securityPolicyRefs,\s+metadataSource: asset\.metadataSource/);
 	assert.match(SOURCE, /const assetKey = String\(assetContract\?\.assetKey \|\| ""\)\.trim\(\)/);
 	assert.doesNotMatch(SOURCE, /assetContract\?\.assetKey \|\| dataset\.description \|\| "-"/);
 });
@@ -93,11 +90,11 @@ test("dataset detail makes the missing business data domain directly actionable"
 	assert.match(SOURCE, /完善治理信息/);
 	assert.match(SOURCE, /openGovernanceTab/);
 	assert.match(SOURCE, /业务归属数据域/);
-	assert.doesNotMatch(SOURCE, /缺少主题域/);
+	assert.match(SOURCE, /缺少业务归属数据域/);
 	assert.match(GOVERNANCE_SOURCE, /label="业务归属数据域"/);
 	assert.match(GOVERNANCE_SOURCE, /name="domainId"/);
 	assert.match(GOVERNANCE_SOURCE, /updateCatalogAssetV2Governance/);
-	assert.match(GOVERNANCE_SOURCE, /不等同于数据建模中的主题域/);
+	assert.match(GOVERNANCE_SOURCE, /不等同于数据建模中的应用主题域/);
 });
 
 test("dataset detail page remains within the repository file-size convention", () => {

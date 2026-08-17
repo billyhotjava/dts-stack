@@ -11,6 +11,9 @@ export type AssetV2FilterState = {
 	matchStatus?: string;
 	unclassified?: boolean;
 	stale?: boolean;
+	eligibility?: string;
+	servingStatus?: string;
+	qualityStatus?: string;
 	tagIds?: string[];
 };
 
@@ -27,5 +30,8 @@ export const buildAssetV2Query = (filters: AssetV2FilterState, page = 0, size = 
 	matchStatus: filters.matchStatus === "ALL" ? undefined : filters.matchStatus,
 	unclassified: filters.unclassified || undefined,
 	stale: filters.stale || undefined,
+	eligibility: filters.eligibility === "ALL" ? undefined : filters.eligibility,
+	servingStatus: filters.servingStatus === "ALL" ? undefined : filters.servingStatus,
+	qualityStatus: filters.qualityStatus === "ALL" ? undefined : filters.qualityStatus,
 	tagIds: filters.tagIds?.length ? filters.tagIds : undefined,
 });

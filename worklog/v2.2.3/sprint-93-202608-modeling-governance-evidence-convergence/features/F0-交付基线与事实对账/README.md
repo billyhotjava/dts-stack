@@ -1,7 +1,7 @@
 # F0：交付基线与事实对账
 
 **优先级**：P0
-**状态**：IN_PROGRESS
+**状态**：BASELINE_READY / FINAL_E2E_PENDING
 
 ## 目标
 
@@ -26,7 +26,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 验证真实登录、验收样本与迁移画像基线 | P0 | IN_PROGRESS | 无 |
+| T01 | 验证真实登录、验收样本与迁移画像基线 | P0 | BASELINE_READY | 无 |
 
 ## Definition of Ready
 

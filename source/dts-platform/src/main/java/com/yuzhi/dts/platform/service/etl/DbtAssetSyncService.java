@@ -9,6 +9,7 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob;
+import com.yuzhi.dts.platform.domain.catalog.CatalogSchemaDriftEvent;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.repository.catalog.CatalogColumnLineageRepository;
@@ -16,6 +17,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
@@ -28,6 +30,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpe
 import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter;
 import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalDatasetObservationAdapter.DatasetObservation;
 import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalLocator;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.AssetRole;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.DiscoveryState;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.EvidenceChannel;
@@ -82,6 +85,8 @@ public class DbtAssetSyncService {
     private final AuditService auditService;
     private final CatalogClassificationPropagationJobService propagationJobService;
     private final CatalogPhysicalDatasetObservationAdapter assetObservation;
+    private final SchemaDriftDetector schemaDriftDetector;
+    private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
 
     public DbtAssetSyncService(
         ObjectMapper objectMapper,
@@ -99,7 +104,9 @@ public class DbtAssetSyncService {
         ModelSpecReader modelSpecReader,
         AuditService auditService,
         CatalogClassificationPropagationJobService propagationJobService,
-        CatalogPhysicalDatasetObservationAdapter assetObservation
+        CatalogPhysicalDatasetObservationAdapter assetObservation,
+        SchemaDriftDetector schemaDriftDetector,
+        CatalogSchemaDriftEventRepository schemaDriftEventRepository
     ) {
         this.objectMapper = objectMapper;
         this.properties = properties;
@@ -117,6 +124,8 @@ public class DbtAssetSyncService {
         this.auditService = auditService;
         this.propagationJobService = propagationJobService;
         this.assetObservation = assetObservation;
+        this.schemaDriftDetector = schemaDriftDetector;
+        this.schemaDriftEventRepository = schemaDriftEventRepository;
     }
 
     /**
@@ -226,6 +235,12 @@ public class DbtAssetSyncService {
                 importCurrentDbtArtifacts(meta);
                 retainedOrAcceptedPhysicalAssetKeys.add(physicalMaterializationKey(meta));
                 if (isLifecycleBoundModel(meta)) {
+                    CatalogDataset publishedDataset = findDataset(toNodeMeta(meta, targetSourceId));
+                    CatalogTableSchema publishedTable = findExistingTable(publishedDataset, meta.table);
+                    if (publishedDataset != null && publishedTable != null) {
+                        datasetByUniqueId.put(entry.getKey(), publishedDataset.getId());
+                        tableByUniqueId.put(entry.getKey(), publishedTable);
+                    }
                     continue;
                 }
                 String controlledLayer = resolveControlledLayer(meta);
@@ -252,7 +267,8 @@ public class DbtAssetSyncService {
             stats.lineageCreated = lineageStats.created();
             stats.lineageRemoved += lineageStats.removed();
             stats.classificationPropagationEnqueued = lineageStats.propagationEnqueued();
-            stats.columnsUpdated = syncColumnsForModels(modelNodes, tableByUniqueId, projectDir);
+            stats.verifiedLineageProtected += lineageStats.verifiedProtected();
+            stats.columnsUpdated = syncColumnsForModels(modelNodes, tableByUniqueId, projectDir, stats);
             ColumnLineageSyncStats columnLineageStats = syncColumnLineage(modelNodes, datasetByUniqueId, tableByUniqueId);
             stats.columnLineageCreated = columnLineageStats.created();
             stats.columnLineageUpdated = columnLineageStats.updated();
@@ -272,7 +288,9 @@ public class DbtAssetSyncService {
                     Map.entry("manifestEvidenceUpdated", stats.manifestEvidenceUpdated),
                     Map.entry("columnLineageCreated", stats.columnLineageCreated),
                     Map.entry("columnLineageUpdated", stats.columnLineageUpdated),
-                    Map.entry("columnLineageRemoved", stats.columnLineageRemoved)
+                    Map.entry("columnLineageRemoved", stats.columnLineageRemoved),
+                    Map.entry("schemaDriftIssues", stats.schemaDriftIssues),
+                    Map.entry("verifiedLineageProtected", stats.verifiedLineageProtected)
                 )
             );
             return DbtAssetSyncResult.success(stats, manifestPath.toString());
@@ -315,6 +333,7 @@ public class DbtAssetSyncService {
         int created = 0;
         int removed = 0;
         int propagationEnqueued = 0;
+        int verifiedProtected = 0;
         for (ModelMeta model : modelNodes.values()) {
             CatalogLineageJob lineageJob = upsertDbtJob(model);
             UUID downstream = datasetByUniqueId.get(model.uniqueId);
@@ -328,6 +347,15 @@ public class DbtAssetSyncService {
                     desired.add(upstream);
                 }
             }
+            if (isLifecycleBoundModel(model)) {
+                if (
+                    !desired.isEmpty() &&
+                    propagationJobService.enqueue(downstream, "DBT", dbtPropagationTriggerRef(model))
+                ) {
+                    propagationEnqueued++;
+                }
+                continue;
+            }
             List<CatalogDatasetLineage> existing = lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(downstream, "DBT");
             for (CatalogDatasetLineage link : existing) {
                 UUID upstreamId = link.getUpstreamDatasetId();
@@ -335,6 +363,10 @@ public class DbtAssetSyncService {
                     continue;
                 }
                 if (!desired.contains(upstreamId)) {
+                    if ("VERIFIED".equalsIgnoreCase(link.getVerificationStatus())) {
+                        verifiedProtected++;
+                        continue;
+                    }
                     link.setValidTo(Instant.now());
                     lineageRepository.save(link);
                     removed++;
@@ -383,7 +415,7 @@ public class DbtAssetSyncService {
                 propagationEnqueued++;
             }
         }
-        return new LineageSyncStats(created, removed, propagationEnqueued);
+        return new LineageSyncStats(created, removed, propagationEnqueued, verifiedProtected);
     }
 
     private String dbtPropagationTriggerRef(ModelMeta model) {
@@ -425,10 +457,19 @@ public class DbtAssetSyncService {
                 if (upstream == null || upstreamTable == null) {
                     continue;
                 }
+                String tableRelationType = isLifecycleBoundModel(model) ? "MODEL_DEPENDENCY" : "DBT";
                 CatalogDatasetLineage tableLineage = lineageRepository
-                    .findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(upstream, downstream, "DBT")
+                    .findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
+                        upstream,
+                        downstream,
+                        tableRelationType
+                    )
                     .orElse(null);
-                if (tableLineage == null || tableLineage.getId() == null) {
+                if (
+                    tableLineage == null ||
+                    tableLineage.getId() == null ||
+                    (isLifecycleBoundModel(model) && !"VERIFIED".equalsIgnoreCase(tableLineage.getVerificationStatus()))
+                ) {
                     continue;
                 }
                 Map<String, CatalogColumnSchema> upstreamColumns = columnsByName(columnRepository.findByTable(upstreamTable));
@@ -900,7 +941,29 @@ public class DbtAssetSyncService {
         return tableRepository.save(table);
     }
 
-    private int syncColumnsForModels(Map<String, ModelMeta> modelNodes, Map<String, CatalogTableSchema> tableByUniqueId, String projectDir) {
+    private CatalogTableSchema findExistingTable(CatalogDataset dataset, String tableName) {
+        if (dataset == null || !StringUtils.hasText(tableName)) {
+            return null;
+        }
+        List<CatalogTableSchema> matches = tableRepository
+            .findByDataset(dataset)
+            .stream()
+            .filter(table -> table != null && tableName.trim().equalsIgnoreCase(table.getName()))
+            .toList();
+        if (matches.size() > 1) {
+            throw new IllegalStateException(
+                "CATALOG_TABLE_PHYSICAL_LOCATOR_AMBIGUOUS: " + dataset.getId() + ":" + tableName.trim()
+            );
+        }
+        return matches.isEmpty() ? null : matches.getFirst();
+    }
+
+    private int syncColumnsForModels(
+        Map<String, ModelMeta> modelNodes,
+        Map<String, CatalogTableSchema> tableByUniqueId,
+        String projectDir,
+        SyncStats stats
+    ) {
         int updated = 0;
         if (modelNodes == null || modelNodes.isEmpty()) {
             return updated;
@@ -908,7 +971,7 @@ public class DbtAssetSyncService {
         for (ModelMeta model : modelNodes.values()) {
             CatalogTableSchema table = tableByUniqueId.get(model.uniqueId);
             if (table == null) continue;
-            updated += syncColumnsForNode(table, model, projectDir);
+            updated += syncColumnsForNode(table, model, projectDir, stats);
         }
         return updated;
     }
@@ -929,11 +992,14 @@ public class DbtAssetSyncService {
         return updated;
     }
 
-    private int syncColumnsForNode(CatalogTableSchema table, ModelMeta meta, String projectDir) {
+    private int syncColumnsForNode(CatalogTableSchema table, ModelMeta meta, String projectDir, SyncStats stats) {
         if (table == null || meta == null) {
             return 0;
         }
         int updated = 0;
+        Map<String, SchemaDriftDetector.ColumnSnapshot> beforeSnapshot = schemaDriftDetector.snapshotExisting(
+            columnRepository.findByTable(table)
+        );
         List<ColumnSpec> csvSpecs = resolveCsvSpecs(meta.originalFilePath, projectDir);
         List<ColumnSpec> manifestSpecs = columnSyncService.parseManifestColumns(meta.columns);
         if (csvSpecs != null && !csvSpecs.isEmpty()) {
@@ -941,8 +1007,86 @@ public class DbtAssetSyncService {
         }
         if (manifestSpecs != null && !manifestSpecs.isEmpty()) {
             updated += columnSyncService.upsertColumns(table, manifestSpecs, CatalogColumnSyncService.STATUS_ACTIVE);
+            recordDbtSchemaDrift(table, meta, beforeSnapshot, manifestSpecs, stats);
         }
         return updated;
+    }
+
+    private void recordDbtSchemaDrift(
+        CatalogTableSchema table,
+        ModelMeta model,
+        Map<String, SchemaDriftDetector.ColumnSnapshot> beforeSnapshot,
+        List<ColumnSpec> manifestSpecs,
+        SyncStats stats
+    ) {
+        if (
+            table == null ||
+            table.getDataset() == null ||
+            table.getDataset().getId() == null ||
+            beforeSnapshot == null ||
+            beforeSnapshot.isEmpty() ||
+            manifestSpecs == null ||
+            manifestSpecs.isEmpty()
+        ) {
+            return;
+        }
+        List<SchemaDriftDetector.ColumnSnapshot> afterSnapshot = manifestSpecs
+            .stream()
+            .filter(spec -> spec != null && StringUtils.hasText(spec.name()))
+            .map(spec -> {
+                SchemaDriftDetector.ColumnSnapshot previous = beforeSnapshot.get(normalizeColumnName(spec.name()));
+                String dataType = StringUtils.hasText(spec.dataType())
+                    ? spec.dataType()
+                    : previous == null ? null : previous.dataType();
+                Boolean nullable = spec.nullable() != null
+                    ? spec.nullable()
+                    : previous == null ? null : previous.nullable();
+                return new SchemaDriftDetector.ColumnSnapshot(spec.name(), dataType, nullable);
+            })
+            .toList();
+        SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(beforeSnapshot, afterSnapshot, null);
+        if (drift.added() == 0 && drift.removed() == 0 && drift.changed() == 0) {
+            return;
+        }
+        UUID runId = dbtSchemaDriftRunId(model);
+        boolean replay = schemaDriftEventRepository
+            .findTop200ByRunIdOrderByCreatedDateDesc(runId)
+            .stream()
+            .anyMatch(event ->
+                event != null &&
+                table.getDataset().getId().equals(event.getDatasetId()) &&
+                "DBT".equalsIgnoreCase(event.getIntegration())
+            );
+        if (replay) {
+            return;
+        }
+        CatalogSchemaDriftEvent event = new CatalogSchemaDriftEvent();
+        event.setRunId(runId);
+        event.setIntegration("DBT");
+        event.setDatasetId(table.getDataset().getId());
+        event.setHiveDatabase(table.getDataset().getHiveDatabase());
+        event.setHiveTable(table.getDataset().getHiveTable());
+        event.setAddedCount(drift.added());
+        event.setRemovedCount(drift.removed());
+        event.setChangedCount(drift.changed());
+        event.setDetailsJson(drift.detailsJson());
+        event.setPolicyMode(CatalogSchemaDriftEvent.POLICY_REVIEW);
+        event.setTicketStatus(CatalogSchemaDriftEvent.TICKET_OPEN);
+        event.setWorkflowNote("dbt manifest schema evidence requires review");
+        schemaDriftEventRepository.save(event);
+        stats.schemaDriftIssues++;
+    }
+
+    private UUID dbtSchemaDriftRunId(ModelMeta model) {
+        String invocationId = model != null && model.runEvidence != null
+            ? model.runEvidence.invocationId()
+            : null;
+        String identity =
+            "dbt-schema-drift:" +
+            defaultIfBlank(invocationId, "manifest") +
+            ":" +
+            defaultIfBlank(model == null ? null : model.uniqueId, "unknown");
+        return UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8));
     }
 
     private List<ColumnSpec> resolveCsvSpecs(String originalFilePath, String projectDir) {
@@ -1481,6 +1625,10 @@ public class DbtAssetSyncService {
         if (datasetLineage != null) {
             for (CatalogDatasetLineage lineage : datasetLineage) {
                 if (lineage != null && lineage.getValidTo() == null) {
+                    if ("VERIFIED".equalsIgnoreCase(lineage.getVerificationStatus())) {
+                        stats.verifiedLineageProtected++;
+                        continue;
+                    }
                     lineage.setValidTo(revokedAt);
                     lineageRepository.save(lineage);
                     stats.lineageRemoved++;
@@ -1769,6 +1917,8 @@ public class DbtAssetSyncService {
         int columnLineageUpdated = 0;
         int columnLineageRemoved = 0;
         int classificationPropagationEnqueued = 0;
+        int schemaDriftIssues = 0;
+        int verifiedLineageProtected = 0;
 
         public int getCreated() {
             return created;
@@ -1812,6 +1962,14 @@ public class DbtAssetSyncService {
 
         public int getClassificationPropagationEnqueued() {
             return classificationPropagationEnqueued;
+        }
+
+        public int getSchemaDriftIssues() {
+            return schemaDriftIssues;
+        }
+
+        public int getVerifiedLineageProtected() {
+            return verifiedLineageProtected;
         }
     }
 
@@ -1878,7 +2036,7 @@ public class DbtAssetSyncService {
 
     private record RunEvidence(String status, String invocationId, String generatedAt, boolean current, String staleReason) {}
 
-    private record LineageSyncStats(int created, int removed, int propagationEnqueued) {}
+    private record LineageSyncStats(int created, int removed, int propagationEnqueued, int verifiedProtected) {}
 
     private record ColumnLineageSyncStats(int created, int updated, int removed) {}
 }

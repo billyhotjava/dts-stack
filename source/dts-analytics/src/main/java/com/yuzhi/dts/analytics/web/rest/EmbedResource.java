@@ -16,6 +16,8 @@ import com.yuzhi.dts.analytics.service.EmbedTokenService;
 import com.yuzhi.dts.analytics.service.MbqlToSqlService;
 import com.yuzhi.dts.analytics.service.ScreenComplianceService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
@@ -51,6 +53,7 @@ public class EmbedResource {
     private final QueryExecutionFacade queryExecutionFacade;
     private final AnalyticsConsumerClassificationService classificationService;
     private final ObjectMapper objectMapper;
+    private final AnalysisQueryGateway analysisQueryGateway;
 
     public EmbedResource(
             AnalyticsSessionService sessionService,
@@ -63,7 +66,8 @@ public class EmbedResource {
             ScreenComplianceService screenComplianceService,
             QueryExecutionFacade queryExecutionFacade,
             AnalyticsConsumerClassificationService classificationService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AnalysisQueryGateway analysisQueryGateway) {
         this.sessionService = sessionService;
         this.embedTokenService = embedTokenService;
         this.cardRepository = cardRepository;
@@ -75,6 +79,7 @@ public class EmbedResource {
         this.queryExecutionFacade = queryExecutionFacade;
         this.classificationService = classificationService;
         this.objectMapper = objectMapper;
+        this.analysisQueryGateway = analysisQueryGateway;
     }
 
     @GetMapping(path = "/embed", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -406,8 +411,15 @@ public class EmbedResource {
                 jsonQuery.put("query", prepared.mbql());
             }
 
-            DatasetQueryService.DatasetResult result = queryExecutionFacade.executeWithCompliance(prepared);
-            long runningTimeMs = System.currentTimeMillis() - startedMillis;
+            AnalysisQueryGateway.GatewayExecution gatewayExecution = analysisQueryGateway.executePrepared(
+                gatewayActor(request),
+                prepared,
+                AnalysisRequestContext.from(request),
+                "embed-card:" + card.getId(),
+                prepared.constraints().maxResults()
+            );
+            DatasetQueryService.DatasetResult result = gatewayExecution.datasetResult();
+            long runningTimeMs = gatewayExecution.result().durationMs();
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("rows", result.rows());
@@ -436,6 +448,17 @@ public class EmbedResource {
             response.put("via", List.of());
             return ResponseEntity.accepted().body(response);
         }
+    }
+
+    private AnalyticsUser gatewayActor(HttpServletRequest request) {
+        return sessionService.resolveUser(request).orElseGet(() -> {
+            AnalyticsUser actor = new AnalyticsUser();
+            long stableId = -1L - Math.abs((long) String.valueOf(request == null ? "embed" : request.getRequestURI()).hashCode());
+            actor.setId(stableId);
+            actor.setEmail("approved-embed-token");
+            actor.setActive(true);
+            return actor;
+        });
     }
 
     private ResponseEntity<?> cardClassificationDenied(long cardId, HttpServletRequest request) {

@@ -252,6 +252,9 @@ dts:
   modeling:
     # Operational write freeze; canonical ModelSpec v2 remains the only readable contract.
     canonical-write-enabled: ${DTS_MODELING_CANONICAL_WRITE_ENABLED:true}
+    catalog:
+      semantic-sync-enabled: ${DTS_MODELING_CATALOG_SEMANTIC_SYNC_ENABLED:true}
+      semantic-sync-delay-ms: ${DTS_MODELING_CATALOG_SEMANTIC_SYNC_DELAY_MS:30000}
     runtime:
       # Keep first deployment safe; enable after Addax and Airflow endpoints are reachable.
       enabled: ${DTS_MODELING_RUNTIME_ENABLED:false}
@@ -367,6 +370,7 @@ dts:
     catalog:
       # Enable Hive(Inceptor) metadata sync by default so datasets appear once a data source is published.
       inceptor-sync-enabled: ${DTS_PLATFORM_CATALOG_INCEPTOR_SYNC_ENABLED:true}
+      asset-status-view-enabled: ${DTS_PLATFORM_CATALOG_ASSET_STATUS_VIEW_ENABLED:true}
       postgres-schema: OLAP
       properties: {}
   jdbc:

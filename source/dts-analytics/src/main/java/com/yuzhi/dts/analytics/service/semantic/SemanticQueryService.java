@@ -15,7 +15,9 @@ import com.yuzhi.dts.analytics.repository.AnalyticsSemanticJoinRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsSemanticModelRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsVirtualDatasetRepository;
 import com.yuzhi.dts.analytics.service.DatasetQueryService;
-import com.yuzhi.dts.analytics.service.QueryCacheService;
+import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -68,8 +70,7 @@ public class SemanticQueryService {
     private final AnalyticsMetricRepository metricRepository;
     private final AnalyticsFieldRepository fieldRepository;
     private final AnalyticsVirtualDatasetRepository virtualDatasetRepository;
-    private final DatasetQueryService datasetQueryService;
-    private final QueryCacheService queryCacheService;
+    private final AnalysisQueryGateway analysisQueryGateway;
     private final ObjectMapper objectMapper;
 
     public SemanticQueryService(
@@ -78,8 +79,7 @@ public class SemanticQueryService {
         AnalyticsMetricRepository metricRepository,
         AnalyticsFieldRepository fieldRepository,
         AnalyticsVirtualDatasetRepository virtualDatasetRepository,
-        DatasetQueryService datasetQueryService,
-        QueryCacheService queryCacheService,
+        AnalysisQueryGateway analysisQueryGateway,
         ObjectMapper objectMapper
     ) {
         this.semanticModelRepository = semanticModelRepository;
@@ -87,8 +87,7 @@ public class SemanticQueryService {
         this.metricRepository = metricRepository;
         this.fieldRepository = fieldRepository;
         this.virtualDatasetRepository = virtualDatasetRepository;
-        this.datasetQueryService = datasetQueryService;
-        this.queryCacheService = queryCacheService;
+        this.analysisQueryGateway = analysisQueryGateway;
         this.objectMapper = objectMapper;
     }
 
@@ -174,31 +173,15 @@ public class SemanticQueryService {
     @Transactional(readOnly = true)
     public Map<String, Object> runQuery(JsonNode body, PlatformContext context, Long userId) throws SQLException {
         CompiledSemanticQuery compiled = compile(body, context);
-        JsonNode cacheBody = buildCacheBody(body, compiled.databaseId());
         boolean skipCache = "fresh".equalsIgnoreCase(trimToNull(body != null ? body.path("cache_hint").asText(null) : null));
-
-        long started = System.currentTimeMillis();
-        DatasetQueryService.DatasetResult result;
-        boolean cacheHit = false;
-        if (!skipCache) {
-            Optional<DatasetQueryService.DatasetResult> cached = queryCacheService.get(compiled.databaseId(), cacheBody, userId);
-            if (cached.isPresent()) {
-                result = cached.get();
-                cacheHit = true;
-            } else {
-                result = datasetQueryService.runNative(compiled.databaseId(), compiled.sql(), compiled.constraints(), compiled.bindings());
-                queryCacheService.put(compiled.databaseId(), cacheBody, userId, result);
-            }
-        } else {
-            result = datasetQueryService.runNative(compiled.databaseId(), compiled.sql(), compiled.constraints(), compiled.bindings());
-        }
-        long elapsed = System.currentTimeMillis() - started;
+        AnalysisQueryGateway.GatewayExecution execution = executeThroughGateway(compiled, context, userId, skipCache, "/api/semantic/query");
+        DatasetQueryService.DatasetResult result = execution.datasetResult();
 
         Map<String, Object> meta = new LinkedHashMap<>();
-        meta.put("sql_preview", compiled.sql());
         meta.put("row_count", result.rows().size());
-        meta.put("elapsed_ms", elapsed);
-        meta.put("cache_hit", cacheHit);
+        meta.put("elapsed_ms", execution.result().durationMs());
+        meta.put("cache_hit", execution.result().cacheHit());
+        meta.put("query_id", execution.result().queryId());
         meta.put("security_applied", compiled.securityApplied());
         meta.put("warnings", compiled.warnings());
 
@@ -213,24 +196,9 @@ public class SemanticQueryService {
     @Transactional(readOnly = true)
     public SemanticExecutionResult executeForCard(JsonNode body, PlatformContext context, Long userId) throws SQLException {
         CompiledSemanticQuery compiled = compile(body, context);
-        JsonNode cacheBody = buildCacheBody(body, compiled.databaseId());
         boolean skipCache = "fresh".equalsIgnoreCase(trimToNull(body != null ? body.path("cache_hint").asText(null) : null));
-
-        long started = System.currentTimeMillis();
-        DatasetQueryService.DatasetResult rawResult;
-        boolean cacheHit = false;
-        if (!skipCache) {
-            Optional<DatasetQueryService.DatasetResult> cached = queryCacheService.get(compiled.databaseId(), cacheBody, userId);
-            if (cached.isPresent()) {
-                rawResult = cached.get();
-                cacheHit = true;
-            } else {
-                rawResult = datasetQueryService.runNative(compiled.databaseId(), compiled.sql(), compiled.constraints(), compiled.bindings());
-                queryCacheService.put(compiled.databaseId(), cacheBody, userId, rawResult);
-            }
-        } else {
-            rawResult = datasetQueryService.runNative(compiled.databaseId(), compiled.sql(), compiled.constraints(), compiled.bindings());
-        }
+        AnalysisQueryGateway.GatewayExecution execution = executeThroughGateway(compiled, context, userId, skipCache, "/api/card/query");
+        DatasetQueryService.DatasetResult rawResult = execution.datasetResult();
 
         DatasetQueryService.DatasetResult cardResult = new DatasetQueryService.DatasetResult(
             rawResult.rows(),
@@ -244,8 +212,46 @@ public class SemanticQueryService {
             cardResult,
             compiled.securityApplied(),
             compiled.warnings(),
-            cacheHit,
-            System.currentTimeMillis() - started
+            execution.result().cacheHit(),
+            execution.result().durationMs()
+        );
+    }
+
+    private AnalysisQueryGateway.GatewayExecution executeThroughGateway(
+        CompiledSemanticQuery compiled,
+        PlatformContext context,
+        Long userId,
+        boolean skipCache,
+        String requestUri
+    ) {
+        AnalyticsUser actor = new AnalyticsUser();
+        actor.setId(userId == null ? -1L : userId);
+        actor.setEmail("analytics-user-" + actor.getId());
+        actor.setActive(true);
+        PlatformContext safeContext = context == null ? new PlatformContext(null, null, null) : context;
+        AnalysisRequestContext requestContext = new AnalysisRequestContext(
+            safeContext.dept(),
+            safeContext.classification(),
+            safeContext.roles(),
+            null,
+            requestUri,
+            null
+        );
+        QueryExecutionFacade.PreparedQuery prepared = new QueryExecutionFacade.PreparedQuery(
+            compiled.databaseId(),
+            "native",
+            compiled.sql(),
+            compiled.bindings(),
+            null,
+            compiled.constraints()
+        );
+        return analysisQueryGateway.executePrepared(
+            actor,
+            prepared,
+            requestContext,
+            "legacy-semantic",
+            compiled.constraints().maxResults(),
+            skipCache
         );
     }
 

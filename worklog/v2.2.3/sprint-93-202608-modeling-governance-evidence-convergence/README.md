@@ -1,7 +1,7 @@
 # Sprint-93：数据建模与数据治理证据闭环
 
 **时间盒**：2026-08-17 ～ 2026-09-04（15 个工作日）
-**状态**：IN_PROGRESS（F0 已验证真实登录、现代 Chrome、受保护 API 与 normalization preview；隔离样本和 Chrome 95 仍为 G0/G4 GAP）
+**状态**：IMPLEMENTATION_COMPLETE / FINAL_E2E_PENDING（F0～F5 已完成实现与模块验证；F6 集中 E2E、发布/回滚演练和 Chrome 95 证据尚未执行）
 **类型**：Architecture Convergence / Governance Evidence / Compatibility Migration / UI Productization
 **目标**：让建模人员从 ModelSpec 构建、物化、质量检查到发布后，能够在同一个稳定资产身份下继续查看业务元数据、表/字段血缘、治理质量和消费资格；二次物化不产生重复模型或重复资产，所有状态均可追溯、可重试、可对账。
 
@@ -9,7 +9,7 @@
 
 平台已经具备资产概览、资产目录、技术元数据、业务元数据、血缘、质量规则和模型发布能力，也存在“模型发布后登记物理表、字段和表级血缘”的真实主干。但是当前主干之后仍存在三类断链：
 
-1. `catalog_dataset`、`modeling_catalog_model_serving_projection` 与 `catalog_asset_semantic_projection` 三个读写模型没有被同一条生产链稳定驱动；本地运行数据中 367 个目录资产对应 0 条语义投影，43 个模型服务投影全部停留在 `SYNC_PENDING`。
+1. Sprint 启动基线中，`catalog_dataset`、`modeling_catalog_model_serving_projection` 与 `catalog_asset_semantic_projection` 三个读写模型没有被同一条生产链稳定驱动：367 个目录资产对应 0 条语义投影，43 个模型服务投影全部停留在 `SYNC_PENDING`。2026-08-17 收口复查已变为 308 条语义投影、59 条待补齐，43 条服务投影全部 `SYNCED`，剩余工作是受控迁移和故障演练而非人工改状态。
 2. 模型发布把 `dbt build/test` 当作“质量通过”，而治理质量的事实来自钉定的 `gov_rule_version`、`gov_rule_binding` 和 `gov_quality_run`。两者含义不同，不能互相替代。
 3. 模型发布已经写入验证过的表级血缘，但当前运行环境字段级血缘为 0；OpenMetadata、dbt 导入和本地血缘各自有入口，尚未形成同一资产身份下的证据链。
 
@@ -104,14 +104,15 @@
 | L16 | 当前目录列表从 `/api/catalog/assets-v2` 读取，概览端点仍最多扫描 200 条 | `CatalogAssetPortalResource.java:71-128,173-190` |
 | L17 | 现有 SOURCE/DIM 归一化迁移已经具备 previewHash、≤500 apply、batchId 和版本防漂移 rollback | `CatalogAssetNormalizationMigrationService.java:27-176,179-234` |
 | L18 | 统计投影已有每日 reconciliation scheduler | `CatalogAssetStatsReconciliationScheduler.java:6-19` |
-| L19 | 本地运行库：目录资产 367、语义投影 0、服务投影 43 且全部 SYNC_PENDING、当前表级血缘 51、字段血缘 0、质量运行 117 且仅覆盖 1 个 dataset | `assets/domain-profile.md` §3 |
+| L19 | 2026-08-16 启动基线：目录资产 367、语义投影 0、服务投影 43 且全部 SYNC_PENDING、字段血缘 0、质量运行仅覆盖 1 个 dataset | `assets/domain-profile.md` §3 |
 | L20 | 本地 367 个目录资产全部为 PENDING_GOVERNANCE；源码发布路径预期写 PUBLISHED，存在源码/部署/数据状态漂移，根因尚未确认 | `assets/domain-profile.md` §3；`CandidatePublicationRepository.java:542-656` |
 | L21 | 资产概览、元数据治理和目录仍有“主题域”文案；Catalog 语义应为“业务归属数据域” | `AssetOverviewPage.tsx`、`MetadataManagementPage.tsx`、`DataSearchPage.tsx` |
 | L22 | 2026-08-14 已允许所级/部门范围数据管理员从质量通过状态自助发布，并保留 actor/timestamp | `20260814_01_model_release_candidate_self_service.xml:7-72` |
+| L23 | 2026-08-17 实现收口复查：目录资产 367、语义投影 308、待补齐 59、服务投影 43 且全部 SYNCED（最大 attempt=3）、当前表级血缘 51、字段血缘 0、质量运行 134 且全部 FAILED/仅 1 个 dataset | `assets/domain-profile.md` §3.1 |
 
 **开放问题**：
 
-- OQ-01：normalization 待处理子集已完成 preview：3/3 自动解析、0 歧义；367 个资产的生产观察 producer/evidence 覆盖率仍须由 F1/T01 接入后对账，F1/T02 不得据此直接全量 apply。
+- OQ-01：当前已有 308/367 条语义投影，剩余 59 条必须继续经 preview 判定 producer/evidence；F1/T02 不得据此直接全量 apply。
 - OQ-02：字段血缘为 0 是缺少 manifest 输入、解析跳过还是部署链未触发，交由 Sprint-90 F1 与本 Sprint F4/T01 联合判定；不得先发明第二个字段解析器。
 - OQ-03：现有所有资产为 `PENDING_GOVERNANCE` 的具体写入者尚未定位；F1/T01 先用契约测试和审计日志确定，不按结果批量改状态。
 - OQ-04：xiezm 已在本地 Chrome 150 完成真实登录、菜单、关键 API、console/Network smoke；Chrome 95、写命令和部门越权负向尚未执行，F5/F6 最终验收保持 BLOCKED。
@@ -120,30 +121,40 @@
 
 | Gate | 项目 | 状态 | 证据 | 未过则关联 Task |
 |---|---|---|---|---|
-| G0 | 交付基线 | GAP | `it/baseline.md` | F0/T01、F6/T01 |
-| G0 | 领域与真实数据画像 | GAP | `assets/domain-profile.md` | F0/T01、F1/T02 |
+| G0 | 交付基线 | READY_FOR_FINAL_E2E | `it/baseline.md` | F6/T01 |
+| G0 | 领域与真实数据画像 | PASS_WITH_GAPS | `assets/domain-profile.md` §3.1 | F6/T01 |
 | G0 | DTS 不变量自检 | PASS | ADR-93-01/03/07/08/09/11；A3/A4/B1/C3/D1/D4 | - |
 | G1 | 契约链贯通 | PASS_WITH_GAPS | 本文 §4；字段血缘入口等待 OQ-02 | F4/T01 |
 | G1 | 非功能预算 | PASS_WITH_GAPS | `assets/nfr-budget.md` | F0/T01、F6/T02 |
-| G2 | 变更范围守卫 | PENDING | 实施前逐符号 impact，提交前 detect_changes | 各编码 Task |
-| G3 | 发布安全 | PENDING | `assets/release-plan.md` | F6/T02 |
-| G4 | 可运维性 | PENDING | `assets/runbook.md` | F2/T01、F6/T02 |
-| G4 | DoD 验收 | BLOCKED | `it/README.md` | F6/T01 |
+| G2 | 变更范围守卫 | PASS_WITH_SHARED_WORKTREE_WARNING | Sprint-93 逐符号 impact；全工作区 detect_changes=CRITICAL（含并行 Sprint-94） | 提交前隔离 owned files |
+| G3 | 发布安全 | READY_FOR_REHEARSAL | `assets/release-plan.md` | F6/T02 |
+| G4 | 可运维性 | IMPLEMENTED / REHEARSAL_PENDING | `assets/runbook.md` | F6/T02 |
+| G4 | DoD 验收 | READY_FOR_FINAL_E2E | `it/README.md` | F6/T01 |
 
 ## 7. Feature 列表
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
-| F0 | 交付基线与事实对账 | 1 | P0 | IN_PROGRESS |
-| F1 | 物理资产登记与语义投影收敛 | 2 | P0 | IN_PROGRESS（T01 已完成组件实现与定向测试，等待运行态 IT；T02 等数据 preview） |
-| F2 | 模型服务投影闭环 | 1 | P0 | READY |
-| F3 | 治理质量证据桥接 | 2 | P0 | DRAFT（T01 READY，T02 依赖 T01） |
-| F4 | 元数据与血缘证据贯通 | 1 | P0 | DRAFT（依赖 Sprint-89/90） |
-| F5 | 资产治理界面收敛 | 1 | P1 | BLOCKED（依赖 F1～F4 与浏览器基线） |
-| F6 | 发布安全与端到端验收 | 2 | P0 | BLOCKED（依赖登录/Chrome95/目标环境） |
+| F0 | 交付基线与事实对账 | 1 | P0 | BASELINE_READY / FINAL_E2E_PENDING |
+| F1 | 物理资产登记与语义投影收敛 | 2 | P0 | IMPLEMENTATION_COMPLETE / MODULE_VERIFIED |
+| F2 | 模型服务投影闭环 | 1 | P0 | IMPLEMENTATION_COMPLETE / MODULE_VERIFIED |
+| F3 | 治理质量证据桥接 | 2 | P0 | IMPLEMENTATION_COMPLETE / MODULE_VERIFIED |
+| F4 | 元数据与血缘证据贯通 | 1 | P0 | IMPLEMENTATION_COMPLETE / REAL_FIELD_EVIDENCE_PENDING |
+| F5 | 资产治理界面收敛 | 1 | P1 | IMPLEMENTATION_COMPLETE / MODULE_VERIFIED |
+| F6 | 发布安全与端到端验收 | 2 | P0 | READY_FOR_FINAL_E2E |
 
 **执行顺序**：F0 → F1/T01 ∥ F2 ∥ F3/T01 → F1/T02 → F3/T02 → F4 → F5 → F6。
 Sprint-89 F3/F4 与 Sprint-90 F1/F5 是外部依赖，任务不得复制其源码范围。
+
+### 7.1 2026-08-17 实现收口
+
+- F1 的唯一资产登记、语义投影补齐、稳定 preview hash、限批 apply、版本防漂移 rollback 和审计已完成；真实首批迁移留给 IT-03。
+- F2 的耐久 claim、CAS 回执、分级退避、终态问题化/审计、人工幂等重试和前端状态块已完成；当前运行库 43 条服务投影均为 `SYNCED`。
+- F3 已用独立 Port 桥接钉定的规则版本、绑定和运行；工程质量与治理质量已在候选快照、发布门禁和 UI 中分栏，重跑生成新 runId。
+- F4 已把 dbt 物化、表/字段血缘、漂移 issue 和 OM 降级接入既有 seam；当前运行库字段血缘仍为 0，最终验收必须展示真实跳过原因或补齐真实证据，禁止伪造边。
+- F5 已统一概览、目录、详情和模型页的批量状态读取、筛选、深链与术语；相关 Vitest 10 项、Node 源码契约 35 项通过。
+- dts-platform 定向后端测试、Spotless 和三份 Compose 配置通过；前端 Vite Legacy 产物构建成功。仓库并行修改的 `DashboardEditorPage.tsx` 仍有 TypeScript 未使用变量，未纳入 Sprint-93 修改范围。
+- 按执行约束，浏览器 E2E、真实迁移 apply/rollback、故障注入和发布演练在 F0～F5 全部实现后集中执行，本节不把模块测试写成运行态 PASS。
 
 ## 8. 追溯矩阵（Traceability）
 

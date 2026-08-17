@@ -21,16 +21,35 @@ class PlatformPermissionFilterTest {
     void mapsReadUpdateDeleteAndPublicLinkOperationsToPlatformActions() throws Exception {
         assertAction("GET", "/api/card/42", "READ");
         assertAction("POST", "/api/card/42/query", "READ");
+        assertAction("POST", "/api/card/42/query/csv", "EXPORT");
         assertAction("PUT", "/api/card/42", "EDIT");
         assertAction("POST", "/api/dashboard/7/cards", "EDIT");
         assertAction("DELETE", "/api/dashboard/7", "MANAGE");
         assertAction("POST", "/api/dashboard/7/public_link", "MANAGE");
+        assertAction("POST", "/api/dashboard/7/publish", "MANAGE");
+        assertAction("POST", "/api/analysis/42/publish", "MANAGE");
     }
 
     @Test
     void favoriteChangesOnlyRequireReadAccessToTheDashboard() throws Exception {
         assertAction("POST", "/api/dashboard/7/favorite", "READ");
         assertAction("DELETE", "/api/dashboard/7/favorite", "READ");
+    }
+
+    @Test
+    void governedAnalysisUsesTheExistingCardPermissionVocabulary() throws Exception {
+        PlatformPermissionClient permissionClient = mock(PlatformPermissionClient.class);
+        when(permissionClient.authorize(anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
+            .thenReturn(new PermissionResult(true, "READ", "allowed"));
+        PlatformPermissionFilter filter = new PlatformPermissionFilter(permissionClient);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/analysis/42/query");
+        request.addHeader("X-DTS-User", "analyst");
+        request.addHeader("X-DTS-Roles", "ROLE_ANALYST");
+        request.addHeader("X-DTS-Dept-Code", "D1");
+
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> {});
+
+        verify(permissionClient).authorize("analyst", "ROLE_ANALYST", "D1", "CARD", "42", "READ");
     }
 
     private void assertAction(String method, String path, String expectedAction) throws Exception {
@@ -55,8 +74,8 @@ class PlatformPermissionFilterTest {
             "dept-owner",
             "ROLE_DEPT_DATA_OWNER",
             "D1",
-            path.startsWith("/api/card/") ? "CARD" : "DASHBOARD",
-            path.startsWith("/api/card/") ? "42" : "7",
+            path.startsWith("/api/card/") || path.startsWith("/api/analysis/") ? "CARD" : "DASHBOARD",
+            path.startsWith("/api/card/") || path.startsWith("/api/analysis/") ? "42" : "7",
             expectedAction
         );
     }

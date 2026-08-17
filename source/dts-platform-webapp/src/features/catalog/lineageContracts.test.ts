@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { edgeEndpoint, isColumnNodeId, nodeTone, normalizeColumnNodeId, relationStroke } from "./lineageContracts";
+import {
+	edgeEndpoint,
+	isColumnNodeId,
+	lineageEvidenceDescription,
+	nodeTone,
+	normalizeColumnNodeId,
+	relationStroke,
+} from "./lineageContracts";
 
 describe("lineageContracts", () => {
 	it("edgeEndpoint resolves from/to ids with legacy fallbacks", () => {
@@ -35,5 +42,23 @@ describe("lineageContracts", () => {
 		expect(relationStroke("AIRFLOW")).toBe("#08979c");
 		expect(relationStroke("MANUAL")).toBe("#8c8c8c");
 		expect(relationStroke("unknown")).toBe("#bfbfbf");
+	});
+
+	it("lineageEvidenceDescription explains missing evidence without inventing lineage", () => {
+		expect(
+			lineageEvidenceDescription({
+				state: "MISSING",
+				reasonCodes: [
+					"TABLE_LINEAGE_EVIDENCE_MISSING",
+					"UPSTREAM_SOURCE_OR_ODS_EVIDENCE_MISSING",
+					"COLUMN_LINEAGE_EVIDENCE_MISSING",
+				],
+				tableLineageCount: 0,
+				columnLineageCount: 0,
+				odsNodeCount: 0,
+				sourceNodeCount: 0,
+				columnEvidenceRequested: true,
+			}),
+		).toBe("缺少表级血缘；未发现上游源系统或 ODS 证据；缺少字段级血缘");
 	});
 });

@@ -1,7 +1,7 @@
 # F5：资产治理界面收敛
 
 **优先级**：P1
-**状态**：BLOCKED（依赖 F1～F4、真实登录和 Chrome 95）
+**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / FINAL_BROWSER_IT_PENDING
 
 ## 目标
 
@@ -28,12 +28,12 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 统一概览目录详情与模型工作台状态和深链 | P1 | BLOCKED | F1～F4、F0/T01 浏览器基线 |
+| T01 | 统一概览目录详情与模型工作台状态和深链 | P1 | IMPLEMENTATION_COMPLETE | IT-09/Chrome 95 待执行 |
 
 ## Definition of Ready
 
 - [x] 页面、路由、控件和四态已命名。
-- [ ] DTO 和状态 owner 已由 F1～F4 固定。
+- [x] DTO 和状态 owner 已由 F1～F4 固定。
 - [ ] 真实登录与 Chrome 95 基线通过。
 
 ## 完成标准

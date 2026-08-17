@@ -1,9 +1,16 @@
 package com.yuzhi.dts.platform.service.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.catalog.JdbcCatalogAssetSemanticStore;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetNormalizationMigrationService.Resolution;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.ProducerKind;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetSemanticsContract.RelationType;
@@ -27,6 +34,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.server.ResponseStatusException;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -48,6 +56,7 @@ class CatalogAssetNormalizationMigrationServiceIT {
     private JdbcTemplate jdbc;
     private TransactionTemplate transaction;
     private CatalogAssetNormalizationMigrationService service;
+    private AuditService auditService;
     private UUID sourceDatasetId;
     private UUID dimensionDatasetId;
     private UUID sourceId;
@@ -70,17 +79,18 @@ class CatalogAssetNormalizationMigrationServiceIT {
                 create table catalog_dataset(
                     id uuid primary key, name varchar(128) not null, domain_id uuid,
                     type varchar(32), source_id uuid, hive_database varchar(128), hive_table varchar(128),
-                    warehouse_layer varchar(16), enabled boolean not null default true
+                    warehouse_layer varchar(16), classification varchar(32), owner varchar(64),
+                    owner_dept varchar(64), lifecycle_status varchar(32), enabled boolean not null default true
                 )
                 """
             );
             statement.execute(
-                "insert into catalog_dataset values ('" + sourceDatasetId +
+                "insert into catalog_dataset(id,name,domain_id,type,source_id,hive_database,hive_table,warehouse_layer,enabled) values ('" + sourceDatasetId +
                 "', '源系统客户', '" + domainId + "', 'jdbc', '" + sourceId +
                 "', 'crm', 'customer', 'SOURCE', true)"
             );
             statement.execute(
-                "insert into catalog_dataset values ('" + dimensionDatasetId +
+                "insert into catalog_dataset(id,name,domain_id,type,source_id,hive_database,hive_table,warehouse_layer,enabled) values ('" + dimensionDatasetId +
                 "', '客户维度', '" + domainId + "', 'jdbc', null, 'dwd', 'dim_customer', 'DIM', true)"
             );
         }
@@ -89,7 +99,12 @@ class CatalogAssetNormalizationMigrationServiceIT {
         jdbc = new JdbcTemplate(dataSource);
         transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
         var store = new JdbcCatalogAssetSemanticStore(jdbc, new ObjectMapper());
-        service = new CatalogAssetNormalizationMigrationService(jdbc, new CatalogAssetRegistrationService(store));
+        auditService = mock(AuditService.class);
+        service = new CatalogAssetNormalizationMigrationService(
+            jdbc,
+            new CatalogAssetRegistrationService(store),
+            auditService
+        );
     }
 
     @AfterEach
@@ -104,6 +119,8 @@ class CatalogAssetNormalizationMigrationServiceIT {
     @Test
     void previewApplyAndRollbackKeepLegacyValuesAndRequireExplicitDimensionEvidence() {
         var preview = service.preview(100);
+
+        assertThat(service.preview(100).previewHash()).isEqualTo(preview.previewHash());
 
         assertThat(preview.rows()).hasSize(2);
         assertThat(preview.rows()).filteredOn(row -> row.resourceId().equals(sourceDatasetId)).singleElement().satisfies(row -> {
@@ -152,6 +169,98 @@ class CatalogAssetNormalizationMigrationServiceIT {
             "select count(*) from catalog_asset_normalization_issue where status = 'PENDING'",
             Long.class
         )).isEqualTo(2);
+        verify(auditService).auditActionStrict(
+            eq("CATALOG_ASSET_SEMANTIC_BACKFILL_APPLY"),
+            eq(AuditStage.SUCCESS),
+            eq(applied.batchId().toString()),
+            argThat(payload -> payload instanceof java.util.Map<?, ?> map && "it-correlation".equals(map.get("correlationId")))
+        );
+        verify(auditService).auditActionStrict(
+            eq("CATALOG_ASSET_SEMANTIC_BACKFILL_ROLLBACK"),
+            eq(AuditStage.SUCCESS),
+            eq(applied.batchId().toString()),
+            argThat(payload -> payload instanceof java.util.Map<?, ?> map && Integer.valueOf(2).equals(map.get("removed")))
+        );
+    }
+
+    @Test
+    void previewsEveryMissingProjectionButRequiresExplicitProducerForCanonicalLayers() {
+        UUID odsDatasetId = UUID.randomUUID();
+        jdbc.update(
+            """
+            insert into catalog_dataset(
+                id, name, domain_id, type, source_id, hive_database, hive_table,
+                warehouse_layer, classification, owner, lifecycle_status, enabled
+            ) values (?, '订单接入表', null, 'POSTGRESQL', ?, 'public', 'ods_orders',
+                      'ODS', null, null, 'PENDING_GOVERNANCE', true)
+            """,
+            odsDatasetId,
+            sourceId
+        );
+
+        var preview = service.preview(100);
+
+        assertThat(preview.totalPending()).isEqualTo(3);
+        assertThat(preview.rows()).filteredOn(row -> row.resourceId().equals(odsDatasetId)).singleElement().satisfies(row -> {
+            assertThat(row.automatic()).isFalse();
+            assertThat(row.issueCode()).isEqualTo("PRODUCER_RESOLUTION_REQUIRED");
+            assertThat(row.resolutionStatus()).isEqualTo("MANUAL_RESOLUTION_REQUIRED");
+            assertThat(row.currentGovernance()).isEqualTo("UNASSIGNED");
+            assertThat(row.currentLifecycle()).isEqualTo("PENDING_GOVERNANCE");
+        });
+
+        Resolution odsResolution = new Resolution(
+            odsDatasetId,
+            false,
+            ProducerKind.INGESTION_JOB,
+            "ingestion-job-orders",
+            "run-7",
+            RelationType.TABLE
+        );
+        var applied = transaction.execute(status ->
+            service.apply(preview.previewHash(), 100, List.of(odsResolution), "it-canonical-layer")
+        );
+
+        assertThat(applied.applied()).isEqualTo(2);
+        assertThat(applied.skipped()).isEqualTo(1);
+        assertThat(applied.issueCount()).isEqualTo(1);
+        assertThat(jdbc.queryForMap(
+            "select canonical_layer, producer_kind from catalog_asset_semantic_projection p join catalog_asset_producer_ref r using(asset_type, asset_key) where p.resource_id = ? and r.valid_to is null",
+            odsDatasetId
+        ))
+            .containsEntry("canonical_layer", "ODS")
+            .containsEntry("producer_kind", "INGESTION_JOB");
+    }
+
+    @Test
+    void rejectsOversizedBatchAndFailsClosedWhenPreviewDriftsOrApplyIsReplayed() {
+        assertThatThrownBy(() -> service.preview(501))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("CATALOG_ASSET_NORMALIZATION_LIMIT_INVALID");
+
+        var preview = service.preview(100);
+        jdbc.update(
+            """
+            insert into catalog_dataset(
+                id, name, type, source_id, hive_database, hive_table, warehouse_layer, enabled
+            ) values (?, '新增源表', 'POSTGRESQL', ?, 'public', 'new_source', 'SOURCE', true)
+            """,
+            UUID.randomUUID(),
+            sourceId
+        );
+        assertThatThrownBy(() -> service.apply(preview.previewHash(), 100, List.of(), "it-drift"))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("CATALOG_ASSET_NORMALIZATION_PREVIEW_STALE");
+
+        var current = service.preview(100);
+        var applied = transaction.execute(status -> service.apply(current.previewHash(), 100, List.of(), "it-replay"));
+        long projectionCount = jdbc.queryForObject("select count(*) from catalog_asset_semantic_projection", Long.class);
+        assertThatThrownBy(() -> service.apply(current.previewHash(), 100, List.of(), "it-replay"))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("CATALOG_ASSET_NORMALIZATION_PREVIEW_STALE");
+        assertThat(jdbc.queryForObject("select count(*) from catalog_asset_semantic_projection", Long.class))
+            .isEqualTo(projectionCount);
+        assertThat(applied.applied()).isPositive();
     }
 
     private void applyMigration() throws Exception {

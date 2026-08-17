@@ -45,7 +45,7 @@ const DashboardDetailPage = lazy(() => import("@/analytics/pages/DashboardDetail
 const DashboardEditorPage = lazy(() => import("@/analytics/pages/DashboardEditorPage"));
 const CardsPage = lazy(() => import("@/analytics/pages/CardsPage"));
 const CardDetailPage = lazy(() => import("@/analytics/pages/CardDetailPage"));
-const CardEditorRoutePage = lazy(() => import("@/analytics/pages/CardEditorRoutePage"));
+const AnalysisEditorPage = lazy(() => import("@/analytics/pages/AnalysisEditorPage"));
 const DataPage = lazy(() => import("@/analytics/pages/DataPage"));
 const DatabaseDetailPage = lazy(() => import("@/analytics/pages/DatabaseDetailPage"));
 const TableDetailPage = lazy(() => import("@/analytics/pages/TableDetailPage"));
@@ -722,7 +722,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "bi/questions/new",
 		element: (
 			<S>
-				<SemanticCardEditorPage />
+				<AnalysisEditorPage />
 			</S>
 		),
 	},
@@ -738,7 +738,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		path: "bi/questions/:id/edit",
 		element: (
 			<S>
-				<CardEditorRoutePage />
+				<AnalysisEditorPage />
 			</S>
 		),
 	},

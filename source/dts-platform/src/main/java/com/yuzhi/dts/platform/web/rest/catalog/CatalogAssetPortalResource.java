@@ -89,6 +89,9 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "size", required = false, defaultValue = "20") int size,
         @RequestParam(value = "unclassified", required = false) Boolean unclassified,
         @RequestParam(value = "stale", required = false) Boolean stale,
+        @RequestParam(value = "eligibility", required = false) String eligibility,
+        @RequestParam(value = "servingStatus", required = false) String servingStatus,
+        @RequestParam(value = "qualityStatus", required = false) String qualityStatus,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String effDept = resolveActiveDepartment(activeDept);
@@ -111,7 +114,10 @@ public class CatalogAssetPortalResource {
                 page,
                 size,
                 unclassified,
-                stale
+                stale,
+                eligibility,
+                servingStatus,
+                qualityStatus
             ),
             effDept
         );

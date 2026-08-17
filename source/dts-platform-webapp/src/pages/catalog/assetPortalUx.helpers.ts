@@ -60,7 +60,7 @@ export function resolveAssetReadiness(asset: AssetReadinessInput): AssetReadines
 		};
 	}
 
-	if (matchStatus && matchStatus !== "MATCHED") {
+	if (matchStatus && matchStatus !== "MATCHED" && matchStatus !== "DTS_NATIVE") {
 		return {
 			state: "WARNING",
 			label: "待确认",

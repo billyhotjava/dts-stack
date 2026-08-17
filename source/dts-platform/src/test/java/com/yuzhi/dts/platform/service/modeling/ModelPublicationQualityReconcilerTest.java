@@ -17,8 +17,11 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Can
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceState;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.GovernanceQualitySummaryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.QualityEvidencePort.QualityEvidence;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +62,9 @@ class ModelPublicationQualityReconcilerTest {
     @Mock
     private ModelReleaseCandidateService commands;
 
+    @Mock
+    private CandidateGovernanceQualityEvidenceService governanceQuality;
+
     private ModelPublicationQualityReconciler reconciler;
 
     @BeforeEach
@@ -66,7 +72,8 @@ class ModelPublicationQualityReconcilerTest {
         reconciler = new ModelPublicationQualityReconciler(
             evidence,
             candidates,
-            commands
+            commands,
+            governanceQuality
         );
     }
 
@@ -82,11 +89,13 @@ class ModelPublicationQualityReconcilerTest {
         );
         when(candidates.find(TENANT, CANDIDATE_ID))
             .thenReturn(Optional.of(running));
+        when(governanceQuality.evaluateLive(running)).thenReturn(passingGovernance());
         when(
-            commands.transition(
+            commands.transitionWithQualityEvidence(
                 eq(TENANT),
                 eq("service:dts-platform-quality"),
                 eq(CANDIDATE_ID),
+                any(),
                 any()
             )
         )
@@ -107,11 +116,12 @@ class ModelPublicationQualityReconcilerTest {
             .isEqualTo(QualityReconcileOutcome.PASSED);
         ArgumentCaptor<TransitionCommand> command =
             ArgumentCaptor.forClass(TransitionCommand.class);
-        verify(commands).transition(
+        verify(commands).transitionWithQualityEvidence(
             eq(TENANT),
             eq("service:dts-platform-quality"),
             eq(CANDIDATE_ID),
-            command.capture()
+            command.capture(),
+            any()
         );
         assertThat(command.getValue().targetStatus())
             .isEqualTo(DeliveryStatus.QUALITY_PASSED);
@@ -180,6 +190,30 @@ class ModelPublicationQualityReconcilerTest {
 
         assertThat(result.outcome())
             .isEqualTo(QualityReconcileOutcome.FAILED);
+    }
+
+    @Test
+    void keepsCandidateRunningWhenBlockingGovernanceEvidenceIsMissing() {
+        CandidateView running = candidate(DeliveryStatus.QUALITY_RUNNING, 8);
+        when(candidates.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(running));
+        when(governanceQuality.evaluateLive(running))
+            .thenReturn(
+                new GovernanceQualitySummaryView(
+                    true,
+                    EvidenceState.FAILED,
+                    "MODEL_SPEC_GOVERNANCE_QUALITY_MISSING",
+                    "missing governance evidence",
+                    300,
+                    List.of()
+                )
+            );
+
+        var result = reconciler.reconcile(work("COMPLETED", null, 1, 1, 1));
+
+        assertThat(result.outcome()).isEqualTo(QualityReconcileOutcome.BLOCKED);
+        assertThat(result.blockerCode()).isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_MISSING");
+        verify(commands, never()).transitionWithQualityEvidence(any(), any(), any(), any(), any());
+        verify(commands, never()).transition(any(), any(), any(), any());
     }
 
     private static QualityWorkItem work(
@@ -251,6 +285,29 @@ class ModelPublicationQualityReconcilerTest {
             "postgres",
             "profile",
             "prod"
+        );
+    }
+
+    private static GovernanceQualitySummaryView passingGovernance() {
+        return new GovernanceQualitySummaryView(
+            true,
+            EvidenceState.PASSED,
+            null,
+            null,
+            300,
+            List.of(
+                new QualityEvidence(
+                    "40000000-0000-0000-0000-000000000001",
+                    UUID.fromString("40000000-0000-0000-0000-000000000002"),
+                    UUID.fromString("40000000-0000-0000-0000-000000000003"),
+                    UUID.fromString("40000000-0000-0000-0000-000000000004"),
+                    UUID.fromString("40000000-0000-0000-0000-000000000005"),
+                    "SUCCEEDED",
+                    Instant.parse("2026-07-28T00:00:30Z"),
+                    "c".repeat(64),
+                    List.of()
+                )
+            )
         );
     }
 }

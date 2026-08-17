@@ -394,10 +394,32 @@ class CatalogAssetPortalStatsTest {
         assertThat(keys).hasSize(3).doesNotHaveDuplicates();
     }
 
+    @Test
+    void unreadableLegacyPrefixIsCompactedBeforePagination() {
+        givenOpenMetadataAssets(0);
+        givenLegacyAssets(25);
+        givenLegacyPrefixUnreadable(20);
+
+        CatalogAssetPortalService.AssetPage first = service.listAssets(queryOf(0, 10), ACTIVE_DEPT);
+
+        assertThat(first.total()).isEqualTo(5);
+        assertThat(first.content())
+            .as("不可见的原始行不能占用目录分页槽位")
+            .hasSize(5)
+            .allSatisfy(row -> assertThat(row.metadataSource()).isEqualTo("dts-catalog"));
+    }
+
     /** 让首个 legacy 资产在可见性校验中被拒。 */
     private void givenFirstLegacyAssetUnreadable() {
         CatalogDataset hidden = legacyAssets.get(0);
         lenient().when(accessChecker.canRead(hidden)).thenReturn(false);
+    }
+
+    private void givenLegacyPrefixUnreadable(int count) {
+        legacyAssets
+            .stream()
+            .limit(count)
+            .forEach(dataset -> lenient().when(accessChecker.canRead(dataset)).thenReturn(false));
     }
 
     @Test

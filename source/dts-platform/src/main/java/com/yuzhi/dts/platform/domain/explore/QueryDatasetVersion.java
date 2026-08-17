@@ -47,6 +47,21 @@ public class QueryDatasetVersion extends AbstractAuditingEntity<UUID> implements
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    @Column(name = "semantic_contract_schema", length = 64)
+    private String semanticContractSchema;
+
+    @Column(name = "semantic_contract_version", length = 64)
+    private String semanticContractVersion;
+
+    @Column(name = "semantic_contract_json", columnDefinition = "jsonb")
+    private String semanticContractJson;
+
+    @Column(name = "semantic_contract_checksum", length = 64)
+    private String semanticContractChecksum;
+
+    @Column(name = "contract_snapshot_status", length = 32, nullable = false)
+    private String contractSnapshotStatus = "UNRESOLVED";
+
     @Override
     public UUID getId() {
         return id;
@@ -118,5 +133,45 @@ public class QueryDatasetVersion extends AbstractAuditingEntity<UUID> implements
 
     public void setPublishedAt(Instant publishedAt) {
         this.publishedAt = publishedAt;
+    }
+
+    public String getSemanticContractSchema() {
+        return semanticContractSchema;
+    }
+
+    public void setSemanticContractSchema(String semanticContractSchema) {
+        this.semanticContractSchema = semanticContractSchema;
+    }
+
+    public String getSemanticContractVersion() {
+        return semanticContractVersion;
+    }
+
+    public void setSemanticContractVersion(String semanticContractVersion) {
+        this.semanticContractVersion = semanticContractVersion;
+    }
+
+    public String getSemanticContractJson() {
+        return semanticContractJson;
+    }
+
+    public void setSemanticContractJson(String semanticContractJson) {
+        this.semanticContractJson = semanticContractJson;
+    }
+
+    public String getSemanticContractChecksum() {
+        return semanticContractChecksum;
+    }
+
+    public void setSemanticContractChecksum(String semanticContractChecksum) {
+        this.semanticContractChecksum = semanticContractChecksum;
+    }
+
+    public String getContractSnapshotStatus() {
+        return contractSnapshotStatus;
+    }
+
+    public void setContractSnapshotStatus(String contractSnapshotStatus) {
+        this.contractSnapshotStatus = contractSnapshotStatus;
     }
 }

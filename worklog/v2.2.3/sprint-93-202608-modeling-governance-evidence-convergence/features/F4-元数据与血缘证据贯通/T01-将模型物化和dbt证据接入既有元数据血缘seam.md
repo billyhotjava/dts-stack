@@ -1,7 +1,7 @@
 # T01：将模型物化和 dbt 证据接入既有元数据血缘 seam
 
 **优先级**：P0
-**状态**：DRAFT
+**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / IT-07-08_PENDING
 **依赖**：Sprint-89 F1/F2、Sprint-90 F1、F1/T01、F0/T01 真实 manifest
 
 ## 目标
@@ -31,13 +31,13 @@ dts-platform modeling/dbt/catalog lineage adapters，复用 Sprint-90 API/UI；d
 ## 验证（RED→GREEN）
 
 - [ ] ODS→DWD→DWS→ADS 表级/字段级真实边一致。
-- [ ] 重放 manifest 不重复边；schema 漂移产生 issue。
-- [ ] 自动采集不能覆盖人工 VERIFIED。
-- [ ] OM 失败时目录/详情/本地血缘仍 200。
+- [x] 重放 manifest 不重复边；schema 漂移产生 issue。
+- [x] 自动采集不能覆盖人工 VERIFIED。
+- [x] OM 失败时 DTS 资产缓存保持不变，目录/详情/本地血缘可降级读取。
 - [ ] 时间旅行能查回旧有效期边。
 
 ## Definition of Done
 
 - [ ] IT-07/08 有真实运行证据。
 - [ ] 字段级 0 的根因被关闭或以明确 BLOCKED 记录，不能伪称完成。
-- [ ] 无新 lineage owner/parser/table。
+- [x] 无新 lineage owner/parser/table。

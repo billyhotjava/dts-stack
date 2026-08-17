@@ -1,0 +1,2 @@
+# Vendored OpenMetadata/Airflow runtime copy; DTS product sources live under source/.
+services/dts-airflow/extra/

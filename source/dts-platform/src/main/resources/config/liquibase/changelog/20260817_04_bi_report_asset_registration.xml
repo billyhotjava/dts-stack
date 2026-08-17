@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260817_04_bi_report_asset_registration" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="bi_report_link"/>
+        </preConditions>
+        <addColumn tableName="bi_report_link">
+            <column name="asset_type" type="varchar(32)"/>
+            <column name="asset_key" type="varchar(128)"/>
+            <column name="asset_version" type="bigint"/>
+            <column name="reconcile_status" type="varchar(32)" defaultValue="SYNCED">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>
+            UPDATE bi_report_link SET reconcile_status = 'SYNCED' WHERE reconcile_status IS NULL;
+            CREATE UNIQUE INDEX uk_bi_report_link_asset_identity
+                ON bi_report_link(engine, asset_type, asset_key)
+             WHERE asset_type IS NOT NULL AND asset_key IS NOT NULL;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS uk_bi_report_link_asset_identity;</sql>
+            <dropColumn tableName="bi_report_link" columnName="reconcile_status"/>
+            <dropColumn tableName="bi_report_link" columnName="asset_version"/>
+            <dropColumn tableName="bi_report_link" columnName="asset_key"/>
+            <dropColumn tableName="bi_report_link" columnName="asset_type"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

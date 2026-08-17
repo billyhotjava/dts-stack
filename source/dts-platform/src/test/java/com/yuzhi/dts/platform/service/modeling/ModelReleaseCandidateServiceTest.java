@@ -27,11 +27,14 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Cre
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CurrentModelReference;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.DriftReasonView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceState;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.GovernanceQualitySummaryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ReplaceScopeCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.ScopeEntryCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.VersionConflictView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.QualityEvidencePort.QualityEvidence;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -506,6 +509,85 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
+    void qualityPassPinsEvidenceInTheAppendOnlySnapshotAndStillReplaysAsCommandResult() throws Exception {
+        CandidateView running = candidate(
+            DeliveryStatus.QUALITY_RUNNING,
+            8,
+            createdAudit(),
+            List.of(entry(DeliveryStatus.QUALITY_RUNNING, 1, CHECKSUM))
+        );
+        GovernanceQualitySummaryView governance = new GovernanceQualitySummaryView(
+            true,
+            EvidenceState.PASSED,
+            null,
+            null,
+            300,
+            List.of(
+                new QualityEvidence(
+                    "40000000-0000-0000-0000-000000000001",
+                    UUID.fromString("40000000-0000-0000-0000-000000000002"),
+                    UUID.fromString("40000000-0000-0000-0000-000000000003"),
+                    UUID.fromString("40000000-0000-0000-0000-000000000004"),
+                    UUID.fromString("40000000-0000-0000-0000-000000000005"),
+                    "SUCCEEDED",
+                    NOW.minusSeconds(10),
+                    "e".repeat(64),
+                    List.of()
+                )
+            )
+        );
+        CandidateQualityEvidenceSnapshot snapshot = CandidateQualityEvidenceSnapshot.capture(
+            running,
+            UUID.fromString("40000000-0000-0000-0000-000000000006"),
+            1,
+            1,
+            1,
+            governance
+        );
+        TransitionCommand command = new TransitionCommand(
+            8,
+            DeliveryStatus.QUALITY_PASSED,
+            "quality-pin-key",
+            "engineering and governance quality passed"
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "quality-pin-key")).thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(running));
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID)))
+            .thenReturn(Map.of(MODEL_ID, currentReference(1, CHECKSUM)));
+        when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
+
+        CommandResult first = service.transitionWithQualityEvidence(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            command,
+            snapshot
+        );
+
+        ArgumentCaptor<CommandEventView> event = ArgumentCaptor.forClass(CommandEventView.class);
+        verify(repository).transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), event.capture());
+        var json = new ObjectMapper().findAndRegisterModules().readTree(event.getValue().responseSnapshot());
+        assertThat(json.path("engineeringEvidence").path("pipelineRunGroupId").asText())
+            .isEqualTo("40000000-0000-0000-0000-000000000006");
+        assertThat(json.path("governanceQualityEvidence")).hasSize(1);
+        assertThat(json.path("combinedEvidenceChecksum").asText()).hasSize(64);
+
+        when(repository.findCommandByIdempotencyKey(TENANT, "quality-pin-key"))
+            .thenReturn(Optional.of(event.getValue()));
+        CommandResult replay = service.transitionWithQualityEvidence(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            command,
+            snapshot
+        );
+
+        assertThat(first.candidate().status()).isEqualTo(DeliveryStatus.QUALITY_PASSED);
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.candidate()).isEqualTo(first.candidate());
+    }
+
+    @Test
     void retrySnapshotDriftUsesTheOriginalCommandReceiptToTransitionStale() {
         EntryView locked = entry(DeliveryStatus.BUILD_FAILED, 1, CHECKSUM);
         CandidateView current = candidate(
@@ -837,7 +919,7 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
-    void builtCandidateCannotBeCancelled() {
+    void builtCandidateCanBeCancelledBeforeQualityStarts() {
         CandidateView built = candidate(
             DeliveryStatus.BUILT,
             4,
@@ -847,21 +929,26 @@ class ModelReleaseCandidateServiceTest {
         when(repository.findCommandByIdempotencyKey(TENANT, "late-cancel-key")).thenReturn(Optional.empty());
         when(repository.findByIdempotencyKey(TENANT, "late-cancel-key")).thenReturn(Optional.empty());
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
+        when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
 
-        assertThatThrownBy(() ->
-            service.transition(
-                TENANT,
-                ACTOR,
-                CANDIDATE_ID,
-                new TransitionCommand(4, DeliveryStatus.CANCELLED, "late-cancel-key", "too late")
-            )
-        )
-            .isInstanceOf(ModelReleaseCandidateException.class)
-            .satisfies(error ->
-                assertThat(((ModelReleaseCandidateException) error).code())
-                    .isEqualTo(ModelReleaseCandidateContract.INVALID_TRANSITION_ERROR_CODE)
-            );
-        verify(repository, never()).transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any());
+        CommandResult result = service.transition(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            new TransitionCommand(4, DeliveryStatus.CANCELLED, "late-cancel-key", "cancel before quality")
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.CANCELLED);
+        assertThat(result.candidate().version()).isEqualTo(5);
+        verify(repository).transitionAndAppend(
+            eq(built),
+            eq(4),
+            eq(DeliveryStatus.CANCELLED),
+            any(),
+            eq(ACTOR),
+            eq(NOW),
+            any()
+        );
     }
 
     @Test

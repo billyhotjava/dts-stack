@@ -273,3 +273,61 @@ export const publishQueryDataset = (datasetId: string, payload?: PublishQueryDat
 
 export const archiveQueryDataset = (datasetId: string) =>
 	api.post<QueryDatasetAsset>({ url: `/sql/query-datasets/${datasetId}/archive`, data: {} });
+
+export type AnalysisDatasetSummary = {
+	datasetId: string;
+	version: number;
+	name: string;
+	description?: string | null;
+	ownerDept?: string | null;
+	sourceDatasourceId?: string | null;
+	sourceDatasourceName?: string | null;
+	warehouseLayer: string;
+	classification?: string | null;
+	refreshStrategy: string;
+	semanticContractVersion: string;
+	semanticModelNames: string[];
+	contractChecksum: string;
+	updatedAt?: string | null;
+};
+
+export type AnalysisDatasetPage = {
+	items: AnalysisDatasetSummary[];
+	page: number;
+	size: number;
+	totalElements: number;
+	totalPages: number;
+};
+
+export type AnalysisDatasetContractField = {
+	code: string;
+	label?: string | null;
+	dataType?: string | null;
+	timeGrains?: string[];
+	classification?: string | null;
+	filterOps?: string[];
+};
+
+export type AnalysisDatasetDetail = {
+	dataset: AnalysisDatasetSummary;
+	dimensions: AnalysisDatasetContractField[];
+	metrics: Array<Record<string, unknown>>;
+	joins: Array<Record<string, unknown>>;
+	policyRefs: string[];
+};
+
+export type PublishedQueryDatasetParams = {
+	page?: number;
+	size?: number;
+	keyword?: string;
+	bizDomain?: string;
+	ownerDept?: string;
+	warehouseLayer?: string;
+	classification?: string;
+};
+
+export const listPublishedQueryDatasets = (params: PublishedQueryDatasetParams) =>
+	api.get<AnalysisDatasetPage>({ url: "/sql/query-datasets/published", params });
+
+export const getPublishedQueryDataset = (datasetId: string, version: number) =>
+	api.get<AnalysisDatasetDetail>({ url: `/sql/query-datasets/${datasetId}/published/${version}` });

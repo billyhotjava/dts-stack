@@ -2,6 +2,7 @@ package com.yuzhi.dts.analytics.repository;
 
 import com.yuzhi.dts.analytics.domain.AnalyticsCard;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AnalyticsCardRepository extends JpaRepository<AnalyticsCard, Long> {
@@ -14,4 +15,8 @@ public interface AnalyticsCardRepository extends JpaRepository<AnalyticsCard, Lo
     List<AnalyticsCard> findAllByArchivedFalseAndCollectionIdIsNullOrderByIdAsc();
 
     List<AnalyticsCard> findAllByArchivedFalseAndCardTypeOrderByIdAsc(String cardType);
+
+    List<AnalyticsCard> findAllByCardTypeAndArchivedFalseOrderByUpdatedAtDesc(String cardType);
+
+    Optional<AnalyticsCard> findByCreatorIdAndIdempotencyKey(Long creatorId, String idempotencyKey);
 }

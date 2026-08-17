@@ -37,12 +37,58 @@ export type DashboardListItem = {
 	updated_at?: string;
 	favorite?: boolean;
 	public_uuid?: string | null;
+	lifecycle_status?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+	published_revision_id?: number | null;
+	registration_status?: "NOT_REGISTERED" | "PENDING_REGISTRATION" | "AVAILABLE" | "REGISTRATION_FAILED" | "DISABLED";
+	version_no?: number;
 };
 
 export type DashboardDetail = DashboardListItem & {
 	dashcards?: unknown[];
 	parameters?: unknown[];
 	ordered_cards?: DashboardCard[];
+};
+
+export type DashboardPublicationAudience = {
+	deptCodes: string[];
+	roleCodes: string[];
+	classification: "DATA_PUBLIC" | "DATA_INTERNAL" | "DATA_CONFIDENTIAL" | "DATA_SENSITIVE" | "DATA_SECRET";
+	expiresAt?: string | null;
+};
+
+export type DashboardPublicationIssue = {
+	code: string;
+	path: string;
+	message: string;
+};
+
+export type DashboardPublicationValidation = {
+	valid: boolean;
+	blockers: DashboardPublicationIssue[];
+	warnings: DashboardPublicationIssue[];
+	dependencySnapshot: Record<string, unknown>;
+};
+
+export type DashboardPublicationResult = {
+	dashboardId: number;
+	revisionId: number;
+	versionNo: number;
+	lifecycleStatus: "PUBLISHED";
+	registrationStatus: "PENDING_REGISTRATION" | "AVAILABLE" | "REGISTRATION_FAILED";
+	contractChecksum: string;
+	dependencySnapshot: Record<string, unknown>;
+	publishedAt: string;
+};
+
+export type DashboardVersion = {
+	revisionId: number;
+	versionNo: number;
+	status: "DRAFT" | "PUBLISHED" | "SUPERSEDED";
+	contractChecksum?: string | null;
+	dependencySnapshot: Record<string, unknown>;
+	publishedBy?: number | null;
+	publishedAt?: string | null;
+	createdAt: string;
 };
 
 export type PublicCardDetail = CardDetail & {
@@ -72,7 +118,9 @@ export type CardListItem = {
 	archived?: boolean;
 	collection_id?: number | null;
 	display?: string;
-	type?: "question" | "model";
+	type?: "question" | "model" | "analysis";
+	lifecycle_status?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+	published_revision_id?: number | null;
 	created_at?: string;
 	updated_at?: string;
 	favorite?: boolean;
@@ -1905,6 +1953,28 @@ export const analyticsApi = {
 		fetchJson<DashboardDetail>(`/bi/api/dashboard/${encodeURIComponent(String(id))}`),
 	createDashboard: (body: unknown) => sendJson<DashboardDetail>("/bi/api/dashboard", body),
 	saveDashboard: (body: unknown) => sendJson<DashboardDetail>("/bi/api/dashboard/save", body),
+	validateDashboardPublication: (id: string | number, audience: DashboardPublicationAudience) =>
+		sendJson<DashboardPublicationValidation>(
+			`/bi/api/dashboard/${encodeURIComponent(String(id))}/validate`,
+			audience,
+		),
+	publishDashboard: (id: string | number, audience: DashboardPublicationAudience) =>
+		sendJson<DashboardPublicationResult>(
+			`/bi/api/dashboard/${encodeURIComponent(String(id))}/publish`,
+			audience,
+		),
+	listDashboardVersions: (id: string | number) =>
+		fetchJson<DashboardVersion[]>(`/bi/api/dashboard/${encodeURIComponent(String(id))}/versions`),
+	createDashboardDraftFromVersion: (id: string | number, revisionId: string | number) =>
+		sendJson<DashboardDetail>(
+			`/bi/api/dashboard/${encodeURIComponent(String(id))}/versions/${encodeURIComponent(String(revisionId))}/draft`,
+			{},
+		),
+	retryDashboardRegistration: (id: string | number) =>
+		sendJson<{ queued: boolean }>(
+			`/bi/api/dashboard/${encodeURIComponent(String(id))}/registration/retry`,
+			{},
+		),
 	listDashboardParamValues: (dashId: string | number, paramId: string) =>
 		fetchJson<string[]>(
 			`/bi/api/dashboard/${encodeURIComponent(String(dashId))}/params/${encodeURIComponent(String(paramId))}/values`,

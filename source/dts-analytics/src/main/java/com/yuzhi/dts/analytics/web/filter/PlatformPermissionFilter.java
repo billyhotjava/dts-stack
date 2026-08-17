@@ -33,6 +33,7 @@ public class PlatformPermissionFilter extends OncePerRequestFilter {
 
     /** URL patterns that map to asset references: group(1)=assetType, group(2)=assetId */
     private static final Pattern CARD_PATTERN = Pattern.compile("^/api/card/(\\d+)(?:/.*)?$");
+    private static final Pattern ANALYSIS_PATTERN = Pattern.compile("^/api/analysis/(\\d+)(?:/.*)?$");
     private static final Pattern DASHBOARD_PATTERN = Pattern.compile("^/api/dashboard/(\\d+)(?:/.*)?$");
     // SCREEN removed: screen permissions are handled by ScreenPermissionService in the controller layer
     private static final Pattern TABLE_PATTERN = Pattern.compile("^/api/table/(\\d+)(?:/.*)?$");
@@ -128,6 +129,9 @@ public class PlatformPermissionFilter extends OncePerRequestFilter {
         m = CARD_PATTERN.matcher(path);
         if (m.matches()) return new AssetRef("CARD", m.group(1));
 
+        m = ANALYSIS_PATTERN.matcher(path);
+        if (m.matches()) return new AssetRef("CARD", m.group(1));
+
         m = DASHBOARD_PATTERN.matcher(path);
         if (m.matches()) return new AssetRef("DASHBOARD", m.group(1));
 
@@ -143,6 +147,15 @@ public class PlatformPermissionFilter extends OncePerRequestFilter {
         }
         if (path.endsWith("/favorite")) {
             return "READ";
+        }
+        if (path.endsWith("/publish") || path.endsWith("/registration/retry")) {
+            return "MANAGE";
+        }
+        if (
+            "POST".equals(method) &&
+            (path.endsWith("/query/csv") || path.endsWith("/query/xlsx") || path.endsWith("/query/json"))
+        ) {
+            return "EXPORT";
         }
         if ("POST".equals(method)
                 && (path.contains("/query") || path.contains("/execute/") || path.endsWith("/copy"))) {

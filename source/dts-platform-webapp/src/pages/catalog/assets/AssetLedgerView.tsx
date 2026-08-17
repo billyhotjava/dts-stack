@@ -21,6 +21,26 @@ const DATA_SOURCE_TYPE_DICT: Record<string, string> = {
 	DAMENG: "达梦",
 };
 
+const ELIGIBILITY_META: Record<string, { label: string; color: string }> = {
+	ELIGIBLE: { label: "可消费", color: "green" },
+	CONDITIONAL: { label: "有条件", color: "gold" },
+	BLOCKED: { label: "不可消费", color: "red" },
+};
+
+const SERVING_STATUS_META: Record<string, { label: string; color: string }> = {
+	SYNCED: { label: "已同步", color: "green" },
+	SYNC_PENDING: { label: "同步中", color: "blue" },
+	SYNC_FAILED: { label: "同步失败", color: "red" },
+	NOT_READY: { label: "待就绪", color: "gold" },
+	NOT_APPLICABLE: { label: "不适用", color: "default" },
+};
+
+const QUALITY_STATUS_META: Record<string, { label: string; color: string }> = {
+	PASSED: { label: "已通过", color: "green" },
+	FAILED: { label: "未通过", color: "red" },
+	UNKNOWN: { label: "暂无证据", color: "default" },
+};
+
 export type AssetDirectoryRow = AssetRow & {
 	service?: string;
 	columnCount?: number;
@@ -179,10 +199,10 @@ export function AssetLedgerView({
 						</div>
 						<Space wrap>
 							<Select
-								aria-label="批量归域目标主题域"
+								aria-label="批量归域目标业务归属数据域"
 								showSearch
 								optionFilterProp="label"
-								placeholder="目标主题域"
+								placeholder="目标业务归属数据域"
 								value={batchDomainId || undefined}
 								onChange={setBatchDomainId}
 								options={domainOptions}
@@ -278,7 +298,7 @@ export function AssetLedgerView({
 						render: (value) => value || "-",
 					},
 					{
-						title: "主题域",
+						title: "业务归属数据域",
 						width: 150,
 						render: (_, row) => row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "待归域",
 					},
@@ -304,6 +324,42 @@ export function AssetLedgerView({
 							row.owner && row.ownerDept && row.owner !== row.ownerDept
 								? `${row.owner}（${row.ownerDept}）`
 								: row.owner || row.ownerDept || "待明确",
+					},
+					{
+						title: "消费资格",
+						dataIndex: "consumptionEligibility",
+						width: 120,
+						render: (value, row) => {
+							const meta = ELIGIBILITY_META[String(value || "CONDITIONAL")] || ELIGIBILITY_META.CONDITIONAL;
+							return (
+								<Tag color={meta.color} title={row.eligibilityReasons?.join("；") || undefined}>
+									{meta.label}
+								</Tag>
+							);
+						},
+					},
+					{
+						title: "服务状态",
+						width: 120,
+						render: (_, row) => {
+							const code = String(row.servingSync?.status || "NOT_APPLICABLE");
+							const meta = SERVING_STATUS_META[code] || { label: code, color: "default" };
+							return (
+								<Tag color={meta.color} title={row.servingSync?.lastError || undefined}>
+									{meta.label}
+								</Tag>
+							);
+						},
+					},
+					{
+						title: "质量状态",
+						dataIndex: "qualityStatus",
+						width: 120,
+						render: (value) => {
+							const code = String(value || "UNKNOWN");
+							const meta = QUALITY_STATUS_META[code] || { label: code, color: "default" };
+							return <Tag color={meta.color}>{meta.label}</Tag>;
+						},
 					},
 					{
 						title: "更新时间",
