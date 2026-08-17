@@ -1,7 +1,7 @@
 # F1：物理资产登记与语义投影收敛
 
 **优先级**：P0
-**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / FINAL_E2E_PENDING
+**状态**：COMPLETE / IT-01-03_PASS
 
 ## 目标
 
@@ -25,8 +25,8 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 接入生产资产观察并统一目录与统计事实 | P0 | IMPLEMENTATION_COMPLETE | 运行态 IT 待执行 |
-| T02 | 分批补齐存量语义投影并可回滚 | P0 | IMPLEMENTATION_COMPLETE | IT-03 待执行 |
+| T01 | 接入生产资产观察并统一目录与统计事实 | P0 | COMPLETE / IT-01-02-09_PASS | - |
+| T02 | 分批补齐存量语义投影并可回滚 | P0 | COMPLETE / IT-03_PASS | - |
 
 ## Definition of Ready
 
@@ -36,7 +36,7 @@
 
 ## 完成标准
 
-- [ ] 新物化关系自动得到单一目录身份和语义投影。
+- [x] 新物化关系自动得到单一目录身份和语义投影。
 - [ ] 500+ 数据量下概览与目录可按同一 asOf 对账。
-- [ ] 存量迁移可 preview/apply/rollback，歧义 fail-closed。
-- [ ] 用户已有业务治理结果不被自动回填覆盖。
+- [x] 存量迁移可 preview/apply/rollback，歧义 fail-closed。
+- [x] 用户已有业务治理结果不被自动回填覆盖。

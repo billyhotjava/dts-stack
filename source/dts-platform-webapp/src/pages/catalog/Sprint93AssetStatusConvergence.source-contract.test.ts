@@ -36,3 +36,11 @@ test("asset detail links model evidence back to the existing modeling workbench"
 	assert.match(MODEL_SYNC, /查看资产/);
 	assert.match(MODEL_SYNC, /\/catalog\/datasets\//);
 });
+
+test("asset quality tab renders the converged governance quality status", () => {
+	assert.match(DETAIL, /治理质量状态/);
+	assert.match(DETAIL, /qualityStatus === "PASSED"/);
+	assert.match(DETAIL, /qualityStatus === "FAILED"/);
+	assert.match(DETAIL, /qualityStatus === "RUNNING"/);
+	assert.doesNotMatch(DETAIL, /assetContract\?\.consumable === false \? "治理阻断" : "待质量校验"/);
+});

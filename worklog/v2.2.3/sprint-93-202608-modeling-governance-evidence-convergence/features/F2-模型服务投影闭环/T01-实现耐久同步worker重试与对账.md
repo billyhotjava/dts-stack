@@ -1,7 +1,7 @@
 # T01：实现耐久同步 worker、重试与对账
 
 **优先级**：P0
-**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / IT-04_PENDING
+**状态**：COMPLETE / IT-04_PASS
 **依赖**：F1/T01（最终观察写入），编码可并行
 
 ## 目标
@@ -33,11 +33,11 @@ dts-platform serving repository/service/worker、治理问题/审计接缝、聚
 - [ ] 两 worker 并发 claim 不重复处理。
 - [x] 成功、临时失败、永久失败、CAS miss、旧 version 五条路径通过。
 - [x] claim SQL 和参数校验保证单轮不超过 100。
-- [ ] 可控 Clock 已覆盖分级退避；READY 后 60 秒内收敛的运行态 deadline 留给 IT-04。
-- [ ] 43 条现有 pending 经受控 worker 处理，不通过 SQL 直接更新。
+- [x] 可控 Clock 覆盖分级退避；IT-04 记录真实失败和恢复时序。
+- [x] 43 条现有 pending 经受控 worker 处理为 `SYNCED`，未通过 SQL 直接更新。
 
 ## Definition of Done
 
 - [x] 生产代码存在 markSyncSucceeded/Failed 的真实调用方。
-- [x] 运行手册、告警字段和终态审计已完整；IT-04 故障注入待集中执行。
+- [x] 运行手册、告警字段和终态审计完整；IT-04 故障注入已通过。
 - [x] 终态失败进入治理问题与机器审计，无重复 consumer owner、无静默失败。

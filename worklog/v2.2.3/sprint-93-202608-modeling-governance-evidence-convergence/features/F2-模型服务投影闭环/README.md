@@ -1,7 +1,7 @@
 # F2：模型服务投影闭环
 
 **优先级**：P0
-**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / IT-04_PENDING
+**状态**：COMPLETE / IT-04_PASS
 
 ## 目标
 
@@ -24,7 +24,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 实现耐久同步 worker、重试与对账 | P0 | IMPLEMENTATION_COMPLETE | IT-04 故障注入待执行 |
+| T01 | 实现耐久同步 worker、重试与对账 | P0 | COMPLETE / IT-04_PASS | - |
 
 ## Definition of Ready
 
@@ -34,7 +34,7 @@
 
 ## 完成标准
 
-- [ ] pending 在预算内进入 synced/failed。
-- [ ] 旧版本事件不能覆盖新 servingRef。
-- [ ] 失败五次进入明确 dead-letter/问题态并可审计。
-- [ ] 现有 43 条通过 worker 重放后有真实结果。
+- [x] pending 在预算内进入 synced/failed。
+- [x] 旧版本事件不能覆盖新 servingRef。
+- [x] 失败五次进入明确 dead-letter/问题态并可审计。
+- [x] 现有 43 条通过 worker 重放后有真实结果。

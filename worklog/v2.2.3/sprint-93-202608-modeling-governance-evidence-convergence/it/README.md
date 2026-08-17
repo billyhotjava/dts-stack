@@ -1,22 +1,22 @@
 # Sprint-93 集成验收台账
 
-**当前结论**：PARTIAL。受控样本 `biz_ads_budget_kpi_v2` 的模型物化、单一资产、治理投影和 BI 消费主链已通过真实账号复验；其余 IT 仍按下表独立执行，不能以样本通过替代全量、故障和权限负向验收。
+**当前结论**：E2E_COMPLETE_WITH_EXTERNAL_GAPS。代码、部署、集中 E2E 和回滚演练已完成；IT-01～06、08～10、12 PASS，IT-07、11、13 因真实数据/账号/浏览器条件不足保持 PARTIAL。完整证据见 [`evidence/20260817-final-e2e.md`](evidence/20260817-final-e2e.md)。
 
 | IT | 验收切片 | 关键断言 | 状态 |
 |---|---|---|---|
 | IT-01 | 首次物化登记资产 | ModelSpec → candidate → dispatch → observation → 单一 AssetKey/datasetId/projection | PASS（受控样本） |
 | IT-02 | 发布推进同一资产 | 发布不创建第二 dataset；publication/serving 状态按证据推进 | PASS（受控样本） |
-| IT-03 | 存量补齐 | preview/apply/rollback；歧义 fail-closed；回滚不覆盖漂移版本 | PENDING |
-| IT-04 | 服务投影消费 | outbox → SYNCED；超时/失败重试；旧 version 不覆盖新 ref | PARTIAL（真实 BI 消费通过，故障注入待测） |
-| IT-05 | QualityEvidence Port | pass/fail/running/missing/expired/mismatch 全部结构化判定 | PASS（自动化状态矩阵 + 真实缺证据样本） |
+| IT-03 | 存量补齐 | preview/apply/rollback；歧义 fail-closed；回滚不覆盖漂移版本 | PASS（真实 apply/rollback/reapply） |
+| IT-04 | 服务投影消费 | outbox → SYNCED；超时/失败重试；旧 version 不覆盖新 ref | PASS（Analytics 故障注入与恢复） |
+| IT-05 | QualityEvidence Port | pass/fail/running/missing/expired/mismatch 全部结构化判定 | PASS（自动化状态矩阵 + 真实成功运行） |
 | IT-06 | 发布质量 UI | 工程质量与治理质量分栏；候选钉定 rule/version/binding/run/checksum | PASS（受控样本） |
-| IT-07 | 模型血缘 | ODS→DWD→DWS→ADS 表级和字段级边可查，来源/验证/有效期正确 | PARTIAL（DWD→DWS→ADS 表级 3 边通过；ODS/字段边缺失） |
-| IT-08 | OM 故障降级 | OM 不可用时资产仍可查，技术同步显示失败且可重试 | PENDING |
-| IT-09 | 治理页面一致性 | 概览、目录、详情数字/状态/业务归属数据域一致，深链可达 | PASS（当前可见范围 49 条，分页与详情复验通过） |
+| IT-07 | 模型血缘 | ODS→DWD→DWS→ADS 表级和字段级边可查，来源/验证/有效期正确 | PARTIAL（DWD→DWS→ADS 表级证据通过；真实 ODS/字段输入缺失） |
+| IT-08 | OM 故障降级 | OM 不可用时资产仍可查，技术同步显示失败且可重试 | PASS（真实停止/恢复 OpenMetadata） |
+| IT-09 | 治理页面一致性 | 概览、目录、详情数字/状态/业务归属数据域一致，深链可达 | PASS（当前可见范围 49 条，分页、详情和质量状态复验通过） |
 | IT-10 | 二次物化 | 模型数和资产数不增加；candidate/attempt/observation 增加；servingRef 推进 | PASS（受控样本） |
-| IT-11 | 权限与审计 | xiezm 所级管理员正向通过；部门越权失败；审计动作有分类 | PARTIAL（xiezm 创建/删除通过，负向与审计待测） |
-| IT-12 | 发布/回滚/可运维 | 镜像、迁移、feature flag、告警、runbook、回滚演练完整 | PARTIAL（健康与回滚镜像通过，演练待执行） |
-| IT-13 | Chrome 95 集中验收 | 真实登录；空/加载/错误/成功；console/network 无未解释异常 | PARTIAL（Chrome 95 目标构建和窄屏通过，真实 Chrome 95 待测） |
+| IT-11 | 权限与审计 | xiezm 所级管理员正向通过；部门越权失败；审计动作有分类 | PARTIAL（xiezm 正向与审计分类通过；无部门账号执行负向） |
+| IT-12 | 发布/回滚/可运维 | 镜像、迁移、feature flag、告警、runbook、回滚演练完整 | PASS（状态读开关关闭/恢复，历史证据不丢失） |
+| IT-13 | Chrome 95 集中验收 | 真实登录；空/加载/错误/成功；console/network 无未解释异常 | PARTIAL（legacy build、Chrome 150 双视口和三态通过；现场缺 Chrome 95） |
 
 ## 集中执行顺序
 
@@ -34,7 +34,7 @@
 - 详细过程与结果：[`evidence/20260817-post-deploy-real-chrome-smoke.md`](evidence/20260817-post-deploy-real-chrome-smoke.md)。
 - xiezm 的分析卡片、新建问题、分析看板创建与删除不再返回 403；创建 200、删除 204。
 - 当时阻断不是权限，而是模型到 Analytics 语义投影为空；同时，同一 public 物理关系仍存在物理观察与语义投影两个资产身份。该结论已由下方主链复验更新。
-- 本轮浏览器为 Chrome 150；IT-13 的 Chrome 95 状态继续保持 PENDING。
+- 本轮浏览器为 Chrome 150；该修复前快照中 IT-13 仍为 PENDING，最终集中复验已更新为 PARTIAL，见本页顶部台账。
 
 ## 2026-08-17 建模、资产与 BI 主链复验
 

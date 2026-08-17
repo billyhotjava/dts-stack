@@ -1,7 +1,7 @@
 # T01：将模型物化和 dbt 证据接入既有元数据血缘 seam
 
 **优先级**：P0
-**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / IT-07-08_PENDING
+**状态**：IMPLEMENTATION_COMPLETE / IT-08_PASS / IT-07_PARTIAL_DATA_EVIDENCE_GAP
 **依赖**：Sprint-89 F1/F2、Sprint-90 F1、F1/T01、F0/T01 真实 manifest
 
 ## 目标
@@ -38,6 +38,6 @@ dts-platform modeling/dbt/catalog lineage adapters，复用 Sprint-90 API/UI；d
 
 ## Definition of Done
 
-- [ ] IT-07/08 有真实运行证据。
-- [ ] 字段级 0 的根因被关闭或以明确 BLOCKED 记录，不能伪称完成。
+- [x] IT-07/08 有真实运行证据；IT-07 结果为 PARTIAL。
+- [x] 字段级 0 已以明确数据证据缺口登记，未伪称完成。
 - [x] 无新 lineage owner/parser/table。

@@ -1,6 +1,6 @@
 # 发布安全计划（Gate G3）
 
-**当前状态**：READY_FOR_REHEARSAL；代码和开关已具备，真实发布/回滚演练与 IT-12 完成前 G3 仍为 GAP。
+**当前状态**：PASS；真实补齐回滚、下游故障恢复、OpenMetadata 降级和资产状态读开关回滚均已演练，历史证据未丢失。
 **变更类型**：兼容扩展、耐久消费者、受控数据补齐、兼容 UI 读切换。
 **风险等级**：HIGH；涉及资产消费资格、模型发布证据和存量语义状态，但不删除历史事实。
 **发布负责人/回滚负责人**：xiezm / 平台运维。
@@ -76,12 +76,12 @@
 
 | 字段 | 当前值 |
 |---|---|
-| releaseId | `PENDING_FINAL_E2E` |
-| commit / images | 待集中 E2E 前冻结 |
-| migration batches | 待执行首批 20 的 apply/rollback/reapply |
-| flags before/after | 待记录两个独立开关 |
-| startedAt / rolledBackAt / recoveredAt | 待记录 |
+| releaseId | `sprint93-final-20260817` |
+| commit / images | `979983d1f`；platform `85cd145d...`；webapp `791692ae...`；admin `293ee8bf...` |
+| migration batches | preview `c4326...`；apply `67e0...`；rollback 后 reapply `117c...` |
+| flags before/after | `CATALOG_ASSET_STATUS_VIEW=true → false → true`；semantic sync 保持 `true` |
+| startedAt / rolledBackAt / recoveredAt | `2026-08-17 16:34:08 / 16:35:10 / 16:35:59 +08:00` |
 | actor | xiezm |
-| result | PENDING |
+| result | PASS |
 
-真实值、API/SQL 输出、截图和日志统一登记在 `it/README.md`；未完成回滚演练前不得把 G3 标为 PASS。
+真实 API/SQL、历史保留断言和截图登记在 `it/evidence/20260817-final-e2e.md`。Chrome 95、部门账号和字段 lineage 缺口不影响 G3 的可回滚结论，但仍分别阻塞 IT-13、11、07。

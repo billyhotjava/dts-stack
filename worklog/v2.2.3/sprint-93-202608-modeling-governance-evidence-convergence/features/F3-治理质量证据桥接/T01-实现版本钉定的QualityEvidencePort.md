@@ -1,7 +1,7 @@
 # T01：实现版本钉定的 QualityEvidence Port
 
 **优先级**：P0
-**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / IT-05_PENDING
+**状态**：COMPLETE / IT-05_PASS
 **依赖**：F0/T01 提供真实质量样本用于最终 IT
 
 ## 目标

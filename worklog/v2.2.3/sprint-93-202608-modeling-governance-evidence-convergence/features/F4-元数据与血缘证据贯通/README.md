@@ -1,7 +1,7 @@
 # F4：元数据与血缘证据贯通
 
 **优先级**：P0
-**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / REAL_FIELD_EVIDENCE_PENDING
+**状态**：IMPLEMENTATION_COMPLETE / IT-08_PASS / IT-07_PARTIAL_DATA_EVIDENCE_GAP
 
 ## 目标
 
@@ -25,7 +25,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 将模型物化和 dbt 证据接入既有元数据血缘 seam | P0 | IMPLEMENTATION_COMPLETE | IT-07/08 真实证据待执行 |
+| T01 | 将模型物化和 dbt 证据接入既有元数据血缘 seam | P0 | IMPLEMENTATION_COMPLETE / IT-08_PASS / IT-07_PARTIAL | 真实 ODS/字段输入 |
 
 ## Definition of Ready
 
@@ -36,6 +36,6 @@
 ## 完成标准
 
 - [ ] 同一 datasetId 可查表/字段/模型证据。
-- [ ] 重放幂等且不覆盖人工 VERIFIED。
-- [ ] OM 故障不删除资产或返回 5xx。
+- [x] 重放幂等且不覆盖人工 VERIFIED。
+- [x] OM 故障不删除资产或返回 5xx。
 - [ ] IT-07/08 通过。

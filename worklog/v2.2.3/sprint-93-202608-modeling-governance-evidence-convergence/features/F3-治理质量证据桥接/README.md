@@ -1,7 +1,7 @@
 # F3：治理质量证据桥接
 
 **优先级**：P0
-**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / REAL_SAMPLE_IT_PENDING
+**状态**：COMPLETE / IT-05-06_PASS
 
 ## 目标
 
@@ -24,8 +24,8 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 实现版本钉定的 QualityEvidence Port | P0 | IMPLEMENTATION_COMPLETE | F0 样本用于 IT |
-| T02 | 接入 StageGate、发布命令与质量双栏 UI | P0 | IMPLEMENTATION_COMPLETE | IT-06 待执行 |
+| T01 | 实现版本钉定的 QualityEvidence Port | P0 | COMPLETE / IT-05_PASS | - |
+| T02 | 接入 StageGate、发布命令与质量双栏 UI | P0 | COMPLETE / IT-06_PASS | - |
 
 ## Definition of Ready
 
@@ -35,7 +35,7 @@
 
 ## 完成标准
 
-- [ ] StageGate 不再把 TEST 同时当 quality。
-- [ ] 历史候选质量结论不受 latest rule version 漂移影响。
-- [ ] UI 分开展示两类质量并可追溯 run。
-- [ ] 重试产生新 runId，不改历史证据。
+- [x] StageGate 不再把 TEST 同时当 quality。
+- [x] 历史候选质量结论不受 latest rule version 漂移影响。
+- [x] UI 分开展示两类质量并可追溯 run。
+- [x] 重试产生新 runId，不改历史证据。

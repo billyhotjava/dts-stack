@@ -686,6 +686,17 @@ function DatasetQualitySlaTab({
 		: assetContract?.expectedRefreshIntervalMinutes
 			? `${assetContract.expectedRefreshIntervalMinutes} 分钟刷新`
 			: "未配置";
+	const qualityStatus = String(dataset.qualityStatus || "UNKNOWN")
+		.trim()
+		.toUpperCase();
+	const qualityStatusLabel =
+		qualityStatus === "PASSED"
+			? "已通过"
+			: qualityStatus === "FAILED"
+				? "未通过"
+				: qualityStatus === "RUNNING"
+					? "校验中"
+					: "待校验";
 	return (
 		<div className="space-y-4 py-2">
 			<Alert
@@ -710,10 +721,8 @@ function DatasetQualitySlaTab({
 					</div>
 				</div>
 				<div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
-					<div className="text-xs text-slate-500">发布前状态</div>
-					<div className="mt-1 text-sm font-semibold text-slate-900">
-						{assetContract?.consumable === false ? "治理阻断" : "待质量校验"}
-					</div>
+					<div className="text-xs text-slate-500">治理质量状态</div>
+					<div className="mt-1 text-sm font-semibold text-slate-900">{qualityStatusLabel}</div>
 				</div>
 			</div>
 			{hasLegacyDataset ? (

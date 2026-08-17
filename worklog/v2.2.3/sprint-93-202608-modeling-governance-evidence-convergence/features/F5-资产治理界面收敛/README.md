@@ -1,7 +1,7 @@
 # F5：资产治理界面收敛
 
 **优先级**：P1
-**状态**：IMPLEMENTATION_COMPLETE / MODULE_VERIFIED / FINAL_BROWSER_IT_PENDING
+**状态**：COMPLETE / IT-09_PASS
 
 ## 目标
 
@@ -28,7 +28,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 统一概览目录详情与模型工作台状态和深链 | P1 | IMPLEMENTATION_COMPLETE | IT-09/Chrome 95 待执行 |
+| T01 | 统一概览目录详情与模型工作台状态和深链 | P1 | COMPLETE / IT-09_PASS | Chrome 95 由 IT-13 独立验收 |
 
 ## Definition of Ready
 
@@ -38,7 +38,7 @@
 
 ## 完成标准
 
-- [ ] 同一资产在概览/目录/详情/模型页状态一致。
-- [ ] 所有深链可达且不出现空详情/403。
+- [x] 同一资产在概览/目录/详情/模型页状态一致。
+- [x] 所有深链可达且不出现空详情/403。
 - [ ] 空/加载/错误/成功四态和 Chrome 95 有证据。
-- [ ] 无新菜单、页面、前端依赖或 N+1 请求。
+- [x] 无新菜单、页面、前端依赖或 N+1 请求。

@@ -1,7 +1,7 @@
 # F0：交付基线与事实对账
 
 **优先级**：P0
-**状态**：BASELINE_READY / FINAL_E2E_PENDING
+**状态**：COMPLETE / BASELINE_AND_FINAL_E2E_RECORDED
 
 ## 目标
 
@@ -26,7 +26,7 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T01 | 验证真实登录、验收样本与迁移画像基线 | P0 | BASELINE_READY | 无 |
+| T01 | 验证真实登录、验收样本与迁移画像基线 | P0 | COMPLETE_WITH_RECORDED_GAPS | 无 |
 
 ## Definition of Ready
 
@@ -37,7 +37,7 @@
 
 ## 完成标准
 
-- [ ] P1～P8 每项都有真实证据。
-- [ ] producer/evidence 可解析、歧义、缺失比例已量化。
+- [x] P1～P8 每项都有真实结果或明确不可用证据。
+- [x] producer/evidence 可解析、歧义、缺失比例已量化。
 - [ ] 一条具备字段血缘的真实模型链及三类质量样本可重复使用。
-- [ ] 受影响 Feature 状态按结果更新，未通过项不被写成 PASS。
+- [x] 受影响 Feature 状态按结果更新，未通过项不被写成 PASS。

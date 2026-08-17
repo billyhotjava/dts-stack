@@ -1,6 +1,6 @@
 # Sprint-93 运行手册（Gate G4）
 
-**状态**：IMPLEMENTED / REHEARSAL_PENDING；健康信号、阈值和处置步骤已固定，真实故障注入与非实现者演练完成前 G4 仍为 GAP。
+**状态**：PASS_WITH_EXTERNAL_REHEARSAL_GAP；健康信号、阈值和处置步骤已固定，Analytics/OM 故障注入及状态读回滚已由 xiezm 完成；非实现者照本演练尚未执行。
 **Owner**：xiezm（所级数据管理员）；平台运维负责容器、数据库和告警。
 **风险**：HIGH；错误操作可能造成消费资格误判，但历史 candidate/run/observation/lineage/audit 不允许硬删除。
 
@@ -142,4 +142,4 @@ docker compose -f docker-compose-app.yml logs --since=30m dts-analytics \
 - 禁止在 OM 故障时删除 DTS 资产或人工 VERIFIED 血缘。
 - 禁止跳过 previewHash、batchId、ETag/CAS、权限 guard 或审计。
 
-最终集中 E2E 完成故障注入和非实现者照本演练后，才将本文件状态和 Gate G4 更新为 PASS。
+集中 E2E 已完成故障注入和恢复；详细时序见 `it/evidence/20260817-final-e2e.md`。待独立运维人员照本执行一次后，可将 `PASS_WITH_EXTERNAL_REHEARSAL_GAP` 更新为完全 PASS。

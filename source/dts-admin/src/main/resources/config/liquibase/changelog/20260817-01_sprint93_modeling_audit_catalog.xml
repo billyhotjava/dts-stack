@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260817-01-sprint93-modeling-audit-catalog" author="codex">
+        <comment>固定 Sprint-93 模型目录同步与资产语义补齐动作的审计分类，避免运行时字符串推断产生错误口径</comment>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            INSERT INTO audit_module_catalog (
+                source_system, module_key, module_name, parent_module_key, owner,
+                enabled, order_value, version, updated_at
+            ) VALUES (
+                'platform',
+                'modeling.dbt-roundtrip',
+                'dbt 可视化往返建模',
+                'modeling',
+                'platform',
+                TRUE,
+                5000,
+                'sprint-93-audit-convergence-v1',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+
+            WITH desired (action_code, operation_name, operation_kind) AS (
+                VALUES
+                    ('MODELING_SEMANTIC_SYNC_RETRY', '重试模型目录同步', 'REFRESH'),
+                    ('MODELING_SEMANTIC_SYNC_TERMINAL_FAILURE', '模型目录同步终态失败', 'REFRESH'),
+                    ('CATALOG_ASSET_SEMANTIC_BACKFILL_APPLY', '应用资产语义投影补齐批次', 'EXECUTE'),
+                    ('CATALOG_ASSET_SEMANTIC_BACKFILL_ROLLBACK', '回滚资产语义投影补齐批次', 'DELETE')
+            )
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            )
+            SELECT
+                'platform',
+                desired.action_code,
+                'modeling.dbt-roundtrip',
+                'dbt 可视化往返建模',
+                desired.action_code,
+                desired.operation_name,
+                desired.operation_kind,
+                'modeling.dbt-roundtrip',
+                FALSE,
+                TRUE,
+                'sprint-93-audit-convergence-v1',
+                CURRENT_TIMESTAMP
+              FROM desired
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" stripComments="false"><![CDATA[
+                -- Forward-only convergence: the catalog rows classify durable audit evidence
+                -- and may already be consumed by audit search, so rollback preserves them.
+                SELECT 1;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
