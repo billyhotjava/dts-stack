@@ -51,6 +51,10 @@ class ServiceDependencyAuthenticationFilterTest {
     private static final String ANALYTICS_ASSET_PERMISSION_BATCH_CHECK = "/api/internal/asset-permission/batch-check";
     private static final String ANALYTICS_ASSET_PERMISSION_ACCESSIBLE_IDS = "/api/internal/asset-permission/accessible-ids";
     private static final String ANALYTICS_ASSET_PERMISSION_OWNERSHIP = "/api/internal/asset-permission/ownership";
+    private static final String ANALYTICS_DATASET_CONTRACT =
+        "/api/internal/analysis-datasets/11111111-1111-1111-1111-111111111111/versions/3";
+    private static final String ANALYTICS_REPORT_REGISTRATION =
+        "/api/internal/reports/registrations";
     private static final String INTERNAL_CAPABILITIES = "/api/internal/capabilities";
     private static final String INTERNAL_GLOSSARY_TERMS_RESOLVE = "/api/internal/glossary/terms/resolve";
     private static final String INTERNAL_DOMAINS_RESOLVE = "/api/internal/domains/resolve";
@@ -188,6 +192,20 @@ class ServiceDependencyAuthenticationFilterTest {
         assertAnalyticsCanAccessPost(ANALYTICS_CLASSIFICATION_ACCESS_BINDINGS);
         assertAnalyticsCanAccessGet(ANALYTICS_CLASSIFICATION_ACCESS_BINDINGS_GUARD);
         assertAnalyticsCanAccessPost(ANALYTICS_CLASSIFICATION_EXPORT_SEAL);
+    }
+
+    @Test
+    void analyticsMatchingToken_canReadAnalysisDatasetContractAndRegisterReport() throws Exception {
+        assertAnalyticsCanAccess("GET", ANALYTICS_DATASET_CONTRACT);
+        assertAnalyticsCanAccess("PUT", ANALYTICS_REPORT_REGISTRATION);
+    }
+
+    @Test
+    void analyticsGovernedBiEndpointsRejectAdjacentMethodsAndPaths() throws Exception {
+        assertAnalyticsCannotAccess("POST", ANALYTICS_DATASET_CONTRACT);
+        assertAnalyticsCannotAccess("GET", ANALYTICS_REPORT_REGISTRATION);
+        assertAnalyticsCannotAccess("GET", ANALYTICS_DATASET_CONTRACT + "/extra");
+        assertAnalyticsCannotAccess("PUT", ANALYTICS_REPORT_REGISTRATION + "/extra");
     }
 
     @Test
@@ -469,13 +487,21 @@ class ServiceDependencyAuthenticationFilterTest {
     }
 
     private void assertAnalyticsCanAccessPost(String path) throws Exception {
+        assertAnalyticsCanAccess("POST", path);
+    }
+
+    private void assertAnalyticsCanAccessGet(String path) throws Exception {
+        assertAnalyticsCanAccess("GET", path);
+    }
+
+    private void assertAnalyticsCanAccess(String method, String path) throws Exception {
         SecurityContextHolder.clearContext();
         FilterChain localChain = mock(FilterChain.class);
         ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-analytics");
         req.addHeader(TOKEN_HEADER, "analytics-secret");
-        req.setMethod("POST");
+        req.setMethod(method);
         req.setRequestURI(path);
 
         filter.doFilter(req, new MockHttpServletResponse(), localChain);
@@ -487,22 +513,19 @@ class ServiceDependencyAuthenticationFilterTest {
         verify(localChain).doFilter(any(), any());
     }
 
-    private void assertAnalyticsCanAccessGet(String path) throws Exception {
+    private void assertAnalyticsCannotAccess(String method, String path) throws Exception {
         SecurityContextHolder.clearContext();
         FilterChain localChain = mock(FilterChain.class);
         ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.addHeader(SERVICE_HEADER, "dts-analytics");
         req.addHeader(TOKEN_HEADER, "analytics-secret");
-        req.setMethod("GET");
+        req.setMethod(method);
         req.setRequestURI(path);
 
         filter.doFilter(req, new MockHttpServletResponse(), localChain);
 
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        assertThat(auth).isNotNull();
-        assertThat(auth.getPrincipal()).isEqualTo("service:dts-analytics");
-        assertThat(auth.getAuthorities()).extracting(Object::toString).contains(AuthoritiesConstants.SERVICE_INTERNAL);
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
         verify(localChain).doFilter(any(), any());
     }
 
