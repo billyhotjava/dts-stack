@@ -8,6 +8,7 @@ import {
 	type ModelSpecTimeSemanticsType,
 } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelSourceInventoryDialog } from "./ModelSourceInventoryDialog";
+import { ModelVisualTransformationFields } from "./ModelVisualTransformationFields";
 import { Button } from "./PrototypePrimitives";
 import {
 	MODEL_KIND_CONFIG,
@@ -433,6 +434,12 @@ export function ModelImplementationBindingFields({
 						<ValidationMessage message={validationErrors.consumptionScenario} />
 					</label>
 				) : null}
+				<ModelVisualTransformationFields
+					context={context}
+					draft={draft}
+					onChange={onChange}
+					validationMessage={validationErrors.transformations}
+				/>
 			</div>
 			{sourceDialogOpen ? (
 				<ModelSourceInventoryDialog

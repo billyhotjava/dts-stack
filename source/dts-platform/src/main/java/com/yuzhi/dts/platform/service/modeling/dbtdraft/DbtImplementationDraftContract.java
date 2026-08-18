@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.modeling.dbtdraft;
 
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Snapshot;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -152,8 +153,13 @@ public final class DbtImplementationDraftContract {
     public record CommitDraftRequest(
         @NotBlank @Size(max = 64) String expectedEtag,
         @NotBlank @Size(min = 64, max = 64) @jakarta.validation.constraints.Pattern(regexp = "^[0-9a-fA-F]{64}$") String validatedChecksum,
+        @Size(min = 64, max = 64) @jakarta.validation.constraints.Pattern(regexp = "^[0-9a-fA-F]{64}$") String dependencyChecksum,
         @NotBlank @Size(max = 128) String idempotencyKey
-    ) {}
+    ) {
+        public CommitDraftRequest(String expectedEtag, String validatedChecksum, String idempotencyKey) {
+            this(expectedEtag, validatedChecksum, null, idempotencyKey);
+        }
+    }
 
     public record DraftView(
         UUID draftId,
@@ -176,11 +182,28 @@ public final class DbtImplementationDraftContract {
         String bundleChecksum,
         SourceBundleKind sourceKind,
         boolean lossless,
-        List<BundleFileView> files
+        List<BundleFileView> files,
+        String dependencyChecksum,
+        Snapshot dependencySnapshot,
+        Map<String, String> managedDependencyAliases
     ) {
+        public SourceBundleView(
+            String projectKey,
+            String projectChecksum,
+            String bundleChecksum,
+            SourceBundleKind sourceKind,
+            boolean lossless,
+            List<BundleFileView> files
+        ) {
+            this(projectKey, projectChecksum, bundleChecksum, sourceKind, lossless, files, null, null, Map.of());
+        }
+
         public SourceBundleView {
             if (sourceKind == null) throw new IllegalArgumentException("sourceKind is required");
             files = List.copyOf(files == null ? List.of() : files);
+            managedDependencyAliases = Map.copyOf(
+                managedDependencyAliases == null ? Map.of() : managedDependencyAliases
+            );
         }
     }
 
@@ -216,11 +239,37 @@ public final class DbtImplementationDraftContract {
         Instant expiresAt,
         String validatedChecksum,
         List<Diagnostic> diagnostics,
-        List<ProposedNode> proposedStructure
+        List<ProposedNode> proposedStructure,
+        DependencyValidationView dependencyValidation
     ) {
+        public ValidationView(
+            UUID draftId,
+            DraftState state,
+            String etag,
+            Instant expiresAt,
+            String validatedChecksum,
+            List<Diagnostic> diagnostics,
+            List<ProposedNode> proposedStructure
+        ) {
+            this(draftId, state, etag, expiresAt, validatedChecksum, diagnostics, proposedStructure, null);
+        }
+
         public ValidationView {
             diagnostics = List.copyOf(diagnostics == null ? List.of() : diagnostics);
             proposedStructure = List.copyOf(proposedStructure == null ? List.of() : proposedStructure);
+        }
+    }
+
+    public record DependencyValidationView(
+        String dependencyChecksum,
+        List<String> matched,
+        List<String> missing,
+        List<String> undeclared
+    ) {
+        public DependencyValidationView {
+            matched = List.copyOf(matched == null ? List.of() : matched);
+            missing = List.copyOf(missing == null ? List.of() : missing);
+            undeclared = List.copyOf(undeclared == null ? List.of() : undeclared);
         }
     }
 
@@ -233,8 +282,34 @@ public final class DbtImplementationDraftContract {
         int implementationRevision,
         String implementationChecksum,
         int artifactCount,
-        String etag
-    ) {}
+        String etag,
+        String dependencyChecksum
+    ) {
+        public CommitView(
+            UUID draftId,
+            UUID modelSpecId,
+            int modelRevision,
+            String modelChecksum,
+            UUID implementationId,
+            int implementationRevision,
+            String implementationChecksum,
+            int artifactCount,
+            String etag
+        ) {
+            this(
+                draftId,
+                modelSpecId,
+                modelRevision,
+                modelChecksum,
+                implementationId,
+                implementationRevision,
+                implementationChecksum,
+                artifactCount,
+                etag,
+                null
+            );
+        }
+    }
 
     public static List<FileInput> normalizeFiles(List<FileInput> input) {
         if (input == null || input.isEmpty()) {

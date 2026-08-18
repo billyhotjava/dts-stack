@@ -803,6 +803,55 @@ export type ModelMaterializationStatus = {
 	evidence: ReleaseCandidateEntryEvidence;
 };
 
+export type MaterializationPlanStrategy = "WITH_MISSING_UPSTREAMS" | "CURRENT_ONLY";
+export type MaterializationPlanAction = "BUILD" | "REUSE";
+export type MaterializationPlanDependencyRole = "ROOT" | "UPSTREAM" | "DIMENSION" | "MIXED";
+export type MaterializationPlanEntry = {
+	modelSpecId: string;
+	modelName: string;
+	modelRevision: number;
+	modelChecksum: string;
+	implementationRevision: number;
+	implementationChecksum: string;
+	dependencyChecksum: string;
+	layer: ModelSpecLayer;
+	dependencyRole: MaterializationPlanDependencyRole;
+	topologyLevel: number;
+	action: MaterializationPlanAction;
+	reasonCode: string;
+	relationEvidenceId?: string | null;
+	targetRelation?: string | null;
+};
+export type MaterializationPlanBlocker = {
+	code: string;
+	modelSpecId?: string | null;
+	message: string;
+	details: Record<string, unknown>;
+};
+export type MaterializationPlanPreview = {
+	planId: string;
+	environment: string;
+	strategy: MaterializationPlanStrategy;
+	planChecksum: string;
+	canStart: boolean;
+	requestedModelSpecIds: string[];
+	orderedEntries: MaterializationPlanEntry[];
+	blockers: MaterializationPlanBlocker[];
+};
+export type MaterializationPlanPreviewRequest = {
+	environment: string;
+	requestedModelSpecIds: string[];
+	strategy: MaterializationPlanStrategy;
+};
+
+export type ReleaseCandidateMaterializationRequest = {
+	environment: string;
+	entries: ReleaseCandidateScopeEntryInput[];
+	reason: string;
+	materializationPlanChecksum?: string;
+	strategy?: MaterializationPlanStrategy;
+};
+
 export type ReleaseCandidateBlocker = {
 	code: string;
 	message: string;
@@ -955,6 +1004,9 @@ export const releaseCandidateWorkbenchError = (
 
 const releaseCandidateResource = (planId: string) => `/modeling/plans/${encodeURIComponent(planId)}/release-candidates`;
 
+const materializationPlanResource = (planId: string) =>
+	`/modeling/plans/${encodeURIComponent(planId)}/materialization-plans`;
+
 const releaseCandidateItemUrl = (planId: string, candidateId: string, suffix = "") =>
 	`${releaseCandidateResource(planId)}/${encodeURIComponent(candidateId)}${suffix}`;
 
@@ -973,6 +1025,13 @@ export const getModelMaterializationStatuses = (planId: string, modelSpecIds: st
 	api.get<ModelMaterializationStatus[]>({
 		url: releaseCandidateItemUrl(planId, "materializations"),
 		params: { modelSpecIds: modelSpecIds.join(",") },
+		_skipErrorToast: true,
+	} as any);
+
+export const previewMaterializationPlan = (planId: string, data: MaterializationPlanPreviewRequest) =>
+	api.post<MaterializationPlanPreview>({
+		url: `${materializationPlanResource(planId)}/preview`,
+		data,
 		_skipErrorToast: true,
 	} as any);
 
@@ -1030,11 +1089,7 @@ export const startModelPublicationIntent = (
 export const createReleaseCandidate = (
 	planId: string,
 	idempotencyKey: string,
-	data: {
-		environment: string;
-		entries: ReleaseCandidateScopeEntryInput[];
-		reason: string;
-	},
+	data: ReleaseCandidateMaterializationRequest,
 ) =>
 	api.post<ReleaseCandidateCommandResult>({
 		url: releaseCandidateResource(planId),
@@ -1192,11 +1247,7 @@ export const createReplacementReleaseCandidate = (
 	planId: string,
 	expected: ReleaseCandidateCasToken,
 	idempotencyKey: string,
-	data: {
-		environment: string;
-		entries: ReleaseCandidateScopeEntryInput[];
-		reason: string;
-	},
+	data: ReleaseCandidateMaterializationRequest,
 ) =>
 	api.post<ReleaseCandidateCommandResult>({
 		url: releaseCandidateItemUrl(planId, expected.id, "/replacement"),
@@ -1209,11 +1260,7 @@ export const rematerializeReleaseCandidate = (
 	planId: string,
 	expected: ReleaseCandidateCasToken,
 	idempotencyKey: string,
-	data: {
-		environment: string;
-		entries: ReleaseCandidateScopeEntryInput[];
-		reason: string;
-	},
+	data: ReleaseCandidateMaterializationRequest,
 ) =>
 	api.post<ReleaseCandidateCommandResult>({
 		url: releaseCandidateItemUrl(planId, expected.id, "/rematerialize"),

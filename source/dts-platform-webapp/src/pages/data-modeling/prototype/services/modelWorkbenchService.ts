@@ -31,8 +31,13 @@ import type {
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import type {
 	GeneratedImplementationInput,
+	ModelImplementationAggregation,
+	ModelImplementationCastType,
+	ModelImplementationFieldMapping,
+	ModelImplementationFilter,
 	ModelImplementationInput,
 	ModelImplementationInputMode,
+	ModelImplementationJoin,
 	ModelImplementationView,
 	ModelImplementationWriteCommand,
 } from "@/features/modeling/contracts/modelImplementationContract";
@@ -117,6 +122,13 @@ export type ModelSpecDraft = {
 	implementationInputMode: ModelImplementationInputMode | "";
 	generationStrategyType: "" | "DATE_DIMENSION";
 	implementationIdempotencyKey: string;
+	fieldMappings: ModelImplementationFieldMapping[];
+	casts: Record<string, ModelImplementationCastType>;
+	filters: ModelImplementationFilter[];
+	deduplicateBy: string[];
+	joins: ModelImplementationJoin[];
+	groupBy: string[];
+	aggregations: ModelImplementationAggregation[];
 	sourceRefs: ModelSpecSourceRef[];
 	dependsOn: ModelSpecRevisionRef[];
 	dimensionRefs: ModelSpecRevisionRef[];
@@ -159,6 +171,7 @@ export type ModelDraftErrorKey =
 	| "grainStatement"
 	| "fields"
 	| "implementationInputMode"
+	| "transformations"
 	| "factShape"
 	| "timeSemantics"
 	| "consumptionScenario"
@@ -216,6 +229,13 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		implementationInputMode: kind === "summary" || kind === "application" ? "UPSTREAM_MODEL" : "PHYSICAL_ASSET",
 		generationStrategyType: "",
 		implementationIdempotencyKey: crypto.randomUUID(),
+		fieldMappings: [],
+		casts: {},
+		filters: [],
+		deduplicateBy: [],
+		joins: [],
+		groupBy: [],
+		aggregations: [],
 		sourceRefs: [],
 		dependsOn: [],
 		dimensionRefs: [],
@@ -254,6 +274,59 @@ const implementationStringList = (implementation: ModelImplementationView | null
 	const value = implementationSetting(implementation, key);
 	return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 };
+
+const implementationObject = (implementation: ModelImplementationView | null, key: string): Record<string, unknown> => {
+	const value = implementationSetting(implementation, key);
+	return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+};
+
+const implementationObjectList = (implementation: ModelImplementationView | null, key: string): Record<string, unknown>[] => {
+	const value = implementationSetting(implementation, key);
+	return Array.isArray(value)
+		? value.filter(
+				(item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item),
+			)
+		: [];
+};
+
+const implementationCasts = (implementation: ModelImplementationView | null): Record<string, ModelImplementationCastType> =>
+	Object.fromEntries(
+		Object.entries(implementationObject(implementation, "casts")).filter(
+			(entry): entry is [string, ModelImplementationCastType] =>
+				typeof entry[1] === "string" &&
+				["string", "integer", "bigint", "decimal", "date", "timestamp", "boolean"].includes(entry[1]),
+		),
+	);
+
+const implementationFilters = (implementation: ModelImplementationView | null): ModelImplementationFilter[] =>
+	implementationObjectList(implementation, "filters").flatMap((filter) =>
+		typeof filter.field === "string" &&
+		typeof filter.operator === "string" &&
+		typeof filter.valueType === "string" &&
+		"value" in filter
+			? [filter as ModelImplementationFilter]
+			: [],
+	);
+
+const implementationJoins = (implementation: ModelImplementationView | null): ModelImplementationJoin[] =>
+	implementationObjectList(implementation, "joins").flatMap((join) =>
+		typeof join.inputIndex === "number" &&
+		(join.type === "INNER" || join.type === "LEFT") &&
+		typeof join.leftField === "string" &&
+		typeof join.rightField === "string"
+			? [join as ModelImplementationJoin]
+			: [],
+	);
+
+const implementationAggregations = (implementation: ModelImplementationView | null): ModelImplementationAggregation[] =>
+	implementationObjectList(implementation, "aggregations").flatMap((aggregation) =>
+		typeof aggregation.targetField === "string" &&
+		typeof aggregation.function === "string" &&
+		typeof aggregation.sourceField === "string" &&
+		typeof aggregation.distinct === "boolean"
+			? [aggregation as ModelImplementationAggregation]
+			: [],
+	);
 
 const generatedInput = (implementation: ModelImplementationView | null): GeneratedImplementationInput | null => {
 	if (implementation?.inputMode !== "GENERATED") return null;
@@ -314,6 +387,13 @@ export function modelDraftFromView(
 							: ""),
 		generationStrategyType: generationStrategyType === "DATE_DIMENSION" ? "DATE_DIMENSION" : "",
 		implementationIdempotencyKey: crypto.randomUUID(),
+		fieldMappings: (implementation?.fieldMappings || []).map((mapping) => ({ ...mapping })),
+		casts: implementationCasts(implementation),
+		filters: implementationFilters(implementation),
+		deduplicateBy: implementationStringList(implementation, "deduplicateBy"),
+		joins: implementationJoins(implementation),
+		groupBy: implementationStringList(implementation, "groupBy"),
+		aggregations: implementationAggregations(implementation),
 		sourceRefs: model.compatibilityMode === "CANONICAL" ? model.sourceRefs.map((source) => ({ ...source })) : [],
 		dependsOn: model.dependsOn.map((dependency) => ({ ...dependency })),
 		dimensionRefs: model.dimensionRefs.map((dimension) => ({ ...dimension })),
@@ -531,6 +611,10 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 	if (draft.createKind === "application" && !draft.consumptionScenario.trim()) {
 		errors.consumptionScenario = "请填写应用场景";
 	}
+	if (draft.implementationMode === "DESIGNER_GENERATED" && draft.implementationInputMode !== "GENERATED") {
+		const transformationError = validateDesignerTransformations(draft);
+		if (transformationError) errors.transformations = transformationError;
+	}
 
 	if (!draft.fields.length) {
 		errors.fields = "请至少添加一个字段";
@@ -551,6 +635,93 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 	}
 	return errors;
 }
+
+const SOURCE_FIELD_PATTERN = /^(?:src_([0-9]+)\.)?[A-Za-z_][A-Za-z0-9_]*$/;
+
+const sourceFieldIndex = (value: string): number | null => {
+	const match = SOURCE_FIELD_PATTERN.exec(value.trim());
+	return match?.[1] === undefined ? null : Number(match[1]);
+};
+
+const filterValueMatchesType = (filter: ModelImplementationFilter): boolean => {
+	if (filter.operator === "IS_NULL" || filter.operator === "IS_NOT_NULL") return true;
+	const values = Array.isArray(filter.value) ? filter.value : [filter.value];
+	if ((filter.operator === "IN" || filter.operator === "NOT_IN") && values.length < 1) return false;
+	if (filter.operator === "BETWEEN" && values.length !== 2) return false;
+	if (!["IN", "NOT_IN", "BETWEEN"].includes(filter.operator) && Array.isArray(filter.value)) return false;
+	return values.every((value) => {
+		if (filter.valueType === "NUMBER") return typeof value === "number" && Number.isFinite(value);
+		if (filter.valueType === "BOOLEAN") return typeof value === "boolean";
+		return typeof value === "string" && Boolean(value.trim());
+	});
+};
+
+const validateDesignerTransformations = (draft: ModelSpecDraft): string | null => {
+	const inputCount = draft.sourceRefs.length + draft.dependsOn.length + draft.dimensionRefs.length;
+	const outputFields = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
+	const mappings = new Map<string, string>();
+	for (const mapping of draft.fieldMappings) {
+		const sourceField = mapping.sourceField.trim();
+		const targetField = mapping.targetField.trim();
+		if (!outputFields.has(targetField) || mappings.has(targetField)) return "字段映射的目标字段不存在或重复";
+		const sourceIndex = sourceFieldIndex(sourceField);
+		if (!SOURCE_FIELD_PATTERN.test(sourceField) || (inputCount > 1 && sourceIndex === null)) {
+			return "多输入模型的来源字段必须使用 src_序号.字段名";
+		}
+		if (sourceIndex !== null && sourceIndex >= inputCount) return "字段映射引用了不存在的输入别名";
+		mappings.set(targetField, sourceField);
+	}
+	if (inputCount > 1 && [...outputFields].some((field) => !mappings.has(field))) {
+		return "多输入模型必须为每个目标字段配置来源字段";
+	}
+	if (Object.keys(draft.casts).some((field) => !outputFields.has(field))) return "类型转换只能绑定目标字段";
+	if (draft.deduplicateBy.some((field) => !outputFields.has(field))) return "去重键只能选择目标字段";
+	if (inputCount > 1) {
+		const ordered = [...draft.joins].sort((left, right) => left.inputIndex - right.inputIndex);
+		if (ordered.length !== inputCount - 1) return "每个附加输入都必须配置一条关联关系";
+		for (let inputIndex = 1; inputIndex < inputCount; inputIndex += 1) {
+			const join = ordered[inputIndex - 1];
+			if (join?.inputIndex !== inputIndex) return "关联关系必须按输入顺序完整配置";
+			const leftIndex = sourceFieldIndex(join.leftField);
+			const rightIndex = sourceFieldIndex(join.rightField);
+			if (leftIndex === null || rightIndex !== inputIndex || leftIndex >= inputIndex) {
+				return "关联字段必须把当前输入连接到一个更早的输入";
+			}
+		}
+	} else if (draft.joins.length) {
+		return "单输入模型不能配置关联关系";
+	}
+	for (const filter of draft.filters) {
+		const field = filter.field.trim();
+		const sourceIndex = sourceFieldIndex(field);
+		if ((!outputFields.has(field) && !SOURCE_FIELD_PATTERN.test(field)) || (sourceIndex !== null && sourceIndex >= inputCount)) {
+			return "过滤字段必须是目标字段或当前输入的字段";
+		}
+		if (!filterValueMatchesType(filter)) return "过滤值与所选值类型或操作符不匹配";
+	}
+	const hasAggregation = draft.groupBy.length > 0 || draft.aggregations.length > 0;
+	if (hasAggregation) {
+		if (!draft.groupBy.length || !draft.aggregations.length) return "分组字段和聚合配置必须同时填写";
+		if (draft.deduplicateBy.length) return "聚合与去重不能同时启用";
+		const grouped = new Set(draft.groupBy);
+		const aggregateTargets = new Set<string>();
+		if ([...grouped].some((field) => !outputFields.has(field))) return "分组字段只能选择目标字段";
+		for (const aggregation of draft.aggregations) {
+			if (!outputFields.has(aggregation.targetField) || grouped.has(aggregation.targetField)) {
+				return "聚合目标字段必须存在且不能同时作为分组字段";
+			}
+			if (!aggregateTargets.add(aggregation.targetField)) return "一个目标字段只能配置一个聚合";
+			if (aggregation.distinct && aggregation.function !== "COUNT") return "仅 COUNT 支持去重计数";
+			if (!SOURCE_FIELD_PATTERN.test(aggregation.sourceField.trim())) return "聚合来源字段格式不正确";
+			const sourceIndex = sourceFieldIndex(aggregation.sourceField);
+			if (sourceIndex !== null && sourceIndex >= inputCount) return "聚合引用了不存在的输入别名";
+		}
+		if ([...outputFields].some((field) => !grouped.has(field) && !aggregateTargets.has(field))) {
+			return "聚合模型的每个输出字段必须配置为分组字段或聚合结果";
+		}
+	}
+	return null;
+};
 
 const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 	const config = MODEL_KIND_CONFIG[draft.createKind];
@@ -712,18 +883,40 @@ const buildImplementationCommand = (
 	if (!new Set(["table", "view", "incremental"]).has(materialization)) {
 		throw new Error("当前数据实现仅支持表、视图或增量物化方式");
 	}
+	const controlledSettingKeys = new Set([
+		"casts",
+		"deduplicateBy",
+		"dedupBy",
+		"filters",
+		"joins",
+		"groupBy",
+		"aggregations",
+	]);
+	const retainedSettings = Object.fromEntries(
+		Object.entries(draft.implementationBase?.settings || {}).filter(([key]) => !controlledSettingKeys.has(key)),
+	);
 	return {
 		inputMode: resolved.inputMode,
 		inputs: resolved.inputs as never,
-		fieldMappings: draft.implementationBase?.fieldMappings || [],
+		fieldMappings: draft.fieldMappings.map((mapping) => ({
+			sourceField: mapping.sourceField.trim(),
+			targetField: mapping.targetField.trim(),
+		})),
 		settings: {
-			...(draft.implementationBase?.settings || {}),
+			...retainedSettings,
 			targetPhysicalName: draft.physicalName.trim(),
 			loadStrategy: draft.loadStrategy,
 			partitionFields: draft.partitionFields
 				.split(",")
 				.map((field) => field.trim())
 				.filter(Boolean),
+			...(Object.keys(draft.casts).length ? { casts: draft.casts } : {}),
+			...(draft.filters.length ? { filters: draft.filters } : {}),
+			...(draft.deduplicateBy.length ? { deduplicateBy: draft.deduplicateBy } : {}),
+			...(draft.joins.length ? { joins: draft.joins } : {}),
+			...(draft.groupBy.length && draft.aggregations.length
+				? { groupBy: draft.groupBy, aggregations: draft.aggregations }
+				: {}),
 		},
 		ownership: model.implementationMode,
 		materialization,

@@ -28,6 +28,12 @@
 - **复用点**: `ModelingDbtCompiler`、ModelSpec/Lifecycle repository、现有 artifact normalization；禁止复制 SQL 生成逻辑。
 - **容量**: 输出遵守 draft 的 128/2MiB/16MiB 边界；超过即 422，不截断代码。
 
+## Definition of Ready
+
+- [x] F0/T02 已冻结 3 文件预览与 artifact type 映射契约。
+- [x] F1 code view 和 TECHNICAL capability 已可承载只读预览。
+- [x] preview pins/checksum、权限和零写入边界已定义。
+
 ## 影响范围
 
 - 新增薄 REST resource/contract 或在现有 lifecycle resource 下扩展 endpoint

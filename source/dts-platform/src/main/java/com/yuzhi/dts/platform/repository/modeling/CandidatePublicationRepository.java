@@ -4,14 +4,18 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRepository.PublicationEntryEvidence;
+import com.yuzhi.dts.platform.service.etl.DbtSqlProjectionParser;
 import com.yuzhi.dts.platform.service.modeling.CandidatePublicationAssetFactory;
 import com.yuzhi.dts.platform.service.modeling.ModelExecutionTargetCatalogResolver.ResolvedCatalogTarget;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleEventView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalColumn;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -103,7 +107,24 @@ public class CandidatePublicationRepository {
         );
         replaceColumns(tableId, model, evidence, actor, now);
         replaceModelLineage(model, now);
-        replaceCatalogLineage(candidate, model, assetId, evidence, actor, now);
+        List<CatalogLineageInput> lineageInputs = replaceCatalogLineage(
+            candidate,
+            model,
+            assetId,
+            evidence,
+            actor,
+            now
+        );
+        replaceCatalogColumnLineage(
+            candidate,
+            model,
+            assetId,
+            tableId,
+            evidence,
+            lineageInputs,
+            actor,
+            now
+        );
 
         int artifactWrites = jdbcTemplate.update(
             """
@@ -231,6 +252,18 @@ public class CandidatePublicationRepository {
         jdbcTemplate.update(
             """
             update catalog_dataset_lineage
+               set valid_to = ?, last_modified_by = ?, last_modified_date = ?
+             where downstream_dataset_id = ?
+               and valid_to is null
+            """,
+            Timestamp.from(now),
+            actor,
+            Timestamp.from(now),
+            assetId
+        );
+        jdbcTemplate.update(
+            """
+            update catalog_column_lineage
                set valid_to = ?, last_modified_by = ?, last_modified_date = ?
              where downstream_dataset_id = ?
                and valid_to is null
@@ -905,7 +938,7 @@ public class CandidatePublicationRepository {
         }
     }
 
-    private void replaceCatalogLineage(
+    private List<CatalogLineageInput> replaceCatalogLineage(
         CandidateView candidate,
         ModelSpecView model,
         UUID downstreamAssetId,
@@ -926,6 +959,7 @@ public class CandidatePublicationRepository {
             Timestamp.from(now),
             downstreamAssetId
         );
+        Map<UUID, Boolean> upstreams = new LinkedHashMap<>();
         for (var dependency : model.dependsOn()) {
             UUID upstreamAssetId = requirePublishedAssetId(
                 candidate,
@@ -940,65 +974,563 @@ public class CandidatePublicationRepository {
             if (exists == null || exists != 1) {
                 throw publicationConflict(candidate, "Published dependency Catalog asset is required");
             }
-            jdbcTemplate.update(
-                """
-                insert into catalog_dataset_lineage (
-                    id, upstream_dataset_id, downstream_dataset_id,
-                    relation_type, notes, upstream_asset_type,
-                    downstream_asset_type, direction, project_name,
-                    verification_status, last_execution_id,
-                    last_execution_status, last_observed_at,
-                    last_verified_at, valid_from, valid_to,
-                    created_by, created_date, last_modified_by,
-                    last_modified_date
-                ) values (
-                    ?, ?, ?, 'MODEL_DEPENDENCY', ?, 'DATASET', 'DATASET',
-                    'FORWARD', ?, 'VERIFIED', ?, 'SUCCESS', ?, ?, ?, null,
-                    ?, ?, ?, ?
-                )
-                on conflict (id) do update
-                   set upstream_dataset_id =
-                           excluded.upstream_dataset_id,
-                       downstream_dataset_id =
-                           excluded.downstream_dataset_id,
-                       notes = excluded.notes,
-                       project_name = excluded.project_name,
-                       verification_status = 'VERIFIED',
-                       last_execution_id =
-                           excluded.last_execution_id,
-                       last_execution_status = 'SUCCESS',
-                       last_observed_at =
-                           excluded.last_observed_at,
-                       last_verified_at =
-                           excluded.last_verified_at,
-                       valid_to = null,
-                       last_modified_by =
-                           excluded.last_modified_by,
-                       last_modified_date =
-                           excluded.last_modified_date
-                """,
-                stableUuid(
-                    "catalog-model-lineage:" +
-                    upstreamAssetId +
-                    ":" +
-                    downstreamAssetId +
-                    ":" +
-                    evidence.metadataChecksum()
-                ),
-                upstreamAssetId,
-                downstreamAssetId,
-                "Candidate " + candidate.id(),
-                candidate.planId().toString(),
-                evidence.dbtInvocationId().toString(),
-                Timestamp.from(evidence.observedAt()),
-                Timestamp.from(evidence.observedAt()),
-                Timestamp.from(now),
-                actor,
-                Timestamp.from(now),
-                actor,
-                Timestamp.from(now)
+            upstreams.putIfAbsent(upstreamAssetId, false);
+        }
+        for (UUID sourceAssetId : resolveConfirmedOdsSourceAssets(candidate, model)) {
+            upstreams.merge(
+                sourceAssetId,
+                true,
+                (existing, physicalSource) -> existing || physicalSource
             );
         }
+        List<CatalogLineageInput> inputs = new ArrayList<>();
+        for (Map.Entry<UUID, Boolean> upstream : upstreams.entrySet()) {
+            UUID lineageId = writeCatalogLineage(
+                candidate,
+                upstream.getKey(),
+                downstreamAssetId,
+                evidence,
+                actor,
+                now
+            );
+            inputs.add(
+                new CatalogLineageInput(
+                    upstream.getKey(),
+                    lineageId,
+                    upstream.getValue()
+                )
+            );
+        }
+        return List.copyOf(inputs);
+    }
+
+    private List<UUID> resolveConfirmedOdsSourceAssets(
+        CandidateView candidate,
+        ModelSpecView model
+    ) {
+        if (model.sourceRefs() == null || model.sourceRefs().isEmpty()) {
+            return List.of();
+        }
+        List<UUID> assets = new ArrayList<>();
+        for (SourceRef source : model.sourceRefs()) {
+            if (
+                source == null ||
+                source.kind() != SourceKind.TABLE ||
+                source.layer() != Layer.ODS
+            ) {
+                continue;
+            }
+            if (
+                source.sourceBindingId() == null ||
+                source.ref() == null ||
+                source.resolvedVersion() == null
+            ) {
+                throw publicationConflict(
+                    candidate,
+                    "Confirmed ODS source identity is required for Catalog lineage"
+                );
+            }
+            List<UUID> matches = jdbcTemplate.queryForList(
+                """
+                select dataset.id
+                  from modeling_warehouse_plan_source binding
+                  join catalog_table_schema table_schema
+                    on table_schema.id::text = coalesce(
+                           nullif(binding.locator_json ->> 'assetId', ''),
+                           binding.source_id
+                       )
+                  join catalog_dataset dataset
+                    on dataset.id = table_schema.dataset_id
+                 where binding.tenant_id = ?
+                   and binding.plan_id = ?
+                   and binding.id = ?
+                   and binding.source_type = 'CATALOG_TABLE'
+                   and binding.source_id = ?
+                   and binding.source_version = ?
+                   and binding.confirmation_status = 'CONFIRMED'
+                   and dataset.enabled = true
+                   and upper(
+                           coalesce(
+                               nullif(dataset.warehouse_layer, ''),
+                               'ODS'
+                           )
+                       ) = 'ODS'
+                """,
+                UUID.class,
+                candidate.tenantId(),
+                candidate.planId(),
+                source.sourceBindingId(),
+                source.ref(),
+                source.resolvedVersion()
+            );
+            if (matches.size() != 1) {
+                throw publicationConflict(
+                    candidate,
+                    "Confirmed ODS source must resolve to one enabled Catalog asset"
+                );
+            }
+            assets.add(matches.getFirst());
+        }
+        return assets.stream().distinct().toList();
+    }
+
+    private UUID writeCatalogLineage(
+        CandidateView candidate,
+        UUID upstreamAssetId,
+        UUID downstreamAssetId,
+        PublicationEntryEvidence evidence,
+        String actor,
+        Instant now
+    ) {
+        UUID lineageId = stableUuid(
+            "catalog-model-lineage:" +
+            upstreamAssetId +
+            ":" +
+            downstreamAssetId +
+            ":" +
+            evidence.metadataChecksum()
+        );
+        jdbcTemplate.update(
+            """
+            insert into catalog_dataset_lineage (
+                id, upstream_dataset_id, downstream_dataset_id,
+                relation_type, notes, upstream_asset_type,
+                downstream_asset_type, direction, project_name,
+                verification_status, last_execution_id,
+                last_execution_status, last_observed_at,
+                last_verified_at, valid_from, valid_to,
+                created_by, created_date, last_modified_by,
+                last_modified_date
+            ) values (
+                ?, ?, ?, 'MODEL_DEPENDENCY', ?, 'DATASET', 'DATASET',
+                'FORWARD', ?, 'VERIFIED', ?, 'SUCCESS', ?, ?, ?, null,
+                ?, ?, ?, ?
+            )
+            on conflict (id) do update
+               set upstream_dataset_id = excluded.upstream_dataset_id,
+                   downstream_dataset_id = excluded.downstream_dataset_id,
+                   notes = excluded.notes,
+                   project_name = excluded.project_name,
+                   verification_status = 'VERIFIED',
+                   last_execution_id = excluded.last_execution_id,
+                   last_execution_status = 'SUCCESS',
+                   last_observed_at = excluded.last_observed_at,
+                   last_verified_at = excluded.last_verified_at,
+                   valid_to = null,
+                   last_modified_by = excluded.last_modified_by,
+                   last_modified_date = excluded.last_modified_date
+            """,
+            lineageId,
+            upstreamAssetId,
+            downstreamAssetId,
+            "Candidate " + candidate.id(),
+            candidate.planId().toString(),
+            evidence.dbtInvocationId().toString(),
+            Timestamp.from(evidence.observedAt()),
+            Timestamp.from(evidence.observedAt()),
+            Timestamp.from(now),
+            actor,
+            Timestamp.from(now),
+            actor,
+            Timestamp.from(now)
+        );
+        return lineageId;
+    }
+
+    private void replaceCatalogColumnLineage(
+        CandidateView candidate,
+        ModelSpecView model,
+        UUID downstreamAssetId,
+        UUID downstreamTableId,
+        PublicationEntryEvidence evidence,
+        List<CatalogLineageInput> lineageInputs,
+        String actor,
+        Instant now
+    ) {
+        jdbcTemplate.update(
+            """
+            update catalog_column_lineage
+               set valid_to = ?, last_modified_by = ?, last_modified_date = ?
+             where downstream_dataset_id = ?
+               and relation_type = 'DBT'
+               and valid_to is null
+            """,
+            Timestamp.from(now),
+            actor,
+            Timestamp.from(now),
+            downstreamAssetId
+        );
+        if (lineageInputs == null || lineageInputs.isEmpty()) {
+            return;
+        }
+        Map<String, CatalogColumn> downstreamColumns = loadColumnsForTable(
+            downstreamTableId
+        );
+        if (downstreamColumns.isEmpty()) {
+            return;
+        }
+        Map<String, String> rootExpressions = DbtSqlProjectionParser.selectExpressionsByAlias(
+            requireCurrentModelSql(candidate, model, evidence)
+        );
+        long physicalSourceCount = lineageInputs
+            .stream()
+            .filter(CatalogLineageInput::physicalSource)
+            .count();
+        Map<String, List<String>> stageExpressions = physicalSourceCount == 1
+            ? loadCurrentStageExpressions(model, evidence)
+            : Map.of();
+        for (CatalogLineageInput input : lineageInputs) {
+            Map<String, CatalogColumn> upstreamColumns = loadColumnsForDataset(
+                input.upstreamAssetId()
+            );
+            if (upstreamColumns.isEmpty()) {
+                continue;
+            }
+            for (CatalogColumn downstreamColumn : downstreamColumns.values()) {
+                String downstreamKey = normalizeColumnName(
+                    downstreamColumn.name()
+                );
+                String rootExpression = rootExpressions.get(downstreamKey);
+                Map<String, ColumnMatch> matches;
+                if (input.physicalSource() && physicalSourceCount == 1) {
+                    matches = matchPhysicalSourceColumns(
+                        rootExpression,
+                        stageExpressions,
+                        upstreamColumns
+                    );
+                } else if (!input.physicalSource()) {
+                    matches = matchDirectColumns(
+                        rootExpression,
+                        upstreamColumns
+                    );
+                } else {
+                    matches = Map.of();
+                }
+                if (
+                    matches.isEmpty() &&
+                    (!input.physicalSource() || physicalSourceCount <= 1)
+                ) {
+                    CatalogColumn sameName = upstreamColumns.get(downstreamKey);
+                    if (sameName != null) {
+                        matches = Map.of(
+                            downstreamKey,
+                            new ColumnMatch(
+                                sameName,
+                                "SAME_NAME",
+                                "same-name projection: " + sameName.name(),
+                                "INFERRED"
+                            )
+                        );
+                    }
+                }
+                for (ColumnMatch match : matches.values()) {
+                    writeCatalogColumnLineage(
+                        input,
+                        downstreamAssetId,
+                        match,
+                        downstreamColumn,
+                        evidence,
+                        actor,
+                        now
+                    );
+                }
+            }
+        }
+    }
+
+    private String requireCurrentModelSql(
+        CandidateView candidate,
+        ModelSpecView model,
+        PublicationEntryEvidence evidence
+    ) {
+        List<String> sql = jdbcTemplate.queryForList(
+            """
+            select content
+              from modeling_dbt_artifact
+             where model_spec_id = ?
+               and revision = ?
+               and model_checksum = ?
+               and implementation_revision = ?
+               and dbt_unique_id = ?
+               and artifact_type = 'SQL'
+               and node_kind = 'MODEL'
+               and status = 'COMPILED'
+            """,
+            String.class,
+            model.id(),
+            model.revision(),
+            model.checksum(),
+            evidence.implementationRevision(),
+            evidence.dbtUniqueId()
+        );
+        if (sql.size() != 1 || sql.getFirst() == null || sql.getFirst().isBlank()) {
+            throw publicationConflict(
+                candidate,
+                "Current compiled model SQL is required for Catalog column lineage"
+            );
+        }
+        return sql.getFirst();
+    }
+
+    private Map<String, List<String>> loadCurrentStageExpressions(
+        ModelSpecView model,
+        PublicationEntryEvidence evidence
+    ) {
+        List<String> stageSql = jdbcTemplate.queryForList(
+            """
+            select content
+              from modeling_dbt_artifact
+             where model_spec_id = ?
+               and revision = ?
+               and model_checksum = ?
+               and implementation_revision = ?
+               and artifact_type = 'SQL'
+               and node_kind = 'STG'
+               and status = 'COMPILED'
+             order by dbt_unique_id
+            """,
+            String.class,
+            model.id(),
+            model.revision(),
+            model.checksum(),
+            evidence.implementationRevision()
+        );
+        Map<String, List<String>> result = new LinkedHashMap<>();
+        for (String sql : stageSql) {
+            for (
+                Map.Entry<String, String> projection : DbtSqlProjectionParser
+                    .selectExpressionsByAlias(sql)
+                    .entrySet()
+            ) {
+                result
+                    .computeIfAbsent(
+                        projection.getKey(),
+                        ignored -> new ArrayList<>()
+                    )
+                    .add(projection.getValue());
+            }
+        }
+        return result;
+    }
+
+    private Map<String, ColumnMatch> matchDirectColumns(
+        String rootExpression,
+        Map<String, CatalogColumn> upstreamColumns
+    ) {
+        if (rootExpression == null || rootExpression.isBlank()) {
+            return Map.of();
+        }
+        Map<String, ColumnMatch> result = new LinkedHashMap<>();
+        for (CatalogColumn column : upstreamColumns.values()) {
+            if (
+                DbtSqlProjectionParser.expressionReferencesColumn(
+                    rootExpression,
+                    column.name()
+                )
+            ) {
+                result.putIfAbsent(
+                    normalizeColumnName(column.name()),
+                    new ColumnMatch(
+                        column,
+                        "SQL_EXPRESSION",
+                        rootExpression,
+                        "PARSED"
+                    )
+                );
+            }
+        }
+        return result;
+    }
+
+    private Map<String, ColumnMatch> matchPhysicalSourceColumns(
+        String rootExpression,
+        Map<String, List<String>> stageExpressions,
+        Map<String, CatalogColumn> upstreamColumns
+    ) {
+        if (rootExpression == null || rootExpression.isBlank()) {
+            return Map.of();
+        }
+        Map<String, ColumnMatch> result = new LinkedHashMap<>();
+        for (Map.Entry<String, List<String>> stage : stageExpressions.entrySet()) {
+            if (
+                !DbtSqlProjectionParser.expressionReferencesColumn(
+                    rootExpression,
+                    stage.getKey()
+                )
+            ) {
+                continue;
+            }
+            for (String stageExpression : stage.getValue()) {
+                for (CatalogColumn column : upstreamColumns.values()) {
+                    if (
+                        DbtSqlProjectionParser.expressionReferencesColumn(
+                            stageExpression,
+                            column.name()
+                        )
+                    ) {
+                        result.putIfAbsent(
+                            normalizeColumnName(column.name()),
+                            new ColumnMatch(
+                                column,
+                                "SQL_EXPRESSION",
+                                rootExpression + " => " + stageExpression,
+                                "PARSED"
+                            )
+                        );
+                    }
+                }
+            }
+        }
+        for (
+            Map.Entry<String, ColumnMatch> direct : matchDirectColumns(
+                rootExpression,
+                upstreamColumns
+            ).entrySet()
+        ) {
+            result.putIfAbsent(direct.getKey(), direct.getValue());
+        }
+        return result;
+    }
+
+    private Map<String, CatalogColumn> loadColumnsForDataset(UUID datasetId) {
+        List<CatalogColumn> columns = jdbcTemplate.query(
+            """
+            select column_schema.id, column_schema.name
+              from catalog_column_schema column_schema
+              join catalog_table_schema table_schema
+                on table_schema.id = column_schema.table_id
+             where table_schema.dataset_id = ?
+               and column_schema.status = 'ACTIVE'
+             order by column_schema.name, column_schema.id
+            """,
+            (row, rowNumber) ->
+                new CatalogColumn(
+                    row.getObject("id", UUID.class),
+                    row.getString("name")
+                ),
+            datasetId
+        );
+        return columnsByName(columns);
+    }
+
+    private Map<String, CatalogColumn> loadColumnsForTable(UUID tableId) {
+        List<CatalogColumn> columns = jdbcTemplate.query(
+            """
+            select id, name
+              from catalog_column_schema
+             where table_id = ?
+               and status = 'ACTIVE'
+             order by name, id
+            """,
+            (row, rowNumber) ->
+                new CatalogColumn(
+                    row.getObject("id", UUID.class),
+                    row.getString("name")
+                ),
+            tableId
+        );
+        return columnsByName(columns);
+    }
+
+    private Map<String, CatalogColumn> columnsByName(
+        List<CatalogColumn> columns
+    ) {
+        Map<String, CatalogColumn> result = new LinkedHashMap<>();
+        for (CatalogColumn column : columns) {
+            String key = normalizeColumnName(column.name());
+            if (key != null) {
+                result.putIfAbsent(key, column);
+            }
+        }
+        return result;
+    }
+
+    private void writeCatalogColumnLineage(
+        CatalogLineageInput input,
+        UUID downstreamAssetId,
+        ColumnMatch match,
+        CatalogColumn downstreamColumn,
+        PublicationEntryEvidence evidence,
+        String actor,
+        Instant now
+    ) {
+        CatalogColumn upstreamColumn = match.column();
+        jdbcTemplate.update(
+            """
+            insert into catalog_column_lineage (
+                id, dataset_lineage_id,
+                upstream_dataset_id, downstream_dataset_id,
+                upstream_column_id, downstream_column_id,
+                upstream_column, downstream_column,
+                relation_type, lineage_type, expression, confidence,
+                project_name, lineage_job_id, last_observed_at,
+                valid_from, valid_to,
+                created_by, created_date, last_modified_by,
+                last_modified_date
+            ) values (
+                ?, ?, ?, ?, ?, ?, ?, ?, 'DBT', ?, ?, ?, ?, null, ?, ?, null,
+                ?, ?, ?, ?
+            )
+            on conflict (
+                upstream_dataset_id, downstream_dataset_id,
+                upstream_column, downstream_column, relation_type
+            ) do update
+               set dataset_lineage_id = excluded.dataset_lineage_id,
+                   upstream_column_id = excluded.upstream_column_id,
+                   downstream_column_id = excluded.downstream_column_id,
+                   lineage_type = excluded.lineage_type,
+                   expression = excluded.expression,
+                   confidence = excluded.confidence,
+                   project_name = excluded.project_name,
+                   last_observed_at = excluded.last_observed_at,
+                   valid_to = null,
+                   last_modified_by = excluded.last_modified_by,
+                   last_modified_date = excluded.last_modified_date
+            """,
+            stableUuid(
+                "catalog-column-lineage:" +
+                input.upstreamAssetId() +
+                ":" +
+                downstreamAssetId +
+                ":" +
+                normalizeColumnName(upstreamColumn.name()) +
+                ":" +
+                normalizeColumnName(downstreamColumn.name()) +
+                ":DBT"
+            ),
+            input.lineageId(),
+            input.upstreamAssetId(),
+            downstreamAssetId,
+            upstreamColumn.id(),
+            downstreamColumn.id(),
+            upstreamColumn.name(),
+            downstreamColumn.name(),
+            match.lineageType(),
+            match.expression(),
+            match.confidence(),
+            dbtProjectName(evidence.dbtUniqueId()),
+            Timestamp.from(evidence.observedAt()),
+            Timestamp.from(now),
+            actor,
+            Timestamp.from(now),
+            actor,
+            Timestamp.from(now)
+        );
+    }
+
+    private static String dbtProjectName(String dbtUniqueId) {
+        if (dbtUniqueId == null || dbtUniqueId.isBlank()) {
+            return null;
+        }
+        String[] parts = dbtUniqueId.split("\\.", 3);
+        return parts.length >= 2 ? parts[1] : dbtUniqueId;
+    }
+
+    private static String normalizeColumnName(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim().toLowerCase(Locale.ROOT);
     }
 
     private UUID requirePublishedAssetId(
@@ -1117,6 +1649,21 @@ public class CandidatePublicationRepository {
             Map.of("candidateId", candidate.id(), "candidateVersion", candidate.version())
         );
     }
+
+    private record CatalogLineageInput(
+        UUID upstreamAssetId,
+        UUID lineageId,
+        boolean physicalSource
+    ) {}
+
+    private record CatalogColumn(UUID id, String name) {}
+
+    private record ColumnMatch(
+        CatalogColumn column,
+        String lineageType,
+        String expression,
+        String confidence
+    ) {}
 
     public record PublishedModelBinding(
         UUID modelSpecId,

@@ -198,6 +198,51 @@ class ModelReleaseCandidateResourceTest {
     }
 
     @Test
+    void checksumBoundCreatePassesTheDependencyPlanFenceToTheApplicationBoundary() throws Exception {
+        String checksum = "a".repeat(64);
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(
+            service.create(
+                eq("server-tenant"),
+                eq("xiezm"),
+                eq(PLAN_ID),
+                any(),
+                eq(checksum),
+                eq(com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.Strategy.WITH_MISSING_UPSTREAMS)
+            )
+        )
+            .thenReturn(new CommandResult(candidate(), false, List.of()));
+
+        mockMvc
+            .perform(
+                post("/api/modeling/plans/{planId}/release-candidates", PLAN_ID)
+                    .header("Idempotency-Key", "planned-create-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "environment":"dev",
+                          "entries":[{"modelSpecId":"40000000-0000-0000-0000-000000000001","sortOrder":0}],
+                          "reason":"dependency-aware materialization",
+                          "materializationPlanChecksum":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                          "strategy":"WITH_MISSING_UPSTREAMS"
+                        }
+                        """
+                    )
+            )
+            .andExpect(status().isCreated());
+
+        verify(service).create(
+            eq("server-tenant"),
+            eq("xiezm"),
+            eq(PLAN_ID),
+            any(),
+            eq(checksum),
+            eq(com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.Strategy.WITH_MISSING_UPSTREAMS)
+        );
+    }
+
+    @Test
     void lockRequiresStrongEtagBeforeCallingTheService() throws Exception {
         mockMvc
             .perform(

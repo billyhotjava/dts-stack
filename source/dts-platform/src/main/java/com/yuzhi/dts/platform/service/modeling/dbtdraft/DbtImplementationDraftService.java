@@ -7,6 +7,9 @@ import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftReposito
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository.DraftRow;
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository.FileRow;
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository.NewDraft;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService.Resolution;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Reconciliation;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
@@ -32,6 +35,7 @@ import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftCo
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.BundleFileView;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CreateDraftRequest;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.Diagnostic;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.DependencyValidationView;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.DraftException;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.DraftState;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.DraftView;
@@ -88,6 +92,7 @@ public class DbtImplementationDraftService {
     private final ModelingDbtArtifactImportService artifactImports;
     private final ModelRepresentationEvidencePort representationEvidence;
     private final DbtImplementationDraftAuditRecorder auditRecorder;
+    private final ModelImplementationDependencyService dependencies;
     private final ObjectMapper objectMapper;
     private final DbtCanonicalProjectReconstructor canonicalProjects;
     private final Clock clock;
@@ -102,7 +107,8 @@ public class DbtImplementationDraftService {
         ModelingDbtArtifactImportService artifactImports,
         ModelRepresentationEvidencePort representationEvidence,
         DbtImplementationDraftAuditRecorder auditRecorder,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        ModelImplementationDependencyService dependencies
     ) {
         this(
             repository,
@@ -114,6 +120,7 @@ public class DbtImplementationDraftService {
             representationEvidence,
             auditRecorder,
             objectMapper,
+            dependencies,
             Clock.systemUTC()
         );
     }
@@ -130,6 +137,34 @@ public class DbtImplementationDraftService {
         ObjectMapper objectMapper,
         Clock clock
     ) {
+        this(
+            repository,
+            modelSpecs,
+            lifecycle,
+            writeAccess,
+            validator,
+            artifactImports,
+            representationEvidence,
+            auditRecorder,
+            objectMapper,
+            null,
+            clock
+        );
+    }
+
+    DbtImplementationDraftService(
+        DbtImplementationDraftRepository repository,
+        ModelSpecApplicationService modelSpecs,
+        ModelLifecycleService lifecycle,
+        ModelSpecPlanWriteAccessPort writeAccess,
+        AdvancedDbtDraftStaticValidator validator,
+        ModelingDbtArtifactImportService artifactImports,
+        ModelRepresentationEvidencePort representationEvidence,
+        DbtImplementationDraftAuditRecorder auditRecorder,
+        ObjectMapper objectMapper,
+        ModelImplementationDependencyService dependencies,
+        Clock clock
+    ) {
         this.repository = repository;
         this.modelSpecs = modelSpecs;
         this.lifecycle = lifecycle;
@@ -138,6 +173,7 @@ public class DbtImplementationDraftService {
         this.artifactImports = artifactImports;
         this.representationEvidence = representationEvidence;
         this.auditRecorder = auditRecorder;
+        this.dependencies = dependencies;
         this.objectMapper = objectMapper;
         this.canonicalProjects = new DbtCanonicalProjectReconstructor(objectMapper);
         this.clock = clock;
@@ -333,6 +369,32 @@ public class DbtImplementationDraftService {
             if (source.files().stream().noneMatch(file -> "dbt_project.yml".equals(file.path()))) {
                 throw sourceBundleUnavailable();
             }
+            if ((source.dependencyChecksum() == null) != (source.dependencySnapshot() == null)) {
+                throw sourceBundleUnavailable();
+            }
+            if (source.dependencySnapshot() != null) {
+                DbtImplementationDraftContract.requiredChecksum(
+                    source.dependencyChecksum(),
+                    "dependencyChecksum"
+                );
+                if (!Objects.equals(source.dependencyChecksum(), source.dependencySnapshot().dependencyChecksum())) {
+                    throw sourceBundleUnavailable();
+                }
+                source.managedDependencyAliases().forEach((alias, dependency) -> {
+                    if (
+                        alias == null ||
+                        alias.isBlank() ||
+                        dependency == null ||
+                        dependency.isBlank() ||
+                        !alias.startsWith("model.") ||
+                        !dependency.startsWith("model.")
+                    ) {
+                        throw sourceBundleUnavailable();
+                    }
+                });
+            } else if (!source.managedDependencyAliases().isEmpty()) {
+                throw sourceBundleUnavailable();
+            }
             return source;
         } catch (DraftException failure) {
             throw failure;
@@ -376,12 +438,31 @@ public class DbtImplementationDraftService {
                 "A committing or committed draft cannot be edited"
             );
         }
+        requireManagedFilesUnchanged(current, files);
         DraftRow saved = repository
             .replaceFiles(tenantId, modelSpecId, draftId, actorId, expectedEtag, nextEtag(), files, now)
             .orElseThrow(() -> etagConflict(current, expectedEtag));
         long totalBytes = files.stream().mapToLong(file -> file.content().getBytes(java.nio.charset.StandardCharsets.UTF_8).length).sum();
         audit(AUDIT_SAVE, saved, files.size(), null, null, null, null, correlationId);
         return new SaveFilesView(saved.id(), saved.etag(), saved.expiresAt(), files.size(), totalBytes);
+    }
+
+    private void requireManagedFilesUnchanged(DraftRow current, List<FileInput> files) {
+        if (dependencies == null || current.sourceBundleSnapshot() == null) return;
+        SourceBundleView source = sourceBundleSnapshot(current.sourceBundleSnapshot());
+        if (source.dependencySnapshot() == null) return;
+        Map<String, FileInput> submitted = new LinkedHashMap<>();
+        files.forEach(file -> submitted.put(file.path(), file));
+        for (BundleFileView managed : source.files()) {
+            if (!managed.path().startsWith("models/.dts_dependencies/")) continue;
+            FileInput actual = submitted.get(managed.path());
+            if (actual == null || !Objects.equals(actual.content(), managed.content())) {
+                throw DbtImplementationDraftContract.unprocessable(
+                    "DBT_DRAFT_MANAGED_DEPENDENCY_IMMUTABLE",
+                    "System-managed dbt dependency files cannot be removed, renamed or edited"
+                );
+            }
+        }
     }
 
     @Transactional
@@ -427,6 +508,13 @@ public class DbtImplementationDraftService {
         BundleSnapshot bundle = freezeBundle(files, validated);
         List<Diagnostic> diagnostics = diagnostics(validated);
         List<ProposedNode> structure = structure(validated);
+        DependencyValidationView dependencyValidation = validateDependencies(
+            tenantId,
+            actorId,
+            modelSpecId,
+            current,
+            validated
+        );
         DraftRow saved = repository
             .markValidated(
                 tenantId,
@@ -439,7 +527,7 @@ public class DbtImplementationDraftService {
                 bundle.projectChecksum(),
                 bundle.bundleChecksum(),
                 bundle.manifest(),
-                validationSummary(diagnostics, structure),
+                validationSummary(diagnostics, structure, dependencyValidation),
                 now
             )
             .orElseThrow(() -> etagConflict(current, expectedEtag));
@@ -460,7 +548,66 @@ public class DbtImplementationDraftService {
             saved.expiresAt(),
             validated.validatedChecksum(),
             diagnostics,
-            structure
+            structure,
+            dependencyValidation
+        );
+    }
+
+    private DependencyValidationView validateDependencies(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        DraftRow draft,
+        ValidatedProject validated
+    ) {
+        if (dependencies == null || draft.sourceBundleSnapshot() == null) return null;
+        SourceBundleView source = sourceBundleSnapshot(draft.sourceBundleSnapshot());
+        if (source.dependencySnapshot() == null) return null;
+        ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, draft.planId());
+        requireModelPins(draft, model);
+        ImplementationView implementation = lifecycle.timeline(tenantId, modelSpecId).implementation();
+        requireImplementationPin(
+            modelSpecId,
+            implementation,
+            draft.baseImplementationRevision(),
+            draft.baseImplementationChecksum()
+        );
+        ValidatedNode ownedTarget = target(validated, implementation);
+        Resolution current = resolveDependencies(
+            tenantId,
+            model,
+            implementation,
+            validated.projectKey(),
+            ownedTarget.name()
+        );
+        if (!Objects.equals(source.dependencyChecksum(), current.snapshot().dependencyChecksum())) {
+            throw dependencyFailure(
+                "MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE",
+                "ModelSpec dependencies changed after the dbt draft was created",
+                Map.of(
+                    "expectedDependencyChecksum",
+                    source.dependencyChecksum(),
+                    "currentDependencyChecksum",
+                    current.snapshot().dependencyChecksum()
+                )
+            );
+        }
+        List<String> parsed = ownedTarget
+            .dependencies()
+            .stream()
+            .map(value -> source.managedDependencyAliases().getOrDefault(value, value))
+            .toList();
+        Reconciliation reconciliation;
+        try {
+            reconciliation = dependencies.reconcile(current.snapshot(), parsed);
+        } catch (ModelSpecException failure) {
+            throw dependencyFailure(failure.code(), failure.getMessage(), failure.details());
+        }
+        return new DependencyValidationView(
+            current.snapshot().dependencyChecksum(),
+            reconciliation.matched(),
+            reconciliation.missing(),
+            reconciliation.undeclared()
         );
     }
 
@@ -498,8 +645,29 @@ public class DbtImplementationDraftService {
             request == null ? null : request.validatedChecksum(),
             "validatedChecksum"
         );
+        SourceBundleView frozenSource = current.sourceBundleSnapshot() == null
+            ? null
+            : sourceBundleSnapshot(current.sourceBundleSnapshot());
+        String dependencyChecksum = frozenSource == null ? null : frozenSource.dependencyChecksum();
+        if (dependencyChecksum != null) {
+            String suppliedDependencyChecksum = DbtImplementationDraftContract.requiredChecksum(
+                request == null ? null : request.dependencyChecksum(),
+                "dependencyChecksum"
+            );
+            if (!Objects.equals(dependencyChecksum, suppliedDependencyChecksum)) {
+                throw DbtImplementationDraftContract.precondition(
+                    "DBT_DRAFT_DEPENDENCY_PIN_STALE",
+                    "The supplied dependency checksum is not current"
+                );
+            }
+        }
         String frozenBundleChecksum = requireFrozenChecksum(current.bundleChecksum());
-        String derivedCommitKey = commitKey(idempotencyKey, validatedChecksum, frozenBundleChecksum);
+        String derivedCommitKey = commitKey(
+            idempotencyKey,
+            validatedChecksum,
+            frozenBundleChecksum,
+            dependencyChecksum
+        );
         if (current.state() == DraftState.COMMITTED) {
             if (
                 Objects.equals(current.commitIdempotencyKey(), derivedCommitKey) &&
@@ -515,7 +683,7 @@ public class DbtImplementationDraftService {
                     frozenBundleChecksum,
                     correlationId
                 );
-                return committedView(current);
+                return committedView(current, dependencyChecksum);
             }
             throw DbtImplementationDraftContract.conflict(
                 "DBT_DRAFT_COMMIT_IDEMPOTENCY_CONFLICT",
@@ -542,6 +710,13 @@ public class DbtImplementationDraftService {
         List<FileRow> files = repository.listFiles(draftId);
         ValidatedProject validated = staticValidate(files);
         BundleSnapshot bundle = freezeBundle(files, validated);
+        DependencyValidationView dependencyValidation = validateDependencies(
+            tenantId,
+            actorId,
+            modelSpecId,
+            current,
+            validated
+        );
         if (!Objects.equals(validated.validatedChecksum(), validatedChecksum)) {
             throw DbtImplementationDraftContract.precondition(
                 "DBT_DRAFT_VALIDATED_CONTENT_CONFLICT",
@@ -591,7 +766,7 @@ public class DbtImplementationDraftService {
                     bundle.bundleChecksum(),
                     correlationId
                 );
-                return committedView(winner);
+                return committedView(winner, dependencyChecksum);
             }
             throw etagConflict(winner, expectedEtag);
         }
@@ -605,28 +780,36 @@ public class DbtImplementationDraftService {
                 projectedFields
             );
         }
+        Resolution committedDependencies = dependencyValidation == null
+            ? null
+            : resolveDependencies(
+                tenantId,
+                model,
+                null,
+                validated.projectKey(),
+                target.name()
+            );
         ExpectedImplementationVersion expectedImplementation = new ExpectedImplementationVersion(
             modelSpecId,
             current.baseImplementationRevision() == null ? 0 : current.baseImplementationRevision(),
             current.baseImplementationChecksum()
         );
+        LinkedHashMap<String, Object> generatedConfig = new LinkedHashMap<>();
+        generatedConfig.put("projectKey", validated.projectKey());
+        generatedConfig.put("dbtUniqueId", target.dbtUniqueId());
+        generatedConfig.put("projectChecksum", bundle.projectChecksum());
+        generatedConfig.put("bundleChecksum", bundle.bundleChecksum());
+        if (committedDependencies != null) {
+            generatedConfig.put("dependencyChecksum", committedDependencies.snapshot().dependencyChecksum());
+            generatedConfig.put("dependencySnapshot", committedDependencies.snapshot());
+            generatedConfig.put(
+                "managedDependencyAliases",
+                frozenSource == null ? Map.of() : frozenSource.managedDependencyAliases()
+            );
+        }
         SaveImplementationCommand command = new SaveImplementationCommand(
             InputMode.GENERATED,
-            List.of(
-                new GeneratedInput(
-                    "DBT",
-                    Map.of(
-                        "projectKey",
-                        validated.projectKey(),
-                        "dbtUniqueId",
-                        target.dbtUniqueId(),
-                        "projectChecksum",
-                        bundle.projectChecksum(),
-                        "bundleChecksum",
-                        bundle.bundleChecksum()
-                    )
-                )
-            ),
+            List.of(new GeneratedInput("DBT", Map.copyOf(generatedConfig))),
             List.of(),
             Map.of(
                 "targetPhysicalName",
@@ -692,7 +875,7 @@ public class DbtImplementationDraftService {
             bundle.bundleChecksum(),
             correlationId
         );
-        return committedView(committed, model);
+        return committedView(committed, model, dependencyChecksum);
     }
 
     private ModelSpecView requireEditableModel(String tenantId, String actorId, UUID modelSpecId, UUID planId) {
@@ -809,7 +992,12 @@ public class DbtImplementationDraftService {
                     )
                 );
         }
-        List<ValidatedNode> models = validated.nodes().stream().filter(node -> "MODEL".equals(node.nodeKind())).toList();
+        List<ValidatedNode> models = validated
+            .nodes()
+            .stream()
+            .filter(node -> "MODEL".equals(node.nodeKind()))
+            .filter(node -> !managedDependencyPath(node.resourcePath()))
+            .toList();
         if (models.size() != 1) {
             throw DbtImplementationDraftContract.unprocessable(
                 "DBT_DRAFT_MODEL_SELECTION_UNSUPPORTED",
@@ -817,6 +1005,11 @@ public class DbtImplementationDraftService {
             );
         }
         return models.getFirst();
+    }
+
+    private static boolean managedDependencyPath(String path) {
+        String normalized = Objects.toString(path, "").replace('\\', '/');
+        return normalized.contains("/.dts_dependencies/") || normalized.contains("/dts_dependencies/");
     }
 
     private static void requireMaterialization(ModelSpecView model, ValidatedNode target) {
@@ -899,12 +1092,35 @@ public class DbtImplementationDraftService {
         String targetPhysicalName
     ) {
         if (current == null) {
+            Resolution dependencyResolution = dependencies == null
+                ? null
+                : resolveDependencies(
+                    tenantId,
+                    model,
+                    null,
+                    initializedProjectKey(modelSpecId),
+                    targetPhysicalName
+                );
             return freezeCanonical(
-                canonicalProjects.initialize(modelSpecId, model.materialization(), targetPhysicalName),
+                canonicalProjects.initialize(
+                    modelSpecId,
+                    model.materialization(),
+                    targetPhysicalName,
+                    dependencyResolution
+                ),
                 SourceBundleKind.CANONICAL_INITIALIZATION
             );
         }
         if (implementationRevision == null || implementationChecksum == null) throw sourceBundleUnavailable();
+        Resolution dependencyResolution = dependencies == null
+            ? null
+            : resolveDependencies(
+                tenantId,
+                model,
+                current,
+                current.projectKey(),
+                current.dbtUniqueId().substring(current.dbtUniqueId().lastIndexOf('.') + 1)
+            );
 
         int sourceModelRevision = current.revision();
         String sourceModelChecksum = current.modelChecksum();
@@ -934,7 +1150,11 @@ public class DbtImplementationDraftService {
                 implementationRevision,
                 implementationChecksum
             );
-            return freezeCanonical(canonical, SourceBundleKind.CANONICAL_ARTIFACT_RECONSTRUCTION);
+            return withDependencies(
+                freezeCanonical(canonical, SourceBundleKind.CANONICAL_ARTIFACT_RECONSTRUCTION),
+                dependencyResolution,
+                Map.of()
+            );
         }
         String configuredProjectKey = bundleText(config, "projectKey", 128);
         String configuredDbtUniqueId = bundleText(config, "dbtUniqueId", 512);
@@ -974,13 +1194,17 @@ public class DbtImplementationDraftService {
             .map(file -> new BundleFileView(file.path(), file.content(), file.checksum(), file.byteSize()))
             .toList();
         if (files.stream().noneMatch(file -> "dbt_project.yml".equals(file.path()))) throw sourceBundleUnavailable();
-        return new SourceBundleView(
-            restored.projectKey(),
-            restored.projectChecksum(),
-            restored.bundleChecksum(),
-            SourceBundleKind.FROZEN_SOURCE_BUNDLE,
-            true,
-            files
+        return withDependencies(
+            new SourceBundleView(
+                restored.projectKey(),
+                restored.projectChecksum(),
+                restored.bundleChecksum(),
+                SourceBundleKind.FROZEN_SOURCE_BUNDLE,
+                true,
+                files
+            ),
+            dependencyResolution,
+            Map.of()
         );
     }
 
@@ -1031,8 +1255,74 @@ public class DbtImplementationDraftService {
             bundle.bundleChecksum(),
             sourceKind,
             false,
-            files.stream().map(file -> new BundleFileView(file.path(), file.content(), file.checksum(), file.byteSize())).toList()
+            files.stream().map(file -> new BundleFileView(file.path(), file.content(), file.checksum(), file.byteSize())).toList(),
+            canonical.dependencySnapshot() == null ? null : canonical.dependencySnapshot().dependencyChecksum(),
+            canonical.dependencySnapshot(),
+            canonical.dependencyAliases()
         );
+    }
+
+    private static SourceBundleView withDependencies(
+        SourceBundleView source,
+        Resolution dependencies,
+        Map<String, String> aliases
+    ) {
+        if (dependencies == null) return source;
+        return new SourceBundleView(
+            source.projectKey(),
+            source.projectChecksum(),
+            source.bundleChecksum(),
+            source.sourceKind(),
+            source.lossless(),
+            source.files(),
+            dependencies.snapshot().dependencyChecksum(),
+            dependencies.snapshot(),
+            aliases
+        );
+    }
+
+    private static String initializedProjectKey(UUID modelSpecId) {
+        return "dts_model_" + modelSpecId.toString().replace("-", "").substring(0, 12);
+    }
+
+    private Resolution resolveDependencies(
+        String tenantId,
+        ModelSpecView model,
+        ImplementationView implementation,
+        String projectKey,
+        String targetName
+    ) {
+        try {
+            return dependencies.resolveForDraft(
+                tenantId,
+                model,
+                implementation,
+                projectKey,
+                targetName
+            );
+        } catch (ModelSpecException failure) {
+            throw dependencyFailure(failure.code(), failure.getMessage(), failure.details());
+        }
+    }
+
+    private static DraftException dependencyFailure(String sourceCode, String message, Object details) {
+        String code = switch (sourceCode) {
+            case "MODEL_IMPLEMENTATION_DEPENDENCY_UNDECLARED" -> "DBT_DRAFT_DEPENDENCY_UNDECLARED";
+            case "MODEL_IMPLEMENTATION_DEPENDENCY_MISSING" -> "DBT_DRAFT_DEPENDENCY_MISSING";
+            case "MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE" -> "DBT_DRAFT_DEPENDENCY_PIN_STALE";
+            case "MODEL_SOURCE_BINDING_STALE" -> "DBT_DRAFT_SOURCE_BINDING_STALE";
+            case "MODEL_IMPLEMENTATION_DEPENDENCY_CYCLE" -> "DBT_DRAFT_DEPENDENCY_CYCLE";
+            default -> "DBT_DRAFT_DEPENDENCY_INVALID";
+        };
+        Map<String, Object> projectedDetails;
+        if (details instanceof Map<?, ?> values) {
+            LinkedHashMap<String, Object> projected = new LinkedHashMap<>();
+            values.forEach((key, value) -> projected.put(Objects.toString(key), value));
+            projectedDetails = Map.copyOf(projected);
+        } else {
+            projectedDetails = details == null ? Map.of() : Map.of("dependency", details);
+        }
+        return new DraftException(code, message, ErrorKind.PRECONDITION_FAILED, projectedDetails);
     }
 
     private static void requireSourcePins(
@@ -1179,7 +1469,24 @@ public class DbtImplementationDraftService {
         }
     }
 
-    private static String commitKey(String idempotencyKey, String validatedChecksum, String bundleChecksum) {
+    private static String commitKey(
+        String idempotencyKey,
+        String validatedChecksum,
+        String bundleChecksum,
+        String dependencyChecksum
+    ) {
+        if (dependencyChecksum != null) {
+            return ModelPackageChecksum.sha256Text(
+                String.join(
+                    "\u0000",
+                    "dbt-draft-commit-v2",
+                    idempotencyKey,
+                    validatedChecksum,
+                    bundleChecksum,
+                    dependencyChecksum
+                )
+            );
+        }
         return ModelPackageChecksum.sha256Text(
             String.join("\u0000", "dbt-draft-commit-v1", idempotencyKey, validatedChecksum, bundleChecksum)
         );
@@ -1210,9 +1517,17 @@ public class DbtImplementationDraftService {
             .toList();
     }
 
-    private String validationSummary(List<Diagnostic> diagnostics, List<ProposedNode> structure) {
+    private String validationSummary(
+        List<Diagnostic> diagnostics,
+        List<ProposedNode> structure,
+        DependencyValidationView dependencyValidation
+    ) {
         try {
-            return objectMapper.writeValueAsString(Map.of("diagnostics", diagnostics, "proposedStructure", structure));
+            LinkedHashMap<String, Object> summary = new LinkedHashMap<>();
+            summary.put("diagnostics", diagnostics);
+            summary.put("proposedStructure", structure);
+            if (dependencyValidation != null) summary.put("dependencyValidation", dependencyValidation);
+            return objectMapper.writeValueAsString(summary);
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Static validation summary could not be serialized", exception);
         }
@@ -1254,14 +1569,31 @@ public class DbtImplementationDraftService {
     }
 
     private static CommitView committedView(DraftRow row) {
-        return committedView(row, row.baseModelRevision(), row.baseModelChecksum());
+        return committedView(row, row.baseModelRevision(), row.baseModelChecksum(), null);
     }
 
     private static CommitView committedView(DraftRow row, ModelSpecView model) {
-        return committedView(row, model.revision(), model.checksum());
+        return committedView(row, model.revision(), model.checksum(), null);
     }
 
-    private static CommitView committedView(DraftRow row, int modelRevision, String modelChecksum) {
+    private static CommitView committedView(DraftRow row, String dependencyChecksum) {
+        return committedView(row, row.baseModelRevision(), row.baseModelChecksum(), dependencyChecksum);
+    }
+
+    private static CommitView committedView(
+        DraftRow row,
+        ModelSpecView model,
+        String dependencyChecksum
+    ) {
+        return committedView(row, model.revision(), model.checksum(), dependencyChecksum);
+    }
+
+    private static CommitView committedView(
+        DraftRow row,
+        int modelRevision,
+        String modelChecksum,
+        String dependencyChecksum
+    ) {
         if (row.implementationId() == null || row.implementationRevision() == null) {
             throw new IllegalStateException("Committed advanced dbt draft is missing its implementation receipt");
         }
@@ -1274,7 +1606,8 @@ public class DbtImplementationDraftService {
             row.implementationRevision(),
             row.implementationChecksum(),
             row.artifactCount(),
-            row.etag()
+            row.etag(),
+            dependencyChecksum
         );
     }
 

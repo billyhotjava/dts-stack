@@ -7,6 +7,12 @@
 
 可视化模型进入代码模式时先看到与当前版本严格绑定的只读 dbt 代码；只有用户明确确认“接管代码实现”后，平台才原子地把模型和实现转为 DBT_MANAGED，**并保证转换后的模型仍能编译、物化、发布**。
 
+## Feature 关联
+
+- 上游：F1 提供唯一 code view；F0/T02 固定 canonical bundle/compile 契约。
+- 下游：F4 编辑接管后的 bundle；F6/T03 以统一 dependency snapshot 初始化后续草稿；F7/T03 复用 preview/freeze/import seam；F5 回归接管后的统一发布。
+- 约束：本 Feature 只改变 ownership 与制品来源，不创建依赖图、物化计划或发布分支。
+
 ## 契约定义
 
 | 类型 | 契约 | 关键字段/签名 |

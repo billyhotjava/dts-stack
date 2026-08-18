@@ -24,6 +24,9 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRole;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.ExpectedRelationType;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalColumn;
 import com.yuzhi.dts.platform.service.catalog.CatalogPhysicalLocator;
@@ -517,6 +520,7 @@ class CandidatePublicationRepositoryIT {
             "fct_dbt_retry_" +
             scope.prodModelId().toString().replace("-", "").substring(0, 12);
         UUID upstreamAssetId = UUID.randomUUID();
+        UUID upstreamTableId = UUID.randomUUID();
         try {
             transaction.executeWithoutResult(status -> {
                 seedPlanAndCandidate(scope);
@@ -546,7 +550,8 @@ class CandidatePublicationRepositoryIT {
                 jdbcTemplate.update(
                     """
                     update modeling_dbt_artifact
-                       set ownership = 'DBT_MANAGED'
+                       set ownership = 'DBT_MANAGED',
+                           content = 'select u.payment_id as payment_id from dim_upstream u'
                      where model_spec_id = ?
                     """,
                     scope.prodModelId()
@@ -569,6 +574,33 @@ class CandidatePublicationRepositoryIT {
                         .toString()
                         .replace("-", "")
                         .substring(0, 12),
+                    Timestamp.from(NOW.minusSeconds(30)),
+                    Timestamp.from(NOW.minusSeconds(30))
+                );
+                jdbcTemplate.update(
+                    """
+                    insert into catalog_table_schema (
+                        id, dataset_id, name, classification,
+                        created_by, created_date, last_modified_date
+                    ) values (?, ?, 'dim_upstream', 'L2', 'it', ?, ?)
+                    """,
+                    upstreamTableId,
+                    upstreamAssetId,
+                    Timestamp.from(NOW.minusSeconds(30)),
+                    Timestamp.from(NOW.minusSeconds(30))
+                );
+                jdbcTemplate.update(
+                    """
+                    insert into catalog_column_schema (
+                        id, table_id, name, data_type, nullable, status,
+                        created_by, created_date, last_modified_date
+                    ) values (
+                        ?, ?, 'payment_id', 'bigint', false, 'ACTIVE',
+                        'it', ?, ?
+                    )
+                    """,
+                    UUID.randomUUID(),
+                    upstreamTableId,
                     Timestamp.from(NOW.minusSeconds(30)),
                     Timestamp.from(NOW.minusSeconds(30))
                 );
@@ -660,6 +692,23 @@ class CandidatePublicationRepositoryIT {
                 )
             ).isEqualTo(1);
             assertThat(
+                jdbcTemplate.queryForMap(
+                    """
+                    select upstream_column, downstream_column, confidence
+                      from catalog_column_lineage
+                     where upstream_dataset_id = ?
+                       and downstream_dataset_id = ?
+                       and relation_type = 'DBT'
+                       and valid_to is null
+                    """,
+                    upstreamAssetId,
+                    downstreamAssetId
+                )
+            )
+                .containsEntry("upstream_column", "payment_id")
+                .containsEntry("downstream_column", "payment_id")
+                .containsEntry("confidence", "PARSED");
+            assertThat(
                 jdbcTemplate.queryForObject(
                     """
                     select count(*)
@@ -716,6 +765,398 @@ class CandidatePublicationRepositoryIT {
             ).isEqualTo(downstreamAssetId);
         } finally {
             transaction.executeWithoutResult(status -> cleanup(scope));
+        }
+    }
+
+    @Test
+    void dbtManagedDwdPublicationProjectsConfirmedOdsTableAndTransitiveColumnLineage() {
+        TestScope scope = TestScope.create();
+        TransactionTemplate transaction = new TransactionTemplate(
+            transactionManager
+        );
+        UUID sourceDatasetId = UUID.randomUUID();
+        UUID sourceTableId = UUID.randomUUID();
+        UUID sourceBindingId = UUID.randomUUID();
+        String sourceVersion = "source-v1";
+        String tableName =
+            "fct_ods_lineage_" +
+            scope.prodModelId().toString().replace("-", "").substring(0, 12);
+        String rootUniqueId = dbtUniqueId(scope.prodModelId());
+        String stgUniqueId =
+            "model.finance.stg_budget_" +
+            scope.prodModelId().toString().replace("-", "");
+        try {
+            transaction.executeWithoutResult(status -> {
+                seedPlanAndCandidate(scope);
+                seedPublishedModel(
+                    scope,
+                    scope.prodModelId(),
+                    scope.prodReleaseId(),
+                    "PROD",
+                    true
+                );
+                seedCompiledArtifact(scope);
+                jdbcTemplate.update(
+                    """
+                    update modeling_dbt_artifact
+                       set ownership = 'DBT_MANAGED',
+                           content = ?,
+                           content_checksum = ?
+                     where model_spec_id = ?
+                       and artifact_type = 'SQL'
+                       and node_kind = 'MODEL'
+                    """,
+                    "select s.budget_no as budget_no, s.budget_amount as budget_amount from {{ ref('stg_budget') }} s",
+                    "1".repeat(64),
+                    scope.prodModelId()
+                );
+                jdbcTemplate.update(
+                    """
+                    insert into modeling_dbt_artifact (
+                        id, model_spec_id, project_key, dbt_unique_id,
+                        artifact_type, artifact_key, path, content_checksum,
+                        content, status, revision, plan_id, model_checksum,
+                        ownership, implementation_revision, node_kind,
+                        materialization, created_date, last_modified_date
+                    ) values (
+                        ?, ?, 'finance', ?, 'DEPENDENCY', ?, ?, ?, ?,
+                        'COMPILED', 1, ?, ?, 'DBT_MANAGED', 1, 'MODEL',
+                        'table', ?, ?
+                    ), (
+                        ?, ?, 'finance', ?, 'SQL', ?, ?, ?, ?,
+                        'COMPILED', 1, ?, ?, 'DBT_MANAGED', 1, 'STG',
+                        'view', ?, ?
+                    ), (
+                        ?, ?, 'finance', ?, 'DEPENDENCY', ?, ?, ?, ?,
+                        'COMPILED', 1, ?, ?, 'DBT_MANAGED', 1, 'STG',
+                        'view', ?, ?
+                    )
+                    """,
+                    UUID.randomUUID(),
+                    scope.prodModelId(),
+                    rootUniqueId,
+                    "DEPENDENCY:" + rootUniqueId,
+                    "models/fct_payment.sql#dependency",
+                    "2".repeat(64),
+                    "[\"" + stgUniqueId + "\"]",
+                    scope.planId(),
+                    "a".repeat(64),
+                    Timestamp.from(NOW.minusSeconds(20)),
+                    Timestamp.from(NOW.minusSeconds(20)),
+                    UUID.randomUUID(),
+                    scope.prodModelId(),
+                    stgUniqueId,
+                    "SQL:" + stgUniqueId,
+                    "models/stg/stg_budget.sql",
+                    "3".repeat(64),
+                    "select o.budget_no as budget_no, o.budget_amount_adjusted as budget_amount from {{ source('ods', 'budget') }} o",
+                    scope.planId(),
+                    "a".repeat(64),
+                    Timestamp.from(NOW.minusSeconds(20)),
+                    Timestamp.from(NOW.minusSeconds(20)),
+                    UUID.randomUUID(),
+                    scope.prodModelId(),
+                    stgUniqueId,
+                    "DEPENDENCY:" + stgUniqueId,
+                    "models/stg/stg_budget.sql#dependency",
+                    "4".repeat(64),
+                    "[\"source.finance.ods.budget\"]",
+                    scope.planId(),
+                    "a".repeat(64),
+                    Timestamp.from(NOW.minusSeconds(20)),
+                    Timestamp.from(NOW.minusSeconds(20))
+                );
+                jdbcTemplate.update(
+                    """
+                    insert into catalog_dataset (
+                        id, name, type, source_id, classification,
+                        hive_database, hive_table, warehouse_layer,
+                        enabled, lifecycle_status, created_date,
+                        last_modified_date
+                    ) values (
+                        ?, 'ODS budget', 'POSTGRES', ?, 'L2',
+                        'public', 'ods_budget', 'ODS', true, 'ACTIVE', ?, ?
+                    )
+                    """,
+                    sourceDatasetId,
+                    SOURCE_ID,
+                    Timestamp.from(NOW.minusSeconds(40)),
+                    Timestamp.from(NOW.minusSeconds(40))
+                );
+                jdbcTemplate.update(
+                    """
+                    insert into catalog_table_schema (
+                        id, dataset_id, name, classification,
+                        created_by, created_date, last_modified_date
+                    ) values (?, ?, 'ods_budget', 'L2', 'it', ?, ?)
+                    """,
+                    sourceTableId,
+                    sourceDatasetId,
+                    Timestamp.from(NOW.minusSeconds(40)),
+                    Timestamp.from(NOW.minusSeconds(40))
+                );
+                jdbcTemplate.update(
+                    """
+                    insert into catalog_column_schema (
+                        id, table_id, name, data_type, nullable, status,
+                        created_by, created_date, last_modified_date
+                    ) values
+                        (?, ?, 'budget_no', 'varchar', false, 'ACTIVE', 'it', ?, ?),
+                        (?, ?, 'budget_amount_adjusted', 'numeric', true, 'ACTIVE', 'it', ?, ?)
+                    """,
+                    UUID.randomUUID(),
+                    sourceTableId,
+                    Timestamp.from(NOW.minusSeconds(40)),
+                    Timestamp.from(NOW.minusSeconds(40)),
+                    UUID.randomUUID(),
+                    sourceTableId,
+                    Timestamp.from(NOW.minusSeconds(40)),
+                    Timestamp.from(NOW.minusSeconds(40))
+                );
+                jdbcTemplate.update(
+                    """
+                    insert into modeling_warehouse_plan_source (
+                        id, tenant_id, plan_id, source_type, source_id,
+                        source_version, locator_json, confirmation_status,
+                        created_date, last_modified_date
+                    ) values (
+                        ?, ?, ?, 'CATALOG_TABLE', ?, ?,
+                        jsonb_build_object('assetId', cast(? as text)),
+                        'CONFIRMED', ?, ?
+                    )
+                    """,
+                    sourceBindingId,
+                    scope.tenantId(),
+                    scope.planId(),
+                    sourceTableId.toString(),
+                    sourceVersion,
+                    sourceTableId,
+                    Timestamp.from(NOW.minusSeconds(30)),
+                    Timestamp.from(NOW.minusSeconds(30))
+                );
+            });
+
+            ModelSpecView model = publicationModel(scope);
+            org.mockito.Mockito.when(model.fields())
+                .thenReturn(
+                    List.of(
+                        new ModelField(
+                            "budget_no",
+                            "Budget number",
+                            "varchar",
+                            false,
+                            null,
+                            FieldRole.KEY,
+                            "L2",
+                            null,
+                            false,
+                            null
+                        ),
+                        new ModelField(
+                            "budget_amount",
+                            "Budget amount",
+                            "decimal",
+                            true,
+                            null,
+                            FieldRole.MEASURE,
+                            "L2",
+                            null,
+                            false,
+                            null
+                        )
+                    )
+                );
+            org.mockito.Mockito.when(model.sourceRefs())
+                .thenReturn(
+                    List.of(
+                        new SourceRef(
+                            SourceKind.TABLE,
+                            sourceTableId.toString(),
+                            Layer.ODS,
+                            SourceRole.PRIMARY,
+                            "src",
+                            null,
+                            null,
+                            0,
+                            sourceBindingId,
+                            sourceVersion
+                        )
+                    )
+                );
+            PublicationEntryEvidence observation = new PublicationEntryEvidence(
+                scope.entryId(),
+                scope.prodModelId(),
+                1,
+                "a".repeat(64),
+                1,
+                "b".repeat(64),
+                rootUniqueId,
+                tableName,
+                "c".repeat(64),
+                "d".repeat(64),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "postgres",
+                "warehouse",
+                "finance",
+                tableName,
+                ExpectedRelationType.TABLE,
+                List.of(
+                    new PhysicalColumn(1, "budget_no", "varchar", false),
+                    new PhysicalColumn(2, "budget_amount", "numeric", true)
+                ),
+                "f".repeat(64),
+                NOW.minusSeconds(10)
+            );
+            LifecycleEventView release = org.mockito.Mockito.mock(
+                LifecycleEventView.class
+            );
+            org.mockito.Mockito.when(release.id())
+                .thenReturn(scope.prodReleaseId());
+            CandidateView candidate = candidate(scope);
+            ResolvedCatalogTarget target = new ResolvedCatalogTarget(
+                TARGET_KEY,
+                SOURCE_ID,
+                "postgres"
+            );
+
+            transaction.executeWithoutResult(status ->
+                publications.registerModel(
+                    candidate,
+                    target,
+                    observation,
+                    model,
+                    release,
+                    "release-operator",
+                    NOW
+                )
+            );
+            transaction.executeWithoutResult(status ->
+                publications.registerModel(
+                    candidate,
+                    target,
+                    observation,
+                    model,
+                    release,
+                    "release-operator",
+                    NOW.plusSeconds(1)
+                )
+            );
+
+            UUID downstreamAssetId = jdbcTemplate.queryForObject(
+                "select physical_asset_ref from modeling_dbt_artifact where model_spec_id = ? and node_kind = 'MODEL' and artifact_type = 'SQL'",
+                UUID.class,
+                scope.prodModelId()
+            );
+            UUID tableLineageId = jdbcTemplate.queryForObject(
+                """
+                select id
+                  from catalog_dataset_lineage
+                 where upstream_dataset_id = ?
+                   and downstream_dataset_id = ?
+                   and relation_type = 'MODEL_DEPENDENCY'
+                   and verification_status = 'VERIFIED'
+                   and valid_to is null
+                """,
+                UUID.class,
+                sourceDatasetId,
+                downstreamAssetId
+            );
+            assertThat(tableLineageId).isNotNull();
+            assertThat(
+                jdbcTemplate.queryForList(
+                    """
+                    select upstream_column, downstream_column,
+                           confidence, dataset_lineage_id
+                      from catalog_column_lineage
+                     where upstream_dataset_id = ?
+                       and downstream_dataset_id = ?
+                       and valid_to is null
+                     order by downstream_column
+                    """,
+                    sourceDatasetId,
+                    downstreamAssetId
+                )
+            )
+                .hasSize(2)
+                .allSatisfy(row -> {
+                    assertThat(row.get("confidence")).isEqualTo("PARSED");
+                    assertThat(row.get("dataset_lineage_id")).isEqualTo(tableLineageId);
+                })
+                .extracting(
+                    row -> row.get("upstream_column") + "->" + row.get("downstream_column")
+                )
+                .containsExactly(
+                    "budget_amount_adjusted->budget_amount",
+                    "budget_no->budget_no"
+                );
+
+            LifecycleEventView rollback = org.mockito.Mockito.mock(
+                LifecycleEventView.class
+            );
+            org.mockito.Mockito.when(rollback.id()).thenReturn(UUID.randomUUID());
+            transaction.executeWithoutResult(status ->
+                publications.rollbackModel(
+                    publishedCandidate(scope),
+                    observation,
+                    model,
+                    rollback,
+                    "release-operator",
+                    NOW.plusSeconds(2)
+                )
+            );
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    "select count(*) from catalog_dataset_lineage where downstream_dataset_id = ? and valid_to is null",
+                    Integer.class,
+                    downstreamAssetId
+                )
+            ).isZero();
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    "select count(*) from catalog_column_lineage where downstream_dataset_id = ? and valid_to is null",
+                    Integer.class,
+                    downstreamAssetId
+                )
+            ).isZero();
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select count(*)
+                      from catalog_dataset_lineage
+                     where upstream_dataset_id = ?
+                       and downstream_dataset_id = ?
+                       and valid_from < valid_to
+                    """,
+                    Integer.class,
+                    sourceDatasetId,
+                    downstreamAssetId
+                )
+            ).isEqualTo(1);
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select count(*)
+                      from catalog_column_lineage
+                     where upstream_dataset_id = ?
+                       and downstream_dataset_id = ?
+                       and valid_from < valid_to
+                    """,
+                    Integer.class,
+                    sourceDatasetId,
+                    downstreamAssetId
+                )
+            ).isEqualTo(2);
+        } finally {
+            transaction.executeWithoutResult(status -> {
+                jdbcTemplate.update(
+                    "delete from modeling_warehouse_plan_source where tenant_id = ? and plan_id = ?",
+                    scope.tenantId(),
+                    scope.planId()
+                );
+                cleanup(scope);
+            });
         }
     }
 
@@ -1701,6 +2142,19 @@ class CandidatePublicationRepositoryIT {
     }
 
     private void cleanup(TestScope scope) {
+        jdbcTemplate.update(
+            """
+            delete from catalog_column_lineage
+             where upstream_dataset_id in (
+                       select id from catalog_dataset where source_id = ?
+                   )
+                or downstream_dataset_id in (
+                       select id from catalog_dataset where source_id = ?
+                   )
+            """,
+            SOURCE_ID,
+            SOURCE_ID
+        );
         jdbcTemplate.update(
             """
             delete from catalog_dataset_lineage

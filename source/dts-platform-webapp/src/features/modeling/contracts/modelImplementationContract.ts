@@ -111,6 +111,53 @@ export type ModelImplementationFieldMapping = {
 	targetField: string;
 };
 
+export type ModelImplementationCastType =
+	| "string"
+	| "integer"
+	| "bigint"
+	| "decimal"
+	| "date"
+	| "timestamp"
+	| "boolean";
+
+export type ModelImplementationFilterOperator =
+	| "EQ"
+	| "NE"
+	| "GT"
+	| "GTE"
+	| "LT"
+	| "LTE"
+	| "IN"
+	| "NOT_IN"
+	| "IS_NULL"
+	| "IS_NOT_NULL"
+	| "BETWEEN";
+
+export type ModelImplementationFilterValueType = "STRING" | "NUMBER" | "BOOLEAN" | "DATE" | "TIMESTAMP";
+
+export type ModelImplementationFilter = {
+	field: string;
+	operator: ModelImplementationFilterOperator;
+	valueType: ModelImplementationFilterValueType;
+	value: string | number | boolean | Array<string | number | boolean>;
+};
+
+export type ModelImplementationJoin = {
+	inputIndex: number;
+	type: "INNER" | "LEFT";
+	leftField: string;
+	rightField: string;
+};
+
+export type ModelImplementationAggregationFunction = "SUM" | "COUNT" | "MIN" | "MAX" | "AVG" | "COUNT_DISTINCT";
+
+export type ModelImplementationAggregation = {
+	targetField: string;
+	function: ModelImplementationAggregationFunction;
+	sourceField: string;
+	distinct: boolean;
+};
+
 type ModelImplementationWriteBase = {
 	projectKey: string;
 	dbtUniqueId: string;

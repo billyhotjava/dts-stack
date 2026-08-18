@@ -1,6 +1,6 @@
 # Sprint-93 集成验收台账
 
-**当前结论**：E2E_COMPLETE_WITH_EXTERNAL_GAPS。代码、部署、集中 E2E 和回滚演练已完成；IT-01～06、08～10、12 PASS，IT-07、11、13 因真实数据/账号/浏览器条件不足保持 PARTIAL。完整证据见 [`evidence/20260817-final-e2e.md`](evidence/20260817-final-e2e.md)。
+**当前结论**：IMPLEMENTATION_COMPLETE / DELTA_REGRESSION_PASS / FINAL_E2E_PENDING。2026-08-17 的集中 E2E 与回滚证据继续有效；IT-07 缺失写入能力已在 2026-08-18 以自动化集成测试补齐，但尚未部署后复验，IT-11、13 仍缺部门账号和 Chrome 95 条件。历史证据见 [`evidence/20260817-final-e2e.md`](evidence/20260817-final-e2e.md)，本次增量证据见 [`evidence/20260818-it07-publication-lineage-automated.md`](evidence/20260818-it07-publication-lineage-automated.md)。
 
 | IT | 验收切片 | 关键断言 | 状态 |
 |---|---|---|---|
@@ -10,7 +10,7 @@
 | IT-04 | 服务投影消费 | outbox → SYNCED；超时/失败重试；旧 version 不覆盖新 ref | PASS（Analytics 故障注入与恢复） |
 | IT-05 | QualityEvidence Port | pass/fail/running/missing/expired/mismatch 全部结构化判定 | PASS（自动化状态矩阵 + 真实成功运行） |
 | IT-06 | 发布质量 UI | 工程质量与治理质量分栏；候选钉定 rule/version/binding/run/checksum | PASS（受控样本） |
-| IT-07 | 模型血缘 | ODS→DWD→DWS→ADS 表级和字段级边可查，来源/验证/有效期正确 | PARTIAL（DWD→DWS→ADS 表级证据通过；真实 ODS/字段输入缺失） |
+| IT-07 | 模型血缘 | ODS→DWD→DWS→ADS 表级和字段级边可查，来源/验证/有效期正确 | AUTOMATED_PASS / FINAL_E2E_PENDING（候选发布写入、幂等和回滚有效期通过 PostgreSQL 集成测试） |
 | IT-08 | OM 故障降级 | OM 不可用时资产仍可查，技术同步显示失败且可重试 | PASS（真实停止/恢复 OpenMetadata） |
 | IT-09 | 治理页面一致性 | 概览、目录、详情数字/状态/业务归属数据域一致，深链可达 | PASS（当前可见范围 49 条，分页、详情和质量状态复验通过） |
 | IT-10 | 二次物化 | 模型数和资产数不增加；candidate/attempt/observation 增加；servingRef 推进 | PASS（受控样本） |

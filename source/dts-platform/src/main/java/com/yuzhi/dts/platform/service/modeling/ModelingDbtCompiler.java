@@ -1,8 +1,12 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import java.time.DateTimeException;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.math.BigDecimal;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +37,12 @@ public final class ModelingDbtCompiler {
         "boolean",
         "boolean"
     );
-    private static final Set<String> JOIN_TYPES = Set.of("INNER", "LEFT", "RIGHT", "FULL");
+	private static final Set<String> JOIN_TYPES = Set.of("INNER", "LEFT");
+	private static final Set<String> FILTER_OPERATORS = Set.of(
+		"EQ", "NE", "GT", "GTE", "LT", "LTE", "IN", "NOT_IN", "IS_NULL", "IS_NOT_NULL", "BETWEEN"
+	);
+	private static final Set<String> FILTER_VALUE_TYPES = Set.of("STRING", "NUMBER", "BOOLEAN", "DATE", "TIMESTAMP");
+	private static final Set<String> AGGREGATION_FUNCTIONS = Set.of("SUM", "COUNT", "MIN", "MAX", "AVG", "COUNT_DISTINCT");
     private static final Set<String> DATE_DIMENSION_CONFIG_KEYS = Set.of("start", "end", "startYear", "endYear");
     private static final long DATE_DIMENSION_MAX_DAYS = 73_200;
     private static final Map<String, String> DATE_DIMENSION_EXPRESSIONS = Map.of(
@@ -199,6 +208,9 @@ public final class ModelingDbtCompiler {
             .append("'loadStrategy':'")
             .append(jinjaString(text(projection.settings().get("loadStrategy")).toUpperCase()))
             .append("'");
+		if (projection.dependencyChecksum() != null) {
+			config.append(",'dependencyChecksum':'").append(projection.dependencyChecksum()).append("'");
+		}
         Object retentionDays = projection.settings().get("retentionDays");
         if (retentionDays instanceof Number days) config.append(",'retentionDays':").append(days.longValue());
         config.append("}) }}\n");
@@ -217,15 +229,29 @@ public final class ModelingDbtCompiler {
             validateMultiSourceMappings(columns, mappings);
         }
         Map<String, String> casts = casts(projection.settings());
-        String select = columns.stream().map(column -> renderMappedColumn(column, mappings, casts)).collect(Collectors.joining(",\n"));
+		List<ModelingCompilerContract.SourceRef> sources = projection.inputMode() == ModelLifecycleContract.InputMode.GENERATED
+			? List.of()
+			: requireImplementationSources(model);
+		Map<String, AggregationSpec> aggregations = aggregations(
+			projection.settings(),
+			columns,
+			mappings,
+			sources.size()
+		);
+		String select = columns
+			.stream()
+			.map(column -> renderProjectedColumn(column, mappings, casts, aggregations))
+			.collect(Collectors.joining(",\n"));
         StringBuilder sql = new StringBuilder("{{ config(materialized='ephemeral') }}\nwith ");
         if (projection.inputMode() == ModelLifecycleContract.InputMode.GENERATED) {
+			if (!aggregations.isEmpty() || projection.settings().containsKey("filters")) {
+				throw new CompileException("GENERATED_TRANSFORM_SETTING_NOT_ALLOWED");
+			}
             sql.append(renderDateDimensionInput(projection, columns))
                 .append(",\ntransformed as (\n    select\n")
                 .append(select)
                 .append("\n    from generated_input");
         } else {
-            List<ModelingCompilerContract.SourceRef> sources = requireImplementationSources(model);
             for (int index = 0; index < sources.size(); index++) {
                 if (index > 0) sql.append(",\n");
                 sql.append("source_").append(index).append(" as (\n    select *\n    ")
@@ -237,6 +263,14 @@ public final class ModelingDbtCompiler {
                     .append(" src_").append(join.inputIndex()).append(" on ")
                     .append(join.leftField()).append(" = ").append(join.rightField());
             }
+			List<String> filters = filters(projection.settings(), mappings, sources.size());
+			if (!filters.isEmpty()) {
+				sql.append("\n    where ").append(String.join("\n      and ", filters));
+			}
+			if (!aggregations.isEmpty()) {
+				List<String> groupBy = groupByExpressions(projection.settings(), columns, mappings, casts);
+				sql.append("\n    group by ").append(String.join(", ", groupBy));
+			}
         }
         sql.append("\n)");
         List<String> dedupBy = settingValues(projection.settings(), "deduplicateBy");
@@ -410,7 +444,7 @@ public final class ModelingDbtCompiler {
 
     private record JoinSpec(int inputIndex, String type, String leftField, String rightField) {
         String sqlType() {
-            return "FULL".equals(type) ? "FULL OUTER JOIN" : type + " JOIN";
+			return type + " JOIN";
         }
     }
 
@@ -489,13 +523,191 @@ public final class ModelingDbtCompiler {
         return Map.copyOf(fields);
     }
 
-    private static String renderMappedColumn(String column, Map<String, String> mappings, Map<String, String> casts) {
-        String expression = mappings.getOrDefault(column, column);
+	private static String renderMappedColumn(String column, Map<String, String> mappings, Map<String, String> casts) {
+		String expression = mappedExpression(column, mappings, casts);
+		return "        " + expression + (expression.equals(column) ? "" : " as " + column);
+	}
+
+	private static String mappedExpression(String column, Map<String, String> mappings, Map<String, String> casts) {
+		String expression = mappings.getOrDefault(column, column);
         String type = casts.get(column);
         if (type == null) type = casts.get(expression);
         if (type != null) expression = "cast(" + expression + " as " + POSTGRES_CAST_TYPES.get(type) + ")";
-        return "        " + expression + (expression.equals(column) ? "" : " as " + column);
+		return expression;
     }
+
+	private static String renderProjectedColumn(
+		String column,
+		Map<String, String> mappings,
+		Map<String, String> casts,
+		Map<String, AggregationSpec> aggregations
+	) {
+		AggregationSpec aggregation = aggregations.get(column);
+		if (aggregation == null) return renderMappedColumn(column, mappings, casts);
+		String expression = aggregation.sqlExpression();
+		String cast = casts.get(column);
+		if (cast != null) expression = "cast(" + expression + " as " + POSTGRES_CAST_TYPES.get(cast) + ")";
+		return "        " + expression + " as " + column;
+	}
+
+	private static List<String> filters(Map<String, Object> settings, Map<String, String> mappings, int sourceCount) {
+		Object value = settings.get("filters");
+		if (value == null) return List.of();
+		if (!(value instanceof List<?> values) || values.isEmpty()) throw new CompileException("IMPLEMENTATION_FILTER_INVALID");
+		List<String> result = new java.util.ArrayList<>();
+		for (Object item : values) {
+			if (!(item instanceof Map<?, ?> filter)) throw new CompileException("IMPLEMENTATION_FILTER_INVALID");
+			String field = sourceExpression(text(filter.get("field")), mappings, sourceCount, "IMPLEMENTATION_FILTER_INVALID");
+			String operator = text(filter.get("operator")).toUpperCase();
+			String valueType = text(filter.get("valueType")).toUpperCase();
+			if (!FILTER_OPERATORS.contains(operator) || !FILTER_VALUE_TYPES.contains(valueType)) {
+				throw new CompileException("IMPLEMENTATION_FILTER_INVALID");
+			}
+			result.add(renderFilter(field, operator, valueType, filter.get("value")));
+		}
+		return List.copyOf(result);
+	}
+
+	private static String renderFilter(String field, String operator, String valueType, Object value) {
+		return switch (operator) {
+			case "IS_NULL" -> field + " is null";
+			case "IS_NOT_NULL" -> field + " is not null";
+			case "IN", "NOT_IN" -> {
+				if (!(value instanceof List<?> values) || values.isEmpty()) throw new CompileException("IMPLEMENTATION_FILTER_INVALID");
+				yield field + ("IN".equals(operator) ? " in (" : " not in (") + values
+					.stream()
+					.map(item -> sqlLiteral(valueType, item))
+					.collect(Collectors.joining(", ")) + ")";
+			}
+			case "BETWEEN" -> {
+				if (!(value instanceof List<?> values) || values.size() != 2) throw new CompileException("IMPLEMENTATION_FILTER_INVALID");
+				yield field + " between " + sqlLiteral(valueType, values.get(0)) + " and " + sqlLiteral(valueType, values.get(1));
+			}
+			default -> field + " " + switch (operator) {
+				case "EQ" -> "=";
+				case "NE" -> "<>";
+				case "GT" -> ">";
+				case "GTE" -> ">=";
+				case "LT" -> "<";
+				case "LTE" -> "<=";
+				default -> throw new CompileException("IMPLEMENTATION_FILTER_INVALID");
+			} + " " + sqlLiteral(valueType, value);
+		};
+	}
+
+	private static String sqlLiteral(String valueType, Object value) {
+		try {
+			return switch (valueType) {
+				case "STRING" -> quote(requireTextValue(value));
+				case "NUMBER" -> {
+					if (!(value instanceof Number number)) throw new CompileException("IMPLEMENTATION_FILTER_VALUE_INVALID");
+					yield new BigDecimal(number.toString()).stripTrailingZeros().toPlainString();
+				}
+				case "BOOLEAN" -> {
+					if (!(value instanceof Boolean bool)) throw new CompileException("IMPLEMENTATION_FILTER_VALUE_INVALID");
+					yield Boolean.toString(bool);
+				}
+				case "DATE" -> "date " + quote(LocalDate.parse(requireTextValue(value)).toString());
+				case "TIMESTAMP" -> "cast(" + quote(validTimestamp(requireTextValue(value))) + " as timestamp)";
+				default -> throw new CompileException("IMPLEMENTATION_FILTER_VALUE_INVALID");
+			};
+		} catch (DateTimeException | NumberFormatException invalid) {
+			throw new CompileException("IMPLEMENTATION_FILTER_VALUE_INVALID");
+		}
+	}
+
+	private static String requireTextValue(Object value) {
+		if (!(value instanceof String text) || text.isBlank()) throw new CompileException("IMPLEMENTATION_FILTER_VALUE_INVALID");
+		return text;
+	}
+
+	private static String validTimestamp(String value) {
+		try {
+			return OffsetDateTime.parse(value).toInstant().toString();
+		} catch (DateTimeException ignored) {
+			try {
+				return Instant.parse(value).toString();
+			} catch (DateTimeException alsoIgnored) {
+				return LocalDateTime.parse(value).toString();
+			}
+		}
+	}
+
+	private static String quote(String value) {
+		return "'" + value.replace("'", "''") + "'";
+	}
+
+	private static Map<String, AggregationSpec> aggregations(
+		Map<String, Object> settings,
+		List<String> columns,
+		Map<String, String> mappings,
+		int sourceCount
+	) {
+		Object value = settings.get("aggregations");
+		List<String> groupBy = settingValues(settings, "groupBy");
+		if (value == null && groupBy.isEmpty()) return Map.of();
+		if (!(value instanceof List<?> values) || values.isEmpty() || groupBy.isEmpty()) {
+			throw new CompileException("IMPLEMENTATION_AGGREGATION_INVALID");
+		}
+		Set<String> output = new LinkedHashSet<>(columns);
+		if (groupBy.stream().anyMatch(field -> !output.contains(field))) {
+			throw new CompileException("IMPLEMENTATION_GROUP_BY_INVALID");
+		}
+		Map<String, AggregationSpec> result = new TreeMap<>();
+		for (Object item : values) {
+			if (!(item instanceof Map<?, ?> raw)) throw new CompileException("IMPLEMENTATION_AGGREGATION_INVALID");
+			String target = text(raw.get("targetField"));
+			String function = text(raw.get("function")).toUpperCase();
+			String source = sourceExpression(text(raw.get("sourceField")), mappings, sourceCount, "IMPLEMENTATION_AGGREGATION_INVALID");
+			Object rawDistinct = raw.get("distinct");
+			if (
+				!identifier(target) ||
+				!output.contains(target) ||
+				groupBy.contains(target) ||
+				!AGGREGATION_FUNCTIONS.contains(function) ||
+				!(rawDistinct instanceof Boolean distinct) ||
+				(distinct && !"COUNT".equals(function)) ||
+				result.putIfAbsent(target, new AggregationSpec(function, source, distinct)) != null
+			) {
+				throw new CompileException("IMPLEMENTATION_AGGREGATION_INVALID");
+			}
+		}
+		if (output.stream().anyMatch(field -> !groupBy.contains(field) && !result.containsKey(field))) {
+			throw new CompileException("IMPLEMENTATION_AGGREGATION_COVERAGE_INVALID");
+		}
+		return Map.copyOf(result);
+	}
+
+	private static List<String> groupByExpressions(
+		Map<String, Object> settings,
+		List<String> columns,
+		Map<String, String> mappings,
+		Map<String, String> casts
+	) {
+		Set<String> requested = new LinkedHashSet<>(settingValues(settings, "groupBy"));
+		return columns.stream().filter(requested::contains).map(column -> mappedExpression(column, mappings, casts)).toList();
+	}
+
+	private static String sourceExpression(
+		String value,
+		Map<String, String> mappings,
+		int sourceCount,
+		String errorCode
+	) {
+		String expression = mappings.getOrDefault(value, value);
+		if (identifier(expression)) return expression;
+		if (!SOURCE_FIELD.matcher(expression).matches() || sourceIndex(expression) >= sourceCount) {
+			throw new CompileException(errorCode);
+		}
+		return expression;
+	}
+
+	private record AggregationSpec(String function, String sourceField, boolean distinct) {
+		String sqlExpression() {
+			if ("COUNT_DISTINCT".equals(function) || distinct) return "count(distinct " + sourceField + ")";
+			return function.toLowerCase() + "(" + sourceField + ")";
+		}
+	}
 
     private static List<String> settingValues(Map<String, Object> settings, String key) {
         Object value = settings.get(key);

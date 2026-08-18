@@ -4,6 +4,29 @@ export type DbtDraftFile = { path: string; content: string };
 
 export type DbtDraftBundleFile = DbtDraftFile & { checksum: string; byteSize: number };
 
+export type DbtDependencySnapshot = {
+	modelSpecId: string;
+	modelRevision: number;
+	modelChecksum: string;
+	implementationRevision: number;
+	implementationChecksum: string;
+	physicalSources: Array<{
+		sourceBindingId: string;
+		resolvedVersion: string;
+		dbtSourceUniqueId: string;
+	}>;
+	modelInputs: Array<{
+		modelSpecId: string;
+		revision: number;
+		checksum: string;
+		implementationRevision: number;
+		implementationChecksum: string;
+		dbtUniqueId: string;
+		role: "UPSTREAM" | "DIMENSION";
+	}>;
+	dependencyChecksum: string;
+};
+
 export type DbtDraftSourceBundle = {
 	projectKey: string;
 	projectChecksum: string;
@@ -11,6 +34,9 @@ export type DbtDraftSourceBundle = {
 	sourceKind: "FROZEN_SOURCE_BUNDLE" | "CANONICAL_ARTIFACT_RECONSTRUCTION" | "CANONICAL_INITIALIZATION";
 	lossless: boolean;
 	files: DbtDraftBundleFile[];
+	dependencyChecksum?: string | null;
+	dependencySnapshot?: DbtDependencySnapshot | null;
+	managedDependencyAliases: Record<string, string>;
 };
 
 export type DbtImplementationDraft = {
@@ -50,6 +76,12 @@ export type DbtDraftValidation = {
 		nodeKind: string;
 		dependencies: string[];
 	}>;
+	dependencyValidation?: {
+		dependencyChecksum: string;
+		matched: string[];
+		missing: string[];
+		undeclared: string[];
+	} | null;
 };
 
 export type DbtDraftCommit = {
@@ -62,6 +94,7 @@ export type DbtDraftCommit = {
 	implementationChecksum: string;
 	artifactCount: number;
 	etag: string;
+	dependencyChecksum?: string | null;
 };
 
 const basePath = (modelSpecId: string) => `/modeling/model-specs/${encodeURIComponent(modelSpecId)}/dbt-drafts`;
@@ -104,7 +137,12 @@ export const validateDbtImplementationDraft = (
 export const commitDbtImplementationDraft = (
 	modelSpecId: string,
 	draftId: string,
-	request: { expectedEtag: string; validatedChecksum: string; idempotencyKey: string },
+	request: {
+		expectedEtag: string;
+		validatedChecksum: string;
+		dependencyChecksum?: string | null;
+		idempotencyKey: string;
+	},
 ) =>
 	api.post<DbtDraftCommit>({
 		url: `${basePath(modelSpecId)}/${encodeURIComponent(draftId)}/commit`,

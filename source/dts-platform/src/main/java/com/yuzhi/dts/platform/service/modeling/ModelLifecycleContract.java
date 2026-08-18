@@ -32,14 +32,24 @@ public final class ModelLifecycleContract {
         "deduplicateBy",
         "dedupBy",
         "joins",
+		"filters",
+		"groupBy",
+		"aggregations",
         "targetPhysicalName",
         "loadStrategy",
         "partitionFields",
         "retentionDays"
     );
     private static final Set<String> LOAD_STRATEGIES = Set.of("FULL", "INCREMENTAL", "SNAPSHOT");
-    private static final Set<String> JOIN_TYPES = Set.of("INNER", "LEFT", "RIGHT", "FULL");
+	private static final Set<String> JOIN_TYPES = Set.of("INNER", "LEFT");
     private static final Set<String> JOIN_KEYS = Set.of("inputIndex", "type", "leftField", "rightField");
+	private static final Set<String> FILTER_KEYS = Set.of("field", "operator", "valueType", "value");
+	private static final Set<String> FILTER_OPERATORS = Set.of(
+		"EQ", "NE", "GT", "GTE", "LT", "LTE", "IN", "NOT_IN", "IS_NULL", "IS_NOT_NULL", "BETWEEN"
+	);
+	private static final Set<String> FILTER_VALUE_TYPES = Set.of("STRING", "NUMBER", "BOOLEAN", "DATE", "TIMESTAMP");
+	private static final Set<String> AGGREGATION_KEYS = Set.of("targetField", "function", "sourceField", "distinct");
+	private static final Set<String> AGGREGATION_FUNCTIONS = Set.of("SUM", "COUNT", "MIN", "MAX", "AVG", "COUNT_DISTINCT");
 
     private ModelLifecycleContract() {}
 
@@ -508,6 +518,10 @@ public final class ModelLifecycleContract {
         validateIdentifierList(settings.get("dedupBy"), "dedupBy");
         validateIdentifierList(settings.get("partitionFields"), "partitionFields", true);
         validateJoinShape(settings.get("joins"));
+		validateFilterShape(settings.get("filters"));
+		validateIdentifierList(settings.get("groupBy"), "groupBy");
+		validateAggregationShape(settings.get("aggregations"));
+		validateAggregationCoverage(settings);
         Object targetPhysicalName = settings.get("targetPhysicalName");
         if (
             targetPhysicalName != null &&
@@ -552,6 +566,105 @@ public final class ModelLifecycleContract {
             requiredSourceField(join.get("rightField") == null ? null : join.get("rightField").toString(), "join rightField");
         }
     }
+
+	private static void validateFilterShape(Object value) {
+		if (value == null) return;
+		if (!(value instanceof List<?> filters) || filters.isEmpty()) {
+			throw new IllegalArgumentException("filters must be a non-empty list");
+		}
+		for (Object item : filters) {
+			if (!(item instanceof Map<?, ?> filter) || !FILTER_KEYS.equals(filter.keySet())) {
+				throw new IllegalArgumentException("each filter must contain only field, operator, valueType and value");
+			}
+			requiredSourceField(textValue(filter.get("field")), "filter field");
+			String operator = requiredText(textValue(filter.get("operator")), "filter operator").toUpperCase();
+			if (!FILTER_OPERATORS.contains(operator)) throw new IllegalArgumentException("filter operator is not allowed");
+			String valueType = requiredText(textValue(filter.get("valueType")), "filter valueType").toUpperCase();
+			if (!FILTER_VALUE_TYPES.contains(valueType)) throw new IllegalArgumentException("filter valueType is not allowed");
+			validateFilterValue(operator, valueType, filter.get("value"));
+		}
+	}
+
+	private static void validateFilterValue(String operator, String valueType, Object value) {
+		if ("IS_NULL".equals(operator) || "IS_NOT_NULL".equals(operator)) return;
+		if ("IN".equals(operator) || "NOT_IN".equals(operator)) {
+			if (!(value instanceof List<?> values) || values.isEmpty()) {
+				throw new IllegalArgumentException("filter list value must be non-empty");
+			}
+			values.forEach(item -> validateFilterScalar(valueType, item));
+			return;
+		}
+		if ("BETWEEN".equals(operator)) {
+			if (!(value instanceof List<?> values) || values.size() != 2) {
+				throw new IllegalArgumentException("filter BETWEEN value must contain two items");
+			}
+			values.forEach(item -> validateFilterScalar(valueType, item));
+			return;
+		}
+		if (value instanceof List<?>) throw new IllegalArgumentException("filter scalar value is required");
+		validateFilterScalar(valueType, value);
+	}
+
+	private static void validateFilterScalar(String valueType, Object value) {
+		boolean valid = switch (valueType) {
+			case "STRING", "DATE", "TIMESTAMP" -> value instanceof String text && !text.isBlank();
+			case "NUMBER" -> value instanceof Number;
+			case "BOOLEAN" -> value instanceof Boolean;
+			default -> false;
+		};
+		if (!valid) throw new IllegalArgumentException("filter value does not match valueType");
+	}
+
+	private static void validateAggregationShape(Object value) {
+		if (value == null) return;
+		if (!(value instanceof List<?> aggregations) || aggregations.isEmpty()) {
+			throw new IllegalArgumentException("aggregations must be a non-empty list");
+		}
+		Set<String> targets = new LinkedHashSet<>();
+		for (Object item : aggregations) {
+			if (!(item instanceof Map<?, ?> aggregation) || !AGGREGATION_KEYS.equals(aggregation.keySet())) {
+				throw new IllegalArgumentException(
+					"each aggregation must contain only targetField, function, sourceField and distinct"
+				);
+			}
+			String targetField = requiredIdentifier(textValue(aggregation.get("targetField")), "aggregation targetField");
+			if (!targets.add(targetField)) throw new IllegalArgumentException("aggregation targetField must be unique");
+			String function = requiredText(textValue(aggregation.get("function")), "aggregation function").toUpperCase();
+			if (!AGGREGATION_FUNCTIONS.contains(function)) {
+				throw new IllegalArgumentException("aggregation function is not allowed");
+			}
+			requiredSourceField(textValue(aggregation.get("sourceField")), "aggregation sourceField");
+			if (!(aggregation.get("distinct") instanceof Boolean distinct)) {
+				throw new IllegalArgumentException("aggregation distinct must be boolean");
+			}
+			if (distinct && !"COUNT".equals(function)) {
+				throw new IllegalArgumentException("aggregation distinct is allowed only for COUNT");
+			}
+		}
+	}
+
+	private static void validateAggregationCoverage(Map<String, Object> settings) {
+		boolean grouped = settings.containsKey("groupBy");
+		boolean aggregated = settings.containsKey("aggregations");
+		if (grouped != aggregated) {
+			throw new IllegalArgumentException("groupBy and aggregations must be configured together");
+		}
+		if (aggregated && (settings.containsKey("deduplicateBy") || settings.containsKey("dedupBy"))) {
+			throw new IllegalArgumentException("aggregation and deduplication cannot be combined");
+		}
+		if (!aggregated) return;
+		Set<String> groupBy = new LinkedHashSet<>((List<String>) settings.get("groupBy"));
+		for (Object item : (List<?>) settings.get("aggregations")) {
+			String target = textValue(((Map<?, ?>) item).get("targetField"));
+			if (groupBy.contains(target)) {
+				throw new IllegalArgumentException("aggregation targetField cannot also be in groupBy");
+			}
+		}
+	}
+
+	private static String textValue(Object value) {
+		return value == null ? null : value.toString();
+	}
 
     private static void validateJoinCoverage(
         InputMode inputMode,

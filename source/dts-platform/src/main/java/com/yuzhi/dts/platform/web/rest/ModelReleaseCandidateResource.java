@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Wor
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidatePreflightService.BatchPreflightView;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.Strategy;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import java.net.URI;
 import java.util.List;
@@ -142,12 +143,23 @@ public class ModelReleaseCandidateResource {
     ) {
         String key = requiredIdempotencyKey(idempotencyKey);
         CreateRequest body = requiredRequest(request, "create request");
-        CommandResult result = service.create(
-            serverTenantId,
-            actorId(),
+        CreateCandidateCommand command = new CreateCandidateCommand(
             planId,
-            new CreateCandidateCommand(planId, body.environment(), body.entries(), key, body.reason())
+            body.environment(),
+            body.entries(),
+            key,
+            body.reason()
         );
+        CommandResult result = body.materializationPlanChecksum() == null
+            ? service.create(serverTenantId, actorId(), planId, command)
+            : service.create(
+                serverTenantId,
+                actorId(),
+                planId,
+                command,
+                body.materializationPlanChecksum(),
+                body.strategy()
+            );
         HttpStatus status = result.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity
             .status(status)
@@ -291,14 +303,32 @@ public class ModelReleaseCandidateResource {
         int expectedVersion = expectedVersion(candidateId, ifMatch);
         String key = requiredIdempotencyKey(idempotencyKey);
         CreateRequest body = requiredRequest(request, "replacement request");
-        CommandResult result = service.createReplacement(
-            serverTenantId,
-            actorId(),
+        CreateCandidateCommand command = new CreateCandidateCommand(
             planId,
-            candidateId,
-            expectedVersion,
-            new CreateCandidateCommand(planId, body.environment(), body.entries(), key, body.reason())
+            body.environment(),
+            body.entries(),
+            key,
+            body.reason()
         );
+        CommandResult result = body.materializationPlanChecksum() == null
+            ? service.createReplacement(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion,
+                command
+            )
+            : service.createReplacement(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion,
+                command,
+                body.materializationPlanChecksum(),
+                body.strategy()
+            );
         return ResponseEntity
             .status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
             .location(candidateLocation(planId, result.candidate().id()))
@@ -318,14 +348,32 @@ public class ModelReleaseCandidateResource {
         int expectedVersion = expectedVersion(candidateId, ifMatch);
         String key = requiredIdempotencyKey(idempotencyKey);
         CreateRequest body = requiredRequest(request, "rematerialization request");
-        CommandResult result = service.rematerialize(
-            serverTenantId,
-            actorId(),
+        CreateCandidateCommand command = new CreateCandidateCommand(
             planId,
-            candidateId,
-            expectedVersion,
-            new CreateCandidateCommand(planId, body.environment(), body.entries(), key, body.reason())
+            body.environment(),
+            body.entries(),
+            key,
+            body.reason()
         );
+        CommandResult result = body.materializationPlanChecksum() == null
+            ? service.rematerialize(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion,
+                command
+            )
+            : service.rematerialize(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion,
+                command,
+                body.materializationPlanChecksum(),
+                body.strategy()
+            );
         return ResponseEntity
             .status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
             .location(candidateLocation(planId, result.candidate().id()))
@@ -623,7 +671,13 @@ public class ModelReleaseCandidateResource {
         return request;
     }
 
-    public record CreateRequest(String environment, List<ScopeEntryCommand> entries, String reason) {}
+    public record CreateRequest(
+        String environment,
+        List<ScopeEntryCommand> entries,
+        String reason,
+        String materializationPlanChecksum,
+        Strategy strategy
+    ) {}
 
     public record ScopeRequest(List<ScopeEntryCommand> entries, String reason) {}
 

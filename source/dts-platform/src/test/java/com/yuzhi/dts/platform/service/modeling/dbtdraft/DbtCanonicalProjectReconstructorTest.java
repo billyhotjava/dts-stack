@@ -3,12 +3,19 @@ package com.yuzhi.dts.platform.service.modeling.dbtdraft;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService.Resolution;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.DependencyRole;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.ModelInput;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSource;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSourceFact;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Snapshot;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
 import com.yuzhi.dts.platform.service.modeling.imports.converter.AdvancedDbtDraftStaticValidator;
 import com.yuzhi.dts.platform.service.modeling.representation.ModelRepresentationEvidencePort.ArtifactEvidence;
 import com.yuzhi.dts.platform.service.modeling.representation.ModelRepresentationEvidencePort.ImplementationSnapshot;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +28,66 @@ class DbtCanonicalProjectReconstructorTest {
     private static final String IMPLEMENTATION_CHECKSUM = "b".repeat(64);
     private static final String PROJECT_KEY = "pm_analytics_v3";
     private static final String TARGET_PATH = "models/ads/biz_ads_progress_kpi_v2.sql";
+
+    @Test
+    void initializesManagedSourcesAndModelProxiesWithoutCountingThemAsOwnedTargets() {
+        ObjectMapper objectMapper = new ObjectMapper();
+        DbtCanonicalProjectReconstructor reconstructor = new DbtCanonicalProjectReconstructor(objectMapper);
+        UUID sourceId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        UUID dimensionId = UUID.fromString("30000000-0000-0000-0000-000000000001");
+        String projectKey = "dts_model_ec1975b941d2";
+        String sourceUniqueId = "source." + projectKey + ".dts_src_500000000000.src_500000000000";
+        Snapshot snapshot = new Snapshot(
+            MODEL_ID,
+            1,
+            MODEL_CHECKSUM,
+            1,
+            "0".repeat(64),
+            List.of(new PhysicalSource(sourceId, "source-v1", sourceUniqueId)),
+            List.of(
+                new ModelInput(
+                    dimensionId,
+                    2,
+                    "c".repeat(64),
+                    3,
+                    "d".repeat(64),
+                    "model.pjm.dim_project",
+                    DependencyRole.DIMENSION
+                )
+            ),
+            "e".repeat(64)
+        );
+        Resolution dependencies = new Resolution(
+            snapshot,
+            Map.of(
+                sourceId,
+                new PhysicalSourceFact(sourceId, "source-v1", true, "CONNECTION_TABLE", "public.ods_project")
+            )
+        );
+
+        var canonical = reconstructor.initialize(MODEL_ID, "table", "dwd_project_fact", dependencies);
+        var validated = new AdvancedDbtDraftStaticValidator().validate(canonical.files());
+
+        assertThat(canonical.files()).containsKeys(
+            "models/.dts_dependencies/sources.yml",
+            "models/.dts_dependencies/dts_ref_300000000000.sql",
+            "models/dwd_project_fact.sql"
+        );
+        assertThat(canonical.files().get("models/dwd_project_fact.sql"))
+            .contains("source('dts_src_500000000000', 'src_500000000000')")
+            .contains("ref('dts_ref_300000000000')");
+        assertThat(canonical.dependencyAliases())
+            .containsEntry("model." + projectKey + ".dts_ref_300000000000", "model.pjm.dim_project");
+        assertThat(canonical.dependencySnapshot()).isEqualTo(snapshot);
+        assertThat(validated.nodes().stream().filter(node -> "MODEL".equals(node.nodeKind())))
+            .extracting(node -> node.resourcePath())
+            .containsExactly("models/dwd_project_fact.sql");
+        assertThat(validated.nodes().getFirst().dependencies())
+            .containsExactlyInAnyOrder(
+                sourceUniqueId,
+                "model." + projectKey + ".dts_ref_300000000000"
+            );
+    }
 
     @Test
     void restoresSameProjectUpstreamRefsAsEphemeralEvidencePlaceholders() {

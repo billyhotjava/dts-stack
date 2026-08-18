@@ -10,6 +10,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.Implementa
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.UpstreamModelInput;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService.Resolution;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.ModelInput;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSource;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSourceFact;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +41,44 @@ public final class ModelSpecCompilerProjection {
         String materialization,
         List<String> keyFields,
         String planId,
-        List<CompilerField> typedFields
+		List<CompilerField> typedFields,
+		String dependencyChecksum
     ) {
+		public ImplementationProjection(
+			ModelingCompilerContract.CompilerModel model,
+			String tenantId,
+			String modelChecksum,
+			int implementationRevision,
+			String implementationChecksum,
+			String dbtUniqueId,
+			InputMode inputMode,
+			List<ImplementationInput> inputs,
+			List<FieldMapping> fieldMappings,
+			Map<String, Object> settings,
+			String materialization,
+			List<String> keyFields,
+			String planId,
+			List<CompilerField> typedFields
+		) {
+			this(
+				model,
+				tenantId,
+				modelChecksum,
+				implementationRevision,
+				implementationChecksum,
+				dbtUniqueId,
+				inputMode,
+				inputs,
+				fieldMappings,
+				settings,
+				materialization,
+				keyFields,
+				planId,
+				typedFields,
+				null
+			);
+		}
+
         public ImplementationProjection(
             ModelingCompilerContract.CompilerModel model,
             String tenantId,
@@ -66,7 +106,8 @@ public final class ModelSpecCompilerProjection {
                 materialization,
                 grainKeys(model),
                 "unscoped",
-                List.of()
+				List.of(),
+				null
             );
         }
 
@@ -98,7 +139,8 @@ public final class ModelSpecCompilerProjection {
                 materialization,
                 grainKeys(model),
                 "unscoped",
-                typedFields
+				typedFields,
+				null
             );
         }
 
@@ -123,6 +165,9 @@ public final class ModelSpecCompilerProjection {
             if (planId == null || planId.isBlank()) throw new IllegalArgumentException("planId is required");
             planId = planId.trim();
             typedFields = List.copyOf(typedFields == null ? List.of() : typedFields);
+			if (dependencyChecksum != null && !dependencyChecksum.matches("^[0-9a-f]{64}$")) {
+				throw new IllegalArgumentException("dependencyChecksum must be SHA-256");
+			}
         }
     }
 
@@ -241,6 +286,117 @@ public final class ModelSpecCompilerProjection {
             compilerFields(view)
         );
     }
+
+	/** Projects compiler inputs from the same fixed dependency snapshot used by dbt drafts and materialization. */
+	public static ImplementationProjection project(
+		ModelSpecView view,
+		ImplementationView implementation,
+		Function<ModelRevisionRef, ModelSpecView> revisionResolver,
+		String tenantId,
+		Resolution dependencies
+	) {
+		if (dependencies == null || dependencies.snapshot() == null) {
+			throw new ModelSpecException(
+				"MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE",
+				"A fixed dependency snapshot is required for generated compilation",
+				ModelSpecException.Kind.CONFLICT
+			);
+		}
+		ImplementationProjection base = project(
+			view,
+			implementation,
+			revisionResolver,
+			tenantId,
+			input -> view.sourceRefs()
+				.stream()
+				.filter(source -> source != null && input.sourceBindingId().equals(source.sourceBindingId()))
+				.filter(source -> input.resolvedVersion().equals(source.resolvedVersion()))
+				.findFirst()
+				.orElse(null)
+		);
+		List<ModelingCompilerContract.SourceRef> sources = projectDependencySources(dependencies, revisionResolver);
+		ModelingCompilerContract.CompilerModel model = base.model();
+		ModelingCompilerContract.CompilerModel dependencyBound = new ModelingCompilerContract.CompilerModel(
+			model.id(),
+			model.layer(),
+			model.modelType(),
+			model.implementationMode(),
+			model.name(),
+			model.grain(),
+			model.standardBindings(),
+			sources,
+			model.dimensions(),
+			model.metrics(),
+			model.revision()
+		);
+		return new ImplementationProjection(
+			dependencyBound,
+			base.tenantId(),
+			base.modelChecksum(),
+			base.implementationRevision(),
+			base.implementationChecksum(),
+			base.dbtUniqueId(),
+			base.inputMode(),
+			base.inputs(),
+			base.fieldMappings(),
+			base.settings(),
+			base.materialization(),
+			base.keyFields(),
+			base.planId(),
+			base.typedFields(),
+			dependencies.snapshot().dependencyChecksum()
+		);
+	}
+
+	private static List<ModelingCompilerContract.SourceRef> projectDependencySources(
+		Resolution dependencies,
+		Function<ModelRevisionRef, ModelSpecView> revisionResolver
+	) {
+		List<ModelingCompilerContract.SourceRef> result = new ArrayList<>();
+		for (PhysicalSource source : dependencies.snapshot().physicalSources()) {
+			PhysicalSourceFact fact = dependencies.physicalSourceFacts().get(source.sourceBindingId());
+			if (
+				fact == null ||
+				!fact.current() ||
+				!Objects.equals(source.resolvedVersion(), fact.resolvedVersion()) ||
+				!notBlank(fact.executableRef())
+			) {
+				throw dependencyStale(source.sourceBindingId());
+			}
+			boolean dbtNode = "DBT_NODE".equalsIgnoreCase(fact.sourceType());
+			result.add(new ModelingCompilerContract.SourceRef(
+				dbtNode ? "DBT_MODEL" : "TABLE",
+				dbtNode ? dbtResourceName(fact.executableRef()) : fact.executableRef(),
+				ModelingCompilerContract.Layer.ODS
+			));
+		}
+		for (ModelInput input : dependencies.snapshot().modelInputs()) {
+			ModelRevisionRef reference = new ModelRevisionRef(input.modelSpecId(), input.revision());
+			ModelSpecView dependency = revisionResolver.apply(reference);
+			if (
+				dependency == null ||
+				dependency.revision() != input.revision() ||
+				!Objects.equals(dependency.checksum(), input.checksum())
+			) {
+				throw dependencyStale(input.modelSpecId());
+			}
+			result.add(new ModelingCompilerContract.SourceRef(
+				"DBT_MODEL",
+				dbtResourceName(input.dbtUniqueId()),
+				ModelingCompilerContract.Layer.valueOf(dependency.layer().name())
+			));
+		}
+		return List.copyOf(result);
+	}
+
+	private static ModelSpecException dependencyStale(Object dependency) {
+		return new ModelSpecException(
+			"MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE",
+			"A fixed implementation dependency is unavailable",
+			ModelSpecException.Kind.CONFLICT,
+			Map.of("dependency", dependency)
+		);
+	}
 
     private static List<CompilerField> compilerFields(ModelSpecView view) {
         if (view == null || view.fields() == null) return List.of();

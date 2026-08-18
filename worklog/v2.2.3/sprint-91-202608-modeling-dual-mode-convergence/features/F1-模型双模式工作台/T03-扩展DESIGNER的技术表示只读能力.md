@@ -49,6 +49,12 @@ DESIGNER 模型的 TECHNICAL scope 恒为 `BLOCKED`、`allowedActions=[]`。在 
   - 既有 `ADVANCED_DBT_IMPLEMENTATION` 的全部断言零回归。
 - **错误路径**: 投影不可信（pin mismatch / fields untrusted / dynamic dependency / dependencies untrusted）优先级高于新能力——先 `BLOCKED`，不给预览。
 
+## Definition of Ready
+
+- [x] DESIGNER/DBT × BUSINESS/TECHNICAL 决策矩阵已冻结。
+- [x] 新能力只读、无 transition 写动作的边界已确认。
+- [x] 既有 `ADVANCED_DBT_IMPLEMENTATION` 语义零改动。
+
 ## 影响范围
 
 - `ModelVisualizationCapabilityEvaluator.java`

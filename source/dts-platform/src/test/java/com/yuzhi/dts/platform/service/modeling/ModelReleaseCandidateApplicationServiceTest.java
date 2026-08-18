@@ -83,6 +83,9 @@ class ModelReleaseCandidateApplicationServiceTest {
     private ReleaseCandidateWorkbenchEvidencePort workbenchEvidence;
 
     @Mock
+    private ModelMaterializationPlanService materializationPlans;
+
+    @Mock
     private ModelReleaseCandidatePreflightService preflight;
 
     @Mock
@@ -102,6 +105,7 @@ class ModelReleaseCandidateApplicationServiceTest {
             publicationCoordinator,
             rollbackCommits,
             workbenchEvidence,
+            materializationPlans,
             preflight,
             governanceQuality
         );
@@ -467,6 +471,52 @@ class ModelReleaseCandidateApplicationServiceTest {
         assertThat(created.candidate()).isSameAs(draft);
         verify(preflight).requireEligible(TENANT, command);
         verify(commands).createBatchWithExpandedScope(TENANT, ACTOR, command, command.entries());
+    }
+
+    @Test
+    void checksumBoundCreateUsesOnlyTheServerOwnedBuildScope() {
+        UUID upstreamId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+        CreateCandidateCommand command = new CreateCandidateCommand(
+            PLAN_ID,
+            "dev",
+            List.of(new ScopeEntryCommand(MODEL_ID, 0, "selected root")),
+            "planned-candidate-key",
+            "materialize dependency plan"
+        );
+        List<ScopeEntryCommand> buildScope = List.of(
+            new ScopeEntryCommand(upstreamId, 0, "AUTO_DEPENDENCY"),
+            new ScopeEntryCommand(MODEL_ID, 1, "MATERIALIZATION_ROOT")
+        );
+        String checksum = "a".repeat(64);
+        when(
+            materializationPlans.requireCurrent(
+                eq(TENANT),
+                any(ModelMaterializationPlanContract.PreviewCommand.class),
+                eq(checksum)
+            )
+        )
+            .thenReturn(new ModelMaterializationPlanService.ValidatedPlan(null, buildScope));
+        CandidateView draft = candidate(DeliveryStatus.DRAFT, List.of(entry(DeliveryStatus.DRAFT)));
+        when(commands.createBatchWithExpandedScope(TENANT, ACTOR, command, buildScope))
+            .thenReturn(new CommandResult(draft, false, List.of()));
+
+        CommandResult result = service.create(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            command,
+            checksum,
+            ModelMaterializationPlanContract.Strategy.WITH_MISSING_UPSTREAMS
+        );
+
+        assertThat(result.candidate()).isSameAs(draft);
+        ArgumentCaptor<ModelMaterializationPlanContract.PreviewCommand> preview = ArgumentCaptor.forClass(
+            ModelMaterializationPlanContract.PreviewCommand.class
+        );
+        verify(materializationPlans).requireCurrent(eq(TENANT), preview.capture(), eq(checksum));
+        assertThat(preview.getValue().requestedModelSpecIds()).containsExactly(MODEL_ID);
+        verify(commands).createBatchWithExpandedScope(TENANT, ACTOR, command, buildScope);
+        verify(preflight, never()).requireEligible(eq(TENANT), any(CreateCandidateCommand.class));
     }
 
     @Test

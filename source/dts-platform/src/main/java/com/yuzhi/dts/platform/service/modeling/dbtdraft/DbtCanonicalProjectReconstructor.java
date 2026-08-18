@@ -5,6 +5,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService.Resolution;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.ModelInput;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSource;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSourceFact;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Snapshot;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.FileInput;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
 import com.yuzhi.dts.platform.service.modeling.representation.ModelRepresentationEvidencePort.ArtifactEvidence;
@@ -36,6 +41,15 @@ final class DbtCanonicalProjectReconstructor {
     }
 
     CanonicalProject initialize(UUID modelSpecId, String materialization, String targetPhysicalName) {
+        return initialize(modelSpecId, materialization, targetPhysicalName, null);
+    }
+
+    CanonicalProject initialize(
+        UUID modelSpecId,
+        String materialization,
+        String targetPhysicalName,
+        Resolution dependencies
+    ) {
         if (modelSpecId == null) throw unavailable();
         String token = modelSpecId.toString().replace("-", "").substring(0, 12);
         String projectKey = "dts_model_" + token;
@@ -46,12 +60,115 @@ final class DbtCanonicalProjectReconstructor {
             "dbt_project.yml",
             CanonicalDbtProjectBundleAssembler.projectFile(projectKey, List.of("models"), materialization)
         );
-        files.put(
-            "models/" + modelName + ".sql",
-            "-- DTS canonical initialization; replace this placeholder before commit.\n" +
-            "select 1 as _dts_placeholder where 1 = 0\n"
+        if (dependencies == null) {
+            files.put(
+                "models/" + modelName + ".sql",
+                "-- DTS canonical initialization; replace this placeholder before commit.\n" +
+                "select 1 as _dts_placeholder where 1 = 0\n"
+            );
+            return canonical(projectKey, files, Map.of());
+        }
+        Snapshot snapshot = dependencies.snapshot();
+        if (!Objects.equals(modelSpecId, snapshot.modelSpecId())) throw unavailable();
+        LinkedHashMap<String, String> aliases = new LinkedHashMap<>();
+        List<ManagedDependency> managed = new ArrayList<>();
+        if (!snapshot.physicalSources().isEmpty()) {
+            files.put("models/.dts_dependencies/sources.yml", managedSources(snapshot, dependencies));
+        }
+        for (PhysicalSource source : snapshot.physicalSources()) {
+            String[] identity = source.dbtSourceUniqueId().split("\\.", -1);
+            if (identity.length != 4 || !"source".equals(identity[0])) throw unavailable();
+            managed.add(
+                new ManagedDependency(
+                    "source('" + identity[2] + "', '" + identity[3] + "')",
+                    source.dbtSourceUniqueId()
+                )
+            );
+        }
+        for (ModelInput input : snapshot.modelInputs()) {
+            String proxyName = "dts_ref_" + input.modelSpecId().toString().replace("-", "").substring(0, 12);
+            String proxyPath = "models/.dts_dependencies/" + proxyName + ".sql";
+            files.put(
+                proxyPath,
+                "{{ config(materialized='ephemeral', tags=['dts-managed-dependency']) }}\n" +
+                "-- Managed dependency proxy for " + input.dbtUniqueId() + ". Do not rename or delete.\n" +
+                "select 1 as _dts_dependency_placeholder where 1 = 0\n"
+            );
+            String localUniqueId = "model." + projectKey + "." + proxyName;
+            aliases.put(localUniqueId, input.dbtUniqueId());
+            managed.add(new ManagedDependency("ref('" + proxyName + "')", localUniqueId));
+        }
+        String targetPath = "models/" + modelName + ".sql";
+        files.put(targetPath, initializedTargetSql(managed));
+        Map<String, List<String>> expected = Map.of(
+            targetPath,
+            managed.stream().map(ManagedDependency::localUniqueId).sorted().toList()
         );
-        return canonical(projectKey, files, Map.of());
+        return canonical(projectKey, files, expected, snapshot, aliases);
+    }
+
+    private static String managedSources(Snapshot snapshot, Resolution dependencies) {
+        StringBuilder yaml = new StringBuilder("version: 2\nsources:\n");
+        for (PhysicalSource source : snapshot.physicalSources()) {
+            PhysicalSourceFact fact = dependencies.physicalSourceFacts().get(source.sourceBindingId());
+            if (fact == null || !fact.current() || fact.executableRef() == null || fact.executableRef().isBlank()) {
+                throw unavailable();
+            }
+            String[] identity = source.dbtSourceUniqueId().split("\\.", -1);
+            if (identity.length != 4) throw unavailable();
+            List<String> relation = java.util.Arrays
+                .stream(fact.executableRef().split("\\."))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .toList();
+            if (relation.isEmpty() || relation.size() > 3) throw unavailable();
+            String identifier = relation.getLast();
+            String schema = relation.size() >= 2 ? relation.get(relation.size() - 2) : null;
+            String database = relation.size() == 3 ? relation.getFirst() : null;
+            yaml.append("  - name: '").append(yaml(identity[2])).append("'\n");
+            if (database != null) yaml.append("    database: '").append(yaml(database)).append("'\n");
+            if (schema != null) yaml.append("    schema: '").append(yaml(schema)).append("'\n");
+            yaml
+                .append("    tables:\n")
+                .append("      - name: '")
+                .append(yaml(identity[3]))
+                .append("'\n")
+                .append("        identifier: '")
+                .append(yaml(identifier))
+                .append("'\n");
+        }
+        return yaml.toString();
+    }
+
+    private static String initializedTargetSql(List<ManagedDependency> dependencies) {
+        if (dependencies.isEmpty()) {
+            return "-- DTS canonical initialization; replace this placeholder before commit.\n" +
+            "select 1 as _dts_placeholder where 1 = 0\n";
+        }
+        StringBuilder sql = new StringBuilder(
+            "-- DTS managed dependency skeleton. Keep every source/ref until ModelSpec is changed.\nwith\n"
+        );
+        for (int index = 0; index < dependencies.size(); index++) {
+            if (index > 0) sql.append(",\n");
+            sql
+                .append("_dts_dependency_")
+                .append(index + 1)
+                .append(" as (select * from {{ ")
+                .append(dependencies.get(index).expression())
+                .append(" }})");
+        }
+        sql.append("\nselect _dts_dependency_1.*\n  from _dts_dependency_1\n");
+        for (int index = 1; index < dependencies.size(); index++) {
+            sql
+                .append("  left join _dts_dependency_")
+                .append(index + 1)
+                .append(" on 1 = 0\n");
+        }
+        return sql.append(" where 1 = 0\n").toString();
+    }
+
+    private static String yaml(String value) {
+        return value.replace("'", "''");
     }
 
     CanonicalProject reconstruct(
@@ -179,12 +296,28 @@ final class DbtCanonicalProjectReconstructor {
         Map<String, String> files,
         Map<String, List<String>> dependencies
     ) {
+        return canonical(projectKey, files, dependencies, null, Map.of());
+    }
+
+    private CanonicalProject canonical(
+        String projectKey,
+        Map<String, String> files,
+        Map<String, List<String>> dependencies,
+        Snapshot dependencySnapshot,
+        Map<String, String> dependencyAliases
+    ) {
         List<FileInput> normalized = DbtImplementationDraftContract.normalizeFiles(
             files.entrySet().stream().map(entry -> new FileInput(entry.getKey(), entry.getValue())).toList()
         );
         LinkedHashMap<String, String> ordered = new LinkedHashMap<>();
         normalized.stream().sorted(Comparator.comparing(FileInput::path)).forEach(file -> ordered.put(file.path(), file.content()));
-        return new CanonicalProject(projectKey, Map.copyOf(ordered), Map.copyOf(dependencies));
+        return new CanonicalProject(
+            projectKey,
+            Map.copyOf(ordered),
+            Map.copyOf(dependencies),
+            dependencySnapshot,
+            Map.copyOf(dependencyAliases)
+        );
     }
 
     private void requireExactArtifact(
@@ -267,11 +400,20 @@ final class DbtCanonicalProjectReconstructor {
         );
     }
 
-    record CanonicalProject(String projectKey, Map<String, String> files, Map<String, List<String>> expectedDependencies) {
+    private record ManagedDependency(String expression, String localUniqueId) {}
+
+    record CanonicalProject(
+        String projectKey,
+        Map<String, String> files,
+        Map<String, List<String>> expectedDependencies,
+        Snapshot dependencySnapshot,
+        Map<String, String> dependencyAliases
+    ) {
         CanonicalProject {
             if (!PROJECT_KEY.matcher(Objects.toString(projectKey, "")).matches()) throw unavailable();
             files = Map.copyOf(files);
             expectedDependencies = Map.copyOf(expectedDependencies);
+            dependencyAliases = Map.copyOf(dependencyAliases == null ? Map.of() : dependencyAliases);
         }
     }
 }

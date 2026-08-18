@@ -19,6 +19,12 @@
 - **体积约束**（ADR-91-06）: `monaco-editor@0.52` 目前只被 sql-ide 引用，**建模页首屏尚未包含它**（账本 #23）。`DbtCodeEditor` 必须经 `React.lazy` + 动态 `import()` 装载，且只在 `view=code` 且用户具备维护权限时触发。禁止在 `ModelingWorkbenchPage`/`ModelingWorkbenchEditor` 的模块顶层 import monaco。
 - **Worker 约束**（ADR-91-06）: 仓库内无 `MonacoEnvironment`/`getWorker` 配置，Monaco 当前运行在主线程（账本 #23）。本 Task **沿用主线程模式，不引入 worker**——`@vitejs/plugin-legacy` 默认不转译 worker chunk，引入 worker 会成为 Chrome 95 上的新增风险面。语法高亮与诊断标记不依赖 worker。
 
+## Definition of Ready
+
+- [x] F1/F2 code view、草稿与只读 preview 状态已稳定。
+- [x] editor props、懒加载、容量和 worker 禁止项已冻结。
+- [ ] F0/T01 Chrome 95/browser harness 可执行最终 smoke。
+
 ## 影响范围
 
 - 新增 `DbtCodeEditor.tsx` 及测试

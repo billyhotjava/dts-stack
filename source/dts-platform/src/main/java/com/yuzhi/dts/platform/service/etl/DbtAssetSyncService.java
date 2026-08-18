@@ -448,7 +448,9 @@ public class DbtAssetSyncService {
             if (downstreamColumns.isEmpty()) {
                 continue;
             }
-            Map<String, String> expressionsByAlias = selectExpressionsByAlias(model.compiledCode);
+            Map<String, String> expressionsByAlias = DbtSqlProjectionParser.selectExpressionsByAlias(
+                model.compiledCode
+            );
             Map<String, CatalogColumnLineage> existing = existingColumnLineageByKey(downstream);
             Set<String> desiredKeys = new LinkedHashSet<>();
             for (String upstreamUniqueId : model.dependsOn) {
@@ -482,7 +484,12 @@ public class DbtAssetSyncService {
                     Set<String> matchedUpstreamColumns = new LinkedHashSet<>();
                     if (StringUtils.hasText(expression)) {
                         for (CatalogColumnSchema upstreamColumn : upstreamColumns.values()) {
-                            if (!expressionReferencesColumn(expression, upstreamColumn.getName())) {
+                            if (
+                                !DbtSqlProjectionParser.expressionReferencesColumn(
+                                    expression,
+                                    upstreamColumn.getName()
+                                )
+                            ) {
                                 continue;
                             }
                             matchedUpstreamColumns.add(normalizeColumnName(upstreamColumn.getName()));
@@ -639,206 +646,6 @@ public class DbtAssetSyncService {
             return null;
         }
         return value.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private Map<String, String> selectExpressionsByAlias(String sql) {
-        if (!StringUtils.hasText(sql)) {
-            return Map.of();
-        }
-        String selectClause = extractTopLevelSelectClause(sql);
-        if (!StringUtils.hasText(selectClause)) {
-            return Map.of();
-        }
-        Map<String, String> result = new LinkedHashMap<>();
-        for (String expression : splitTopLevel(selectClause, ',')) {
-            String trimmed = trimToNull(expression);
-            if (trimmed == null) {
-                continue;
-            }
-            String alias = resolveSelectAlias(trimmed);
-            String key = normalizeColumnName(alias);
-            if (StringUtils.hasText(key)) {
-                result.putIfAbsent(key, trimmed);
-            }
-        }
-        return result;
-    }
-
-    private String extractTopLevelSelectClause(String sql) {
-        String normalized = stripSqlComments(sql);
-        int selectStart = findTopLevelKeyword(normalized, "select", 0);
-        if (selectStart < 0) {
-            return null;
-        }
-        int fromStart = findTopLevelKeyword(normalized, "from", selectStart + "select".length());
-        if (fromStart < 0 || fromStart <= selectStart) {
-            return null;
-        }
-        return normalized.substring(selectStart + "select".length(), fromStart);
-    }
-
-    private int findTopLevelKeyword(String sql, String keyword, int startIndex) {
-        if (!StringUtils.hasText(sql) || !StringUtils.hasText(keyword)) {
-            return -1;
-        }
-        String lowerKeyword = keyword.toLowerCase(Locale.ROOT);
-        int depth = 0;
-        char quote = 0;
-        for (int index = Math.max(0, startIndex); index <= sql.length() - keyword.length(); index++) {
-            char ch = sql.charAt(index);
-            if (quote != 0) {
-                if (ch == quote) {
-                    quote = 0;
-                }
-                continue;
-            }
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-                continue;
-            }
-            if (ch == '(') {
-                depth++;
-                continue;
-            }
-            if (ch == ')' && depth > 0) {
-                depth--;
-                continue;
-            }
-            if (depth != 0) {
-                continue;
-            }
-            if (sql.regionMatches(true, index, lowerKeyword, 0, lowerKeyword.length()) && isKeywordBoundary(sql, index, lowerKeyword.length())) {
-                return index;
-            }
-        }
-        return -1;
-    }
-
-    private boolean isKeywordBoundary(String text, int start, int length) {
-        char before = start > 0 ? text.charAt(start - 1) : ' ';
-        char after = start + length < text.length() ? text.charAt(start + length) : ' ';
-        return !isIdentifierChar(before) && !isIdentifierChar(after);
-    }
-
-    private List<String> splitTopLevel(String text, char delimiter) {
-        if (!StringUtils.hasText(text)) {
-            return List.of();
-        }
-        List<String> parts = new ArrayList<>();
-        int depth = 0;
-        char quote = 0;
-        int start = 0;
-        for (int index = 0; index < text.length(); index++) {
-            char ch = text.charAt(index);
-            if (quote != 0) {
-                if (ch == quote) {
-                    quote = 0;
-                }
-                continue;
-            }
-            if (ch == '\'' || ch == '"' || ch == '`') {
-                quote = ch;
-                continue;
-            }
-            if (ch == '(') {
-                depth++;
-                continue;
-            }
-            if (ch == ')' && depth > 0) {
-                depth--;
-                continue;
-            }
-            if (ch == delimiter && depth == 0) {
-                parts.add(text.substring(start, index));
-                start = index + 1;
-            }
-        }
-        parts.add(text.substring(start));
-        return parts;
-    }
-
-    private String resolveSelectAlias(String expression) {
-        String trimmed = trimToNull(expression);
-        if (trimmed == null) {
-            return null;
-        }
-        java.util.regex.Matcher asMatcher = java.util.regex.Pattern
-            .compile("(?is)\\s+as\\s+([\"`\\[]?[A-Za-z_][A-Za-z0-9_]*[\"`\\]]?)\\s*$")
-            .matcher(trimmed);
-        if (asMatcher.find()) {
-            return unquoteIdentifier(asMatcher.group(1));
-        }
-        List<String> tokens = splitTopLevel(trimmed, ' ');
-        for (int index = tokens.size() - 1; index >= 0; index--) {
-            String token = trimToNull(tokens.get(index));
-            if (token == null) {
-                continue;
-            }
-            String alias = unquoteIdentifier(token);
-            if (alias != null && alias.matches("[A-Za-z_][A-Za-z0-9_]*") && !isSqlKeyword(alias)) {
-                return alias;
-            }
-            break;
-        }
-        String simpleColumn = trimmed.replace("\"", "").replace("`", "");
-        int dot = simpleColumn.lastIndexOf('.');
-        if (dot >= 0 && dot + 1 < simpleColumn.length()) {
-            simpleColumn = simpleColumn.substring(dot + 1);
-        }
-        simpleColumn = trimToNull(simpleColumn);
-        return simpleColumn != null && simpleColumn.matches("[A-Za-z_][A-Za-z0-9_]*") ? simpleColumn : null;
-    }
-
-    private boolean expressionReferencesColumn(String expression, String columnName) {
-        String column = trimToNull(columnName);
-        if (!StringUtils.hasText(expression) || column == null) {
-            return false;
-        }
-        String pattern = "(?i)(^|[^A-Za-z0-9_])([\"`\\[]?)" + java.util.regex.Pattern.quote(column) + "([\"`\\]]?)([^A-Za-z0-9_]|$)";
-        return java.util.regex.Pattern.compile(pattern).matcher(expression).find();
-    }
-
-    private String stripSqlComments(String sql) {
-        if (!StringUtils.hasText(sql)) {
-            return sql;
-        }
-        return sql.replaceAll("(?m)--.*?$", " ").replaceAll("(?s)/\\*.*?\\*/", " ");
-    }
-
-    private String trimToNull(String value) {
-        if (!StringUtils.hasText(value)) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private String unquoteIdentifier(String value) {
-        String text = trimToNull(value);
-        if (text == null) {
-            return null;
-        }
-        if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("`") && text.endsWith("`"))) {
-            return text.substring(1, text.length() - 1);
-        }
-        if (text.startsWith("[") && text.endsWith("]")) {
-            return text.substring(1, text.length() - 1);
-        }
-        return text;
-    }
-
-    private boolean isIdentifierChar(char ch) {
-        return Character.isLetterOrDigit(ch) || ch == '_';
-    }
-
-    private boolean isSqlKeyword(String value) {
-        if (!StringUtils.hasText(value)) {
-            return false;
-        }
-        return switch (value.trim().toUpperCase(Locale.ROOT)) {
-            case "CASE", "WHEN", "THEN", "ELSE", "END", "NULL", "TRUE", "FALSE", "FROM", "WHERE", "GROUP", "ORDER" -> true;
-            default -> false;
-        };
     }
 
     private CatalogLineageJob upsertDbtJob(ModelMeta model) {

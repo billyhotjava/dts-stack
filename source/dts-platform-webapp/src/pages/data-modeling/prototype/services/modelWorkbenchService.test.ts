@@ -780,6 +780,72 @@ describe("model workbench draft validation", () => {
 		);
 	});
 
+	it("round-trips the controlled visual transformation contract", async () => {
+		const base = {
+			...canonicalFactView(),
+			sourceRefs: [
+				{
+					kind: "TABLE" as const,
+					ref: "预算执行 ODS",
+					layer: "ODS" as const,
+					role: "PRIMARY" as const,
+					alias: null,
+					joinType: null,
+					joinExpression: null,
+					sortOrder: 0,
+					sourceBindingId: physicalSource.bindingId,
+					resolvedVersion: "source-v1",
+				},
+			],
+		};
+		const currentImplementation = generatedImplementation(base, {
+			inputMode: "PHYSICAL_ASSET",
+			inputs: [{ sourceBindingId: physicalSource.bindingId, resolvedVersion: "source-v1" }],
+			fieldMappings: [
+				{ sourceField: "record_code", targetField: "record_id" },
+				{ sourceField: "created_at", targetField: "event_time" },
+			],
+			settings: {
+				targetPhysicalName: "dwd_budget_execution",
+				loadStrategy: "FULL",
+				partitionFields: [],
+				casts: { event_time: "timestamp" },
+				filters: [{ field: "record_id", operator: "IN", valueType: "STRING", value: ["A", "B"] }],
+				deduplicateBy: ["record_id"],
+			},
+		});
+		const draft = modelDraftFromView(base, currentImplementation);
+		expect(draft).toMatchObject({
+			fieldMappings: currentImplementation.fieldMappings,
+			casts: { event_time: "timestamp" },
+			filters: [{ field: "record_id", operator: "IN", valueType: "STRING", value: ["A", "B"] }],
+			deduplicateBy: ["record_id"],
+		});
+
+		const savedModel = { ...base, revision: 2, checksum: "d".repeat(64) };
+		vi.mocked(updateModelSpec).mockResolvedValue(savedModel);
+		vi.mocked(saveModelImplementation).mockResolvedValue(
+			generatedImplementation(savedModel, {
+				inputMode: "PHYSICAL_ASSET",
+				inputs: currentImplementation.inputs,
+			}),
+		);
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [], models: [base] });
+
+		expect(saveModelImplementation).toHaveBeenCalledWith(
+			savedModel,
+			currentImplementation,
+			expect.objectContaining({
+				fieldMappings: currentImplementation.fieldMappings,
+				settings: expect.objectContaining({
+					casts: { event_time: "timestamp" },
+					filters: [{ field: "record_id", operator: "IN", valueType: "STRING", value: ["A", "B"] }],
+					deduplicateBy: ["record_id"],
+				}),
+			}),
+		);
+	});
+
 	it("saves a selected warehouse source through logical and implementation bindings", async () => {
 		const base = canonicalFactView();
 		const savedModel = { ...base, revision: 2, checksum: "d".repeat(64) };

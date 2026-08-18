@@ -1,7 +1,7 @@
 # Sprint-93：数据建模与数据治理证据闭环
 
 **时间盒**：2026-08-17 ～ 2026-09-04（15 个工作日）
-**状态**：IMPLEMENTATION_COMPLETE / E2E_COMPLETE_WITH_EXTERNAL_GAPS（集中 E2E 与回滚演练已完成；IT-07、11、13 受真实 lineage 输入、部门账号和 Chrome 95 环境限制保持 PARTIAL）
+**状态**：IMPLEMENTATION_COMPLETE / DELTA_REGRESSION_PASS / FINAL_E2E_PENDING（IT-07 缺失写入能力已自动化通过；待全部实现收口后，与 IT-11、13 一并集中复验）
 **类型**：Architecture Convergence / Governance Evidence / Compatibility Migration / UI Productization
 **目标**：让建模人员从 ModelSpec 构建、物化、质量检查到发布后，能够在同一个稳定资产身份下继续查看业务元数据、表/字段血缘、治理质量和消费资格；二次物化不产生重复模型或重复资产，所有状态均可追溯、可重试、可对账。
 
@@ -124,12 +124,12 @@
 | G0 | 交付基线 | PASS | `it/baseline.md`、`it/evidence/20260817-final-e2e.md` | - |
 | G0 | 领域与真实数据画像 | PASS_WITH_GAPS | `assets/domain-profile.md` §3.1 | F6/T01 |
 | G0 | DTS 不变量自检 | PASS | ADR-93-01/03/07/08/09/11；A3/A4/B1/C3/D1/D4 | - |
-| G1 | 契约链贯通 | PASS_WITH_DATA_EVIDENCE_GAP | 本文 §4；表级链贯通，运行样本缺 ODS/字段证据 | F4/T01 |
+| G1 | 契约链贯通 | PASS_AUTOMATED / FINAL_E2E_PENDING | 本文 §4；`it/evidence/20260818-it07-publication-lineage-automated.md` | F4/T01 |
 | G1 | 非功能预算 | PASS_WITH_GAPS | `assets/nfr-budget.md`、集中 E2E 双视口与故障恢复证据；500+ 真实负载未执行 | F6/T02 |
 | G2 | 变更范围守卫 | PASS | Sprint-93 逐符号 impact；2026-08-17 最终 `gitnexus_detect_changes(scope=unstaged)` 为 LOW，0 条受影响执行流 | - |
 | G3 | 发布安全 | PASS | `assets/release-plan.md` §8、IT-12 | - |
 | G4 | 可运维性 | PASS_WITH_EXTERNAL_REHEARSAL_GAP | `assets/runbook.md`、IT-04/08/12；非实现者演练未执行 | F6/T02 |
-| G4 | DoD 验收 | PARTIAL_EXTERNAL_GAPS | `it/README.md`、`it/evidence/20260817-final-e2e.md` | IT-07、11、13 |
+| G4 | DoD 验收 | FINAL_E2E_PENDING | `it/README.md`、`it/evidence/20260817-final-e2e.md`、`it/evidence/20260818-it07-publication-lineage-automated.md` | IT-07、11、13 |
 
 ## 7. Feature 列表
 
@@ -139,7 +139,7 @@
 | F1 | 物理资产登记与语义投影收敛 | 2 | P0 | COMPLETE / IT-01-03_PASS |
 | F2 | 模型服务投影闭环 | 1 | P0 | COMPLETE / IT-04_PASS |
 | F3 | 治理质量证据桥接 | 2 | P0 | COMPLETE / IT-05-06_PASS |
-| F4 | 元数据与血缘证据贯通 | 1 | P0 | IMPLEMENTATION_COMPLETE / IT-08_PASS / IT-07_PARTIAL_DATA_GAP |
+| F4 | 元数据与血缘证据贯通 | 1 | P0 | IMPLEMENTATION_COMPLETE / IT-08_PASS / IT-07_AUTOMATED_PASS / FINAL_E2E_PENDING |
 | F5 | 资产治理界面收敛 | 1 | P1 | COMPLETE / IT-09_PASS |
 | F6 | 发布安全与端到端验收 | 2 | P0 | IMPLEMENTATION_COMPLETE / ACCEPTANCE_PARTIAL_EXTERNAL_GAPS |
 
@@ -163,6 +163,13 @@ Sprint-89 F3/F4 与 Sprint-90 F1/F5 是外部依赖，任务不得复制其源�
 - `dts-admin` 已执行 Sprint-93 审计目录迁移，四个同步/补齐动作不再依赖易误判的字符串分类。
 - IT-07 只缺运行样本的 ODS/字段级证据，IT-11 只缺部门账号负向，IT-13 只缺真实 Chrome 95；详见 `it/evidence/20260817-final-e2e.md`。
 
+### 7.3 2026-08-18 IT-07 边界修正与实现补齐
+
+- 数据建模仍是 ODS→DWD→DWS→ADS 转换、构建、测试和物化的唯一 owner；Sprint-93 治理链只消费已钉定的模型、dbt 和物理观察证据，不执行 ODS 业务数据加工。
+- 候选发布现可从已确认 ODS source binding 写入 ODS→DWD 表级边，并以 MODEL/STG compiled SQL 保守组合字段映射；DWD→DWS→ADS 继续依据 ModelSpec 依赖写入。
+- 发布重试保持逻辑边幂等，回滚关闭当前表/字段边并保留历史有效期；共享解析和发布回归 24 项全部通过。
+- 本轮是自动化实现证据，未执行部署后 Chrome E2E；IT-07 最终状态保持 `FINAL_E2E_PENDING`。详见 `it/evidence/20260818-it07-publication-lineage-automated.md`。
+
 ## 8. 追溯矩阵（Traceability）
 
 | 需求点 | Feature / Task | 验收证据 |
@@ -185,7 +192,7 @@ Sprint-89 F3/F4 与 Sprint-90 F1/F5 是外部依赖，任务不得复制其源�
 - [x] 模型服务投影能够从 `SYNC_PENDING` 进入 `SYNCED`；失败可重试并保留错误码、attempt 和 correlationId。
 - [x] 资产概览、目录和详情读取同一语义投影，数字与筛选结果可对账，并明确显示投影新鲜度。
 - [x] 发布面板将工程质量与治理数据质量分开展示，治理质量证据钉定 rule/version/binding/run/checksum。
-- [ ] 表级与字段级血缘均有真实模型链样本；字段血缘缺失时显示具体跳过原因，不伪造边。
+- [ ] 表级与字段级血缘写入契约已自动化通过；仍需最终真实模型链 E2E，缺少唯一来源时不得伪造边。
 - [x] OM 不可用不导致 DTS 资产消失；同步状态正确降级。
 - [x] 存量补齐全程具备 preview/apply/rollback，漂移或歧义 fail-closed，不覆盖用户治理结果。
 - [x] 资产详情可回溯模型 revision、candidate、materialization attempt、quality run 和 lineage evidence。

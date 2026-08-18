@@ -200,9 +200,11 @@ public class ModelMaterializationSourceAvailabilityGuard {
                     candidateInputs,
                     pending
                 );
-                case "GENERATED" -> {
-                    // Generated inputs have no physical source to fence.
-                }
+                case "GENERATED" -> validateGeneratedSources(
+                    snapshot,
+                    boundaryId,
+                    physicalSources
+                );
                 default -> throw unavailable(boundaryId, snapshot.modelSpecId(), "Implementation input mode is invalid");
             }
         }
@@ -239,10 +241,48 @@ public class ModelMaterializationSourceAvailabilityGuard {
                 resolvedVersion.trim()
             );
             PhysicalSourceRequest previous = physicalSources.putIfAbsent(sourceBindingId, request);
-            if (previous != null && !previous.equals(request)) {
+            if (previous != null && !sameSourceGeneration(previous, request)) {
                 throw unavailable(boundaryId, snapshot.modelSpecId(), "A source binding has conflicting generation pins");
             }
         }
+    }
+
+    private void validateGeneratedSources(
+        InputSnapshot snapshot,
+        UUID boundaryId,
+        Map<UUID, PhysicalSourceRequest> physicalSources
+    ) {
+        JsonNode sourceRefs = parseSourceRefs(snapshot, boundaryId);
+        if (!sourceRefs.isEmpty()) {
+            validatePhysicalInputs(snapshot, sourceRefs, boundaryId, physicalSources);
+        }
+    }
+
+    private JsonNode parseSourceRefs(InputSnapshot snapshot, UUID boundaryId) {
+        if (snapshot.sourceRefsJson() == null || snapshot.sourceRefsJson().isBlank()) {
+            return objectMapper.createArrayNode();
+        }
+        try {
+            JsonNode sources = objectMapper.readTree(snapshot.sourceRefsJson());
+            if (!sources.isArray()) {
+                throw unavailable(boundaryId, snapshot.modelSpecId(), "Model source references are unreadable");
+            }
+            return sources;
+        } catch (ModelReleaseCandidateException exception) {
+            throw exception;
+        } catch (Exception exception) {
+            throw unavailable(boundaryId, snapshot.modelSpecId(), "Model source references are unreadable");
+        }
+    }
+
+    private static boolean sameSourceGeneration(
+        PhysicalSourceRequest previous,
+        PhysicalSourceRequest current
+    ) {
+        return previous.tenantId().equals(current.tenantId()) &&
+            previous.planId().equals(current.planId()) &&
+            previous.sourceBindingId().equals(current.sourceBindingId()) &&
+            previous.resolvedVersion().equals(current.resolvedVersion());
     }
 
     private SourceDescriptor descriptor(PhysicalSourceRequest request, UUID boundaryId) {

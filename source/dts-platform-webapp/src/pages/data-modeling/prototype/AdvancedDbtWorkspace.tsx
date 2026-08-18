@@ -37,6 +37,8 @@ const LazyDbtCodeEditor = lazy(() => import("./DbtCodeEditor").then((module) => 
 const canonical = (model: ModelSpecView): model is CanonicalModelSpecView =>
 	model.compatibilityMode === "CANONICAL" && model.contractVersion === 2;
 
+const isManagedDependencyPath = (path: string) => path.replaceAll("\\", "/").startsWith("models/.dts_dependencies/");
+
 export function AdvancedDbtWorkspace({
 	model,
 	initialTargetPhysicalName = "",
@@ -314,6 +316,7 @@ export function AdvancedDbtWorkspace({
 			const receipt = await commitDbtImplementationDraft(model.id, draft.draftId, {
 				expectedEtag: validation.etag,
 				validatedChecksum: validation.validatedChecksum,
+				dependencyChecksum: validation.dependencyValidation?.dependencyChecksum,
 				idempotencyKey: newModelingIdempotencyKey(),
 			});
 			setCommit(receipt);
@@ -360,6 +363,7 @@ export function AdvancedDbtWorkspace({
 	};
 
 	const selectedFile = files.find((file) => file.path === selectedPath) || null;
+	const selectedFileManaged = Boolean(selectedFile && isManagedDependencyPath(selectedFile.path));
 	const draftCommitted = draft?.state === "COMMITTED" || Boolean(commit);
 	const draftWriteLocked = draftCommitted || conflict;
 	const draftStatus = draft
@@ -553,7 +557,9 @@ export function AdvancedDbtWorkspace({
 								}}
 								type="text"
 								>
-									{file.path}{diagnosticsFor(file.path).length ? ` · ${diagnosticsFor(file.path).length}` : ""}
+									{file.path}
+									{isManagedDependencyPath(file.path) ? " · 系统依赖" : ""}
+									{diagnosticsFor(file.path).length ? ` · ${diagnosticsFor(file.path).length}` : ""}
 							</Button>
 						))}
 						<div>
@@ -568,6 +574,7 @@ export function AdvancedDbtWorkspace({
 									!canMaintain ||
 										draftWriteLocked ||
 									!newPath.trim() ||
+									isManagedDependencyPath(newPath.trim()) ||
 									files.some((file) => file.path === newPath.trim())
 								}
 								onClick={() => {
@@ -588,10 +595,13 @@ export function AdvancedDbtWorkspace({
 						{selectedFile ? (
 							<>
 								<header>
-									<strong>{selectedFile.path}</strong>
+									<strong>
+										{selectedFile.path}
+										{selectedFileManaged ? " · 系统依赖" : ""}
+									</strong>
 									<Button
 										danger
-										disabled={!canMaintain || draftWriteLocked}
+										disabled={!canMaintain || draftWriteLocked || selectedFileManaged}
 										onClick={() => {
 											setFiles((current) => current.filter((file) => file.path !== selectedFile.path));
 											setSelectedPath(files.find((file) => file.path !== selectedFile.path)?.path || "");
@@ -618,7 +628,7 @@ export function AdvancedDbtWorkspace({
 									}}
 										onSave={() => void save()}
 										path={selectedFile.path}
-										readOnly={!canMaintain || draftWriteLocked}
+										readOnly={!canMaintain || draftWriteLocked || selectedFileManaged}
 									/>
 								</Suspense>
 							</>
@@ -657,6 +667,28 @@ export function AdvancedDbtWorkspace({
 					{validation ? (
 						<div className="dmx-dbt-diagnostics">
 							<h3>校验结果</h3>
+							{validation.dependencyValidation ? (
+								<div>
+									<Status
+										tone={
+											validation.dependencyValidation.missing.length ||
+											validation.dependencyValidation.undeclared.length
+												? "danger"
+												: "success"
+										}
+									>
+										依赖校验
+									</Status>
+									<b>依赖关系已匹配 {validation.dependencyValidation.matched.length} 项</b>
+									<span>校验和 {validation.dependencyValidation.dependencyChecksum}</span>
+									{validation.dependencyValidation.missing.length ? (
+										<p>缺少：{validation.dependencyValidation.missing.join("、")}</p>
+									) : null}
+									{validation.dependencyValidation.undeclared.length ? (
+										<p>未声明：{validation.dependencyValidation.undeclared.join("、")}</p>
+									) : null}
+								</div>
+							) : null}
 							{validation.diagnostics.length ? (
 								validation.diagnostics.map((item, index) => (
 									<div key={`${item.code}-${index}`}>

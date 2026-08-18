@@ -32,6 +32,12 @@
   `action:'CONVERT'` **不由本函数产出**——接管可用性来自 F2 的 transition validate，不塞进 capability 层（ADR-91-10）。
 - **兼容**: 保留 source-contract 对 `open=advanced` 的旧入口断言，再增加归一化断言。
 
+## Definition of Ready
+
+- [x] F1/T03 capability code 与 representation 路径已固定。
+- [x] URL、旧深链、dirty guard 与请求次数契约已冻结。
+- [x] 本 Task 不触发任何写 API 的边界已确认。
+
 ## 影响范围
 
 - `ModelingWorkbenchPage.tsx`

@@ -89,7 +89,8 @@ class ModelMaterializationSourceAvailabilityGuardTest {
             2,
             "a".repeat(64),
             "UPSTREAM_MODEL",
-            "[{\"modelSpecId\":\"" + upstream + "\",\"revision\":3,\"checksum\":\"" + "b".repeat(64) + "\"}]"
+            "[{\"modelSpecId\":\"" + upstream + "\",\"revision\":3,\"checksum\":\"" + "b".repeat(64) + "\"}]",
+            "[]"
         );
         when(snapshots.findDispatchInputs(CANDIDATE)).thenReturn(List.of(root));
         when(snapshots.findPublishedInput("tenant-a", upstream, 3, "b".repeat(64)))
@@ -101,6 +102,38 @@ class ModelMaterializationSourceAvailabilityGuardTest {
 
         verify(snapshots).findPublishedInput("tenant-a", upstream, 3, "b".repeat(64));
         verify(sourceValidation).isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1");
+    }
+
+    @Test
+    void generatedImplementationUsesTheSameVersionBoundSourceFence() {
+        InputSnapshot generated = new InputSnapshot(
+            "tenant-a",
+            PLAN,
+            MODEL,
+            3,
+            "b".repeat(64),
+            "GENERATED",
+            "[{\"generator\":\"designer\"}]",
+            "[{\"sourceBindingId\":\"" + SOURCE + "\",\"resolvedVersion\":\"source-version-1\"}]"
+        );
+        when(snapshots.findCandidateInputs("tenant-a", CANDIDATE, 4)).thenReturn(List.of(generated));
+        when(sourceValidation.isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1"))
+            .thenReturn(true);
+
+        assertThatCode(() -> guard.requireCandidateCurrent("tenant-a", CANDIDATE, 4)).doesNotThrowAnyException();
+
+        verify(sourceValidation).isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1");
+    }
+
+    @Test
+    void multipleBuildModelsMayShareOneExactSourceGeneration() {
+        UUID secondModel = UUID.fromString("30000000-0000-0000-0000-000000000004");
+        when(snapshots.findCandidateInputs("tenant-a", CANDIDATE, 4))
+            .thenReturn(List.of(physical(MODEL), physical(secondModel)));
+        when(sourceValidation.isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1"))
+            .thenReturn(true);
+
+        assertThatCode(() -> guard.requireCandidateCurrent("tenant-a", CANDIDATE, 4)).doesNotThrowAnyException();
     }
 
     @Test
@@ -248,7 +281,8 @@ class ModelMaterializationSourceAvailabilityGuardTest {
             3,
             "b".repeat(64),
             "PHYSICAL_ASSET",
-            "[{\"sourceBindingId\":\"" + SOURCE + "\",\"resolvedVersion\":\"source-version-1\"}]"
+            "[{\"sourceBindingId\":\"" + SOURCE + "\",\"resolvedVersion\":\"source-version-1\"}]",
+            "[]"
         );
     }
 }

@@ -377,11 +377,59 @@ public class ModelReleaseCandidateService {
         int expectedVersion,
         CreateCandidateCommand command
     ) {
+        return createReplacement(
+            tenantId,
+            actorId,
+            sourceCandidateId,
+            expectedVersion,
+            command,
+            command == null ? List.of() : command.entries(),
+            null
+        );
+    }
+
+    /**
+     * Creates a replacement from the server-owned dependency expansion while retaining the user
+     * root request as the idempotency identity.
+     */
+    @Transactional
+    public CommandResult createReplacementWithExpandedScope(
+        String tenantId,
+        String actorId,
+        UUID sourceCandidateId,
+        int expectedVersion,
+        CreateCandidateCommand rootCommand,
+        List<ScopeEntryCommand> expandedEntries
+    ) {
+        if (rootCommand == null) throw invalid("create command is required");
+        if (rootCommand.entries().size() > ModelReleaseCandidateContract.MAX_ROOT_ENTRIES) {
+            throw invalid("batch root scope exceeds maximum");
+        }
+        return createReplacement(
+            tenantId,
+            actorId,
+            sourceCandidateId,
+            expectedVersion,
+            rootCommand,
+            expandedEntries,
+            hash(rootCommand)
+        );
+    }
+
+    private CommandResult createReplacement(
+        String tenantId,
+        String actorId,
+        UUID sourceCandidateId,
+        int expectedVersion,
+        CreateCandidateCommand rootCommand,
+        List<ScopeEntryCommand> expandedEntries,
+        String requestHashOverride
+    ) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
         if (sourceCandidateId == null) throw notFound(null);
         if (expectedVersion < 1) throw invalid("expectedVersion must be positive");
-        if (command == null) throw invalid("create command is required");
+        if (rootCommand == null) throw invalid("create command is required");
         CandidateView source = repository.find(tenant, sourceCandidateId).orElseThrow(() -> notFound(sourceCandidateId));
         requireExpectedVersion(source, expectedVersion);
         if (!isReplacementSource(source.status())) {
@@ -392,7 +440,7 @@ public class ModelReleaseCandidateService {
                 Map.of("candidateId", source.id(), "status", source.status())
             );
         }
-        if (!source.planId().equals(command.planId())) {
+        if (!source.planId().equals(rootCommand.planId())) {
             throw new ModelReleaseCandidateException(
                 REPLACEMENT_NOT_ALLOWED,
                 "Replacement candidate must belong to the same plan",
@@ -401,18 +449,19 @@ public class ModelReleaseCandidateService {
             );
         }
         CreateCandidateCommand replacement = new CreateCandidateCommand(
-            command.planId(),
-            command.environment(),
-            command.entries(),
-            command.idempotencyKey(),
-            command.reason() + " [replaces " + source.id() + "]"
+            rootCommand.planId(),
+            rootCommand.environment(),
+            expandedEntries,
+            rootCommand.idempotencyKey(),
+            rootCommand.reason() + " [replaces " + source.id() + "]"
         );
         CommandResult result = createWithOrigin(
             tenant,
             actor,
             replacement,
             source.origin(),
-            null
+            null,
+            requestHashOverride
         );
         if (!result.replayed()) {
             repository.transferActiveClaims(source, result.candidate());

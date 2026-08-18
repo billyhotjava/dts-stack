@@ -10,9 +10,13 @@ import {
 	getPlanExecutionWorkspace,
 	getReleaseCandidateWorkbench,
 	lockReleaseCandidate,
+	type MaterializationPlanEntry,
+	type MaterializationPlanPreview,
+	type MaterializationPlanStrategy,
 	type ModelMaterializationStatus,
 	type PlanExecutionWorkspace,
 	publishReleaseCandidate,
+	previewMaterializationPlan,
 	type ReleaseCandidateEntryEvidence,
 	type ReleaseCandidateLifecycleAction,
 	type ReleaseCandidateWorkbench,
@@ -36,7 +40,7 @@ import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 
-const MAX_MATERIALIZATION_MODELS = 100;
+const MAX_MATERIALIZATION_MODELS = 64;
 const COMPILE_CONCURRENCY = 5;
 
 type MaterializationBuildAction =
@@ -75,6 +79,16 @@ const RELEASE_ACTION_LABELS: Record<ReleaseWorkflowAction, string> = {
 	ROLLBACK: "回滚发布",
 };
 
+const PLAN_BOUND_BUILD_ACTIONS = new Set<MaterializationBuildAction>([
+	"CREATE_CANDIDATE",
+	"REFRESH_AND_CREATE",
+	"CREATE_AFTER_TERMINAL",
+	"CANCEL_AND_CREATE",
+	"REFRESH_AND_REPLACE",
+	"CREATE_REPLACEMENT",
+	"REMATERIALIZE",
+]);
+
 const canonical = (model: ModelSpecView): model is CanonicalModelSpecView =>
 	model.compatibilityMode === "CANONICAL" && model.contractVersion === 2;
 
@@ -112,9 +126,13 @@ export function ModelPublishDialog({
 }) {
 	const [tab, setTab] = useState<"materialize" | "publish">("materialize");
 	const [environment, setEnvironment] = useState("dev");
+	const [strategy, setStrategy] = useState<MaterializationPlanStrategy>("WITH_MISSING_UPSTREAMS");
 	const [reason, setReason] = useState("从模型工作台发布");
 	const [workspace, setWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
 	const [materializations, setMaterializations] = useState<ModelMaterializationStatus[]>([]);
+	const [materializationPlan, setMaterializationPlan] = useState<MaterializationPlanPreview | null>(null);
+	const [planState, setPlanState] = useState<"idle" | "loading" | "ready" | "blocked" | "error">("idle");
+	const [planFailure, setPlanFailure] = useState("");
 	const [executionWorkspace, setExecutionWorkspace] = useState<PlanExecutionWorkspace | null>(null);
 	const [busy, setBusy] = useState<"load" | "build" | "release" | "governance-quality" | "run" | "">("load");
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
@@ -176,10 +194,14 @@ export function ModelPublishDialog({
 		void load();
 	}, [load]);
 	const candidate = workspace?.candidate || null;
+	const explicitRootEntries = candidate?.entries.filter((entry) => entry.selectedReason === "MATERIALIZATION_ROOT") || [];
+	const candidateRootEntries = explicitRootEntries.length
+		? explicitRootEntries
+		: candidate?.entries.filter((entry) => entry.selectedReason !== "AUTO_DEPENDENCY") || [];
 	const candidateScopeMatches = Boolean(
 		candidate &&
-			candidate.entries.length === selectedIds.size &&
-			candidate.entries.every((entry) => selectedIds.has(entry.modelSpecId)),
+			candidateRootEntries.length === selectedIds.size &&
+			candidateRootEntries.every((entry) => selectedIds.has(entry.modelSpecId)),
 	);
 	const scopedCandidate = candidateScopeMatches ? candidate : null;
 	const selectedEvidence = candidateScopeMatches
@@ -233,12 +255,65 @@ export function ModelPublishDialog({
 				? "RUN_NOW"
 				: null
 		: null;
-	const canBuild = Boolean(!selectionProblem && (operationalAction || buildAction));
 	const entries = selection.map((model, sortOrder) => ({
 		modelSpecId: model.id,
 		sortOrder,
 		selectedReason: "从模型工作台选择",
 	}));
+	const rematerializationEntries =
+		buildAction === "REMATERIALIZE" && candidate
+			? candidate.entries.map((entry, sortOrder) => ({
+					modelSpecId: entry.modelSpecId,
+					sortOrder,
+					selectedReason: entry.selectedReason || "EXISTING_CANDIDATE_SCOPE",
+				}))
+			: entries;
+	const materializationRequestEntries = buildAction === "REMATERIALIZE" ? rematerializationEntries : entries;
+	const materializationRequestedIds = useMemo(
+		() => materializationRequestEntries.map((entry) => entry.modelSpecId),
+		[materializationRequestEntries.map((entry) => entry.modelSpecId).join(",")],
+	);
+	const materializationRequestedKey = materializationRequestedIds.join(",");
+	const refreshMaterializationPlan = useCallback(async () => {
+		if (!canMaintain || !planId || !materializationRequestedIds.length) {
+			setMaterializationPlan(null);
+			setPlanState("idle");
+			setPlanFailure("");
+			return null;
+		}
+		setPlanState("loading");
+		setPlanFailure("");
+		try {
+			const preview = await previewMaterializationPlan(planId, {
+				environment,
+				requestedModelSpecIds: materializationRequestedIds,
+				strategy,
+			});
+			setMaterializationPlan(preview);
+			setPlanState(preview.canStart ? "ready" : "blocked");
+			return preview;
+		} catch (error) {
+			const normalized = normalizeModelingRequestFailure(error, "物化计划预览失败。");
+			setMaterializationPlan(null);
+			setPlanState("error");
+			setPlanFailure(normalized.message);
+			return null;
+		}
+	}, [canMaintain, environment, materializationRequestedKey, planId, strategy]);
+	useEffect(() => {
+		void refreshMaterializationPlan();
+	}, [refreshMaterializationPlan]);
+	const requiresPlan = Boolean(buildAction && PLAN_BOUND_BUILD_ACTIONS.has(buildAction));
+	const currentOnlyAvailable = Boolean(
+		materializationPlan?.canStart && materializationPlan.orderedEntries.every(
+			(entry) => entry.dependencyRole === "ROOT" || entry.action === "REUSE",
+		),
+	);
+	const canBuild = Boolean(
+		!selectionProblem &&
+			(operationalAction ||
+				(buildAction && (!requiresPlan || (planState === "ready" && materializationPlan?.canStart)))),
+	);
 	const build = async () => {
 		if (!canMaintain || !canBuild || !planId || !primary || !selection.every(canonical)) return;
 		if (operationalAction === "REPAIR_DEPLOYMENT") {
@@ -253,18 +328,39 @@ export function ModelPublishDialog({
 		setFailure("");
 		try {
 			await compileSelectedModels(selection);
+			let checkedPlan: MaterializationPlanPreview | null = null;
+			if (requiresPlan) {
+				checkedPlan = await previewMaterializationPlan(planId, {
+					environment,
+					requestedModelSpecIds: materializationRequestedIds,
+					strategy,
+				});
+				setMaterializationPlan(checkedPlan);
+				setPlanState(checkedPlan.canStart ? "ready" : "blocked");
+				if (!checkedPlan.canStart) {
+					throw new Error(
+						checkedPlan.blockers.map((blocker) => `${blocker.code}：${blocker.message}`).join("；") ||
+							"当前依赖计划存在阻断。",
+					);
+				}
+			}
+			const planFence = checkedPlan
+				? { materializationPlanChecksum: checkedPlan.planChecksum, strategy: checkedPlan.strategy }
+				: {};
 			if (buildAction === "CREATE_CANDIDATE") {
 				const created = await createReleaseCandidate(planId, crypto.randomUUID(), {
 					environment,
 					entries,
 					reason: batch ? "从模型列表创建批量物化候选" : "从模型工作台创建单模型候选",
+					...planFence,
 				});
 				await lockReleaseCandidate(planId, created.candidate, crypto.randomUUID(), "从模型工作台启动构建");
 			} else if (buildAction === "REMATERIALIZE" && candidate) {
 				await rematerializeReleaseCandidate(planId, candidate, crypto.randomUUID(), {
 					environment,
-					entries,
+					entries: materializationRequestEntries,
 					reason: batch ? "从模型列表重新物化所选模型" : "从模型工作台重新物化",
+					...planFence,
 				});
 			} else if (
 				(buildAction === "REFRESH_AND_CREATE" ||
@@ -280,6 +376,7 @@ export function ModelPublishDialog({
 					environment,
 					entries,
 					reason: batch ? "从模型列表按新范围创建候选" : "从模型工作台按新范围创建候选",
+					...planFence,
 				});
 				await lockReleaseCandidate(planId, created.candidate, crypto.randomUUID(), "从模型工作台启动新范围构建");
 			} else if ((buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT") && candidate) {
@@ -292,6 +389,7 @@ export function ModelPublishDialog({
 					environment,
 					entries,
 					reason: batch ? "从模型列表按新修订创建替代候选" : "从模型工作台按新修订创建替代候选",
+					...planFence,
 				});
 				await lockReleaseCandidate(planId, replacement.candidate, crypto.randomUUID(), "从模型工作台启动新修订构建");
 			} else if (buildAction === "RETRY_BUILD" && candidate) {
@@ -304,7 +402,12 @@ export function ModelPublishDialog({
 			await load();
 			if (!batch) setTab("publish");
 		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "物化构建未能启动。").message);
+			const normalized = normalizeModelingRequestFailure(error, "物化构建未能启动。");
+			setFailure(
+				normalized.code === "MODEL_MATERIALIZATION_PLAN_STALE"
+					? "依赖已变化，请重新预览后再创建候选。"
+					: normalized.message,
+			);
 		} finally {
 			setBusy("");
 		}
@@ -378,6 +481,27 @@ export function ModelPublishDialog({
 			setBusy("");
 		}
 	};
+	const materializationPlanColumns = useMemo<CompactColumns<MaterializationPlanEntry>>(
+		() => [
+			{ title: "顺序", dataIndex: "topologyLevel", render: (value: number) => value + 1 },
+			{ title: "模型", dataIndex: "modelName" },
+			{ title: "分层", dataIndex: "layer" },
+			{ title: "依赖角色", dataIndex: "dependencyRole" },
+			{
+				title: "计划动作",
+				dataIndex: "action",
+				render: (value: MaterializationPlanEntry["action"]) => (
+					<Status tone={value === "REUSE" ? "success" : "info"}>{value}</Status>
+				),
+			},
+			{
+				title: "目标关系",
+				dataIndex: "targetRelation",
+				render: (value?: string | null) => value || "构建后生成",
+			},
+		],
+		[],
+	);
 	const evidenceColumns = useMemo<CompactColumns<ReleaseCandidateEntryEvidence>>(
 		() => [
 			{ title: "模型", dataIndex: "modelName" },
@@ -437,6 +561,55 @@ export function ModelPublishDialog({
 									<option value="prod">生产环境</option>
 								</select>
 							</label>
+							<label>
+								<span>依赖策略</span>
+								<select
+									onChange={(event) => setStrategy(event.target.value as MaterializationPlanStrategy)}
+									value={strategy}
+								>
+									<option value="WITH_MISSING_UPSTREAMS">缺失上游一并构建（推荐）</option>
+									<option disabled={!currentOnlyAvailable} value="CURRENT_ONLY">
+										仅使用当前已验证上游
+									</option>
+								</select>
+							</label>
+							<div className="dmx-materialization-plan-toolbar">
+								<strong>依赖物化计划</strong>
+								<Button disabled={planState === "loading" || Boolean(busy)} onClick={() => void refreshMaterializationPlan()}>
+									{planState === "loading" ? "预览中…" : "刷新计划"}
+								</Button>
+							</div>
+							{planState === "error" ? (
+								<div className="dmx-inline-error" role="alert">
+									{planFailure}
+								</div>
+							) : null}
+							{materializationPlan ? (
+								<>
+									<div className="dmx-table-scroll dmx-materialization-plan-table">
+										<CompactTable<MaterializationPlanEntry>
+											columns={materializationPlanColumns}
+											dataSource={materializationPlan.orderedEntries}
+											pagination={false}
+											rowKey="modelSpecId"
+										/>
+									</div>
+									{materializationPlan.blockers.length ? (
+										<ul className="dmx-materialization-plan-blockers">
+											{materializationPlan.blockers.map((blocker) => (
+												<li key={`${blocker.code}:${blocker.modelSpecId || "plan"}`}>
+													<strong>{blocker.code}</strong>：{blocker.message}
+												</li>
+											))}
+										</ul>
+									) : null}
+									<p className="dmx-materialization-plan-checksum">
+										计划校验和：{materializationPlan.planChecksum.slice(0, 12)}…
+									</p>
+								</>
+							) : planState === "loading" ? (
+								<p className="dmx-capability-note">正在计算 BUILD、REUSE 与阻断项…</p>
+							) : null}
 							<dl className="dmx-summary-list">
 								<dt>模型范围</dt>
 								<dd>{selection.map((model) => `${model.name} · r${model.revision}`).join("；")}</dd>
@@ -469,7 +642,14 @@ export function ModelPublishDialog({
 									disabled={!canMaintain || !canBuild || Boolean(busy)}
 									onClick={() => void build()}
 									primary
-									title={canBuild ? undefined : workspace?.primaryBlocker?.message || "当前候选不允许启动构建"}
+									title={
+										canBuild
+											? undefined
+											: materializationPlan?.blockers[0]?.message ||
+												planFailure ||
+												workspace?.primaryBlocker?.message ||
+												"当前候选不允许启动构建"
+									}
 								>
 									{busy === "build" || busy === "run"
 										? "处理中…"

@@ -368,6 +368,20 @@ class ModelLifecycleContractTest {
 
         assertThat(command.inputs()).hasSize(2);
         assertThat(command.settings()).containsEntry("joins", List.of(join));
+		assertThatThrownBy(() -> new SaveImplementationCommand(
+			InputMode.PHYSICAL_ASSET,
+			command.inputs(),
+			command.fieldMappings(),
+			Map.of("joins", List.of(Map.of(
+				"inputIndex", 1,
+				"type", "FULL",
+				"leftField", "src_0.customer_id",
+				"rightField", "src_1.customer_id"
+			))),
+			command.ownership(),
+			command.materialization(),
+			"unsafe-join"
+		)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("join type");
         assertThatThrownBy(() -> new SaveImplementationCommand(
             InputMode.PHYSICAL_ASSET,
             command.inputs(),
@@ -383,6 +397,68 @@ class ModelLifecycleContractTest {
             "bad-multi-source"
         )).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("inputIndex");
     }
+
+	@Test
+	void structuredTransformSettingsAcceptOnlyTheControlledFilterAndAggregationDsl() {
+		UUID sourceBindingId = UUID.fromString("50000000-0000-0000-0000-000000000069");
+		Map<String, Object> settings = Map.of(
+			"filters", List.of(Map.of(
+				"field", "src_0.status",
+				"operator", "IN",
+				"valueType", "STRING",
+				"value", List.of("ACTIVE", "PAUSED")
+			)),
+			"groupBy", List.of("project_id"),
+			"aggregations", List.of(Map.of(
+				"targetField", "total_amount",
+				"function", "SUM",
+				"sourceField", "src_0.amount",
+				"distinct", false
+			))
+		);
+		SaveImplementationCommand command = new SaveImplementationCommand(
+			InputMode.PHYSICAL_ASSET,
+			List.of(new PhysicalAssetInput(sourceBindingId, "source-v7")),
+			List.of(
+				new FieldMapping("src_0.project_id", "project_id"),
+				new FieldMapping("src_0.amount", "total_amount")
+			),
+			settings,
+			ImplementationMode.DESIGNER_GENERATED,
+			"table",
+			"controlled-transform"
+		);
+
+		assertThat(command.settings()).containsAllEntriesOf(settings);
+		assertThatThrownBy(() -> new SaveImplementationCommand(
+			command.inputMode(),
+			command.inputs(),
+			command.fieldMappings(),
+			Map.of("filters", List.of(Map.of(
+				"field", "src_0.status; drop table audit",
+				"operator", "EQ",
+				"valueType", "STRING",
+				"value", "ACTIVE"
+			))),
+			command.ownership(),
+			command.materialization(),
+			"filter-injection"
+		)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("filter field");
+		assertThatThrownBy(() -> new SaveImplementationCommand(
+			command.inputMode(),
+			command.inputs(),
+			command.fieldMappings(),
+			Map.of("aggregations", List.of(Map.of(
+				"targetField", "total_amount",
+				"function", "SUM(raw); drop table audit",
+				"sourceField", "src_0.amount",
+				"distinct", false
+			))),
+			command.ownership(),
+			command.materialization(),
+			"aggregation-injection"
+		)).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("aggregation function");
+	}
 
     @Test
     void implementationOwnsPhysicalTargetLoadPartitionAndRetentionSettings() {

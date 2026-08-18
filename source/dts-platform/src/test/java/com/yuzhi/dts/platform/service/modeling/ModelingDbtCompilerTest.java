@@ -509,6 +509,117 @@ class ModelingDbtCompilerTest {
             .contains("LEFT JOIN source_1 src_1 on src_0.customer_id = src_1.customer_id");
     }
 
+	@Test
+	void compilesControlledFiltersWithoutAllowingRawSqlExpressions() {
+		ModelingCompilerContract.CompilerModel model = new ModelingCompilerContract.CompilerModel(
+			"model-id",
+			ModelingCompilerContract.Layer.DWD,
+			ModelingCompilerContract.ModelType.FACT,
+			ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED,
+			"项目事实",
+			new ModelingCompilerContract.Grain("one row per project", List.of("project_id")),
+			List.of(),
+			List.of(new ModelingCompilerContract.SourceRef("TABLE", "ods.project", ModelingCompilerContract.Layer.ODS)),
+			List.of("project_id", "status"),
+			List.of(),
+			1
+		);
+		ModelSpecCompilerProjection.ImplementationProjection projection = new ModelSpecCompilerProjection.ImplementationProjection(
+			model,
+			"tenant-a",
+			"a".repeat(64),
+			1,
+			"b".repeat(64),
+			"model.plan_123.model_456",
+			InputMode.PHYSICAL_ASSET,
+			List.of(),
+			List.of(
+				new FieldMapping("src_0.project_id", "project_id"),
+				new FieldMapping("src_0.status", "status")
+			),
+			Map.of(
+				"targetPhysicalName", "model_456",
+				"loadStrategy", "FULL",
+				"partitionFields", List.of(),
+				"filters", List.of(
+					Map.of("field", "src_0.status", "operator", "IN", "valueType", "STRING", "value", List.of("ACTIVE", "O'Reilly")),
+					Map.of("field", "src_0.deleted_at", "operator", "IS_NULL", "valueType", "TIMESTAMP", "value", "")
+				)
+			),
+			"table",
+			typedFields(model)
+		);
+
+		String sql = ModelingDbtCompiler.compile(projection).files().get("stg_model_456.sql");
+
+		assertThat(sql)
+			.contains("where src_0.status in ('ACTIVE', 'O''Reilly')")
+			.contains("and src_0.deleted_at is null")
+			.doesNotContain("drop table");
+	}
+
+	@Test
+	void compilesPinnedDimensionJoinAndControlledAggregationAtTheDeclaredGrain() {
+		ModelingCompilerContract.CompilerModel model = new ModelingCompilerContract.CompilerModel(
+			"model-id",
+			ModelingCompilerContract.Layer.DWS,
+			ModelingCompilerContract.ModelType.SUMMARY,
+			ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED,
+			"项目月度汇总",
+			new ModelingCompilerContract.Grain("one row per project", List.of("project_id")),
+			List.of(),
+			List.of(
+				new ModelingCompilerContract.SourceRef("DBT_MODEL", "dwd_project_fact", ModelingCompilerContract.Layer.DWD),
+				new ModelingCompilerContract.SourceRef("DBT_MODEL", "dim_project", ModelingCompilerContract.Layer.DWD)
+			),
+			List.of("project_id", "project_name"),
+			List.of("total_amount"),
+			1
+		);
+		ModelSpecCompilerProjection.ImplementationProjection projection = new ModelSpecCompilerProjection.ImplementationProjection(
+			model,
+			"tenant-a",
+			"a".repeat(64),
+			1,
+			"b".repeat(64),
+			"model.plan_123.model_456",
+			InputMode.UPSTREAM_MODEL,
+			List.of(),
+			List.of(
+				new FieldMapping("src_0.project_id", "project_id"),
+				new FieldMapping("src_1.project_name", "project_name"),
+				new FieldMapping("src_0.amount", "total_amount")
+			),
+			Map.of(
+				"targetPhysicalName", "model_456",
+				"loadStrategy", "FULL",
+				"partitionFields", List.of(),
+				"joins", List.of(Map.of(
+					"inputIndex", 1,
+					"type", "LEFT",
+					"leftField", "src_0.project_id",
+					"rightField", "src_1.project_id"
+				)),
+				"groupBy", List.of("project_id", "project_name"),
+				"aggregations", List.of(Map.of(
+					"targetField", "total_amount",
+					"function", "SUM",
+					"sourceField", "src_0.amount",
+					"distinct", false
+				))
+			),
+			"table",
+			typedFields(model)
+		);
+
+		String sql = ModelingDbtCompiler.compile(projection).files().get("stg_model_456.sql");
+
+		assertThat(sql)
+			.contains("LEFT JOIN source_1 src_1 on src_0.project_id = src_1.project_id")
+			.contains("sum(src_0.amount) as total_amount")
+			.contains("group by src_0.project_id, src_1.project_name");
+	}
+
     @Test
     void rejectsFreeSqlSettingsEvenWhenAProjectionBypassesTheHttpDecoder() {
         ModelingCompilerContract.CompilerModel model = PjmModelingFixture.projectNode().compilerModel();

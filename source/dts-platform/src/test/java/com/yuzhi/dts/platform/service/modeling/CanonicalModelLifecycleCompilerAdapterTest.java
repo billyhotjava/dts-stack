@@ -9,11 +9,18 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.PhysicalAssetInput;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService.Resolution;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.DependencyRole;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.ModelInput;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSource;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSourceFact;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Snapshot;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CompatibilityMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Grain;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
@@ -178,6 +185,92 @@ class CanonicalModelLifecycleCompilerAdapterTest {
             .contains("{{ source('landing', 'customer_current') }}");
     }
 
+	@Test
+	void compilesPhysicalAndDimensionInputsFromTheSharedFixedDependencySnapshot() {
+		ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+		ModelImplementationDependencyService dependencyService = mock(ModelImplementationDependencyService.class);
+		UUID dimensionId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+		UUID bindingId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+		ModelSpecView dimension = dimensionModel(dimensionId);
+		ModelSpecView owner = modelWithDimension(dimensionId);
+		ImplementationView base = implementation(ImplementationMode.DESIGNER_GENERATED);
+		ImplementationView implementation = new ImplementationView(
+			base.id(),
+			base.modelSpecId(),
+			base.planId(),
+			base.revision(),
+			base.modelChecksum(),
+			base.ownership(),
+			base.projectKey(),
+			base.dbtUniqueId(),
+			base.status(),
+			base.implementationRevision(),
+			base.implementationChecksum(),
+			base.inputMode(),
+			base.inputs(),
+			List.of(new ModelLifecycleContract.FieldMapping("src_0.customer_id", "customer_id")),
+			Map.of(
+				"targetPhysicalName", "dwd_customer_detail",
+				"loadStrategy", "FULL",
+				"partitionFields", List.of(),
+				"joins", List.of(Map.of(
+					"inputIndex", 1,
+					"type", "LEFT",
+					"leftField", "src_0.customer_id",
+					"rightField", "src_1.customer_id"
+				))
+			),
+			base.materialization()
+		);
+		Snapshot snapshot = new Snapshot(
+			owner.id(),
+			owner.revision(),
+			owner.checksum(),
+			implementation.implementationRevision(),
+			implementation.implementationChecksum(),
+			List.of(new PhysicalSource(bindingId, "source-v2", "source.dts.binding_1")),
+			List.of(new ModelInput(
+				dimensionId,
+				dimension.revision(),
+				dimension.checksum(),
+				2,
+				"c".repeat(64),
+				"model.dts.dim_customer",
+				DependencyRole.DIMENSION
+			)),
+			"d".repeat(64)
+		);
+		Resolution resolution = new Resolution(
+			snapshot,
+			Map.of(bindingId, new PhysicalSourceFact(bindingId, "source-v2", true, "CONNECTION_TABLE", "landing.customer_current"))
+		);
+		when(dependencyService.resolveCurrent(
+			"tenant-a",
+			owner,
+			implementation,
+			implementation.projectKey(),
+			"dwd_customer_detail"
+		)).thenReturn(resolution);
+		when(modelSpecs.revision("tenant-a", new ModelRevisionRef(dimensionId, dimension.revision()))).thenReturn(dimension);
+
+		List<ModelLifecycleContract.ArtifactWrite> artifacts = new CanonicalModelLifecycleCompilerAdapter(
+			modelSpecs,
+			null,
+			dependencyService
+		).compile("tenant-a", owner, implementation);
+
+		assertThat(artifacts).filteredOn(artifact -> artifact.artifactType().equals("STG_SQL")).singleElement()
+			.extracting(ModelLifecycleContract.ArtifactWrite::content)
+			.asString()
+			.contains("{{ source('landing', 'customer_current') }}")
+			.contains("{{ ref('dim_customer') }}")
+			.contains("LEFT JOIN source_1 src_1");
+		assertThat(artifacts).filteredOn(artifact -> artifact.artifactType().equals("SQL")).singleElement()
+			.extracting(ModelLifecycleContract.ArtifactWrite::content)
+			.asString()
+			.contains("'dependencyChecksum':'" + "d".repeat(64) + "'");
+	}
+
     private static ImplementationView implementation(ImplementationMode ownership) {
         return implementation(ownership, "dwd_customer_detail", "b".repeat(64));
     }
@@ -256,6 +349,40 @@ class CanonicalModelLifecycleCompilerAdapterTest {
             null
         );
     }
+
+	private static ModelSpecView modelWithDimension(UUID dimensionId) {
+		ModelSpecView base = model(ImplementationMode.DESIGNER_GENERATED);
+		return copyModel(
+			base,
+			base.id(),
+			base.modelType(),
+			base.revision(),
+			base.fields(),
+			List.of(new ModelRevisionRef(dimensionId, 1))
+		);
+	}
+
+	private static ModelSpecView dimensionModel(UUID dimensionId) {
+		ModelSpecView base = model(ImplementationMode.DESIGNER_GENERATED);
+		return copyModel(base, dimensionId, ModelType.DIMENSION, 1, base.fields(), List.of());
+	}
+
+	private static ModelSpecView copyModel(
+		ModelSpecView base,
+		UUID id,
+		ModelType modelType,
+		int revision,
+		List<ModelField> fields,
+		List<ModelRevisionRef> dimensionRefs
+	) {
+		return new ModelSpecView(
+			base.contractVersion(), id, base.planId(), base.domainId(), modelType, base.layer(), base.name(), base.description(),
+			base.implementationMode(), base.materialization(), base.businessActivityRef(), base.consumptionScenario(), base.grain(),
+			base.factShape(), base.timeSemantics(), fields, base.sourceRefs(), base.dependsOn(), dimensionRefs, base.metricRefs(),
+			base.standardBindings(), base.generationStrategy(), base.dimensionProfile(), base.dimensionDefinitionRef(), base.status(),
+			revision, "a".repeat(64), base.createdAt(), base.updatedAt(), base.compatibilityMode(), base.legacyRefs()
+		);
+	}
 
     private static BundleFile bundleFile(String path, String content) {
         byte[] bytes = content.getBytes(StandardCharsets.UTF_8);

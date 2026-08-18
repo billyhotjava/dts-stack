@@ -1111,6 +1111,67 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
+    void dependencyExpandedReplacementReplaysByTheOriginalRootRequest() {
+        UUID upstreamId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        CandidateView cancelled = candidate(DeliveryStatus.CANCELLED, 5, createdAudit(), List.of());
+        CreateCandidateCommand rootCommand = new CreateCandidateCommand(
+            PLAN_ID,
+            "dev",
+            List.of(new ScopeEntryCommand(MODEL_ID, 0, "MATERIALIZATION_ROOT")),
+            "planned-replacement-key",
+            "replace with current dependency plan"
+        );
+        List<ScopeEntryCommand> expanded = List.of(
+            new ScopeEntryCommand(upstreamId, 0, "AUTO_DEPENDENCY"),
+            new ScopeEntryCommand(MODEL_ID, 1, "MATERIALIZATION_ROOT")
+        );
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(cancelled));
+        when(repository.findCommandByIdempotencyKey(TENANT, "planned-replacement-key"))
+            .thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, "planned-replacement-key"))
+            .thenReturn(Optional.empty());
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(upstreamId, MODEL_ID)))
+            .thenReturn(
+                Map.of(
+                    upstreamId,
+                    currentReference(1, "b".repeat(64)),
+                    MODEL_ID,
+                    currentReference(2, "c".repeat(64))
+                )
+            );
+        when(repository.insert(any())).thenReturn(1);
+        when(repository.appendCommand(any())).thenReturn(1);
+
+        CommandResult first = service.createReplacementWithExpandedScope(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            5,
+            rootCommand,
+            expanded
+        );
+        ArgumentCaptor<CommandEventView> event = ArgumentCaptor.forClass(CommandEventView.class);
+        verify(repository).appendCommand(event.capture());
+        when(repository.findCommandByIdempotencyKey(TENANT, "planned-replacement-key"))
+            .thenReturn(Optional.of(event.getValue()));
+
+        CommandResult replay = service.createReplacementWithExpandedScope(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            5,
+            rootCommand,
+            rootCommand.entries()
+        );
+
+        assertThat(first.candidate().entries())
+            .extracting(EntryView::modelSpecId)
+            .containsExactly(upstreamId, MODEL_ID);
+        assertThat(replay.replayed()).isTrue();
+        assertThat(replay.candidate()).isEqualTo(first.candidate());
+    }
+
+    @Test
     void staleReplacementTransfersTheExistingClaimToTheNewDraft() {
         CandidateView stale = candidate(
             DeliveryStatus.STALE,

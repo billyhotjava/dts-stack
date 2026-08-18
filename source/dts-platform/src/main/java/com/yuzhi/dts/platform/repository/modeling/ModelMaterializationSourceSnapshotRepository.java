@@ -11,10 +11,17 @@ public class ModelMaterializationSourceSnapshotRepository {
 
     private static final String CURRENT_INPUTS_SELECT = """
         select c.tenant_id, c.plan_id, e.model_spec_id, e.revision as model_revision,
-               e.checksum as model_checksum, r.input_mode, r.inputs_json::text as inputs_json
+               e.checksum as model_checksum, r.input_mode, r.inputs_json::text as inputs_json,
+               model_revision.snapshot_json -> 'sourceRefs' as source_refs_json
           from modeling_model_release_candidate c
           join modeling_model_release_candidate_entry e
             on e.tenant_id = c.tenant_id and e.candidate_id = c.id and e.status = c.status
+          left join modeling_model_spec_revision model_revision
+            on model_revision.tenant_id = e.tenant_id
+           and model_revision.model_spec_id = e.model_spec_id
+           and model_revision.revision = e.revision
+           and model_revision.content_checksum = e.checksum
+           and model_revision.contract_version = 2
           left join modeling_model_implementation i
             on i.tenant_id = e.tenant_id and i.plan_id = e.plan_id
            and i.model_spec_id = e.model_spec_id and i.model_revision = e.revision
@@ -28,10 +35,17 @@ public class ModelMaterializationSourceSnapshotRepository {
 
     private static final String LOCKED_INPUTS_SELECT = """
         select c.tenant_id, c.plan_id, e.model_spec_id, e.revision as model_revision,
-               e.checksum as model_checksum, r.input_mode, r.inputs_json::text as inputs_json
+               e.checksum as model_checksum, r.input_mode, r.inputs_json::text as inputs_json,
+               model_revision.snapshot_json -> 'sourceRefs' as source_refs_json
           from modeling_model_release_candidate c
           join modeling_model_release_candidate_entry e
             on e.tenant_id = c.tenant_id and e.candidate_id = c.id and e.status = c.status
+          left join modeling_model_spec_revision model_revision
+            on model_revision.tenant_id = e.tenant_id
+           and model_revision.model_spec_id = e.model_spec_id
+           and model_revision.revision = e.revision
+           and model_revision.content_checksum = e.checksum
+           and model_revision.contract_version = 2
           left join modeling_model_implementation_revision r
             on r.tenant_id = e.tenant_id
            and r.implementation_id = e.implementation_id
@@ -77,8 +91,15 @@ public class ModelMaterializationSourceSnapshotRepository {
         return jdbcTemplate.query(
             """
             select s.tenant_id, s.plan_id, s.id as model_spec_id, s.revision as model_revision,
-                   s.current_checksum as model_checksum, r.input_mode, r.inputs_json::text as inputs_json
+                   s.current_checksum as model_checksum, r.input_mode, r.inputs_json::text as inputs_json,
+                   model_revision.snapshot_json -> 'sourceRefs' as source_refs_json
               from modeling_model_spec s
+              join modeling_model_spec_revision model_revision
+                on model_revision.tenant_id = s.tenant_id
+               and model_revision.model_spec_id = s.id
+               and model_revision.revision = s.revision
+               and model_revision.content_checksum = s.current_checksum
+               and model_revision.contract_version = 2
               join modeling_model_implementation i
                 on i.tenant_id = s.tenant_id and i.plan_id = s.plan_id
                and i.model_spec_id = s.id and i.model_revision = s.revision
@@ -139,7 +160,8 @@ public class ModelMaterializationSourceSnapshotRepository {
             row.getInt("model_revision"),
             row.getString("model_checksum"),
             row.getString("input_mode"),
-            row.getString("inputs_json")
+            row.getString("inputs_json"),
+            row.getString("source_refs_json")
         );
     }
 
@@ -150,7 +172,8 @@ public class ModelMaterializationSourceSnapshotRepository {
         int modelRevision,
         String modelChecksum,
         String inputMode,
-        String inputsJson
+        String inputsJson,
+        String sourceRefsJson
     ) {}
 
     public record SourceBindingDescriptor(

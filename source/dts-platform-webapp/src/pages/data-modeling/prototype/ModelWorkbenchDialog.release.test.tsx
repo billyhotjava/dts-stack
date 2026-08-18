@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
+	MaterializationPlanPreview,
 	ModelSpecStageGate,
 	PlanExecutionWorkspace,
 	ReleaseCandidate,
@@ -52,6 +53,7 @@ const apiMocks = vi.hoisted(() => ({
 	createReplacementCandidate: vi.fn(),
 	getExecutionWorkspace: vi.fn(),
 	getMaterializationStatuses: vi.fn(),
+	previewMaterializationPlan: vi.fn(),
 	repairExecutionBinding: vi.fn(),
 	runExecutionNow: vi.fn(),
 	getWorkbench: vi.fn(),
@@ -85,6 +87,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	createReplacementReleaseCandidate: apiMocks.createReplacementCandidate,
 	getPlanExecutionWorkspace: apiMocks.getExecutionWorkspace,
 	getModelMaterializationStatuses: apiMocks.getMaterializationStatuses,
+	previewMaterializationPlan: apiMocks.previewMaterializationPlan,
 	repairPlanExecutionBinding: apiMocks.repairExecutionBinding,
 	runPlanExecutionNow: apiMocks.runExecutionNow,
 	getReleaseCandidateWorkbench: apiMocks.getWorkbench,
@@ -181,6 +184,30 @@ const workspace = (
 		etag: null,
 	}) as ReleaseCandidateWorkbench;
 
+const materializationPreview = (requestedModelSpecIds: string[]): MaterializationPlanPreview => ({
+	planId: model.planId,
+	environment: "dev",
+	strategy: "WITH_MISSING_UPSTREAMS",
+	planChecksum: "a".repeat(64),
+	canStart: true,
+	requestedModelSpecIds,
+	orderedEntries: requestedModelSpecIds.map((modelSpecId, topologyLevel) => ({
+		modelSpecId,
+		modelName: modelSpecId === model.id ? model.name : secondModel.name,
+		modelRevision: 3,
+		modelChecksum: "b".repeat(64),
+		implementationRevision: 1,
+		implementationChecksum: "c".repeat(64),
+		dependencyChecksum: "d".repeat(64),
+		layer: "DWD",
+		dependencyRole: "ROOT",
+		topologyLevel,
+		action: "BUILD",
+		reasonCode: "REQUESTED_MODEL",
+	})),
+	blockers: [],
+});
+
 let container: HTMLDivElement;
 let root: Root;
 
@@ -210,6 +237,10 @@ beforeEach(() => {
 		bindings: [],
 	} satisfies PlanExecutionWorkspace);
 	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
+	apiMocks.previewMaterializationPlan.mockImplementation(
+		(_planId: string, request: { requestedModelSpecIds: string[] }) =>
+			Promise.resolve(materializationPreview(request.requestedModelSpecIds)),
+	);
 	apiMocks.getLifecycle.mockResolvedValue({ implementation, artifacts: [], events: [] });
 	apiMocks.compileLifecycle.mockResolvedValue({ implementation, artifacts: [], event: {} });
 	vi.stubGlobal("crypto", { randomUUID: vi.fn(() => "idem-1") });
@@ -241,6 +272,8 @@ describe("release and materialization dispatch", () => {
 			"idem-1",
 			expect.objectContaining({
 				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
+				materializationPlanChecksum: "a".repeat(64),
+				strategy: "WITH_MISSING_UPSTREAMS",
 			}),
 		);
 		expect(apiMocks.lockCandidate).toHaveBeenCalledWith(model.planId, created, "idem-1", "从模型工作台启动构建");
@@ -266,6 +299,35 @@ describe("release and materialization dispatch", () => {
 		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
 		expect(apiMocks.lockCandidate).not.toHaveBeenCalled();
 		expect(container.textContent).toContain("当前模型实现编译失败");
+	});
+
+	it("renders the server-owned BUILD and REUSE dependency plan before candidate creation", async () => {
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
+		apiMocks.previewMaterializationPlan.mockResolvedValue({
+			...materializationPreview([model.id]),
+			orderedEntries: [
+				{
+					...materializationPreview([secondModel.id]).orderedEntries[0],
+					modelName: secondModel.name,
+					dependencyRole: "DIMENSION",
+					action: "REUSE",
+					reasonCode: "EXACT_VERIFIED_RELATION",
+					targetRelation: "public.dim_budget_subject",
+				},
+				materializationPreview([model.id]).orderedEntries[0],
+			],
+		});
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+
+		expect(container.textContent).toContain("依赖物化计划");
+		expect(container.textContent).toContain("REUSE");
+		expect(container.textContent).toContain("BUILD");
+		expect(container.textContent).toContain("public.dim_budget_subject");
+		expect(container.textContent).toContain("aaaaaaaaaaaa…");
 	});
 
 	it("compiles and submits one bounded candidate scope for multiple selected models", async () => {
@@ -359,7 +421,43 @@ describe("release and materialization dispatch", () => {
 			built,
 			"idem-1",
 			expect.objectContaining({
-				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
+				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "EXISTING_CANDIDATE_SCOPE" }],
+				materializationPlanChecksum: "a".repeat(64),
+			}),
+		);
+	});
+
+	it("matches an expanded candidate by its roots and previews the full immutable scope before rematerializing", async () => {
+		const built = {
+			...candidate("BATCH_WORKBENCH", "BUILT"),
+			entries: [
+				{ modelSpecId: secondModel.id, selectedReason: "AUTO_DEPENDENCY" },
+				{ modelSpecId: model.id, selectedReason: "MATERIALIZATION_ROOT" },
+			],
+		} as ReleaseCandidate;
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["RUN_QUALITY", "REMATERIALIZE"], built));
+		apiMocks.rematerializeCandidate.mockResolvedValue({ candidate: built });
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("重新物化")?.click());
+
+		expect(apiMocks.previewMaterializationPlan).toHaveBeenLastCalledWith(model.planId, {
+			environment: "dev",
+			requestedModelSpecIds: [secondModel.id, model.id],
+			strategy: "WITH_MISSING_UPSTREAMS",
+		});
+		expect(apiMocks.rematerializeCandidate).toHaveBeenCalledWith(
+			model.planId,
+			built,
+			"idem-1",
+			expect.objectContaining({
+				entries: [
+					{ modelSpecId: secondModel.id, sortOrder: 0, selectedReason: "AUTO_DEPENDENCY" },
+					{ modelSpecId: model.id, sortOrder: 1, selectedReason: "MATERIALIZATION_ROOT" },
+				],
 			}),
 		);
 	});
@@ -949,6 +1047,84 @@ describe("stage gate dispatch", () => {
 });
 
 describe("advanced dbt draft lifecycle", () => {
+	it("keeps generated dependency files read-only and commits the validated dependency checksum", async () => {
+		apiMocks.getRepresentation.mockResolvedValue({
+			allowedActions: ["OPEN_ADVANCED_DBT"],
+			capabilityReasons: [],
+			implementationRevision: 2,
+			implementationChecksum: "impl-2",
+			ownershipMode: "DBT_MANAGED",
+		});
+		apiMocks.createDbtDraft.mockResolvedValue({
+			draftId: "draft-dependencies",
+			planId: model.planId,
+			modelSpecId: model.id,
+			baseModelRevision: model.revision,
+			baseModelChecksum: model.checksum,
+			state: "DRAFT",
+			etag: "e1",
+			expiresAt: "2026-08-04T00:00:00Z",
+			sourceBundle: {
+				dependencyChecksum: "dependency-checksum",
+				files: [
+					{ path: "models/.dts_dependencies/sources.yml", content: "version: 2" },
+					{ path: "models/budget.sql", content: "select 1" },
+				],
+			},
+		});
+		apiMocks.saveDbtFiles.mockResolvedValue({ etag: "e2", expiresAt: "2026-08-04T00:00:00Z" });
+		apiMocks.validateDbtDraft.mockResolvedValue({
+			draftId: "draft-dependencies",
+			state: "VALIDATED",
+			etag: "e3",
+			expiresAt: "2026-08-04T00:00:00Z",
+			validatedChecksum: "validated-checksum",
+			diagnostics: [],
+			proposedStructure: [],
+			dependencyValidation: {
+				dependencyChecksum: "dependency-checksum",
+				matched: ["source.system.binding"],
+				missing: [],
+				undeclared: [],
+			},
+		});
+		apiMocks.commitDbtDraft.mockResolvedValue({
+			draftId: "draft-dependencies",
+			modelSpecId: model.id,
+			modelRevision: model.revision,
+			modelChecksum: model.checksum,
+			implementationId: "impl-1",
+			implementationRevision: 3,
+			implementationChecksum: "impl-3",
+			artifactCount: 1,
+			etag: "e4",
+			dependencyChecksum: "dependency-checksum",
+		});
+
+		await act(async () => root.render(<AdvancedDbtWorkspace canMaintain model={model} onBack={vi.fn()} />));
+		await flush();
+		await act(async () => button("创建高级草稿")?.click());
+		await flush();
+
+		expect(container.textContent).toContain("系统依赖");
+		expect(
+			(container.querySelector('textarea[aria-label="编辑 models/.dts_dependencies/sources.yml"]') as HTMLTextAreaElement)
+				.disabled,
+		).toBe(true);
+		expect(button("删除文件")?.disabled).toBe(true);
+
+		await act(async () => button("校验")?.click());
+		await flush();
+		expect(container.textContent).toContain("依赖关系已匹配 1 项");
+		await act(async () => button("提交实现")?.click());
+		await flush();
+		expect(apiMocks.commitDbtDraft).toHaveBeenCalledWith(
+			model.id,
+			"draft-dependencies",
+			expect.objectContaining({ dependencyChecksum: "dependency-checksum" }),
+		);
+	});
+
 	it("does not request the technical representation for a read-only account", async () => {
 		await act(async () => root.render(<AdvancedDbtWorkspace canMaintain={false} model={model} onBack={vi.fn()} />));
 		await flush();

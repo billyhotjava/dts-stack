@@ -560,6 +560,9 @@
                         <testInclude>**/repository/modeling/Sprint74ModelImplementationSettingsRepositoryIT.java</testInclude>
                         <testInclude>**/repository/rollback/RollbackInvalidationRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationInputPolicyTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelImplementationDependencyServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelImplementationDependencySnapshotResolverTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelMaterializationPlanServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationExecutionPlannerTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelImplementationOwnershipTransitionServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CanonicalModelLifecycleCompilerAdapterTest.java</testInclude>
@@ -772,6 +775,7 @@
                         <testInclude>**/web/rest/WarehousePlanResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelingAuxResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelReleaseCandidateResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelMaterializationPlanResourceTest.java</testInclude>
                         <testInclude>**/web/rest/ModelReleaseSuperAdminAuthorizationTest.java</testInclude>
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
                         <testInclude>**/web/rest/IngestionTaskProxyResourceTest.java</testInclude>

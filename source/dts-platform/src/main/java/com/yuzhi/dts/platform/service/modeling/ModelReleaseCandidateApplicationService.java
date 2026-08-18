@@ -23,6 +23,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Tra
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.Preview;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.PreviewCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.Strategy;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanService.ValidatedPlan;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidatePreflightService.BatchPreflightView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
 import java.nio.charset.StandardCharsets;
@@ -57,6 +61,7 @@ public class ModelReleaseCandidateApplicationService {
     private final CandidatePublicationCoordinator publicationCoordinator;
     private final CandidateRollbackCommitService rollbackCommits;
     private final ReleaseCandidateWorkbenchEvidencePort workbenchEvidence;
+    private final ModelMaterializationPlanService materializationPlans;
     private final ModelReleaseCandidatePreflightService preflight;
     private final CandidateGovernanceQualityEvidenceService governanceQuality;
 
@@ -70,6 +75,7 @@ public class ModelReleaseCandidateApplicationService {
         CandidatePublicationCoordinator publicationCoordinator,
         CandidateRollbackCommitService rollbackCommits,
         ReleaseCandidateWorkbenchEvidencePort workbenchEvidence,
+        ModelMaterializationPlanService materializationPlans,
         ModelReleaseCandidatePreflightService preflight,
         CandidateGovernanceQualityEvidenceService governanceQuality
     ) {
@@ -82,6 +88,7 @@ public class ModelReleaseCandidateApplicationService {
         this.publicationCoordinator = publicationCoordinator;
         this.rollbackCommits = rollbackCommits;
         this.workbenchEvidence = workbenchEvidence;
+        this.materializationPlans = materializationPlans;
         this.preflight = preflight;
         this.governanceQuality = governanceQuality;
     }
@@ -152,11 +159,39 @@ public class ModelReleaseCandidateApplicationService {
         return workbenchEvidence.findHistory(candidate);
     }
 
+    @Transactional(readOnly = true)
+    public Preview previewMaterializationPlan(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        PreviewCommand command
+    ) {
+        Access access = authorizeMaintainer(tenantId, actorId, planId);
+        if (command == null || !access.planId().equals(command.planId())) {
+            throw badRequest(
+                "MODEL_MATERIALIZATION_PLAN_SCOPE_MISMATCH",
+                "Materialization plan must match the plan in the request path"
+            );
+        }
+        return materializationPlans.preview(access.tenantId(), command);
+    }
+
     public CommandResult create(
         String tenantId,
         String actorId,
         UUID planId,
         CreateCandidateCommand command
+    ) {
+        return create(tenantId, actorId, planId, command, null, null);
+    }
+
+    public CommandResult create(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        CreateCandidateCommand command,
+        String materializationPlanChecksum,
+        Strategy strategy
     ) {
         Access access = authorizeMaintainer(tenantId, actorId, planId);
         if (command == null || !access.planId().equals(command.planId())) {
@@ -199,16 +234,28 @@ public class ModelReleaseCandidateApplicationService {
                 )
             );
         }
-        ModelReleaseCandidatePreflightService.PreflightResult evaluated = preflight.requireEligible(
-            access.tenantId(),
-            command
-        );
+        List<ModelReleaseCandidateContract.ScopeEntryCommand> expandedEntries;
+        if (materializationPlanChecksum == null) {
+            ModelReleaseCandidatePreflightService.PreflightResult evaluated = preflight.requireEligible(
+                access.tenantId(),
+                command
+            );
+            expandedEntries = evaluated.command().entries();
+        } else {
+            expandedEntries = materializationPlans
+                .requireCurrent(
+                    access.tenantId(),
+                    materializationCommand(access.planId(), command, strategy),
+                    materializationPlanChecksum
+                )
+                .buildEntries();
+        }
         return roleAware(
             commands.createBatchWithExpandedScope(
                 access.tenantId(),
                 access.actorId(),
                 command,
-                evaluated.command().entries()
+                expandedEntries
             ),
             access
         );
@@ -366,6 +413,28 @@ public class ModelReleaseCandidateApplicationService {
         int expectedVersion,
         CreateCandidateCommand command
     ) {
+        return createReplacement(
+            tenantId,
+            actorId,
+            planId,
+            sourceCandidateId,
+            expectedVersion,
+            command,
+            null,
+            null
+        );
+    }
+
+    public CommandResult createReplacement(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        UUID sourceCandidateId,
+        int expectedVersion,
+        CreateCandidateCommand command,
+        String materializationPlanChecksum,
+        Strategy strategy
+    ) {
         Access access = authorizeMaintainer(tenantId, actorId, planId);
         candidateForPlan(access.tenantId(), access.planId(), sourceCandidateId);
         if (command == null || !access.planId().equals(command.planId())) {
@@ -374,13 +443,37 @@ public class ModelReleaseCandidateApplicationService {
                 "Replacement plan must match the plan in the request path"
             );
         }
+        if (materializationPlanChecksum == null) {
+            return roleAware(
+                commands.createReplacement(
+                    access.tenantId(),
+                    access.actorId(),
+                    sourceCandidateId,
+                    expectedVersion,
+                    command
+                ),
+                access
+            );
+        }
+        List<ModelReleaseCandidateContract.ScopeEntryCommand> expandedEntries = repository
+            .findByIdempotencyKey(access.tenantId(), command.idempotencyKey())
+            .isPresent()
+            ? command.entries()
+            : materializationPlans
+                .requireCurrent(
+                    access.tenantId(),
+                    materializationCommand(access.planId(), command, strategy),
+                    materializationPlanChecksum
+                )
+                .buildEntries();
         return roleAware(
-            commands.createReplacement(
+            commands.createReplacementWithExpandedScope(
                 access.tenantId(),
                 access.actorId(),
                 sourceCandidateId,
                 expectedVersion,
-                command
+                command,
+                expandedEntries
             ),
             access
         );
@@ -394,6 +487,29 @@ public class ModelReleaseCandidateApplicationService {
         UUID sourceCandidateId,
         int expectedVersion,
         CreateCandidateCommand command
+    ) {
+        return rematerialize(
+            tenantId,
+            actorId,
+            planId,
+            sourceCandidateId,
+            expectedVersion,
+            command,
+            null,
+            null
+        );
+    }
+
+    @Transactional
+    public CommandResult rematerialize(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        UUID sourceCandidateId,
+        int expectedVersion,
+        CreateCandidateCommand command,
+        String materializationPlanChecksum,
+        Strategy strategy
     ) {
         Access access = authorizeMaintainer(tenantId, actorId, planId);
         CandidateView current = candidateForPlan(access.tenantId(), access.planId(), sourceCandidateId);
@@ -413,6 +529,21 @@ public class ModelReleaseCandidateApplicationService {
             .stream()
             .map(ModelReleaseCandidateContract.ScopeEntryCommand::modelSpecId)
             .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        if (
+            materializationPlanChecksum != null &&
+            repository.findCommandByIdempotencyKey(access.tenantId(), command.idempotencyKey()).isEmpty()
+        ) {
+            ValidatedPlan validated = materializationPlans.requireCurrent(
+                access.tenantId(),
+                materializationCommand(access.planId(), command, strategy),
+                materializationPlanChecksum
+            );
+            requestedScope = validated
+                .buildEntries()
+                .stream()
+                .map(ModelReleaseCandidateContract.ScopeEntryCommand::modelSpecId)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        }
         if (
             !current.environment().equals(command.environment()) ||
             (!requestedScope.isEmpty() && !currentScope.equals(requestedScope))
@@ -441,6 +572,23 @@ public class ModelReleaseCandidateApplicationService {
                 command.reason()
             ),
             access
+        );
+    }
+
+    private static PreviewCommand materializationCommand(
+        UUID planId,
+        CreateCandidateCommand command,
+        Strategy strategy
+    ) {
+        return new PreviewCommand(
+            planId,
+            command.environment(),
+            command
+                .entries()
+                .stream()
+                .map(ModelReleaseCandidateContract.ScopeEntryCommand::modelSpecId)
+                .toList(),
+            strategy
         );
     }
 

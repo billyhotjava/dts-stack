@@ -1,7 +1,7 @@
 # T01：将模型物化和 dbt 证据接入既有元数据血缘 seam
 
 **优先级**：P0
-**状态**：IMPLEMENTATION_COMPLETE / IT-08_PASS / IT-07_PARTIAL_DATA_EVIDENCE_GAP
+**状态**：IMPLEMENTATION_COMPLETE / IT-08_PASS / IT-07_AUTOMATED_PASS / FINAL_E2E_PENDING
 **依赖**：Sprint-89 F1/F2、Sprint-90 F1、F1/T01、F0/T01 真实 manifest
 
 ## 目标
@@ -12,11 +12,12 @@
 
 - **输入契约**：模型 dependsOn、candidate/revision/implementation pins、physical observation、dbt manifest/run artifact、Sprint-89 schema fingerprint。
 - **表级输出**：既有 `catalog_dataset_lineage`；模型依赖先 DECLARED，成功物化后同 evidence 进入 VERIFIED；保留 validFrom/validTo。
-- **字段级输出**：既有 `catalog_column_lineage`；只接受 manifest 明确映射，记录 confidence/source/evidenceRef；解析跳过必须返回 reasonCodes。
+- **字段级输出**：既有 `catalog_column_lineage`；只消费候选钉定的 MODEL/STG compiled SQL，记录 confidence/source/evidenceRef；多来源歧义时禁止猜测字段边。
 - **数据流**：publication/materialization → F1 datasetId → Sprint-90 lineage writer/guard；dbt sync → Sprint-89 stable columns → 同一 writer。
+- **能力边界**：数据建模负责 ODS→DWD→DWS→ADS 转换与物化；本 Task 只消费建模证据生成治理投影，不读取或加工 ODS 业务数据。
 - **错误路径**：源/目标资产或列无法唯一解析、schema fingerprint stale、人工 VERIFIED 冲突时不写边并记录 skip/issue。
 - **OM 降级**：OM cache/mapping 不可用只更新 syncStatus/error；DTS dataset/lineage/quality 继续读取。
-- **复用点**：CandidatePublicationRepository 既有表级写入、DbtAssetSyncService/CatalogDbtLineageService、Sprint-90 LineageVerificationGuard；禁止新 parser/table。
+- **复用点**：CandidatePublicationRepository 既有表级写入、DbtAssetSyncService/CatalogDbtLineageService、Sprint-90 LineageVerificationGuard；已有 SQL 投影解析提取为唯一 shared parser，禁止第二 parser/owner/table。
 
 ## UI 交互规格
 
@@ -30,14 +31,14 @@ dts-platform modeling/dbt/catalog lineage adapters，复用 Sprint-90 API/UI；d
 
 ## 验证（RED→GREEN）
 
-- [ ] ODS→DWD→DWS→ADS 表级/字段级真实边一致。
+- [x] ODS→DWD 物理来源与 DWD→DWS→ADS 模型依赖的表/字段写入契约通过自动化集成测试；真实全链 E2E 待集中执行。
 - [x] 重放 manifest 不重复边；schema 漂移产生 issue。
 - [x] 自动采集不能覆盖人工 VERIFIED。
 - [x] OM 失败时 DTS 资产缓存保持不变，目录/详情/本地血缘可降级读取。
-- [ ] 时间旅行能查回旧有效期边。
+- [x] 回滚关闭当前表/字段边，旧有效期边仍可查询。
 
 ## Definition of Done
 
-- [x] IT-07/08 有真实运行证据；IT-07 结果为 PARTIAL。
-- [x] 字段级 0 已以明确数据证据缺口登记，未伪称完成。
-- [x] 无新 lineage owner/parser/table。
+- [x] IT-08 已有真实运行证据；IT-07 写入契约自动化通过，最终真实 E2E 待集中执行。
+- [x] 缺少唯一来源或明确字段表达式时不伪造字段边。
+- [x] 无新 lineage owner/table；原有解析逻辑已收敛为唯一 shared parser。

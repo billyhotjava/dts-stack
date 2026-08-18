@@ -9,6 +9,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /** Reuses the existing deterministic dbt compiler without creating another ModelSpec. */
@@ -17,14 +18,25 @@ public class CanonicalModelLifecycleCompilerAdapter implements ModelLifecycleCom
 
     private final ModelSpecApplicationService modelSpecs;
     private final ModelSpecSourceValidationPort sourceValidation;
+	private final ModelImplementationDependencyService dependencies;
 
-    public CanonicalModelLifecycleCompilerAdapter(
+	@Autowired
+	public CanonicalModelLifecycleCompilerAdapter(
         ModelSpecApplicationService modelSpecs,
-        ModelSpecSourceValidationPort sourceValidation
+		ModelSpecSourceValidationPort sourceValidation,
+		ModelImplementationDependencyService dependencies
     ) {
         this.modelSpecs = modelSpecs;
         this.sourceValidation = sourceValidation;
+		this.dependencies = dependencies;
     }
+
+	CanonicalModelLifecycleCompilerAdapter(
+		ModelSpecApplicationService modelSpecs,
+		ModelSpecSourceValidationPort sourceValidation
+	) {
+		this(modelSpecs, sourceValidation, null);
+	}
 
     @Override
     public List<ArtifactWrite> compile(String tenantId, ModelSpecView model, ImplementationView implementation) {
@@ -35,25 +47,46 @@ public class CanonicalModelLifecycleCompilerAdapter implements ModelLifecycleCom
                 ModelSpecException.Kind.CONFLICT
             );
         }
-        ModelSpecCompilerProjection.ImplementationProjection projection = ModelSpecCompilerProjection.project(
-            model,
-            implementation,
-            reference -> modelSpecs.revision(tenantId, reference),
-            tenantId,
-            input -> {
-                if (sourceValidation == null) {
-                    return model.sourceRefs()
-                        .stream()
-                        .filter(source -> input.sourceBindingId().equals(source.sourceBindingId()))
-                        .filter(source -> input.resolvedVersion().equals(source.resolvedVersion()))
-                        .findFirst()
-                        .orElse(null);
-                }
-                return sourceValidation
-                    .resolveCurrentBindingForCompiler(tenantId, model.planId(), input.sourceBindingId(), input.resolvedVersion())
-                    .orElse(null);
-            }
-        );
+		ModelSpecCompilerProjection.ImplementationProjection projection;
+		if (dependencies != null) {
+			String targetName = implementation.settings().get("targetPhysicalName") == null
+				? null
+				: implementation.settings().get("targetPhysicalName").toString();
+			ModelImplementationDependencyService.Resolution resolution = dependencies.resolveCurrent(
+				tenantId,
+				model,
+				implementation,
+				implementation.projectKey(),
+				targetName
+			);
+			projection = ModelSpecCompilerProjection.project(
+				model,
+				implementation,
+				reference -> modelSpecs.revision(tenantId, reference),
+				tenantId,
+				resolution
+			);
+		} else {
+			projection = ModelSpecCompilerProjection.project(
+				model,
+				implementation,
+				reference -> modelSpecs.revision(tenantId, reference),
+				tenantId,
+				input -> {
+					if (sourceValidation == null) {
+						return model.sourceRefs()
+							.stream()
+							.filter(source -> input.sourceBindingId().equals(source.sourceBindingId()))
+							.filter(source -> input.resolvedVersion().equals(source.resolvedVersion()))
+							.findFirst()
+							.orElse(null);
+					}
+					return sourceValidation
+						.resolveCurrentBindingForCompiler(tenantId, model.planId(), input.sourceBindingId(), input.resolvedVersion())
+						.orElse(null);
+				}
+			);
+		}
         ModelingDbtCompiler.CompiledArtifacts compiled = ModelingDbtCompiler.compile(projection);
         List<ArtifactWrite> result = new ArrayList<>();
         for (Map.Entry<String, String> file : compiled.files().entrySet()) {

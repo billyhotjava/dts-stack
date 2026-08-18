@@ -25,6 +25,12 @@
 3. 面板底部一行说明：「本模型由代码维护，请在代码模式修改实现。」——陈述当前事实，不承诺未来能力，也不是禁用按钮。
 4. 投影不可信时，逐条列出原因（动态依赖 / 字段不可信 / 依赖不可信 / 制品版本不匹配），并提供切到代码模式的入口。
 
+## Definition of Ready
+
+- [x] BUSINESS representation 的可信/阻断语义已核实。
+- [x] 回切和旧 convert endpoint 明确不在本 Task 修改范围。
+- [ ] F0/T01 真实 DBT 样本与浏览器路径可用。
+
 ## 影响范围
 
 - visual mode form 的 `readOnly` 判定（改为消费 `allowedActions` 而非 ownership 猜测）

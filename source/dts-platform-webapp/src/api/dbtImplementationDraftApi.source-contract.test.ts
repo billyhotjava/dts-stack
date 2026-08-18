@@ -16,6 +16,10 @@ describe("advanced dbt implementation draft contract", () => {
 		expect(api).toContain("targetPhysicalName");
 		expect(api).toContain("expectedEtag");
 		expect(api).toContain("sourceBundle");
+		expect(api).toContain("dependencySnapshot");
+		expect(api).toContain("dependencyChecksum");
+		expect(api).toContain("managedDependencyAliases");
+		expect(api).toContain("dependencyValidation");
 		expect(api).toContain("bundleChecksum");
 		expect(api).toContain("projectChecksum");
 		expect(api).toContain("byteSize");
@@ -51,6 +55,9 @@ describe("advanced dbt implementation draft contract", () => {
 		expect(editor).toContain("conflict");
 		expect(editor).toContain("validateDbtImplementationDraft");
 		expect(editor).toContain("commitDbtImplementationDraft");
+		expect(editor).toContain("dependencyChecksum: validation.dependencyValidation?.dependencyChecksum");
+		expect(editor).toContain("isManagedDependencyPath");
+		expect(editor).toContain("系统依赖");
 		expect(editor).toContain("created.sourceBundle?.files");
 		expect(editor).not.toContain("initialFiles");
 		expect(editor).not.toContain('path: "dbt_project.yml"');

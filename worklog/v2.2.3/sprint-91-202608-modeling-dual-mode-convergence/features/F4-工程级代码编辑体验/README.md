@@ -7,6 +7,12 @@
 
 把当前高级 dbt 工作区的普通文本框升级为可维护的多文件 Monaco 编辑体验，同时保留现有草稿、ETag、容量、安全和校验契约。
 
+## Feature 关联
+
+- 上游：F1 code view、F2 preview/ownership transition。
+- 下游：F6/T03 在相同编辑器展示受管依赖和 declared/parsed 对账；F5/T02 统一执行 Chrome 95、并发和首屏体积验收。
+- 约束：本 Feature 只拥有编辑交互，不复制 validator、dependency resolver、执行器或发布按钮。
+
 ## 契约定义
 
 | 类型 | 契约 | 关键字段/签名 |

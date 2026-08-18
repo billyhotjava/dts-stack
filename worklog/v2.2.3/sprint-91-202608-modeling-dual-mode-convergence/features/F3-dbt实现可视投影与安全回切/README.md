@@ -9,6 +9,12 @@
 
 DBT_MANAGED 模型进入可视化模式时可查看可信的业务投影但不能误改 SQL，并且**不出现任何看起来可用、实际不可用的回切入口**。
 
+## Feature 关联
+
+- 上游：F1 的 visual view 与 BUSINESS representation；F2/F4 提供当前 DBT implementation 事实。
+- 下游：F6/T02 在同一 visual view 展示只读依赖，F5/Sprint-93 使用相同 pins 显示发布与治理证据。
+- 约束：本 Feature 只读，不反向修改 implementation，不另建回切、依赖或治理写路径。
+
 ## 契约定义
 
 | 类型 | 契约 | 关键字段/签名 |

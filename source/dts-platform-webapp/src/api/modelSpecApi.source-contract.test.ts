@@ -58,6 +58,15 @@ test("plan-owned release candidate lifecycle exposes create lock retry and publi
 	assert.match(source, /headers: releaseCandidateWriteHeaders\(idempotencyKey, expected\)/);
 });
 
+test("dependency materialization preview owns BUILD REUSE ordering and candidate checksum fencing", () => {
+	const source = readFileSync(API_URL, "utf8");
+	assert.match(source, /export const previewMaterializationPlan/);
+	assert.match(source, /materialization-plans/);
+	assert.match(source, /MaterializationPlanStrategy = "WITH_MISSING_UPSTREAMS" \| "CURRENT_ONLY"/);
+	assert.match(source, /MaterializationPlanAction = "BUILD" \| "REUSE"/);
+	assert.match(source, /materializationPlanChecksum\?: string/);
+});
+
 test("semantic serving delivery exposes status and version-CAS retry without changing model CAS", () => {
 	const source = readFileSync(API_URL, "utf8");
 	assert.match(source, /export const getModelServingSyncStatus/);
