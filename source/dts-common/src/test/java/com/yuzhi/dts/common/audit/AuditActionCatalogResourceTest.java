@@ -87,6 +87,30 @@ class AuditActionCatalogResourceTest {
     }
 
     @Test
+    void registersGovernedAnalysisQueryInEveryRuntimeCatalogAndUpgradeMigration() throws Exception {
+        java.nio.file.Path repo = java.nio.file.Paths.get(System.getProperty("user.dir")).getParent().getParent();
+        for (String relativePath : java.util.List.of(
+            "source/dts-common/src/main/resources/config/audit-action-catalog.json",
+            "source/dts-platform/src/main/docker/dts-common-fallback/src/main/resources/config/audit-action-catalog.json",
+            "source/dts-admin/src/main/docker/dts-common-fallback/src/main/resources/config/audit-action-catalog.json"
+        )) {
+            String catalog = java.nio.file.Files.readString(repo.resolve(relativePath));
+            assertThat(catalog)
+                .contains("\"code\": \"ANALYSIS_QUERY\"")
+                .contains("执行治理分析查询");
+        }
+
+        String migration = java.nio.file.Files.readString(repo.resolve(
+            "source/dts-admin/src/main/resources/config/liquibase/changelog/20260819-01_sprint94_analysis_audit_catalog.xml"
+        ));
+        String master = java.nio.file.Files.readString(repo.resolve(
+            "source/dts-admin/src/main/resources/config/liquibase/master.xml"
+        ));
+        assertThat(migration).contains("ANALYSIS_QUERY");
+        assertThat(master).contains("20260819-01_sprint94_analysis_audit_catalog.xml");
+    }
+
+    @Test
     void registersModelMaterializationMachineAuditActions() throws Exception {
         String catalog;
         try (var input = getClass().getResourceAsStream("/config/audit-action-catalog.json")) {

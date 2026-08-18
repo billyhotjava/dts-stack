@@ -7,7 +7,7 @@
 
 建立 `AnalysisQueryGateway` 作为语义预览、Analysis 和 Dashboard 的唯一应用层查询入口；用真实认证、平台资产权限、RLS/脱敏、查询预算和审计替代宽泛 `permitAll` 与分散直调。
 
-**范围变更（2026-08-17）**：Screen 接入、grant 对账与迁移全部移交 `../../assets/deferred-scope-handoff.md` 的 S3，本 Sprint 不修改 Screen。网关契约保持可扩展，S3 作为新调用方接入时重新过当期门禁。
+**范围变更（2026-08-19）**：本 Sprint 不修改 Screen 查询实现，只保护历史大屏链。未来若让大屏复用 governed Analysis，必须新立 Feature 并重新过当期门禁。
 
 ## 网关契约
 
@@ -38,7 +38,7 @@ validated Authentication
 
 `/api/semantic/query`、`/api/analysis/*/query`、Card 兼容查询和 Dashboard 查询都必须委托该 gateway。禁止 `SemanticQueryService` 或资源层直接调用 `DatasetQueryService.runNative`；低层 adapter 仅由 gateway 使用。
 
-直调 `runNative` 的生产调用点共 3 处（账本 L22）。`ScreenWarmupService:152` 已裁定为 S3 的非交互 Screen 预热 owner：Sprint-94 不改该符号，架构测试以精确类/方法/source location 登记临时例外，并写明 S3 移除条件；禁止扩大到 package 级白名单。
+直调 `runNative` 的生产调用点共 3 处（账本 L22）。`ScreenWarmupService:152` 是历史大屏的非交互预热 owner：Sprint-94 不改该符号，架构测试只允许精确类/方法/source location 例外；禁止扩大到 package 级白名单。
 
 ## 安全与错误矩阵
 
@@ -59,7 +59,7 @@ validated Authentication
 - 除显式 public/embed endpoint 外默认 authenticated；公共匿名分享默认 disabled。
 - 资产动作继续使用 `read/write/export`；发布资格由 lifecycle/workflow 验证，不新增 permission verb。
 - public link 显式开启时必须审批、到期时间、classification 检查、密码/IP 策略和审计。
-- Screen 本地 access、AssetGrant 对账、apply/rollback 与 fallback 关闭均不属于本 Sprint，移交 S3。
+- Screen 本地 access、AssetGrant 与历史运行链不在本 Sprint 改造；F0/T04/F6/T03 只负责保护与清理阻断。
 - 复用 `AnalyticsAssetAccessRegistrar` 与 `PlatformPermissionFilter`（2026-08-17 `af19ed44e` 已落地），在其上扩展默认拒绝，**不重写**（见 `../../assets/dependency-boundary.md` §1）。
 
 ## UI/UX

@@ -21,11 +21,11 @@
 | 发布弹窗 | 部门/角色/密级/有效期 | 发布资格；密级不低于依赖 | 保存到平台 registration request | 同步成功/版本号 | 平台不可用保持未发布或待 reconcile，不假成功 | cross-service IT |
 | 消费页 | 导出 | `export` + read + 当前受众 | 独立 export endpoint 和预算 | 文件名含资产/版本/时间 | 无 export 403；超限明确 | auth IT |
 
-大屏组件与兼容迁移的控件验收已移交退役 S3，定义保存在 `deferred-scope-handoff.md`。
+大屏继续作为需保留的历史资产；旧 BI 兼容控件不再演进。大屏保留与旧 BI 清理验收由 F0/T04、F6/T03 负责。
 
 ## 组件拆分约束
 
 - `SemanticCardEditorPage.tsx`（1137 行）：先抽取 `AnalysisDatasetSummary`、`AnalysisFieldPanel`、`AnalysisConfigPanel`、`AnalysisPreviewCanvas`、`AnalysisValidationPanel`；原文件不得继续增长。**该文件是 5 条路由的共用宿主（含 VDS 两条），拆分前必须先补冻结路由回归测试**（ADR-94-14）。
-- `analyticsApi.ts`（2483 行）：按 `analysisClient`、`dashboardClient` 拆分，同时保留兼容导出 facade（`screenClient`/`migrationClient` 随 S3）。
-- `ScreenResource.java`（3117 行）：本 Sprint 不改动（大屏顺延 S3）。
+- `analyticsApi.ts`（2483 行）：按 `analysisClient`、`dashboardClient` 拆分；R1 保留兼容导出 facade，R2 删除无调用旧 BI client；`screenClient` 永久保留。
+- `ScreenResource.java`（3117 行）：本 Sprint 不改动；大屏 owner 与旧 BI Contract 清理分离。
 - 状态、权限和按钮可用性来自后端 DTO/capability，不在多个页面复制角色字符串判断。

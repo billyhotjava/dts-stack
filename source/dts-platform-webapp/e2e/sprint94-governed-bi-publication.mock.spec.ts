@@ -92,6 +92,30 @@ async function installApis(page: Page) {
 		const path = url.pathname;
 
 		if (path.startsWith("/bi/api/")) {
+			if (path === "/bi/api/analysis" && request.method() === "GET") {
+				return json(route, {
+					items: [{
+						id: 11,
+						name: "项目综合分析",
+						description: "用于项目经营驾驶舱",
+						lifecycleStatus: "PUBLISHED",
+						versionNo: 2,
+						publishedRevisionId: 91,
+						queryDatasetId: dataset.datasetId,
+						queryDatasetVersion: 1,
+						contractVersion: dataset.semanticContractVersion,
+						visualization: querySpec.visualization,
+						querySpec,
+						createdBy: "sprint94-maintainer",
+						updatedAt: "2026-08-17T06:00:00Z",
+						permissions: { read: true, write: true, publish: true },
+					}],
+					page: 0,
+					size: 10,
+					totalElements: 1,
+					totalPages: 1,
+				});
+			}
 			if (path === "/bi/api/analysis/11" && request.method() === "GET") {
 				return json(route, {
 					id: 11,
@@ -263,6 +287,26 @@ test("publishes governed analysis and dashboard, then safely retries registratio
 	await installApis(page);
 	const failures = collectFailures(page);
 
+	await page.goto("/#/bi/questions");
+	await expect(page.getByRole("heading", { name: "分析", exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "从已发布数据集创建分析" })).toBeVisible();
+	await expect(page.getByRole("link", { name: "项目综合分析" })).toBeVisible();
+	await expect(page.getByText("已发布", { exact: true })).toBeVisible();
+	await expect(page.getByRole("button", { name: "查看" })).toBeVisible();
+	let noPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+	expect(noPageOverflow).toBe(true);
+	await page.screenshot({ path: testInfo.outputPath("analysis-list-1366x768.png"), fullPage: true });
+
+	await page.setViewportSize({ width: 768, height: 900 });
+	noPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+	expect(noPageOverflow).toBe(true);
+	const actionWrap = await page.locator(".ant-table-tbody .ant-space").first().evaluate((element) =>
+		getComputedStyle(element).flexWrap,
+	);
+	expect(actionWrap).not.toBe("wrap");
+	await page.screenshot({ path: testInfo.outputPath("analysis-list-768x900.png"), fullPage: true });
+	await page.setViewportSize({ width: 1366, height: 768 });
+
 	await page.goto("/#/bi/questions/11/edit");
 	await expect(page.getByRole("heading", { name: "治理分析编辑器" })).toBeVisible();
 	await page.getByRole("button", { name: /^校\s*验$/ }).click();
@@ -297,7 +341,7 @@ test("publishes governed analysis and dashboard, then safely retries registratio
 
 	await page.setViewportSize({ width: 768, height: 900 });
 	await expect(page.getByTestId("analytics-dashboard-editor")).toBeVisible();
-	const noPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+	noPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 	expect(noPageOverflow).toBe(true);
 	await page.screenshot({ path: testInfo.outputPath("dashboard-registration-retry-768x900.png"), fullPage: true });
 

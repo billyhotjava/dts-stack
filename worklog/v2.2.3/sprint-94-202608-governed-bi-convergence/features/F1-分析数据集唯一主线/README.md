@@ -88,7 +88,7 @@ QueryDataset publish/archive
 | **创建分析（canonical）** | `/bi/questions/new?datasetId={uuid}&version={int}&checksum={sha}` | F1/T02 的导航目标；F2/T02 的读取来源；IT-03 断言对象 |
 | 编辑分析（canonical） | `/bi/questions/{id}/edit` | F2/T02 owner |
 
-`/bi/card/new`、`/bi/card/:id/edit`、`/bi/explore` 在本 Sprint **保持原样可用，不重定向**（重定向属退役 S2）。旧参数 `dbId/vds/base` 只做兼容解析，不用于新链接。
+`/bi/card/*`、legacy explore/VDS 不再是新建主线，只保留至 F6/T03 Contract；新链接只接受 datasetId/version/checksum。
 
 ## UI/UX
 

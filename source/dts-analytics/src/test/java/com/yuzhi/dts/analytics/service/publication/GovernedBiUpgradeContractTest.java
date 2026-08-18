@@ -26,6 +26,17 @@ class GovernedBiUpgradeContractTest {
     }
 
     @Test
+    void rollingOldWriterReceivesRevisionDefaultsWithoutKnowingTheExpandColumns() throws Exception {
+        String changelog = Files.readString(CHANGELOG);
+
+        assertThat(changelog)
+            .contains("trg_analytics_revision_legacy_defaults")
+            .contains("pg_advisory_xact_lock")
+            .contains("NEW.status := 'DRAFT'")
+            .contains("MAX(version_no)");
+    }
+
+    @Test
     void controlledCleanupProtectsHistoricalScreensAndDefaultsToDryRun() throws Exception {
         String cleanup = Files.readString(CLEANUP);
 

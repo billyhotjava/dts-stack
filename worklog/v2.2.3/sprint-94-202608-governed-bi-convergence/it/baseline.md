@@ -102,11 +102,12 @@ F0/T01 关闭条件：确定可排除 vendored 路径或修复索引刷新；确
 - [ ] 后端旧写面（`/api/card` write、MBQL execute、public/embed）盘点完成，与前端路由表分开记录。
 - [ ] 所有样本有清理/回滚方案，且不改现有 PJM 业务数据。
 
-## P10. 退役 S0 的零变更证明
+## P10. R1 Expand / R2 Contract 证明
 
-本 Sprint 属 Metabase 渐进退役的 S0（盘点与冻结）。交付前须能证明：
+R1 先建立治理分析主线并保持滚动升级连续性；R2 才在明确维护窗口删除旧 BI。交付前须能证明：
 
-- [ ] diff 中无任何新增路由重定向（`LegacyDataModelingRedirect` 的既有两处除外，本 Sprint 不扩展）。
-- [ ] diff 中无 feature flag 由开改关。
-- [ ] 无迁移 apply 被执行，无表/列/route handler 被删除。
-- [ ] `bi/virtual-datasets*` 三条路由行为零回归（有回归测试证据）。
+- [ ] R1 新旧镜像交错期间 revision 写入均成功，迁移可回滚，公开分享默认关闭。
+- [ ] `/bi/questions*` 已统一到治理分析页面；`bi/virtual-datasets*` 在 R1 仍有冻结回归证据。
+- [ ] R2 清理 dry-run 默认回滚，并按明确 Card/Dashboard 截止水位报告命中对象。
+- [ ] Screen、ScreenVersion、ScreenTemplate 及稳定菜单/权限绑定不在清理范围，且大屏 JSON 的 legacy card 引用为 0。
+- [ ] R2 apply 前完成备份恢复演练、旧写冻结和维护窗口审批；未满足时不得执行生产删除。

@@ -2,7 +2,7 @@
 
 **依据**：`domain-profile.md` 本地画像、DTS Chrome 95/权限/审计不变量，以及本 Sprint 契约链。
 **说明**：阈值必须由自动化适应度函数证明；客户规模尚未取得的项目标记为“待校准”，不得以本地空库判定 PASS。
-**2026-08-17 修订**：大屏依赖、迁移批次、迁移吞吐移交后续阶段；新增退役 S0 的观测覆盖适应度函数；分页默认值按前端既有 table 约定校正（UI 10 条，非 API 的 20）。状态取值统一为 `PASS|GAP|BLOCKED|PENDING|N/A|待校准`；严重度写入说明，不另造状态词。
+**2026-08-19 修订**：历史边界收敛为“只保留大屏资产”；旧 Card/Dashboard/Collection 等 BI 对象进入 R2 Contract 受控清理，DWD/DWS/ADS 由数据建模重新生成，不再以长期兼容为前提。分页默认值按前端既有 table 约定校正（UI 10 条，非 API 的 20）。状态取值统一为 `PASS|GAP|BLOCKED|PENDING|N/A|待校准`；严重度写入说明，不另造状态词。
 
 | 维度 | 预算 | 可执行适应度函数 | 责任 Task | 当前状态 |
 |---|---|---|---|---|
@@ -23,15 +23,15 @@
 | 发布原子性 | revision、实体指针、受众登记失败时不出现半发布；跨服务使用 outbox/补偿 | 故障点参数化 IT + reconcile | F4/T01、F4/T02 | GAP |
 | 受众可见性 | 列表和直链一致；过期后 ≤60s 不可见；导出另验 export | fake clock + 三角色 API/E2E | F4/T02 | GAP |
 | 看板依赖 | 卡片 ≤50；参数 ≤20；校验一次批量加载依赖，额外查询 ≤4 | 查询计数 IT + 51/21 边界 | F4/T01 | GAP |
-| **退役 S0 分母与观测覆盖** | 32 条静态路由、动态菜单和后端旧写 surface 完整；每项有 `source/window/value/status`，UNKNOWN 有原因且不得记 0 | 静态 inventory 对账 + observation coverage schema 检查（IT-11） | F0/T02、F0/T03 | GAP |
-| **退役 S0 零变更** | 本 Sprint 新增重定向=0、flag 由开改关=0、迁移 apply=0、删除=0 | diff 静态检查 + 冻结路由回归（IT-10） | F0/T02、F2/T02 | GAP |
+| **大屏保留边界** | Screen、ScreenVersion、ScreenTemplate 及稳定菜单/权限绑定不被旧 BI 清理命中；JSON 中 legacy card 引用必须为 0 | 清理脚本预检 + 表级计数/引用扫描 + 大屏 smoke | F0/T04、F6/T03 | PENDING |
+| **R1 Expand 兼容** | 新分析主线可读写；旧镜像仍能写 revision；迁移不强制新增列非空；公开分享默认关闭 | 新旧写契约测试 + Liquibase rollback + Compose config | F6/T02 | GAP |
 | **冻结路由回归** | `bi/card/*`、`bi/virtual-datasets/*` 共 4 条在组件拆分前后行为一致 | 拆分前置 RED 回归测试 | F2/T02 | GAP |
-| 兼容期 | 旧读旧写本 Sprint **全部保持开启**；关闭属退役 S1/S2 | release gate 断言 legacy write flag 仍为 on | F6/T02 | PENDING |
+| **R2 Contract 清理** | 清理仅命中截止水位内旧 BI 对象；dry-run 默认回滚；apply 要求备份恢复成功且大屏引用为 0 | cleanup SQL dry-run/apply IT + 备份恢复演练 + 前后对账 | F6/T03 | BLOCKED |
 | 前端首屏 | 每个列表首屏 API ≤3；禁止 N+1；本地 P95 ≤2s | Playwright Network 计数和 performance entries | F1/T02、F2/T02、F4/T02 | 待校准 |
 | 浏览器 | Chrome 95；不新增第三方依赖；loading/empty/error/success 四态 | legacy build + Chrome95 focused E2E + package diff | F1/T02～F6/T01 | GAP |
 | 可访问性 | 键盘完成创建/校验/发布；dialog 焦点回收；表单错误与字段关联 | Playwright keyboard journey + axe 如现有工具可用 | F2/T02、F4/T02 | GAP |
 | 可用性 | Platform contract 暂时不可用：新查询 502/503 且可诊断；已发布页面元数据可降级读，禁止绕过治理 | platform fault injection + UI error state | F3/T01、F6/T01 | GAP |
-| 可回滚 | `DTS_ANALYTICS_GOVERNED_BI_ENABLED` 可在一轮发布内切回（`LEGACY_CARD_WRITE` 本 Sprint 只观测不切换） | 部署演练 + API/UI smoke + 数据指针对账 | F6/T02 | PENDING |
+| 可回滚 | R1 可在一轮发布内回切且旧镜像可继续写；R2 执行前必须有可恢复备份，执行后不再承诺旧 BI 写路径回切 | 部署演练 + API/UI smoke + 数据指针对账 + restore rehearsal | F6/T02、F6/T03 | PENDING |
 | 租户 | N/A：当前产品未形成多租户模型；保留既有兼容字段，不新增 tenant selector | source-contract test | 全部 | N/A |
 
 ## 风险预算与处置
@@ -39,11 +39,11 @@
 | GAP | 影响 | G1 处置 |
 |---|---|---|
 | 本地 BI 数据近乎为空 | 时延和并发不可判定 | F0/T02 只建当前能力基线；F0/T03 取得目标分布，超出时重新审批预算 |
-| 旧路由调用量 UNKNOWN | 退役阶段无法推进 | S0 登记来源与观测起点；连续 14 天可读前不得进入 S1，且不得把 UNKNOWN 当 0 |
+| 旧路由调用量 UNKNOWN | 无法证明停写水位 | R1 记录清理截止水位并冻结旧写；R2 不以长期观察替代备份、引用扫描和明确维护窗口 |
 | 安全配置仍 permitAll | 任何功能验收都不能代表授权正确 | F3/T02 是发布硬门禁，未关闭不得进入 pilot |
 | Platform/Analytics 跨服务发布 | 可能半发布或受众登记漂移 | 使用幂等 registration + outbox/reconcile，不做分布式事务假设 |
 | Chrome 95 缺失 | UI 兼容性未知 | 所有用户可见 Feature 保持 DRAFT/BLOCKED，F6 集中验证一次 |
 | 超大 owner 文件 | 变更易产生回归 | 先抽取 seam；禁止 `SemanticCardEditorPage.tsx`（1137）、`analyticsApi.ts`（2483）继续增长；`ScreenResource.java`（3117）本 Sprint 不动 |
-| 共享编辑器组件误伤 VDS | `virtual-datasets` 行为静默变化 | 拆分前置回归测试；VDS 处置属 S1（开放问题 Q5） |
+| 共享编辑器组件误伤 VDS | `virtual-datasets` 行为静默变化 | R1 拆分前置回归测试；R2 再删除旧入口和共用兼容代码 |
 
 DoD 时逐行回填实测值、命令和证据路径；“代码看起来支持”不等于适应度函数通过。

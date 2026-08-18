@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.service.audit.AnalyticsAuditForwarderService;
 import com.yuzhi.dts.analytics.service.audit.AnalyticsAuditForwarderService.AnalyticsAuditEvent;
 import java.util.Optional;
@@ -18,6 +19,32 @@ import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 class AnalyticsAuditLoggingFilterTest {
+
+    @Test
+    void shouldNotDuplicateAnAuditAlreadyRecordedByTheGovernedQueryGateway() throws Exception {
+        AnalyticsSessionService sessionService = mock(AnalyticsSessionService.class);
+        AnalyticsAuditForwarderService forwarder = mock(AnalyticsAuditForwarderService.class);
+        AnalyticsAuditLoggingFilter filter = new AnalyticsAuditLoggingFilter(sessionService, forwarder);
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/analysis/42/query");
+        when(sessionService.resolveUser(request)).thenReturn(Optional.of(user()));
+
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) ->
+            req.setAttribute(AnalysisRequestContext.SPECIALIZED_AUDIT_RECORDED_ATTRIBUTE, Boolean.TRUE)
+        );
+
+        verify(forwarder, never()).record(org.mockito.ArgumentMatchers.any(AnalyticsAuditEvent.class));
+    }
+
+    @Test
+    void shouldRetainGenericAuditWhenQueryValidationFailsBeforeTheGatewayRuns() throws Exception {
+        AnalyticsSessionService sessionService = mock(AnalyticsSessionService.class);
+        AnalyticsAuditForwarderService forwarder = mock(AnalyticsAuditForwarderService.class);
+        AnalyticsAuditLoggingFilter filter = new AnalyticsAuditLoggingFilter(sessionService, forwarder);
+
+        AnalyticsAuditEvent event = perform(filter, sessionService, forwarder, "POST", "/api/analysis/preview");
+
+        assertThat(event.actionCode()).isEqualTo("ANALYTICS_ANALYSIS_READ");
+    }
 
     @Test
     void shouldRecordAuthenticatedAnalyticsPageReadWithHumanActorAndRealIp() throws Exception {

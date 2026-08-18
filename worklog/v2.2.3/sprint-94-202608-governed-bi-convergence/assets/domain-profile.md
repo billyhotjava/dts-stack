@@ -25,7 +25,7 @@
 5. 保存草稿不等于发布；发布必须钉定依赖 revision 和受众快照。
 6. 发布物只能由受众匹配且具有 `read` 的用户消费；编辑使用 `write`，导出使用 `export`。
 7. 公共匿名链接默认关闭；显式启用时必须有审批、有效期、密级检查、IP/密码策略和审计。
-8. 不可证明等价的旧 MBQL 最终分类为 legacy-read-only；Sprint-94 S0 不改变其当前行为，任何后续迁移都必须 preview、幂等、可回滚。
+8. 旧 Card/MBQL 不作为长期业务资产保留；R1 仅为滚动升级提供短期读写连续性，R2 在备份恢复和大屏引用校验通过后受控删除。
 9. 同一稳定资产身份不得因重新发布或迁移生成第二本台账。
 10. 业务标签与 `classification` 分离；Analytics 不覆盖平台治理事实。
 
@@ -68,12 +68,12 @@
 | F0/T02 | DS-PUBLISHED | 复用当前 QueryDataset 发布 API；DWS/ADS、PUBLISHED、version=1、现有可证明字段与 classification |
 | F0/T02 | DS-STALE | 使用现有版本能力建立 v1/v2；只作为后续不可变 snapshot 测试输入，不伪造尚未实现的 checksum |
 | F0/T02 + F0/T03 | DS-DENIED | 本地建立资产；取得 A4 后由 T03 补无 read/密级负向证据 |
-| F0/T02 | LEGACY-CARD 三分类基线 | 仅使用当前 Card/MBQL 能力建立 convertible、legacy-read-only、invalid 输入；不写 `dts.analysis/v1` |
+| F0/T04 | LEGACY-CLEANUP-CUTOFF | 只建立截止水位、引用扫描和 dry-run 样本；不再投入旧 Card/MBQL 等价迁移 |
 | F2/T01 | ANALYSIS-DRAFT | Analysis v1 实现后建立合法 spec，消费者不可见 |
 | F4/T01 | ANALYSIS-PUBLISHED | revision 发布后钉定数据集 snapshot/checksum，结果可人工核算 |
 | F4/T01 | DASHBOARD-PUBLISHED | 至少两个已发布 Analysis revision 与一个参数映射 |
 | F4/T02 + F0/T03 | AUDIENCE | A1 维护、A2 独立发布、A3 授权消费、A4 非授权负向 |
-| 退役 S3 | SCREEN-PUBLISHED | 至少一个 analysis component 与一个 legacy adapter component；不属于 Sprint-94 |
+| F6/T03 | SCREEN-PUBLISHED | 至少一个现有大屏结构；证明清理前后稳定身份、版本、菜单和权限绑定不变，不要求保留 legacy adapter |
 
 ## 5. 数据剖面探针
 

@@ -133,6 +133,8 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
                 || isGet(method, path, "/api/infra/data-source-selections")
                 || isGetInfraDataSourceDetail(method, path)
                 || isGetRuntimeDetail(method, path)
+                || isAnalyticsDatasetContract(method, path)
+                || isPut(method, path, "/api/internal/reports/registrations")
                 || isAnalyticsAssetPermission(method, path)
                 || isAnalyticsClassificationConsumer(method, path);
         }
@@ -307,6 +309,29 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             || isPost(method, path, "/api/catalog/classifications/consumers/exports/seal");
     }
 
+    private boolean isAnalyticsDatasetContract(String method, String path) {
+        if (!HttpMethod.GET.matches(method) || path == null) {
+            return false;
+        }
+        String prefix = "/api/internal/analysis-datasets/";
+        if (!path.startsWith(prefix)) {
+            return false;
+        }
+        String[] segments = path.substring(prefix.length()).split("/", -1);
+        if (segments.length != 3 || !"versions".equals(segments[1])) {
+            return false;
+        }
+        try {
+            java.util.UUID datasetId = java.util.UUID.fromString(segments[0]);
+            if (!datasetId.toString().equalsIgnoreCase(segments[0]) || !segments[2].matches("[1-9][0-9]*")) {
+                return false;
+            }
+            return Long.parseLong(segments[2]) > 0;
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+    }
+
     private boolean isMetricsAssetPermission(String method, String path) {
         return isPost(method, path, "/api/internal/asset-permission/check")
             || isPost(method, path, "/api/internal/v1/asset-permission/policy")
@@ -379,6 +404,10 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
 
     private boolean isPost(String method, String path, String expectedPath) {
         return HttpMethod.POST.matches(method) && expectedPath.equals(path);
+    }
+
+    private boolean isPut(String method, String path, String expectedPath) {
+        return HttpMethod.PUT.matches(method) && expectedPath.equals(path);
     }
 
     private boolean isDelete(String method, String path, String expectedPath) {

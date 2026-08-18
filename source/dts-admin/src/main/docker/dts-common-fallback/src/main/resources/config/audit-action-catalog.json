@@ -1,5 +1,5 @@
 {
-  "version": "2026-08-02",
+  "version": "2026-08-19",
   "description": "System-wide audit action catalog mapped to portal and admin menus. Each action describes human-readable display text, aggregation phases, and flow aggregation hints.",
   "sections": [
     {
@@ -2894,6 +2894,16 @@
             {
               "code": "SEMANTIC_QUERY_EXECUTE",
               "display": "执行语义查询",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "ANALYSIS_QUERY",
+              "display": "执行治理分析查询",
               "phases": [
                 "BEGIN",
                 "SUCCESS",

@@ -47,12 +47,12 @@ AnalysisQuerySpec {
 
 `card_type='analysis'`；增加必要索引与非空约束采用 expand/backfill/validate/contract 顺序。`AnalysisDto` 返回 id/name/description/lifecycleStatus/versionNo/publishedRevisionId/queryDatasetId/queryDatasetVersion/contractVersion/visualization/createdBy/updatedAt/permissions。
 
-旧 `/api/card` 的现有兼容读写行为在 S0 保持不变；新 UI 只调用 `/api/analysis`，不得新增 legacy 写调用。错误：400 malformed，403 denied，404 missing，409 version/contract conflict，422 semantic field invalid。
+R1 期间旧 `/api/card` 只为旧镜像回切暂存；新 UI 只调用 `/api/analysis`，不得新增 legacy 写调用。错误：400 malformed，403 denied，404 missing，409 version/contract conflict，422 semantic field invalid。
 
 ## UI/UX
 
-- canonical editor 路由为 `/bi/questions/new` 与 `/bi/questions/{id}/edit`（ADR-94-13）。`CardEditorRoutePage` 保留为兼容分流器：`card_type='analysis'` 渲染新 Analysis editor；semantic legacy 继续当前 `/bi/card/:id/edit` 分流；其他 legacy Card 保持本 Sprint 开始时的兼容行为。S0 不关闭旧写、不新增 redirect。
-- **`/bi/card/new`、`/bi/card/:id/edit`、`/bi/explore` 本 Sprint 保持原样可用，不做重定向**（属退役 S2）。
+- canonical 路由为 `/bi/questions/new`、`/bi/questions/{id}` 与 `/bi/questions/{id}/edit`（ADR-94-13），全部由 `AnalysisEditorPage` 承接；列表只使用 Analysis API。
+- `/bi/card/*` 与 legacy explore/VDS 只在 R1 作为回切面保留，F6/T03 独立 Contract 处理。
 - 布局：顶部名称/保存状态/数据集版本；左侧字段与指标；中间图表/表格预览；右侧配置；底部或抽屉显示校验、查询统计和错误。
 - 先从 1137 行 `SemanticCardEditorPage.tsx` 抽取职责组件，原文件不得增长。
 
@@ -68,7 +68,7 @@ bi/virtual-datasets/new  ← VDS 线，行为须不变
 bi/virtual-datasets/:id  ← VDS 线，行为须不变
 ```
 
-抽取组件前**必须先补 VDS 两条路由的回归测试**，否则拆分会静默改变 VDS 行为。VDS 与 ADR-94-01 的长期冲突不在本 Sprint 处置（开放问题 Q5，属退役 S1）。
+不得把旧 VDS 适配进新 Analysis 主线；F6/T03 删除前只需证明 R1 回切面未被意外破坏。
 - loading/empty/error/success 全覆盖；409 显示契约已变化并提供“基于新版本创建草稿”，不得自动升级。
 - 保存、校验、发布分开；本 Feature 只完成保存/编辑，发布由 F4 owner。
 

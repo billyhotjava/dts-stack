@@ -205,6 +205,11 @@ class ServiceDependencyAuthenticationFilterTest {
         assertAnalyticsCannotAccess("POST", ANALYTICS_DATASET_CONTRACT);
         assertAnalyticsCannotAccess("GET", ANALYTICS_REPORT_REGISTRATION);
         assertAnalyticsCannotAccess("GET", ANALYTICS_DATASET_CONTRACT + "/extra");
+        assertAnalyticsCannotAccess("GET", "/api/internal/analysis-datasets/1-1-1-1-1/versions/3");
+        assertAnalyticsCannotAccess(
+            "GET",
+            "/api/internal/analysis-datasets/11111111-1111-1111-1111-111111111111/versions/+3"
+        );
         assertAnalyticsCannotAccess("PUT", ANALYTICS_REPORT_REGISTRATION + "/extra");
     }
 

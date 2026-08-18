@@ -1,50 +1,61 @@
-# Metabase 仿造功能渐进退役路线
+# Metabase 仿造功能退役路线
 
-**定稿日期**：2026-08-17
-**决策**：Metabase 形态功能**不在 Sprint-94 退役**。退役拆成 5 个阶段，每阶段一个门禁，跨多个 Sprint 执行；本 Sprint 只完成 S0。
-**理由**：32 条 `bi/*` 路由中 28 条菜单不可见但调用量 UNKNOWN（见 `route-inventory.md`）。在调用量未知时做重定向或迁移 apply，等于用生产用户验证假设。
+**决策日期**：2026-08-19
+**决策**：旧 Card/Dashboard/Collection/Model/Trash/Pulse/Subscription/MBQL/VDS 不再作为迁移对象。老安装只无损保留大屏历史链；DWD/DWS/ADS 由数据建模的 ModelSpec/dbt 重新生成。
 
-## 阶段总览
+这项决策取代 2026-08-17 的“未知调用量阻断退役”假设。调用量仍可用于运维观察，但不决定数据保留。真正的硬门禁是大屏引用、旧写 cutoff、完整数据库备份、恢复演练和 Expand/Contract 分离。
 
-| 阶段 | 名称 | 承接 Sprint | 进入门禁 | 允许的动作 | 明确禁止 |
-|---|---|---|---|---|---|
-| **S0** | 盘点、冻结与建立观测口 | **Sprint-94** | 无 | 全量静态 inventory；新建产物入口收敛到 canonical；旧 surface 登记 source/window/status，缺历史则建立观测起点 | 重定向、删除、迁移 apply、feature flag 关闭、把 UNKNOWN 写成 0 |
-| **S1** | 只读兼容准备 | Sprint-95+ | S0 观测口连续 ≥14 天可读，旧写调用方与回切责任明确 | 旧写入口挂 feature flag（**默认仍开**）；旧读全保留；UI 标"兼容只读" | 关闭旧写、删除路由 |
-| **S2** | 兼容重定向 | Sprint-96+ | S1 期间旧写调用趋零且有 pilot 部门验证 | 按 `LegacyDataModelingRedirect` 样板做重定向；旧写默认关闭、可紧急回切 | 删除路由 handler、DROP 表 |
-| **S3** | 迁移 apply | Sprint-97+ | S2 稳定 ≥30 天；三分类 fixture 齐备；备份/恢复演练通过 | preview/apply/replay/rollback 分批迁移；大屏复用已发布分析 | DROP 任何表/列 |
-| **S4** | 物理退役 | 独立变更评审 | 连续 30 天零调用 + 全量 inventory + backup/restore proof | DROP 表/列/route handler | 无门禁的批量清理 |
+## 1. 永久保留与可清理边界
 
-**当前位置：S0（Sprint-94）。**
-
-## S0 的完成定义（Sprint-94 范围）
-
-- [ ] `route-inventory.md` 32 行全部有组件宿主、菜单可见性、处置和阶段归属。
-- [ ] 后端旧写面（`/api/card` write、MBQL execute、public/embed）盘点完成，与前端路由表分开记录。
-- [ ] 每个旧 surface 都记录 `source + retention/window + value/status`；没有历史来源时保留 UNKNOWN、记录 owner 和观测起始时间。
-- [ ] 新建分析产物只从 canonical 入口产生（ADR-94-13）；旧入口仍可用但不再是新建主线。
-- [ ] 无任何重定向、删除、flag 关闭动作落地。
-
-## 从原 F5 移出的内容及去向
-
-Sprint-94 原 F5「大屏复用与 Metabase 退役」整体顺延，拆分如下：
-
-| 原 Task | 内容 | 去向 |
+| 类别 | 处置 | 说明 |
 |---|---|---|
-| F5/T01 | 大屏复用已发布 Analysis revision | **S3**（依赖 F2/F4 的 published revision，本就排在最后） |
-| F5/T02 迁移通道 | preview/apply/rollback 迁移 API 与批次表 | **S3** |
-| F5/T02 路由收敛 | collections/models/trash 重定向 | **S2** |
-| F5/T02 旧写 flag | `DTS_ANALYTICS_LEGACY_CARD_WRITE_ENABLED` 关闭 | **S1→S2** |
-| 原 F5/T02 盘点部分 | 静态 inventory、后端旧写 surface 与动态菜单 | **S0 = 本 Sprint F0/T02** |
-| 原 F5/T02 观测部分 | 角色、容量、调用来源/窗口与观测起点 | **S0 = 本 Sprint F0/T03** |
+| `analytics_screen` | 永久保留 | 当前大屏定义、背景、变量、页面、轮播、V2 spec 与密级快照 |
+| `analytics_screen_version` | 永久保留 | 历史发布版本和回退依据 |
+| screen access/lock/policy/audit | 永久保留 | 权限、协作、合规与审计证据 |
+| screen template/template version | 永久保留 | 模板及其历史快照 |
+| 大屏素材、菜单、角色绑定 | 永久保留 | 防止升级后入口、图片或授权断层；菜单只允许原位更新，不换稳定身份 |
+| legacy Card/Dashboard 及关联 ACL/link/revision/query trace | 可清理 | 不迁移为 Analysis；必须先证明大屏 payload 无 Card 引用 |
+| Collection/Model/Trash/Pulse/Subscription/旧 VDS/MBQL | 可清理 | 不再复制 Metabase 产品面，不承担历史兼容义务 |
+| DWD/DWS/ADS 物化表 | 可重建 | 由 ModelSpec、dbt 项目、发布记录和源数据重建；不得把物化表误当治理事实源 |
+| ODS/source、ModelSpec、dbt 项目/版本 | 必须保留 | 它们是重建 DWD/DWS/ADS 的来源，不属于旧 BI 清理范围 |
 
-原 F5 已从活跃 Feature 移除；`ScreenAnalysisSource`、迁移三分类、批次表 schema 与 API 语义保存在 `deferred-scope-handoff.md`。后续 Sprint 将其作为输入，但仍须重新过当期 G0/G1、fresh impact 和阶段门禁。
+## 2. 发布阶段
 
-## 不变的硬约束
+| 阶段 | 承接 | 允许动作 | 退出门禁 |
+|---|---|---|---|
+| **E0 Expand** | Sprint-94 | governed Analysis/Dashboard 主线；`/bi/questions` canonical 收敛；schema Expand；旧写兼容触发器；清理 dry-run；公开分享显式默认 false | 聚焦测试、构建、三角色 E2E、旧镜像回切、大屏对账全部通过 |
+| **C1 Contract apply** | F6/T03 独立发布 | 冻结 legacy 写入；归档 Card/Dashboard cutoff；运行 screen 引用预检；执行有备份确认的 legacy 数据 DELETE；关闭/重定向旧入口 | 大屏及版本/权限/模板/审计计数和 checksum 不变；新主线可用；恢复演练通过 |
+| **C2 Physical removal** | C1 稳定后的独立变更 | 删除 legacy route handler、无引用 service/page、最终旧 schema | 至少跨过约定回滚窗口；旧镜像不再是回滚方案；数据库备份仍可恢复 |
 
-无论走到哪个阶段，以下约束贯穿全程：
+**当前位置**：E0 实现收口，真实 E2E/灰度/回滚证据仍待完成。C1 不与 E0 同批执行。
 
-1. 旧读路径在 S4 之前**永不中断**。
-2. 不可证明等价的 MBQL 只读保留，任何阶段都不做近似转换。
-3. 每个阶段的关闭动作都必须可在一轮发布内回切。
-4. "菜单不可见"永远不能作为"无人使用"的证据。
-5. 阶段不可跳跃：S2 不能在 S1 未取得趋零证据时启动。
+## 3. C1 硬门禁
+
+1. 停止所有 legacy Card/Dashboard 写入，记录 `legacy_card_max_id` 与 `legacy_dashboard_max_id`；cutoff 之后出现 legacy 行即重新冻结。
+2. 对整个 Analytics 数据库执行 `pg_dump`，验证文件非空并在隔离库完成恢复演练。
+3. 执行 `sprint94_legacy_bi_cleanup.sql` 的 dry-run；脚本默认 `apply=false` 并以 `ROLLBACK` 结束。
+4. 扫描 screen、screen version、template、template version 的 `cardId|card_id|sourceCardId|source_card_id`。任一命中都必须阻断，禁止靠人工忽略。
+5. 只删除 cutoff 以内的 legacy Card/Dashboard 及其关联数据；不得按“当前最大 ID”无界删除，以免误删 governed 新行。
+6. apply 必须显式传入 `backup_confirmed=true`；未确认备份时脚本终止并回滚。
+7. 清理后逐项对账大屏、版本、权限、模板、审计、素材和菜单/角色绑定；任何差异都触发恢复。
+
+## 4. 大屏仍含 Card 引用时
+
+- 不删除被引用 Card，也不执行部分“猜测等价”的 MBQL 转换。
+- 先明确该大屏是否应冻结现有渲染结果，或由业务维护者用已发布 Analysis revision 重建组件。
+- 迁移后重新扫描所有历史版本和模板；不能只看当前 screen 行。
+- 引用未清零时，C1 整体保持 BLOCKED。
+
+## 5. 数仓重建边界
+
+- Analytics 清理脚本不直接 DROP `biadmin` 的 DWD/DWS/ADS，避免用跨域硬编码替代数据建模发布流程。
+- 需要重建时，由数据建模对目标 ModelSpec/dbt release 执行有选择的 build/test/materialize，并校验关系、行数、主键/粒度和下游契约。
+- ODS/source、ModelSpec、dbt project、profiles、发布记录和治理映射必须先备份并保留。
+- 删除旧物化关系和创建新关系属于同一次“数仓发布”，与 Analytics legacy BI Contract 分开留证。
+
+## 6. 回滚语义
+
+- E0 回滚：关闭 `DTS_ANALYTICS_GOVERNED_BI_ENABLED`，恢复旧镜像；Expand 列和触发器保留，旧写入方仍可产生有效 revision 默认值。
+- C1 apply 前回滚：无需动作，dry-run 已回滚。
+- C1 apply 后回滚：恢复完整数据库备份和旧镜像；不能仅回滚镜像，因为 legacy 数据已删除。
+- C2 后回滚：只依赖数据库备份/发布包，不再承诺旧 handler 可即时回切。

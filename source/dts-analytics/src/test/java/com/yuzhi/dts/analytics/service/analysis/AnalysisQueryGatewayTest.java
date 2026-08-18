@@ -23,6 +23,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 class AnalysisQueryGatewayTest {
 
@@ -80,11 +83,18 @@ class AnalysisQueryGatewayTest {
         ));
         AnalyticsUser actor = actor();
 
-        AnalysisQueryGateway.AnalysisQueryResult result = gateway.preview(
-            actor,
-            spec,
-            new AnalysisRequestContext("D1", "INTERNAL", "ROLE_ANALYST", "request-1", "/api/analysis/preview", null)
-        );
+        MockHttpServletRequest servletRequest = new MockHttpServletRequest("POST", "/api/analysis/preview");
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(servletRequest));
+        AnalysisQueryGateway.AnalysisQueryResult result;
+        try {
+            result = gateway.preview(
+                actor,
+                spec,
+                new AnalysisRequestContext("D1", "INTERNAL", "ROLE_ANALYST", "request-1", "/api/analysis/preview", null)
+            );
+        } finally {
+            RequestContextHolder.resetRequestAttributes();
+        }
 
         assertThat(result.rows()).hasSize(2);
         assertThat(result.rowCount()).isEqualTo(2);
@@ -93,6 +103,8 @@ class AnalysisQueryGatewayTest {
         verify(executionFacade).executeWithCompliance(any(QueryExecutionFacade.PreparedQuery.class));
         verify(cacheService).put(eq(11L), any(), eq(7L), any());
         verify(auditService).record(any());
+        assertThat(servletRequest.getAttribute(AnalysisRequestContext.SPECIALIZED_AUDIT_RECORDED_ATTRIBUTE))
+            .isEqualTo(Boolean.TRUE);
     }
 
     @Test

@@ -7,7 +7,8 @@
 
 ## 1. 正常状态
 
-- `DTS_ANALYTICS_GOVERNED_BI_ENABLED=true`；`DTS_ANALYTICS_LEGACY_CARD_WRITE_ENABLED=true`。
+- R1：`DTS_ANALYTICS_GOVERNED_BI_ENABLED=true`、`DTS_ANALYTICS_LEGACY_CARD_WRITE_ENABLED=true`，用于滚动升级连续性；`ANALYTICS_PUBLIC_SHARING_ENABLED=false` 为默认值。
+- R2：确认旧写已冻结、备份可恢复且大屏无 legacy card 引用后，执行受控清理；完成后不再把旧 BI 写路径作为回切能力。
 - 分析发布完成后 revision 为 `PUBLISHED`；仪表板发布先进入 `PENDING_REGISTRATION`，通常在一个 30 秒 reconcile 周期内转为 `AVAILABLE`。
 - `analytics.report.registration.backlog` 通常为 0；短暂非 0 可以自愈。
 - 消费者只看到 `PUBLISHED + AVAILABLE` 且部门/角色/密级/有效期匹配的仪表板。
@@ -21,7 +22,7 @@
 | registration 功能健康 | `GET /actuator/health` 或组件 `biReportRegistration` | backlog <100 时 UP |
 | Platform 进程 | `GET /api/health` | HTTP 200 |
 | 新能力开关 | `analytics.bi.feature.enabled{feature="governed_bi"}` | pilot/default 为 1 |
-| 旧写保护 | `analytics.bi.feature.enabled{feature="legacy_card_write"}` | 本 Sprint 必须为 1 |
+| 旧写保护 | `analytics.bi.feature.enabled{feature="legacy_card_write"}` | R1 为 1；R2 清理窗口前先冻结并确认无新增写入 |
 | 登记积压 | `analytics.report.registration.backlog` | 正常 0；不得持续增长 |
 | 仪表板状态 | Dashboard API 的 `lifecycle_status`、`registration_status` | 发布后依次 PUBLISHED/PENDING → PUBLISHED/AVAILABLE |
 
@@ -40,7 +41,7 @@
 
 抑制规则：Platform 整体不可用时，以 Platform availability 为父告警，抑制同窗口的 registration failure 风暴；governed flag 主动关闭的维护窗口抑制 503 ratio，但不得抑制 legacy-write-disabled 信号。
 
-退役 S0 观察面板必须保留 `analytics.bi.legacy.calls{surface,operation}` 的 14 天趋势；UNKNOWN 没有历史值时写明窗口起点，不能补成 0。
+R1 观察面板保留 `analytics.bi.legacy.calls{surface,operation}` 趋势，用于确定冻结窗口；R2 的硬门禁仍是明确截止水位、备份恢复成功、大屏引用为 0 和 dry-run 对账，UNKNOWN 不得补成 0。
 
 ## 4. 关键日志字段
 

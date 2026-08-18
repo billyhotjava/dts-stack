@@ -143,6 +143,7 @@
     <include file="config/liquibase/changelog/20260810-04_portal_primary_menu_order.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260811-01_retire_legacy_modeling_strategy_menu.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260817-01_sprint93_modeling_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260819-01_sprint94_analysis_audit_catalog.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->

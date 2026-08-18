@@ -2,6 +2,7 @@ package com.yuzhi.dts.analytics.web.filter;
 
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.service.audit.AnalyticsAuditForwarderService;
 import com.yuzhi.dts.analytics.service.audit.AnalyticsAuditForwarderService.AnalyticsAuditEvent;
 import com.yuzhi.dts.common.net.ClientIpTrace;
@@ -65,6 +66,9 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
     }
 
     private void recordIfNeeded(HttpServletRequest request, HttpServletResponse response, long startNanos) {
+        if (AnalysisRequestContext.hasSpecializedAuditRecorded(request)) {
+            return;
+        }
         Optional<AnalyticsUser> maybeUser = sessionService.resolveUser(request);
         if (maybeUser.isEmpty()) {
             return;

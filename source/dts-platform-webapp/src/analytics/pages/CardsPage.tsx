@@ -1,397 +1,184 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { analyticsApi, type CardListItem } from "../api/analyticsApi";
+import { Button, Card, Input, Modal, Space, Spin, Tag, message } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
+import { CompactTable } from "@/components/table";
+import {
+	archiveAnalysis,
+	listAnalyses,
+	type Analysis,
+	type AnalysisPage,
+} from "../api/analysisApi";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card, Input, Modal, Select, Space, Spin, Tag, message } from "antd";
-import { CompactTable } from "@/components/table";
-import { } from "@ant-design/icons";
-import type { ColumnsType } from "antd/es/table";
-import { getEffectiveLocale, t, type Locale } from "../i18n";
-import CollectionTree, { collectDescendantIds } from "../components/CollectionTree";
-import MoveToCollectionModal from "../components/MoveToCollectionModal";
+import { getEffectiveLocale, type Locale } from "../i18n";
 
-type LoadState<T> =
+type LoadState =
 	| { state: "loading" }
-	| { state: "loaded"; value: T }
+	| { state: "loaded"; value: AnalysisPage }
 	| { state: "error"; error: unknown };
+
+const STATUS_LABELS: Record<Analysis["lifecycleStatus"], string> = {
+	DRAFT: "草稿",
+	PUBLISHED: "已发布",
+	ARCHIVED: "已归档",
+};
+
+const STATUS_COLORS: Record<Analysis["lifecycleStatus"], string> = {
+	DRAFT: "default",
+	PUBLISHED: "green",
+	ARCHIVED: "orange",
+};
+
+const VISUALIZATION_LABELS: Record<Analysis["visualization"]["type"], string> = {
+	table: "表格",
+	bar: "柱状图",
+	line: "折线图",
+	area: "面积图",
+	pie: "饼图",
+	number: "指标卡",
+	scatter: "散点图",
+};
 
 function formatTime(raw?: string | null): string {
 	if (!raw) return "-";
-	try {
-		const d = new Date(raw);
-		return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-	} catch {
-		return raw;
-	}
+	const value = new Date(raw);
+	if (Number.isNaN(value.getTime())) return raw;
+	return new Intl.DateTimeFormat("zh-CN", {
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+		hour: "2-digit",
+		minute: "2-digit",
+		hour12: false,
+	}).format(value);
 }
-
-const DISPLAY_LABELS: Record<string, string> = {
-	table: "表格", line: "折线", bar: "柱状", pie: "饼图", area: "面积",
-	scalar: "数字", row: "横柱", combo: "组合", funnel: "漏斗", scatter: "散点",
-	number: "数字", gauge: "仪表", map: "地图", progress: "进度", waterfall: "瀑布",
-};
-
-// ── 批量导入 SQL 查询卡片 ──────────────────────────────────
-
-function parseSqlCardMeta(filename: string, content: string): { name: string; description: string; screen: string } {
-	// 从 SQL 注释头提取中文名称、用途和对应大屏
-	const lines = content.split('\n');
-	let name = filename.replace(/\.sql$/i, '').replace(/^card-/, '');
-	let description = '';
-	let screen = '';
-	for (const line of lines) {
-		const m = line.match(/^--\s*查询卡片[:：]\s*(.+)/);
-		if (m) { name = m[1].trim(); continue; }
-		const d = line.match(/^--\s*用途[:：]\s*(.+)/);
-		if (d) { description = d[1].trim(); continue; }
-		const s = line.match(/^--\s*对应大屏[:：]\s*(.+)/);
-		if (s) { screen = s[1].trim(); continue; }
-	}
-	return { name, description, screen };
-}
-
-function extractPureSql(content: string): string {
-	return content.split('\n').filter(line => !line.startsWith('--')).join('\n').trim();
-}
-
-function BatchImportCardsModal({
-	open, onClose, onSuccess,
-}: {
-	open: boolean; onClose: () => void; onSuccess: () => void;
-}) {
-	const [databases, setDatabases] = useState<Array<{ id: number; name: string }>>([]);
-	const [selectedDb, setSelectedDb] = useState<number | null>(null);
-	const [namePrefix, setNamePrefix] = useState('');
-	const [files, setFiles] = useState<Array<{ name: string; cardName: string; description: string; screen: string; sql: string }>>([]);
-	const [importing, setImporting] = useState(false);
-	const [results, setResults] = useState<Array<{ name: string; status: string }> | null>(null);
-	const fileInputRef = useRef<HTMLInputElement>(null);
-
-	useEffect(() => {
-		if (!open) return;
-		analyticsApi.listDatabases().then((resp: any) => {
-			const dbs = (resp?.data || resp || []).map((d: any) => ({ id: d.id, name: d.name }));
-			setDatabases(dbs);
-			if (dbs.length === 1) setSelectedDb(dbs[0].id);
-		}).catch(() => {});
-	}, [open]);
-
-	const handleFilesSelected = async (fileList: FileList | null) => {
-		if (!fileList) return;
-		const parsed: typeof files = [];
-		for (const file of Array.from(fileList)) {
-			if (!file.name.endsWith('.sql')) continue;
-			const content = await file.text();
-			const meta = parseSqlCardMeta(file.name, content);
-			parsed.push({ name: file.name, cardName: meta.name, description: meta.description, screen: meta.screen, sql: extractPureSql(content) });
-		}
-		parsed.sort((a, b) => a.name.localeCompare(b.name));
-		setFiles(parsed);
-	};
-
-	const handleImport = async () => {
-		if (!selectedDb || files.length === 0) return;
-		setImporting(true);
-		const results: Array<{ name: string; status: string }> = [];
-		for (const file of files) {
-			try {
-				const fullName = namePrefix ? `[${namePrefix}] ${file.cardName}` : file.cardName;
-				await analyticsApi.createCard({
-					name: fullName,
-					description: file.description || null,
-					dataset_query: {
-						database: selectedDb,
-						type: "native",
-						native: { query: file.sql },
-					},
-					display: "table",
-					visualization_settings: {},
-				});
-				results.push({ name: file.cardName, status: 'OK' });
-			} catch (err: any) {
-				results.push({ name: file.cardName, status: err?.message || '失败' });
-			}
-		}
-		setResults(results);
-		setImporting(false);
-		const ok = results.filter(r => r.status === 'OK').length;
-		message.success(`批量导入完成: ${ok}/${results.length} 成功`);
-		onSuccess();
-	};
-
-	const reset = () => {
-		setFiles([]);
-		setResults(null);
-		setSelectedDb(databases.length === 1 ? databases[0].id : null);
-		setNamePrefix('');
-	};
-
-	return (
-		<Modal
-			open={open}
-			title="批量导入查询卡片"
-			width={700}
-			onCancel={() => { reset(); onClose(); }}
-			footer={results ? (
-				<Button type="primary" onClick={() => { reset(); onClose(); }}>关闭</Button>
-			) : (
-				<Space>
-					<Button onClick={() => { reset(); onClose(); }}>取消</Button>
-					<Button type="primary" onClick={handleImport} loading={importing} disabled={!selectedDb || files.length === 0}>
-						导入 {files.length > 0 ? `(${files.length} 个)` : ''}
-					</Button>
-				</Space>
-			)}
-		>
-			{results ? (
-				<CompactTable
-					size="small"
-					dataSource={results}
-					rowKey="name"
-					pagination={false}
-					columns={[
-						{ title: '卡片名称', dataIndex: 'name', key: 'name' , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
-						{ title: '状态', dataIndex: 'status', key: 'status', width: 100,
-							render: (s: string) => <Tag color={s === 'OK' ? 'green' : 'red'}>{s}</Tag> },
-					]}
-				/>
-			) : (
-				<Space direction="vertical" className="w-full" size={16}>
-					<div>
-						<div className="text-sm font-medium mb-2">数据源</div>
-						<Select
-							className="w-full"
-							placeholder="选择数据源（查询卡片将从此数据源查询）"
-							value={selectedDb}
-							onChange={setSelectedDb}
-							options={databases.map(d => ({ label: d.name, value: d.id }))}
-						/>
-					</div>
-					<div>
-						<div className="text-sm font-medium mb-2">名称前缀（用于分组）</div>
-						<Input
-							placeholder="如: GPMC项管、专利数仓（卡片名称显示为 [前缀] 卡片名）"
-							value={namePrefix}
-							onChange={(e) => setNamePrefix(e.target.value)}
-							allowClear
-						/>
-					</div>
-					<div>
-						<div className="text-sm font-medium mb-2">SQL 文件</div>
-						<input
-							ref={fileInputRef}
-							type="file"
-							multiple
-							accept=".sql"
-							style={{ display: 'none' }}
-							onChange={(e) => handleFilesSelected(e.target.files)}
-						/>
-						<Button onClick={() => fileInputRef.current?.click()}>
-							选择 SQL 文件（可多选）
-						</Button>
-					</div>
-					{files.length > 0 && (
-						<CompactTable
-							size="small"
-							dataSource={files}
-							rowKey="name"
-							pagination={false}
-							scroll={{ y: 300 }}
-							columns={[
-								{ title: '文件名', dataIndex: 'name', key: 'name', width: 200, ellipsis: true , sorter: (a, b) => (a.name || "").localeCompare(b.name || "") },
-								{ title: '卡片名称', dataIndex: 'cardName', key: 'cardName', width: 180, ellipsis: true , sorter: (a, b) => (a.cardName || "").localeCompare(b.cardName || "") },
-								{ title: '对应大屏', dataIndex: 'screen', key: 'screen', width: 120, ellipsis: true },
-								{ title: '用途', dataIndex: 'description', key: 'description', ellipsis: true },
-							]}
-						/>
-					)}
-				</Space>
-			)}
-		</Modal>
-	);
-}
-
-// ── CardsPage ──────────────────────────────────────────────
 
 export default function CardsPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
-	const [state, setState] = useState<LoadState<CardListItem[]>>({ state: "loading" });
+	const [state, setState] = useState<LoadState>({ state: "loading" });
+	const [page, setPage] = useState(0);
+	const [pageSize, setPageSize] = useState(10);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [batchImportOpen, setBatchImportOpen] = useState(false);
-	const [selectedCollection, setSelectedCollection] = useState("__all__");
-	const [moveModalOpen, setMoveModalOpen] = useState(false);
-	const [moveCardIds, setMoveCardIds] = useState<number[]>([]);
-	const [collectionsVersion, setCollectionsVersion] = useState(0);
 
-	const loadCards = useCallback(() => {
+	const loadAnalyses = useCallback(async () => {
 		setState({ state: "loading" });
-		analyticsApi.listCards("question")
-			.then((value) => setState({ state: "loaded", value: Array.isArray(value) ? value.filter((c) => !c.archived) : [] }))
-			.catch((e) => setState({ state: "error", error: e }));
-	}, []);
+		try {
+			setState({ state: "loaded", value: await listAnalyses(page, pageSize) });
+		} catch (error) {
+			setState({ state: "error", error });
+		}
+	}, [page, pageSize]);
 
-	useEffect(() => { loadCards(); }, [loadCards]);
+	useEffect(() => {
+		void loadAnalyses();
+	}, [loadAnalyses]);
 
-	const handleCollectionsChange = useCallback(() => {
-		setCollectionsVersion((v) => v + 1);
-		loadCards();
-	}, [loadCards]);
-
-	const handleMoveSuccess = useCallback(() => {
-		setMoveModalOpen(false);
-		setMoveCardIds([]);
-		setSelectedRowKeys([]);
-		setCollectionsVersion((v) => v + 1);
-		loadCards();
-	}, [loadCards]);
-
-	const filteredCards = useMemo(() => {
+	const analyses = useMemo(() => {
 		if (state.state !== "loaded") return [];
-		let cards = state.value;
+		const keyword = searchQuery.trim().toLocaleLowerCase();
+		if (!keyword) return state.value.items;
+		return state.value.items.filter(
+			(item) =>
+				item.name.toLocaleLowerCase().includes(keyword) ||
+				(item.description ?? "").toLocaleLowerCase().includes(keyword),
+		);
+	}, [searchQuery, state]);
 
-		// Filter by collection
-		if (selectedCollection === "__uncategorized__") {
-			cards = cards.filter((c) => c.collection_id == null);
-		} else if (selectedCollection !== "__all__") {
-			const treeRef = (CollectionTree as any).__treeRef;
-			const tree = treeRef?.tree ?? [];
-			const ids = collectDescendantIds(tree, Number(selectedCollection));
-			if (ids.length > 0) {
-				const idSet = new Set(ids);
-				cards = cards.filter((c) => c.collection_id != null && idSet.has(c.collection_id));
-			} else {
-				cards = cards.filter((c) => c.collection_id === Number(selectedCollection));
-			}
-		}
-
-		// Filter by search keyword
-		const kw = searchQuery.trim().toLowerCase();
-		if (kw) {
-			cards = cards.filter((c) =>
-				(c.name ?? "").toLowerCase().includes(kw) || (c.description ?? "").toLowerCase().includes(kw)
-			);
-		}
-		return cards;
-	}, [state, searchQuery, selectedCollection, collectionsVersion]);
-
-	const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-	const [batchDeleting, setBatchDeleting] = useState(false);
-
-	const handleBatchDelete = () => {
-		if (selectedRowKeys.length === 0) return;
+	const handleArchive = (analysis: Analysis) => {
 		Modal.confirm({
-			title: `批量删除 ${selectedRowKeys.length} 张卡片`,
-			content: "确定将选中的卡片移至废纸篓？可在废纸篓中恢复。",
-			okText: "确定",
+			title: "归档分析",
+			content: `确定归档「${analysis.name}」？已发布版本和审计记录仍会保留。`,
+			okText: "归档",
 			cancelText: "取消",
 			okButtonProps: { danger: true },
 			onOk: async () => {
-				setBatchDeleting(true);
-				let ok = 0;
-				let fail = 0;
-				for (const id of selectedRowKeys) {
-					try {
-						await analyticsApi.deleteCard(Number(id));
-						ok++;
-					} catch {
-						fail++;
-					}
+				try {
+					await archiveAnalysis(analysis.id);
+					message.success("分析已归档");
+					await loadAnalyses();
+				} catch (error) {
+					message.error(error instanceof Error ? error.message : "归档分析失败");
+					throw error;
 				}
-				setBatchDeleting(false);
-				setSelectedRowKeys([]);
-				if (fail === 0) {
-					message.success(`已将 ${ok} 张卡片移至废纸篓`);
-				} else {
-					message.warning(`完成：成功 ${ok}，失败 ${fail}`);
-				}
-				loadCards();
 			},
 		});
 	};
 
-	const handleDelete = (id: number, name: string) => {
-		Modal.confirm({
-			title: "移至废纸篓",
-			content: `确定将「${name}」移至废纸篓？可在废纸篓中恢复。`,
-			okText: "确定",
-			cancelText: "取消",
-			okButtonProps: { danger: true },
-			onOk: async () => {
-				await analyticsApi.deleteCard(id);
-				message.success("已移至废纸篓");
-				loadCards();
-			},
-		});
-	};
-
-	const columns: ColumnsType<CardListItem> = [
+	const columns: ColumnsType<Analysis> = [
 		{
-			title: t(locale, "common.name"),
+			title: "分析名称",
 			dataIndex: "name",
-			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 			key: "name",
 			ellipsis: true,
 			render: (name: string, record) => (
-				<Link to={`/bi/questions/${record.id}`} className="text-brand hover:underline font-medium">
-					{name || t(locale, "common.untitled")}
+				<Link to={`/bi/questions/${record.id}`} className="font-medium text-brand hover:underline">
+					{name || "未命名分析"}
 				</Link>
 			),
 		},
 		{
-			title: t(locale, "common.description"),
+			title: "说明",
 			dataIndex: "description",
 			key: "description",
 			ellipsis: true,
-			render: (desc: string | null) => <span className="text-text-secondary">{desc || "-"}</span>,
+			render: (description: string | null) => (
+				<span className="text-text-secondary">{description || "-"}</span>
+			),
 		},
 		{
-			title: t(locale, "common.type"),
-			dataIndex: "display",
-			key: "display",
-			width: 90,
-			render: (display: string) => <Tag>{DISPLAY_LABELS[display] ?? display ?? "-"}</Tag>,
+			title: "状态",
+			dataIndex: "lifecycleStatus",
+			key: "lifecycleStatus",
+			width: 100,
+			render: (status: Analysis["lifecycleStatus"]) => (
+				<Tag color={STATUS_COLORS[status]}>{STATUS_LABELS[status]}</Tag>
+			),
 		},
 		{
-			title: t(locale, "common.updatedAt"),
-			dataIndex: "updated_at",
-			key: "updated_at",
-			width: 155,
-			render: (v: string) => <span className="text-text-muted text-xs">{formatTime(v)}</span>,
-			sorter: (a, b) => (a.updated_at ?? "").localeCompare(b.updated_at ?? ""),
-			defaultSortOrder: "descend",
+			title: "图表",
+			key: "visualization",
+			width: 100,
+			render: (_, record) => <Tag>{VISUALIZATION_LABELS[record.visualization.type]}</Tag>,
 		},
 		{
-			title: t(locale, "common.actions"),
+			title: "版本",
+			dataIndex: "versionNo",
+			key: "versionNo",
+			width: 80,
+			render: (version: number) => `v${version}`,
+		},
+		{
+			title: "更新时间",
+			dataIndex: "updatedAt",
+			key: "updatedAt",
+			width: 170,
+			render: (value: string | null) => <span className="text-text-muted">{formatTime(value)}</span>,
+		},
+		{
+			title: "操作",
 			key: "actions",
-			width: 200,
+			width: 180,
 			render: (_, record) => (
 				<Space size={4}>
 					<Link to={`/bi/questions/${record.id}`}>
-						<Button type="link" size="small">查看</Button>
+						<Button type="link" size="small">
+							查看
+						</Button>
 					</Link>
-					<Link to={`/bi/questions/${record.id}/edit`}>
-						<Button type="link" size="small">编辑</Button>
-					</Link>
-					<Button
-						type="link"
-						size="small"
-						onClick={() => {
-							setMoveCardIds([record.id]);
-							setMoveModalOpen(true);
-						}}
-					>
-						移动
-					</Button>
-					<Button
-						type="link"
-						size="small"
-						danger
-						onClick={() => handleDelete(record.id, record.name || "")}
-					>
-						删除
-					</Button>
+					{record.permissions.write && record.lifecycleStatus !== "ARCHIVED" && (
+						<>
+							<Link to={`/bi/questions/${record.id}/edit`}>
+								<Button type="link" size="small">
+									编辑
+								</Button>
+							</Link>
+							<Button type="link" size="small" danger onClick={() => handleArchive(record)}>
+								归档
+							</Button>
+						</>
+					)}
 				</Space>
 			),
 		},
@@ -400,133 +187,73 @@ export default function CardsPage() {
 	return (
 		<div className="space-y-4">
 			<PageHeader
-				title={t(locale, "questions.title")}
+				title="分析"
 				actions={
-					<Space>
-						<Button disabled title="打开问题编辑页后运行查询">
-							运行
-						</Button>
-						<Button disabled title="打开问题编辑页后保存分析问题">
-							保存
-						</Button>
-						<Button disabled title="运行查询后在编辑页生成图表">
-							生成图表
-						</Button>
-						<Button onClick={() => setBatchImportOpen(true)}>
-							批量导入 SQL
-						</Button>
-						<Link to="/bi/card/new">
-							<Button type="primary">
-								新建问题
-							</Button>
-						</Link>
-					</Space>
+					<Link to="/bi/data">
+						<Button type="primary">从已发布数据集创建分析</Button>
+					</Link>
 				}
-			/>
-			<BatchImportCardsModal
-				open={batchImportOpen}
-				onClose={() => setBatchImportOpen(false)}
-				onSuccess={loadCards}
 			/>
 
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 
 			<Card styles={{ body: { padding: 0 } }}>
-				<div className="flex min-h-[720px]">
-					{/* Left: Collection tree */}
-					<CollectionTree
-						selectedKey={selectedCollection}
-						onSelect={setSelectedCollection}
-						onCollectionsChange={handleCollectionsChange}
-					/>
-
-					{/* Right: Cards list */}
-					<div className="flex min-w-0 flex-1 flex-col">
-						{state.state === "loading" ? (
-							<div className="flex justify-center items-center flex-1">
-								<Spin size="large" />
-							</div>
-						) : state.state === "loaded" ? (
-							<div className="p-4">
-								<div className="mb-4 flex items-center justify-between flex-wrap gap-3">
-									<div className="flex items-center gap-3 flex-wrap">
-										<Input.Search
-											placeholder={t(locale, "common.search")}
-											value={searchQuery}
-											onChange={(e) => setSearchQuery(e.target.value)}
-											allowClear
-											style={{ width: 300 }}
-										/>
-										{selectedRowKeys.length > 0 && (
-											<Space size="small">
-												<span className="text-xs text-text-secondary">
-													已选 {selectedRowKeys.length} 项
-												</span>
-												<Button size="small" onClick={() => setSelectedRowKeys([])}>
-													取消选择
-												</Button>
-												<Button
-													size="small"
-													danger
-													loading={batchDeleting}
-													onClick={handleBatchDelete}
-												>
-													批量删除
-												</Button>
-												<Button
-													size="small"
-													onClick={() => {
-														setMoveCardIds(selectedRowKeys.map(Number));
-														setMoveModalOpen(true);
-													}}
-												>
-													{t(locale, "collections.moveTo")}
-												</Button>
-											</Space>
-										)}
-									</div>
-									<Tag color="blue">{filteredCards.length} 张卡片</Tag>
-								</div>
-								{filteredCards.length === 0 ? (
-									<EmptyState
-										title={
-											searchQuery
-												? t(locale, "common.noResults")
-												: t(locale, "common.empty")
-										}
-									/>
-								) : (
-									<CompactTable<CardListItem>
-										columns={columns}
-										dataSource={filteredCards}
-										rowKey={(r) => r.id}
-										rowSelection={{
-											selectedRowKeys,
-											onChange: (keys) => setSelectedRowKeys(keys),
-										}}
-										pagination={{
-											pageSize: 10,
-											showSizeChanger: true,
-											showQuickJumper: true,
-											showTotal: (total) => `共 ${total} 条`,
-										}}
-									/>
-								)}
-							</div>
-						) : null}
+				<div className="flex min-h-[480px] flex-col">
+					<div className="flex flex-wrap items-center justify-between gap-3 border-b border-border-default p-4">
+						<Input.Search
+							allowClear
+							placeholder="搜索分析名称或说明"
+							style={{ width: 320 }}
+							value={searchQuery}
+							onChange={(event) => setSearchQuery(event.target.value)}
+						/>
+						{state.state === "loaded" && <Tag color="blue">共 {state.value.totalElements} 个分析</Tag>}
 					</div>
+
+					{state.state === "loading" ? (
+						<div className="flex flex-1 items-center justify-center">
+							<Spin size="large" />
+						</div>
+					) : state.state === "loaded" && analyses.length === 0 ? (
+						<EmptyState
+							title={searchQuery ? "没有匹配的分析" : "还没有分析"}
+							description={searchQuery ? "请调整搜索条件。" : "请先从已发布数据集中创建分析。"}
+							action={
+								searchQuery ? (
+									<Button onClick={() => setSearchQuery("")}>清除搜索</Button>
+								) : (
+									<Link to="/bi/data">
+										<Button type="primary">选择已发布数据集</Button>
+									</Link>
+								)
+							}
+						/>
+					) : state.state === "loaded" ? (
+						<div className="p-4">
+							<CompactTable<Analysis>
+								columns={columns}
+								dataSource={analyses}
+								rowKey="id"
+								pagination={{
+									current: page + 1,
+									pageSize,
+									total: state.value.totalElements,
+									showSizeChanger: true,
+									showTotal: (total) => `共 ${total} 条`,
+									onChange: (nextPage, nextPageSize) => {
+										if (nextPageSize !== pageSize) {
+											setPageSize(nextPageSize);
+											setPage(0);
+										} else {
+											setPage(nextPage - 1);
+										}
+									},
+								}}
+							/>
+						</div>
+					) : null}
 				</div>
 			</Card>
-
-			<MoveToCollectionModal
-				open={moveModalOpen}
-				cardIds={moveCardIds}
-				onClose={() => {
-					setMoveModalOpen(false);
-					setMoveCardIds([]);
-				}}
-				onSuccess={handleMoveSuccess}
-			/>
 		</div>
 	);
 }

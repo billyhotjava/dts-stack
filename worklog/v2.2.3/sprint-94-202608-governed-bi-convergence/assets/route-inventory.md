@@ -2,14 +2,14 @@
 
 **采集日期**：2026-08-17
 **证据**：`source/dts-platform-webapp/src/routes/sections/dashboard/static-routes.tsx`、`portal-menu-seed.json`
-**用途**：本表是 Metabase 仿造功能渐进退役的**唯一分母**。任何"旧路由已收敛"的结论必须能在本表逐行对账。
+**用途**：本表是旧 BI Contract 的路由分母。任何“旧路由已收敛”结论必须逐行对账。
 
-> **本 Sprint 只做盘点与冻结，不做重定向、不做删除。** 处置列的"阶段"指 `metabase-retirement-roadmap.md` 的阶段编号，绝大多数落在 Sprint-94 之后。
+> **2026-08-19 修订**：原 S1～S4 阶段列已被新的 Expand/Contract 路线取代。R1 先保留回切面，F6/T03 统一处理 legacy 路由；大屏入口永久保留。下表的旧阶段值只作为 2026-08-17 勘察快照，不再是发布门禁。
 
 ## 1. 事实：32 条 `bi/*` 静态路由，4 个菜单入口
 
 菜单可见（`portal-menu-seed.json`）仅 4 条：`/bi/dashboards`、`/bi/questions`、`/bi/data`、`/bi/screens`。
-其余 28 条只能通过直接 URL、页面内跳转或历史书签到达。**"菜单不可见"不等于"无人调用"** —— 调用量列在 F0/T03 确认观测来源与窗口前一律为 `UNKNOWN`，不得填 0。若没有历史来源，记录 `UNKNOWN_NO_SOURCE` 与观测起始时间，而不是伪造过去 30 天数据。
+其余 28 条只能通过直接 URL、页面内跳转或历史书签到达。调用量未知时仍记 `UNKNOWN`，但它不再决定旧 BI 数据是否迁移；F6/T03 以大屏引用、cutoff 和备份恢复为硬门禁。
 
 ## 2. 全量路由表
 
@@ -21,15 +21,15 @@
 | 4 | `bi/data/:dbId/tables/:tableId` | `TableDetailPage` | ✗ | UNKNOWN | **冻结**：同上 | S1 | F0/T02 |
 | 5 | `bi/data/:dbId/tables/:tableId/fields/:fieldId` | `FieldDetailPage` | ✗ | UNKNOWN | **冻结**：同上 | S1 | F0/T02 |
 | 6 | `bi/questions` | `CardsPage` | ✓ | UNKNOWN | **改造**：分析工作区（草稿/已发布/归档） | - | F2/F4 |
-| 7 | `bi/questions/new` | `SemanticCardEditorPage` | ✗ | UNKNOWN | **canonical 新建入口**（ADR-94-13） | - | F2/T02 |
-| 8 | `bi/questions/:id` | `CardDetailPage` | ✗ | UNKNOWN | 保留不动 | S2 | - |
-| 9 | `bi/questions/:id/edit` | `CardEditorRoutePage` | ✗ | UNKNOWN | **改造**：保留兼容分流器，新增 analysis editor 分支；semantic/legacy 行为不变（ADR-94-13） | - | F2/T02 |
+| 7 | `bi/questions/new` | `AnalysisEditorPage` | ✗ | UNKNOWN | **canonical 新建入口**（ADR-94-13） | - | F2/T02 |
+| 8 | `bi/questions/:id` | `AnalysisEditorPage` | ✗ | UNKNOWN | **canonical 查看入口** | - | F2/T02 |
+| 9 | `bi/questions/:id/edit` | `AnalysisEditorPage` | ✗ | UNKNOWN | **canonical 编辑入口** | - | F2/T02 |
 | 10 | `bi/explore` | `SemanticExplorePage` | ✗ | UNKNOWN | 保留不动（**非编辑器**，是探索页） | S2 | - |
-| 11 | `bi/card/new` | `SemanticCardEditorPage` | ✗ | UNKNOWN | **冻结**：不再作为新建产物入口 | S1 | F0/T02 |
-| 12 | `bi/card/:id/edit` | `SemanticCardEditorPage` | ✗ | UNKNOWN | **冻结**：同上 | S1 | F0/T02 |
-| 13 | `bi/virtual-datasets` | `SemanticVirtualDatasetsPage` | ✗ | UNKNOWN | **冻结**：与 ADR-94-01 冲突，见 §3 | S1 | F0/T02 |
-| 14 | `bi/virtual-datasets/new` | `SemanticCardEditorPage` | ✗ | UNKNOWN | **冻结**：见 §3 | S1 | F0/T02 |
-| 15 | `bi/virtual-datasets/:id` | `SemanticCardEditorPage` | ✗ | UNKNOWN | **冻结**：见 §3 | S1 | F0/T02 |
+| 11 | `bi/card/new` | `SemanticCardEditorPage` | ✗ | UNKNOWN | R1 回切面；F6/T03 删除 | Contract | F6/T03 |
+| 12 | `bi/card/:id/edit` | `SemanticCardEditorPage` | ✗ | UNKNOWN | R1 回切面；F6/T03 删除 | Contract | F6/T03 |
+| 13 | `bi/virtual-datasets` | `SemanticVirtualDatasetsPage` | ✗ | UNKNOWN | 不迁移；F6/T03 删除 | Contract | F6/T03 |
+| 14 | `bi/virtual-datasets/new` | `SemanticCardEditorPage` | ✗ | UNKNOWN | 不迁移；F6/T03 删除 | Contract | F6/T03 |
+| 15 | `bi/virtual-datasets/:id` | `SemanticCardEditorPage` | ✗ | UNKNOWN | 不迁移；F6/T03 删除 | Contract | F6/T03 |
 | 16 | `bi/dashboards` | `DashboardsPage` | ✓ | UNKNOWN | **改造**：版本/依赖健康/受众 | - | F4 |
 | 17 | `bi/dashboards/new` | `DashboardEditorPage` | ✗ | UNKNOWN | **改造**：只可添加已发布 Analysis revision | - | F4/T01 |
 | 18 | `bi/dashboards/:id` | `DashboardDetailPage` | ✗ | UNKNOWN | **改造**：消费侧受众鉴权 | - | F4/T02 |

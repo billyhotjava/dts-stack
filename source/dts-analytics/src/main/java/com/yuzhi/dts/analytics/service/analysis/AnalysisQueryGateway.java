@@ -300,6 +300,7 @@ public class AnalysisQueryGateway {
             null,
             Math.toIntExact(Math.min(Integer.MAX_VALUE, durationMs))
         ));
+        AnalysisRequestContext.markSpecializedAuditRecorded();
     }
 
     private long elapsedMillis(long startedNanos) {

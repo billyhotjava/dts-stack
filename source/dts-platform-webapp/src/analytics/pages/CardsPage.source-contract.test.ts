@@ -12,6 +12,7 @@ test("analysis workspace lists and archives governed analyses only", () => {
 	assert.match(PAGE_SOURCE, /listAnalyses/);
 	assert.match(PAGE_SOURCE, /archiveAnalysis/);
 	assert.match(PAGE_SOURCE, /lifecycleStatus/);
+	assert.match(PAGE_SOURCE, /useState\(10\)/);
 	assert.doesNotMatch(PAGE_SOURCE, /listCards|createCard|deleteCard/);
 	assert.doesNotMatch(PAGE_SOURCE, /BatchImportCardsModal|CollectionTree|MoveToCollectionModal/);
 });

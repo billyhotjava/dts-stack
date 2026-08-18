@@ -13,18 +13,20 @@
             <column name="contract_checksum" type="varchar(64)"/>
         </addColumn>
         <sql>
+            WITH ranked_revision AS (
+                SELECT id,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY model, model_id
+                           ORDER BY id
+                       )::int AS version_no
+                  FROM analytics_revision
+            )
             UPDATE analytics_revision current_revision
-               SET version_no = (
-                       SELECT COUNT(*)
-                         FROM analytics_revision older_revision
-                        WHERE older_revision.model = current_revision.model
-                          AND older_revision.model_id = current_revision.model_id
-                          AND older_revision.id &lt;= current_revision.id
-                   ),
-                   status = 'DRAFT'
-             WHERE version_no IS NULL OR status IS NULL;
-            ALTER TABLE analytics_revision ALTER COLUMN version_no SET NOT NULL;
-            ALTER TABLE analytics_revision ALTER COLUMN status SET NOT NULL;
+               SET version_no = COALESCE(current_revision.version_no, ranked_revision.version_no),
+                   status = COALESCE(current_revision.status, 'DRAFT')
+              FROM ranked_revision
+             WHERE current_revision.id = ranked_revision.id
+               AND (current_revision.version_no IS NULL OR current_revision.status IS NULL);
             ALTER TABLE analytics_revision
                 ADD CONSTRAINT ck_analytics_revision_status
                 CHECK (status IN ('DRAFT', 'PUBLISHED', 'SUPERSEDED'));
@@ -37,7 +39,40 @@
                 ON analytics_revision(model, model_id)
              WHERE status = 'PUBLISHED';
         </sql>
+        <sql splitStatements="false" stripComments="false"><![CDATA[
+            CREATE OR REPLACE FUNCTION public.set_analytics_revision_legacy_defaults()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                IF NEW.version_no IS NULL THEN
+                    PERFORM pg_advisory_xact_lock(
+                        hashtext(COALESCE(NEW.model, '') || ':' || COALESCE(NEW.model_id::text, ''))::bigint
+                    );
+                    SELECT COALESCE(MAX(version_no), 0) + 1
+                      INTO NEW.version_no
+                      FROM public.analytics_revision
+                     WHERE model IS NOT DISTINCT FROM NEW.model
+                       AND model_id IS NOT DISTINCT FROM NEW.model_id;
+                END IF;
+                IF NEW.status IS NULL THEN
+                    NEW.status := 'DRAFT';
+                END IF;
+                RETURN NEW;
+            END;
+            $$;
+
+            DROP TRIGGER IF EXISTS trg_analytics_revision_legacy_defaults ON public.analytics_revision;
+            CREATE TRIGGER trg_analytics_revision_legacy_defaults
+                BEFORE INSERT ON public.analytics_revision
+                FOR EACH ROW
+                EXECUTE FUNCTION public.set_analytics_revision_legacy_defaults();
+        ]]></sql>
         <rollback>
+            <sql splitStatements="false" stripComments="false"><![CDATA[
+                DROP TRIGGER IF EXISTS trg_analytics_revision_legacy_defaults ON public.analytics_revision;
+                DROP FUNCTION IF EXISTS public.set_analytics_revision_legacy_defaults();
+            ]]></sql>
             <sql>DROP INDEX IF EXISTS uk_analytics_revision_current_published;</sql>
             <dropUniqueConstraint tableName="analytics_revision" constraintName="uk_analytics_revision_model_version"/>
             <sql>ALTER TABLE analytics_revision DROP CONSTRAINT IF EXISTS ck_analytics_revision_status;</sql>

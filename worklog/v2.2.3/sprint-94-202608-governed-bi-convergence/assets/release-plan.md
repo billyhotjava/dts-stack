@@ -1,34 +1,50 @@
 # 发布安全计划（Gate G3）
 
-**变更类型**：Schema Expand + 跨服务 API + 受管发布能力  
-**风险等级**：高（涉及受众、密级、跨服务登记和历史兼容）  
-**当前 Gate**：GAP；计划与回切路径已具备，真实 shadow/pilot、数据库 rollback 演练和 48h/7d 观察尚未执行。
+**变更类型**：Schema Expand + 跨服务 API + canonical BI UI + 后续独立 Contract 清理
+**风险等级**：高
+**当前 Gate**：GAP；代码与自动化门禁已补，真实 shadow/pilot、Chrome 95、四角色 E2E、旧镜像回切和数据库恢复演练尚未完成。
 
-## 1. 发布边界
+## 1. 两次发布，不混批
 
-本次只交付治理型 BI 主线，不执行 Metabase 退役 S1～S4：
+### R1：Governed BI Expand
 
-- 新增分析/看板的校验、版本、发布和受众登记；旧 `/api/card`、旧 dashboard 读写和既有路由继续工作。
-- Analytics 只保存平台已发布数据集版本的引用和不可变快照，不成为数据集治理 owner。
-- Platform `bi_report_link` 是受众事实源；Analytics 通过幂等 registration + outbox/reconcile 登记。
-- `DTS_ANALYTICS_GOVERNED_BI_ENABLED` 是本次紧急回切开关。
-- `DTS_ANALYTICS_LEGACY_CARD_WRITE_ENABLED` 固定保持 `true`，本 Sprint 只暴露状态与调用指标，禁止借本次发布关闭旧写。
-- 本次没有 DROP、rename、旧数据迁移 apply、路由重定向或旧入口删除。
+- Platform 先提供已发布分析数据集内部契约与报表登记端点；Analytics 只持有数据集版本引用和运行快照。
+- Analytics 增加 Analysis/Dashboard 版本发布、统一查询网关、审计和 outbox。
+- `/bi/questions`、`/new`、`/:id`、`/:id/edit` 统一到 governed Analysis；创建从 `/bi/data` 已发布数据集开始。
+- `analytics_revision` 使用线性窗口回填；新增列保持 nullable，并用 legacy-writer trigger 为旧镜像 INSERT 补 `version_no/status`，确保滚动部署与镜像回切不断写。
+- `ANALYTICS_PUBLIC_SHARING_ENABLED` 在 app/dev/legacy Compose 中显式默认 `false`。老安装只有在确认仍需大屏公开链接后才显式设为 `true`。
+- R1 不执行旧 BI DELETE/DROP，不移除 rollback 所需 handler。
 
-## 2. 迁移策略
+### R2：Legacy BI Contract
 
-| 阶段 | 内容 | 本次是否包含 | 回滚策略 |
-|---|---|---:|---|
-| Expand | Analytics revision/dashboard 字段、registration outbox；Platform report asset identity 字段/索引 | 是 | changelog 有 rollback；生产应用回滚默认保留 Expand 数据 |
-| Migrate | 旧 revision 只回填顺序版本和 `DRAFT`；旧 report link 保持无 asset identity | 仅兼容回填 | 不做批量资产转换，不存在迁移 batch |
-| Contract | 删除旧字段、旧表、旧路由、关闭旧写 | 否 | 必须在后续 S1～S4 独立审批 |
+- R1 通过完整纵向验收和回切演练后，另开发布窗口。
+- 冻结旧写并记录 Card/Dashboard 最大 ID cutoff。
+- 完整备份并恢复验证 `dts_analytics`。
+- 执行 screen/template 全历史引用预检；任一 Card 引用都阻断。
+- dry-run 通过后才允许 `backup_confirmed=true, apply=true` 执行清理。
+- 路由 handler/schema 的物理删除晚于数据 Contract，避免同一窗口失去恢复手段。
 
-迁移文件：
+## 2. 老安装升级兼容矩阵
+
+| 场景 | 预期 | 保护机制 |
+|---|---|---|
+| 旧 DB + 新 Analytics | Liquibase 线性回填，启动时间不随 revision 数量平方增长 | `ROW_NUMBER() OVER` |
+| 新 DB + 旧 Analytics 实例仍写 revision | INSERT 不因新列失败，且版本/状态可被新实例读取 | nullable Expand 列 + advisory-lock trigger |
+| 新 DB + 旧镜像回切 | 旧 Card/Dashboard 仍可暂时读写 | R1 不执行 Contract DELETE/DROP |
+| 老安装存在大屏历史 | screen/version/access/template/audit/assets/menu bindings 均不改 | 清理脚本无这些 DELETE target，引用命中 fail-closed |
+| 老安装大屏引用旧 Card | R2 不执行 | `cardId` 四种命名扫描阻断 |
+| 老安装需要大屏公开链接 | 运维显式开启并复验；默认安装不暴露匿名分享 | Compose 显式 default false |
+| 仅有 DWD/DWS/ADS 历史 | 不做 BI 数据迁移；由 ModelSpec/dbt 选择性重建 | 数据建模发布流程拥有物化关系 |
+
+## 3. 迁移与预检
+
+R1 文件：
 
 - `source/dts-analytics/src/main/resources/config/liquibase/changelog/0052_analysis_publication.xml`
 - `source/dts-platform/src/main/resources/config/liquibase/changelog/20260817_04_bi_report_asset_registration.xml`
+- `source/dts-admin/src/main/resources/config/liquibase/changelog/20260819-01_sprint94_analysis_audit_catalog.xml`
 
-上线前只读预检：
+R1 上线前：
 
 ```sql
 select model, model_id, count(*)
@@ -43,70 +59,63 @@ group by engine, asset_type, asset_key
 having count(*) > 1;
 ```
 
-两个查询都应返回 0 行。首个查询用于确认 `version_no int` 的回填上限；第二个查询用于确认 partial unique index 可安全建立。
+两条查询都必须返回 0 行。
 
-## 3. 兼容性与消费方
+R2 工具：
 
-| 消费方 | 契约变化 | 处置 |
-|---|---|---|
-| dts-platform-webapp 分析/仪表板 | 新增 validate/publish/versions/retry API 与可选响应字段 | 后端先部署；旧前端不读取新字段仍可运行 |
-| dts-platform `bi_report_link` | 新增 nullable asset identity/version 和非空 reconcile status | 旧手工链接不回填 identity；旧 CRUD DTO 只增可选字段 |
-| dts-analytics 旧 Card/Dashboard | 不改既有路由与写入语义 | legacy write flag 保持 on；`analytics.bi.legacy.calls` 建立观测分母 |
-| BI 消费者 | 受管仪表板仅在 registration=`AVAILABLE` 后可消费 | pending/failed 不降级为公开旧链接，不绕过受众过滤 |
-| 运维监控 | 新增 Micrometer 指标和 health component | 先接入 dashboard，再进入 pilot |
+- `source/dts-analytics/src/main/resources/ops/sprint94_legacy_bi_cleanup.sql`
+- 必填：`legacy_card_max_id`、`legacy_dashboard_max_id`
+- 默认：`apply=false`
+- apply 额外必填：`backup_confirmed=true`
 
-## 4. 部署顺序
+## 4. R1 部署顺序
 
-1. 记录当前 commit、Compose 参数和三个受影响容器的 image ID/标签；给旧镜像添加本次 rollback 标签。
-2. 设置 `DTS_ANALYTICS_GOVERNED_BI_ENABLED=false`、`DTS_ANALYTICS_LEGACY_CARD_WRITE_ENABLED=true`，执行 Compose config 校验。
-3. 先部署 `dts-platform`，完成 `bi_report_link` Expand 并验证旧 report API。
-4. 再部署 `dts-analytics`，完成 revision/dashboard/outbox Expand，验证 health、旧 card/dashboard 和新 API 在 flag off 时返回 `GOVERNED_BI_DISABLED`。
-5. 部署 `dts-platform-webapp`；flag 仍关闭时旧主线保持可用。
-6. Shadow：在非用户流量的验收实例将 governed flag 打开，执行固定数据集/分析/看板对账；用户结果不切换。
-7. Pilot：生产打开 governed flag，但只发布给指定试点部门/角色；观察至少 48 小时。
-8. Default：指标符合阈值且回滚演练通过后，允许所有授权部门使用；旧读旧写继续开启并观察 7 天。
+1. 记录 commit、Compose 参数、三个受影响容器 image ID/标签和当前大屏计数；给旧镜像加 rollback 标签。
+2. 设置 `DTS_ANALYTICS_GOVERNED_BI_ENABLED=false`，保持 legacy write 可用；按安装实际需求设置 `ANALYTICS_PUBLIC_SHARING_ENABLED`，不得依赖隐式默认。
+3. 先部署 `dts-platform`，验证内部数据集契约和报表登记的 service token 正/负向路径。
+4. 再部署 `dts-analytics`，完成 revision/dashboard/outbox Expand；验证旧写 trigger、新 API flag-off、health 和审计 action catalog。
+5. 部署 `dts-platform-webapp`；确认 `/bi/questions` 不再调用 `/api/card`，创建 CTA 指向 `/bi/data`。
+6. Shadow 打开 governed flag，执行固定数据集→Analysis→Dashboard 对账。
+7. Pilot 仅向指定部门/角色发布，观察至少 48 小时。
+8. Chrome 95、A1～A4、审计/权限负向、公开分享边界和旧镜像回切全部通过后进入 Default。
 
-只重建/重建后替换 `dts-platform`、`dts-analytics`、`dts-platform-webapp`，不连带重建数据库或其他服务。
+只替换 `dts-platform`、`dts-analytics`、`dts-platform-webapp`（以及承载新审计 catalog 的 `dts-admin`）；不重建 PostgreSQL 数据容器。
 
-## 5. 回滚
-
-### 5.1 首选：能力回切
+## 5. R1 回滚
 
 ```bash
 export DTS_ANALYTICS_GOVERNED_BI_ENABLED=false
-export DTS_ANALYTICS_LEGACY_CARD_WRITE_ENABLED=true
 docker compose -f docker-compose-app.yml up -d --no-deps --force-recreate dts-analytics
 ```
 
-期望：新 `/api/analysis/**` 与 dashboard 发布动作返回 503/`GOVERNED_BI_DISABLED`；旧 Card/Dashboard 读写仍可用；已产生的 revision/outbox/asset identity 保留。
+随后按发布前记录的 image 依次恢复 platform → analytics → webapp → admin（如 admin 已升级）。常规镜像回滚保留 Expand 列、trigger、outbox 和审计目录；旧镜像必须能继续写 revision。回滚后复验旧 API、大屏、公开链接策略和数据库指针。
 
-### 5.2 镜像回滚
+## 6. R2 apply 与恢复
 
-1. 将三个 image 变量恢复到发布前记录值。
-2. 按 `dts-platform` → `dts-analytics` → `dts-platform-webapp` 顺序，用 `--no-deps --force-recreate` 替换。
-3. 不执行 Liquibase rollback，不删除 Expand 列/表；旧二进制必须容忍这些附加结构。
-4. 分别验证容器健康、HTTP、旧 Card/Dashboard、已发布旧入口和数据库指针。
+1. 停止 legacy 写入，归档 cutoff 和当前 screen 资产清单。
+2. `pg_dump` 完整备份 `dts_analytics`，在隔离库恢复并验证 screen 全链。
+3. 运行清理脚本 dry-run；输出必须显示 `ROLLBACK`，screen 引用为 false。
+4. 独立审批后传入 `backup_confirmed=true -v apply=true`。
+5. 对账 screen、versions、access、templates、audit、assets、menu/role binding，以及 governed Analysis/Dashboard。
+6. 任何差异：停止服务，恢复完整 DB 备份和 R1 镜像。只恢复镜像不能恢复已删除 legacy 行。
 
-### 5.3 不可逆/需人工判断部分
+## 7. 发布阻断条件
 
-- 已登记到 Platform 的新 asset identity 不随应用回切删除；它在受众过滤下可禁用，禁止直接物理删除。
-- 已发布 revision 和 outbox 证据保留；如登记失败，优先前向重试，不手工改 `AVAILABLE`。
-- 只有预生产数据库可演练 changelog rollback；生产常规回滚保留 Expand 数据，避免丢失发布证据。
+- screen/template 任一历史 payload 命中 Card 引用；
+- cutoff 缺失、非法或冻结后仍有 legacy 写；
+- 完整备份未验证可恢复；
+- migration 预检异常或旧镜像写 revision 测试失败；
+- service-token 精确路径正负向失败；
+- registration backlog ≥20 持续 5 分钟，或 5 分钟服务端错误率 >5%；
+- A4 越权负向失败、Chrome 95 未通过、公开分享策略未明确；
+- R1 与 R2 被安排在同一不可回切窗口。
 
-## 6. Gate 与职责
+## 8. 尚待实证
 
-- 维护者：准备草稿和依赖，不批准自己的生产发布。
-- 独立发布者：确认受众、密级、有效期和 checksum 后发布。
-- Release operator：执行 flag/image 切换与回滚；不修改业务定义。
-- Analytics/Platform on-call：观察指标并按 runbook 处置。
+- [ ] 预生产 Liquibase update → 旧镜像写 revision → 新镜像恢复演练。
+- [ ] Chrome 95 与 A1～A4 真实纵向旅程。
+- [ ] Shadow/pilot/default 的 image、commit、耗时和指标窗口。
+- [ ] 大屏完整备份恢复与 R2 dry-run 归档。
+- [ ] 48h pilot 观察。
 
-发布阻断条件：任一 migration 预检异常、legacy write flag 不为 true、registration backlog ≥20 持续 5 分钟、5 分钟 server error ratio >5%、真实角色负向越权失败、Chrome 95 未通过。
-
-## 7. 尚待实证
-
-- [ ] 预生产 Liquibase update → rollback → update 演练。
-- [ ] Shadow/pilot/default 的实际 image、commit、耗时和指标窗口。
-- [ ] 紧急 flag 回切和旧镜像恢复演练。
-- [ ] 48h pilot 与 7d default 观察。
-
-在以上证据落盘前，G3 保持 GAP，不得标记 PASS。
+证据未落盘前，G3 保持 GAP。
