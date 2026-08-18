@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +30,7 @@ public class ModelImplementationDependencyService {
     private final ModelImplementationDependencyReadPort readPort;
     private final ModelImplementationDependencySnapshotResolver resolver;
 
+    @Autowired
     public ModelImplementationDependencyService(ModelImplementationDependencyReadPort readPort) {
         this(readPort, new ModelImplementationDependencySnapshotResolver());
     }

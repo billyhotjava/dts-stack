@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -12,12 +13,26 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class ModelImplementationDependencyServiceTest {
 
     private static final String TENANT = "default";
     private static final UUID PLAN_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID ROOT_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+
+    @Test
+    void createsServiceFromSpringContextWhenTestSeamConstructorAlsoExists() {
+        ModelImplementationDependencyReadPort readPort = mock(ModelImplementationDependencyReadPort.class);
+
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(ModelImplementationDependencyReadPort.class, () -> readPort);
+            context.register(ModelImplementationDependencyService.class);
+            context.refresh();
+
+            assertThat(context.getBean(ModelImplementationDependencyService.class)).isNotNull();
+        }
+    }
 
     @Test
     void rejectsOneModelPinnedToDifferentRevisionsAcrossBatchRoots() {
