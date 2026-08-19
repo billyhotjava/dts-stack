@@ -2043,3 +2043,24 @@
 **执行顺序**: F0 → F1 → F2 → F3 → F4 → F6；编码完成后只运行一次集中三角色 Chrome 95 纵向 E2E，失败仅针对断点重跑。
 **关键决策**: 平台 QueryDataset 是 BI 数据集唯一 owner；QueryDatasetVersion 发布时保存不可变 semantic snapshot/checksum；逻辑 BI_DATASET 不进入物理 `CatalogAssetRegistrationService.observe`；新建分析以 `dts.analysis/v1` 复用 `analytics_card`；`CardEditorRoutePage` 保留兼容分流并新增 analysis 分支；`AnalysisQueryGateway` 收口语义/分析/看板查询；`analytics_revision` 承载发布版本；`bi_report_link` 承载受众；权限只用 `read/write/export`；首轮 Expand-only，无 DROP。
 **已知风险**: 当前 Analytics Card/有效 Dashboard/Database/Semantic Model/VDS 与平台 Query Dataset 均为 0，只有 1 个 Screen/1 条 BI 登记；Security 仍有 broad permitAll；32 条路由调用量及目标环境容量均 UNKNOWN 且尚无确认的历史来源；`SemanticCardEditorPage` 被 5 条路由共用；`ScreenWarmupService:152` 作为 S3 owner 的精确临时例外；与 Sprint-93 时间盒完全重叠；13 Task 仍超期则触发二次裁剪（F4/T02 顺延，不压缩 F6 验收）。
+
+## Sprint-95: 工业级 BI 分析创作闭环 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-95-202608-industrial-bi-authoring-closure`
+**时间盒**: 2026-08-20 ～ 2026-09-04
+**状态**: DONE_WITH_GAPS（实现、隔离构建、部署和 Chrome 150 完整旅程完成；真实登录、Chrome 95、生产回滚演练保留 GAP）
+**类型**: Full-stack / UI Productization / Governed BI
+**目标**: 在现有治理分析与分析看板入口中完成“拖字段 → 出图 → 调样式 → 做计算 → 配联动 → 发布 → 导出”，不新增平行编辑器、菜单或分析定义。
+**依赖**: 承接 Sprint-94 的 QueryDataset、`AnalysisQuerySpec`、`AnalysisQueryGateway`、Analysis/Dashboard revision、受众登记；复用 `ChartRenderer`、`parameter_mappings`、`QueryExportService` 和 CARD `read/write/export` 权限。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与契约冻结 | P0 | 1 | DONE |
+| F1-可视化分析工作台 | P0 | 2 | DONE |
+| F2-看板联动与发布消费 | P0 | 1 | DONE |
+| F3-受控导出与集中验收 | P0 | 2 | DONE_WITH_GAPS |
+
+**统计**: DONE=5，DONE_WITH_GAPS=1，IN_PROGRESS=0，READY=0，BLOCKED=0（共 6 Task）。
+**执行顺序**: F0 → F1/T01 → F1/T02 → F2/T01 → F3/T01 → F3/T02；编码完成后只运行一次集中 E2E。
+**关键决策**: canonical 页面和 `dts.analysis/v1` 保持唯一 owner；原生 DnD + 键盘 fallback；只开放真实图表；联动复用 dashcard；导出复用查询网关、流式服务、密级封印与 EXPORT 权限；无 schema 迁移。
+**已知风险**: 当前 shell 无真实 E2E 凭据，Chrome 95 executable 缺失；本地 25 个发布数据集只代表功能样本，容量不外推；共享工作区有未提交的数据建模改动，Sprint-95 不触碰、不暂存、不回滚。
