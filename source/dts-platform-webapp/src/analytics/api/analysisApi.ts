@@ -66,6 +66,7 @@ export type AnalysisPermissions = {
 	read: boolean;
 	write: boolean;
 	publish: boolean;
+	export?: boolean;
 };
 
 export type Analysis = {
@@ -268,3 +269,42 @@ export const cancelAnalysisQuery = (queryId: string) =>
 		method: "POST",
 		body: "{}",
 	});
+
+function exportFilename(contentDisposition: string | null, fallback: string): string {
+	const encoded = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+	if (encoded) {
+		try {
+			return decodeURIComponent(encoded);
+		} catch {
+			return fallback;
+		}
+	}
+	return contentDisposition?.match(/filename="?([^";]+)"?/i)?.[1] ?? fallback;
+}
+
+export async function exportAnalysis(
+	id: string | number,
+	format: "csv" | "xlsx",
+): Promise<{ blob: Blob; filename: string }> {
+	const response = await fetchWithPlatformAuth(
+		`${ANALYSIS_API}/${encodeURIComponent(String(id))}/query/${format}`,
+		{ method: "POST", headers: { accept: format === "csv" ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" } },
+	);
+	if (!response.ok) {
+		const raw = await response.text();
+		let payload: Record<string, unknown> = {};
+		try {
+			payload = JSON.parse(raw) as Record<string, unknown>;
+		} catch {
+			payload = {};
+		}
+		throw new AnalysisApiError(response.status, String(payload.message ?? (raw || `分析导出失败（${response.status}）`)), {
+			errorCode: typeof payload.errorCode === "string" ? payload.errorCode : undefined,
+			correlationId: response.headers.get("x-correlation-id") ?? response.headers.get("x-request-id") ?? undefined,
+		});
+	}
+	return {
+		blob: await response.blob(),
+		filename: exportFilename(response.headers.get("content-disposition"), `analysis-${id}.${format}`),
+	};
+}

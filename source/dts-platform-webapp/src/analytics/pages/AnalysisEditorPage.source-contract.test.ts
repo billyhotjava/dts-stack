@@ -7,6 +7,8 @@ const ROUTES_SOURCE = readFileSync(
 	"utf8",
 );
 const EDITOR_SOURCE = readFileSync(new URL("./AnalysisEditorPage.tsx", import.meta.url), "utf8");
+const WORKSPACE_SOURCE = readFileSync(new URL("./analysis/AnalysisWorkspace.tsx", import.meta.url), "utf8");
+const AUTHORING_SOURCE = `${EDITOR_SOURCE}\n${WORKSPACE_SOURCE}`;
 const API_SOURCE = readFileSync(new URL("../api/analysisApi.ts", import.meta.url), "utf8");
 
 test("canonical question create and edit routes use the governed analysis editor", () => {
@@ -36,7 +38,7 @@ test("analysis API and editor cover draft persistence, conflict recovery, and fo
 	assert.match(API_SOURCE, /createAnalysis/);
 	assert.match(API_SOURCE, /updateAnalysis/);
 	for (const state of ["正在加载分析契约", "暂无可分析字段", "分析加载失败", "分析草稿已保存", "契约已变化"]) {
-		assert.match(EDITOR_SOURCE, new RegExp(state));
+		assert.match(AUTHORING_SOURCE, new RegExp(state));
 	}
 });
 
@@ -44,12 +46,12 @@ test("editor executes only through the governed query gateway and exposes bounde
 	assert.match(API_SOURCE, /previewAnalysis/);
 	assert.match(API_SOURCE, /\/api\/analysis\/preview/);
 	assert.match(API_SOURCE, /cancelAnalysisQuery/);
-	assert.match(EDITOR_SOURCE, /执行查询/);
-	assert.match(EDITOR_SOURCE, /取消查询/);
+	assert.match(AUTHORING_SOURCE, /执行查询/);
+	assert.match(AUTHORING_SOURCE, /取消查询/);
 	for (const state of ["排队中", "执行中", "执行成功", "结果已截断", "无权访问", "查询超时", "已取消"]) {
-		assert.match(EDITOR_SOURCE, new RegExp(state));
+		assert.match(AUTHORING_SOURCE, new RegExp(state));
 	}
-	assert.doesNotMatch(EDITOR_SOURCE, /native_form|sql_preview/);
+	assert.doesNotMatch(AUTHORING_SOURCE, /native_form|sql_preview/);
 });
 
 test("analysis publication is a validated and versioned action separate from saving a draft", () => {

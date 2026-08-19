@@ -226,7 +226,12 @@ public class AnalysisApplicationService {
             spec,
             String.valueOf(card.getCreatorId()),
             card.getUpdatedAt(),
-            Map.of("read", owner, "write", owner && "DRAFT".equals(card.getLifecycleStatus()), "publish", owner)
+            Map.of(
+                "read", owner,
+                "write", owner && "DRAFT".equals(card.getLifecycleStatus()),
+                "publish", owner,
+				"export", owner && "PUBLISHED".equals(card.getLifecycleStatus())
+            )
         );
     }
 

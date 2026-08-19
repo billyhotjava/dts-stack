@@ -1,6 +1,6 @@
 # F1：可视化分析工作台
 
-**优先级**：P0  **状态**：IN_PROGRESS
+**优先级**：P0  **状态**：DONE
 
 ## 目标
 
@@ -18,7 +18,7 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 字段货架与实时真实图表 | IN_PROGRESS | F0 |
+| T01 | 字段货架与实时真实图表 | DONE | F0 |
 | T02 | 样式、计算和配置 round-trip | READY | T01 |
 
 ## Definition of Ready

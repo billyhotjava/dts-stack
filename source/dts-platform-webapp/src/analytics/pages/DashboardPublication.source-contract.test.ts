@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const EDITOR_SOURCE = readFileSync(new URL("./DashboardEditorPage.tsx", import.meta.url), "utf8");
+const QUERY_SOURCE = readFileSync(new URL("./dashboard/useDashboardCardQueries.ts", import.meta.url), "utf8");
 const API_SOURCE = readFileSync(new URL("../api/analyticsApi.ts", import.meta.url), "utf8");
 const REPORTS_SOURCE = readFileSync(new URL("../../pages/services/BiLinksPage.tsx", import.meta.url), "utf8");
 
@@ -40,6 +41,6 @@ test("dashboard picker and consumer surface enforce the governed registration bo
 });
 
 test("new dashboard cards query through the card endpoint until their binding has a persisted id", () => {
-	assert.match(EDITOR_SOURCE, /dashboardId && dc\.id > 0/);
-	assert.match(EDITOR_SOURCE, /queryCard\(cardId/);
+	assert.match(QUERY_SOURCE, /dashboardId && dashcard\.id > 0/);
+	assert.match(QUERY_SOURCE, /queryCard\(cardId/);
 });

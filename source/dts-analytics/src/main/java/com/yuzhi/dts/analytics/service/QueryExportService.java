@@ -19,6 +19,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import org.apache.poi.xssf.streaming.SXSSFSheet;
 import org.springframework.stereotype.Service;
 
 /**
@@ -84,6 +85,10 @@ public class QueryExportService {
         // Use SXSSFWorkbook for streaming large datasets
         try (Workbook workbook = new SXSSFWorkbook(EXCEL_ROW_ACCESS_WINDOW_SIZE)) {
             Sheet sheet = workbook.createSheet(options.sheetName() != null ? options.sheetName() : "Query Results");
+            boolean autoSize = result.rows().size() <= 1000 && result.cols().size() <= 50;
+            if (autoSize && sheet instanceof SXSSFSheet streamingSheet) {
+                streamingSheet.trackAllColumnsForAutoSizing();
+            }
 
             int rowIndex = 0;
 
@@ -111,18 +116,13 @@ public class QueryExportService {
             }
 
             // Auto-size columns (only for small datasets to avoid performance issues)
-            if (result.rows().size() <= 1000 && result.cols().size() <= 50) {
+            if (autoSize) {
                 for (int i = 0; i < result.cols().size(); i++) {
                     sheet.autoSizeColumn(i);
                 }
             }
 
             workbook.write(output);
-
-            // Clean up streaming workbook
-            if (workbook instanceof SXSSFWorkbook sxssf) {
-                sxssf.dispose();
-            }
         }
     }
 

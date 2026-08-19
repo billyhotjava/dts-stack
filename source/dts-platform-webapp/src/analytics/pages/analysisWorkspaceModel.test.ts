@@ -3,10 +3,11 @@ import test from "node:test";
 import type { AnalysisQuerySpec } from "../api/analysisApi";
 import {
 	CANONICAL_VISUALIZATIONS,
+	analysisQueryFingerprint,
 	placeFieldOnShelf,
 	removeFieldFromAnalysis,
 	setVisualizationSetting,
-} from "./analysisWorkspaceModel";
+} from "./analysisWorkspaceModel.ts";
 
 function spec(): AnalysisQuerySpec {
 	return {
@@ -75,4 +76,13 @@ test("style updates are immutable and canonical visualizations exclude fake rend
 		"pie",
 		"number",
 	]);
+});
+
+test("automatic preview ignores style-only edits but reacts to query edits", () => {
+	const original = spec();
+	const styled = setVisualizationSetting(original, "graph.show_values", true);
+	const filtered = { ...original, filters: [{ field: "department", op: "EQ", values: ["D1"] }] };
+
+	assert.equal(analysisQueryFingerprint(styled), analysisQueryFingerprint(original));
+	assert.notEqual(analysisQueryFingerprint(filtered), analysisQueryFingerprint(original));
 });

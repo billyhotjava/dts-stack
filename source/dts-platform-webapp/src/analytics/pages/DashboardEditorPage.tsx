@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import type { Layout } from "react-grid-layout";
 import {
@@ -9,11 +9,10 @@ import {
 	type DashboardDetail,
 	type DashboardPublicationAudience,
 	type DashboardPublicationValidation,
-	type DashboardQueryResponse,
 	type DashboardVersion,
 } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Alert, Button, Card, Drawer, Empty, Input, Select, Modal, message, Space, Spin, Tag, Typography } from "antd";
+import { Alert, App, Button, Card, Drawer, Empty, Input, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { PlusOutlined, } from "@ant-design/icons";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { useDashboardCrossFilter } from "../hooks/useDashboardCrossFilter";
@@ -22,6 +21,10 @@ import { DashboardEditorGrid } from "./dashboard/DashboardEditorGrid";
 import { DashboardFilterBar, type DashboardParameter } from "./dashboard/DashboardFilterBar";
 import { CardPickerModal } from "./dashboard/CardPickerModal";
 import type { SeriesClickParams } from "../components/charts";
+import { CROSS_FILTER_ENABLED, CROSS_FILTER_TARGETS } from "./dashboard/InteractionSettingsPopover";
+import type { ParameterMapping } from "./dashboard/ParameterMappingPopover";
+import { publicationErrorMessage, toDashboardParams, toEditableDashcards } from "./dashboard/dashboardEditorModel";
+import { useDashboardCardQueries } from "./dashboard/useDashboardCardQueries";
 
 const { Text } = Typography;
 
@@ -30,29 +33,8 @@ type LoadState<T> =
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
 
-function toEditableDashcards(d: DashboardDetail): DashboardCard[] {
-	const raw = d.ordered_cards;
-	return Array.isArray(raw) ? raw : [];
-}
-
-function toDashboardParams(d: DashboardDetail): DashboardParameter[] {
-	const raw = d.parameters;
-	if (!Array.isArray(raw)) return [];
-	return raw
-		.map((p: any) => ({
-			id: String(p?.id ?? ""),
-			name: typeof p?.name === "string" ? p.name : undefined,
-			slug: typeof p?.slug === "string" ? p.slug : undefined,
-			type: typeof p?.type === "string" ? p.type : undefined,
-		}))
-		.filter((p) => p.id);
-}
-
-function publicationErrorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : "仪表板发布请求失败";
-}
-
 export default function DashboardEditorPage() {
+	const { message, modal } = App.useApp();
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const navigate = useNavigate();
 	const params = useParams();
@@ -90,9 +72,6 @@ export default function DashboardEditorPage() {
 
 	const dashboardValue = dashboard?.state === "loaded" ? dashboard.value : null;
 	const canModify = !dashboardValue?.lifecycle_status || dashboardValue.lifecycle_status === "DRAFT";
-
-	// Card query results
-	const [cardResults, setCardResults] = useState<Record<number, LoadState<DashboardQueryResponse>>>({});
 
 	// Cross-filter and drill
 	const crossFilter = useDashboardCrossFilter();
@@ -173,51 +152,12 @@ export default function DashboardEditorPage() {
 		return out;
 	}, [parameters, paramValues]);
 
-	// Query all dashcards when they change or params change or cross-filter changes
-	const queryGenRef = useRef(0);
-	useEffect(() => {
-		const gen = ++queryGenRef.current;
-		if (dashcards.length === 0) {
-			setCardResults({});
-			return;
-		}
-
-		const next: Record<number, LoadState<DashboardQueryResponse>> = {};
-		for (const dc of dashcards) {
-			next[dc.id] = { state: "loading" };
-		}
-		setCardResults({ ...next });
-
-		(async () => {
-			for (const dc of dashcards) {
-				if (gen !== queryGenRef.current) return;
-				const card: any = dc.card as any;
-				const cardId = dc.card_id ?? (card && typeof card.id === "number" ? card.id : undefined);
-				if (!cardId) {
-					next[dc.id] = { state: "error", error: new Error("Missing card_id") };
-					continue;
-				}
-
-				// Build params with cross-filter
-				const params = crossFilter.buildCrossFilterParams(dc.id, queryParametersPayload);
-
-				try {
-					let value: DashboardQueryResponse;
-					if (dashboardId && dc.id > 0) {
-						value = await analyticsApi.queryDashcard(dashboardId, dc.id, cardId, { parameters: params });
-					} else {
-						value = await analyticsApi.queryCard(cardId, { parameters: params });
-					}
-					next[dc.id] = { state: "loaded", value };
-				} catch (e) {
-					next[dc.id] = { state: "error", error: e };
-				}
-				if (gen === queryGenRef.current) {
-					setCardResults({ ...next });
-				}
-			}
-		})();
-	}, [dashcards, dashboardId, queryParametersPayload, crossFilter.activeFilter]);
+	const cardResults = useDashboardCardQueries({
+		dashcards,
+		dashboardId,
+		queryParameters: queryParametersPayload,
+		buildCrossFilterParams: crossFilter.buildCrossFilterParams,
+	});
 
 	// Layout change handler
 	const handleLayoutChange = useCallback((newLayout: Layout[]) => {
@@ -242,6 +182,18 @@ export default function DashboardEditorPage() {
 	// Remove card
 	const handleRemoveCard = useCallback((index: number) => {
 		setDashcards((prev) => prev.filter((_, i) => i !== index));
+	}, []);
+
+	const onParameterMappingsChange = useCallback((dashcardId: number, mappings: ParameterMapping[]) => {
+		setDashcards((prev) => prev.map((item) =>
+			item.id === dashcardId ? { ...item, parameter_mappings: mappings } : item
+		));
+	}, []);
+
+	const onInteractionSettingsChange = useCallback((dashcardId: number, settings: Record<string, unknown>) => {
+		setDashcards((prev) => prev.map((item) =>
+			item.id === dashcardId ? { ...item, visualization_settings: settings } : item
+		));
 	}, []);
 
 	// Add cards from picker
@@ -283,13 +235,25 @@ export default function DashboardEditorPage() {
 	const handleSeriesClick = useCallback(
 		(dashcardId: number, params: SeriesClickParams, _event?: React.MouseEvent) => {
 			if (isEditing) return;
+			const source = dashcards.find((item) => item.id === dashcardId);
+			const settings = source?.visualization_settings && typeof source.visualization_settings === "object"
+				? source.visualization_settings as Record<string, unknown>
+				: {};
+			if (settings[CROSS_FILTER_ENABLED] !== true) return;
+			const targetCardIds = Array.isArray(settings[CROSS_FILTER_TARGETS])
+				? settings[CROSS_FILTER_TARGETS].filter((value): value is number =>
+					typeof value === "number" && value !== dashcardId && dashcards.some((item) => item.id === value)
+				)
+				: [];
+			if (targetCardIds.length === 0) return;
 			crossFilter.setFilter({
 				sourceCardId: dashcardId,
 				column: params.dimensionName,
 				value: params.dimensionValue,
+				targetCardIds,
 			});
 		},
-		[isEditing, crossFilter],
+		[isEditing, dashcards, crossFilter],
 	);
 
 	// Param change
@@ -304,7 +268,7 @@ export default function DashboardEditorPage() {
 			return;
 		}
 		const id = `param_${Date.now()}`;
-		Modal.confirm({
+		modal.confirm({
 			title: t(locale, "dashboards.addFilter"),
 			content: (
 				<div className="space-y-2 mt-2">
@@ -677,12 +641,15 @@ export default function DashboardEditorPage() {
 					</div>
 				) : (
 					<DashboardEditorGrid
-						dashcards={dashcards}
-						cardResults={cardResults}
-						isEditing={isEditing && canModify}
-						locale={locale}
-						onLayoutChange={handleLayoutChange}
-						onRemoveCard={handleRemoveCard}
+							dashcards={dashcards}
+							cardResults={cardResults}
+							isEditing={isEditing && canModify}
+							locale={locale}
+							parameters={parameters}
+							onLayoutChange={handleLayoutChange}
+							onRemoveCard={handleRemoveCard}
+							onParameterMappingsChange={onParameterMappingsChange}
+							onInteractionSettingsChange={onInteractionSettingsChange}
 						onSeriesClick={handleSeriesClick}
 						drillFilters={drill.filters}
 						onDrillClear={drill.clearAll}

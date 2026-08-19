@@ -2,20 +2,31 @@ package com.yuzhi.dts.analytics.web.rest;
 
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.service.AnalyticsAssetAccessRegistrar;
+import com.yuzhi.dts.analytics.service.AnalyticsClassificationClient;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.DatasetQueryService;
+import com.yuzhi.dts.analytics.service.QueryExportService;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisApplicationService;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisApplicationService.AnalysisDto;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisApplicationService.AnalysisPage;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisApplicationService.CreateAnalysisCommand;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisApplicationService.UpdateAnalysisCommand;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway.AnalysisQueryResult;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisQuerySpec;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.service.publication.AnalysisPublicationService;
 import com.yuzhi.dts.analytics.service.publication.AnalysisPublicationService.PublicationCommand;
+import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,19 +47,25 @@ public class AnalysisResource {
     private final AnalyticsAssetAccessRegistrar assetAccessRegistrar;
     private final AnalysisQueryGateway queryGateway;
     private final AnalysisPublicationService publicationService;
+    private final QueryExportService queryExportService;
+    private final AnalyticsConsumerClassificationService classificationService;
 
     public AnalysisResource(
         AnalysisApplicationService analysisService,
         AnalyticsSessionService sessionService,
         AnalyticsAssetAccessRegistrar assetAccessRegistrar,
         AnalysisQueryGateway queryGateway,
-        AnalysisPublicationService publicationService
+        AnalysisPublicationService publicationService,
+        QueryExportService queryExportService,
+        AnalyticsConsumerClassificationService classificationService
     ) {
         this.analysisService = analysisService;
         this.sessionService = sessionService;
         this.assetAccessRegistrar = assetAccessRegistrar;
         this.queryGateway = queryGateway;
         this.publicationService = publicationService;
+        this.queryExportService = queryExportService;
+        this.classificationService = classificationService;
     }
 
     @GetMapping
@@ -177,6 +194,90 @@ public class AnalysisResource {
         return ResponseEntity.ok(queryGateway.preview(actor.get(), analysis.querySpec(), AnalysisRequestContext.from(request)));
     }
 
+    @PostMapping(path = "/{id}/query/csv")
+    public void exportCsv(
+        @PathVariable long id,
+        HttpServletRequest request,
+        HttpServletResponse response
+    ) throws IOException {
+        exportAnalysis(id, request, response, QueryExportService.ExportFormat.CSV);
+    }
+
+    @PostMapping(path = "/{id}/query/xlsx")
+    public void exportXlsx(
+        @PathVariable long id,
+        HttpServletRequest request,
+        HttpServletResponse response
+    ) throws IOException {
+        exportAnalysis(id, request, response, QueryExportService.ExportFormat.EXCEL);
+    }
+
+    private void exportAnalysis(
+        long id,
+        HttpServletRequest request,
+        HttpServletResponse response,
+        QueryExportService.ExportFormat format
+    ) throws IOException {
+        Optional<AnalyticsUser> actor = actor(request);
+        if (actor.isEmpty()) {
+            response.setStatus(401);
+            response.getWriter().write("Authentication required");
+            return;
+        }
+
+        AnalysisDto analysis = analysisService.get(id, actor.get());
+        String baseName = sanitizeFilename(analysis.name());
+        String filename = baseName + queryExportService.getFileExtension(format);
+        String fileSubjectKey = "analytics-analysis-export:" + UUID.randomUUID() + ":" + filename;
+        AnalyticsClassificationClient.ExportSeal exportSeal;
+        try {
+            exportSeal = classificationService.sealCardExport(
+                id,
+                fileSubjectKey,
+                PlatformContext.from(request).classification()
+            );
+        } catch (AnalyticsConsumerClassificationService.PersonnelClassificationDeniedException denied) {
+            response.setStatus(403);
+            response.getWriter().write(denied.getMessage());
+            return;
+        } catch (RuntimeException missingClassification) {
+            response.setStatus(409);
+            response.getWriter().write("Analysis classification is missing or awaiting recomputation");
+            return;
+        }
+
+        AnalysisQueryResult queryResult = queryGateway.preview(
+            actor.get(),
+            analysis.querySpec(),
+            AnalysisRequestContext.from(request)
+        );
+        DatasetQueryService.DatasetResult result = new DatasetQueryService.DatasetResult(
+            queryResult.rows(),
+            queryResult.columns(),
+            queryResult.columns(),
+            "UTC"
+        );
+
+        response.setContentType(queryExportService.getContentType(format));
+        String asciiFilename = "analysis-" + id + queryExportService.getFileExtension(format);
+        String encodedFilename = URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20");
+        response.setHeader(
+            "Content-Disposition",
+            "attachment; filename=\"" + asciiFilename + "\"; filename*=UTF-8''" + encodedFilename
+        );
+        response.setHeader("X-DTS-Classification", exportSeal.effectiveLevel());
+        response.setHeader("X-DTS-Classification-Snapshot", exportSeal.snapshotId());
+
+        QueryExportService.ExportOptions options = format == QueryExportService.ExportFormat.CSV
+            ? QueryExportService.ExportOptions.forCsv()
+            : QueryExportService.ExportOptions.forExcel().withSheetName(sheetName(baseName));
+        if (format == QueryExportService.ExportFormat.CSV) {
+            queryExportService.exportToCsv(result, response.getOutputStream(), options);
+        } else {
+            queryExportService.exportToExcel(result, response.getOutputStream(), options);
+        }
+    }
+
     @PostMapping("/queries/{queryId}/cancel")
     public ResponseEntity<?> cancelQuery(@PathVariable String queryId, HttpServletRequest request) {
         Optional<AnalyticsUser> actor = actor(request);
@@ -186,6 +287,18 @@ public class AnalysisResource {
 
     private Optional<AnalyticsUser> actor(HttpServletRequest request) {
         return sessionService.resolveUser(request).filter(AnalyticsUser::isActive);
+    }
+
+    private String sanitizeFilename(String value) {
+        if (value == null || value.isBlank()) return "analysis";
+        String sanitized = value.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+        if (sanitized.isEmpty()) return "analysis";
+        return sanitized.length() > 120 ? sanitized.substring(0, 120) : sanitized;
+    }
+
+    private String sheetName(String value) {
+        String sanitized = value.replaceAll("[\\\\/*?:\\[\\]]", "_");
+        return sanitized.length() > 31 ? sanitized.substring(0, 31) : sanitized;
     }
 
     private ResponseEntity<?> unauthorized() {

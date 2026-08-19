@@ -1,9 +1,11 @@
 import { useCallback, useState } from "react";
+import { buildTargetedCrossFilterParams } from "../pages/dashboard/dashboardInteractionModel";
 
 export interface CrossFilter {
   sourceCardId: number;
   column: string;
   value: string;
+  targetCardIds: number[];
 }
 
 export interface DashboardCrossFilterState {
@@ -51,22 +53,7 @@ export function useDashboardCrossFilter(): DashboardCrossFilterState {
 
   const buildCrossFilterParams = useCallback(
     (dashcardId: number, baseParams: unknown[]): unknown[] => {
-      if (!activeFilter) return baseParams;
-      // Don't filter the source card itself
-      if (dashcardId === activeFilter.sourceCardId) return baseParams;
-
-      // Append a cross-filter parameter entry.
-      // The Metabase dashboard query API accepts `parameters` array where each
-      // entry can target a dimension.  We use the generic "dimension" target
-      // pointing to the column name, which the backend resolves via the card's
-      // dataset_query metadata.
-      const crossParam = {
-        type: "category",
-        value: activeFilter.value,
-        target: ["dimension", ["field", activeFilter.column, null]],
-      };
-
-      return [...baseParams, crossParam];
+      return buildTargetedCrossFilterParams(activeFilter, dashcardId, baseParams);
     },
     [activeFilter],
   );

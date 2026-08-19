@@ -2,19 +2,15 @@ import {
 	Alert,
 	Button,
 	Card,
-	Checkbox,
 	Col,
-	Divider,
 	Drawer,
 	Empty,
 	Input,
-	InputNumber,
 	Modal,
 	Row,
 	Select,
 	Space,
 	Spin,
-	Table,
 	Tag,
 	Typography,
 } from "antd";
@@ -26,6 +22,7 @@ import {
 	cancelAnalysisQuery,
 	createAnalysis,
 	createAnalysisDraftFromVersion,
+	exportAnalysis,
 	getAnalysis,
 	listAnalysisVersions,
 	previewAnalysis,
@@ -33,13 +30,16 @@ import {
 	updateAnalysis,
 	validateAnalysisPublication,
 	type Analysis,
-	type AnalysisFilterSelection,
 	type AnalysisVersion,
 	type PublicationAudience,
 	type PublicationValidation,
 	type AnalysisQuerySpec,
-	type AnalysisQueryResult,
 } from "../api/analysisApi";
+import {
+	AnalysisWorkspace,
+	type AnalysisWorkspaceQueryState,
+} from "./analysis/AnalysisWorkspace";
+import { analysisQueryFingerprint } from "./analysisWorkspaceModel";
 
 const { Text, Title } = Typography;
 
@@ -49,12 +49,6 @@ type EditorState =
 	| { status: "error"; error: unknown };
 
 type SaveNotice = { kind: "success" | "error"; message: string; correlationId?: string } | null;
-type QueryState =
-	| { status: "idle" }
-	| { status: "queued"; queryId: string }
-	| { status: "running"; queryId: string }
-	| { status: "success"; result: AnalysisQueryResult }
-	| { status: "denied" | "timeout" | "cancelled" | "throttled" | "error"; message: string; queryId?: string };
 
 function idempotencyKey(): string {
 	return `analysis-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
@@ -69,14 +63,6 @@ function errorMessage(error: unknown): string {
 		return `${error.message}${error.errorCode ? `（${error.errorCode}）` : ""}`;
 	}
 	return error instanceof Error ? error.message : "未知错误";
-}
-
-function metricCode(metric: Record<string, unknown>): string {
-	return String(metric.code ?? "");
-}
-
-function metricLabel(metric: Record<string, unknown>): string {
-	return String(metric.label ?? metric.code ?? "未命名度量");
 }
 
 function initialSpec(contract: AnalysisDatasetDetail): AnalysisQuerySpec {
@@ -111,7 +97,9 @@ export default function AnalysisEditorPage() {
 	const [saving, setSaving] = useState(false);
 	const [saveNotice, setSaveNotice] = useState<SaveNotice>(null);
 	const [contractConflict, setContractConflict] = useState(false);
-	const [queryState, setQueryState] = useState<QueryState>({ status: "idle" });
+	const [queryState, setQueryState] = useState<AnalysisWorkspaceQueryState>({ status: "idle" });
+	const [autoPreview, setAutoPreview] = useState(true);
+	const [exporting, setExporting] = useState<"csv" | "xlsx" | null>(null);
 	const [publishOpen, setPublishOpen] = useState(false);
 	const [publicationBusy, setPublicationBusy] = useState(false);
 	const [publicationValidation, setPublicationValidation] = useState<PublicationValidation | null>(null);
@@ -178,8 +166,6 @@ export default function AnalysisEditorPage() {
 
 	const contract = editor.status === "ready" ? editor.contract : null;
 	const analysis = editor.status === "ready" ? editor.analysis : undefined;
-	const dimensions = contract?.dimensions ?? [];
-	const metrics = contract?.metrics ?? [];
 	const selectedFields = useMemo(
 		() => [
 			...(spec?.dimensions.map((item) => item.field) ?? []),
@@ -188,38 +174,15 @@ export default function AnalysisEditorPage() {
 		],
 		[spec],
 	);
+	const queryFingerprint = useMemo(() => {
+		if (!spec) return "";
+		return analysisQueryFingerprint(spec);
+	}, [spec]);
 
-	const updateSpec = useCallback((mutate: (current: AnalysisQuerySpec) => AnalysisQuerySpec) => {
-		setSpec((current) => (current ? mutate(current) : current));
+	const replaceSpec = useCallback((next: AnalysisQuerySpec) => {
+		setSpec(next);
 		setSaveNotice(null);
 	}, []);
-
-	const toggleDimension = (field: string, checked: boolean) => {
-		updateSpec((current) => ({
-			...current,
-			dimensions: checked
-				? [...current.dimensions, { field, alias: null }]
-				: current.dimensions.filter((item) => item.field !== field),
-			orderBy: checked ? current.orderBy : current.orderBy.filter((item) => item.field !== field),
-		}));
-	};
-
-	const toggleMetric = (code: string, checked: boolean) => {
-		updateSpec((current) => ({
-			...current,
-			metrics: checked
-				? [...current.metrics, { code, alias: null }]
-				: current.metrics.filter((item) => item.code !== code),
-			orderBy: checked ? current.orderBy : current.orderBy.filter((item) => item.field !== code),
-		}));
-	};
-
-	const updateFilter = (index: number, patch: Partial<AnalysisFilterSelection>) => {
-		updateSpec((current) => ({
-			...current,
-			filters: current.filters.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)),
-		}));
-	};
 
 	const save = async () => {
 		if (!spec || !name.trim()) {
@@ -274,11 +237,15 @@ export default function AnalysisEditorPage() {
 		);
 	};
 
-	const executeQuery = async () => {
-		if (!spec || selectedFields.length === 0) {
+	const executeQuery = useCallback(async (candidate: AnalysisQuerySpec | null) => {
+		const candidateFields = candidate
+			? [...candidate.dimensions, ...candidate.metrics, ...candidate.derivedMetrics]
+			: [];
+		if (!candidate || candidateFields.length === 0) {
 			setQueryState({ status: "error", message: "请至少选择一个维度或度量后再执行。" });
 			return;
 		}
+		queryAbortRef.current?.abort();
 		const queryId = clientQueryId();
 		const controller = new AbortController();
 		queryAbortRef.current = controller;
@@ -286,9 +253,11 @@ export default function AnalysisEditorPage() {
 		await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 		setQueryState({ status: "running", queryId });
 		try {
-			const result = await previewAnalysis(spec, queryId, controller.signal);
+			const result = await previewAnalysis(candidate, queryId, controller.signal);
+			if (queryAbortRef.current !== controller) return;
 			setQueryState({ status: "success", result });
 		} catch (error) {
+			if (queryAbortRef.current !== controller) return;
 			if (controller.signal.aborted) {
 				setQueryState({ status: "cancelled", message: "已取消", queryId });
 			} else if (error instanceof AnalysisApiError && error.status === 403) {
@@ -305,14 +274,50 @@ export default function AnalysisEditorPage() {
 		} finally {
 			if (queryAbortRef.current === controller) queryAbortRef.current = null;
 		}
-	};
+	}, []);
+
+	useEffect(() => {
+		if (!autoPreview || !spec || selectedFields.length === 0) return;
+		const candidate = spec;
+		const timer = window.setTimeout(() => void executeQuery(candidate), 450);
+		return () => window.clearTimeout(timer);
+	}, [autoPreview, executeQuery, queryFingerprint]);
+
+	useEffect(() => () => queryAbortRef.current?.abort(), []);
 
 	const cancelQuery = () => {
 		if (queryState.status !== "queued" && queryState.status !== "running") return;
 		const queryId = queryState.queryId;
 		const controller = queryAbortRef.current;
-		void cancelAnalysisQuery(queryId).finally(() => controller?.abort());
+		controller?.abort();
+		void cancelAnalysisQuery(queryId);
 		setQueryState({ status: "cancelled", message: "已取消", queryId });
+	};
+
+	const downloadExport = async (format: "csv" | "xlsx") => {
+		if (!analysis || analysis.lifecycleStatus !== "PUBLISHED" || analysis.permissions.export !== true) return;
+		setExporting(format);
+		setSaveNotice(null);
+		try {
+			const exported = await exportAnalysis(analysis.id, format);
+			const url = URL.createObjectURL(exported.blob);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = exported.filename;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			window.setTimeout(() => URL.revokeObjectURL(url), 0);
+			setSaveNotice({ kind: "success", message: `已导出 ${exported.filename}` });
+		} catch (error) {
+			setSaveNotice({
+				kind: "error",
+				message: errorMessage(error),
+				correlationId: error instanceof AnalysisApiError ? error.correlationId : undefined,
+			});
+		} finally {
+			setExporting(null);
+		}
 	};
 
 	const validatePublication = async (): Promise<PublicationValidation | null> => {
@@ -413,33 +418,7 @@ export default function AnalysisEditorPage() {
 
 	if (!spec || !contract) return null;
 	const canWrite = (analysis?.lifecycleStatus ?? "DRAFT") === "DRAFT" && (analysis?.permissions.write ?? true);
-	const fieldOptions = dimensions.map((field) => ({ label: field.label || field.code, value: field.code }));
-	const orderOptions = selectedFields.map((field) => ({ label: field, value: field }));
-	const queryResult = queryState.status === "success" ? queryState.result : null;
-	const resultColumnNames = (queryResult?.columns ?? []).map((column, index) =>
-		String(column.name ?? column.display_name ?? column.label ?? selectedFields[index] ?? `column_${index + 1}`),
-	);
-	const resultColumns = resultColumnNames.map((column) => ({ title: column, dataIndex: column, key: column }));
-	const resultRows = (queryResult?.rows ?? []).map((row, rowIndex) => {
-		const record: Record<string, unknown> = { __key: rowIndex };
-		resultColumnNames.forEach((column, columnIndex) => {
-			record[column] = row[columnIndex];
-		});
-		return record;
-	});
-	const queryStatusLabel = (() => {
-		switch (queryState.status) {
-			case "queued": return "排队中";
-			case "running": return "执行中";
-			case "success": return queryState.result.truncated ? "结果已截断" : "执行成功";
-			case "denied": return "无权访问";
-			case "timeout": return "查询超时";
-			case "cancelled": return "已取消";
-			case "throttled": return "查询繁忙";
-			case "error": return "执行失败";
-			default: return "等待执行";
-		}
-	})();
+	const canExport = analysis?.lifecycleStatus === "PUBLISHED" && analysis.permissions.export === true;
 
 	return (
 		<div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: "calc(100vh - 132px)" }}>
@@ -461,6 +440,22 @@ export default function AnalysisEditorPage() {
 						<Space>
 							<Button onClick={() => navigate("/bi/data")}>返回数据集</Button>
 							{analysis && <Button onClick={() => void openVersions()}>版本历史</Button>}
+							<Button
+								disabled={!canExport}
+								loading={exporting === "csv"}
+								title={!analysis ? "请先保存分析" : analysis.lifecycleStatus !== "PUBLISHED" ? "请先发布分析" : !canExport ? "当前账号无导出权限" : "导出受治理查询结果"}
+								onClick={() => void downloadExport("csv")}
+							>
+								导出 CSV
+							</Button>
+							<Button
+								disabled={!canExport}
+								loading={exporting === "xlsx"}
+								title={!analysis ? "请先保存分析" : analysis.lifecycleStatus !== "PUBLISHED" ? "请先发布分析" : !canExport ? "当前账号无导出权限" : "导出受治理查询结果"}
+								onClick={() => void downloadExport("xlsx")}
+							>
+								导出 Excel
+							</Button>
 							{analysis?.lifecycleStatus === "DRAFT" && (
 								<Button disabled={!analysis.permissions.publish} onClick={openPublication}>校验</Button>
 							)}
@@ -486,206 +481,21 @@ export default function AnalysisEditorPage() {
 				/>
 			)}
 
-			<Row gutter={12} style={{ flex: 1, minHeight: 0 }}>
-				<Col xs={24} xl={6} style={{ display: "flex" }}>
-					<Card title="字段与度量" size="small" style={{ width: "100%", overflow: "auto" }}>
-						{dimensions.length === 0 && metrics.length === 0 ? (
-							<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可分析字段" />
-						) : (
-							<Space direction="vertical" size={8} style={{ width: "100%" }}>
-								<Text strong>维度</Text>
-								{dimensions.map((field) => (
-									<Checkbox
-										key={field.code}
-										checked={spec.dimensions.some((item) => item.field === field.code)}
-										disabled={!canWrite}
-										onChange={(event) => toggleDimension(field.code, event.target.checked)}
-									>
-										{field.label || field.code} <Text type="secondary">({field.code})</Text>
-									</Checkbox>
-								))}
-								<Divider style={{ margin: "8px 0" }} />
-								<Text strong>度量</Text>
-								{metrics.map((metric) => (
-									<Checkbox
-										key={metricCode(metric)}
-										checked={spec.metrics.some((item) => item.code === metricCode(metric))}
-										disabled={!canWrite}
-										onChange={(event) => toggleMetric(metricCode(metric), event.target.checked)}
-									>
-										{metricLabel(metric)} <Text type="secondary">({metricCode(metric)})</Text>
-									</Checkbox>
-								))}
-							</Space>
-						)}
-					</Card>
-				</Col>
-
-				<Col xs={24} xl={11} style={{ display: "flex" }}>
-					<Card
-						title="结果预览"
-						size="small"
-						style={{ width: "100%" }}
-						extra={
-							<Space>
-								<Button
-									type="primary"
-									disabled={queryState.status === "queued" || queryState.status === "running"}
-									onClick={() => void executeQuery()}
-								>
-									执行查询
-								</Button>
-								{(queryState.status === "queued" || queryState.status === "running") && (
-									<Button danger onClick={cancelQuery}>取消查询</Button>
-								)}
-							</Space>
-						}
-					>
-						{selectedFields.length === 0 ? (
-							<Empty description="选择字段后可执行受治理查询" />
-						) : (
-							<Space direction="vertical" size={16} style={{ width: "100%" }}>
-								{queryState.status === "idle" && (
-									<Alert
-										type="info"
-										showIcon
-										message="查询尚未执行"
-										description="草稿只保存结构化分析定义；执行时将统一应用权限、行级策略和字段脱敏。"
-									/>
-								)}
-								{["denied", "timeout", "cancelled", "throttled", "error"].includes(queryState.status) && (
-									<Alert
-										type={queryState.status === "cancelled" ? "warning" : "error"}
-										showIcon
-										message={queryStatusLabel}
-										description={"message" in queryState ? queryState.message : undefined}
-									/>
-								)}
-								<Card size="small" title="查询状态">
-									<Space wrap size="large">
-										<Text>状态：{queryStatusLabel}</Text>
-										<Text>行数：{queryResult?.rowCount ?? "—"}</Text>
-										<Text>耗时：{queryResult ? `${queryResult.durationMs} ms` : "—"}</Text>
-										<Text>缓存：{queryResult ? (queryResult.cacheHit ? "命中" : "未命中") : "—"}</Text>
-									</Space>
-								</Card>
-								{queryResult && (
-									<Table
-										size="small"
-										rowKey="__key"
-										columns={resultColumns}
-										dataSource={resultRows}
-										pagination={{ pageSize: 20, showSizeChanger: false }}
-										scroll={{ x: "max-content", y: 420 }}
-									/>
-								)}
-								<Space wrap>
-									{selectedFields.map((field) => <Tag key={field}>{field}</Tag>)}
-								</Space>
-							</Space>
-						)}
-					</Card>
-				</Col>
-
-				<Col xs={24} xl={7} style={{ display: "flex" }}>
-					<Card title="分析配置" size="small" style={{ width: "100%", overflow: "auto" }}>
-						<Space direction="vertical" size={12} style={{ width: "100%" }}>
-							<div>
-								<Text strong>名称</Text>
-								<Input value={name} maxLength={255} disabled={!canWrite} onChange={(event) => setName(event.target.value)} />
-							</div>
-							<div>
-								<Text strong>说明</Text>
-								<Input.TextArea value={description} rows={2} disabled={!canWrite} onChange={(event) => setDescription(event.target.value)} />
-							</div>
-							<div>
-								<Text strong>展示方式</Text>
-								<Select
-									style={{ width: "100%" }}
-									value={spec.visualization.type}
-									disabled={!canWrite}
-									options={["table", "bar", "line", "area", "pie", "number", "scatter"].map((value) => ({ label: value, value }))}
-									onChange={(value) => updateSpec((current) => ({ ...current, visualization: { ...current.visualization, type: value } }))}
-								/>
-							</div>
-							<div>
-								<Text strong>最大返回行数</Text>
-								<InputNumber
-									style={{ width: "100%" }}
-									min={1}
-									max={10000}
-									value={spec.limit}
-									disabled={!canWrite}
-									onChange={(value) => updateSpec((current) => ({ ...current, limit: Number(value ?? 5000) }))}
-								/>
-							</div>
-
-							<Divider style={{ margin: "4px 0" }}>筛选</Divider>
-							{spec.filters.map((filter, index) => (
-								<Space.Compact key={`${filter.field}-${index}`} block>
-									<Select
-										style={{ width: "34%" }}
-										value={filter.field}
-										options={fieldOptions}
-										disabled={!canWrite}
-										onChange={(field) => updateFilter(index, { field })}
-									/>
-									<Select
-										style={{ width: "26%" }}
-										value={filter.op}
-										disabled={!canWrite}
-										options={["EQ", "NE", "IN", "NOT_IN", "IS_NULL", "IS_NOT_NULL"].map((value) => ({ label: value, value }))}
-										onChange={(op) => updateFilter(index, { op })}
-									/>
-									<Input
-										style={{ width: "40%" }}
-										value={filter.values.join(",")}
-										disabled={!canWrite || filter.op === "IS_NULL" || filter.op === "IS_NOT_NULL"}
-										onChange={(event) => updateFilter(index, { values: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })}
-									/>
-									<Button disabled={!canWrite} onClick={() => updateSpec((current) => ({ ...current, filters: current.filters.filter((_, itemIndex) => itemIndex !== index) }))}>删除</Button>
-								</Space.Compact>
-							))}
-							<Button
-								block
-								disabled={!canWrite || dimensions.length === 0 || spec.filters.length >= 50}
-								onClick={() => updateSpec((current) => ({ ...current, filters: [...current.filters, { field: dimensions[0]?.code ?? "", op: "EQ", values: [] }] }))}
-							>
-								添加筛选条件
-							</Button>
-
-							<Divider style={{ margin: "4px 0" }}>排序</Divider>
-							{spec.orderBy.map((order, index) => (
-								<Space.Compact key={`${order.field}-${index}`} block>
-									<Select
-										style={{ width: "55%" }}
-										value={order.field}
-										options={orderOptions}
-										disabled={!canWrite}
-										onChange={(field) => updateSpec((current) => ({ ...current, orderBy: current.orderBy.map((item, itemIndex) => itemIndex === index ? { ...item, field } : item) }))}
-									/>
-									<Select
-										style={{ width: "30%" }}
-										value={order.direction}
-										disabled={!canWrite}
-										options={[{ label: "升序", value: "ASC" }, { label: "降序", value: "DESC" }]}
-										onChange={(direction) => updateSpec((current) => ({ ...current, orderBy: current.orderBy.map((item, itemIndex) => itemIndex === index ? { ...item, direction } : item) }))}
-									/>
-									<Button disabled={!canWrite} onClick={() => updateSpec((current) => ({ ...current, orderBy: current.orderBy.filter((_, itemIndex) => itemIndex !== index) }))}>删除</Button>
-								</Space.Compact>
-							))}
-							<Button
-								block
-								disabled={!canWrite || selectedFields.length === 0 || spec.orderBy.length >= 10}
-								onClick={() => updateSpec((current) => ({ ...current, orderBy: [...current.orderBy, { field: selectedFields[0] ?? "", direction: "ASC" }] }))}
-							>
-								添加排序
-							</Button>
-						</Space>
-					</Card>
-				</Col>
-			</Row>
-
+			<AnalysisWorkspace
+				contract={contract}
+				spec={spec}
+				name={name}
+				description={description}
+				canWrite={canWrite}
+				autoPreview={autoPreview}
+				queryState={queryState}
+				onNameChange={setName}
+				onDescriptionChange={setDescription}
+				onSpecChange={replaceSpec}
+				onAutoPreviewChange={setAutoPreview}
+				onExecute={() => void executeQuery(spec)}
+				onCancel={cancelQuery}
+			/>
 			<Drawer
 				title="发布分析"
 				open={publishOpen}

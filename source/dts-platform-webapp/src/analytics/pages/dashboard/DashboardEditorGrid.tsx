@@ -7,6 +7,8 @@ import type { DashboardCard, DashboardQueryResponse } from "../../api/analyticsA
 import type { SeriesClickParams } from "../../components/charts";
 import type { DrillFilter } from "../../hooks/useDrillFilter";
 import type { Locale } from "../../i18n";
+import type { DashboardParameter } from "./DashboardFilterBar";
+import type { ParameterMapping } from "./ParameterMappingPopover";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -20,8 +22,11 @@ export interface DashboardEditorGridProps {
 	cardResults: Record<number, LoadState<DashboardQueryResponse>>;
 	isEditing: boolean;
 	locale: Locale;
+	parameters: DashboardParameter[];
 	onLayoutChange: (layout: Layout[]) => void;
 	onRemoveCard: (dashcardIndex: number) => void;
+	onParameterMappingsChange: (dashcardId: number, mappings: ParameterMapping[]) => void;
+	onInteractionSettingsChange: (dashcardId: number, settings: Record<string, unknown>) => void;
 	onSeriesClick?: (dashcardId: number, params: SeriesClickParams, event?: React.MouseEvent) => void;
 	drillFilters?: DrillFilter[];
 	onDrillClear?: () => void;
@@ -37,8 +42,11 @@ export function DashboardEditorGrid({
 	cardResults,
 	isEditing,
 	locale,
+	parameters,
 	onLayoutChange,
 	onRemoveCard,
+	onParameterMappingsChange,
+	onInteractionSettingsChange,
 	onSeriesClick,
 	drillFilters,
 	onDrillClear,
@@ -94,8 +102,12 @@ export function DashboardEditorGrid({
 								dashcard={dc}
 								result={result}
 								isEditing={isEditing}
-								locale={locale}
-								onRemove={() => onRemoveCard(idx)}
+									locale={locale}
+									parameters={parameters}
+									dashcards={dashcards}
+									onRemove={() => onRemoveCard(idx)}
+									onParameterMappingsChange={(mappings) => onParameterMappingsChange(dc.id, mappings)}
+									onInteractionSettingsChange={(settings) => onInteractionSettingsChange(dc.id, settings)}
 								onSeriesClick={
 									onSeriesClick
 										? (params, event) => onSeriesClick(dc.id, params, event)

@@ -64,18 +64,18 @@ Sprint-94 已建立已发布 QueryDataset → `AnalysisQuerySpec` → `AnalysisQ
 | G0 | DTS 不变量 | PASS | ADR-95-01～08 | - |
 | G1 | 契约链与 UI 规格 | PASS | 本文与 Feature README | - |
 | G1 | 非功能预算 | PASS | `assets/nfr-budget.md` | - |
-| G2 | 变更范围与测试先行 | IN_PROGRESS | RED/GREEN commit + detect_changes | F1～F3 |
-| G3 | 发布安全 | PENDING | `assets/release-plan.md`（实施后补） | F3/T02 |
-| G4 | 可运维与 DoD | PENDING | `it/README.md` | F3/T02 |
+| G2 | 变更范围与测试先行 | PASS | RED commit `aa7956d5a`；GREEN tests；GitNexus staged risk LOW | - |
+| G3 | 发布安全 | READY_WITH_GAP | `assets/release-plan.md`；待部署后登记回滚演练 | F3/T02 |
+| G4 | 可运维与 DoD | READY_WITH_GAP | `assets/runbook.md`；待容器健康验收 | F3/T02 |
 
 ## Feature 列表
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
 | F0 | 交付基线与契约冻结 | 1 | P0 | DONE |
-| F1 | 可视化分析工作台 | 2 | P0 | IN_PROGRESS |
-| F2 | 看板联动与发布消费 | 1 | P0 | READY |
-| F3 | 受控导出与集中验收 | 2 | P0 | READY |
+| F1 | 可视化分析工作台 | 2 | P0 | DONE |
+| F2 | 看板联动与发布消费 | 1 | P0 | DONE |
+| F3 | 受控导出与集中验收 | 2 | P0 | IN_PROGRESS |
 
 **执行顺序**：F0 → F1/T01 → F1/T02 → F2/T01 → F3/T01 → F3/T02。
 
@@ -92,11 +92,11 @@ Sprint-94 已建立已发布 QueryDataset → `AnalysisQuerySpec` → `AnalysisQ
 
 ## 完成标准
 
-- [ ] 同一 `AnalysisQuerySpec` 从拖拽到保存、重载、发布保持无损。
-- [ ] 真实图表随查询结果渲染，未实现图表不再出现在 canonical 创建入口。
-- [ ] 派生指标/日期粒度/样式都有合法、错误和只读态。
-- [ ] 看板编辑时可配置参数映射与联动目标，发布快照包含这些配置。
-- [ ] CSV/XLSX 导出要求已保存 Analysis、EXPORT 权限，并包含审计/密级封印。
+- [x] 同一 `AnalysisQuerySpec` 从拖拽到保存、重载、发布保持无损。
+- [x] 真实图表随查询结果渲染，未实现图表不再出现在 canonical 创建入口。
+- [x] 派生指标/日期粒度/样式都有合法、错误和只读态。
+- [x] 看板编辑时可配置参数映射与联动目标，发布快照包含这些配置。
+- [x] CSV/XLSX 导出要求 Analysis 已发布且具备 EXPORT 权限，并包含审计/密级封印。
 - [ ] 聚焦测试、webapp legacy build、Analytics test 通过；页面无 console/page error。
 - [ ] Chrome 95 若环境仍缺失，Sprint 保持 PASS_WITH_GAPS，不伪称兼容门禁关闭。
 

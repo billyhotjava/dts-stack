@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTargetedCrossFilterParams, mapWithConcurrency } from "./dashboardInteractionModel";
+import { buildTargetedCrossFilterParams, mapWithConcurrency } from "./dashboardInteractionModel.ts";
 
 test("cross-filter applies only to configured targets and never to its source", () => {
 	const active = {

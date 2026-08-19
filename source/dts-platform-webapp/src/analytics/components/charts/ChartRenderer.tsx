@@ -35,6 +35,7 @@ export interface VisualizationSettings {
 	'graph.y_axis.title_text'?: string;
 	'graph.x_axis.label_rotate'?: number;
 	'graph.show_values'?: boolean;
+	'graph.show_legend'?: boolean;
 	'graph.label_value_frequency'?: string;
 	'graph.show_dots'?: boolean;
 	'graph.show_area'?: boolean;
@@ -115,7 +116,7 @@ export function ChartRenderer({
 	if (!data || !data.rows || !data.cols || data.rows.length === 0) {
 		return (
 			<div className={`relative w-full h-full min-h-[200px] ${className || ''}`} style={style}>
-				<div className="flex flex-col items-center justify-center gap-4 p-8 text-center text-text-muted min-h-[200px]">No data to display</div>
+					<div className="flex flex-col items-center justify-center gap-4 p-8 text-center text-text-muted min-h-[200px]">暂无可展示数据</div>
 			</div>
 		);
 	}
@@ -137,9 +138,8 @@ export function ChartRenderer({
 
 	const dimensionColName = data.cols[effectiveXIdx]?.name ?? '';
 
-	const echartsEvents = useMemo(() => {
-		if (!onSeriesClick) return undefined;
-		return {
+	const echartsEvents = onSeriesClick
+		? {
 			click: (params: Record<string, unknown>) => {
 				// For pie charts, the "name" is the dimension value directly
 				// For axis charts, use dataIndex to look up the label
@@ -159,8 +159,8 @@ export function ChartRenderer({
 					seriesName: typeof params.seriesName === 'string' ? params.seriesName : undefined,
 				}, nativeEvent as unknown as React.MouseEvent | undefined);
 			},
-		};
-	}, [onSeriesClick, display, dimensionColName, labels]);
+		}
+		: undefined;
 
 	const content = (() => {
 		switch (display) {
@@ -174,8 +174,9 @@ export function ChartRenderer({
 					showSymbol: settings['graph.show_dots'] !== false,
 					symbolSize: 6,
 					areaStyle: (display === 'area' || settings['graph.show_area']) ? { opacity: 0.15 } : undefined,
-					...(settings['stackable.stack_type'] === 'stacked' ? { stack: 'total' } : {}),
-					itemStyle: { color: colors[si % colors.length] },
+						...(settings['stackable.stack_type'] === 'stacked' ? { stack: 'total' } : {}),
+						label: settings['graph.show_values'] ? { show: true, position: 'top' as const, fontSize: 11 } : undefined,
+						itemStyle: { color: colors[si % colors.length] },
 				}));
 
 				const refLines = settings['graph.reference_lines'] || [];
@@ -196,10 +197,10 @@ export function ChartRenderer({
 				const option = {
 					color: colors,
 					tooltip: { trigger: 'axis' },
-					legend: { data: series.map(s => s.name), bottom: 0, textStyle: { fontSize: 12 } },
-					grid: { left: 50, right: 20, top: 20, bottom: 40 },
-					xAxis: { type: 'category', data: labels, axisLabel: { rotate: settings['graph.x_axis.label_rotate'] || 0, fontSize: 11 } },
-					yAxis: { type: 'value', axisLabel: { fontSize: 11 } },
+						legend: settings['graph.show_legend'] === false ? undefined : { data: series.map(s => s.name), bottom: 0, textStyle: { fontSize: 12 } },
+						grid: { left: 50, right: 20, top: 20, bottom: 40 },
+						xAxis: { show: settings['graph.x_axis.axis_enabled'] !== false, name: settings['graph.x_axis.title_text'], type: 'category', data: labels, axisLabel: { rotate: settings['graph.x_axis.label_rotate'] || 0, fontSize: 11 } },
+						yAxis: { show: settings['graph.y_axis.axis_enabled'] !== false, name: settings['graph.y_axis.title_text'], type: 'value', axisLabel: { fontSize: 11 } },
 					series,
 				};
 				return <Suspense fallback={<Spin />}><EChartsRuntime option={option} style={{ width: '100%', height: '100%', minHeight: 260 }} onEvents={echartsEvents} /></Suspense>;
@@ -254,7 +255,9 @@ export function ChartRenderer({
 				}));
 
 				const xRotate = settings['graph.x_axis.label_rotate'] || 0;
-				const categoryAxis = {
+					const categoryAxis = {
+						show: settings['graph.x_axis.axis_enabled'] !== false,
+						name: settings['graph.x_axis.title_text'],
 					type: 'category' as const,
 					data: labels,
 					axisLabel: {
@@ -265,12 +268,12 @@ export function ChartRenderer({
 						overflow: 'truncate' as const,
 					},
 				};
-				const valueAxis = { type: 'value' as const, axisLabel: { fontSize: 11 } };
+					const valueAxis = { show: settings['graph.y_axis.axis_enabled'] !== false, name: settings['graph.y_axis.title_text'], type: 'value' as const, axisLabel: { fontSize: 11 } };
 
 				const option = {
 					color: colors,
 					tooltip: { trigger: 'axis' },
-					legend: { data: series.map(s => s.name), bottom: 0, textStyle: { fontSize: 12 } },
+						legend: settings['graph.show_legend'] === false ? undefined : { data: series.map(s => s.name), bottom: 0, textStyle: { fontSize: 12 } },
 					// Vertical bars need extra top padding when value labels are on so the
 					// label of the tallest bar doesn't get clipped by the canvas edge.
 					grid: {

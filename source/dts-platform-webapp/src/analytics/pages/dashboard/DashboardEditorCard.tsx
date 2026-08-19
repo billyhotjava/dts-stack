@@ -7,6 +7,9 @@ import type { DashboardCard, DashboardQueryResponse } from "../../api/analyticsA
 import type { DrillFilter } from "../../hooks/useDrillFilter";
 import type { Locale } from "../../i18n";
 import { t } from "../../i18n";
+import { ParameterMappingPopover, type ParameterMapping } from "./ParameterMappingPopover";
+import { InteractionSettingsPopover } from "./InteractionSettingsPopover";
+import type { DashboardParameter } from "./DashboardFilterBar";
 
 type LoadState<T> =
 	| { state: "loading" }
@@ -18,7 +21,11 @@ export interface DashboardEditorCardProps {
 	result: LoadState<DashboardQueryResponse> | undefined;
 	isEditing: boolean;
 	locale: Locale;
+	parameters: DashboardParameter[];
+	dashcards: DashboardCard[];
 	onRemove?: () => void;
+	onParameterMappingsChange?: (mappings: ParameterMapping[]) => void;
+	onInteractionSettingsChange?: (settings: Record<string, unknown>) => void;
 	onSeriesClick?: (params: SeriesClickParams, event?: React.MouseEvent) => void;
 	drillFilters?: DrillFilter[];
 	onDrillClear?: () => void;
@@ -30,7 +37,11 @@ export function DashboardEditorCard({
 	result,
 	isEditing,
 	locale,
+	parameters,
+	dashcards,
 	onRemove,
+	onParameterMappingsChange,
+	onInteractionSettingsChange,
 	onSeriesClick,
 	drillFilters,
 	onDrillClear,
@@ -39,12 +50,20 @@ export function DashboardEditorCard({
 	const card: any = dashcard.card as any;
 	const cardName = (card && typeof card.name === "string" && card.name) || `Card ${dashcard.card_id ?? "-"}`;
 	const display: VisualizationType = (card?.display as VisualizationType) || "table";
-	const vizSettings: VisualizationSettings = (card?.visualization_settings as VisualizationSettings) || {};
+	const cardSettings: VisualizationSettings = (card?.visualization_settings as VisualizationSettings) || {};
+	const dashcardSettings: VisualizationSettings =
+		dashcard.visualization_settings && typeof dashcard.visualization_settings === "object"
+			? dashcard.visualization_settings as VisualizationSettings
+			: {};
+	const vizSettings: VisualizationSettings = { ...cardSettings, ...dashcardSettings };
+	const currentMappings = Array.isArray(dashcard.parameter_mappings)
+		? dashcard.parameter_mappings as ParameterMapping[]
+		: [];
 
 	const hasDrill = drillFilters && drillFilters.length > 0;
 
 	return (
-		<div className="flex flex-col h-full rounded-md border border-border-default shadow-sm overflow-hidden"
+		<div data-testid={`dashboard-card-${dashcard.id}`} className="flex flex-col h-full rounded-md border border-border-default shadow-sm overflow-hidden"
 			style={{ background: "var(--surface-card, #fff)" }}
 		>
 			{/* Header bar - always show in editing mode, minimal in preview */}
@@ -58,12 +77,28 @@ export function DashboardEditorCard({
 						</span>
 						<span className="text-sm font-medium truncate">{cardName}</span>
 					</div>
-					<Button
-						type="text"
-						size="small"
-						danger
-						onClick={onRemove}
-					>删除</Button>
+					<div className="flex items-center gap-1">
+						{dashcard.card_id && onParameterMappingsChange ? (
+							<ParameterMappingPopover
+								parameters={parameters}
+								currentMappings={currentMappings}
+								cardId={dashcard.card_id}
+								locale={locale}
+								onSave={onParameterMappingsChange}
+							/>
+						) : null}
+						{onInteractionSettingsChange && dashcard.id > 0 ? (
+							<InteractionSettingsPopover
+								currentDashcardId={dashcard.id}
+								dashcards={dashcards}
+								settings={dashcardSettings}
+								onSave={onInteractionSettingsChange}
+							/>
+						) : (
+							<Button type="text" size="small" disabled title="请先保存仪表板，再配置组件联动">联动</Button>
+						)}
+						<Button type="text" size="small" danger onClick={onRemove}>删除</Button>
+					</div>
 				</div>
 			)}
 

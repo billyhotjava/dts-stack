@@ -3,8 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const EDITOR = readFileSync(new URL("./AnalysisEditorPage.tsx", import.meta.url), "utf8");
+const WORKSPACE = readFileSync(new URL("./analysis/AnalysisWorkspace.tsx", import.meta.url), "utf8");
 const DASHBOARD = readFileSync(new URL("./DashboardEditorPage.tsx", import.meta.url), "utf8");
 const DASHBOARD_CARD = readFileSync(new URL("./dashboard/DashboardEditorCard.tsx", import.meta.url), "utf8");
+const DASHBOARD_QUERIES = readFileSync(new URL("./dashboard/useDashboardCardQueries.ts", import.meta.url), "utf8");
 const API = readFileSync(new URL("../api/analysisApi.ts", import.meta.url), "utf8");
 
 test("analysis editor exposes the complete governed authoring chain", () => {
@@ -17,7 +19,7 @@ test("analysis editor exposes the complete governed authoring chain", () => {
 		"导出 Excel",
 		"exportAnalysis",
 	]) {
-		assert.match(`${EDITOR}\n${API}`, new RegExp(token));
+		assert.match(`${EDITOR}\n${WORKSPACE}\n${API}`, new RegExp(token));
 	}
 	assert.doesNotMatch(EDITOR, /\["table", "bar", "line", "area", "pie", "number", "scatter"\]/);
 });
@@ -27,7 +29,7 @@ test("dashboard editor wires authored parameter mappings and targeted linkage", 
 	assert.match(DASHBOARD_CARD, /InteractionSettingsPopover/);
 	assert.match(DASHBOARD, /onParameterMappingsChange/);
 	assert.match(DASHBOARD, /targetCardIds/);
-	assert.match(DASHBOARD, /mapWithConcurrency/);
+	assert.match(`${DASHBOARD}\n${DASHBOARD_QUERIES}`, /mapWithConcurrency/);
 });
 
 test("analysis client downloads CSV and XLSX from the canonical analysis route", () => {
