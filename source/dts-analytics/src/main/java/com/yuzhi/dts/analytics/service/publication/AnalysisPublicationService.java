@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -57,6 +58,7 @@ public class AnalysisPublicationService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    @Autowired
     public AnalysisPublicationService(
         AnalyticsCardRepository cards,
         AnalyticsRevisionRepository revisions,

@@ -26,6 +26,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class AnalysisPublicationServiceTest {
 
@@ -70,6 +71,27 @@ class AnalysisPublicationServiceTest {
             revision.setId(91L);
             return revision;
         });
+    }
+
+    @Test
+    void createsServiceFromSpringContextWhenClockTestSeamAlsoExists() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(AnalyticsCardRepository.class, () -> mock(AnalyticsCardRepository.class));
+            context.registerBean(AnalyticsRevisionRepository.class, () -> mock(AnalyticsRevisionRepository.class));
+            context.registerBean(
+                GovernedAnalysisDatasetContractProvider.class,
+                () -> mock(GovernedAnalysisDatasetContractProvider.class)
+            );
+            context.registerBean(AnalysisQuerySpecParser.class, () -> mock(AnalysisQuerySpecParser.class));
+            context.registerBean(AnalysisQuerySpecValidator.class, () -> mock(AnalysisQuerySpecValidator.class));
+            context.registerBean(AnalysisApplicationService.class, () -> mock(AnalysisApplicationService.class));
+            context.registerBean(PublicationEntityLock.class, () -> mock(PublicationEntityLock.class));
+            context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
+            context.register(AnalysisPublicationService.class);
+            context.refresh();
+
+            assertThat(context.getBean(AnalysisPublicationService.class)).isNotNull();
+        }
     }
 
     @Test

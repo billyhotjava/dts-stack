@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 class DashboardPublicationServiceTest {
 
@@ -69,6 +70,30 @@ class DashboardPublicationServiceTest {
         when(entityLock.dashboard(22L)).thenReturn(dashboard);
         when(dashboards.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(entityIdGenerator.newEntityId()).thenReturn("dashboard-draft-23");
+    }
+
+    @Test
+    void createsServiceFromSpringContextWhenClockTestSeamAlsoExists() {
+        try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(AnalyticsDashboardRepository.class, () -> mock(AnalyticsDashboardRepository.class));
+            context.registerBean(
+                AnalyticsDashboardCardRepository.class,
+                () -> mock(AnalyticsDashboardCardRepository.class)
+            );
+            context.registerBean(AnalyticsCardRepository.class, () -> mock(AnalyticsCardRepository.class));
+            context.registerBean(AnalyticsRevisionRepository.class, () -> mock(AnalyticsRevisionRepository.class));
+            context.registerBean(EntityIdGenerator.class, () -> mock(EntityIdGenerator.class));
+            context.registerBean(PublicationEntityLock.class, () -> mock(PublicationEntityLock.class));
+            context.registerBean(
+                ReportRegistrationOutboxService.class,
+                () -> mock(ReportRegistrationOutboxService.class)
+            );
+            context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
+            context.register(DashboardPublicationService.class);
+            context.refresh();
+
+            assertThat(context.getBean(DashboardPublicationService.class)).isNotNull();
+        }
     }
 
     @Test
