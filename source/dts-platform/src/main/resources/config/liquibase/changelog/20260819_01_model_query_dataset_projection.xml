@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260819-01-model-query-dataset-link" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="query_dataset_asset"/>
+            <not>
+                <columnExists tableName="query_dataset_asset" columnName="source_model_spec_id"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add an optional stable link from the canonical BI query dataset to its published
+            ModelSpec owner. Manually created query datasets remain valid with a null link.
+        </comment>
+        <addColumn tableName="query_dataset_asset">
+            <column name="source_model_spec_id" type="${uuidType}"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="query_dataset_asset" columnName="source_model_spec_id"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet
+        id="20260819-01-model-query-dataset-link-index"
+        author="codex"
+        dbms="postgresql"
+        runInTransaction="false">
+        <comment>
+            Enforce one canonical BI dataset per published ModelSpec without locking existing
+            unlinked query datasets during index creation.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uk_query_dataset_source_model_spec
+                ON query_dataset_asset (source_model_spec_id)
+                WHERE source_model_spec_id IS NOT NULL
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX CONCURRENTLY IF EXISTS uk_query_dataset_source_model_spec
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -8,6 +8,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsRevision;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsRevisionRepository;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisApplicationService;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisApplicationService.AnalysisDto;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisApplicationService.CreateAnalysisCommand;
@@ -54,6 +55,7 @@ public class AnalysisPublicationService {
     private final AnalysisQuerySpecParser parser;
     private final AnalysisQuerySpecValidator validator;
     private final AnalysisApplicationService applicationService;
+    private final AnalyticsConsumerClassificationService classificationService;
     private final PublicationEntityLock entityLock;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -66,10 +68,22 @@ public class AnalysisPublicationService {
         AnalysisQuerySpecParser parser,
         AnalysisQuerySpecValidator validator,
         AnalysisApplicationService applicationService,
+        AnalyticsConsumerClassificationService classificationService,
         PublicationEntityLock entityLock,
         ObjectMapper objectMapper
     ) {
-        this(cards, revisions, contracts, parser, validator, applicationService, entityLock, objectMapper, Clock.systemUTC());
+        this(
+            cards,
+            revisions,
+            contracts,
+            parser,
+            validator,
+            applicationService,
+            classificationService,
+            entityLock,
+            objectMapper,
+            Clock.systemUTC()
+        );
     }
 
     AnalysisPublicationService(
@@ -79,6 +93,7 @@ public class AnalysisPublicationService {
         AnalysisQuerySpecParser parser,
         AnalysisQuerySpecValidator validator,
         AnalysisApplicationService applicationService,
+        AnalyticsConsumerClassificationService classificationService,
         PublicationEntityLock entityLock,
         ObjectMapper objectMapper,
         Clock clock
@@ -89,6 +104,7 @@ public class AnalysisPublicationService {
         this.parser = parser;
         this.validator = validator;
         this.applicationService = applicationService;
+        this.classificationService = classificationService;
         this.entityLock = entityLock;
         this.objectMapper = objectMapper;
         this.clock = clock;
@@ -138,6 +154,7 @@ public class AnalysisPublicationService {
         card.setLifecycleStatus("PUBLISHED");
         card.setPublishedRevisionId(revision.getId());
         cards.save(card);
+        classificationService.deriveCard(card);
         LOG.info(
             "Analysis published correlationId={} actor={} assetKey=analysis:{} revisionId={} datasetVersion={} checksum={} outcome=SUCCESS",
             RequestContextUtils.resolveRequestId(), actor.getId(), id, revision.getId(),

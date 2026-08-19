@@ -25,6 +25,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsSemanticModelRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -107,6 +108,29 @@ class AnalyticsConsumerClassificationServiceTest {
                 "source:a0000000-0000-0000-0000-000000000001/schema:public/table:biz_ads_budget_kpi_v2"
             ))),
             eq("dts-analytics:card:42")
+        );
+    }
+
+    @Test
+    void governed_analysis_card_inherits_its_published_query_dataset_classification() {
+        UUID queryDatasetId = UUID.fromString("f306fd06-e1bb-4344-9eb5-f0620bb8f52c");
+        AnalyticsCard card = new AnalyticsCard();
+        card.setId(43L);
+        card.setDatabaseId(1L);
+        card.setQueryDatasetId(queryDatasetId);
+        card.setDatasetQueryJson("{\"version\":\"dts.analysis/v1\"}");
+
+        service.deriveCard(card);
+
+        verify(client).derive(
+            eq("CARD"),
+            eq("analytics-card:43"),
+            isNull(),
+            eq(List.of(new AnalyticsClassificationClient.SubjectRef(
+                "ASSET",
+                "bi-dataset:" + queryDatasetId
+            ))),
+            eq("dts-analytics:card:43")
         );
     }
 

@@ -557,6 +557,45 @@ test("opens a draft from list management without reloading the workbench catalog
 	expect(consoleErrors, "console errors").toEqual([]);
 });
 
+test("shows every model detail panel in natural document flow", async ({ page }, testInfo) => {
+	await page.setViewportSize({ width: 1366, height: 768 });
+	await installMockAuthenticatedState(page);
+	await installControlledMaterializationProxy(page);
+
+	await page.goto(`/#/data-modeling/dimensions/workbench?modelSpecId=${CONTROLLED_DATE_MODEL_ID}`);
+	await expect(page.locator("main.dmx-workbench-page h1")).toHaveText("维度建模", { timeout: 20_000 });
+	await expect(page.locator(".dmx-model-editor").getByRole("heading", { name: "基本信息" })).toBeVisible();
+	const readDetailLayout = () =>
+		page.locator("fieldset.dmx-editor-fieldset").evaluate((fieldset) => {
+			const panels = Array.from(fieldset.querySelectorAll<HTMLElement>(":scope > .dmx-editor-panel"));
+			return {
+				panelCount: panels.length,
+				clippedPanels: panels
+					.filter((panel) => panel.scrollHeight > panel.clientHeight + 1)
+					.map((panel) => panel.querySelector("h3")?.textContent?.trim() || "未命名详情区"),
+				overflowY: getComputedStyle(fieldset).overflowY,
+			};
+		});
+	const desktopLayout = await readDetailLayout();
+	expect(desktopLayout.panelCount).toBeGreaterThanOrEqual(3);
+	expect(desktopLayout.overflowY).toBe("visible");
+	expect(desktopLayout.clippedPanels).toEqual([]);
+	await page.screenshot({ path: testInfo.outputPath("model-details-desktop.png"), fullPage: true });
+
+	await page.setViewportSize({ width: 768, height: 900 });
+	await page.locator("fieldset.dmx-editor-fieldset > .dmx-editor-panel").last().scrollIntoViewIfNeeded();
+	const narrowLayout = await readDetailLayout();
+	expect(narrowLayout.panelCount).toBeGreaterThanOrEqual(3);
+	expect(narrowLayout.overflowY).toBe("visible");
+	expect(narrowLayout.clippedPanels).toEqual([]);
+	const narrowWidths = await page.evaluate(() => ({
+		document: document.documentElement.scrollWidth,
+		viewport: document.documentElement.clientWidth,
+	}));
+	expect(narrowWidths.document).toBeLessThanOrEqual(narrowWidths.viewport + 1);
+	await page.screenshot({ path: testInfo.outputPath("model-details-narrow.png"), fullPage: true });
+});
+
 test("builds and submits a release candidate, then opens advanced dbt inside data modeling", async ({
 	page,
 }, testInfo) => {

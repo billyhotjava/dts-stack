@@ -365,6 +365,12 @@ public class AnalyticsConsumerClassificationService {
     }
 
     private List<AnalyticsClassificationClient.SubjectRef> cardUpstreams(AnalyticsCard card) {
+        if (card.getQueryDatasetId() != null) {
+            return List.of(new AnalyticsClassificationClient.SubjectRef(
+                "ASSET",
+                "bi-dataset:" + card.getQueryDatasetId()
+            ));
+        }
         Set<Long> tableIds = new LinkedHashSet<>();
         Set<Long> metricIds = new LinkedHashSet<>();
         JsonNode query;

@@ -567,7 +567,7 @@
 }
 
 .dmx-model-workbench {
-	height: calc(100vh - 185px);
+	height: auto;
 	min-height: 620px;
 	display: grid;
 	grid-template-columns: 310px minmax(650px, 1fr) 52px;
@@ -739,9 +739,9 @@
 
 .dmx-editor-scroll,
 .dmx-metric-scroll {
-	flex: 1;
-	min-height: 0;
-	overflow: auto;
+	min-height: auto;
+	flex: none;
+	overflow: visible;
 	padding: 16px;
 	background: #f4f6f9;
 }
@@ -1402,7 +1402,7 @@
 }
 
 .dmx-metric-workbench {
-	height: calc(100vh - 185px);
+	height: auto;
 	min-height: 620px;
 	display: grid;
 	grid-template-columns: minmax(650px, 1fr);
@@ -1419,16 +1419,12 @@
 }
 .dmx-editor-fieldset {
 	min-width: 0;
-	min-height: 0;
-	display: flex;
-	flex: 1 1 auto;
-	flex-direction: column;
+	min-height: auto;
+	display: block;
+	flex: none;
 	margin: 0;
 	padding: 0;
 	border: 0;
-}
-.dmx-metric-editor > .dmx-editor-fieldset {
-	flex-basis: 320px;
 }
 .dmx-metric-section {
 	margin-bottom: 14px;
@@ -1437,20 +1433,15 @@
 	background: #fff;
 }
 .dmx-metric-section--history {
-	max-height: 260px;
-	display: flex;
-	flex: 0 1 260px;
-	flex-direction: column;
-	overflow: hidden;
+	overflow: visible;
 }
 .dmx-metric-section--history > h3 {
 	flex: 0 0 auto;
 	margin-bottom: 0;
 }
 .dmx-metric-section--history > div {
-	min-height: 0;
-	flex: 1 1 auto;
-	overflow: auto;
+	min-height: auto;
+	overflow: visible;
 }
 .dmx-metric-section > div {
 	display: grid;
@@ -1624,7 +1615,7 @@
 }
 .dmx-graph-canvas {
 	position: relative;
-	height: calc(100vh - 250px);
+	height: auto;
 	min-height: 560px;
 	overflow: hidden;
 	border: 1px solid var(--dmx-border);

@@ -60,8 +60,11 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    public AnalyticsAuthenticationFilter analyticsAuthenticationFilter(AnalyticsSessionService sessionService) {
-        return new AnalyticsAuthenticationFilter(sessionService);
+    public AnalyticsAuthenticationFilter analyticsAuthenticationFilter(
+        AnalyticsSessionService sessionService,
+        @Value("${dts.analytics.inbound.platform.service-token:}") String platformServiceToken
+    ) {
+        return new AnalyticsAuthenticationFilter(sessionService, platformServiceToken);
     }
 
     @Bean

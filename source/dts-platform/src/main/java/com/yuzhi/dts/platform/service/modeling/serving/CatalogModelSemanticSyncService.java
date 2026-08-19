@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-/** Claims due serving projections and converges them into dts-analytics without a distributed transaction. */
+/** Claims due serving projections and converges Analytics plus the canonical BI dataset without a distributed transaction. */
 @Service
 public class CatalogModelSemanticSyncService {
 
@@ -41,12 +41,18 @@ public class CatalogModelSemanticSyncService {
         "CATALOG_MODEL_SEMANTIC_TIME_FIELD_NOT_FOUND",
         "CATALOG_MODEL_SEMANTIC_AGGREGATION_UNSUPPORTED",
         "CATALOG_MODEL_SEMANTIC_CLASSIFICATION_INVALID",
-        "ANALYTICS_SEMANTIC_PUBLISH_NOT_CONFIGURED"
+        "ANALYTICS_SEMANTIC_PUBLISH_NOT_CONFIGURED",
+        "MODEL_QUERY_DATASET_PHYSICAL_ASSET_REQUIRED",
+        "MODEL_QUERY_DATASET_PHYSICAL_TARGET_REQUIRED",
+        "MODEL_QUERY_DATASET_MODEL_IDENTITY_REQUIRED",
+        "MODEL_QUERY_DATASET_ID_REQUIRED",
+        "MODEL_QUERY_DATASET_CONTRACT_NOT_READY"
     );
 
     private final CatalogModelServingProjectionRepository repository;
     private final CatalogModelSemanticPayloadFactory payloadFactory;
     private final AnalyticsSemanticPublishClient client;
+    private final ModelQueryDatasetProjectionService datasetProjectionService;
     private final AuditService auditService;
     private final Clock clock;
 
@@ -55,9 +61,10 @@ public class CatalogModelSemanticSyncService {
         CatalogModelServingProjectionRepository repository,
         CatalogModelSemanticPayloadFactory payloadFactory,
         AnalyticsSemanticPublishClient client,
+        ModelQueryDatasetProjectionService datasetProjectionService,
         AuditService auditService
     ) {
-        this(repository, payloadFactory, client, auditService, Clock.systemUTC());
+        this(repository, payloadFactory, client, datasetProjectionService, auditService, Clock.systemUTC());
     }
 
     CatalogModelSemanticSyncService(
@@ -66,7 +73,7 @@ public class CatalogModelSemanticSyncService {
         AnalyticsSemanticPublishClient client,
         Clock clock
     ) {
-        this(repository, payloadFactory, client, null, clock);
+        this(repository, payloadFactory, client, null, null, clock);
     }
 
     CatalogModelSemanticSyncService(
@@ -76,9 +83,31 @@ public class CatalogModelSemanticSyncService {
         AuditService auditService,
         Clock clock
     ) {
+        this(repository, payloadFactory, client, null, auditService, clock);
+    }
+
+    CatalogModelSemanticSyncService(
+        CatalogModelServingProjectionRepository repository,
+        CatalogModelSemanticPayloadFactory payloadFactory,
+        AnalyticsSemanticPublishClient client,
+        ModelQueryDatasetProjectionService datasetProjectionService,
+        Clock clock
+    ) {
+        this(repository, payloadFactory, client, datasetProjectionService, null, clock);
+    }
+
+    private CatalogModelSemanticSyncService(
+        CatalogModelServingProjectionRepository repository,
+        CatalogModelSemanticPayloadFactory payloadFactory,
+        AnalyticsSemanticPublishClient client,
+        ModelQueryDatasetProjectionService datasetProjectionService,
+        AuditService auditService,
+        Clock clock
+    ) {
         this.repository = repository;
         this.payloadFactory = payloadFactory;
         this.client = client;
+        this.datasetProjectionService = datasetProjectionService;
         this.auditService = auditService;
         this.clock = clock;
     }
@@ -93,7 +122,11 @@ public class CatalogModelSemanticSyncService {
             var projection = candidate.projection();
             String correlationId = UUID.randomUUID().toString();
             try {
-                client.publish(payloadFactory.create(candidate));
+                var payload = payloadFactory.create(candidate);
+                client.publish(payload);
+                if (datasetProjectionService != null) {
+                    datasetProjectionService.project(candidate, payload);
+                }
                 if (repository.markSyncSucceeded(
                     projection.tenantId(),
                     projection.modelSpecId(),
@@ -129,7 +162,8 @@ public class CatalogModelSemanticSyncService {
                     projection.version(),
                     candidate.syncAttempts() + 1,
                     errorCode,
-                    nextAttemptAt
+                    nextAttemptAt,
+                    failure
                 );
             }
         }

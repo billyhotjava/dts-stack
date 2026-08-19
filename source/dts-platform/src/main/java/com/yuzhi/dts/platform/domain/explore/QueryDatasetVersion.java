@@ -12,6 +12,8 @@ import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "query_dataset_version")
@@ -53,6 +55,7 @@ public class QueryDatasetVersion extends AbstractAuditingEntity<UUID> implements
     @Column(name = "semantic_contract_version", length = 64)
     private String semanticContractVersion;
 
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "semantic_contract_json", columnDefinition = "jsonb")
     private String semanticContractJson;
 

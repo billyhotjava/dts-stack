@@ -203,7 +203,7 @@ export default function DashboardEditorPage() {
 
 				try {
 					let value: DashboardQueryResponse;
-					if (dashboardId) {
+					if (dashboardId && dc.id > 0) {
 						value = await analyticsApi.queryDashcard(dashboardId, dc.id, cardId, { parameters: params });
 					} else {
 						value = await analyticsApi.queryCard(cardId, { parameters: params });

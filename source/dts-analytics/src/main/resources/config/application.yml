@@ -49,6 +49,9 @@ analytics:
 
 dts:
   analytics:
+    inbound:
+      platform:
+        service-token: ${DTS_ANALYTICS_INBOUND_FROM_PLATFORM_TOKEN:}
     screen-permission:
       platform-source-enabled: ${DTS_ANALYTICS_SCREEN_PERMISSION_PLATFORM_SOURCE_ENABLED:true}
       local-fallback-enabled: ${DTS_ANALYTICS_SCREEN_PERMISSION_LOCAL_FALLBACK_ENABLED:true}

@@ -5,6 +5,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.yuzhi.dts.platform.config.DtsAnalyticsProperties;
 import java.util.List;
@@ -25,6 +26,7 @@ class AnalyticsSemanticPublishClientTest {
         DtsAnalyticsProperties properties = new DtsAnalyticsProperties();
         properties.setBaseUrl("http://analytics.test");
         properties.setServiceName("dts-platform");
+        properties.setServiceToken("platform-analytics-pair-token-20260819");
         RestTemplate restTemplate = new RestTemplate();
         server = MockRestServiceServer.bindTo(restTemplate).build();
         client = new AnalyticsSemanticPublishClient(restTemplate, properties);
@@ -50,6 +52,7 @@ class AnalyticsSemanticPublishClientTest {
         server.expect(requestTo("http://analytics.test/api/semantic/publish"))
             .andExpect(method(HttpMethod.POST))
             .andExpect(header("X-DTS-Service", "dts-platform"))
+            .andExpect(header("X-DTS-Service-Token", "platform-analytics-pair-token-20260819"))
             .andExpect(jsonPath("$.platformDataSourceId").value("10000000-0000-0000-0000-000000000001"))
             .andExpect(jsonPath("$.modelName").value("model_spec_30000000000000000000000000000001"))
             .andRespond(withSuccess("{\"modelName\":\"model_spec_30000000000000000000000000000001\"}", MediaType.APPLICATION_JSON));
@@ -57,5 +60,16 @@ class AnalyticsSemanticPublishClientTest {
         client.publish(payload);
 
         server.verify();
+    }
+
+    @Test
+    void refusesToPublishWhenTheServiceTokenIsMissing() {
+        DtsAnalyticsProperties properties = new DtsAnalyticsProperties();
+        properties.setBaseUrl("http://analytics.test");
+        AnalyticsSemanticPublishClient unconfigured = new AnalyticsSemanticPublishClient(new RestTemplate(), properties);
+
+        assertThatThrownBy(() -> unconfigured.publish(org.mockito.Mockito.mock(CatalogModelSemanticContract.PublishPayload.class)))
+            .isInstanceOf(AnalyticsSemanticPublishClient.SemanticPublishException.class)
+            .hasMessage("ANALYTICS_SEMANTIC_PUBLISH_NOT_CONFIGURED");
     }
 }

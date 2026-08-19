@@ -466,21 +466,46 @@ public class CatalogModelServingProjectionRepository {
         return jdbcTemplate.query(
             """
             with claimable as (
-                select tenant_id, model_spec_id
-                  from modeling_catalog_model_serving_projection
-                 where serving_ref is not null
-                   and sync_attempts < 6
+                select projection.tenant_id, projection.model_spec_id
+                  from modeling_catalog_model_serving_projection projection
+                 where projection.serving_ref is not null
+                   and projection.sync_attempts < 6
                    and (
-                       (sync_status = 'SYNC_PENDING' and (next_sync_at is null or next_sync_at <= ?))
+                       (projection.sync_status = 'SYNC_PENDING' and (projection.next_sync_at is null or projection.next_sync_at <= ?))
                        or
-                       (sync_status = 'SYNC_FAILED' and next_sync_at is not null and next_sync_at <= ?)
+                       (projection.sync_status = 'SYNC_FAILED' and projection.next_sync_at is not null and projection.next_sync_at <= ?)
+                       or
+                       (
+                           projection.sync_status = 'SYNCED'
+                           and exists (
+                               select 1
+                                 from catalog_dataset dataset
+                                where dataset.id = case
+                                      when projection.serving_ref ->> 'physicalAssetId'
+                                           ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                                      then (projection.serving_ref ->> 'physicalAssetId')::uuid
+                                      else null
+                                  end
+                                  and dataset.enabled = true
+                                  and upper(dataset.warehouse_layer) in ('DWS', 'ADS')
+                           )
+                           and not exists (
+                               select 1
+                                 from query_dataset_asset query_dataset
+                                where query_dataset.source_model_spec_id = projection.model_spec_id
+                           )
+                       )
                    )
-                 order by updated_at, model_spec_id
+                 order by projection.updated_at, projection.model_spec_id
                  for update skip locked
                  limit ?
             )
             update modeling_catalog_model_serving_projection projection
-               set next_sync_at = ?, updated_at = current_timestamp
+               set sync_status = case
+                       when projection.sync_status = 'SYNCED' then 'SYNC_PENDING'
+                       else projection.sync_status
+                   end,
+                   next_sync_at = ?, updated_at = current_timestamp
               from claimable
              where projection.tenant_id = claimable.tenant_id
                and projection.model_spec_id = claimable.model_spec_id

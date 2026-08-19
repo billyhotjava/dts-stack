@@ -23,6 +23,7 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class AnalyticsSemanticPublishClient {
 
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String PUBLISH_PATH = "/api/semantic/publish";
 
     private final RestTemplate restTemplate;
@@ -45,13 +46,18 @@ public class AnalyticsSemanticPublishClient {
     }
 
     public void publish(PublishPayload payload) {
-        if (!properties.isEnabled() || !StringUtils.hasText(properties.getBaseUrl())) {
+        if (
+            !properties.isEnabled() ||
+            !StringUtils.hasText(properties.getBaseUrl()) ||
+            !StringUtils.hasText(properties.getServiceToken())
+        ) {
             throw new SemanticPublishException("ANALYTICS_SEMANTIC_PUBLISH_NOT_CONFIGURED");
         }
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set(SERVICE_HEADER, properties.getServiceName());
+        headers.set(SERVICE_TOKEN_HEADER, properties.getServiceToken().trim());
         try {
             restTemplate.exchange(uri(), HttpMethod.POST, new HttpEntity<>(payload, headers), Object.class);
         } catch (HttpStatusCodeException failure) {

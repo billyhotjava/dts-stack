@@ -14,11 +14,7 @@ import com.yuzhi.dts.platform.service.sql.dto.AnalysisDatasetDetail;
 import com.yuzhi.dts.platform.service.sql.dto.AnalysisDatasetPage;
 import com.yuzhi.dts.platform.service.sql.dto.AnalysisDatasetRuntimeContract;
 import com.yuzhi.dts.platform.service.sql.dto.AnalysisDatasetSummary;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -131,10 +127,13 @@ public class PublishedQueryDatasetService {
     private ContractView contract(QueryDatasetVersion version) {
         String contractJson = trimToNull(version.getSemanticContractJson());
         String checksum = trimToNull(version.getSemanticContractChecksum());
-        if (contractJson == null || checksum == null || !checksum.equals(checksum(contractJson, version.getSqlText()))) {
+        if (contractJson == null || checksum == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "查询数据集契约校验失败");
         }
         try {
+            if (!checksum.equals(checksum(contractJson, version.getSqlText()))) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "查询数据集契约校验失败");
+            }
             JsonNode root = objectMapper.readTree(contractJson);
             if (root == null || !root.isObject()) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "查询数据集契约格式无效");
@@ -155,7 +154,10 @@ public class PublishedQueryDatasetService {
                     }
                 });
             }
-            String warehouseLayer = warehouseLayer(modelReferences, modelNames);
+            String warehouseLayer = upperToNull(root.path("warehouseLayer").asText(null));
+            if (warehouseLayer == null) {
+                warehouseLayer = warehouseLayer(modelReferences, modelNames);
+            }
             return new ContractView(
                 dimensions,
                 metrics,
@@ -299,12 +301,7 @@ public class PublishedQueryDatasetService {
     }
 
     static String checksum(String contractJson, String sqlText) {
-        try {
-            String value = String.valueOf(contractJson) + "\n" + (sqlText == null ? "" : sqlText);
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException failure) {
-            throw new IllegalStateException("SHA-256 is unavailable", failure);
-        }
+        return QueryDatasetContractChecksum.compute(contractJson, sqlText);
     }
 
     public record PublishedQueryDatasetQuery(

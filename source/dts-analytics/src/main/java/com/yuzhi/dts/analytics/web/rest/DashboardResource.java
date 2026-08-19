@@ -28,6 +28,7 @@ import com.yuzhi.dts.analytics.service.AssetListFilterService;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.service.semantic.SemanticQueryService;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
+import com.yuzhi.dts.analytics.service.analysis.AnalysisQuerySpec;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.service.publication.AnalysisPublicationService.PublicationCommand;
 import com.yuzhi.dts.analytics.service.publication.DashboardPublicationService;
@@ -864,6 +865,36 @@ public class DashboardResource {
 
         long startedMillis = System.currentTimeMillis();
         try {
+            if (isGovernedAnalysisCard(card, datasetQuery)) {
+                AnalysisQueryGateway.AnalysisQueryResult analysisResult = analysisQueryGateway.preview(
+                    actor.get(),
+                    objectMapper.convertValue(datasetQuery, AnalysisQuerySpec.class),
+                    AnalysisRequestContext.from(request)
+                );
+
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("rows", analysisResult.rows());
+                data.put("cols", analysisResult.columns());
+                data.put("results_metadata", Map.of("columns", analysisResult.columns()));
+                data.put("insights", null);
+
+                Map<String, Object> jsonQuery = new LinkedHashMap<>();
+                jsonQuery.put("database", card.getDatabaseId());
+                jsonQuery.put("type", "analysis");
+                jsonQuery.put("dataset", datasetQuery.path("dataset"));
+
+                Map<String, Object> response = new LinkedHashMap<>();
+                response.put("data", data);
+                response.put("database_id", card.getDatabaseId());
+                response.put("started_at", java.time.OffsetDateTime.now());
+                response.put("json_query", jsonQuery);
+                response.put("status", "completed");
+                response.put("context", "question");
+                response.put("row_count", analysisResult.rowCount());
+                response.put("running_time", analysisResult.durationMs());
+                response.put("error", null);
+                return ResponseEntity.accepted().body(response);
+            }
             if (isSemanticDatasetQuery(datasetQuery)) {
                 SemanticQueryService.SemanticExecutionResult semanticResult = semanticQueryService.executeForCard(
                     extractSemanticQuery(datasetQuery),
@@ -977,6 +1008,14 @@ public class DashboardResource {
             return false;
         }
         return "semantic".equalsIgnoreCase(datasetQuery.path("type").asText(null)) || datasetQuery.has("semantic_query");
+    }
+
+    private boolean isGovernedAnalysisCard(AnalyticsCard card, JsonNode datasetQuery) {
+        return card != null
+            && "analysis".equals(card.getCardType())
+            && card.getQueryDatasetId() != null
+            && datasetQuery != null
+            && "dts.analysis/v1".equals(datasetQuery.path("apiVersion").asText());
     }
 
     private JsonNode extractSemanticQuery(JsonNode datasetQuery) {

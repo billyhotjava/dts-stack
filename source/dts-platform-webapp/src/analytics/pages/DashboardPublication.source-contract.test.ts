@@ -38,3 +38,8 @@ test("dashboard picker and consumer surface enforce the governed registration bo
 	}
 	assert.match(REPORTS_SOURCE, /受管资产请在仪表板发布端维护/);
 });
+
+test("new dashboard cards query through the card endpoint until their binding has a persisted id", () => {
+	assert.match(EDITOR_SOURCE, /dashboardId && dc\.id > 0/);
+	assert.match(EDITOR_SOURCE, /queryCard\(cardId/);
+});

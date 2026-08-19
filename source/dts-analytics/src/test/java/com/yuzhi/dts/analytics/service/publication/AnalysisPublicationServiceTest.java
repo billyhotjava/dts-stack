@@ -3,6 +3,7 @@ package com.yuzhi.dts.analytics.service.publication;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +12,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsRevision;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsRevisionRepository;
+import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisApplicationService;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisQuerySpec;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisQuerySpecParser;
@@ -33,6 +35,7 @@ class AnalysisPublicationServiceTest {
     private AnalyticsCardRepository cards;
     private AnalyticsRevisionRepository revisions;
     private GovernedAnalysisDatasetContractProvider contracts;
+    private AnalyticsConsumerClassificationService classificationService;
     private PublicationEntityLock entityLock;
     private AnalysisPublicationService service;
     private AnalyticsCard card;
@@ -44,6 +47,7 @@ class AnalysisPublicationServiceTest {
         cards = mock(AnalyticsCardRepository.class);
         revisions = mock(AnalyticsRevisionRepository.class);
         contracts = mock(GovernedAnalysisDatasetContractProvider.class);
+        classificationService = mock(AnalyticsConsumerClassificationService.class);
         entityLock = mock(PublicationEntityLock.class);
         AnalysisQuerySpecParser parser = new AnalysisQuerySpecParser(new ObjectMapper());
         service = new AnalysisPublicationService(
@@ -53,6 +57,7 @@ class AnalysisPublicationServiceTest {
             parser,
             new AnalysisQuerySpecValidator(),
             mock(AnalysisApplicationService.class),
+            classificationService,
             entityLock,
             new ObjectMapper(),
             Clock.fixed(Instant.parse("2026-08-17T06:00:00Z"), ZoneOffset.UTC)
@@ -85,6 +90,10 @@ class AnalysisPublicationServiceTest {
             context.registerBean(AnalysisQuerySpecParser.class, () -> mock(AnalysisQuerySpecParser.class));
             context.registerBean(AnalysisQuerySpecValidator.class, () -> mock(AnalysisQuerySpecValidator.class));
             context.registerBean(AnalysisApplicationService.class, () -> mock(AnalysisApplicationService.class));
+            context.registerBean(
+                AnalyticsConsumerClassificationService.class,
+                () -> mock(AnalyticsConsumerClassificationService.class)
+            );
             context.registerBean(PublicationEntityLock.class, () -> mock(PublicationEntityLock.class));
             context.registerBean(ObjectMapper.class, () -> new ObjectMapper());
             context.register(AnalysisPublicationService.class);
@@ -122,6 +131,7 @@ class AnalysisPublicationServiceTest {
         assertThat(result.dependencySnapshot()).containsEntry("contractChecksum", "checksum-v1");
         assertThat(card.getLifecycleStatus()).isEqualTo("PUBLISHED");
         assertThat(card.getPublishedRevisionId()).isEqualTo(91L);
+        verify(classificationService).deriveCard(card);
     }
 
     private static AnalyticsCard analysisCard(AnalysisQuerySpecParser parser, GovernedAnalysisDatasetContract contract) {

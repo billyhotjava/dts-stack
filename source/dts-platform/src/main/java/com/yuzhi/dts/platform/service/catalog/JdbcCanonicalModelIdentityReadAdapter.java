@@ -65,8 +65,7 @@ public class JdbcCanonicalModelIdentityReadAdapter implements CanonicalModelIden
                 """
                 select s.id as model_spec_id,
                        s.name as model_name,
-                       s.revision as model_revision,
-                       s.dbt_unique_id
+                       s.revision as model_revision
                   from modeling_model_spec s
                  where s.tenant_id = ?
                    and s.id = ?
@@ -138,8 +137,7 @@ public class JdbcCanonicalModelIdentityReadAdapter implements CanonicalModelIden
                     """
                     select s.id as model_spec_id,
                            s.name as model_name,
-                           s.revision as model_revision,
-                           s.dbt_unique_id
+                           s.revision as model_revision
                       from modeling_model_spec s
                      where s.tenant_id = ?
                        and s.id = ?
@@ -157,8 +155,7 @@ public class JdbcCanonicalModelIdentityReadAdapter implements CanonicalModelIden
             """
             select s.id as model_spec_id,
                    s.name as model_name,
-                   s.revision as model_revision,
-                   s.dbt_unique_id
+                   s.revision as model_revision
               from modeling_model_spec s
              where s.tenant_id = ?
                and lower(s.name) = ?
@@ -255,7 +252,7 @@ public class JdbcCanonicalModelIdentityReadAdapter implements CanonicalModelIden
             null,
             resultSet.getString("model_name"),
             resultSet.getInt("model_revision"),
-            resultSet.getString("dbt_unique_id")
+            null
         );
     }
 

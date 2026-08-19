@@ -46,8 +46,7 @@ class JdbcCanonicalModelIdentityReadAdapterPostgresIT {
                     id uuid primary key,
                     tenant_id varchar(128) not null,
                     name varchar(255) not null,
-                    revision int not null,
-                    dbt_unique_id varchar(512)
+                    revision int not null
                 )
                 """
             );
@@ -84,9 +83,9 @@ class JdbcCanonicalModelIdentityReadAdapterPostgresIT {
 
     @Test
     void resolvesOnlyCanonicalModelsInsideServerTenant() throws Exception {
-        UUID specId = insertModel("tenant-a", "预算执行事实", 3, "model.finance.fct_budget_execution");
+        UUID specId = insertModel("tenant-a", "预算执行事实", 3);
         UUID implementationId = insertImplementation("tenant-a", specId, 3, "model.finance.fct_budget_execution");
-        UUID foreignSpecId = insertModel("tenant-b", "预算执行事实", 9, "model.foreign.fct_budget_execution");
+        UUID foreignSpecId = insertModel("tenant-b", "预算执行事实", 9);
         insertImplementation("tenant-b", foreignSpecId, 9, "model.foreign.fct_budget_execution");
 
         ModelIdentity dbtIdentity = adapter.findDbtModel("fct_budget_execution").orElseThrow();
@@ -104,8 +103,8 @@ class JdbcCanonicalModelIdentityReadAdapterPostgresIT {
 
     @Test
     void failsClosedForAmbiguousDbtResourceNameButAllowsExactUniqueId() throws Exception {
-        UUID firstSpec = insertModel("tenant-a", "订单事实 A", 1, "model.sales.orders");
-        UUID secondSpec = insertModel("tenant-a", "订单事实 B", 2, "model.finance.orders");
+        UUID firstSpec = insertModel("tenant-a", "订单事实 A", 1);
+        UUID secondSpec = insertModel("tenant-a", "订单事实 B", 2);
         insertImplementation("tenant-a", firstSpec, 1, "model.sales.orders");
         insertImplementation("tenant-a", secondSpec, 2, "model.finance.orders");
 
@@ -116,8 +115,8 @@ class JdbcCanonicalModelIdentityReadAdapterPostgresIT {
 
     @Test
     void batchLookupReturnsOneCanonicalIdentityPerUnambiguousRef() throws Exception {
-        UUID orderSpec = insertModel("tenant-a", "订单事实", 4, "model.finance.fct_order");
-        UUID budgetSpec = insertModel("tenant-a", "预算事实", 5, "model.finance.fct_budget");
+        UUID orderSpec = insertModel("tenant-a", "订单事实", 4);
+        UUID budgetSpec = insertModel("tenant-a", "预算事实", 5);
         insertImplementation("tenant-a", orderSpec, 4, "model.finance.fct_order");
         insertImplementation("tenant-a", budgetSpec, 5, "model.finance.fct_budget");
 
@@ -130,18 +129,17 @@ class JdbcCanonicalModelIdentityReadAdapterPostgresIT {
         assertThat(result.get("fct_budget").modelSpecId()).isEqualTo(budgetSpec);
     }
 
-    private UUID insertModel(String tenantId, String name, int revision, String dbtUniqueId) throws Exception {
+    private UUID insertModel(String tenantId, String name, int revision) throws Exception {
         UUID id = UUID.randomUUID();
         try (
             PreparedStatement statement = connection.prepareStatement(
-                "insert into modeling_model_spec (id, tenant_id, name, revision, dbt_unique_id) values (?, ?, ?, ?, ?)"
+                "insert into modeling_model_spec (id, tenant_id, name, revision) values (?, ?, ?, ?)"
             )
         ) {
             statement.setObject(1, id);
             statement.setString(2, tenantId);
             statement.setString(3, name);
             statement.setInt(4, revision);
-            statement.setString(5, dbtUniqueId);
             statement.executeUpdate();
         }
         return id;

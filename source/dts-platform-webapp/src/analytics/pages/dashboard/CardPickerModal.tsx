@@ -1,9 +1,10 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useMemo, useState } from "react";
-import { Button, Input, Modal, Tag } from "antd";
+import { Button, Empty, Input, Modal, Tag } from "antd";
 import { CompactTable } from "@/components/table";
 import { SearchOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
+import { useNavigate } from "react-router";
 import type { CardListItem } from "../../api/analyticsApi";
 
 const DISPLAY_LABELS: Record<string, string> = {
@@ -20,6 +21,7 @@ interface CardPickerModalProps {
 }
 
 export function CardPickerModal({ open, onClose, onAdd, allCards, existingCardIds }: CardPickerModalProps) {
+	const navigate = useNavigate();
 	const [search, setSearch] = useState("");
 	const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
 
@@ -103,7 +105,23 @@ export function CardPickerModal({ open, onClose, onAdd, allCards, existingCardId
 					selectedRowKeys: selectedKeys,
 					onChange: (keys) => setSelectedKeys(keys as number[]),
 				}}
-				locale={{ emptyText: search ? "未找到匹配的卡片" : "没有可用的卡片" }}
+				locale={{
+					emptyText: search ? (
+						"未找到匹配的卡片"
+					) : (
+						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已发布分析">
+							<Button
+								type="link"
+								onClick={() => {
+									handleCancel();
+									navigate("/bi/questions");
+								}}
+							>
+								先创建并发布分析
+							</Button>
+						</Empty>
+					),
+				}}
 			/>
 		</Modal>
 	);

@@ -8,6 +8,7 @@ public class DtsAnalyticsProperties {
     private boolean enabled = true;
     private String baseUrl = "http://dts-analytics:3000";
     private String serviceName = "dts-platform";
+    private String serviceToken;
     private int connectTimeoutSeconds = 5;
     private int readTimeoutSeconds = 20;
 
@@ -33,6 +34,14 @@ public class DtsAnalyticsProperties {
 
     public void setServiceName(String serviceName) {
         this.serviceName = serviceName;
+    }
+
+    public String getServiceToken() {
+        return serviceToken;
+    }
+
+    public void setServiceToken(String serviceToken) {
+        this.serviceToken = serviceToken;
     }
 
     public int getConnectTimeoutSeconds() {

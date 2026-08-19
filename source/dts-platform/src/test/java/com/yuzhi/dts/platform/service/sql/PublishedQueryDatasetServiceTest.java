@@ -89,6 +89,28 @@ class PublishedQueryDatasetServiceTest {
             .satisfies(field -> assertThat(field).containsEntry("code", "project_code"));
     }
 
+    @Test
+    void runtimeContract_shouldAcceptJsonbNormalizedContractText() {
+        QueryDatasetAsset asset = asset();
+        QueryDatasetVersion version = publishedVersion(asset);
+        String originalContract = version.getSemanticContractJson();
+        version.setSemanticContractChecksum(PublishedQueryDatasetService.checksum(originalContract, version.getSqlText()));
+        version.setSemanticContractJson(
+            "{\"policyRefs\": [], \"classificationFloor\": \"DATA_INTERNAL\", \"sourceModels\": [{\"modelRevision\": 7, \"modelName\": \"项目健康 ADS\", \"reference\": \"ads_project_health\"}], \"joins\": [], \"metrics\": [], \"dimensions\": [{\"code\": \"project_code\"}], \"contractVersion\": \"r7\"}"
+        );
+        when(assetRepository.findById(asset.getId())).thenReturn(Optional.of(asset));
+        when(versionRepository.findByDataset_IdAndVersionNo(asset.getId(), 2)).thenReturn(Optional.of(version));
+
+        PublishedQueryDatasetService service = new PublishedQueryDatasetService(
+            assetRepository,
+            versionRepository,
+            new ObjectMapper()
+        );
+
+        assertThat(service.runtimeContract(asset.getId(), 2).contractChecksum())
+            .isEqualTo(version.getSemanticContractChecksum());
+    }
+
     private QueryDatasetAsset asset() {
         QueryDatasetAsset asset = new QueryDatasetAsset();
         asset.setId(UUID.randomUUID());

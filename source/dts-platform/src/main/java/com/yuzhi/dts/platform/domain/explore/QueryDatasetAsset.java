@@ -30,6 +30,9 @@ public class QueryDatasetAsset extends AbstractAuditingEntity<UUID> implements S
     @Column(name = "source_datasource_name", length = 256)
     private String sourceDatasourceName;
 
+    @Column(name = "source_model_spec_id", columnDefinition = "uuid")
+    private UUID sourceModelSpecId;
+
     @Column(name = "owner_dept", length = 64)
     private String ownerDept;
 
@@ -96,6 +99,14 @@ public class QueryDatasetAsset extends AbstractAuditingEntity<UUID> implements S
 
     public void setSourceDatasourceName(String sourceDatasourceName) {
         this.sourceDatasourceName = sourceDatasourceName;
+    }
+
+    public UUID getSourceModelSpecId() {
+        return sourceModelSpecId;
+    }
+
+    public void setSourceModelSpecId(UUID sourceModelSpecId) {
+        this.sourceModelSpecId = sourceModelSpecId;
     }
 
     public String getOwnerDept() {

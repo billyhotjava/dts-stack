@@ -2,19 +2,21 @@ package com.yuzhi.dts.platform.service.sql;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetAsset;
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetVersion;
 import com.yuzhi.dts.platform.domain.explore.ResultSet;
 import com.yuzhi.dts.platform.service.catalog.CanonicalModelIdentityReadPort.ModelIdentity;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DerivationResult;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.ResolvedSource;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.DimensionPayload;
+import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.JoinPayload;
+import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.MetricPayload;
+import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.PublishPayload;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -64,7 +66,164 @@ public class QueryDatasetContractSnapshotAssembler {
 
         String contractJson = json(contract);
         String sqlText = version == null || version.getSqlText() == null ? "" : version.getSqlText();
-        return new Snapshot(CONTRACT_SCHEMA, contractVersion, status, contractJson, sha256(contractJson + "\n" + sqlText));
+        return new Snapshot(
+            CONTRACT_SCHEMA,
+            contractVersion,
+            status,
+            contractJson,
+            QueryDatasetContractChecksum.compute(contractJson, sqlText)
+        );
+    }
+
+    public Snapshot assemblePublishedModel(
+        QueryDatasetAsset asset,
+        QueryDatasetVersion version,
+        CatalogDataset physical,
+        ModelIdentity identity,
+        PublishPayload semantic,
+        DerivationResult classification
+    ) {
+        List<String> blockers = publishedModelBlockers(asset, physical, identity, semantic, classification);
+        String status = blockers.isEmpty() ? "READY" : "UNRESOLVED";
+        String contractVersion = semantic != null && StringUtils.hasText(semantic.specVersion())
+            ? semantic.specVersion().trim()
+            : identity == null ? "unresolved" : identity.contractVersion();
+        List<ModelEntry> models = identity == null
+            ? List.of()
+            : List.of(new ModelEntry(modelReference(semantic, identity), identity));
+
+        Map<String, Object> contract = new LinkedHashMap<>();
+        contract.put("schema", CONTRACT_SCHEMA);
+        contract.put("contractVersion", contractVersion);
+        contract.put("datasetId", asset == null ? null : asset.getId());
+        contract.put("datasetVersion", version == null ? null : version.getVersionNo());
+        contract.put("sourceDatasourceId", asset == null ? null : asset.getSourceDatasourceId());
+        contract.put("sourceDatasourceName", asset == null ? null : asset.getSourceDatasourceName());
+        contract.put("warehouseLayer", physical == null ? null : upper(physical.getWarehouseLayer()));
+        contract.put("bizDomain", physical == null || physical.getDomain() == null ? null : physical.getDomain().getCode());
+        contract.put("dimensions", publishedDimensions(semantic));
+        contract.put("metrics", publishedMetrics(semantic));
+        contract.put("joins", publishedJoins(semantic));
+        contract.put("sourceModels", modelContracts(models));
+        contract.put("classificationFloor", classification == null ? null : classification.effectiveLevel());
+        contract.put("classificationSnapshot", classificationContract(classification));
+        contract.put("policyRefs", policyRefs(classification));
+        contract.put("blockers", blockers);
+
+        String contractJson = json(contract);
+        String sqlText = version == null || version.getSqlText() == null ? "" : version.getSqlText();
+        return new Snapshot(
+            CONTRACT_SCHEMA,
+            contractVersion,
+            status,
+            contractJson,
+            QueryDatasetContractChecksum.compute(contractJson, sqlText)
+        );
+    }
+
+    private List<String> publishedModelBlockers(
+        QueryDatasetAsset asset,
+        CatalogDataset physical,
+        ModelIdentity identity,
+        PublishPayload semantic,
+        DerivationResult classification
+    ) {
+        List<String> blockers = new ArrayList<>();
+        if (identity == null) blockers.add("SEMANTIC_SOURCE_REQUIRED");
+        if (semantic == null || semantic.dimensions().isEmpty()) blockers.add("RESULT_SCHEMA_REQUIRED");
+        if (asset == null || asset.getSourceDatasourceId() == null) blockers.add("SOURCE_DATASOURCE_REQUIRED");
+        String layer = physical == null ? null : upper(physical.getWarehouseLayer());
+        if (!"DWS".equals(layer) && !"ADS".equals(layer)) blockers.add("PUBLISHED_WAREHOUSE_LAYER_REQUIRED");
+        if (
+            classification == null ||
+            !StringUtils.hasText(classification.effectiveLevel()) ||
+            classification.snapshotId() == null ||
+            classification.snapshotVersion() < 1
+        ) {
+            blockers.add("CLASSIFICATION_SNAPSHOT_REQUIRED");
+        } else if (classification.blockers() != null) {
+            classification
+                .blockers()
+                .stream()
+                .filter(StringUtils::hasText)
+                .sorted()
+                .forEach(blockers::add);
+        }
+        return List.copyOf(blockers);
+    }
+
+    private List<Map<String, Object>> publishedDimensions(PublishPayload semantic) {
+        if (semantic == null) return List.of();
+        return semantic
+            .dimensions()
+            .stream()
+            .filter(dimension -> dimension != null && StringUtils.hasText(dimension.name()))
+            .map(dimension -> publishedDimension(dimension, semantic.securityLevel()))
+            .toList();
+    }
+
+    private Map<String, Object> publishedDimension(DimensionPayload source, String classification) {
+        Map<String, Object> dimension = new LinkedHashMap<>();
+        dimension.put("code", source.name().trim());
+        dimension.put("label", StringUtils.hasText(source.displayName()) ? source.displayName().trim() : source.name().trim());
+        dimension.put("dataType", "UNKNOWN");
+        dimension.put("timeGrains", StringUtils.hasText(source.timeGrain()) ? List.of(upper(source.timeGrain())) : List.of());
+        dimension.put("classification", upper(classification));
+        dimension.put("filterOps", List.of("EQ", "NE", "IN", "NOT_IN", "IS_NULL", "IS_NOT_NULL"));
+        return dimension;
+    }
+
+    private List<Map<String, Object>> publishedMetrics(PublishPayload semantic) {
+        List<Map<String, Object>> metrics = new ArrayList<>();
+        if (semantic != null) {
+            semantic
+                .metrics()
+                .stream()
+                .filter(metric -> metric != null && StringUtils.hasText(metric.name()))
+                .map(this::publishedMetric)
+                .forEach(metrics::add);
+        }
+        boolean hasRecordCount = metrics.stream().anyMatch(metric -> "record_count".equals(metric.get("code")));
+        if (!hasRecordCount) metrics.addAll(defaultMetrics());
+        return List.copyOf(metrics);
+    }
+
+    private Map<String, Object> publishedMetric(MetricPayload source) {
+        Map<String, Object> metric = new LinkedHashMap<>();
+        metric.put("code", source.name().trim());
+        metric.put("label", StringUtils.hasText(source.displayName()) ? source.displayName().trim() : source.name().trim());
+        metric.put("aggregation", upper(source.aggregation()));
+        metric.put("unit", StringUtils.hasText(source.unit()) ? source.unit().trim() : null);
+        metric.put("expression", StringUtils.hasText(source.field()) ? source.field().trim() : source.name().trim());
+        return metric;
+    }
+
+    private List<Map<String, Object>> publishedJoins(PublishPayload semantic) {
+        if (semantic == null) return List.of();
+        return semantic
+            .joins()
+            .stream()
+            .filter(join -> join != null && StringUtils.hasText(join.to()))
+            .map(join -> publishedJoin(semantic, join))
+            .toList();
+    }
+
+    private Map<String, Object> publishedJoin(PublishPayload semantic, JoinPayload source) {
+        Map<String, Object> join = new LinkedHashMap<>();
+        join.put("fromModel", semantic.modelName());
+        join.put("toModel", source.to().trim());
+        join.put("relationship", source.relationship());
+        join.put("approvalRequired", source.approvalRequired());
+        return join;
+    }
+
+    private static String modelReference(PublishPayload semantic, ModelIdentity identity) {
+        if (semantic != null && StringUtils.hasText(semantic.tableName())) return semantic.tableName().trim();
+        return identity.modelName();
+    }
+
+    private static String upper(String value) {
+        return StringUtils.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : null;
     }
 
     private List<ModelEntry> orderedModels(Map<String, ModelIdentity> sourceModels) {
@@ -202,14 +361,6 @@ public class QueryDatasetContractSnapshotAssembler {
             return objectMapper.writeValueAsString(contract);
         } catch (JsonProcessingException failure) {
             throw new IllegalStateException("Unable to serialize query dataset semantic contract", failure);
-        }
-    }
-
-    private String sha256(String value) {
-        try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException failure) {
-            throw new IllegalStateException("SHA-256 is unavailable", failure);
         }
     }
 

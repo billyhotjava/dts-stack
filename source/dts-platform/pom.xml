@@ -652,6 +652,8 @@
                         <testInclude>**/service/sql/QueryDatasetServiceTest.java</testInclude>
                         <testInclude>**/service/sql/QueryDatasetContractSnapshotAssemblerTest.java</testInclude>
                         <testInclude>**/service/sql/PublishedQueryDatasetServiceTest.java</testInclude>
+                        <testInclude>**/service/sql/QueryDatasetPublishedModelContractTest.java</testInclude>
+                        <testInclude>**/service/sql/ModelQueryDatasetProjectionLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleImportedDbtImplementationTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
@@ -799,6 +801,8 @@
                         <testInclude>**/service/catalog/SchemaDriftDetectorTest.java</testInclude>
                         <testInclude>**/service/catalog/SchemaDriftDetailsReaderTest.java</testInclude>
                         <testInclude>**/service/catalog/JdbcCanonicalModelIdentityReadAdapterPostgresIT.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogClassificationVersionVisibilityPostgresIT.java</testInclude>
+                        <testInclude>**/repository/explore/QueryDatasetVersionJsonbPostgresIT.java</testInclude>
                         <testInclude>**/service/catalog/CatalogPhysicalLocatorTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogClassificationBoundaryAdapterTest.java</testInclude>
                         <testInclude>**/service/catalog/ArchitectureDictionaryWriteGuardTest.java</testInclude>

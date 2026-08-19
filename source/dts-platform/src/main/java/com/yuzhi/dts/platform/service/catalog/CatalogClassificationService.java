@@ -280,7 +280,7 @@ public class CatalogClassificationService {
             }
         }
         snapshot.setPropagationStatus(STATUS_PROPAGATED);
-        return snapshotRepository.save(snapshot);
+        return snapshotRepository.saveAndFlush(snapshot);
     }
 
     private CatalogClassificationSnapshot lockRequired(String subjectType, String subjectKey) {
