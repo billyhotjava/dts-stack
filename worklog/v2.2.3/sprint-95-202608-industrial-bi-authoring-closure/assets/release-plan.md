@@ -47,7 +47,7 @@ docker compose -f docker-compose-app.yml up -d --no-deps --force-recreate dts-pl
 
 回滚后校验：`docker compose -f docker-compose-app.yml ps`、Analytics health、webapp `nginx -t`、平台 HTTPS 200、最近 10 分钟容器日志无启动错误。
 
-**回滚演练结果**：待本次容器部署后登记；未完成前 G3 记为 GAP，不能写 PASS。
+**回滚准备结果（2026-08-20）**：部署前旧镜像已标记为 `rollback-sprint95-20260820`；新镜像已按后端→前端顺序部署并通过健康检查。为避免对当前用户造成第二次主动中断，本次未切回旧镜像做生产回滚演练，因此 G3 保留 GAP，不记完整 PASS。
 
 ## 5. 影响面与加固
 

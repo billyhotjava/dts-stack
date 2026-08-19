@@ -1,7 +1,7 @@
 # Sprint-95：工业级 BI 分析创作闭环
 
 **时间**：2026-08-20 ～ 2026-09-04  
-**状态**：IN_PROGRESS  
+**状态**：DONE_WITH_GAPS
 **类型**：Full-stack / UI Productization / Governed BI  
 **目标**：业务分析人员在既有治理分析与分析看板入口中完成“拖字段 → 出图 → 调样式 → 做计算 → 配联动 → 发布 → 导出”，全过程继续受数据集契约、权限、查询预算、版本和审计约束。
 
@@ -65,8 +65,8 @@ Sprint-94 已建立已发布 QueryDataset → `AnalysisQuerySpec` → `AnalysisQ
 | G1 | 契约链与 UI 规格 | PASS | 本文与 Feature README | - |
 | G1 | 非功能预算 | PASS | `assets/nfr-budget.md` | - |
 | G2 | 变更范围与测试先行 | PASS | RED commit `aa7956d5a`；GREEN tests；GitNexus staged risk LOW | - |
-| G3 | 发布安全 | READY_WITH_GAP | `assets/release-plan.md`；待部署后登记回滚演练 | F3/T02 |
-| G4 | 可运维与 DoD | READY_WITH_GAP | `assets/runbook.md`；待容器健康验收 | F3/T02 |
+| G3 | 发布安全 | PASS_WITH_GAP | `assets/release-plan.md`；旧镜像已保留，未执行生产回滚演练 | - |
+| G4 | 可运维与 DoD | PASS_WITH_GAPS | `assets/runbook.md`、`it/deployment-20260820.md`；告警落地待目标监控系统 | - |
 
 ## Feature 列表
 
@@ -75,7 +75,7 @@ Sprint-94 已建立已发布 QueryDataset → `AnalysisQuerySpec` → `AnalysisQ
 | F0 | 交付基线与契约冻结 | 1 | P0 | DONE |
 | F1 | 可视化分析工作台 | 2 | P0 | DONE |
 | F2 | 看板联动与发布消费 | 1 | P0 | DONE |
-| F3 | 受控导出与集中验收 | 2 | P0 | IN_PROGRESS |
+| F3 | 受控导出与集中验收 | 2 | P0 | DONE_WITH_GAPS |
 
 **执行顺序**：F0 → F1/T01 → F1/T02 → F2/T01 → F3/T01 → F3/T02。
 
@@ -97,7 +97,7 @@ Sprint-94 已建立已发布 QueryDataset → `AnalysisQuerySpec` → `AnalysisQ
 - [x] 派生指标/日期粒度/样式都有合法、错误和只读态。
 - [x] 看板编辑时可配置参数映射与联动目标，发布快照包含这些配置。
 - [x] CSV/XLSX 导出要求 Analysis 已发布且具备 EXPORT 权限，并包含审计/密级封印。
-- [ ] 聚焦测试、webapp legacy build、Analytics test 通过；页面无 console/page error。
+- [x] 聚焦测试、webapp legacy build、Analytics test 通过；页面无 console/page error。
 - [ ] Chrome 95 若环境仍缺失，Sprint 保持 PASS_WITH_GAPS，不伪称兼容门禁关闭。
 
 ## 非目标
