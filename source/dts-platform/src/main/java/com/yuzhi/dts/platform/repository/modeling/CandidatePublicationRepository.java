@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -997,7 +998,8 @@ public class CandidatePublicationRepository {
                 new CatalogLineageInput(
                     upstream.getKey(),
                     lineageId,
-                    upstream.getValue()
+                    upstream.getValue(),
+                    loadCatalogRelationNames(upstream.getKey())
                 )
             );
         }
@@ -1169,9 +1171,9 @@ public class CandidatePublicationRepository {
         if (downstreamColumns.isEmpty()) {
             return;
         }
-        Map<String, String> rootExpressions = DbtSqlProjectionParser.selectExpressionsByAlias(
-            requireCurrentModelSql(candidate, model, evidence)
-        );
+        String rootSql = requireCurrentModelSql(candidate, model, evidence);
+        Map<String, String> rootExpressions = DbtSqlProjectionParser.selectExpressionsByAlias(rootSql);
+        Map<String, String> relationAliases = DbtSqlProjectionParser.relationAliases(rootSql);
         long physicalSourceCount = lineageInputs
             .stream()
             .filter(CatalogLineageInput::physicalSource)
@@ -1179,13 +1181,27 @@ public class CandidatePublicationRepository {
         Map<String, List<String>> stageExpressions = physicalSourceCount == 1
             ? loadCurrentStageExpressions(model, evidence)
             : Map.of();
+        Map<UUID, Map<String, CatalogColumn>> upstreamColumnsByAsset = new LinkedHashMap<>();
+        Map<String, Integer> columnOwnerCounts = new LinkedHashMap<>();
         for (CatalogLineageInput input : lineageInputs) {
-            Map<String, CatalogColumn> upstreamColumns = loadColumnsForDataset(
-                input.upstreamAssetId()
+            Map<String, CatalogColumn> columns = loadColumnsForDataset(input.upstreamAssetId());
+            upstreamColumnsByAsset.put(input.upstreamAssetId(), columns);
+            columns.keySet().forEach(name -> columnOwnerCounts.merge(name, 1, Integer::sum));
+        }
+        for (CatalogLineageInput input : lineageInputs) {
+            Map<String, CatalogColumn> upstreamColumns = upstreamColumnsByAsset.getOrDefault(
+                input.upstreamAssetId(),
+                Map.of()
             );
             if (upstreamColumns.isEmpty()) {
                 continue;
             }
+            Set<String> allowedQualifiers = relationAliases
+                .entrySet()
+                .stream()
+                .filter(alias -> input.relationNames().contains(alias.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
             for (CatalogColumn downstreamColumn : downstreamColumns.values()) {
                 String downstreamKey = normalizeColumnName(
                     downstreamColumn.name()
@@ -1196,12 +1212,16 @@ public class CandidatePublicationRepository {
                     matches = matchPhysicalSourceColumns(
                         rootExpression,
                         stageExpressions,
-                        upstreamColumns
+                        upstreamColumns,
+                        allowedQualifiers,
+                        columnOwnerCounts
                     );
                 } else if (!input.physicalSource()) {
                     matches = matchDirectColumns(
                         rootExpression,
-                        upstreamColumns
+                        upstreamColumns,
+                        allowedQualifiers,
+                        columnOwnerCounts
                     );
                 } else {
                     matches = Map.of();
@@ -1211,7 +1231,12 @@ public class CandidatePublicationRepository {
                     (!input.physicalSource() || physicalSourceCount <= 1)
                 ) {
                     CatalogColumn sameName = upstreamColumns.get(downstreamKey);
-                    if (sameName != null) {
+                    boolean uniquelyOwned = columnOwnerCounts.getOrDefault(downstreamKey, 0) == 1;
+                    if (
+                        sameName != null &&
+                        uniquelyOwned &&
+                        (rootExpression == null || rootExpression.isBlank())
+                    ) {
                         matches = Map.of(
                             downstreamKey,
                             new ColumnMatch(
@@ -1315,21 +1340,25 @@ public class CandidatePublicationRepository {
 
     private Map<String, ColumnMatch> matchDirectColumns(
         String rootExpression,
-        Map<String, CatalogColumn> upstreamColumns
+        Map<String, CatalogColumn> upstreamColumns,
+        Set<String> allowedQualifiers,
+        Map<String, Integer> columnOwnerCounts
     ) {
         if (rootExpression == null || rootExpression.isBlank()) {
             return Map.of();
         }
         Map<String, ColumnMatch> result = new LinkedHashMap<>();
         for (CatalogColumn column : upstreamColumns.values()) {
-            if (
-                DbtSqlProjectionParser.expressionReferencesColumn(
-                    rootExpression,
-                    column.name()
-                )
-            ) {
+            String columnKey = normalizeColumnName(column.name());
+            DbtSqlProjectionParser.ColumnReference reference = DbtSqlProjectionParser.columnReference(
+                rootExpression,
+                column.name()
+            );
+            boolean qualifiedForInput = reference.qualifiers().stream().anyMatch(allowedQualifiers::contains);
+            boolean unqualifiedAndUnique = reference.unqualified() && columnOwnerCounts.getOrDefault(columnKey, 0) == 1;
+            if (qualifiedForInput || unqualifiedAndUnique) {
                 result.putIfAbsent(
-                    normalizeColumnName(column.name()),
+                    columnKey,
                     new ColumnMatch(
                         column,
                         "SQL_EXPRESSION",
@@ -1345,7 +1374,9 @@ public class CandidatePublicationRepository {
     private Map<String, ColumnMatch> matchPhysicalSourceColumns(
         String rootExpression,
         Map<String, List<String>> stageExpressions,
-        Map<String, CatalogColumn> upstreamColumns
+        Map<String, CatalogColumn> upstreamColumns,
+        Set<String> allowedQualifiers,
+        Map<String, Integer> columnOwnerCounts
     ) {
         if (rootExpression == null || rootExpression.isBlank()) {
             return Map.of();
@@ -1384,7 +1415,9 @@ public class CandidatePublicationRepository {
         for (
             Map.Entry<String, ColumnMatch> direct : matchDirectColumns(
                 rootExpression,
-                upstreamColumns
+                upstreamColumns,
+                allowedQualifiers,
+                columnOwnerCounts
             ).entrySet()
         ) {
             result.putIfAbsent(direct.getKey(), direct.getValue());
@@ -1411,6 +1444,25 @@ public class CandidatePublicationRepository {
             datasetId
         );
         return columnsByName(columns);
+    }
+
+    private Set<String> loadCatalogRelationNames(UUID datasetId) {
+        return jdbcTemplate
+            .query(
+                "select name, hive_table from catalog_dataset where id = ?",
+                (row, rowNumber) -> {
+                    List<String> names = new ArrayList<>(2);
+                    names.add(row.getString("name"));
+                    names.add(row.getString("hive_table"));
+                    return names;
+                },
+                datasetId
+            )
+            .stream()
+            .flatMap(List::stream)
+            .map(CandidatePublicationRepository::normalizeColumnName)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     private Map<String, CatalogColumn> loadColumnsForTable(UUID tableId) {
@@ -1653,8 +1705,13 @@ public class CandidatePublicationRepository {
     private record CatalogLineageInput(
         UUID upstreamAssetId,
         UUID lineageId,
-        boolean physicalSource
-    ) {}
+        boolean physicalSource,
+        Set<String> relationNames
+    ) {
+        private CatalogLineageInput {
+            relationNames = Set.copyOf(relationNames == null ? Set.of() : relationNames);
+        }
+    }
 
     private record CatalogColumn(UUID id, String name) {}
 

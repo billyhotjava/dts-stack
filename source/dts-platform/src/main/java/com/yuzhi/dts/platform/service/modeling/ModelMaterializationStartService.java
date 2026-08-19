@@ -6,6 +6,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliverySt
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import java.time.Clock;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -151,6 +152,28 @@ public class ModelMaterializationStartService {
         String idempotencyKey,
         String reason
     ) {
+        return rematerialize(
+            tenantId,
+            actorId,
+            candidateId,
+            expectedVersion,
+            idempotencyKey,
+            reason,
+            null
+        );
+    }
+
+    /** Starts another durable attempt for only the planner-selected BUILD nodes. */
+    @Transactional
+    public CommandResult rematerialize(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        int expectedVersion,
+        String idempotencyKey,
+        String reason,
+        List<UUID> buildModelSpecIds
+    ) {
         CommandResult result = candidateCommands.transition(
             tenantId,
             actorId,
@@ -166,8 +189,10 @@ public class ModelMaterializationStartService {
         requireAvailable(tenantId, actorId, candidateId, result.candidate().version());
         if (result.replayed()) {
             builds.requireQueuedBuild(result.candidate());
-        } else {
+        } else if (buildModelSpecIds == null) {
             builds.createRematerializationQueuedBuild(result.candidate(), clock.instant());
+        } else {
+            builds.createRematerializationQueuedBuild(result.candidate(), clock.instant(), buildModelSpecIds);
         }
         return result;
     }

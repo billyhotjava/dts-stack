@@ -552,6 +552,7 @@
                         <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationAvailabilityPinPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationBatchContractTest.java</testInclude>
+                        <testInclude>**/repository/modeling/RematerializationEvidenceAggregationContractTest.java</testInclude>
                         <testInclude>**/service/modeling/migration/Sprint83G3DatabaseRehearsalPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/CandidatePublicationRepositoryIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelReleaseCandidateRepositoryIT.java</testInclude>
@@ -595,6 +596,7 @@
                         <testInclude>**/service/modeling/imports/proof/ModelSpecImportInspectionProofCodecTest.java</testInclude>
                         <testInclude>**/service/modeling/imports/reconciliation/*.java</testInclude>
                         <testInclude>**/service/etl/DbtScopedProjectServiceTest.java</testInclude>
+                        <testInclude>**/service/etl/DbtSqlProjectionParserTest.java</testInclude>
                         <testInclude>**/service/etl/DbtScopedProjectServiceRealCompileIT.java</testInclude>
                         <testInclude>**/service/etl/DbtDagServiceTest.java</testInclude>
                         <testInclude>**/service/etl/DbtAssetSyncServiceTest.java</testInclude>

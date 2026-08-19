@@ -176,6 +176,7 @@ public class ModelReleaseCandidateApplicationService {
         return materializationPlans.preview(access.tenantId(), command);
     }
 
+    @Transactional
     public CommandResult create(
         String tenantId,
         String actorId,
@@ -185,6 +186,7 @@ public class ModelReleaseCandidateApplicationService {
         return create(tenantId, actorId, planId, command, null, null);
     }
 
+    @Transactional
     public CommandResult create(
         String tenantId,
         String actorId,
@@ -211,6 +213,7 @@ public class ModelReleaseCandidateApplicationService {
                 access
             );
         }
+        repository.lockPlanForCandidate(access.tenantId(), access.planId());
         CandidateView current = repository
             .listForWorkbench(access.tenantId(), access.planId())
             .stream()
@@ -405,6 +408,7 @@ public class ModelReleaseCandidateApplicationService {
         );
     }
 
+    @Transactional
     public CommandResult createReplacement(
         String tenantId,
         String actorId,
@@ -425,6 +429,7 @@ public class ModelReleaseCandidateApplicationService {
         );
     }
 
+    @Transactional
     public CommandResult createReplacement(
         String tenantId,
         String actorId,
@@ -455,6 +460,7 @@ public class ModelReleaseCandidateApplicationService {
                 access
             );
         }
+        repository.lockPlanForCandidate(access.tenantId(), access.planId());
         List<ModelReleaseCandidateContract.ScopeEntryCommand> expandedEntries = repository
             .findByIdempotencyKey(access.tenantId(), command.idempotencyKey())
             .isPresent()
@@ -512,13 +518,17 @@ public class ModelReleaseCandidateApplicationService {
         Strategy strategy
     ) {
         Access access = authorizeMaintainer(tenantId, actorId, planId);
-        CandidateView current = candidateForPlan(access.tenantId(), access.planId(), sourceCandidateId);
         if (command == null || !access.planId().equals(command.planId())) {
             throw badRequest(
                 "MODEL_RELEASE_CANDIDATE_PLAN_MISMATCH",
                 "Rematerialization plan must match the plan in the request path"
             );
         }
+        boolean replay = repository
+            .findCommandByIdempotencyKey(access.tenantId(), command.idempotencyKey())
+            .isPresent();
+        if (!replay) repository.lockPlanForCandidate(access.tenantId(), access.planId());
+        CandidateView current = candidateForPlan(access.tenantId(), access.planId(), sourceCandidateId);
         Set<UUID> currentScope = current
             .entries()
             .stream()
@@ -529,38 +539,37 @@ public class ModelReleaseCandidateApplicationService {
             .stream()
             .map(ModelReleaseCandidateContract.ScopeEntryCommand::modelSpecId)
             .collect(java.util.stream.Collectors.toUnmodifiableSet());
-        if (
-            materializationPlanChecksum != null &&
-            repository.findCommandByIdempotencyKey(access.tenantId(), command.idempotencyKey()).isEmpty()
-        ) {
+        Set<UUID> immutableRoots = candidateRoots(current);
+        List<UUID> buildModelSpecIds = current.entries().stream().map(ModelReleaseCandidateContract.EntryView::modelSpecId).toList();
+        if (materializationPlanChecksum != null && !replay) {
+            if (!immutableRoots.equals(requestedScope)) {
+                throw rematerializationScopeMismatch(current, requestedScope, immutableRoots);
+            }
             ValidatedPlan validated = materializationPlans.requireCurrent(
                 access.tenantId(),
                 materializationCommand(access.planId(), command, strategy),
                 materializationPlanChecksum
             );
-            requestedScope = validated
+            buildModelSpecIds = validated
                 .buildEntries()
                 .stream()
                 .map(ModelReleaseCandidateContract.ScopeEntryCommand::modelSpecId)
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                .toList();
+            Set<UUID> validatedBuildScope = Set.copyOf(buildModelSpecIds);
+            if (
+                buildModelSpecIds.isEmpty() ||
+                validatedBuildScope.size() != buildModelSpecIds.size() ||
+                !currentScope.containsAll(validatedBuildScope) ||
+                !validatedBuildScope.containsAll(immutableRoots)
+            ) {
+                throw rematerializationScopeMismatch(current, validatedBuildScope, immutableRoots);
+            }
         }
         if (
             !current.environment().equals(command.environment()) ||
-            (!requestedScope.isEmpty() && !currentScope.equals(requestedScope))
+            (materializationPlanChecksum == null && !requestedScope.isEmpty() && !currentScope.equals(requestedScope))
         ) {
-            throw new ModelReleaseCandidateException(
-                "MODEL_RELEASE_REMATERIALIZATION_SCOPE_MISMATCH",
-                "Rematerialization must retain the candidate environment and immutable model scope",
-                Kind.CONFLICT,
-                Map.of(
-                    "candidateId",
-                    current.id(),
-                    "currentScope",
-                    currentScope,
-                    "requestedScope",
-                    requestedScope
-                )
-            );
+            throw rematerializationScopeMismatch(current, requestedScope, immutableRoots);
         }
         return roleAware(
             materializationStarts.rematerialize(
@@ -569,9 +578,48 @@ public class ModelReleaseCandidateApplicationService {
                 sourceCandidateId,
                 expectedVersion,
                 command.idempotencyKey(),
-                command.reason()
+                command.reason(),
+                replay ? List.of() : buildModelSpecIds
             ),
             access
+        );
+    }
+
+    private static Set<UUID> candidateRoots(CandidateView candidate) {
+        Set<UUID> explicit = candidate
+            .entries()
+            .stream()
+            .filter(entry -> "MATERIALIZATION_ROOT".equals(entry.selectedReason()))
+            .map(ModelReleaseCandidateContract.EntryView::modelSpecId)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        if (!explicit.isEmpty()) return explicit;
+        return candidate
+            .entries()
+            .stream()
+            .filter(entry -> !"AUTO_DEPENDENCY".equals(entry.selectedReason()))
+            .map(ModelReleaseCandidateContract.EntryView::modelSpecId)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    private static ModelReleaseCandidateException rematerializationScopeMismatch(
+        CandidateView candidate,
+        Set<UUID> requestedScope,
+        Set<UUID> immutableRoots
+    ) {
+        return new ModelReleaseCandidateException(
+            "MODEL_RELEASE_REMATERIALIZATION_SCOPE_MISMATCH",
+            "Rematerialization must retain the candidate environment and immutable root scope",
+            Kind.CONFLICT,
+            Map.of(
+                "candidateId",
+                candidate.id(),
+                "currentScope",
+                candidate.entries().stream().map(ModelReleaseCandidateContract.EntryView::modelSpecId).toList(),
+                "immutableRoots",
+                immutableRoots,
+                "requestedScope",
+                requestedScope
+            )
         );
     }
 

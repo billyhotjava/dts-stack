@@ -15,6 +15,10 @@ import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepositor
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.Action;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.DependencyRole;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.OrderedEntry;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.Preview;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventType;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandEventView;
@@ -31,8 +35,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.Tra
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchState;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.QualityEvidencePort.QualityEvidence;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -44,6 +50,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
 class ModelReleaseCandidateApplicationServiceTest {
@@ -54,6 +61,19 @@ class ModelReleaseCandidateApplicationServiceTest {
     private static final UUID CANDIDATE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID MODEL_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final Instant NOW = Instant.parse("2026-07-24T10:00:00Z");
+
+    @Test
+    void planChecksumBoundCandidateWritesShareOneTransactionBoundary() {
+        assertThat(
+            Arrays
+                .stream(ModelReleaseCandidateApplicationService.class.getDeclaredMethods())
+                .filter(method ->
+                    Set.of("create", "createReplacement", "rematerialize").contains(method.getName())
+                )
+        )
+            .isNotEmpty()
+            .allSatisfy(method -> assertThat(method.getAnnotation(Transactional.class)).isNotNull());
+    }
 
     @Mock
     private ModelReleaseCandidateRepository repository;
@@ -227,7 +247,17 @@ class ModelReleaseCandidateApplicationServiceTest {
             "rebuild selected relations"
         );
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
-        when(materializationStarts.rematerialize(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), eq(4), any(), any()))
+        when(
+            materializationStarts.rematerialize(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(CANDIDATE_ID),
+                eq(4),
+                any(),
+                any(),
+                eq(List.of(MODEL_ID))
+            )
+        )
             .thenReturn(new CommandResult(building, false, List.of()));
 
         CommandResult result = service.rematerialize(
@@ -246,7 +276,8 @@ class ModelReleaseCandidateApplicationServiceTest {
             eq(CANDIDATE_ID),
             eq(4),
             eq("rematerialize-root-key"),
-            eq("rebuild selected relations")
+            eq("rebuild selected relations"),
+            eq(List.of(MODEL_ID))
         );
         verify(commands, never()).createReplacement(any(), any(), any(), anyInt(), any());
     }
@@ -272,6 +303,147 @@ class ModelReleaseCandidateApplicationServiceTest {
             );
 
         verifyNoInteractions(materializationStarts);
+    }
+
+    @Test
+    void checksumBoundRematerializationKeepsCandidateIdentityButQueuesOnlyBuildNodes() {
+        UUID upstreamId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+        EntryView upstream = new EntryView(
+            UUID.fromString("40000000-0000-0000-0000-000000000002"),
+            TENANT,
+            CANDIDATE_ID,
+            PLAN_ID,
+            upstreamId,
+            2,
+            "c".repeat(64),
+            null,
+            ImplementationMode.DBT_MANAGED,
+            DeliveryStatus.BUILT,
+            0,
+            "AUTO_DEPENDENCY"
+        );
+        EntryView root = new EntryView(
+            UUID.fromString("40000000-0000-0000-0000-000000000001"),
+            TENANT,
+            CANDIDATE_ID,
+            PLAN_ID,
+            MODEL_ID,
+            2,
+            "b".repeat(64),
+            null,
+            ImplementationMode.DBT_MANAGED,
+            DeliveryStatus.BUILT,
+            1,
+            "MATERIALIZATION_ROOT"
+        );
+        CandidateView built = candidate(DeliveryStatus.BUILT, List.of(upstream, root));
+        CandidateView building = candidateAtVersion(DeliveryStatus.BUILDING, 5, CANDIDATE_ID);
+        CreateCandidateCommand request = new CreateCandidateCommand(
+            PLAN_ID,
+            "prod",
+            List.of(new ScopeEntryCommand(MODEL_ID, 0, "selected root")),
+            "planned-rematerialization-key",
+            "rebuild only the requested relation"
+        );
+        String checksum = "f".repeat(64);
+        Preview preview = new Preview(
+            PLAN_ID,
+            "prod",
+            ModelMaterializationPlanContract.Strategy.WITH_MISSING_UPSTREAMS,
+            checksum,
+            true,
+            List.of(MODEL_ID),
+            List.of(
+                new OrderedEntry(
+                    upstreamId,
+                    "published upstream",
+                    2,
+                    "c".repeat(64),
+                    1,
+                    "d".repeat(64),
+                    "e".repeat(64),
+                    Layer.DWS,
+                    DependencyRole.UPSTREAM,
+                    0,
+                    Action.REUSE,
+                    "EXACT_VERIFIED_RELATION",
+                    UUID.fromString("50000000-0000-0000-0000-000000000001"),
+                    "warehouse.public.dws_upstream"
+                ),
+                new OrderedEntry(
+                    MODEL_ID,
+                    "requested root",
+                    2,
+                    "b".repeat(64),
+                    1,
+                    "d".repeat(64),
+                    "e".repeat(64),
+                    Layer.ADS,
+                    DependencyRole.ROOT,
+                    1,
+                    Action.BUILD,
+                    "REQUESTED_MODEL",
+                    null,
+                    null
+                )
+            ),
+            List.of()
+        );
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(built));
+        when(
+            materializationPlans.requireCurrent(
+                eq(TENANT),
+                any(ModelMaterializationPlanContract.PreviewCommand.class),
+                eq(checksum)
+            )
+        )
+            .thenReturn(
+                new ModelMaterializationPlanService.ValidatedPlan(
+                    preview,
+                    List.of(new ScopeEntryCommand(MODEL_ID, 0, "MATERIALIZATION_ROOT"))
+                )
+            );
+        when(
+            materializationStarts.rematerialize(
+                TENANT,
+                ACTOR,
+                CANDIDATE_ID,
+                4,
+                request.idempotencyKey(),
+                request.reason(),
+                List.of(MODEL_ID)
+            )
+        )
+            .thenReturn(new CommandResult(building, false, List.of()));
+
+        CommandResult result = service.rematerialize(
+            TENANT,
+            ACTOR,
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            request,
+            checksum,
+            ModelMaterializationPlanContract.Strategy.WITH_MISSING_UPSTREAMS
+        );
+
+        assertThat(result.candidate()).isSameAs(building);
+        InOrder order = org.mockito.Mockito.inOrder(repository, materializationPlans, materializationStarts);
+        order.verify(repository).lockPlanForCandidate(TENANT, PLAN_ID);
+        order.verify(materializationPlans).requireCurrent(
+            eq(TENANT),
+            any(ModelMaterializationPlanContract.PreviewCommand.class),
+            eq(checksum)
+        );
+        order.verify(materializationStarts).rematerialize(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            4,
+            request.idempotencyKey(),
+            request.reason(),
+            List.of(MODEL_ID)
+        );
     }
 
     @Test
@@ -517,6 +689,10 @@ class ModelReleaseCandidateApplicationServiceTest {
         assertThat(preview.getValue().requestedModelSpecIds()).containsExactly(MODEL_ID);
         verify(commands).createBatchWithExpandedScope(TENANT, ACTOR, command, buildScope);
         verify(preflight, never()).requireEligible(eq(TENANT), any(CreateCandidateCommand.class));
+        InOrder order = org.mockito.Mockito.inOrder(repository, materializationPlans, commands);
+        order.verify(repository).lockPlanForCandidate(TENANT, PLAN_ID);
+        order.verify(materializationPlans).requireCurrent(eq(TENANT), any(), eq(checksum));
+        order.verify(commands).createBatchWithExpandedScope(TENANT, ACTOR, command, buildScope);
     }
 
     @Test

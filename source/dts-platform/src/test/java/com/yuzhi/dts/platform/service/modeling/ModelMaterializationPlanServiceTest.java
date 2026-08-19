@@ -19,6 +19,9 @@ import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.
 import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanRelationPort.RelationObservation;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -29,6 +32,7 @@ class ModelMaterializationPlanServiceTest {
 
     private static final String TENANT = "default";
     private static final UUID PLAN_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID UPSTREAM_PLAN_ID = UUID.fromString("10000000-0000-0000-0000-000000000002");
     private static final UUID DIM_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID DWS_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final UUID ADS_ID = UUID.fromString("40000000-0000-0000-0000-000000000001");
@@ -157,6 +161,72 @@ class ModelMaterializationPlanServiceTest {
         });
     }
 
+    @Test
+    void reusesAnExactPublishedUpstreamFromAnotherPlanWithoutCopyingItIntoTheCandidate() {
+        resolution = crossPlanChain();
+        when(dependencies.resolvePlan(TENANT, PLAN_ID, List.of(ADS_ID))).thenReturn(resolution);
+        when(relations.findLatest(eq(TENANT), eq(PLAN_ID), eq("dev"), eq("postgres-primary"), eq("postgres"), anyList()))
+            .thenReturn(Map.of(DWS_ID, observation(DWS_ID, "4".repeat(64))));
+
+        var preview = service.preview(TENANT, command(Strategy.WITH_MISSING_UPSTREAMS));
+
+        assertThat(preview.canStart()).isTrue();
+        assertThat(preview.orderedEntries()).extracting(entry -> entry.modelSpecId()).containsExactly(DWS_ID, ADS_ID);
+        assertThat(preview.orderedEntries()).extracting(entry -> entry.action()).containsExactly(Action.REUSE, Action.BUILD);
+        assertThat(service.requireCurrent(TENANT, command(Strategy.WITH_MISSING_UPSTREAMS), preview.planChecksum()).buildEntries())
+            .extracting(entry -> entry.modelSpecId())
+            .containsExactly(ADS_ID);
+    }
+
+    @Test
+    void blocksRatherThanRebuildingAnUpstreamOwnedByAnotherPlan() {
+        resolution = crossPlanChain();
+        when(dependencies.resolvePlan(TENANT, PLAN_ID, List.of(ADS_ID))).thenReturn(resolution);
+        when(relations.findLatest(eq(TENANT), eq(PLAN_ID), eq("dev"), eq("postgres-primary"), eq("postgres"), anyList()))
+            .thenReturn(Map.of());
+
+        var preview = service.preview(TENANT, command(Strategy.WITH_MISSING_UPSTREAMS));
+
+        assertThat(preview.canStart()).isFalse();
+        assertThat(preview.blockers())
+            .extracting(blocker -> blocker.code())
+            .contains("MODEL_MATERIALIZATION_CROSS_PLAN_UPSTREAM_NOT_CURRENT");
+    }
+
+    @Test
+    void rejectsAnotherPlansModelWhenItIsRequestedAsTheRoot() {
+        ResolvedModel upstream = node(DWS_ID, "跨规划汇总", Layer.DWS, List.of(), UPSTREAM_PLAN_ID);
+        resolution = new PlanResolution(List.of(DWS_ID), Map.of(DWS_ID, upstream), Map.of());
+        when(dependencies.resolvePlan(TENANT, PLAN_ID, List.of(DWS_ID))).thenReturn(resolution);
+        when(relations.findLatest(eq(TENANT), eq(PLAN_ID), eq("dev"), eq("postgres-primary"), eq("postgres"), anyList()))
+            .thenReturn(Map.of(DWS_ID, observation(DWS_ID, "4".repeat(64))));
+
+        var preview = service.preview(
+            TENANT,
+            new PreviewCommand(PLAN_ID, "dev", List.of(DWS_ID), Strategy.WITH_MISSING_UPSTREAMS)
+        );
+
+        assertThat(preview.canStart()).isFalse();
+        assertThat(preview.blockers())
+            .extracting(blocker -> blocker.code())
+            .contains("MODEL_MATERIALIZATION_ROOT_PLAN_MISMATCH");
+    }
+
+    @Test
+    void dependencyAndRelationReadsAdmitOnlyPublishedCrossPlanPins() throws IOException {
+        String dependencies = Files.readString(
+            Path.of("src/main/java/com/yuzhi/dts/platform/repository/modeling/ModelImplementationDependencyReadAdapter.java")
+        );
+        String observations = Files.readString(
+            Path.of("src/main/java/com/yuzhi/dts/platform/repository/modeling/ModelMaterializationPlanRelationReadAdapter.java")
+        );
+
+        assertThat(dependencies)
+            .contains("spec.plan_id = ? or spec.status = 'PUBLISHED'")
+            .doesNotContain("source.tenant_id = ? and source.plan_id = ?");
+        assertThat(observations).contains("c.plan_id = ? or c.status = 'PUBLISHED'");
+    }
+
     private static PreviewCommand command(Strategy strategy) {
         return new PreviewCommand(PLAN_ID, "dev", List.of(ADS_ID), strategy);
     }
@@ -178,11 +248,28 @@ class ModelMaterializationPlanServiceTest {
         return new PlanResolution(List.of(ADS_ID), Map.of(DIM_ID, dim, DWS_ID, dws, ADS_ID, ads), Map.of());
     }
 
+    private static PlanResolution crossPlanChain() {
+        ResolvedModel dws = node(DWS_ID, "跨规划汇总", Layer.DWS, List.of(), UPSTREAM_PLAN_ID);
+        ResolvedModel ads = node(
+            ADS_ID,
+            "应用",
+            Layer.ADS,
+            List.of(input(DWS_ID, DependencyRole.UPSTREAM)),
+            PLAN_ID
+        );
+        return new PlanResolution(List.of(ADS_ID), Map.of(DWS_ID, dws, ADS_ID, ads), Map.of());
+    }
+
     private static ResolvedModel node(UUID id, String name, Layer layer, List<ModelInput> inputs) {
+        return node(id, name, layer, inputs, PLAN_ID);
+    }
+
+    private static ResolvedModel node(UUID id, String name, Layer layer, List<ModelInput> inputs, UUID planId) {
         ModelSpecView model = mock(ModelSpecView.class);
         when(model.id()).thenReturn(id);
         when(model.name()).thenReturn(name);
         when(model.layer()).thenReturn(layer);
+        when(model.planId()).thenReturn(planId);
         ModelLifecycleContract.ImplementationView implementation = mock(ModelLifecycleContract.ImplementationView.class);
         Snapshot snapshot = new Snapshot(
             id,

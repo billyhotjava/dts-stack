@@ -81,10 +81,35 @@ public class ModelPublicationQualityEvidenceRepository {
                                where run.status = 'BUILT'
                                  and run.finished_date is not null
                                  and run.dbt_invocation_id is not null
+                                 and run.dispatch_status = 'COMPLETED'
                            ) as verified_count
-                      from modeling_pipeline_run run
-                     where run.pipeline_run_group_id = dispatch.id
-                       and run.run_purpose = 'RELEASE_BUILD'
+                      from modeling_model_release_candidate_entry entry
+                      join lateral (
+                            select pipeline.status,
+                                   pipeline.finished_date,
+                                   pipeline.dbt_invocation_id,
+                                   materialization.status as dispatch_status
+                              from modeling_pipeline_run pipeline
+                              join modeling_materialization_dispatch materialization
+                                on materialization.tenant_id = pipeline.tenant_id
+                               and materialization.id = pipeline.pipeline_run_group_id
+                               and materialization.candidate_id = pipeline.release_candidate_id
+                             where pipeline.tenant_id = entry.tenant_id
+                               and pipeline.release_candidate_id = entry.candidate_id
+                               and pipeline.release_candidate_entry_id = entry.id
+                               and pipeline.run_purpose = 'RELEASE_BUILD'
+                               and pipeline.model_revision = entry.revision
+                               and pipeline.model_checksum = entry.checksum
+                               and pipeline.implementation_revision = entry.implementation_revision
+                               and pipeline.implementation_checksum = entry.implementation_checksum
+                             order by materialization.attempt desc,
+                                      materialization.last_modified_at desc,
+                                      materialization.id desc,
+                                      pipeline.id desc
+                             limit 1
+                      ) run on true
+                     where entry.tenant_id = candidate.tenant_id
+                       and entry.candidate_id = candidate.id
               ) runs on true
              where candidate.status = 'QUALITY_RUNNING'
              order by candidate.last_modified_date, candidate.id

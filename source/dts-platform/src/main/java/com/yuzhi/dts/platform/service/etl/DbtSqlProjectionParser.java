@@ -2,9 +2,11 @@ package com.yuzhi.dts.platform.service.etl;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.util.StringUtils;
@@ -41,15 +43,61 @@ public final class DbtSqlProjectionParser {
         String expression,
         String columnName
     ) {
+        return columnReference(expression, columnName).referenced();
+    }
+
+    public static ColumnReference columnReference(
+        String expression,
+        String columnName
+    ) {
         String column = trimToNull(columnName);
         if (!StringUtils.hasText(expression) || column == null) {
-            return false;
+            return new ColumnReference(Set.of(), false);
         }
-        String pattern =
-            "(?i)(^|[^A-Za-z0-9_])([\"`\\[]?)" +
+        String source = stripTrailingAlias(expression).replaceAll("'(?:''|[^'])*'", " ");
+        String quotedColumn = "([\"`\\[]?)" +
             Pattern.quote(column) +
-            "([\"`\\]]?)([^A-Za-z0-9_]|$)";
-        return Pattern.compile(pattern).matcher(expression).find();
+            "([\"`\\]]?)";
+        Pattern qualifiedPattern = Pattern.compile(
+            "(?i)([\"`\\[]?[A-Za-z_][A-Za-z0-9_]*[\"`\\]]?)\\s*\\.\\s*" + quotedColumn
+        );
+        Matcher qualified = qualifiedPattern.matcher(source);
+        Set<String> qualifiers = new LinkedHashSet<>();
+        StringBuffer withoutQualified = new StringBuffer();
+        while (qualified.find()) {
+            qualifiers.add(normalizeColumnName(unquoteIdentifier(qualified.group(1))));
+            qualified.appendReplacement(withoutQualified, " ");
+        }
+        qualified.appendTail(withoutQualified);
+        boolean unqualified = Pattern
+            .compile(
+                "(?i)(^|[^A-Za-z0-9_\\.])" + quotedColumn + "([^A-Za-z0-9_]|$)"
+            )
+            .matcher(withoutQualified)
+            .find();
+        return new ColumnReference(qualifiers, unqualified);
+    }
+
+    public static Map<String, String> relationAliases(String sql) {
+        if (!StringUtils.hasText(sql)) return Map.of();
+        String identifier = "[\"`\\[]?[A-Za-z_][A-Za-z0-9_$]*[\"`\\]]?";
+        String relation = identifier + "(?:\\s*\\.\\s*" + identifier + "){0,2}";
+        Matcher matcher = Pattern
+            .compile(
+                "(?is)\\b(?:from|join)\\s+(" + relation + ")(?:\\s+(?:as\\s+)?(" + identifier + "))?"
+            )
+            .matcher(stripSqlComments(sql));
+        Map<String, String> result = new LinkedHashMap<>();
+        while (matcher.find()) {
+            String relationName = relationLeaf(matcher.group(1));
+            String alias = normalizeColumnName(unquoteIdentifier(matcher.group(2)));
+            if (!StringUtils.hasText(alias) || isSqlKeyword(alias)) alias = relationName;
+            if (StringUtils.hasText(relationName)) {
+                result.putIfAbsent(relationName, relationName);
+                if (StringUtils.hasText(alias)) result.putIfAbsent(alias, relationName);
+            }
+        }
+        return Map.copyOf(result);
     }
 
     private static String extractTopLevelSelectClause(String sql) {
@@ -212,6 +260,20 @@ public final class DbtSqlProjectionParser {
             : null;
     }
 
+    private static String stripTrailingAlias(String expression) {
+        return expression.replaceFirst(
+            "(?is)\\s+as\\s+[\"`\\[]?[A-Za-z_][A-Za-z0-9_]*[\"`\\]]?\\s*$",
+            ""
+        );
+    }
+
+    private static String relationLeaf(String relation) {
+        String value = trimToNull(relation);
+        if (value == null) return null;
+        List<String> parts = List.of(value.split("\\s*\\.\\s*"));
+        return normalizeColumnName(unquoteIdentifier(parts.getLast()));
+    }
+
     private static String stripSqlComments(String sql) {
         if (!StringUtils.hasText(sql)) {
             return sql;
@@ -260,8 +322,18 @@ public final class DbtSqlProjectionParser {
             return false;
         }
         return switch (value.trim().toUpperCase(Locale.ROOT)) {
-            case "CASE", "WHEN", "THEN", "ELSE", "END", "NULL", "TRUE", "FALSE", "FROM", "WHERE", "GROUP", "ORDER" -> true;
+            case "AS", "CASE", "WHEN", "THEN", "ELSE", "END", "NULL", "TRUE", "FALSE", "FROM", "JOIN", "ON", "WHERE", "GROUP", "ORDER", "HAVING", "LIMIT", "UNION", "LEFT", "RIGHT", "FULL", "INNER", "OUTER", "CROSS" -> true;
             default -> false;
         };
+    }
+
+    public record ColumnReference(Set<String> qualifiers, boolean unqualified) {
+        public ColumnReference {
+            qualifiers = Set.copyOf(qualifiers == null ? Set.of() : qualifiers);
+        }
+
+        public boolean referenced() {
+            return unqualified || !qualifiers.isEmpty();
+        }
     }
 }

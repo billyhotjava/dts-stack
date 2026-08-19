@@ -63,7 +63,7 @@ public class ModelMaterializationPlanRelationReadAdapter implements ModelMateria
                   join modeling_pipeline_run p
                     on p.id = o.pipeline_run_id and p.pipeline_run_group_id = d.id
                    and p.run_purpose = 'RELEASE_BUILD'
-                 where o.tenant_id = ? and c.plan_id = ? and c.environment = ?
+                 where o.tenant_id = ? and (c.plan_id = ? or c.status = 'PUBLISHED') and c.environment = ?
                    and c.execution_target_key = ? and lower(o.adapter) = lower(?)
                    and o.model_spec_id in (%s)
                    and c.status in ('BUILT', 'QUALITY_RUNNING', 'QUALITY_PASSED', 'REVIEW_PENDING',

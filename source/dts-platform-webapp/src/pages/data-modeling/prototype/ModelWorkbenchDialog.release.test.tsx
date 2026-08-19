@@ -52,6 +52,7 @@ const apiMocks = vi.hoisted(() => ({
 	createCandidate: vi.fn(),
 	createReplacementCandidate: vi.fn(),
 	getExecutionWorkspace: vi.fn(),
+	getModelSpec: vi.fn(),
 	getMaterializationStatuses: vi.fn(),
 	previewMaterializationPlan: vi.fn(),
 	repairExecutionBinding: vi.fn(),
@@ -86,6 +87,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	createReleaseCandidate: apiMocks.createCandidate,
 	createReplacementReleaseCandidate: apiMocks.createReplacementCandidate,
 	getPlanExecutionWorkspace: apiMocks.getExecutionWorkspace,
+	getModelSpec: apiMocks.getModelSpec,
 	getModelMaterializationStatuses: apiMocks.getMaterializationStatuses,
 	previewMaterializationPlan: apiMocks.previewMaterializationPlan,
 	repairPlanExecutionBinding: apiMocks.repairExecutionBinding,
@@ -237,6 +239,9 @@ beforeEach(() => {
 		bindings: [],
 	} satisfies PlanExecutionWorkspace);
 	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
+	apiMocks.getModelSpec.mockImplementation((id: string) =>
+		Promise.resolve(id === secondModel.id ? secondModel : model),
+	);
 	apiMocks.previewMaterializationPlan.mockImplementation(
 		(_planId: string, request: { requestedModelSpecIds: string[] }) =>
 			Promise.resolve(materializationPreview(request.requestedModelSpecIds)),
@@ -330,6 +335,36 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).toContain("aaaaaaaaaaaa…");
 	});
 
+	it("compiles every server-planned BUILD node including an automatically expanded upstream", async () => {
+		const created = candidate("BATCH_WORKBENCH");
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
+		apiMocks.createCandidate.mockResolvedValue({ candidate: created });
+		apiMocks.lockCandidate.mockResolvedValue({ candidate: created });
+		apiMocks.previewMaterializationPlan.mockResolvedValue({
+			...materializationPreview([model.id]),
+			orderedEntries: [
+				{
+					...materializationPreview([secondModel.id]).orderedEntries[0],
+					dependencyRole: "UPSTREAM",
+					reasonCode: "UPSTREAM_MATERIALIZATION_REQUIRED",
+				},
+				materializationPreview([model.id]).orderedEntries[0],
+			],
+		});
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("创建并运行")?.click());
+
+		expect(apiMocks.getModelSpec).toHaveBeenCalledWith(secondModel.id);
+		expect(apiMocks.compileLifecycle).toHaveBeenCalledTimes(2);
+		expect(apiMocks.compileLifecycle).toHaveBeenCalledWith(secondModel, implementation, "idem-1");
+		expect(apiMocks.compileLifecycle).toHaveBeenCalledWith(model, implementation, "idem-1");
+		expect(apiMocks.createCandidate).toHaveBeenCalled();
+	});
+
 	it("compiles and submits one bounded candidate scope for multiple selected models", async () => {
 		const created = candidate("BATCH_WORKBENCH");
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
@@ -421,13 +456,13 @@ describe("release and materialization dispatch", () => {
 			built,
 			"idem-1",
 			expect.objectContaining({
-				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "EXISTING_CANDIDATE_SCOPE" }],
+				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
 				materializationPlanChecksum: "a".repeat(64),
 			}),
 		);
 	});
 
-	it("matches an expanded candidate by its roots and previews the full immutable scope before rematerializing", async () => {
+	it("matches an expanded candidate by its roots and previews only those roots before rematerializing", async () => {
 		const built = {
 			...candidate("BATCH_WORKBENCH", "BUILT"),
 			entries: [
@@ -446,7 +481,7 @@ describe("release and materialization dispatch", () => {
 
 		expect(apiMocks.previewMaterializationPlan).toHaveBeenLastCalledWith(model.planId, {
 			environment: "dev",
-			requestedModelSpecIds: [secondModel.id, model.id],
+			requestedModelSpecIds: [model.id],
 			strategy: "WITH_MISSING_UPSTREAMS",
 		});
 		expect(apiMocks.rematerializeCandidate).toHaveBeenCalledWith(
@@ -454,10 +489,7 @@ describe("release and materialization dispatch", () => {
 			built,
 			"idem-1",
 			expect.objectContaining({
-				entries: [
-					{ modelSpecId: secondModel.id, sortOrder: 0, selectedReason: "AUTO_DEPENDENCY" },
-					{ modelSpecId: model.id, sortOrder: 1, selectedReason: "MATERIALIZATION_ROOT" },
-				],
+				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
 			}),
 		);
 	});
@@ -1108,8 +1140,11 @@ describe("advanced dbt draft lifecycle", () => {
 
 		expect(container.textContent).toContain("系统依赖");
 		expect(
-			(container.querySelector('textarea[aria-label="编辑 models/.dts_dependencies/sources.yml"]') as HTMLTextAreaElement)
-				.disabled,
+			(
+				container.querySelector(
+					'textarea[aria-label="编辑 models/.dts_dependencies/sources.yml"]',
+				) as HTMLTextAreaElement
+			).disabled,
 		).toBe(true);
 		expect(button("删除文件")?.disabled).toBe(true);
 

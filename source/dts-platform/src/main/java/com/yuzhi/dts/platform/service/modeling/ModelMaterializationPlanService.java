@@ -110,7 +110,38 @@ public class ModelMaterializationPlanService {
                 boolean root = requested.contains(node.model().id());
                 boolean reusable = !root && reusable(snapshot, observation, executionTargetKey, adapter);
                 Action action = reusable ? Action.REUSE : Action.BUILD;
-                if (!root && action == Action.BUILD && command.strategy() == Strategy.CURRENT_ONLY) {
+                boolean crossPlan = !Objects.equals(command.planId(), node.model().planId());
+                if (root && crossPlan) {
+                    blockers.add(
+                        new Blocker(
+                            "MODEL_MATERIALIZATION_ROOT_PLAN_MISMATCH",
+                            node.model().id(),
+                            "A requested root model must belong to the materialization plan",
+                            Map.of(
+                                "ownerPlanId",
+                                Objects.toString(node.model().planId(), ""),
+                                "requestedPlanId",
+                                command.planId().toString()
+                            )
+                        )
+                    );
+                } else if (!root && crossPlan && action == Action.BUILD) {
+                    blockers.add(
+                        new Blocker(
+                            "MODEL_MATERIALIZATION_CROSS_PLAN_UPSTREAM_NOT_CURRENT",
+                            node.model().id(),
+                            "An upstream owned by another plan must already have an exact published relation",
+                            Map.of(
+                                "ownerPlanId",
+                                Objects.toString(node.model().planId(), ""),
+                                "requestedPlanId",
+                                command.planId().toString(),
+                                "revision",
+                                node.model().revision()
+                            )
+                        )
+                    );
+                } else if (!root && action == Action.BUILD && command.strategy() == Strategy.CURRENT_ONLY) {
                     blockers.add(
                         new Blocker(
                             "MODEL_MATERIALIZATION_UPSTREAM_NOT_CURRENT",

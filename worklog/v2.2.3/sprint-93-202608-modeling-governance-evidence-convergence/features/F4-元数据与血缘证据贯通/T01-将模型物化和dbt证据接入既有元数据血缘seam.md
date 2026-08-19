@@ -13,6 +13,7 @@
 - **输入契约**：模型 dependsOn、candidate/revision/implementation pins、physical observation、dbt manifest/run artifact、Sprint-89 schema fingerprint。
 - **表级输出**：既有 `catalog_dataset_lineage`；模型依赖先 DECLARED，成功物化后同 evidence 进入 VERIFIED；保留 validFrom/validTo。
 - **字段级输出**：既有 `catalog_column_lineage`；只消费候选钉定的 MODEL/STG compiled SQL，记录 confidence/source/evidenceRef；多来源歧义时禁止猜测字段边。
+- **多输入限定**：shared parser 同时保留 `alias.column` 限定符和 `FROM/JOIN relation → alias` 映射；同名字段只写入限定符命中的上游，未限定且存在多个 owner 时不写推测边。
 - **数据流**：publication/materialization → F1 datasetId → Sprint-90 lineage writer/guard；dbt sync → Sprint-89 stable columns → 同一 writer。
 - **能力边界**：数据建模负责 ODS→DWD→DWS→ADS 转换与物化；本 Task 只消费建模证据生成治理投影，不读取或加工 ODS 业务数据。
 - **错误路径**：源/目标资产或列无法唯一解析、schema fingerprint stale、人工 VERIFIED 冲突时不写边并记录 skip/issue。
@@ -36,6 +37,7 @@ dts-platform modeling/dbt/catalog lineage adapters，复用 Sprint-90 API/UI；d
 - [x] 自动采集不能覆盖人工 VERIFIED。
 - [x] OM 失败时 DTS 资产缓存保持不变，目录/详情/本地血缘可降级读取。
 - [x] 回滚关闭当前表/字段边，旧有效期边仍可查询。
+- [x] 多模型输入同名字段的 alias-aware 路由与歧义抑制已有聚焦契约测试；单物理源 `alias.column` 的原有血缘由 PostgreSQL 集成用例验证，真实 DWD→DWS→ADS 多输入字段边仍随最终 E2E 集中复核。
 
 ## Definition of Done
 

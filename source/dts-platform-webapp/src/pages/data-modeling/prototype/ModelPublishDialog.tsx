@@ -7,6 +7,7 @@ import {
 	createReplacementReleaseCandidate,
 	getModelLifecycle,
 	getModelMaterializationStatuses,
+	getModelSpec,
 	getPlanExecutionWorkspace,
 	getReleaseCandidateWorkbench,
 	lockReleaseCandidate,
@@ -98,14 +99,23 @@ const formatTime = (value?: string | null) => {
 	return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("zh-CN", { hour12: false });
 };
 
-async function compileSelectedModels(models: CanonicalModelSpecView[]) {
-	for (let offset = 0; offset < models.length; offset += COMPILE_CONCURRENCY) {
+async function compileSelectedModels(models: CanonicalModelSpecView[], modelSpecIds = models.map((model) => model.id)) {
+	const known = new Map(models.map((model) => [model.id, model]));
+	const plannedIds = Array.from(new Set(modelSpecIds));
+	for (let offset = 0; offset < plannedIds.length; offset += COMPILE_CONCURRENCY) {
+		const batch = await Promise.all(
+			plannedIds.slice(offset, offset + COMPILE_CONCURRENCY).map(async (modelSpecId) => {
+				const resolved = known.get(modelSpecId) || (await getModelSpec(modelSpecId));
+				if (!canonical(resolved)) throw new Error("物化计划包含不可编译的历史模型，请刷新计划后重试。");
+				return resolved;
+			}),
+		);
 		await Promise.all(
-			models.slice(offset, offset + COMPILE_CONCURRENCY).map(async (model) => {
+			batch.map(async (model) => {
 				const lifecycle = await getModelLifecycle(model.id);
 				if (!lifecycle.implementation)
 					throw new Error(
-						models.length === 1
+						plannedIds.length === 1
 							? "当前模型尚未保存可编译的数据实现，请先保存数据实现后重试。"
 							: `${model.name} 尚未保存可编译的数据实现，请先保存数据实现后重试。`,
 					);
@@ -194,7 +204,8 @@ export function ModelPublishDialog({
 		void load();
 	}, [load]);
 	const candidate = workspace?.candidate || null;
-	const explicitRootEntries = candidate?.entries.filter((entry) => entry.selectedReason === "MATERIALIZATION_ROOT") || [];
+	const explicitRootEntries =
+		candidate?.entries.filter((entry) => entry.selectedReason === "MATERIALIZATION_ROOT") || [];
 	const candidateRootEntries = explicitRootEntries.length
 		? explicitRootEntries
 		: candidate?.entries.filter((entry) => entry.selectedReason !== "AUTO_DEPENDENCY") || [];
@@ -260,15 +271,7 @@ export function ModelPublishDialog({
 		sortOrder,
 		selectedReason: "从模型工作台选择",
 	}));
-	const rematerializationEntries =
-		buildAction === "REMATERIALIZE" && candidate
-			? candidate.entries.map((entry, sortOrder) => ({
-					modelSpecId: entry.modelSpecId,
-					sortOrder,
-					selectedReason: entry.selectedReason || "EXISTING_CANDIDATE_SCOPE",
-				}))
-			: entries;
-	const materializationRequestEntries = buildAction === "REMATERIALIZE" ? rematerializationEntries : entries;
+	const materializationRequestEntries = entries;
 	const materializationRequestedIds = useMemo(
 		() => materializationRequestEntries.map((entry) => entry.modelSpecId),
 		[materializationRequestEntries.map((entry) => entry.modelSpecId).join(",")],
@@ -305,9 +308,8 @@ export function ModelPublishDialog({
 	}, [refreshMaterializationPlan]);
 	const requiresPlan = Boolean(buildAction && PLAN_BOUND_BUILD_ACTIONS.has(buildAction));
 	const currentOnlyAvailable = Boolean(
-		materializationPlan?.canStart && materializationPlan.orderedEntries.every(
-			(entry) => entry.dependencyRole === "ROOT" || entry.action === "REUSE",
-		),
+		materializationPlan?.canStart &&
+			materializationPlan.orderedEntries.every((entry) => entry.dependencyRole === "ROOT" || entry.action === "REUSE"),
 	);
 	const canBuild = Boolean(
 		!selectionProblem &&
@@ -327,7 +329,6 @@ export function ModelPublishDialog({
 		setBusy("build");
 		setFailure("");
 		try {
-			await compileSelectedModels(selection);
 			let checkedPlan: MaterializationPlanPreview | null = null;
 			if (requiresPlan) {
 				checkedPlan = await previewMaterializationPlan(planId, {
@@ -343,6 +344,30 @@ export function ModelPublishDialog({
 							"当前依赖计划存在阻断。",
 					);
 				}
+				await compileSelectedModels(
+					selection,
+					checkedPlan.orderedEntries.filter((entry) => entry.action === "BUILD").map((entry) => entry.modelSpecId),
+				);
+				checkedPlan = await previewMaterializationPlan(planId, {
+					environment,
+					requestedModelSpecIds: materializationRequestedIds,
+					strategy,
+				});
+				setMaterializationPlan(checkedPlan);
+				setPlanState(checkedPlan.canStart ? "ready" : "blocked");
+				if (!checkedPlan.canStart) {
+					throw new Error(
+						checkedPlan.blockers.map((blocker) => `${blocker.code}：${blocker.message}`).join("；") ||
+							"编译后依赖计划发生变化，请确认阻断后重试。",
+					);
+				}
+			} else if (buildAction === "START_BUILD" && candidate) {
+				await compileSelectedModels(
+					selection,
+					candidate.entries.map((entry) => entry.modelSpecId),
+				);
+			} else if (buildAction !== "RETRY_BUILD") {
+				await compileSelectedModels(selection);
 			}
 			const planFence = checkedPlan
 				? { materializationPlanChecksum: checkedPlan.planChecksum, strategy: checkedPlan.strategy }
@@ -575,7 +600,10 @@ export function ModelPublishDialog({
 							</label>
 							<div className="dmx-materialization-plan-toolbar">
 								<strong>依赖物化计划</strong>
-								<Button disabled={planState === "loading" || Boolean(busy)} onClick={() => void refreshMaterializationPlan()}>
+								<Button
+									disabled={planState === "loading" || Boolean(busy)}
+									onClick={() => void refreshMaterializationPlan()}
+								>
 									{planState === "loading" ? "预览中…" : "刷新计划"}
 								</Button>
 							</div>
@@ -679,16 +707,16 @@ export function ModelPublishDialog({
 						<>
 							<h3>{batch ? "批量发布流程" : "发布模型"}</h3>
 							<p className="dmx-capability-note">
-									构建、工程验证和治理数据质量通过后，数据管理员可在职责范围内直接发布；旧候选仍兼容评审流程。发布登记完成不代表运行计划已经上线。
+								构建、工程验证和治理数据质量通过后，数据管理员可在职责范围内直接发布；旧候选仍兼容评审流程。发布登记完成不代表运行计划已经上线。
 							</p>
 							<ModelReleaseWorkflowPanel
 								binding={executionBinding}
-									candidate={scopedCandidate}
-									evidence={workspace?.evidence || []}
-									governanceQuality={workspace?.governanceQuality || null}
-									governanceQualityRerunning={busy === "governance-quality"}
-									onRerunGovernanceQuality={canMaintain ? () => void rerunGovernanceQuality() : undefined}
-									releaseActions={releaseActions}
+								candidate={scopedCandidate}
+								evidence={workspace?.evidence || []}
+								governanceQuality={workspace?.governanceQuality || null}
+								governanceQualityRerunning={busy === "governance-quality"}
+								onRerunGovernanceQuality={canMaintain ? () => void rerunGovernanceQuality() : undefined}
+								releaseActions={releaseActions}
 							/>
 							<label>
 								<span>操作说明</span>

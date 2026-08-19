@@ -6,6 +6,7 @@ import com.yuzhi.dts.platform.config.ModelMaterializationProperties;
 import com.yuzhi.dts.platform.service.modeling.ModelMaterializationClaimKey;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.DriftReasonView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateRetryDriftGate;
@@ -247,7 +248,93 @@ public class ModelMaterializationBuildRepository
         CandidateView candidate,
         Instant now
     ) {
-        return createSubsequentQueuedBuild(candidate, now, Set.of("COMPLETED"), "rematerialization");
+        List<UUID> fullScope = candidate == null
+            ? List.of()
+            : candidate.entries().stream().map(EntryView::modelSpecId).toList();
+        return createRematerializationQueuedBuild(candidate, now, fullScope);
+    }
+
+    @Transactional
+    public QueuedBuildGroup createRematerializationQueuedBuild(
+        CandidateView candidate,
+        Instant now,
+        List<UUID> buildModelSpecIds
+    ) {
+        requireBuildingCandidate(candidate, now);
+        List<UUID> requested = buildModelSpecIds == null
+            ? List.of()
+            : buildModelSpecIds.stream().filter(Objects::nonNull).distinct().toList();
+        if (
+            buildModelSpecIds == null ||
+            requested.isEmpty() ||
+            requested.size() != buildModelSpecIds.size() ||
+            requested.size() > candidate.entries().size()
+        ) {
+            throw failure(
+                "MODEL_REMATERIALIZATION_BUILD_SCOPE_INVALID",
+                "Rematerialization requires a non-empty unique subset of the immutable candidate scope",
+                Kind.CONFLICT,
+                Map.of("candidateId", candidate.id(), "requestedScope", requested)
+            );
+        }
+        RetryDispatch previous = lockLatestRetryDispatch(candidate);
+        if (!"COMPLETED".equals(previous.status()) || previous.candidateVersion() >= candidate.version()) {
+            throw subsequentAttemptNotReady(candidate, previous.status(), "rematerialization");
+        }
+        Map<UUID, RetryEntryRow> available = lockRematerializationEntries(candidate)
+            .stream()
+            .collect(java.util.stream.Collectors.toMap(RetryEntryRow::modelSpecId, entry -> entry));
+        List<RetryEntryRow> entries = requested.stream().map(available::get).filter(Objects::nonNull).toList();
+        if (entries.size() != requested.size()) {
+            throw subsequentAttemptNotReady(candidate, "INCOMPLETE_VERIFIED_BUILD_SCOPE", "rematerialization");
+        }
+        requireRematerializationSnapshotCurrent(candidate, previous, entries);
+        String aggregate = digest(
+            entries
+                .stream()
+                .sorted(Comparator.comparing(RetryEntryRow::modelSpecId))
+                .flatMap(entry ->
+                    List.of(
+                        entry.modelSpecId().toString(),
+                        entry.artifactBundleChecksum(),
+                        entry.dependencySnapshotChecksum()
+                    ).stream()
+                )
+                .toList()
+        );
+        int attempt = previous.attempt() + 1;
+        UUID groupId = stableUuid("release-build-group:" + candidate.id() + ":a" + attempt);
+        UUID invocationId = stableUuid("dbt-invocation:" + candidate.id() + ":a" + attempt);
+        String dagRunId = "dts_rc_" + candidate.id().toString().replace("-", "") + "_a" + attempt;
+        List<QueuedBuildRun> runs = entries
+            .stream()
+            .map(entry ->
+                insertRetryQueuedRun(
+                    candidate,
+                    entry,
+                    previous,
+                    groupId,
+                    invocationId,
+                    dagRunId,
+                    attempt,
+                    aggregate,
+                    "Release candidate rematerialization queued",
+                    now
+                )
+            )
+            .toList();
+        insertRetryDispatch(candidate, previous, groupId, dagRunId, attempt, aggregate, now);
+        return new QueuedBuildGroup(
+            candidate.id(),
+            candidate.version(),
+            groupId,
+            invocationId,
+            previous.executionTargetKey(),
+            previous.airflowDagId(),
+            dagRunId,
+            aggregate,
+            runs
+        );
     }
 
     private QueuedBuildGroup createSubsequentQueuedBuild(
@@ -268,10 +355,9 @@ public class ModelMaterializationBuildRepository
             candidate,
             previous
         );
-        if (
-            entries.size() != candidate.entries().size() ||
-            entries.isEmpty()
-        ) {
+        Set<UUID> immutableScope = candidate.entries().stream().map(EntryView::modelSpecId).collect(java.util.stream.Collectors.toSet());
+        Set<UUID> retryScope = entries.stream().map(RetryEntryRow::modelSpecId).collect(java.util.stream.Collectors.toSet());
+        if (entries.isEmpty() || retryScope.size() != entries.size() || !immutableScope.containsAll(retryScope)) {
             throw subsequentAttemptNotReady(
                 candidate,
                 "INCOMPLETE_TERMINAL_SCOPE",
@@ -302,6 +388,8 @@ public class ModelMaterializationBuildRepository
                     invocationId,
                     dagRunId,
                     attempt,
+                    previous.artifactBundleChecksum(),
+                    "Release candidate build retry queued",
                     now
                 )
             )
@@ -312,6 +400,7 @@ public class ModelMaterializationBuildRepository
             groupId,
             dagRunId,
             attempt,
+            previous.artifactBundleChecksum(),
             now
         );
         return new QueuedBuildGroup(
@@ -609,10 +698,12 @@ public class ModelMaterializationBuildRepository
             candidate.id(),
             candidate.version()
         );
-        if (runs.size() != candidate.entries().size() || runs.isEmpty()) {
+        Set<UUID> candidateScope = candidate.entries().stream().map(EntryView::modelSpecId).collect(java.util.stream.Collectors.toSet());
+        Set<UUID> queuedScope = runs.stream().map(QueuedBuildRun::modelSpecId).collect(java.util.stream.Collectors.toSet());
+        if (runs.isEmpty() || queuedScope.size() != runs.size() || !candidateScope.containsAll(queuedScope)) {
             throw failure(
                 "MODEL_PIPELINE_RUN_INVARIANT_BROKEN",
-                "A committed BUILDING candidate must have one durable run per entry",
+                "A committed BUILDING candidate must have one durable run per planned BUILD entry",
                 Kind.CONFLICT,
                 Map.of("candidateId", candidate.id(), "candidateVersion", candidate.version(), "runCount", runs.size())
             );
@@ -779,6 +870,83 @@ public class ModelMaterializationBuildRepository
         );
     }
 
+    private List<RetryEntryRow> lockRematerializationEntries(CandidateView candidate) {
+        return jdbcTemplate.query(
+            """
+            select e.id as entry_id, e.model_spec_id,
+                   e.revision as model_revision,
+                   e.checksum as model_checksum,
+                   e.implementation_revision,
+                   e.implementation_checksum,
+                   e.dbt_unique_id,
+                   e.target_identifier as entry_target_identifier,
+                   e.artifact_bundle_checksum,
+                   e.dependency_snapshot_checksum,
+                   e.active_claim_key,
+                   previous.model_revision as previous_model_revision,
+                   previous.model_checksum as previous_model_checksum,
+                   previous.implementation_revision as previous_implementation_revision,
+                   previous.implementation_checksum as previous_implementation_checksum,
+                   previous.dbt_selector,
+                   previous.target as previous_target_identifier,
+                   previous.artifact_bundle_checksum as previous_group_artifact_checksum
+              from modeling_model_release_candidate_entry e
+              join lateral (
+                    select pr.model_revision, pr.model_checksum,
+                           pr.implementation_revision, pr.implementation_checksum,
+                           pr.dbt_selector, pr.target, pr.artifact_bundle_checksum
+                      from modeling_pipeline_run pr
+                      join modeling_materialization_dispatch d
+                        on d.tenant_id = pr.tenant_id
+                       and d.id = pr.pipeline_run_group_id
+                       and d.candidate_id = pr.release_candidate_id
+                     where pr.tenant_id = e.tenant_id
+                       and pr.release_candidate_id = e.candidate_id
+                       and pr.release_candidate_entry_id = e.id
+                       and pr.run_purpose = 'RELEASE_BUILD'
+                       and pr.status = 'BUILT'
+                       and d.status = 'COMPLETED'
+                     order by d.attempt desc, pr.id desc
+                     limit 1
+              ) previous on true
+             where e.tenant_id = ? and e.candidate_id = ?
+               and e.status = 'BUILDING'
+               and e.implementation_revision is not null
+               and e.implementation_checksum is not null
+               and e.dbt_unique_id is not null
+               and e.target_identifier is not null
+               and e.artifact_bundle_checksum is not null
+               and e.dependency_snapshot_checksum is not null
+               and e.active_claim_key is not null
+             order by e.sort_order, e.id
+             for update of e
+            """,
+            (row, rowNumber) ->
+                new RetryEntryRow(
+                    row.getObject("entry_id", UUID.class),
+                    row.getObject("model_spec_id", UUID.class),
+                    row.getInt("model_revision"),
+                    row.getString("model_checksum"),
+                    row.getInt("implementation_revision"),
+                    row.getString("implementation_checksum"),
+                    row.getString("dbt_unique_id"),
+                    row.getString("dbt_selector"),
+                    row.getString("entry_target_identifier"),
+                    row.getString("artifact_bundle_checksum"),
+                    row.getString("dependency_snapshot_checksum"),
+                    row.getString("active_claim_key"),
+                    row.getInt("previous_model_revision"),
+                    row.getString("previous_model_checksum"),
+                    row.getInt("previous_implementation_revision"),
+                    row.getString("previous_implementation_checksum"),
+                    row.getString("previous_target_identifier"),
+                    row.getString("previous_group_artifact_checksum")
+                ),
+            candidate.tenantId(),
+            candidate.id()
+        );
+    }
+
     private static void requireRetrySnapshotCurrent(
         CandidateView candidate,
         RetryDispatch previous,
@@ -859,6 +1027,41 @@ public class ModelMaterializationBuildRepository
         }
     }
 
+    private static void requireRematerializationSnapshotCurrent(
+        CandidateView candidate,
+        RetryDispatch previous,
+        List<RetryEntryRow> entries
+    ) {
+        boolean identityMatches =
+            Objects.equals(candidate.executionTargetKey(), previous.executionTargetKey()) &&
+            entries
+                .stream()
+                .allMatch(entry ->
+                    entry.modelRevision() == entry.previousModelRevision() &&
+                    Objects.equals(entry.modelChecksum(), entry.previousModelChecksum()) &&
+                    entry.implementationRevision() == entry.previousImplementationRevision() &&
+                    Objects.equals(entry.implementationChecksum(), entry.previousImplementationChecksum()) &&
+                    Objects.equals(entry.selector(), dbtSelector(entry.dbtUniqueId())) &&
+                    Objects.equals(entry.targetIdentifier(), entry.previousTargetIdentifier()) &&
+                    Objects.equals(
+                        entry.activeClaimKey(),
+                        ModelMaterializationClaimKey.derive(
+                            candidate.tenantId(),
+                            candidate.environment(),
+                            entry.modelSpecId()
+                        )
+                    )
+                );
+        if (!identityMatches) {
+            throw failure(
+                "MODEL_MATERIALIZATION_RETRY_SNAPSHOT_STALE",
+                "The immutable materialization snapshot changed after the previous successful attempt",
+                Kind.CONFLICT,
+                Map.of("candidateId", candidate.id(), "attempt", previous.attempt())
+            );
+        }
+    }
+
     private QueuedBuildRun insertRetryQueuedRun(
         CandidateView candidate,
         RetryEntryRow entry,
@@ -867,6 +1070,8 @@ public class ModelMaterializationBuildRepository
         UUID invocationId,
         String dagRunId,
         int attempt,
+        String artifactBundleChecksum,
+        String message,
         Instant now
     ) {
         UUID runId = stableUuid(
@@ -914,7 +1119,7 @@ public class ModelMaterializationBuildRepository
             dagRunId,
             entry.selector(),
             entry.targetIdentifier(),
-            "Release candidate build retry queued",
+            message,
             Timestamp.from(now),
             Timestamp.from(now),
             candidate.id(),
@@ -925,7 +1130,7 @@ public class ModelMaterializationBuildRepository
             entry.implementationChecksum(),
             candidate.environment(),
             attempt,
-            previous.artifactBundleChecksum(),
+            artifactBundleChecksum,
             invocationId
         );
         if (inserted != 1) {
@@ -955,7 +1160,7 @@ public class ModelMaterializationBuildRepository
             entry.targetIdentifier(),
             "QUEUED",
             attempt,
-            previous.artifactBundleChecksum()
+            artifactBundleChecksum
         );
     }
 
@@ -965,6 +1170,7 @@ public class ModelMaterializationBuildRepository
         UUID groupId,
         String dagRunId,
         int attempt,
+        String artifactBundleChecksum,
         Instant now
     ) {
         int inserted = jdbcTemplate.update(
@@ -984,7 +1190,7 @@ public class ModelMaterializationBuildRepository
             previous.executionTargetKey(),
             previous.airflowDagId(),
             dagRunId,
-            previous.artifactBundleChecksum(),
+            artifactBundleChecksum,
             Timestamp.from(now),
             Timestamp.from(now),
             Timestamp.from(now)

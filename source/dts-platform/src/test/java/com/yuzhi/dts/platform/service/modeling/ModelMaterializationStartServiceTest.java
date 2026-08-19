@@ -255,7 +255,7 @@ class ModelMaterializationStartServiceTest {
         CandidateView building = candidate(DeliveryStatus.BUILDING);
         when(candidateCommands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
             .thenReturn(new CommandResult(building, false, List.of()));
-        when(builds.createRematerializationQueuedBuild(building, NOW))
+        when(builds.createRematerializationQueuedBuild(building, NOW, List.of(building.entries().getFirst().modelSpecId())))
             .thenReturn(mock(ModelMaterializationBuildRepository.QueuedBuildGroup.class));
 
         CommandResult result = service.rematerialize(
@@ -264,11 +264,16 @@ class ModelMaterializationStartServiceTest {
             CANDIDATE_ID,
             4,
             "rematerialize-key",
-            "rebuild immutable revision"
+            "rebuild immutable revision",
+            List.of(building.entries().getFirst().modelSpecId())
         );
 
         assertThat(result.candidate()).isSameAs(building);
-        verify(builds).createRematerializationQueuedBuild(building, NOW);
+        verify(builds).createRematerializationQueuedBuild(
+            building,
+            NOW,
+            List.of(building.entries().getFirst().modelSpecId())
+        );
         verify(builds, never()).createRetryQueuedBuild(any(), any());
     }
 

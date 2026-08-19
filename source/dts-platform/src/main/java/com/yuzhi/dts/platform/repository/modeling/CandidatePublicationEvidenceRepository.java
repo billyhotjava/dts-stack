@@ -43,36 +43,43 @@ public class CandidatePublicationEvidenceRepository {
                    e.checksum as model_checksum, e.implementation_revision,
                    e.implementation_checksum, e.dbt_unique_id, e.target_identifier,
                    e.artifact_bundle_checksum, e.dependency_snapshot_checksum,
-                   pr.pipeline_run_group_id, pr.id as pipeline_run_id, pr.dbt_invocation_id,
+                   latest.pipeline_run_group_id, pr.id as pipeline_run_id, pr.dbt_invocation_id,
                    o.adapter, o.database_name, o.schema_name, o.identifier,
                    o.actual_type as relation_type, o.actual_columns,
                    o.metadata_checksum, o.observed_at
               from modeling_model_release_candidate c
-              join lateral (
-                    select candidate_id, id as pipeline_run_group_id, attempt
-                      from modeling_materialization_dispatch
-                     where tenant_id = c.tenant_id
-                       and candidate_id = c.id
-                       and status = 'COMPLETED'
-                     order by attempt desc, last_modified_at desc, id desc
-                     limit 1
-              ) d on true
               join modeling_model_release_candidate_entry e
                 on e.tenant_id = c.tenant_id
                and e.candidate_id = c.id
                and e.status = c.status
+              join lateral (
+                    select pr.id as pipeline_run_id,
+                           pr.pipeline_run_group_id
+                      from modeling_pipeline_run pr
+                      join modeling_materialization_dispatch d
+                        on d.tenant_id = pr.tenant_id
+                       and d.id = pr.pipeline_run_group_id
+                       and d.candidate_id = pr.release_candidate_id
+                       and d.status = 'COMPLETED'
+                     where pr.tenant_id = c.tenant_id
+                       and pr.release_candidate_id = c.id
+                       and pr.release_candidate_entry_id = e.id
+                       and pr.run_purpose = 'RELEASE_BUILD'
+                       and pr.status = 'BUILT'
+                       and pr.model_revision = e.revision
+                       and pr.model_checksum = e.checksum
+                       and pr.implementation_revision = e.implementation_revision
+                       and pr.implementation_checksum = e.implementation_checksum
+                       and pr.target = e.target_identifier
+                     order by d.attempt desc,
+                              d.last_modified_at desc,
+                              d.id desc,
+                              pr.id desc
+                     limit 1
+              ) latest on true
               join modeling_pipeline_run pr
                 on pr.tenant_id = c.tenant_id
-               and pr.release_candidate_id = c.id
-               and pr.release_candidate_entry_id = e.id
-               and pr.pipeline_run_group_id = d.pipeline_run_group_id
-               and pr.run_purpose = 'RELEASE_BUILD'
-               and pr.status = 'BUILT'
-               and pr.model_revision = e.revision
-               and pr.model_checksum = e.checksum
-               and pr.implementation_revision = e.implementation_revision
-               and pr.implementation_checksum = e.implementation_checksum
-               and pr.target = e.target_identifier
+               and pr.id = latest.pipeline_run_id
               join lateral (
                     select observation.adapter, observation.database_name,
                            observation.schema_name, observation.identifier,
@@ -81,7 +88,7 @@ public class CandidatePublicationEvidenceRepository {
                       from modeling_physical_relation_observation observation
                      where observation.tenant_id = c.tenant_id
                        and observation.release_candidate_id = c.id
-                       and observation.pipeline_run_group_id = d.pipeline_run_group_id
+                       and observation.pipeline_run_group_id = latest.pipeline_run_group_id
                        and observation.pipeline_run_id = pr.id
                        and observation.model_spec_id = e.model_spec_id
                        and observation.model_revision = e.revision

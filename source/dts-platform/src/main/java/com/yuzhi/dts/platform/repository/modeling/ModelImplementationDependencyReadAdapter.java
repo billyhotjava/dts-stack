@@ -107,7 +107,7 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
               join modeling_model_spec spec
                 on spec.tenant_id = revision.tenant_id
                and spec.id = revision.model_spec_id
-               and spec.plan_id = ?
+               and (spec.plan_id = ? or spec.status = 'PUBLISHED')
                and spec.contract_version = 2
               left join modeling_model_implementation implementation
                 on implementation.tenant_id = revision.tenant_id
@@ -135,7 +135,7 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
             .map(ModelFact::model)
             .anyMatch(model -> owner.id().equals(model.id()) && owner.revision() == model.revision());
         if (!ownerPresent) throw stale("The owning ModelSpec revision is unavailable", owner.id());
-        return new DependencyFacts(models, readPhysicalSources(tenantId, owner.planId(), List.of(owner)));
+        return new DependencyFacts(models, readPhysicalSources(tenantId, List.of(owner)));
     }
 
     @Override
@@ -195,7 +195,7 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
               join modeling_model_spec spec
                 on spec.tenant_id = revision.tenant_id
                and spec.id = revision.model_spec_id
-               and spec.plan_id = ?
+               and (spec.plan_id = ? or spec.status = 'PUBLISHED')
                and spec.contract_version = 2
               left join modeling_model_implementation implementation
                 on implementation.tenant_id = revision.tenant_id
@@ -235,7 +235,7 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
         }
         List<ModelSpecView> modelViews = models.stream().map(ModelFact::model).toList();
         return new PlanFacts(
-            new DependencyFacts(models, readPhysicalSources(tenantId, planId, modelViews)),
+            new DependencyFacts(models, readPhysicalSources(tenantId, modelViews)),
             implementations
         );
     }
@@ -265,7 +265,6 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
 
     private List<PhysicalSourceFact> readPhysicalSources(
         String tenantId,
-        UUID planId,
         List<ModelSpecView> models
     ) {
         Set<UUID> sourceIds = new LinkedHashSet<>();
@@ -297,11 +296,10 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
               left join catalog_dataset dataset
                 on source.source_type = 'CATALOG_TABLE'
                and dataset.id = table_schema.dataset_id
-             where source.tenant_id = ? and source.plan_id = ? and source.id in (
+             where source.tenant_id = ? and source.id in (
             """ + placeholders + ") order by source.id";
         List<Object> arguments = new ArrayList<>();
         arguments.add(tenantId);
-        arguments.add(planId);
         arguments.addAll(ordered);
         return jdbcTemplate.query(sql, ModelImplementationDependencyReadAdapter::mapPhysicalSource, arguments.toArray());
     }

@@ -54,12 +54,12 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                            nullif(btrim(r.snapshot_json ->> 'code'), ''),
                            e.model_spec_id::text
                        ) as model_name,
-                       d.id as pipeline_run_group_id,
-                       d.airflow_dag_id, d.airflow_run_id,
-                       d.attempt, d.status as dispatch_status,
-                       d.last_error_code,
-                       pr.dbt_invocation_id, pr.status as run_status,
-                       pr.started_date, pr.finished_date,
+                       latest.pipeline_run_group_id,
+                       latest.airflow_dag_id, latest.airflow_run_id,
+                       latest.attempt, latest.dispatch_status,
+                       latest.last_error_code,
+                       latest.dbt_invocation_id, latest.run_status,
+                       latest.started_date, latest.finished_date,
                        observation.verified,
                        observation.relation_exists,
                        observation.database_name,
@@ -72,31 +72,39 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                     on r.model_spec_id = e.model_spec_id
                    and r.revision = e.revision
                   left join lateral (
-                        select dispatch.id, dispatch.airflow_dag_id,
-                               dispatch.airflow_run_id, dispatch.attempt,
-                               dispatch.status, dispatch.last_error_code,
-                               dispatch.last_modified_at
-                          from modeling_materialization_dispatch dispatch
-                         where dispatch.tenant_id = e.tenant_id
-                           and dispatch.candidate_id = e.candidate_id
-                         order by dispatch.attempt desc,
-                                  dispatch.last_modified_at desc,
-                                  dispatch.id desc
+                        select pr.id as pipeline_run_id,
+                               d.id as pipeline_run_group_id,
+                               d.airflow_dag_id, d.airflow_run_id,
+                               d.attempt, d.status as dispatch_status,
+                               d.last_error_code, d.last_modified_at,
+                               pr.dbt_invocation_id, pr.status as run_status,
+                               pr.started_date, pr.finished_date
+                          from modeling_pipeline_run pr
+                          join modeling_materialization_dispatch d
+                            on d.tenant_id = pr.tenant_id
+                           and d.id = pr.pipeline_run_group_id
+                           and d.candidate_id = pr.release_candidate_id
+                         where pr.tenant_id = e.tenant_id
+                           and pr.release_candidate_id = e.candidate_id
+                           and pr.release_candidate_entry_id = e.id
+                           and pr.run_purpose = 'RELEASE_BUILD'
+                           and pr.model_revision = e.revision
+                           and pr.model_checksum = e.checksum
+                           and pr.implementation_revision = e.implementation_revision
+                           and pr.implementation_checksum = e.implementation_checksum
+                         order by d.attempt desc,
+                                  d.last_modified_at desc,
+                                  d.id desc,
+                                  pr.id desc
                          limit 1
-                  ) d on true
-                  left join modeling_pipeline_run pr
-                    on pr.tenant_id = e.tenant_id
-                   and pr.release_candidate_id = e.candidate_id
-                   and pr.release_candidate_entry_id = e.id
-                   and pr.pipeline_run_group_id = d.id
-                   and pr.run_purpose = 'RELEASE_BUILD'
+                  ) latest on true
                   left join lateral (
                         select observed.verified, observed.relation_exists,
                                observed.database_name, observed.schema_name,
                                observed.identifier, observed.observed_at,
                                observed.error_code
                           from modeling_physical_relation_observation observed
-                         where observed.pipeline_run_id = pr.id
+                         where observed.pipeline_run_id = latest.pipeline_run_id
                          order by observed.observation_attempt desc,
                                   observed.created_date desc,
                                   observed.id desc
@@ -173,12 +181,12 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                            nullif(btrim(r.snapshot_json ->> 'code'), ''),
                            e.model_spec_id::text
                        ) as model_name,
-                       d.id as pipeline_run_group_id,
-                       d.airflow_dag_id, d.airflow_run_id,
-                       d.attempt, d.status as dispatch_status,
-                       d.last_error_code,
-                       pr.dbt_invocation_id, pr.status as run_status,
-                       pr.started_date, pr.finished_date,
+                       latest.pipeline_run_group_id,
+                       latest.airflow_dag_id, latest.airflow_run_id,
+                       latest.attempt, latest.dispatch_status,
+                       latest.last_error_code,
+                       latest.dbt_invocation_id, latest.run_status,
+                       latest.started_date, latest.finished_date,
                        observation.verified,
                        observation.relation_exists,
                        observation.database_name,
@@ -194,31 +202,39 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                     on current_implementation.tenant_id = e.tenant_id
                    and current_implementation.model_spec_id = e.model_spec_id
                   left join lateral (
-                        select dispatch.id, dispatch.airflow_dag_id,
-                               dispatch.airflow_run_id, dispatch.attempt,
-                               dispatch.status, dispatch.last_error_code,
-                               dispatch.last_modified_at
-                          from modeling_materialization_dispatch dispatch
-                         where dispatch.tenant_id = e.tenant_id
-                           and dispatch.candidate_id = e.candidate_id
-                         order by dispatch.attempt desc,
-                                  dispatch.last_modified_at desc,
-                                  dispatch.id desc
+                        select pr.id as pipeline_run_id,
+                               d.id as pipeline_run_group_id,
+                               d.airflow_dag_id, d.airflow_run_id,
+                               d.attempt, d.status as dispatch_status,
+                               d.last_error_code, d.last_modified_at,
+                               pr.dbt_invocation_id, pr.status as run_status,
+                               pr.started_date, pr.finished_date
+                          from modeling_pipeline_run pr
+                          join modeling_materialization_dispatch d
+                            on d.tenant_id = pr.tenant_id
+                           and d.id = pr.pipeline_run_group_id
+                           and d.candidate_id = pr.release_candidate_id
+                         where pr.tenant_id = e.tenant_id
+                           and pr.release_candidate_id = e.candidate_id
+                           and pr.release_candidate_entry_id = e.id
+                           and pr.run_purpose = 'RELEASE_BUILD'
+                           and pr.model_revision = e.revision
+                           and pr.model_checksum = e.checksum
+                           and pr.implementation_revision = e.implementation_revision
+                           and pr.implementation_checksum = e.implementation_checksum
+                         order by d.attempt desc,
+                                  d.last_modified_at desc,
+                                  d.id desc,
+                                  pr.id desc
                          limit 1
-                  ) d on true
-                  left join modeling_pipeline_run pr
-                    on pr.tenant_id = e.tenant_id
-                   and pr.release_candidate_id = e.candidate_id
-                   and pr.release_candidate_entry_id = e.id
-                   and pr.pipeline_run_group_id = d.id
-                   and pr.run_purpose = 'RELEASE_BUILD'
+                  ) latest on true
                   left join lateral (
                         select observed.verified, observed.relation_exists,
                                observed.database_name, observed.schema_name,
                                observed.identifier, observed.observed_at,
                                observed.error_code
                           from modeling_physical_relation_observation observed
-                         where observed.pipeline_run_id = pr.id
+                         where observed.pipeline_run_id = latest.pipeline_run_id
                          order by observed.observation_attempt desc,
                                   observed.created_date desc,
                                   observed.id desc
