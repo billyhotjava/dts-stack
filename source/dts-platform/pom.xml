@@ -813,6 +813,7 @@
                         <testInclude>**/service/catalog/CatalogDomainCommandServiceTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogDomainDictionaryReadAdapterTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogDbtLineageServiceTest.java</testInclude>
+                        <testInclude>**/service/integration/ScreenSyncClientTest.java</testInclude>
                         <testInclude>**/web/rest/CatalogLineageResourceImpactTest.java</testInclude>
                         <testInclude>**/service/modeling/BusinessProcessApplicationServiceTest.java</testInclude>
                         <testInclude>**/web/rest/internal/CatalogDomainInternalResourceTest.java</testInclude>

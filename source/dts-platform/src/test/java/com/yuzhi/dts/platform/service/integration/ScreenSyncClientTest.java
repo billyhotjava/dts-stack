@@ -20,10 +20,12 @@ import org.springframework.web.client.RestTemplate;
 
 /**
  * Sprint-17 / F1 — wire-level test for {@link ScreenSyncClient}: confirms it
- * sends the {@code X-DTS-Service} header and parses the JSON contract dts-bi
- * exposes via {@code /api/internal/screens}.
+ * sends the service identity and token headers and parses the JSON contract
+ * dts-bi exposes via {@code /api/internal/screens}.
  */
 class ScreenSyncClientTest {
+
+    private static final String PLATFORM_TOKEN = "platform-analytics-pair-token-20260819";
 
     private DtsAnalyticsProperties props;
     private ScreenSyncClient client;
@@ -44,9 +46,11 @@ class ScreenSyncClientTest {
     @Test
     @DisplayName("sends X-DTS-Service header and parses screen list")
     void parsesScreens() {
+        props.setServiceToken(PLATFORM_TOKEN);
         server.expect(requestTo("http://dts-analytics:3000/api/internal/screens"))
             .andExpect(method(HttpMethod.GET))
             .andExpect(header("X-DTS-Service", "dts-platform"))
+            .andExpect(header("X-DTS-Service-Token", PLATFORM_TOKEN))
             .andRespond(withSuccess("""
                 [
                   {"id":1,"name":"Sales","description":null,"classification":"INTERNAL",

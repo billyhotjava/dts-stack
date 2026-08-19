@@ -64,6 +64,23 @@ class AnalyticsAuthenticationFilterTest {
     }
 
     @Test
+    void authenticatesTheInternalScreenReadWithTheConfiguredPlatformToken() throws Exception {
+        AnalyticsSessionService sessionService = mock(AnalyticsSessionService.class);
+        AnalyticsAuthenticationFilter filter = new AnalyticsAuthenticationFilter(sessionService, PLATFORM_TOKEN);
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/internal/screens");
+        request.addHeader("X-DTS-Service", "dts-platform");
+        request.addHeader("X-DTS-Service-Token", PLATFORM_TOKEN);
+        AtomicReference<Authentication> observed = new AtomicReference<>();
+
+        filter.doFilter(request, new MockHttpServletResponse(), (req, res) -> observed.set(SecurityContextHolder.getContext().getAuthentication()));
+
+        assertThat(observed.get()).isNotNull();
+        assertThat(observed.get().getName()).isEqualTo("dts-platform");
+        assertThat(observed.get().getAuthorities()).extracting("authority").containsExactly("ROLE_ANALYTICS_SERVICE");
+        verifyNoInteractions(sessionService);
+    }
+
+    @Test
     void rejectsServiceHeadersWithAWrongTokenAndDoesNotTrustThemOnOtherRoutes() throws Exception {
         AnalyticsSessionService sessionService = mock(AnalyticsSessionService.class);
         AnalyticsAuthenticationFilter filter = new AnalyticsAuthenticationFilter(sessionService, PLATFORM_TOKEN);

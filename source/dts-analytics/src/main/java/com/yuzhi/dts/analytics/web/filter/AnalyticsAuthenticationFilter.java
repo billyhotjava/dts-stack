@@ -25,6 +25,7 @@ public class AnalyticsAuthenticationFilter extends OncePerRequestFilter {
     private static final String SERVICE_HEADER = "X-DTS-Service";
     private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String SEMANTIC_PUBLISH_PATH = "/api/semantic/publish";
+    private static final String INTERNAL_SCREENS_PATH = "/api/internal/screens";
 
     private final AnalyticsSessionService sessionService;
     private final String platformServiceToken;
@@ -72,11 +73,16 @@ public class AnalyticsAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private boolean isTrustedPlatformSemanticPublish(HttpServletRequest request) {
+        boolean semanticPublish = request != null &&
+            "POST".equalsIgnoreCase(request.getMethod()) &&
+            SEMANTIC_PUBLISH_PATH.equals(request.getRequestURI());
+        boolean internalScreenRead = request != null &&
+            "GET".equalsIgnoreCase(request.getMethod()) &&
+            INTERNAL_SCREENS_PATH.equals(request.getRequestURI());
         if (
             request == null ||
             platformServiceToken == null ||
-            !"POST".equalsIgnoreCase(request.getMethod()) ||
-            !SEMANTIC_PUBLISH_PATH.equals(request.getRequestURI()) ||
+            (!semanticPublish && !internalScreenRead) ||
             !PLATFORM_SERVICE.equals(request.getHeader(SERVICE_HEADER))
         ) {
             return false;

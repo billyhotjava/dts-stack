@@ -1,6 +1,7 @@
 package com.yuzhi.dts.analytics.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.analytics.web.rest.errors.ApiError;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
 import jakarta.servlet.ServletException;
@@ -20,7 +21,9 @@ public class SecurityProblemSupport implements AuthenticationEntryPoint, AccessD
     private static final String ERROR_CODE_HEADER = "X-Error-Code";
     private static final String ERROR_RETRYABLE_HEADER = "X-Error-Retryable";
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper()
+        .findAndRegisterModules()
+        .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
 
     @Override
     public void commence(

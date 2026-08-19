@@ -37,6 +37,7 @@ public class ScreenSyncClient {
 
     private static final Logger log = LoggerFactory.getLogger(ScreenSyncClient.class);
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String SCREENS_PATH = "/api/internal/screens";
 
     private final RestTemplate restTemplate;
@@ -72,6 +73,9 @@ public class ScreenSyncClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.set(SERVICE_HEADER, properties.getServiceName());
+        if (StringUtils.hasText(properties.getServiceToken())) {
+            headers.set(SERVICE_TOKEN_HEADER, properties.getServiceToken().trim());
+        }
         HttpEntity<Void> entity = new HttpEntity<>(headers);
 
         ResponseEntity<List<ScreenSummary>> response = restTemplate.exchange(
