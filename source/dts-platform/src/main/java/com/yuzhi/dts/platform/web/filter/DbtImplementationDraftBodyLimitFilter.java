@@ -40,7 +40,10 @@ public final class DbtImplementationDraftBodyLimitFilter extends OncePerRequestF
         (DbtImplementationDraftContract.MAX_TOTAL_BYTES * JSON_WORST_CASE_ESCAPE_FACTOR) +
         JSON_ENVELOPE_OVERHEAD_BYTES;
     private static final Pattern ROUTE = Pattern.compile(
-        "^/api/modeling/model-specs/[^/]+/dbt-drafts(?:/[^/]+/(?:files|validate|commit))?$"
+        "^/api/modeling/model-specs/[^/]+/(?:" +
+        "dbt-drafts(?:/[^/]+/(?:files|validate|commit))?" +
+        "|authoring-drafts(?:/[^/]+(?:/(?:validate|commit))?)?" +
+        ")$"
     );
 
     private final ObjectMapper objectMapper;

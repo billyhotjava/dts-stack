@@ -82,7 +82,7 @@ class ModelRepresentationServiceTest {
     }
 
     @Test
-    void businessRepresentationUsesOwnerReadGateAndNeverSerializesTechnicalText() throws Exception {
+    void businessRepresentationRemainsEditableAcrossOriginsAndNeverSerializesTechnicalText() throws Exception {
         ModelSpecView model = model(ImplementationMode.DBT_MANAGED);
         when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model);
         when(evidencePort.findExact(TENANT, MODEL_ID, 2, MODEL_CHECKSUM, 3, false)).thenReturn(
@@ -92,7 +92,8 @@ class ModelRepresentationServiceTest {
         BusinessModelRepresentationView view = business(exactEvidence(false));
         String json = objectMapper.writeValueAsString(view);
 
-        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.BUSINESS_VISUAL_READ);
+        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.BUSINESS_VISUAL_EDIT);
+        assertThat(view.allowedActions()).containsExactly("OPEN_VISUAL", "EDIT_VISUAL");
         assertThat(view.capabilityReasons()).allSatisfy(reason -> assertThat(reason).isInstanceOf(CapabilityReason.class));
         assertThat(view.logicalModel().fields()).singleElement().satisfies(field -> {
             assertThat(field.name()).isEqualTo("budget_id");
@@ -216,7 +217,7 @@ class ModelRepresentationServiceTest {
     }
 
     @Test
-    void returnsBlockedLogicalRepresentationWhenTheModelHasNoImplementation() {
+    void keepsDeclaredLogicalRepresentationEditableWhenTheModelHasNoImplementation() {
         ModelSpecView model = model(ImplementationMode.DESIGNER_GENERATED);
         when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model);
         when(evidencePort.findCurrentPin(TENANT, MODEL_ID)).thenReturn(Optional.empty());
@@ -232,7 +233,7 @@ class ModelRepresentationServiceTest {
         );
 
         assertThat(view.implementationRevision()).isNull();
-        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.BLOCKED);
+        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.BUSINESS_VISUAL_EDIT);
         assertThat(view.capabilityReasons()).containsExactly(CapabilityReason.MODEL_REPRESENTATION_NO_IMPLEMENTATION);
         assertThat(view.logicalModel().provenance().source()).isEqualTo(Provenance.DECLARED);
         verify(evidencePort, never()).findExact(TENANT, MODEL_ID, 2, MODEL_CHECKSUM, 1, false);
@@ -422,7 +423,7 @@ class ModelRepresentationServiceTest {
     }
 
     @Test
-    void designerOwnershipExposesPinnedReadOnlyDbtPreviewWithoutAdvancedWriteAction() {
+    void designerOriginExposesTheSamePinnedCodeAuthoringEntry() {
         when(modelSpecs.revision(TENANT, new ModelRevisionRef(MODEL_ID, 2))).thenReturn(model(ImplementationMode.DESIGNER_GENERATED));
         RepresentationEvidence evidence = withOwnership(exactEvidence(true), ImplementationMode.DESIGNER_GENERATED);
         when(evidencePort.findExact(TENANT, MODEL_ID, 2, MODEL_CHECKSUM, 3, true)).thenReturn(Optional.of(evidence));
@@ -437,9 +438,9 @@ class ModelRepresentationServiceTest {
             true
         );
 
-        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.DESIGNER_DBT_PREVIEW);
-        assertThat(view.allowedActions()).containsExactly("OPEN_DBT_PREVIEW");
-        assertThat(view.allowedActions()).doesNotContain("OPEN_ADVANCED_DBT");
+        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.ADVANCED_DBT_IMPLEMENTATION);
+        assertThat(view.allowedActions()).containsExactly("OPEN_ADVANCED_DBT");
+        assertThat(view.allowedActions()).doesNotContain("OPEN_DBT_PREVIEW");
     }
 
     @Test
@@ -499,7 +500,7 @@ class ModelRepresentationServiceTest {
         );
         String json = objectMapper.writeValueAsString(view);
 
-        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.BLOCKED);
+        assertThat(view.visualizationCapability()).isEqualTo(VisualizationCapability.BUSINESS_VISUAL_EDIT);
         assertThat(view.capabilityReasons()).contains(
             CapabilityReason.MODEL_REPRESENTATION_FIELDS_UNTRUSTED,
             CapabilityReason.MODEL_REPRESENTATION_SCHEMA_INVALID

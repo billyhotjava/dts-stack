@@ -2,6 +2,8 @@
 
 本文件是 Sprint-91 的范围移交资产，不属于 Sprint-91 Task，不计入状态统计。
 
+> **2026-08-19 已承接**：该 backlog 已升级为“来源无关的统一模型创作”，不再实现一次性的 DBT→DESIGNER 回切按钮。正式 Sprint 位于 `../../sprint-92-202608-unified-model-authoring-convergence/`；本文件保留为当时为何不能安全回切的历史输入。
+
 ## 为什么不在 Sprint-91 实施
 
 1. `DbtCompatibilityEvaluator` 只评估导入包的 runtime/adapter 兼容性，不负责 SQL 到字段映射的可逆性判断。

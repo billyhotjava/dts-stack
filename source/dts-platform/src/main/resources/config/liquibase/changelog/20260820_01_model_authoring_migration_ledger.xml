@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260820-01-model-authoring-migration-ledger" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_dbt_implementation_draft"/>
+            <not>
+                <tableExists tableName="modeling_authoring_migration_batch"/>
+            </not>
+        </preConditions>
+        <comment>
+            Reversible batch evidence for controlled authoring metadata backfill. No ModelSpec status,
+            implementation ownership, draft state, bundle content or commit receipt is rewritten.
+        </comment>
+
+        <createTable tableName="modeling_authoring_migration_batch">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" primaryKeyName="pk_modeling_authoring_migration_batch" nullable="false"/>
+            </column>
+            <column name="preview_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(24)"><constraints nullable="false"/></column>
+            <column name="previewed_count" type="integer"><constraints nullable="false"/></column>
+            <column name="applied_count" type="integer"><constraints nullable="false"/></column>
+            <column name="skipped_count" type="integer"><constraints nullable="false"/></column>
+            <column name="conflict_count" type="integer"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="correlation_id" type="varchar(128)"/>
+            <column name="created_date" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="applied_date" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="rolled_back_date" type="timestamp with time zone"/>
+        </createTable>
+        <createIndex tableName="modeling_authoring_migration_batch" indexName="idx_modeling_authoring_migration_batch_hash">
+            <column name="preview_hash"/>
+            <column name="status"/>
+        </createIndex>
+
+        <createTable tableName="modeling_authoring_migration_item">
+            <column name="batch_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="draft_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="expected_etag" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="expected_last_modified_date" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="before_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="after_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="previous_model_spec_snapshot" type="jsonb"/>
+            <column name="previous_projection_summary" type="jsonb"/>
+            <column name="previous_authoring_origin" type="varchar(32)"/>
+            <column name="applied_model_spec_snapshot" type="jsonb"/>
+            <column name="applied_projection_summary" type="jsonb"/>
+            <column name="applied_authoring_origin" type="varchar(32)"/>
+            <column name="created_date" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <addPrimaryKey
+            tableName="modeling_authoring_migration_item"
+            columnNames="batch_id,draft_id"
+            constraintName="pk_modeling_authoring_migration_item"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_authoring_migration_item"
+            baseColumnNames="batch_id"
+            referencedTableName="modeling_authoring_migration_batch"
+            referencedColumnNames="id"
+            constraintName="fk_modeling_authoring_migration_item_batch"
+            onDelete="CASCADE"/>
+        <createIndex tableName="modeling_authoring_migration_item" indexName="idx_modeling_authoring_migration_item_draft">
+            <column name="draft_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="modeling_authoring_migration_item"/>
+            <dropTable tableName="modeling_authoring_migration_batch"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

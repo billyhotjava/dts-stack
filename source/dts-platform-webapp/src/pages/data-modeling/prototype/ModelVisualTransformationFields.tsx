@@ -85,10 +85,7 @@ export const visualTransformationInputAliases = (
 		...draft.dependsOn.map((reference) => ({ ...reference, role: "上游模型" as const })),
 		...draft.dimensionRefs.map((reference) => ({ ...reference, role: "维度引用" as const })),
 	]
-		.sort(
-			(left, right) =>
-				left.modelSpecId.localeCompare(right.modelSpecId) || left.revision - right.revision,
-		)
+		.sort((left, right) => left.modelSpecId.localeCompare(right.modelSpecId) || left.revision - right.revision)
 		.map((reference) => ({
 			label: `${modelLabel(context, reference.modelSpecId)} · r${reference.revision}`,
 			role: reference.role,
@@ -135,7 +132,7 @@ const defaultFilterValue = (valueType: ModelImplementationFilterValueType): Mode
 export function ModelVisualTransformationFields({ draft, context, validationMessage, onChange }: Props) {
 	const aliases = visualTransformationInputAliases(draft, context);
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
-	const canEdit = draft.implementationMode === "DESIGNER_GENERATED" && draft.implementationInputMode !== "GENERATED";
+	const canEdit = Boolean(draft.implementationInputMode) && draft.implementationInputMode !== "GENERATED";
 
 	const setMapping = (targetField: string, sourceField: string) => {
 		const next = draft.fieldMappings.filter((mapping) => mapping.targetField !== targetField);
@@ -162,7 +159,10 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 				distinct: false,
 			});
 		}
-		patch({ aggregations: next, groupBy: functionName ? draft.groupBy.filter((field) => field !== targetField) : draft.groupBy });
+		patch({
+			aggregations: next,
+			groupBy: functionName ? draft.groupBy.filter((field) => field !== targetField) : draft.groupBy,
+		});
 	};
 
 	const updateAggregation = (targetField: string, next: Partial<ModelImplementationAggregation>) =>
@@ -185,23 +185,22 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 			rightField: "",
 		};
 		patch({
-			joins: [
-				...draft.joins.filter((join) => join.inputIndex !== inputIndex),
-				{ ...current, ...next },
-			].sort((left, right) => left.inputIndex - right.inputIndex),
+			joins: [...draft.joins.filter((join) => join.inputIndex !== inputIndex), { ...current, ...next }].sort(
+				(left, right) => left.inputIndex - right.inputIndex,
+			),
 		});
 	};
 
 	if (!canEdit) {
 		return (
-		<div className="dmx-visual-transform dmx-workbench-editor__wide-field">
-			<strong>可视化转换</strong>
-			<small>
-				{draft.implementationMode === "DBT_MANAGED"
-					? "当前实现已由 dbt 代码维护；来源关系继续在本页登记，转换配置保持只读。"
-					: "受控生成器不接受字段映射、过滤、关联或聚合配置。"}
-			</small>
-		</div>
+			<div className="dmx-visual-transform dmx-workbench-editor__wide-field">
+				<strong>可视化转换</strong>
+				<small>
+					{draft.implementationInputMode === "GENERATED"
+						? "受控生成器不接受字段映射、过滤、关联或聚合配置。"
+						: "当前实现保留原始代码；如需结构化调整，请先选择实现输入方式，或切换到代码模式。"}
+				</small>
+			</div>
 		);
 	}
 
@@ -210,7 +209,7 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 			<div className="dmx-visual-transform__heading">
 				<div>
 					<strong>可视化转换</strong>
-					<small>仅支持结构化白名单；不接收自由 SQL。复杂逻辑请显式切换为手工 dbt 维护。</small>
+					<small>仅支持结构化白名单；不接收自由 SQL。复杂逻辑请切换到代码模式维护。</small>
 				</div>
 				<Button
 					disabled={!aliases.length || !draft.fields.length}
@@ -275,7 +274,9 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 										>
 											<option value="">不转换</option>
 											{CAST_TYPES.map((type) => (
-												<option key={type.value} value={type.value}>{type.label}</option>
+												<option key={type.value} value={type.value}>
+													{type.label}
+												</option>
 											))}
 										</select>
 									</td>
@@ -321,7 +322,9 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 										>
 											<option value="">不聚合</option>
 											{AGGREGATION_FUNCTIONS.map((item) => (
-												<option key={item.value} value={item.value}>{item.label}</option>
+												<option key={item.value} value={item.value}>
+													{item.label}
+												</option>
 											))}
 										</select>
 										{aggregation?.function === "COUNT" ? (
@@ -430,7 +433,9 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 								value={filter.operator}
 							>
 								{FILTER_OPERATORS.map((operator) => (
-									<option key={operator.value} value={operator.value}>{operator.label}</option>
+									<option key={operator.value} value={operator.value}>
+										{operator.label}
+									</option>
 								))}
 							</select>
 							<select
@@ -442,7 +447,9 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 								value={filter.valueType}
 							>
 								{FILTER_VALUE_TYPES.map((valueType) => (
-									<option key={valueType.value} value={valueType.value}>{valueType.label}</option>
+									<option key={valueType.value} value={valueType.value}>
+										{valueType.label}
+									</option>
 								))}
 							</select>
 							<input
@@ -469,7 +476,9 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 			</div>
 
 			{validationMessage ? (
-				<small className="dmx-workbench-editor__validation" role="alert">{validationMessage}</small>
+				<small className="dmx-workbench-editor__validation" role="alert">
+					{validationMessage}
+				</small>
 			) : null}
 		</div>
 	);

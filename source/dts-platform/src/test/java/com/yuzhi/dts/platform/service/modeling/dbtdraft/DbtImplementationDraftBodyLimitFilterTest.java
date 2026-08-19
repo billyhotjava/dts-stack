@@ -85,6 +85,26 @@ class DbtImplementationDraftBodyLimitFilterTest {
     }
 
     @Test
+    void appliesTheSameHardLimitToUnifiedAuthoringSaveRequests() throws Exception {
+        byte[] body = "{\"modelSpecSnapshot\":\"payload-too-large\"}".getBytes(StandardCharsets.UTF_8);
+        MockHttpServletRequest request = new MockHttpServletRequest("PUT", authoringPath());
+        request.setServletPath(authoringPath());
+        request.setContent(body);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        AtomicBoolean dispatched = new AtomicBoolean();
+        DbtImplementationDraftBodyLimitFilter filter = new DbtImplementationDraftBodyLimitFilter(
+            new ObjectMapper(),
+            mock(DbtImplementationDraftRejectionAudit.class),
+            16
+        );
+
+        filter.doFilter(request, response, (ignoredRequest, ignoredResponse) -> dispatched.set(true));
+
+        assertThat(response.getStatus()).isEqualTo(413);
+        assertThat(dispatched).isFalse();
+    }
+
+    @Test
     void failsClosedWithoutWritingA413WhenStrictRejectionAuditCannotPersist() {
         byte[] body = "secret-body-that-is-too-large".getBytes(StandardCharsets.UTF_8);
         MockHttpServletRequest request = new MockHttpServletRequest("PUT", draftPath());
@@ -113,5 +133,10 @@ class DbtImplementationDraftBodyLimitFilterTest {
     private static String draftPath() {
         return "/api/modeling/model-specs/20000000-0000-0000-0000-000000000083/dbt-drafts/" +
         "30000000-0000-0000-0000-000000000083/files";
+    }
+
+    private static String authoringPath() {
+        return "/api/modeling/model-specs/20000000-0000-0000-0000-000000000083/authoring-drafts/" +
+        "30000000-0000-0000-0000-000000000083";
     }
 }

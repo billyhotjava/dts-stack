@@ -94,7 +94,9 @@ describe("ModelVisualTransformationFields", () => {
 		root = createRoot(container);
 		const current = draft();
 		const onChange = vi.fn();
-		act(() => root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={onChange} />));
+		act(() =>
+			root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={onChange} />),
+		);
 
 		expect(container.querySelector('[aria-label="来源字段 record_id"]')).not.toBeNull();
 		expect(container.textContent).toContain("不接收自由 SQL");
@@ -114,7 +116,7 @@ describe("ModelVisualTransformationFields", () => {
 		);
 	});
 
-	it("keeps visual transformations read-only after dbt ownership is selected", () => {
+	it("keeps structured transformations editable regardless of the implementation provenance", () => {
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);
@@ -122,7 +124,20 @@ describe("ModelVisualTransformationFields", () => {
 		current.implementationMode = "DBT_MANAGED";
 		act(() => root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={vi.fn()} />));
 
-		expect(container.textContent).toContain("当前实现已由 dbt 代码维护");
+		expect(container.textContent).not.toContain("当前实现已由 dbt 代码维护");
+		expect(container.querySelector('[aria-label="来源字段 record_id"]')).not.toBeNull();
+	});
+
+	it("keeps raw code intact until the user explicitly selects a structured input", () => {
+		container = document.createElement("div");
+		document.body.append(container);
+		root = createRoot(container);
+		const current = draft();
+		current.implementationMode = "DBT_MANAGED";
+		current.implementationInputMode = "";
+		act(() => root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={vi.fn()} />));
+
+		expect(container.textContent).toContain("当前实现保留原始代码");
 		expect(container.querySelector('[aria-label="来源字段 record_id"]')).toBeNull();
 	});
 });

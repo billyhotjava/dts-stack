@@ -1,5 +1,7 @@
 # F5: 统一发布回归与交付验收
 
+> **Sprint-92 验收重定向（2026-08-19）**：本 Feature 继续拥有候选、构建、质量、评审、发布、物化和治理交接回归；不再把“接管后永久只读/不可回退”作为通过条件。创作入口、PUBLISHED fork、visual/code 同草稿与 provenance 无关权限由 Sprint-92 验收，F5 只验证其提交 pins 能无分支进入现有生命周期。
+
 **优先级**: P0
 **状态**: BLOCKED（等待 F6～F8、真实登录/Chrome 95/事务 IT，并需先裁决既有 `BUILT → CANCELLED` 状态机与测试语义冲突）
 

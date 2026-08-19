@@ -1993,7 +1993,31 @@
 
 **2026-08-13 架构复核**：首版三处「以为可复用、实际不可复用」已修订——①接管制品类型与 `compile()` 门禁冲突（接管后模型无法编译/物化/发布）；②回切的安全子集规则在现网不存在，且平台自生成的 SQL 必然被判定为复杂（回切移出范围）；③DESIGNER 的 TECHNICAL 表示恒为 BLOCKED，代码模式不可见（新增 F1/T03 后端能力扩展）。首版 `READY=5` 作废。详见 Sprint README「架构复核结论」与账本 #16～#23。
 
-**非目标**: `DBT_MANAGED → DESIGNER_GENERATED` 回切（移交 `assets/sprint-92-back-conversion-handoff.md`）；不加固/不下线旧 `convert-to-designer-generated`；不在建模工作台创建/装载 ODS，不把 STG 登记为业务资产；不提供可视化任意 SQL/窗口函数；不引入 Monaco worker；不做 YAML 智能补全。
+**非目标**: Sprint-91 不再扩展 `DBT_MANAGED → DESIGNER_GENERATED` 回切；其历史 handoff 已由 Sprint-92 升级承接为来源无关统一创作。Sprint-91 不加固/不下线旧 `convert-to-designer-generated`；不在建模工作台创建/装载 ODS，不把 STG 登记为业务资产；不提供可视化任意 SQL/窗口函数；不引入 Monaco worker；不做 YAML 智能补全。
+
+## Sprint-92: 统一模型创作与双视图收敛 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-92-202608-unified-model-authoring-convergence`
+**时间盒**: 2026-08-19 ～ 2026-09-15
+**状态**: IMPLEMENTATION_COMPLETE / E2E_PENDING（F1～F4 和迁移命令已实现；F0 实时基线、集中 E2E 与发布回滚演练待执行）
+**类型**: Architecture Convergence / Modeling Workflow / UI Productization / Compatibility Migration
+**目标**: 建模人员在同一 ModelSpec、同一 authoring draft 和同一模型工作台中自由切换 visual/code；平台生成、手工代码和 dbt ZIP 只记录 provenance，不决定编辑权限；PUBLISHED 显式派生新 DRAFT，后续继续复用既有发布、物化和治理链。
+**依赖**: 复用 Sprint-91 的工作台、representation、Monaco、dbt draft、compiler、bundle、依赖快照、候选与物化；消费 Sprint-93 的稳定资产/质量/血缘证据。扩展既有 draft table/service，不新增菜单、模型/依赖/artifact/发布台账或 parser。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与替代裁决 | P0 | 2 | READY |
+| F1-统一创作草稿与版本边界 | P0 | 3 | IMPLEMENTED |
+| F2-来源无关表示与安全投影 | P0 | 3 | IMPLEMENTED |
+| F3-统一模型工作台交互 | P0 | 3 | IMPLEMENTED |
+| F4-统一校验提交与生命周期兼容 | P0 | 3 | IMPLEMENTED |
+| F5-迁移发布与集中验收 | P0 | 3 | IN_PROGRESS |
+
+**统计**: READY=2，IMPLEMENTED=13，IN_PROGRESS=1，PENDING=1，DONE=0，BLOCKED=0（共 17 Task）。
+**执行顺序**: F0 → F1/T01 ∥ F2/T01 → F1/T02 → F2/T02 → F1/T03 ∥ F2/T03 → F3 → F4 → F5；全部编码完成后只执行一次集中 E2E。
+**关键决策**: ModelSpec 是稳定业务 owner；扩展既有 dbt draft 为组合草稿；provenance 与权限分离；复杂 SQL 用 FULL/PARTIAL/NONE + raw node，禁止整页锁定或猜测改写；旧 API 兼容委托，首轮 Expand/Migrate、不做 Contract；PUBLISHED 不可原地改。
+**已知风险**: 当前模型/draft 分布与旧 API 调用量待刷新；三类真实 bundle 的 projection coverage 未实测；组合 commit 的自动化已通过，但 PostgreSQL 实时副本、Chrome95、旧/new 组合兼容、migration rollback 与真实纵向 E2E 仍待验收。
+**非目标**: 不新增菜单/页面/SQL IDE，不承诺任意 SQL 全表单化，不接入 ODS/改数仓分层，不扩权限模型，不删除旧 schema/API，不在 Feature 完成前执行 E2E。
 
 ## Sprint-93: 数据建模与数据治理证据闭环 (202608)
 
@@ -2002,7 +2026,7 @@
 **状态**: IN_PROGRESS（F0 已验证真实登录、现代 Chrome、受保护 API 与 normalization preview；隔离样本和 Chrome95 仍为 GAP）
 **类型**: Architecture Convergence / Governance Evidence / Compatibility Migration / UI Productization
 **目标**: 让 ModelSpec 从构建、物化、治理质量到发布后，继续在同一稳定资产身份下被资产概览、目录、元数据、血缘和质量消费；二次物化只增加候选/执行/观察历史，不重复创建模型或资产。
-**依赖**: 承接 Sprint-86/87 资产语义；复用 Sprint-88 概览 UI、Sprint-89 元数据来源契约、Sprint-90 血缘 owner、Sprint-91 统一发布；Sprint-92 已预留给 dbt 安全回切，本项不占用其范围。
+**依赖**: 承接 Sprint-86/87 资产语义；复用 Sprint-88 概览 UI、Sprint-89 元数据来源契约、Sprint-90 血缘 owner、Sprint-91 统一发布；消费 Sprint-92 来源无关 authoring commit 的相同 model/implementation/dependency pins，但不进入创作草稿、投影和兼容迁移范围。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---|---|---:|---|
@@ -2026,7 +2050,7 @@
 **状态**: BLOCKED（G0 未过：Sprint-94 当前登录/API 尚未复验；Chrome 95 未验；A1～A4 与目标环境观测来源未取得；后端聚焦测试被 root-owned `target/` 阻断；GitNexus indexed=`76d9657`、current=`a0a9fc0`，仍 stale）
 **类型**: Architecture Convergence / Full-stack / UI Productization
 **目标**: 业务分析人员从平台已发布、已治理的 DWS/ADS 数据集出发，在统一查询、安全和版本链中创建分析、编排并发布看板；发布受众由平台统一登记。
-**依赖**: 复用 QueryDataset、CatalogAssetKey/BI_DATASET、Analytics Card/Dashboard/Revision、QueryExecutionFacade 与平台 BiReportLink；承接 Sprint-13 薄语义层方向和 Sprint-45 页面断链审计；`CatalogAssetRegistrationService` 仅负责物理 DATASET observation，QueryDataset 逻辑身份复用既有 mapping/access/classification/report-link seam（见 `assets/dependency-boundary.md`）；不新增菜单、数据集/分析/权限/发布平行 owner，Sprint-92 预留范围不变。
+**依赖**: 复用 QueryDataset、CatalogAssetKey/BI_DATASET、Analytics Card/Dashboard/Revision、QueryExecutionFacade 与平台 BiReportLink；承接 Sprint-13 薄语义层方向和 Sprint-45 页面断链审计；`CatalogAssetRegistrationService` 仅负责物理 DATASET observation，QueryDataset 逻辑身份复用既有 mapping/access/classification/report-link seam（见 `assets/dependency-boundary.md`）；不新增菜单、数据集/分析/权限/发布平行 owner；只消费 Sprint-92/93 已发布、已治理的稳定数据集，不进入 authoring 范围。
 
 **2026-08-17 范围裁剪**: 原 F5 已移出活跃 Feature，契约交接到 `assets/deferred-scope-handoff.md`。Metabase 仿造功能改为**渐进退役**（S0 盘点/冻结/建立观测口 → S1 只读兼容准备 → S2 兼容重定向 → S3 迁移 apply → S4 物理退役），本 Sprint 只做 S0：产出 32 条静态路由、动态菜单和后端旧写 surface 分母，登记逐项 source/window/value-or-UNKNOWN 与观测起点，新建产物入口收敛到 canonical；**不重定向、不关闭旧写、不迁移、不删除**。不存在的历史调用量不得伪造，连续 14 天观测可读前不得进入 S1。
 

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling.dbtdraft;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository;
@@ -11,12 +12,14 @@ import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyServ
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService.Resolution;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Reconciliation;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TimelineView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleCompilerPort;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
@@ -24,6 +27,9 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationM
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecPlanWriteAccessPort;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
+import com.yuzhi.dts.platform.service.modeling.authoring.ModelAuthoringSnapshotDecoder;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ArtifactType;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ImportCommand;
@@ -32,6 +38,8 @@ import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.NodeKind;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CommitDraftRequest;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CommitView;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.AuthoringOrigin;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.AuthoringSeed;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.BundleFileView;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CreateDraftRequest;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.Diagnostic;
@@ -94,7 +102,10 @@ public class DbtImplementationDraftService {
     private final DbtImplementationDraftAuditRecorder auditRecorder;
     private final ModelImplementationDependencyService dependencies;
     private final ObjectMapper objectMapper;
+    private final ModelAuthoringSnapshotDecoder snapshotDecoder;
+    private final ModelSpecSnapshotCodec snapshotCodec;
     private final DbtCanonicalProjectReconstructor canonicalProjects;
+    private final ModelLifecycleCompilerPort visualCompiler;
     private final Clock clock;
 
     @Autowired
@@ -108,7 +119,8 @@ public class DbtImplementationDraftService {
         ModelRepresentationEvidencePort representationEvidence,
         DbtImplementationDraftAuditRecorder auditRecorder,
         ObjectMapper objectMapper,
-        ModelImplementationDependencyService dependencies
+        ModelImplementationDependencyService dependencies,
+        ModelLifecycleCompilerPort visualCompiler
     ) {
         this(
             repository,
@@ -121,6 +133,7 @@ public class DbtImplementationDraftService {
             auditRecorder,
             objectMapper,
             dependencies,
+            visualCompiler,
             Clock.systemUTC()
         );
     }
@@ -148,6 +161,7 @@ public class DbtImplementationDraftService {
             auditRecorder,
             objectMapper,
             null,
+            null,
             clock
         );
     }
@@ -163,6 +177,7 @@ public class DbtImplementationDraftService {
         DbtImplementationDraftAuditRecorder auditRecorder,
         ObjectMapper objectMapper,
         ModelImplementationDependencyService dependencies,
+        ModelLifecycleCompilerPort visualCompiler,
         Clock clock
     ) {
         this.repository = repository;
@@ -175,7 +190,10 @@ public class DbtImplementationDraftService {
         this.auditRecorder = auditRecorder;
         this.dependencies = dependencies;
         this.objectMapper = objectMapper;
+        this.snapshotDecoder = new ModelAuthoringSnapshotDecoder(objectMapper);
+        this.snapshotCodec = new ModelSpecSnapshotCodec(objectMapper);
         this.canonicalProjects = new DbtCanonicalProjectReconstructor(objectMapper);
+        this.visualCompiler = visualCompiler;
         this.clock = clock;
     }
 
@@ -183,7 +201,29 @@ public class DbtImplementationDraftService {
     public DraftView create(String tenantId, String actorId, UUID modelSpecId, CreateDraftRequest request) {
         String correlationId = DbtImplementationDraftCorrelation.currentOrCreate();
         try {
-            return createInternal(tenantId, actorId, modelSpecId, request, correlationId);
+            return createInternal(tenantId, actorId, modelSpecId, request, null, correlationId);
+        } catch (RuntimeException failure) {
+            throw auditedFailure(AUDIT_CREATE, tenantId, actorId, modelSpecId, null, request, correlationId, failure);
+        }
+    }
+
+    @Transactional
+    public DraftView createAuthoring(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        CreateDraftRequest request,
+        AuthoringSeed seed
+    ) {
+        String correlationId = DbtImplementationDraftCorrelation.currentOrCreate();
+        try {
+            if (seed == null || seed.modelSpecSnapshot() == null || !seed.modelSpecSnapshot().isObject()) {
+                throw DbtImplementationDraftContract.badRequest(
+                    "MODEL_AUTHORING_SNAPSHOT_REQUIRED",
+                    "A canonical ModelSpec authoring snapshot is required"
+                );
+            }
+            return createInternal(tenantId, actorId, modelSpecId, request, seed, correlationId);
         } catch (RuntimeException failure) {
             throw auditedFailure(AUDIT_CREATE, tenantId, actorId, modelSpecId, null, request, correlationId, failure);
         }
@@ -194,6 +234,7 @@ public class DbtImplementationDraftService {
         String actorId,
         UUID modelSpecId,
         CreateDraftRequest request,
+        AuthoringSeed seed,
         String correlationId
     ) {
         requireIdentity(tenantId, actorId, modelSpecId);
@@ -241,6 +282,9 @@ public class DbtImplementationDraftService {
             implementationChecksum,
             targetPhysicalName
         );
+        if (seed != null) {
+            requestHash = DbtImplementationDraftContract.requiredChecksum(seed.requestHash(), "requestHash");
+        }
         if (!writeAccess.canMaintain(tenantId, request.planId(), actorId)) {
             throw DbtImplementationDraftContract.forbidden(
                 "DBT_DRAFT_MAINTAINER_FORBIDDEN",
@@ -257,7 +301,7 @@ public class DbtImplementationDraftService {
         );
         if (replay.isPresent()) return createdDraft(replay.orElseThrow(), requestHash, now, correlationId);
 
-        ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, request.planId());
+        ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, request.planId(), seed != null);
         if (model.revision() != request.baseModelRevision() || !Objects.equals(model.checksum(), modelChecksum)) {
             throw DbtImplementationDraftContract.conflict(
                 "DBT_DRAFT_BASE_MODEL_CONFLICT",
@@ -265,7 +309,14 @@ public class DbtImplementationDraftService {
             );
         }
         ImplementationView implementation = lifecycle.timeline(tenantId, modelSpecId).implementation();
-        requireImplementationPin(modelSpecId, implementation, implementationRevision, implementationChecksum);
+        boolean unifiedAuthoring = seed != null;
+        requireImplementationPin(
+            modelSpecId,
+            implementation,
+            implementationRevision,
+            implementationChecksum,
+            unifiedAuthoring
+        );
         if (implementation == null && targetPhysicalName == null) {
             throw DbtImplementationDraftContract.badRequest(
                 "DBT_DRAFT_TARGET_PHYSICAL_NAME_REQUIRED",
@@ -288,7 +339,8 @@ public class DbtImplementationDraftService {
             implementationChecksum,
             implementation,
             model,
-            targetPhysicalName
+            targetPhysicalName,
+            unifiedAuthoring
         );
 
         String sourceBundleSnapshot = sourceBundleSnapshot(sourceBundle);
@@ -306,12 +358,25 @@ public class DbtImplementationDraftService {
                 idempotencyKey,
                 requestHash,
                 sourceBundleSnapshot,
+                seed == null ? null : jsonSnapshot(seed.modelSpecSnapshot(), "ModelSpec authoring snapshot"),
+                seed == null || seed.projectionSummary() == null
+                    ? null
+                    : jsonSnapshot(seed.projectionSummary(), "Model projection summary"),
+                seed == null ? null : seed.origin().name(),
                 nextEtag(),
                 now.plus(DRAFT_TTL),
                 now
             )
         );
         return createdDraft(row, requestHash, now, correlationId);
+    }
+
+    private String jsonSnapshot(JsonNode value, String label) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException(label + " could not be serialized", exception);
+        }
     }
 
     private DraftView createdDraft(DraftRow row, String requestHash, Instant now, String correlationId) {
@@ -334,6 +399,50 @@ public class DbtImplementationDraftService {
             correlationId
         );
         return view(row, sourceBundle);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<DraftView> findAuthoringByIdempotency(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        UUID planId,
+        String idempotencyKey,
+        String requestHash
+    ) {
+        requireIdentity(tenantId, actorId, modelSpecId);
+        String key = DbtImplementationDraftContract.requiredText(idempotencyKey, "idempotencyKey", 128);
+        String expectedHash = DbtImplementationDraftContract.requiredChecksum(requestHash, "requestHash");
+        Optional<DraftRow> found = repository.findByIdempotency(tenantId, planId, modelSpecId, actorId, key);
+        if (found.isEmpty()) return Optional.empty();
+        DraftRow row = found.orElseThrow();
+        if (!Objects.equals(row.requestHash(), expectedHash)) {
+            throw DbtImplementationDraftContract.conflict(
+                "MODEL_AUTHORING_IDEMPOTENCY_CONFLICT",
+                "The authoring idempotency key belongs to another request"
+            );
+        }
+        requireNotExpired(row, clock.instant());
+        if (row.modelSpecSnapshot() == null || row.modelSpecSnapshot().isBlank()) return Optional.empty();
+        return Optional.of(view(row, workingSourceBundle(row)));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<DraftView> findOpenAuthoring(String tenantId, String actorId, UUID modelSpecId) {
+        requireIdentity(tenantId, actorId, modelSpecId);
+        Optional<DraftRow> found = repository.findOpenForActor(tenantId, modelSpecId, actorId, clock.instant());
+        if (found.isEmpty()) return Optional.empty();
+        DraftRow row = found.orElseThrow();
+        if (row.modelSpecSnapshot() == null || row.modelSpecSnapshot().isBlank()) return Optional.empty();
+        if (!writeAccess.canMaintain(tenantId, row.planId(), actorId)) return Optional.empty();
+        return Optional.of(view(row, workingSourceBundle(row)));
+    }
+
+    @Transactional(readOnly = true)
+    public List<FileInput> authoringFiles(String tenantId, String actorId, UUID modelSpecId, UUID draftId) {
+        DraftRow current = requireDraft(tenantId, actorId, modelSpecId, draftId);
+        requireNotExpired(current, clock.instant());
+        return List.copyOf(currentWorkingFiles(current).values());
     }
 
     private String sourceBundleSnapshot(SourceBundleView sourceBundle) {
@@ -403,6 +512,35 @@ public class DbtImplementationDraftService {
         }
     }
 
+    /** Validates and restores a frozen source bundle for the controlled authoring migration lane. */
+    public SourceBundleView restoreSourceBundleSnapshot(String snapshot) {
+        return sourceBundleSnapshot(snapshot);
+    }
+
+    private SourceBundleView workingSourceBundle(DraftRow row) {
+        SourceBundleView frozen = sourceBundleSnapshot(row.sourceBundleSnapshot());
+        List<BundleFileView> workingFiles = currentWorkingFiles(row)
+            .values()
+            .stream()
+            .map(file -> {
+                byte[] bytes = file.content().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                return new BundleFileView(file.path(), file.content(), ModelPackageChecksum.sha256(bytes), bytes.length);
+            })
+            .toList();
+        if (workingFiles.isEmpty()) return frozen;
+        return new SourceBundleView(
+            frozen.projectKey(),
+            frozen.projectChecksum(),
+            frozen.bundleChecksum(),
+            frozen.sourceKind(),
+            frozen.lossless(),
+            workingFiles,
+            frozen.dependencyChecksum(),
+            frozen.dependencySnapshot(),
+            frozen.managedDependencyAliases()
+        );
+    }
+
     @Transactional
     public SaveFilesView saveFiles(
         String tenantId,
@@ -416,6 +554,79 @@ public class DbtImplementationDraftService {
             return saveFilesInternal(tenantId, actorId, modelSpecId, draftId, request, correlationId);
         } catch (RuntimeException failure) {
             throw auditedFailure(AUDIT_SAVE, tenantId, actorId, modelSpecId, draftId, request, correlationId, failure);
+        }
+    }
+
+    @Transactional
+    public SaveFilesView saveAuthoring(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        UUID draftId,
+        String expectedEtag,
+        JsonNode modelSpecSnapshot,
+        JsonNode projectionSummary,
+        List<FileInput> requestedFiles,
+        boolean visualView
+    ) {
+        String correlationId = DbtImplementationDraftCorrelation.currentOrCreate();
+        try {
+            DraftRow current = requireDraft(tenantId, actorId, modelSpecId, draftId);
+            if (modelSpecSnapshot == null || !modelSpecSnapshot.isObject()) {
+                throw DbtImplementationDraftContract.badRequest(
+                    "MODEL_AUTHORING_SNAPSHOT_REQUIRED",
+                    "A canonical ModelSpec authoring snapshot is required"
+                );
+            }
+            String requiredEtag = expectedEtag(expectedEtag);
+            List<FileInput> files = DbtImplementationDraftContract.normalizeFiles(requestedFiles);
+            Instant now = clock.instant();
+            requireNotExpired(current, now);
+            if (current.state() == DraftState.COMMITTED || current.state() == DraftState.COMMITTING) {
+                throw DbtImplementationDraftContract.conflict(
+                    "MODEL_AUTHORING_DRAFT_NOT_EDITABLE",
+                    "A committing or committed authoring draft cannot be edited"
+                );
+            }
+            if (visualView) {
+                var decoded = snapshotDecoder.decode(modelSpecSnapshot);
+                boolean structuredVisual = decoded.valid() && decoded.visualImplementation() != null;
+                requireUnmanagedFilesUnchanged(current, files, structuredVisual, projectionSummary);
+                if (structuredVisual) {
+                    files = recompileVisualAuthoring(
+                        tenantId,
+                        actorId,
+                        modelSpecId,
+                        current,
+                        files,
+                        decoded,
+                        projectionSummary
+                    );
+                }
+            }
+            requireManagedFilesUnchanged(current, files);
+            DraftRow saved = repository
+                .replaceAuthoringContent(
+                    tenantId,
+                    modelSpecId,
+                    draftId,
+                    actorId,
+                    requiredEtag,
+                    nextEtag(),
+                    jsonSnapshot(modelSpecSnapshot, "ModelSpec authoring snapshot"),
+                    projectionSummary == null ? null : jsonSnapshot(projectionSummary, "Model projection summary"),
+                    files,
+                    now
+                )
+                .orElseThrow(() -> etagConflict(current, requiredEtag));
+            long totalBytes = files
+                .stream()
+                .mapToLong(file -> file.content().getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
+                .sum();
+            audit(AUDIT_SAVE, saved, files.size(), null, null, null, null, correlationId);
+            return new SaveFilesView(saved.id(), saved.etag(), saved.expiresAt(), files.size(), totalBytes);
+        } catch (RuntimeException failure) {
+            throw auditedFailure(AUDIT_SAVE, tenantId, actorId, modelSpecId, draftId, requestedFiles, correlationId, failure);
         }
     }
 
@@ -465,6 +676,218 @@ public class DbtImplementationDraftService {
         }
     }
 
+    private void requireUnmanagedFilesUnchanged(
+        DraftRow current,
+        List<FileInput> files,
+        boolean structuredVisual,
+        JsonNode projectionSummary
+    ) {
+        java.util.Set<String> managedPaths = managedPaths(current, projectionSummary);
+        Map<String, FileInput> submitted = new LinkedHashMap<>();
+        files.forEach(file -> submitted.put(file.path(), file));
+        Map<String, FileInput> persisted = currentWorkingFiles(current);
+        String compilerPrefix = structuredVisual ? compilerOutputPrefix(managedPaths) : null;
+        for (FileInput original : persisted.values()) {
+            if (
+                managedPaths.contains(original.path()) ||
+                original.path().startsWith("models/.dts_dependencies/") ||
+                "dbt_project.yml".equals(original.path()) ||
+                (compilerPrefix != null && original.path().startsWith(compilerPrefix))
+            ) {
+                continue;
+            }
+            FileInput actual = submitted.get(original.path());
+            if (actual == null || !Objects.equals(actual.content(), original.content())) {
+                throw DbtImplementationDraftContract.conflict(
+                    "MODEL_AUTHORING_UNMANAGED_FILE_CHANGED",
+                    "Visual editing cannot remove, rename or overwrite an unmanaged bundle file"
+                );
+            }
+        }
+        for (FileInput actual : submitted.values()) {
+            if (
+                persisted.containsKey(actual.path()) ||
+                managedPaths.contains(actual.path()) ||
+                "dbt_project.yml".equals(actual.path()) ||
+                (compilerPrefix != null && actual.path().startsWith(compilerPrefix))
+            ) {
+                continue;
+            }
+            throw DbtImplementationDraftContract.conflict(
+                "MODEL_AUTHORING_UNMANAGED_FILE_CHANGED",
+                "Visual editing cannot add an unmanaged bundle file"
+            );
+        }
+    }
+
+    private List<FileInput> recompileVisualAuthoring(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        DraftRow draft,
+        List<FileInput> submittedFiles,
+        ModelAuthoringSnapshotDecoder.DecodeResult decoded,
+        JsonNode projectionSummary
+    ) {
+        if (visualCompiler == null || decoded.visualImplementation() == null) throw sourceBundleUnavailable();
+        ModelSpecView currentModel = requireEditableModel(tenantId, actorId, modelSpecId, draft.planId(), true);
+        requireModelPins(draft, currentModel);
+        ImplementationView currentImplementation = lifecycle.timeline(tenantId, modelSpecId).implementation();
+        requireImplementationPin(
+            modelSpecId,
+            currentImplementation,
+            draft.baseImplementationRevision(),
+            draft.baseImplementationChecksum(),
+            true
+        );
+        UpdateModelSpecCommand visualModelCommand = withImplementationMode(
+            decoded.modelSpec(),
+            ImplementationMode.DESIGNER_GENERATED
+        );
+        ModelSpecView visualModel = snapshotCodec.toUpdatedView(
+            currentModel,
+            visualModelCommand,
+            currentModel.revision(),
+            clock.instant()
+        );
+        ImplementationView visualImplementation = visualImplementation(
+            modelSpecId,
+            visualModel,
+            currentImplementation,
+            decoded.visualImplementation()
+        );
+        LinkedHashMap<String, String> generated = compiledFiles(tenantId, visualModel, visualImplementation);
+        Map<String, String> assembled = CanonicalDbtProjectBundleAssembler.assemble(
+            visualImplementation.projectKey(),
+            visualImplementation.materialization(),
+            generated
+        );
+
+        java.util.Set<String> managedPaths = managedPaths(draft, projectionSummary);
+        String oldCompilerPrefix = compilerOutputPrefix(managedPaths);
+        LinkedHashMap<String, String> merged = new LinkedHashMap<>();
+        submittedFiles.forEach(file -> merged.put(file.path(), file.content()));
+        merged.remove("dbt_project.yml");
+        managedPaths.forEach(merged::remove);
+        if (oldCompilerPrefix != null) {
+            merged.keySet().removeIf(path -> path.startsWith(oldCompilerPrefix));
+        }
+        for (Map.Entry<String, String> generatedFile : assembled.entrySet()) {
+            String path = generatedFile.getKey();
+            if (
+                merged.containsKey(path) &&
+                !path.startsWith("models/.dts_dependencies/") &&
+                !Objects.equals(merged.get(path), generatedFile.getValue())
+            ) {
+                throw DbtImplementationDraftContract.conflict(
+                    "MODEL_AUTHORING_UNMANAGED_FILE_CHANGED",
+                    "Visual compilation cannot overwrite an unmanaged bundle file"
+                );
+            }
+            merged.put(path, generatedFile.getValue());
+        }
+        return DbtImplementationDraftContract.normalizeFiles(
+            merged.entrySet().stream().map(entry -> new FileInput(entry.getKey(), entry.getValue())).toList()
+        );
+    }
+
+    private LinkedHashMap<String, String> compiledFiles(
+        String tenantId,
+        ModelSpecView model,
+        ImplementationView implementation
+    ) {
+        try {
+            List<ArtifactWrite> artifacts = visualCompiler.compile(tenantId, model, implementation);
+            LinkedHashMap<String, String> files = new LinkedHashMap<>();
+            for (ArtifactWrite artifact : artifacts == null ? List.<ArtifactWrite>of() : artifacts) {
+                if (artifact == null || artifact.path() == null || artifact.content() == null) {
+                    throw sourceBundleUnavailable();
+                }
+                String previous = files.putIfAbsent(artifact.path(), artifact.content());
+                if (previous != null && !Objects.equals(previous, artifact.content())) throw sourceBundleUnavailable();
+            }
+            if (files.isEmpty()) throw sourceBundleUnavailable();
+            return files;
+        } catch (DraftException failure) {
+            throw failure;
+        } catch (RuntimeException failure) {
+            throw sourceBundleUnavailable();
+        }
+    }
+
+    private ImplementationView visualImplementation(
+        UUID modelSpecId,
+        ModelSpecView model,
+        ImplementationView current,
+        ModelAuthoringSnapshotDecoder.VisualImplementationSnapshot snapshot
+    ) {
+        SaveImplementationCommand command = snapshot.command();
+        String checksum;
+        try {
+            checksum = ModelPackageChecksum.sha256(objectMapper.writeValueAsBytes(snapshot));
+        } catch (JsonProcessingException failure) {
+            throw sourceBundleUnavailable();
+        }
+        int implementationRevision = current == null ? 1 : current.implementationRevision();
+        return new ImplementationView(
+            current == null
+                ? UUID.nameUUIDFromBytes((modelSpecId + ":visual-authoring").getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                : current.id(),
+            modelSpecId,
+            model.planId(),
+            model.revision(),
+            model.checksum(),
+            ImplementationMode.DESIGNER_GENERATED,
+            snapshot.projectKey(),
+            snapshot.dbtUniqueId(),
+            current == null || current.status() == null ? "DRAFT" : current.status(),
+            implementationRevision,
+            checksum,
+            command.inputMode(),
+            command.inputs(),
+            command.fieldMappings(),
+            command.settings(),
+            command.materialization()
+        );
+    }
+
+    private Map<String, FileInput> currentWorkingFiles(DraftRow current) {
+        LinkedHashMap<String, FileInput> files = new LinkedHashMap<>();
+        List<FileRow> persisted = repository.listFiles(current.id());
+        if (persisted != null && !persisted.isEmpty()) {
+            persisted.forEach(file -> files.put(file.path(), new FileInput(file.path(), file.content())));
+            return files;
+        }
+        if (current.sourceBundleSnapshot() == null) return files;
+        SourceBundleView source = sourceBundleSnapshot(current.sourceBundleSnapshot());
+        source.files().forEach(file -> files.put(file.path(), new FileInput(file.path(), file.content())));
+        return files;
+    }
+
+    private java.util.Set<String> managedPaths(DraftRow current, JsonNode submittedProjection) {
+        JsonNode projection = submittedProjection != null && submittedProjection.isObject()
+            ? submittedProjection
+            : jsonNode(current.projectionSummary());
+        java.util.Set<String> paths = new java.util.LinkedHashSet<>();
+        if (projection != null && projection.path("managedPaths").isArray()) {
+            projection.path("managedPaths").forEach(path -> {
+                String value = path.asText("").trim();
+                if (!value.isEmpty()) paths.add(value);
+            });
+        }
+        return paths;
+    }
+
+    private static String compilerOutputPrefix(java.util.Set<String> managedPaths) {
+        if (managedPaths == null) return null;
+        return managedPaths
+            .stream()
+            .filter(path -> path != null && path.matches("^models/.+/v[1-9][0-9]*/i[1-9][0-9]*/[^/]+$"))
+            .map(path -> path.substring(0, path.lastIndexOf('/') + 1))
+            .findFirst()
+            .orElse(null);
+    }
+
     @Transactional
     public ValidationView validate(
         String tenantId,
@@ -497,6 +920,7 @@ public class DbtImplementationDraftService {
             throw DbtImplementationDraftContract.conflict("DBT_DRAFT_NOT_VALIDATABLE", "The draft is no longer validatable");
         }
         if (!Objects.equals(current.etag(), expectedEtag)) throw etagConflict(current, expectedEtag);
+        requireValidModelSnapshot(current);
         List<FileRow> files = repository.listFiles(draftId);
         if (files.isEmpty()) {
             throw DbtImplementationDraftContract.unprocessable(
@@ -563,14 +987,22 @@ public class DbtImplementationDraftService {
         if (dependencies == null || draft.sourceBundleSnapshot() == null) return null;
         SourceBundleView source = sourceBundleSnapshot(draft.sourceBundleSnapshot());
         if (source.dependencySnapshot() == null) return null;
-        ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, draft.planId());
+        boolean unifiedAuthoring = draft.modelSpecSnapshot() != null;
+        ModelSpecView model = requireEditableModel(
+            tenantId,
+            actorId,
+            modelSpecId,
+            draft.planId(),
+            unifiedAuthoring
+        );
         requireModelPins(draft, model);
         ImplementationView implementation = lifecycle.timeline(tenantId, modelSpecId).implementation();
         requireImplementationPin(
             modelSpecId,
             implementation,
             draft.baseImplementationRevision(),
-            draft.baseImplementationChecksum()
+            draft.baseImplementationChecksum(),
+            unifiedAuthoring
         );
         ValidatedNode ownedTarget = target(validated, implementation);
         Resolution current = resolveDependencies(
@@ -592,11 +1024,11 @@ public class DbtImplementationDraftService {
                 )
             );
         }
-        List<String> parsed = ownedTarget
-            .dependencies()
-            .stream()
-            .map(value -> source.managedDependencyAliases().getOrDefault(value, value))
-            .toList();
+        List<String> parsed = externalDependencies(
+            validated,
+            ownedTarget,
+            source.managedDependencyAliases()
+        );
         Reconciliation reconciliation;
         try {
             reconciliation = dependencies.reconcile(current.snapshot(), parsed);
@@ -609,6 +1041,49 @@ public class DbtImplementationDraftService {
             reconciliation.missing(),
             reconciliation.undeclared()
         );
+    }
+
+    static List<String> externalDependencies(
+        ValidatedProject project,
+        ValidatedNode target,
+        Map<String, String> managedAliases
+    ) {
+        LinkedHashMap<String, ValidatedNode> internalNodes = new LinkedHashMap<>();
+        if (project != null && project.nodes() != null) {
+            project.nodes().stream().filter(Objects::nonNull).forEach(node -> internalNodes.put(node.dbtUniqueId(), node));
+        }
+        java.util.Set<String> external = new java.util.TreeSet<>();
+        java.util.Set<String> visiting = new java.util.LinkedHashSet<>();
+        Map<String, String> aliases = managedAliases == null ? Map.of() : managedAliases;
+        for (String dependency : target == null || target.dependencies() == null ? List.<String>of() : target.dependencies()) {
+            collectExternalDependency(dependency, internalNodes, aliases, visiting, external);
+        }
+        return List.copyOf(external);
+    }
+
+    private static void collectExternalDependency(
+        String dependency,
+        Map<String, ValidatedNode> internalNodes,
+        Map<String, String> aliases,
+        java.util.Set<String> visiting,
+        java.util.Set<String> external
+    ) {
+        if (dependency == null || dependency.isBlank()) return;
+        String aliased = aliases.get(dependency);
+        if (aliased != null && !aliased.isBlank()) {
+            external.add(aliased);
+            return;
+        }
+        ValidatedNode internal = internalNodes.get(dependency);
+        if (internal == null) {
+            external.add(dependency);
+            return;
+        }
+        if (!visiting.add(dependency)) return;
+        for (String nested : internal.dependencies() == null ? List.<String>of() : internal.dependencies()) {
+            collectExternalDependency(nested, internalNodes, aliases, visiting, external);
+        }
+        visiting.remove(dependency);
     }
 
     @Transactional
@@ -724,7 +1199,8 @@ public class DbtImplementationDraftService {
             );
         }
         requireFrozenBundle(current, bundle);
-        ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, current.planId());
+        boolean unifiedAuthoring = current.modelSpecSnapshot() != null;
+        ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, current.planId(), unifiedAuthoring);
         requireModelPins(current, model);
         TimelineView timeline = lifecycle.timeline(tenantId, modelSpecId);
         ImplementationView baseImplementation = timeline.implementation();
@@ -732,11 +1208,17 @@ public class DbtImplementationDraftService {
             modelSpecId,
             baseImplementation,
             current.baseImplementationRevision(),
-            current.baseImplementationChecksum()
+            current.baseImplementationChecksum(),
+            unifiedAuthoring
         );
         ValidatedNode target = target(validated, baseImplementation);
         requireMaterialization(model, target);
-        List<ModelField> projectedFields = DbtModelFieldProjector.project(objectMapper, target.schema(), model.fields());
+        UpdateModelSpecCommand authoringSnapshot = unifiedAuthoring ? requireValidModelSnapshot(current) : null;
+        List<ModelField> projectedFields = DbtModelFieldProjector.project(
+            objectMapper,
+            target.schema(),
+            authoringSnapshot == null ? model.fields() : authoringSnapshot.fields()
+        );
 
         Optional<DraftRow> claim = repository.claimCommit(
                 tenantId,
@@ -771,7 +1253,15 @@ public class DbtImplementationDraftService {
             throw etagConflict(winner, expectedEtag);
         }
         DraftRow claimed = claim.orElseThrow();
-        if (!Objects.equals(model.fields(), projectedFields)) {
+        if (unifiedAuthoring) {
+            model = modelSpecs.synchronizeAuthoringDraft(
+                tenantId,
+                actorId,
+                modelSpecId,
+                new ExpectedVersion(modelSpecId, model.revision(), model.checksum()),
+                withProjectedFields(authoringSnapshot, projectedFields)
+            );
+        } else if (!Objects.equals(model.fields(), projectedFields)) {
             model = modelSpecs.synchronizeDbtManagedFields(
                 tenantId,
                 actorId,
@@ -799,6 +1289,10 @@ public class DbtImplementationDraftService {
         generatedConfig.put("dbtUniqueId", target.dbtUniqueId());
         generatedConfig.put("projectChecksum", bundle.projectChecksum());
         generatedConfig.put("bundleChecksum", bundle.bundleChecksum());
+        if (unifiedAuthoring) {
+            Map<String, Object> visualImplementation = visualImplementationConfig(current);
+            if (visualImplementation != null) generatedConfig.put("visualImplementation", visualImplementation);
+        }
         if (committedDependencies != null) {
             generatedConfig.put("dependencyChecksum", committedDependencies.snapshot().dependencyChecksum());
             generatedConfig.put("dependencySnapshot", committedDependencies.snapshot());
@@ -878,7 +1372,66 @@ public class DbtImplementationDraftService {
         return committedView(committed, model, dependencyChecksum);
     }
 
+    private UpdateModelSpecCommand requireValidModelSnapshot(DraftRow row) {
+        if (row.modelSpecSnapshot() == null || row.modelSpecSnapshot().isBlank()) return null;
+        var decoded = snapshotDecoder.decode(jsonNode(row.modelSpecSnapshot()));
+        if (!decoded.valid()) {
+            throw DbtImplementationDraftContract.unprocessable(
+                "MODEL_AUTHORING_MODEL_INVALID",
+                "The ModelSpec authoring snapshot must pass validation before implementation commit"
+            );
+        }
+        return decoded.modelSpec();
+    }
+
+    private Map<String, Object> visualImplementationConfig(DraftRow row) {
+        JsonNode snapshot = jsonNode(row.modelSpecSnapshot());
+        JsonNode visual = snapshot == null ? null : snapshot.path("visualImplementation");
+        if (visual == null || !visual.isObject()) return null;
+        return objectMapper.convertValue(visual, new TypeReference<Map<String, Object>>() {});
+    }
+
+    private static UpdateModelSpecCommand withProjectedFields(
+        UpdateModelSpecCommand command,
+        List<ModelField> fields
+    ) {
+        return new UpdateModelSpecCommand(
+            command.planId(), command.domainId(), command.modelType(), command.layer(), command.name(),
+            command.description(), command.implementationMode(), command.materialization(), command.businessActivityRef(),
+            command.consumptionScenario(), command.grain(), command.factShape(), command.timeSemantics(), fields,
+            command.sourceRefs(), command.dependsOn(), command.dimensionRefs(), command.metricRefs(),
+            command.standardBindings(), command.generationStrategy(), command.dimensionProfile(), command.dataMartId(),
+            command.variantCode(), command.implementationPolicy(), command.warehouseLayerCode(),
+            command.businessProcessId(), command.subjectDomainId()
+        );
+    }
+
+    private static UpdateModelSpecCommand withImplementationMode(
+        UpdateModelSpecCommand command,
+        ImplementationMode implementationMode
+    ) {
+        return new UpdateModelSpecCommand(
+            command.planId(), command.domainId(), command.modelType(), command.layer(), command.name(),
+            command.description(), implementationMode, command.materialization(), command.businessActivityRef(),
+            command.consumptionScenario(), command.grain(), command.factShape(), command.timeSemantics(),
+            command.fields(), command.sourceRefs(), command.dependsOn(), command.dimensionRefs(), command.metricRefs(),
+            command.standardBindings(), command.generationStrategy(), command.dimensionProfile(), command.dataMartId(),
+            command.variantCode(), command.implementationPolicy(), command.warehouseLayerCode(),
+            command.businessProcessId(), command.subjectDomainId()
+        );
+    }
+
     private ModelSpecView requireEditableModel(String tenantId, String actorId, UUID modelSpecId, UUID planId) {
+        return requireEditableModel(tenantId, actorId, modelSpecId, planId, false);
+    }
+
+    private ModelSpecView requireEditableModel(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        UUID planId,
+        boolean sourceNeutralAuthoring
+    ) {
         ModelSpecView model = modelSpecs.get(tenantId, modelSpecId);
         if (!Objects.equals(model.planId(), planId)) {
             throw DbtImplementationDraftContract.forbidden(
@@ -892,7 +1445,7 @@ public class DbtImplementationDraftService {
                 "The current actor cannot maintain this warehouse plan"
             );
         }
-        if (model.implementationMode() != ImplementationMode.DBT_MANAGED) {
+        if (!sourceNeutralAuthoring && model.implementationMode() != ImplementationMode.DBT_MANAGED) {
             throw DbtImplementationDraftContract.unprocessable(
                 "DBT_DRAFT_OWNERSHIP_UNSUPPORTED",
                 "Advanced dbt drafts are available only for DBT_MANAGED models"
@@ -942,13 +1495,14 @@ public class DbtImplementationDraftService {
         UUID modelSpecId,
         ImplementationView implementation,
         Integer revision,
-        String checksum
+        String checksum,
+        boolean sourceNeutralAuthoring
     ) {
         if (implementation == null) {
             if (revision == null && checksum == null) return;
         } else if (
             implementation.modelSpecId().equals(modelSpecId) &&
-            implementation.ownership() == ImplementationMode.DBT_MANAGED &&
+            (sourceNeutralAuthoring || implementation.ownership() == ImplementationMode.DBT_MANAGED) &&
             Objects.equals(revision, implementation.implementationRevision()) &&
             Objects.equals(checksum, implementation.implementationChecksum())
         ) {
@@ -1089,7 +1643,8 @@ public class DbtImplementationDraftService {
         String implementationChecksum,
         ImplementationView current,
         ModelSpecView model,
-        String targetPhysicalName
+        String targetPhysicalName,
+        boolean sourceNeutralAuthoring
     ) {
         if (current == null) {
             Resolution dependencyResolution = dependencies == null
@@ -1121,6 +1676,18 @@ public class DbtImplementationDraftService {
                 current.projectKey(),
                 current.dbtUniqueId().substring(current.dbtUniqueId().lastIndexOf('.') + 1)
             );
+
+        if (sourceNeutralAuthoring && current.ownership() == ImplementationMode.DESIGNER_GENERATED) {
+            if (visualCompiler == null) throw sourceBundleUnavailable();
+            return withDependencies(
+                freezeCanonical(
+                    compiledDesignerProject(tenantId, model, current, dependencyResolution),
+                    SourceBundleKind.CANONICAL_ARTIFACT_RECONSTRUCTION
+                ),
+                dependencyResolution,
+                Map.of()
+            );
+        }
 
         int sourceModelRevision = current.revision();
         String sourceModelChecksum = current.modelChecksum();
@@ -1206,6 +1773,43 @@ public class DbtImplementationDraftService {
             dependencyResolution,
             Map.of()
         );
+    }
+
+    private CanonicalProject compiledDesignerProject(
+        String tenantId,
+        ModelSpecView model,
+        ImplementationView implementation,
+        Resolution dependencyResolution
+    ) {
+        try {
+            List<ArtifactWrite> artifacts = visualCompiler.compile(tenantId, model, implementation);
+            LinkedHashMap<String, String> generated = new LinkedHashMap<>();
+            for (ArtifactWrite artifact : artifacts == null ? List.<ArtifactWrite>of() : artifacts) {
+                if (artifact == null || artifact.path() == null || artifact.content() == null) {
+                    throw sourceBundleUnavailable();
+                }
+                String previous = generated.putIfAbsent(artifact.path(), artifact.content());
+                if (previous != null && !Objects.equals(previous, artifact.content())) {
+                    throw sourceBundleUnavailable();
+                }
+            }
+            Map<String, String> files = CanonicalDbtProjectBundleAssembler.assemble(
+                implementation.projectKey(),
+                implementation.materialization() == null ? model.materialization() : implementation.materialization(),
+                generated
+            );
+            return new CanonicalProject(
+                implementation.projectKey(),
+                files,
+                Map.of(),
+                dependencyResolution == null ? null : dependencyResolution.snapshot(),
+                Map.of()
+            );
+        } catch (DraftException failure) {
+            throw failure;
+        } catch (RuntimeException failure) {
+            throw sourceBundleUnavailable();
+        }
     }
 
     private SourceBundleView freezeCanonical(CanonicalProject canonical, SourceBundleKind sourceKind) {
@@ -1552,7 +2156,7 @@ public class DbtImplementationDraftService {
         );
     }
 
-    private static DraftView view(DraftRow row, SourceBundleView sourceBundle) {
+    private DraftView view(DraftRow row, SourceBundleView sourceBundle) {
         return new DraftView(
             row.id(),
             row.planId(),
@@ -1564,8 +2168,20 @@ public class DbtImplementationDraftService {
             row.state(),
             row.etag(),
             row.expiresAt(),
-            sourceBundle
+            sourceBundle,
+            jsonNode(row.modelSpecSnapshot()),
+            jsonNode(row.projectionSummary()),
+            AuthoringOrigin.fromStorage(row.authoringOrigin())
         );
+    }
+
+    private JsonNode jsonNode(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return objectMapper.readTree(value);
+        } catch (JsonProcessingException ignored) {
+            return null;
+        }
     }
 
     private static CommitView committedView(DraftRow row) {

@@ -1,5 +1,7 @@
 # F2: 可视化实现代码预览与接管
 
+> **SUPERSEDED_BY_SPRINT_92（2026-08-19）**：本 Feature 的 preview、bundle freeze、CAS、幂等与审计实现继续作为兼容 seam；“接管代码实现”按钮、ownership 翻转和不可逆产品文案不再是目标交互。新实现由 `../../../sprint-92-202608-unified-model-authoring-convergence/` 的统一 authoring draft 承接。以下内容保留为历史设计与已完成证据，不继续扩展。
+
 **优先级**: P0
 **状态**: IN_PROGRESS（T01/T02/T03 源码与聚焦自动化完成；等待真实事务与浏览器 IT）
 

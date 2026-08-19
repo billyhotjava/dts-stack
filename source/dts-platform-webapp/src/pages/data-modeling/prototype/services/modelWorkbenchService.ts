@@ -1,13 +1,13 @@
+import { listDataMarts } from "@/api/dataMartApi";
+import type { ModelAuthoringSnapshot, ModelAuthoringSnapshotInput } from "@/api/dbtImplementationDraftApi";
 import {
 	confirmDimensionDefinition,
 	createDimensionDefinition,
 	listDimensionDefinitions,
 	updateDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
-import { listDataMarts } from "@/api/dataMartApi";
 import { saveModelImplementation } from "@/api/modelImplementationApi";
 import { listModelFieldStandardOptions, type ModelFieldStandardOption } from "@/api/modelingStandardsApi";
-import { listSubjectDomains } from "@/api/subjectDomainApi";
 import {
 	type CreateDimensionModelCommand,
 	createDimensionModel,
@@ -21,14 +21,15 @@ import {
 	collectCurrentWarehousePlanSources,
 	resolveDefaultModelingContextId,
 } from "@/api/services/modelingImportContextService";
+import { listSubjectDomains } from "@/api/subjectDomainApi";
 import { listWarehouseLayers, type WarehouseLayerView } from "@/api/warehouseLayerApi";
 import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
+import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import type {
 	DimensionDefinitionAttribute,
 	DimensionDefinitionReuseScope,
 	DimensionDefinitionView,
 } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import type {
 	GeneratedImplementationInput,
 	ModelImplementationAggregation,
@@ -41,7 +42,6 @@ import type {
 	ModelImplementationView,
 	ModelImplementationWriteCommand,
 } from "@/features/modeling/contracts/modelImplementationContract";
-import type { SubjectDomainView } from "@/features/modeling/contracts/subjectDomainContract";
 import {
 	type CanonicalModelSpecView,
 	type ModelSpecFactShape,
@@ -59,6 +59,7 @@ import {
 	type UpdateModelSpecCommand,
 	validateModelSpecUpdate,
 } from "@/features/modeling/contracts/modelSpecV2Contract";
+import type { SubjectDomainView } from "@/features/modeling/contracts/subjectDomainContract";
 
 export type ModelCreateKind = "dimension" | "dimension-table" | "fact" | "summary" | "application";
 export type ModelSpecCreateKind = Exclude<ModelCreateKind, "dimension">;
@@ -280,7 +281,10 @@ const implementationObject = (implementation: ModelImplementationView | null, ke
 	return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 };
 
-const implementationObjectList = (implementation: ModelImplementationView | null, key: string): Record<string, unknown>[] => {
+const implementationObjectList = (
+	implementation: ModelImplementationView | null,
+	key: string,
+): Record<string, unknown>[] => {
 	const value = implementationSetting(implementation, key);
 	return Array.isArray(value)
 		? value.filter(
@@ -289,7 +293,9 @@ const implementationObjectList = (implementation: ModelImplementationView | null
 		: [];
 };
 
-const implementationCasts = (implementation: ModelImplementationView | null): Record<string, ModelImplementationCastType> =>
+const implementationCasts = (
+	implementation: ModelImplementationView | null,
+): Record<string, ModelImplementationCastType> =>
 	Object.fromEntries(
 		Object.entries(implementationObject(implementation, "casts")).filter(
 			(entry): entry is [string, ModelImplementationCastType] =>
@@ -334,12 +340,74 @@ const generatedInput = (implementation: ModelImplementationView | null): Generat
 	return input && "generatorType" in input ? input : null;
 };
 
+const isModelImplementationWriteCommand = (value: unknown): value is ModelImplementationWriteCommand => {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+	const candidate = value as Partial<ModelImplementationWriteCommand>;
+	return (
+		typeof candidate.projectKey === "string" &&
+		typeof candidate.dbtUniqueId === "string" &&
+		(candidate.inputMode === "PHYSICAL_ASSET" ||
+			candidate.inputMode === "UPSTREAM_MODEL" ||
+			candidate.inputMode === "GENERATED") &&
+		Array.isArray(candidate.inputs) &&
+		typeof candidate.materialization === "string" &&
+		typeof candidate.idempotencyKey === "string"
+	);
+};
+
+const retainedVisualImplementation = (
+	implementation: ModelImplementationView | null,
+): ModelImplementationWriteCommand | null => {
+	if (!implementation || implementation.ownership !== "DBT_MANAGED") return null;
+	for (const input of implementation.inputs) {
+		if (!("generatorType" in input) || !input.config) continue;
+		const retained = input.config.visualImplementation;
+		if (isModelImplementationWriteCommand(retained)) return retained;
+	}
+	return null;
+};
+
+const implementationViewFromCommand = (
+	model: ModelSpecView,
+	implementation: ModelImplementationView | null,
+	command: ModelImplementationWriteCommand,
+): ModelImplementationView => ({
+	id: implementation?.id || `authoring-visual:${model.id}`,
+	modelSpecId: model.id,
+	planId: model.planId || command.projectKey,
+	revision: model.revision,
+	modelChecksum: model.checksum,
+	ownership: command.ownership,
+	projectKey: command.projectKey,
+	dbtUniqueId: command.dbtUniqueId,
+	status: implementation?.status || "DRAFT",
+	implementationRevision: implementation?.implementationRevision || 1,
+	implementationChecksum: implementation?.implementationChecksum || model.checksum,
+	inputMode: command.inputMode,
+	inputs: command.inputs,
+	fieldMappings: command.fieldMappings || [],
+	settings: command.settings || {},
+	materialization: command.materialization,
+});
+
+const structuredImplementationView = (
+	model: ModelSpecView,
+	implementation: ModelImplementationView | null,
+): ModelImplementationView | null => {
+	if (!implementation) return null;
+	if (implementation.ownership === "DESIGNER_GENERATED") return implementation;
+	const retained = retainedVisualImplementation(implementation);
+	return retained ? implementationViewFromCommand(model, implementation, retained) : null;
+};
+
 export function modelDraftFromView(
 	model: ModelSpecView,
 	implementation: ModelImplementationView | null = null,
 ): ModelSpecDraft {
-	const implementationLoadStrategy = implementationText(implementation, "loadStrategy");
-	const generationStrategyType = generatedInput(implementation)?.generatorType || model.generationStrategy?.type || "";
+	const structuredImplementation = structuredImplementationView(model, implementation);
+	const implementationLoadStrategy = implementationText(structuredImplementation, "loadStrategy");
+	const generationStrategyType =
+		generatedInput(structuredImplementation)?.generatorType || model.generationStrategy?.type || "";
 	const logicalInputMode = model.sourceRefs.length
 		? "PHYSICAL_ASSET"
 		: model.dependsOn.length
@@ -353,13 +421,15 @@ export function modelDraftFromView(
 		name: model.name,
 		description: model.description || "",
 		physicalName:
-			implementationText(implementation, "targetPhysicalName") || model.implementationPolicy?.physicalName || "",
-		materialization: implementation?.materialization || model.materialization || "table",
+			implementationText(structuredImplementation, "targetPhysicalName") ||
+			model.implementationPolicy?.physicalName ||
+			"",
+		materialization: structuredImplementation?.materialization || model.materialization || "table",
 		grainStatement: model.grain?.statement || "",
 		businessProcessId: model.businessProcessId || "",
 		fields: model.fields.map((field) => ({ ...field })),
 		partitionFields:
-			implementationStringList(implementation, "partitionFields").join(",") ||
+			implementationStringList(structuredImplementation, "partitionFields").join(",") ||
 			model.implementationPolicy?.partitionFields?.join(",") ||
 			"",
 		loadStrategy:
@@ -374,26 +444,24 @@ export function modelDraftFromView(
 		implementationMode: model.implementationMode,
 		implementationBase: implementation,
 		implementationInputMode:
-			logicalInputMode ||
-			implementation?.inputMode ||
-			(generationStrategyType === "DATE_DIMENSION"
-				? "GENERATED"
-				: model.sourceRefs.length
-					? "PHYSICAL_ASSET"
-					: model.dependsOn.length
-						? "UPSTREAM_MODEL"
+			implementation?.ownership === "DBT_MANAGED" && !structuredImplementation
+				? ""
+				: logicalInputMode ||
+					structuredImplementation?.inputMode ||
+					(generationStrategyType === "DATE_DIMENSION"
+						? "GENERATED"
 						: model.modelType === "SUMMARY" || model.modelType === "APPLICATION"
 							? "UPSTREAM_MODEL"
 							: ""),
 		generationStrategyType: generationStrategyType === "DATE_DIMENSION" ? "DATE_DIMENSION" : "",
 		implementationIdempotencyKey: crypto.randomUUID(),
-		fieldMappings: (implementation?.fieldMappings || []).map((mapping) => ({ ...mapping })),
-		casts: implementationCasts(implementation),
-		filters: implementationFilters(implementation),
-		deduplicateBy: implementationStringList(implementation, "deduplicateBy"),
-		joins: implementationJoins(implementation),
-		groupBy: implementationStringList(implementation, "groupBy"),
-		aggregations: implementationAggregations(implementation),
+		fieldMappings: (structuredImplementation?.fieldMappings || []).map((mapping) => ({ ...mapping })),
+		casts: implementationCasts(structuredImplementation),
+		filters: implementationFilters(structuredImplementation),
+		deduplicateBy: implementationStringList(structuredImplementation, "deduplicateBy"),
+		joins: implementationJoins(structuredImplementation),
+		groupBy: implementationStringList(structuredImplementation, "groupBy"),
+		aggregations: implementationAggregations(structuredImplementation),
 		sourceRefs: model.compatibilityMode === "CANONICAL" ? model.sourceRefs.map((source) => ({ ...source })) : [],
 		dependsOn: model.dependsOn.map((dependency) => ({ ...dependency })),
 		dimensionRefs: model.dimensionRefs.map((dimension) => ({ ...dimension })),
@@ -406,6 +474,53 @@ export function modelDraftFromView(
 	};
 }
 
+const isVersionedAuthoringSnapshot = (snapshot: ModelAuthoringSnapshotInput): snapshot is ModelAuthoringSnapshot =>
+	"modelSpec" in snapshot && snapshot.schemaVersion === 1;
+
+export function modelDraftFromAuthoringSnapshot(
+	model: ModelSpecView,
+	implementation: ModelImplementationView | null,
+	snapshot: ModelAuthoringSnapshotInput,
+): ModelSpecDraft {
+	const versioned = isVersionedAuthoringSnapshot(snapshot);
+	const modelSnapshot = versioned ? snapshot.modelSpec : snapshot;
+	const visualSnapshot = versioned ? snapshot.visualImplementation || null : null;
+	const visualView = visualSnapshot
+		? implementationViewFromCommand(model, implementation, visualSnapshot)
+		: versioned
+			? null
+			: structuredImplementationView(model, implementation);
+	const base = modelDraftFromView(model, visualView);
+	return {
+		...base,
+		planId: modelSnapshot.planId,
+		domainId: modelSnapshot.domainId,
+		name: modelSnapshot.name,
+		description: modelSnapshot.description || "",
+		materialization: modelSnapshot.materialization || base.materialization,
+		grainStatement: modelSnapshot.grain?.statement || "",
+		businessProcessId: modelSnapshot.businessProcessId || "",
+		fields: (modelSnapshot.fields || []).map((field) => ({ ...field })),
+		scdType: modelSnapshot.dimensionProfile?.scdPolicy.type || "NONE",
+		standardBindings: (modelSnapshot.standardBindings || []).map((binding) => ({ ...binding })),
+		warehouseLayerCode: modelSnapshot.warehouseLayerCode || modelSnapshot.layer,
+		implementationMode: modelSnapshot.implementationMode,
+		generationStrategyType:
+			modelSnapshot.generationStrategy?.type === "DATE_DIMENSION" ? "DATE_DIMENSION" : base.generationStrategyType,
+		sourceRefs: (modelSnapshot.sourceRefs || []).map((source) => ({ ...source })),
+		dependsOn: (modelSnapshot.dependsOn || []).map((dependency) => ({ ...dependency })),
+		dimensionRefs: (modelSnapshot.dimensionRefs || []).map((dimension) => ({ ...dimension })),
+		factShape: modelSnapshot.factShape || "",
+		timeSemanticsType: modelSnapshot.timeSemantics?.type || "",
+		timeSemanticsFields: [...(modelSnapshot.timeSemantics?.fields || [])],
+		consumptionScenario: modelSnapshot.consumptionScenario || "",
+		dataMartId: modelSnapshot.dataMartId || "",
+		subjectDomainId: modelSnapshot.subjectDomainId || "",
+		implementationBase: implementation,
+		implementationIdempotencyKey: crypto.randomUUID(),
+	};
+}
+
 export async function loadModelWorkbenchDraft(model: ModelSpecView): Promise<ModelSpecDraft> {
 	const lifecycle = await getModelLifecycle(model.id);
 	return modelDraftFromView(model, lifecycle.implementation);
@@ -413,16 +528,17 @@ export async function loadModelWorkbenchDraft(model: ModelSpecView): Promise<Mod
 
 export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext> {
 	const planId = await resolveDefaultModelingContextId();
-	const [domains, models, dimensions, standards, dataMarts, subjectDomains, warehouseLayers, sources] = await Promise.all([
-		catalogDomainService.list(),
-		listModelSpecs(),
-		listDimensionDefinitions({ offset: 0, limit: 100 }),
-		listModelFieldStandardOptions(),
-		listDataMarts({ status: "CURRENT", offset: 0, limit: 100 }),
-		listSubjectDomains({ status: "CURRENT", offset: 0, limit: 100 }),
-		listWarehouseLayers(),
-		planId ? collectCurrentWarehousePlanSources(planId) : Promise.resolve([]),
-	]);
+	const [domains, models, dimensions, standards, dataMarts, subjectDomains, warehouseLayers, sources] =
+		await Promise.all([
+			catalogDomainService.list(),
+			listModelSpecs(),
+			listDimensionDefinitions({ offset: 0, limit: 100 }),
+			listModelFieldStandardOptions(),
+			listDataMarts({ status: "CURRENT", offset: 0, limit: 100 }),
+			listSubjectDomains({ status: "CURRENT", offset: 0, limit: 100 }),
+			listWarehouseLayers(),
+			planId ? collectCurrentWarehousePlanSources(planId) : Promise.resolve([]),
+		]);
 	return {
 		planId,
 		domains,
@@ -587,10 +703,7 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 		errors.implementationInputMode = "请至少选择一个当前修订的上游模型";
 	} else if (
 		draft.implementationInputMode === "GENERATED" &&
-		(draft.createKind !== "dimension-table" ||
-			(draft.implementationMode === "DBT_MANAGED"
-				? Boolean(draft.generationStrategyType)
-				: draft.generationStrategyType !== "DATE_DIMENSION"))
+		(draft.createKind !== "dimension-table" || draft.generationStrategyType !== "DATE_DIMENSION")
 	) {
 		errors.implementationInputMode = "当前模型不支持所选生成器";
 	}
@@ -611,7 +724,7 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 	if (draft.createKind === "application" && !draft.consumptionScenario.trim()) {
 		errors.consumptionScenario = "请填写应用场景";
 	}
-	if (draft.implementationMode === "DESIGNER_GENERATED" && draft.implementationInputMode !== "GENERATED") {
+	if (supportsStructuredVisualAuthoring(draft) && draft.implementationInputMode !== "GENERATED") {
 		const transformationError = validateDesignerTransformations(draft);
 		if (transformationError) errors.transformations = transformationError;
 	}
@@ -657,10 +770,17 @@ const filterValueMatchesType = (filter: ModelImplementationFilter): boolean => {
 };
 
 const validateDesignerTransformations = (draft: ModelSpecDraft): string | null => {
-	const inputCount = draft.sourceRefs.length + draft.dependsOn.length + draft.dimensionRefs.length;
+	const inputCount = draft.sourceRefs.length + draft.dependsOn.length + (draft.dimensionRefs?.length ?? 0);
 	const outputFields = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
+	const fieldMappings = draft.fieldMappings ?? [];
+	const casts = draft.casts ?? {};
+	const deduplicateBy = draft.deduplicateBy ?? [];
+	const joins = draft.joins ?? [];
+	const filters = draft.filters ?? [];
+	const groupBy = draft.groupBy ?? [];
+	const aggregations = draft.aggregations ?? [];
 	const mappings = new Map<string, string>();
-	for (const mapping of draft.fieldMappings) {
+	for (const mapping of fieldMappings) {
 		const sourceField = mapping.sourceField.trim();
 		const targetField = mapping.targetField.trim();
 		if (!outputFields.has(targetField) || mappings.has(targetField)) return "字段映射的目标字段不存在或重复";
@@ -674,10 +794,10 @@ const validateDesignerTransformations = (draft: ModelSpecDraft): string | null =
 	if (inputCount > 1 && [...outputFields].some((field) => !mappings.has(field))) {
 		return "多输入模型必须为每个目标字段配置来源字段";
 	}
-	if (Object.keys(draft.casts).some((field) => !outputFields.has(field))) return "类型转换只能绑定目标字段";
-	if (draft.deduplicateBy.some((field) => !outputFields.has(field))) return "去重键只能选择目标字段";
+	if (Object.keys(casts).some((field) => !outputFields.has(field))) return "类型转换只能绑定目标字段";
+	if (deduplicateBy.some((field) => !outputFields.has(field))) return "去重键只能选择目标字段";
 	if (inputCount > 1) {
-		const ordered = [...draft.joins].sort((left, right) => left.inputIndex - right.inputIndex);
+		const ordered = [...joins].sort((left, right) => left.inputIndex - right.inputIndex);
 		if (ordered.length !== inputCount - 1) return "每个附加输入都必须配置一条关联关系";
 		for (let inputIndex = 1; inputIndex < inputCount; inputIndex += 1) {
 			const join = ordered[inputIndex - 1];
@@ -688,25 +808,28 @@ const validateDesignerTransformations = (draft: ModelSpecDraft): string | null =
 				return "关联字段必须把当前输入连接到一个更早的输入";
 			}
 		}
-	} else if (draft.joins.length) {
+	} else if (joins.length) {
 		return "单输入模型不能配置关联关系";
 	}
-	for (const filter of draft.filters) {
+	for (const filter of filters) {
 		const field = filter.field.trim();
 		const sourceIndex = sourceFieldIndex(field);
-		if ((!outputFields.has(field) && !SOURCE_FIELD_PATTERN.test(field)) || (sourceIndex !== null && sourceIndex >= inputCount)) {
+		if (
+			(!outputFields.has(field) && !SOURCE_FIELD_PATTERN.test(field)) ||
+			(sourceIndex !== null && sourceIndex >= inputCount)
+		) {
 			return "过滤字段必须是目标字段或当前输入的字段";
 		}
 		if (!filterValueMatchesType(filter)) return "过滤值与所选值类型或操作符不匹配";
 	}
-	const hasAggregation = draft.groupBy.length > 0 || draft.aggregations.length > 0;
+	const hasAggregation = groupBy.length > 0 || aggregations.length > 0;
 	if (hasAggregation) {
-		if (!draft.groupBy.length || !draft.aggregations.length) return "分组字段和聚合配置必须同时填写";
-		if (draft.deduplicateBy.length) return "聚合与去重不能同时启用";
-		const grouped = new Set(draft.groupBy);
+		if (!groupBy.length || !aggregations.length) return "分组字段和聚合配置必须同时填写";
+		if (deduplicateBy.length) return "聚合与去重不能同时启用";
+		const grouped = new Set(groupBy);
 		const aggregateTargets = new Set<string>();
 		if ([...grouped].some((field) => !outputFields.has(field))) return "分组字段只能选择目标字段";
-		for (const aggregation of draft.aggregations) {
+		for (const aggregation of aggregations) {
 			if (!outputFields.has(aggregation.targetField) || grouped.has(aggregation.targetField)) {
 				return "聚合目标字段必须存在且不能同时作为分组字段";
 			}
@@ -723,7 +846,7 @@ const validateDesignerTransformations = (draft: ModelSpecDraft): string | null =
 	return null;
 };
 
-const buildUpdate = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
+export const modelDraftToUpdateCommand = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 	const config = MODEL_KIND_CONFIG[draft.createKind];
 	const keyNames = draft.fields.filter((field) => field.role === "KEY").map((field) => field.name.trim());
 	const updateFieldNames = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
@@ -892,8 +1015,11 @@ const buildImplementationCommand = (
 		"groupBy",
 		"aggregations",
 	]);
+	const retainedVisual = retainedVisualImplementation(draft.implementationBase);
 	const retainedSettings = Object.fromEntries(
-		Object.entries(draft.implementationBase?.settings || {}).filter(([key]) => !controlledSettingKeys.has(key)),
+		Object.entries(retainedVisual?.settings || draft.implementationBase?.settings || {}).filter(
+			([key]) => !controlledSettingKeys.has(key),
+		),
 	);
 	return {
 		inputMode: resolved.inputMode,
@@ -920,9 +1046,41 @@ const buildImplementationCommand = (
 		},
 		ownership: model.implementationMode,
 		materialization,
-		projectKey: draft.implementationBase?.projectKey || "system-managed",
-		dbtUniqueId: draft.implementationBase?.dbtUniqueId || `model.${model.id}`,
+		projectKey: retainedVisual?.projectKey || draft.implementationBase?.projectKey || "system-managed",
+		dbtUniqueId: retainedVisual?.dbtUniqueId || draft.implementationBase?.dbtUniqueId || `model.${model.id}`,
 		idempotencyKey: draft.implementationIdempotencyKey,
+	};
+};
+
+const supportsStructuredVisualAuthoring = (draft: ModelSpecDraft): boolean =>
+	draft.implementationBase?.ownership === "DESIGNER_GENERATED" ||
+	Boolean(retainedVisualImplementation(draft.implementationBase)) ||
+	Boolean(draft.implementationInputMode) ||
+	(!draft.implementationBase && draft.base?.implementationMode === "DESIGNER_GENERATED");
+
+export const modelDraftToAuthoringSnapshot = (
+	draft: ModelSpecDraft,
+	context: ModelSaveContext,
+	includeStructuredVisual = true,
+): ModelAuthoringSnapshot => {
+	const modelSpec = modelDraftToUpdateCommand(draft);
+	const snapshot: ModelAuthoringSnapshot = { schemaVersion: 1, modelSpec };
+	if (
+		!includeStructuredVisual ||
+		!supportsStructuredVisualAuthoring(draft) ||
+		draft.base?.compatibilityMode !== "CANONICAL"
+	) {
+		return snapshot;
+	}
+	const resolved = implementationInputs(draft, context);
+	if (!resolved) return snapshot;
+	const visualImplementation = buildImplementationCommand(draft, draft.base, resolved);
+	return {
+		...snapshot,
+		visualImplementation: {
+			...visualImplementation,
+			ownership: "DESIGNER_GENERATED",
+		},
 	};
 };
 
@@ -932,15 +1090,12 @@ export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveCo
 	if (!backendContextId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
 	const writableDraft = draft.planId ? draft : { ...draft, planId: backendContextId };
 	const preparedDraft = prepareModelDraftForSave(writableDraft, context.dimensionDefinitions);
-	const update = buildUpdate(preparedDraft);
+	const update = modelDraftToUpdateCommand(preparedDraft);
 	validateDraft(preparedDraft, update);
 	const needsImplementationSave = implementationNeedsSave(preparedDraft);
 	const resolvedImplementationInputs = needsImplementationSave ? implementationInputs(preparedDraft, context) : null;
 	if (needsImplementationSave && !resolvedImplementationInputs) {
 		throw new Error("请先配置数据实现来源；日期维度可选择受控日期维度生成器，普通模型需关联物理来源或上游模型");
-	}
-	if (preparedDraft.implementationBase?.ownership === "DBT_MANAGED" && needsImplementationSave) {
-		throw new Error("DBT 管理的物理实现不能在基础信息中修改，请进入高级 dbt 工作区处理");
 	}
 	let savedModel: CanonicalModelSpecView;
 	if (draft.base) savedModel = await updateModelSpec(draft.base, update);

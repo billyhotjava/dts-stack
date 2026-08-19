@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260819-02-model-authoring-draft-expand" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_dbt_implementation_draft"/>
+            <not>
+                <columnExists tableName="modeling_dbt_implementation_draft" columnName="model_spec_snapshot"/>
+            </not>
+        </preConditions>
+        <comment>
+            Expand the existing revision-pinned dbt draft ledger with nullable logical snapshot,
+            safe projection summary and provenance metadata. Visual and code authoring continue to
+            share the existing draft identity, ETag, file table and commit receipt.
+        </comment>
+
+        <addColumn tableName="modeling_dbt_implementation_draft">
+            <column name="model_spec_snapshot" type="jsonb"/>
+            <column name="projection_summary" type="jsonb"/>
+            <column name="authoring_origin" type="varchar(32)"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="modeling_dbt_implementation_draft" columnName="authoring_origin"/>
+            <dropColumn tableName="modeling_dbt_implementation_draft" columnName="projection_summary"/>
+            <dropColumn tableName="modeling_dbt_implementation_draft" columnName="model_spec_snapshot"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

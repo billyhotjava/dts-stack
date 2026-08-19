@@ -572,6 +572,7 @@
                         <testInclude>**/service/modeling/ModelWorkbenchCatalogQueryServiceTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelWorkbenchCatalogRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/service/modeling/representation/*.java</testInclude>
+                        <testInclude>**/service/modeling/authoring/*.java</testInclude>
                         <testInclude>**/service/modeling/serving/*.java</testInclude>
                         <testInclude>**/service/modeling/dbtdraft/*.java</testInclude>
                         <testInclude>**/service/modeling/observability/*.java</testInclude>

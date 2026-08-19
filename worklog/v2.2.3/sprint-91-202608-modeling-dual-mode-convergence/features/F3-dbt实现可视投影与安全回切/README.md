@@ -1,5 +1,7 @@
 # F3: dbt 实现可视只读投影
 
+> **SUPERSEDED_BY_SPRINT_92（2026-08-19）**：可信 BUSINESS projection 继续复用，但“DBT_MANAGED 可视化恒为只读”被替代为来源无关、逐节点 `FULL/PARTIAL/NONE` 投影；局部不可投影不得锁死整个 visual。以下只读结论仅记录 Sprint-91 历史实现。
+
 > **范围已缩减**（2026-08-13 架构复核）。回切已移出 Sprint-91，移交说明见 `assets/sprint-92-back-conversion-handoff.md`；本 Feature 只有只读投影一个活动 Task。
 
 **优先级**: P1

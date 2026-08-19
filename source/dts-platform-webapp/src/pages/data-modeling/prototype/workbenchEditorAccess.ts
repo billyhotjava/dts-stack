@@ -38,6 +38,9 @@ export function resolveWorkbenchEditorAccess(canMaintain: boolean, draft: ModelD
 	return {
 		mode: "VIEW_VERSION",
 		readOnly: true,
-		message: `当前模型版本为 ${draft.base.status}，只能查看；请进入版本流程创建新的草稿版本后修改。`,
+		message:
+			draft.base.status === "PUBLISHED"
+				? "发布版本不可原地修改；创建新草稿版本后，可继续使用可视化或代码方式编辑。"
+				: `当前模型版本为 ${draft.base.status}，只能查看。`,
 	};
 }

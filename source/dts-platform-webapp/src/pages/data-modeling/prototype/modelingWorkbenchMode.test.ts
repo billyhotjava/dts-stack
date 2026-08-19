@@ -21,9 +21,9 @@ describe("modeling workbench mode URL contract", () => {
 	});
 
 	it("resolves one capability-driven access mode for visual and code views", () => {
-		expect(resolveModelingModeAccess({ view: "visual", canMaintain: true, allowedActions: ["EDIT_VISUAL"], capabilityReasons: [] }).access).toBe("EDIT");
+		expect(resolveModelingModeAccess({ view: "visual", canMaintain: true, allowedActions: ["EDIT_MODEL"], capabilityReasons: [] }).access).toBe("EDIT");
 		expect(resolveModelingModeAccess({ view: "visual", canMaintain: true, allowedActions: ["OPEN_VISUAL"], capabilityReasons: [] }).access).toBe("PREVIEW");
-		expect(resolveModelingModeAccess({ view: "code", canMaintain: false, allowedActions: ["OPEN_ADVANCED_DBT"], capabilityReasons: [] }).access).toBe("PREVIEW");
+		expect(resolveModelingModeAccess({ view: "code", canMaintain: false, allowedActions: ["OPEN_CODE"], capabilityReasons: [] }).access).toBe("PREVIEW");
 		expect(resolveModelingModeAccess({ view: "code", canMaintain: true, allowedActions: [], capabilityReasons: ["版本不匹配"] })).toMatchObject({ access: "BLOCKED", reason: "版本不匹配" });
 	});
 

@@ -16,14 +16,22 @@ import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftReposito
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository.FileRow;
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository.NewDraft;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TimelineView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleCompilerPort;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Grain;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecPlanWriteAccessPort;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ArtifactType;
@@ -31,12 +39,15 @@ import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ImportResult;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CommitDraftRequest;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CommitView;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.AuthoringOrigin;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.AuthoringSeed;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CreateDraftRequest;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.DraftException;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.DraftState;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.ErrorKind;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.FileInput;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.SaveFilesRequest;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.SourceBundleView;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.SourceBundleKind;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.ValidateDraftRequest;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtProjectBundleManifest.BundleFile;
@@ -61,6 +72,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class DbtImplementationDraftServiceSecurityTest {
 
@@ -197,6 +209,323 @@ class DbtImplementationDraftServiceSecurityTest {
                 )
         );
         verify(repository, never()).create(any());
+    }
+
+    @Test
+    void unifiedAuthoringCreatesASourceNeutralDraftWithServerDerivedMetadata() {
+        ModelSpecView model = org.mockito.Mockito.mock(ModelSpecView.class);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(model.planId()).thenReturn(PLAN_ID);
+        when(model.revision()).thenReturn(3);
+        when(model.checksum()).thenReturn(MODEL_CHECKSUM);
+        when(model.status()).thenReturn(ModelStatus.DRAFT);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(model.materialization()).thenReturn("table");
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(null, List.of(), List.of()));
+        when(validator.validate(any())).thenReturn(
+            new ValidatedProject(
+                VALIDATED_CHECKSUM,
+                PROJECT_CHECKSUM,
+                "dts_model_200000000000",
+                List.of(
+                    new ValidatedNode(
+                        "model.dts_model_200000000000.dim_orders",
+                        "dim_orders",
+                        "models/dim_orders.sql",
+                        "table",
+                        "MODEL",
+                        "select 1 as _dts_placeholder where 1 = 0\n",
+                        "1".repeat(64),
+                        "{}",
+                        "2".repeat(64),
+                        List.of(),
+                        List.of()
+                    )
+                ),
+                List.of()
+            )
+        );
+        when(repository.create(any())).thenAnswer(invocation -> draft(invocation.getArgument(0)));
+        var modelSnapshot = objectMapper.createObjectNode().put("name", "orders");
+        var projection = objectMapper.createObjectNode().put("coverage", "FULL");
+
+        var created = service.createAuthoring(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new CreateDraftRequest(PLAN_ID, 3, MODEL_CHECKSUM, null, null, "dim_orders", "create-authoring-83"),
+            new AuthoringSeed(modelSnapshot, projection, AuthoringOrigin.SYSTEM_GENERATED, "9".repeat(64))
+        );
+
+        assertThat(created.modelSpecSnapshot()).isEqualTo(modelSnapshot);
+        assertThat(created.projectionSummary()).isEqualTo(projection);
+        assertThat(created.authoringOrigin()).isEqualTo(AuthoringOrigin.SYSTEM_GENERATED);
+        ArgumentCaptor<NewDraft> inserted = ArgumentCaptor.forClass(NewDraft.class);
+        verify(repository).create(inserted.capture());
+        assertThat(inserted.getValue().requestHash()).isEqualTo("9".repeat(64));
+        assertThat(inserted.getValue().authoringOrigin()).isEqualTo("SYSTEM_GENERATED");
+    }
+
+    @Test
+    void unifiedAuthoringCompilesThePinnedDesignerImplementationIntoOneEditableBundle() {
+        ModelLifecycleCompilerPort visualCompiler = org.mockito.Mockito.mock(ModelLifecycleCompilerPort.class);
+        ReflectionTestUtils.setField(service, "visualCompiler", visualCompiler);
+        ModelSpecView model = org.mockito.Mockito.mock(ModelSpecView.class);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(model.planId()).thenReturn(PLAN_ID);
+        when(model.revision()).thenReturn(3);
+        when(model.checksum()).thenReturn(MODEL_CHECKSUM);
+        when(model.status()).thenReturn(ModelStatus.DRAFT);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(model.materialization()).thenReturn("table");
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        ImplementationView implementation = org.mockito.Mockito.mock(ImplementationView.class);
+        when(implementation.id()).thenReturn(IMPLEMENTATION_ID);
+        when(implementation.modelSpecId()).thenReturn(MODEL_ID);
+        when(implementation.planId()).thenReturn(PLAN_ID);
+        when(implementation.revision()).thenReturn(3);
+        when(implementation.modelChecksum()).thenReturn(MODEL_CHECKSUM);
+        when(implementation.ownership()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(implementation.projectKey()).thenReturn("sprint83");
+        when(implementation.dbtUniqueId()).thenReturn("model.sprint83.orders");
+        when(implementation.implementationRevision()).thenReturn(2);
+        when(implementation.implementationChecksum()).thenReturn(IMPLEMENTATION_CHECKSUM);
+        when(implementation.materialization()).thenReturn("table");
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(implementation, List.of(), List.of()));
+        when(visualCompiler.compile(TENANT, model, implementation)).thenReturn(
+            List.of(
+                new ArtifactWrite(
+                    "SQL",
+                    "models/dwd/orders/v3/i2/orders.sql",
+                    "1".repeat(64),
+                    "select 1 as order_id\n",
+                    "MODEL",
+                    "table",
+                    null
+                ),
+                new ArtifactWrite(
+                    "SCHEMA",
+                    "models/dwd/orders/v3/i2/orders.yml",
+                    "2".repeat(64),
+                    "version: 2\nmodels: []\n",
+                    "MODEL",
+                    "table",
+                    null
+                )
+            )
+        );
+        when(validator.validate(any(Map.class))).thenReturn(
+            new ValidatedProject(VALIDATED_CHECKSUM, PROJECT_CHECKSUM, "sprint83", List.of(), List.of())
+        );
+        when(repository.create(any())).thenAnswer(invocation -> draft(invocation.getArgument(0)));
+
+        var created = service.createAuthoring(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new CreateDraftRequest(
+                PLAN_ID,
+                3,
+                MODEL_CHECKSUM,
+                2,
+                IMPLEMENTATION_CHECKSUM,
+                null,
+                "create-designer-authoring-83"
+            ),
+            new AuthoringSeed(
+                objectMapper.createObjectNode().put("name", "orders"),
+                objectMapper.createObjectNode().put("coverage", "FULL"),
+                AuthoringOrigin.SYSTEM_GENERATED,
+                "8".repeat(64)
+            )
+        );
+
+        assertThat(created.sourceBundle().sourceKind()).isEqualTo(SourceBundleKind.CANONICAL_ARTIFACT_RECONSTRUCTION);
+        assertThat(created.sourceBundle().files())
+            .extracting(DbtImplementationDraftContract.BundleFileView::path)
+            .containsExactly(
+                "dbt_project.yml",
+                "models/dwd/orders/v3/i2/orders.sql",
+                "models/dwd/orders/v3/i2/orders.yml"
+            );
+        verify(visualCompiler).compile(TENANT, model, implementation);
+    }
+
+    @Test
+    void visualSaveRecompilesManagedFilesAndPreservesCurrentUnmanagedFiles() throws Exception {
+        ModelLifecycleCompilerPort visualCompiler = org.mockito.Mockito.mock(ModelLifecycleCompilerPort.class);
+        ReflectionTestUtils.setField(service, "visualCompiler", visualCompiler);
+        String projectFile = "name: sprint83\nversion: '1.0'\nconfig-version: 2\nmodel-paths:\n  - models\nmodels:\n  sprint83:\n    +materialized: table\n";
+        String managedPath = "models/dwd/orders/v3/i2/orders.sql";
+        String unmanagedPath = "macros/custom_business_rule.sql";
+        List<FileInput> submitted = List.of(
+            new FileInput("dbt_project.yml", projectFile),
+            new FileInput(managedPath, "select old_value as order_id\n"),
+            new FileInput(unmanagedPath, "{% macro custom_business_rule() %}1{% endmacro %}\n")
+        );
+        SourceBundleView source = sourceBundle("sprint83", submitted);
+        var projection = objectMapper.createObjectNode();
+        projection.putArray("managedPaths").add(managedPath);
+        String snapshot = objectMapper.writeValueAsString(versionedVisualSnapshot());
+        DraftRow current = authoringRowWithSource(snapshot, objectMapper.writeValueAsString(source), "{}");
+        when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(current));
+        when(repository.listFiles(DRAFT_ID)).thenReturn(
+            submitted.stream().map(file -> file(file.path(), file.content())).toList()
+        );
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        ImplementationView implementation = designerImplementation();
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(implementation, List.of(), List.of()));
+        when(visualCompiler.compile(eq(TENANT), any(ModelSpecView.class), any(ImplementationView.class))).thenReturn(
+            List.of(
+                new ArtifactWrite(
+                    "SQL",
+                    managedPath,
+                    "1".repeat(64),
+                    "select new_value as order_id\n",
+                    "MODEL",
+                    "table",
+                    null
+                ),
+                new ArtifactWrite(
+                    "SCHEMA",
+                    "models/dwd/orders/v3/i2/orders.yml",
+                    "2".repeat(64),
+                    "version: 2\nmodels: []\n",
+                    "MODEL",
+                    "table",
+                    null
+                )
+            )
+        );
+        when(repository.replaceAuthoringContent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(Optional.of(current));
+
+        service.saveAuthoring(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            DRAFT_ID,
+            "authoring-etag",
+            versionedVisualSnapshot(),
+            projection,
+            submitted,
+            true
+        );
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<FileInput>> savedFiles = ArgumentCaptor.forClass(List.class);
+        verify(repository).replaceAuthoringContent(
+            eq(TENANT),
+            eq(MODEL_ID),
+            eq(DRAFT_ID),
+            eq(ACTOR),
+            eq("authoring-etag"),
+            any(),
+            any(),
+            any(),
+            savedFiles.capture(),
+            any()
+        );
+        assertThat(savedFiles.getValue())
+            .filteredOn(file -> managedPath.equals(file.path()))
+            .singleElement()
+            .extracting(FileInput::content)
+            .isEqualTo("select new_value as order_id\n");
+        assertThat(savedFiles.getValue())
+            .filteredOn(file -> unmanagedPath.equals(file.path()))
+            .singleElement()
+            .extracting(FileInput::content)
+            .isEqualTo("{% macro custom_business_rule() %}1{% endmacro %}\n");
+    }
+
+    @Test
+    void visualSaveRejectsAnyMutationOfAnUnmanagedBundleFileBeforeCompilation() throws Exception {
+        String managedPath = "models/dwd/orders/v3/i2/orders.sql";
+        String unmanagedPath = "macros/custom_business_rule.sql";
+        List<FileInput> persisted = List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            new FileInput(managedPath, "select old_value as order_id\n"),
+            new FileInput(unmanagedPath, "{% macro custom_business_rule() %}1{% endmacro %}\n")
+        );
+        SourceBundleView source = sourceBundle("sprint83", persisted);
+        var projection = objectMapper.createObjectNode();
+        projection.putArray("managedPaths").add(managedPath);
+        DraftRow current = authoringRowWithSource(
+            objectMapper.writeValueAsString(versionedVisualSnapshot()),
+            objectMapper.writeValueAsString(source),
+            objectMapper.writeValueAsString(projection)
+        );
+        when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(current));
+        when(repository.listFiles(DRAFT_ID)).thenReturn(
+            persisted.stream().map(file -> file(file.path(), file.content())).toList()
+        );
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        List<FileInput> changed = persisted.stream()
+            .map(file -> unmanagedPath.equals(file.path())
+                ? new FileInput(file.path(), "{% macro custom_business_rule() %}2{% endmacro %}\n")
+                : file)
+            .toList();
+
+        DraftException failure = assertFailure(
+            ErrorKind.CONFLICT,
+            () -> service.saveAuthoring(
+                TENANT,
+                ACTOR,
+                MODEL_ID,
+                DRAFT_ID,
+                "authoring-etag",
+                versionedVisualSnapshot(),
+                projection,
+                changed,
+                true
+            )
+        );
+
+        assertThat(failure.code()).isEqualTo("MODEL_AUTHORING_UNMANAGED_FILE_CHANGED");
+        verify(repository, never()).replaceAuthoringContent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void reopeningAuthoringReturnsTheLatestSavedWorkingFiles() throws Exception {
+        List<FileInput> frozen = List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            new FileInput("models/orders.sql", "select old_value as order_id\n")
+        );
+        SourceBundleView source = sourceBundle("sprint83", frozen);
+        DraftRow current = authoringRowWithSource(
+            objectMapper.writeValueAsString(modelUpdateSnapshot()),
+            objectMapper.writeValueAsString(source),
+            "{}"
+        );
+        when(repository.findOpenForActor(TENANT, MODEL_ID, ACTOR, NOW)).thenReturn(Optional.of(current));
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        when(repository.listFiles(DRAFT_ID)).thenReturn(
+            List.of(
+                file("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+                file("models/orders.sql", "select new_value as order_id\n")
+            )
+        );
+
+        var reopened = service.findOpenAuthoring(TENANT, ACTOR, MODEL_ID).orElseThrow();
+
+        assertThat(reopened.sourceBundle().files())
+            .filteredOn(file -> "models/orders.sql".equals(file.path()))
+            .singleElement()
+            .extracting(DbtImplementationDraftContract.BundleFileView::content)
+            .isEqualTo("select new_value as order_id\n");
+    }
+
+    @Test
+    void legacyDbtDraftWithoutAnAuthoringSnapshotDoesNotHijackTheUnifiedSession() {
+        DraftRow legacy = row(DraftState.DRAFT, "legacy-etag", NOW.plusSeconds(3600), null, null, null, null, null, null);
+        when(repository.findOpenForActor(TENANT, MODEL_ID, ACTOR, NOW)).thenReturn(Optional.of(legacy));
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+
+        assertThat(service.findOpenAuthoring(TENANT, ACTOR, MODEL_ID)).isEmpty();
     }
 
     @Test
@@ -641,6 +970,107 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     @Test
+    void commitsUnifiedAuthoringSnapshotAndProjectedFieldsThroughOneModelRevisionBoundary() throws Exception {
+        List<FileRow> files = files();
+        ValidatedProject project = project();
+        BundleSnapshot bundle = bundle(files, project);
+        String derivedKey = commitKey("authoring-commit-83", VALIDATED_CHECKSUM, bundle.bundleChecksum());
+        DraftRow validated = authoringRow(
+            DraftState.VALIDATED,
+            "authoring-etag",
+            NOW.plusSeconds(60),
+            VALIDATED_CHECKSUM,
+            bundle.projectChecksum(),
+            bundle.bundleChecksum(),
+            bundle.manifest(),
+            null,
+            null,
+            objectMapper.writeValueAsString(versionedVisualSnapshot())
+        );
+        DraftRow claimed = authoringRow(
+            DraftState.COMMITTING,
+            "authoring-claimed-etag",
+            NOW.plusSeconds(60),
+            VALIDATED_CHECKSUM,
+            bundle.projectChecksum(),
+            bundle.bundleChecksum(),
+            bundle.manifest(),
+            derivedKey,
+            null,
+            validated.modelSpecSnapshot()
+        );
+        DraftRow committed = authoringRow(
+            DraftState.COMMITTED,
+            "authoring-committed-etag",
+            NOW.plusSeconds(60),
+            VALIDATED_CHECKSUM,
+            bundle.projectChecksum(),
+            bundle.bundleChecksum(),
+            bundle.manifest(),
+            derivedKey,
+            IMPLEMENTATION_ID,
+            validated.modelSpecSnapshot()
+        );
+        when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(validated));
+        when(repository.listFiles(DRAFT_ID)).thenReturn(files);
+        when(validator.validate(any())).thenReturn(project);
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        ModelSpecView synchronizedModel = model(4, "e".repeat(64));
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(modelSpecs.synchronizeAuthoringDraft(eq(TENANT), eq(ACTOR), eq(MODEL_ID), any(), any()))
+            .thenReturn(synchronizedModel);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        TimelineView timeline = org.mockito.Mockito.mock(TimelineView.class);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(timeline);
+        when(timeline.implementation()).thenReturn(null);
+        when(repository.claimCommit(any(), any(), any(), any(), any(), any(), eq(derivedKey), any(), any()))
+            .thenReturn(Optional.of(claimed));
+        ImplementationView implementation = org.mockito.Mockito.mock(ImplementationView.class);
+        when(implementation.id()).thenReturn(IMPLEMENTATION_ID);
+        when(implementation.implementationRevision()).thenReturn(1);
+        when(implementation.implementationChecksum()).thenReturn(IMPLEMENTATION_CHECKSUM);
+        when(lifecycle.saveImportedDbtImplementation(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(implementation);
+        ImportResult importResult = org.mockito.Mockito.mock(ImportResult.class);
+        when(importResult.artifactCount()).thenReturn(3);
+        when(artifactImports.importArtifacts(any())).thenReturn(importResult);
+        when(repository.completeCommit(any(), any(), any(), any(), any(), any(), any(), anyInt(), any(), anyInt(), any()))
+            .thenReturn(committed);
+
+        CommitView receipt = service.commit(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            DRAFT_ID,
+            new CommitDraftRequest("authoring-etag", VALIDATED_CHECKSUM, "authoring-commit-83")
+        );
+
+        assertThat(receipt.modelRevision()).isEqualTo(4);
+        ArgumentCaptor<UpdateModelSpecCommand> synchronizedCommand = ArgumentCaptor.forClass(UpdateModelSpecCommand.class);
+        verify(modelSpecs).synchronizeAuthoringDraft(eq(TENANT), eq(ACTOR), eq(MODEL_ID), any(), synchronizedCommand.capture());
+        assertThat(synchronizedCommand.getValue().fields())
+            .extracting(ModelField::name)
+            .containsExactly("order_id");
+        ArgumentCaptor<SaveImplementationCommand> implementationCommand = ArgumentCaptor.forClass(
+            SaveImplementationCommand.class
+        );
+        verify(lifecycle).saveImportedDbtImplementation(
+            eq(TENANT),
+            eq(ACTOR),
+            eq(MODEL_ID),
+            any(),
+            any(),
+            any(),
+            eq("sprint83"),
+            eq("model.sprint83.orders"),
+            implementationCommand.capture()
+        );
+        GeneratedInput generated = (GeneratedInput) implementationCommand.getValue().inputs().getFirst();
+        assertThat(generated.config()).containsKey("visualImplementation");
+        verify(modelSpecs, never()).synchronizeDbtManagedFields(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void convertsUnexpectedFailuresToSafeCorrelated500AndNeverAuditsFileContent() {
         DraftRow draft = row(DraftState.DRAFT, "etag", NOW.plusSeconds(60), null, null, null, null, null, null);
         when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(draft));
@@ -808,6 +1238,65 @@ class DbtImplementationDraftServiceSecurityTest {
         );
     }
 
+    private SourceBundleView sourceBundle(String projectKey, List<FileInput> files) {
+        return new SourceBundleView(
+            projectKey,
+            PROJECT_CHECKSUM,
+            "e".repeat(64),
+            SourceBundleKind.CANONICAL_ARTIFACT_RECONSTRUCTION,
+            false,
+            files
+                .stream()
+                .sorted(java.util.Comparator.comparing(FileInput::path))
+                .map(file -> {
+                    byte[] bytes = file.content().getBytes(StandardCharsets.UTF_8);
+                    return new DbtImplementationDraftContract.BundleFileView(
+                        file.path(),
+                        file.content(),
+                        ModelPackageChecksum.sha256(bytes),
+                        bytes.length
+                    );
+                })
+                .toList()
+        );
+    }
+
+    private com.fasterxml.jackson.databind.node.ObjectNode versionedVisualSnapshot() {
+        var root = objectMapper.createObjectNode();
+        root.put("schemaVersion", 1);
+        root.set("modelSpec", objectMapper.valueToTree(modelUpdateSnapshot()));
+        var visual = root.putObject("visualImplementation");
+        visual.put("projectKey", "sprint83");
+        visual.put("dbtUniqueId", "model.sprint83.orders");
+        visual.put("inputMode", "GENERATED");
+        var generated = visual.putArray("inputs").addObject();
+        generated.put("generatorType", "DATE_DIMENSION_GENERATOR");
+        generated.putObject("config").put("startYear", 2025).put("endYear", 2026);
+        visual.putArray("fieldMappings");
+        visual.putObject("settings");
+        visual.put("ownership", "DESIGNER_GENERATED");
+        visual.put("materialization", "table");
+        visual.put("idempotencyKey", "visual-save-83");
+        return root;
+    }
+
+    private ImplementationView designerImplementation() {
+        ImplementationView implementation = org.mockito.Mockito.mock(ImplementationView.class);
+        when(implementation.id()).thenReturn(IMPLEMENTATION_ID);
+        when(implementation.modelSpecId()).thenReturn(MODEL_ID);
+        when(implementation.planId()).thenReturn(PLAN_ID);
+        when(implementation.revision()).thenReturn(3);
+        when(implementation.modelChecksum()).thenReturn(MODEL_CHECKSUM);
+        when(implementation.ownership()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(implementation.projectKey()).thenReturn("sprint83");
+        when(implementation.dbtUniqueId()).thenReturn("model.sprint83.orders");
+        when(implementation.status()).thenReturn("ACTIVE");
+        when(implementation.implementationRevision()).thenReturn(2);
+        when(implementation.implementationChecksum()).thenReturn(IMPLEMENTATION_CHECKSUM);
+        when(implementation.materialization()).thenReturn("table");
+        return implementation;
+    }
+
     private static ArtifactEvidence artifact(String type, String path, String content) {
         return new ArtifactEvidence(
             type,
@@ -837,6 +1326,9 @@ class DbtImplementationDraftServiceSecurityTest {
             draft.idempotencyKey(),
             draft.requestHash(),
             draft.sourceBundleSnapshot(),
+            draft.modelSpecSnapshot(),
+            draft.projectionSummary(),
+            draft.authoringOrigin(),
             DraftState.DRAFT,
             draft.etag(),
             draft.expiresAt(),
@@ -996,6 +1488,118 @@ class DbtImplementationDraftServiceSecurityTest {
             implementationId == null ? null : NOW,
             NOW,
             NOW
+        );
+    }
+
+    private static DraftRow authoringRow(
+        DraftState state,
+        String etag,
+        Instant expiresAt,
+        String validatedChecksum,
+        String projectChecksum,
+        String bundleChecksum,
+        String bundleManifest,
+        String commitKey,
+        UUID implementationId,
+        String modelSpecSnapshot
+    ) {
+        return new DraftRow(
+            DRAFT_ID,
+            TENANT,
+            PLAN_ID,
+            MODEL_ID,
+            ACTOR,
+            3,
+            MODEL_CHECKSUM,
+            null,
+            null,
+            "create-authoring-83",
+            "f".repeat(64),
+            null,
+            modelSpecSnapshot,
+            "{}",
+            AuthoringOrigin.SYSTEM_GENERATED.name(),
+            state,
+            etag,
+            expiresAt,
+            validatedChecksum,
+            projectChecksum,
+            bundleChecksum,
+            bundleManifest,
+            null,
+            commitKey,
+            implementationId,
+            implementationId == null ? null : 1,
+            implementationId == null ? null : IMPLEMENTATION_CHECKSUM,
+            implementationId == null ? 0 : 3,
+            implementationId == null ? null : NOW,
+            NOW,
+            NOW
+        );
+    }
+
+    private static DraftRow authoringRowWithSource(
+        String modelSpecSnapshot,
+        String sourceBundleSnapshot,
+        String projectionSummary
+    ) {
+        return new DraftRow(
+            DRAFT_ID,
+            TENANT,
+            PLAN_ID,
+            MODEL_ID,
+            ACTOR,
+            3,
+            MODEL_CHECKSUM,
+            2,
+            IMPLEMENTATION_CHECKSUM,
+            "create-authoring-83",
+            "f".repeat(64),
+            sourceBundleSnapshot,
+            modelSpecSnapshot,
+            projectionSummary,
+            AuthoringOrigin.SYSTEM_GENERATED.name(),
+            DraftState.DRAFT,
+            "authoring-etag",
+            NOW.plusSeconds(3600),
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            0,
+            null,
+            NOW,
+            NOW
+        );
+    }
+
+    private static UpdateModelSpecCommand modelUpdateSnapshot() {
+        return new UpdateModelSpecCommand(
+            PLAN_ID,
+            UUID.fromString("50000000-0000-0000-0000-000000000083"),
+            ModelType.DIMENSION,
+            Layer.DWD,
+            "orders",
+            "Unified authoring model",
+            ImplementationMode.DESIGNER_GENERATED,
+            "table",
+            null,
+            null,
+            new Grain("one row per order", List.of("record_id")),
+            null,
+            null,
+            List.of(new ModelField("record_id", "bigint", false, "source.record_id", FieldRole.KEY, null)),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            null
         );
     }
 

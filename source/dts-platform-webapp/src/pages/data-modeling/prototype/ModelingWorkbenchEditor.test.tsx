@@ -4,7 +4,6 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 
 beforeAll(() => {
@@ -42,6 +41,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/api/sprint64GovernanceApi", () => ({
 	listBusinessProcessesApi: mocks.listBusinessProcessesApi,
+}));
+
+vi.mock("./ModelServingSyncStatus", () => ({
+	ModelServingSyncStatus: () => null,
 }));
 
 import { ModelingWorkbenchEditor, type ModelingWorkbenchEditorProps } from "./ModelingWorkbenchEditor";
@@ -82,6 +85,13 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	implementationInputMode: "",
 	generationStrategyType: "",
 	implementationIdempotencyKey: "implementation-draft-1",
+	fieldMappings: [],
+	casts: {},
+	filters: [],
+	deduplicateBy: [],
+	joins: [],
+	groupBy: [],
+	aggregations: [],
 	sourceRefs: [],
 	dependsOn: [],
 	dimensionRefs: [],
@@ -211,8 +221,11 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 	dimensionDefinitionFailure: "",
 	currentOwnerId: "current-owner",
 	selectedModel: null,
-	representation: null,
-	representationFailure: "",
+	authoringContext: null,
+	authoringFailure: "",
+	authoringValidation: null,
+	authoringBusy: "",
+	authoringConflict: false,
 	canMaintain: true,
 	readOnly: false,
 	saving: false,
@@ -223,6 +236,10 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 	fieldRowIds: ["field-1"],
 	onChange: vi.fn(),
 	onSave: vi.fn(),
+	onValidateAuthoring: vi.fn(),
+	onCommitAuthoring: vi.fn(),
+	onForkPublished: vi.fn(),
+	onOpenRawNode: vi.fn(),
 	onRefresh: vi.fn(),
 	onDialog: vi.fn(),
 	onAddFields: vi.fn(),
@@ -299,51 +316,40 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 	});
 
-	it("lets a new model choose manual dbt SQL ownership while keeping source relationships editable", async () => {
-		const props = await render(makeProps({ draft: makeDraft({ implementationInputMode: "PHYSICAL_ASSET" }) }));
-		const ownership = container.querySelector<HTMLSelectElement>('select[aria-label="实现维护方式"]');
-		expect(ownership).not.toBeNull();
-
-		await act(async () => {
-			if (!ownership) return;
-			ownership.value = "DBT_MANAGED";
-			ownership.dispatchEvent(new Event("change", { bubbles: true }));
-		});
-
-		expect(props.onChange).toHaveBeenCalledWith(expect.objectContaining({ implementationMode: "DBT_MANAGED" }));
+	it("hides implementation ownership while keeping source relationships editable", async () => {
 		await render(
 			makeProps({
 				draft: makeDraft({ implementationMode: "DBT_MANAGED", implementationInputMode: "PHYSICAL_ASSET" }),
 			}),
 		);
+		expect(container.querySelector<HTMLSelectElement>('select[aria-label="实现维护方式"]')).toBeNull();
 		expect(container.querySelector<HTMLInputElement>('input[aria-label="选择来源 预算执行 ODS"]')).toHaveProperty(
 			"disabled",
 			false,
 		);
 	});
 
-	it("lets a manually maintained dimension declare that its SQL has no upstream", async () => {
+	it("uses the same controlled date generator after an imported model selects visual generation", async () => {
 		const props = await render(
 			makeProps({
 				draft: makeDraft({
 					implementationMode: "DBT_MANAGED",
-					implementationInputMode: "GENERATED",
+					implementationInputMode: "",
 					generationStrategyType: "",
 				}),
 			}),
 		);
 		const source = container.querySelector<HTMLSelectElement>('select[aria-label="实现输入方式"]');
 		expect(source).not.toBeNull();
-		expect(Array.from(source?.options || []).map((option) => option.textContent)).toContain("无上游（手工 SQL 生成）");
-		expect(container.textContent).toContain("当前 SQL 不读取物理来源或上游模型");
+		expect(Array.from(source?.options || []).map((option) => option.textContent)).toContain("受控日期维度生成器");
 
 		await act(async () => {
 			if (!source) return;
-			source.value = "PHYSICAL_ASSET";
+			source.value = "GENERATED";
 			source.dispatchEvent(new Event("change", { bubbles: true }));
 		});
 		expect(props.onChange).toHaveBeenCalledWith(
-			expect.objectContaining({ implementationInputMode: "PHYSICAL_ASSET", generationStrategyType: "" }),
+			expect.objectContaining({ implementationInputMode: "GENERATED", generationStrategyType: "DATE_DIMENSION" }),
 		);
 	});
 
@@ -554,7 +560,7 @@ describe("ModelingWorkbenchEditor", () => {
 		])
 			expect(container.textContent).not.toContain(label);
 
-		for (const label of ["保存", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "导出"])
+		for (const label of ["保存", "交付检查", "刷新", "关联关系", "发布", "日志", "质量规则", "导出"])
 			expect(button(label)).toBeDefined();
 		// Sprint-91：工具栏的「高级 dbt 工作区」入口已下线，可视化/代码切换只在选中模型时出现。
 		expect(container.textContent).not.toContain("高级 dbt 工作区");
@@ -625,7 +631,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(makeProps({ saving: true, selectedModel }));
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		for (const label of ["保存中…", "提交", "刷新", "关联关系", "发布", "日志", "质量规则", "导出"])
+		for (const label of ["保存中…", "交付检查", "刷新", "关联关系", "发布", "日志", "质量规则", "导出"])
 			expect(button(label)).toHaveProperty("disabled", true);
 	});
 
@@ -688,25 +694,20 @@ describe("ModelingWorkbenchEditor", () => {
 
 	it("disables unpublished actions and maps every supported toolbar dialog", async () => {
 		const unpublished = await render();
-		for (const label of ["提交", "关联关系", "发布", "日志", "质量规则", "导出"]) {
+		for (const label of ["交付检查", "关联关系", "发布", "日志", "质量规则", "导出"]) {
 			expect(button(label)).toHaveProperty("disabled", true);
 			act(() => button(label).click());
 		}
 		expect(unpublished.onDialog).not.toHaveBeenCalled();
 
 		const selectedModel = { id: "model-1", compatibilityMode: "CANONICAL" } as ModelSpecView;
-		// 已持久化模型的可视化编辑权限来自服务端 representation 的 allowedActions。
 		const published = makeProps({
 			dirty: false,
-			selectedModel,
-			representation: {
-				allowedActions: ["OPEN_VISUAL", "EDIT_VISUAL"],
-				capabilityReasons: [],
-			} as unknown as ModelRepresentationView,
+			selectedModel: { ...selectedModel, status: "DRAFT", revision: 1, checksum: "a".repeat(64) },
 		});
 		await render(published);
 		for (const [label, dialog] of [
-			["提交", "gates"],
+			["交付检查", "gates"],
 			["关联关系", "association"],
 			["发布", "publish"],
 			["日志", "logs"],
@@ -721,22 +722,124 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(button("代码模式")).toBeDefined();
 
 		const codeManaged = makeProps({
-			dirty: false,
+			dirty: true,
 			selectedModel: {
 				id: "model-2",
 				compatibilityMode: "CANONICAL",
 				implementationMode: "DBT_MANAGED",
+				status: "DRAFT",
 			} as ModelSpecView,
-			representation: {
-				allowedActions: ["OPEN_CODE", "EDIT_CODE"],
-				capabilityReasons: [],
-			} as unknown as ModelRepresentationView,
 		});
 		await render(codeManaged);
-		expect(button("保存")).toHaveProperty("disabled", true);
+		expect(button("保存草稿")).toHaveProperty("disabled", false);
 		expect(button("发布")).toHaveProperty("disabled", false);
 		act(() => button("发布").click());
 		expect(codeManaged.onDialog).toHaveBeenLastCalledWith("publish");
+	});
+
+	it("uses provenance only as evidence and opens raw nodes in the shared code view", async () => {
+		const selectedModel = {
+			id: "model-imported",
+			status: "DRAFT",
+			revision: 3,
+			checksum: "c".repeat(64),
+			compatibilityMode: "CANONICAL",
+			implementationMode: "DBT_MANAGED",
+		} as ModelSpecView;
+		const rawNode = { nodeId: "model.raw", kind: "RAW_SQL", editable: true, sourcePath: "models/raw.sql", line: 1 };
+		const props = makeProps({
+			draft: makeDraft({ base: selectedModel, implementationMode: "DBT_MANAGED" }),
+			selectedModel,
+			authoringContext: {
+				model: selectedModel,
+				implementation: null,
+				provenance: { origin: "DBT_ZIP_IMPORT", sourceKind: "FROZEN_SOURCE_BUNDLE", lossless: true },
+				projection: {
+					coverage: "NONE",
+					lossless: false,
+					managedPaths: [],
+					rawNodes: [rawNode],
+					reasons: ["动态 SQL 保留为原始代码"],
+				},
+				openDraft: null,
+				allowedActions: ["OPEN_VISUAL", "OPEN_CODE", "EDIT_MODEL", "EDIT_IMPLEMENTATION"],
+				publishedForkRequired: false,
+			},
+		});
+		await render(props);
+
+		expect(container.querySelector("fieldset")).toHaveProperty("disabled", false);
+		expect(container.textContent).toContain("来源 dbt ZIP 导入");
+		expect(container.textContent).not.toContain("当前由代码维护");
+		act(() => button("在代码视图定位").click());
+		expect(props.onOpenRawNode).toHaveBeenCalledWith(rawNode);
+	});
+
+	it("blocks visual commit until the shared model definition issues are resolved", async () => {
+		const selectedModel = {
+			id: "model-draft",
+			status: "DRAFT",
+			revision: 3,
+			checksum: "c".repeat(64),
+			compatibilityMode: "CANONICAL",
+			implementationMode: "DBT_MANAGED",
+		} as ModelSpecView;
+		await render(
+			makeProps({
+				draft: makeDraft({ base: selectedModel }),
+				selectedModel,
+				dirty: false,
+				authoringValidation: {
+					modelIssues: [
+						{ code: "MODEL_SPEC_NAME_REQUIRED", field: "name", severity: "ERROR", message: "请填写模型名称" },
+					],
+					projectionIssues: [],
+					implementationValidation: {
+						draftId: "draft-92",
+						state: "VALIDATED",
+						etag: "etag-2",
+						expiresAt: "2026-09-01T00:00:00Z",
+						validatedChecksum: "b".repeat(64),
+						diagnostics: [],
+						proposedStructure: [],
+					},
+				},
+			}),
+		);
+
+		expect(container.textContent).toContain("请填写模型名称");
+		expect(button("提交实现")).toHaveProperty("disabled", true);
+	});
+
+	it("keeps a published revision immutable and exposes one explicit fork action", async () => {
+		const selectedModel = {
+			id: "model-published",
+			status: "PUBLISHED",
+			revision: 7,
+			checksum: "d".repeat(64),
+			compatibilityMode: "CANONICAL",
+		} as ModelSpecView;
+		const props = makeProps({
+			draft: makeDraft({ base: selectedModel }),
+			selectedModel,
+			readOnly: true,
+			editorAccessMessage: "发布版本不可原地修改",
+			authoringContext: {
+				model: selectedModel,
+				implementation: null,
+				provenance: { origin: "SYSTEM_GENERATED", lossless: false },
+				projection: { coverage: "UNKNOWN", lossless: false, managedPaths: [], rawNodes: [], reasons: [] },
+				openDraft: null,
+				allowedActions: ["OPEN_VISUAL", "OPEN_CODE", "FORK_DRAFT"],
+				publishedForkRequired: true,
+			},
+		});
+		await render(props);
+
+		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
+		expect(container.textContent).toContain("发布版本不可原地修改");
+		act(() => button("创建新草稿版本").click());
+		expect(props.onForkPublished).toHaveBeenCalledTimes(1);
 	});
 
 	it("keeps fact drafts on the explicit compatibility form", async () => {

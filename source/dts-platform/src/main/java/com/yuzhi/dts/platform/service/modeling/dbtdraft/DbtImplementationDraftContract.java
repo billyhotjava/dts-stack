@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.modeling.dbtdraft;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Snapshot;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -65,6 +66,23 @@ public final class DbtImplementationDraftContract {
         VALIDATED,
         COMMITTING,
         COMMITTED,
+    }
+
+    /** Provenance is descriptive evidence only and must never be used as an authorization switch. */
+    public enum AuthoringOrigin {
+        SYSTEM_GENERATED,
+        MANUAL_CODE,
+        DBT_ZIP_IMPORT,
+        UNKNOWN;
+
+        public static AuthoringOrigin fromStorage(String value) {
+            if (value == null || value.isBlank()) return UNKNOWN;
+            try {
+                return valueOf(value.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException ignored) {
+                return UNKNOWN;
+            }
+        }
     }
 
     public enum ErrorKind {
@@ -143,6 +161,18 @@ public final class DbtImplementationDraftContract {
         }
     }
 
+    /** Server-derived metadata used only by the unified authoring facade. */
+    public record AuthoringSeed(
+        JsonNode modelSpecSnapshot,
+        JsonNode projectionSummary,
+        AuthoringOrigin origin,
+        @NotBlank @Size(min = 64, max = 64) String requestHash
+    ) {
+        public AuthoringSeed {
+            origin = origin == null ? AuthoringOrigin.UNKNOWN : origin;
+        }
+    }
+
     public record SaveFilesRequest(
         @NotBlank @Size(max = 64) String expectedEtag,
         @NotEmpty @Size(max = MAX_FILES) List<@NotNull @Valid FileInput> files
@@ -172,8 +202,46 @@ public final class DbtImplementationDraftContract {
         DraftState state,
         String etag,
         Instant expiresAt,
-        SourceBundleView sourceBundle
-    ) {}
+        SourceBundleView sourceBundle,
+        JsonNode modelSpecSnapshot,
+        JsonNode projectionSummary,
+        AuthoringOrigin authoringOrigin
+    ) {
+        public DraftView(
+            UUID draftId,
+            UUID planId,
+            UUID modelSpecId,
+            int baseModelRevision,
+            String baseModelChecksum,
+            Integer baseImplementationRevision,
+            String baseImplementationChecksum,
+            DraftState state,
+            String etag,
+            Instant expiresAt,
+            SourceBundleView sourceBundle
+        ) {
+            this(
+                draftId,
+                planId,
+                modelSpecId,
+                baseModelRevision,
+                baseModelChecksum,
+                baseImplementationRevision,
+                baseImplementationChecksum,
+                state,
+                etag,
+                expiresAt,
+                sourceBundle,
+                null,
+                null,
+                AuthoringOrigin.UNKNOWN
+            );
+        }
+
+        public DraftView {
+            authoringOrigin = authoringOrigin == null ? AuthoringOrigin.UNKNOWN : authoringOrigin;
+        }
+    }
 
     /** Content-bearing projection returned only by the maintainer-authorized draft creation route. */
     public record SourceBundleView(

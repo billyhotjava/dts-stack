@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import type {
+	ModelAuthoringContext,
+	ModelAuthoringProjectionNode,
+	ModelAuthoringValidation,
+} from "@/api/modelAuthoringApi";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
 import { ModelImplementationBindingFields } from "./ModelImplementationBindingFields";
@@ -27,12 +31,7 @@ import {
 } from "./services/modelWorkbenchService";
 import { resolveBusinessProcessBinding } from "./services/planningContextPolicyService";
 import "./modeling-workbench.css";
-import {
-	isPersistedVisualReadOnly,
-	modelingCapabilityReasonsText,
-	resolveModelingModeAccess,
-	type ModelingWorkbenchView,
-} from "./modelingWorkbenchMode";
+import { type ModelingWorkbenchView, modelingCapabilityReasonsText } from "./modelingWorkbenchMode";
 
 export type ModelingWorkbenchEditorProps = {
 	draft: ModelDraft;
@@ -41,8 +40,11 @@ export type ModelingWorkbenchEditorProps = {
 	dimensionDefinitionFailure: string;
 	currentOwnerId: string;
 	selectedModel: ModelSpecView | null;
-	representation: ModelRepresentationView | null;
-	representationFailure: string;
+	authoringContext: ModelAuthoringContext | null;
+	authoringFailure: string;
+	authoringValidation: ModelAuthoringValidation | null;
+	authoringBusy: string;
+	authoringConflict: boolean;
 	canMaintain: boolean;
 	readOnly: boolean;
 	saving: boolean;
@@ -56,6 +58,10 @@ export type ModelingWorkbenchEditorProps = {
 	onViewChange: (view: ModelingWorkbenchView) => void;
 	onChange: (draft: ModelDraft) => void;
 	onSave: () => void;
+	onValidateAuthoring: () => void;
+	onCommitAuthoring: () => void;
+	onForkPublished: () => void;
+	onOpenRawNode: (node: ModelAuthoringProjectionNode) => void;
 	onConfirmDimension?: () => void;
 	onRefresh: () => void;
 	onDialog: (dialog: Exclude<WorkbenchDialog, null>) => void;
@@ -148,53 +154,51 @@ function ConceptDimensionForm(props: ConceptDimensionFormProps) {
 	const presentation = resolveConceptDimensionPresentation({ draft, domains: context.domains });
 
 	return (
-		<>
-			<section className="dmx-editor-panel">
-				<h3>基本信息</h3>
-				<div className="dmx-workbench-editor__basic-grid">
-					<label>
-						<span>数仓分层</span>
-						<input aria-label="数仓分层" disabled value={presentation.warehouseLayer} />
-					</label>
-					<label>
-						<span className="required">数据域</span>
-						<select
-							aria-label="数据域"
-							disabled={Boolean(draft.definitionBase)}
-							onChange={(event) => patch({ domainId: event.target.value })}
-							value={draft.domainId}
-						>
-							<option value="">请选择数据域</option>
-							{context.domains
-								.filter((item) => Boolean(item.parentCode))
-								.map((item) => (
-									<option key={item.id} value={item.id}>
-										{item.name} · {item.code}
-									</option>
-								))}
-						</select>
-						<ValidationMessage message={validationErrors.domainId} />
-					</label>
-					<label>
-						<span>系统编码</span>
-						<input aria-label="系统编码" disabled value={presentation.systemCode} />
-					</label>
-					<label>
-						<span className="required">中文名称</span>
-						<input aria-label="中文名称" onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
-						<ValidationMessage message={validationErrors.name} />
-					</label>
-					<label className="dmx-workbench-editor__wide-field">
-						<span>描述</span>
-						<textarea
-							aria-label="描述"
-							onChange={(event) => patch({ description: event.target.value })}
-							value={draft.description}
-						/>
-					</label>
-				</div>
-			</section>
-		</>
+		<section className="dmx-editor-panel">
+			<h3>基本信息</h3>
+			<div className="dmx-workbench-editor__basic-grid">
+				<label>
+					<span>数仓分层</span>
+					<input aria-label="数仓分层" disabled value={presentation.warehouseLayer} />
+				</label>
+				<label>
+					<span className="required">数据域</span>
+					<select
+						aria-label="数据域"
+						disabled={Boolean(draft.definitionBase)}
+						onChange={(event) => patch({ domainId: event.target.value })}
+						value={draft.domainId}
+					>
+						<option value="">请选择数据域</option>
+						{context.domains
+							.filter((item) => Boolean(item.parentCode))
+							.map((item) => (
+								<option key={item.id} value={item.id}>
+									{item.name} · {item.code}
+								</option>
+							))}
+					</select>
+					<ValidationMessage message={validationErrors.domainId} />
+				</label>
+				<label>
+					<span>系统编码</span>
+					<input aria-label="系统编码" disabled value={presentation.systemCode} />
+				</label>
+				<label>
+					<span className="required">中文名称</span>
+					<input aria-label="中文名称" onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
+					<ValidationMessage message={validationErrors.name} />
+				</label>
+				<label className="dmx-workbench-editor__wide-field">
+					<span>描述</span>
+					<textarea
+						aria-label="描述"
+						onChange={(event) => patch({ description: event.target.value })}
+						value={draft.description}
+					/>
+				</label>
+			</div>
+		</section>
 	);
 }
 
@@ -469,6 +473,7 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						<ValidationMessage message={validationErrors.domainId} />
 					</label>
 					{factMode ? (
+						// biome-ignore lint/a11y/noLabelWithoutControl: the select is conditional while its status text stays in the same labeled field.
 						<label>
 							<span className="required">业务过程</span>
 							{processBinding.showSelector ? (
@@ -623,12 +628,28 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 	);
 }
 
+const authoringOriginLabel = (context: ModelAuthoringContext | null) => {
+	switch (context?.provenance.origin) {
+		case "SYSTEM_GENERATED":
+			return "平台生成";
+		case "MANUAL_CODE":
+			return "手工代码";
+		case "DBT_ZIP_IMPORT":
+			return "dbt ZIP 导入";
+		default:
+			return "历史模型";
+	}
+};
+
 export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 	const {
 		draft,
 		selectedModel,
-		representation,
-		representationFailure,
+		authoringContext,
+		authoringFailure,
+		authoringValidation,
+		authoringBusy,
+		authoringConflict,
 		canMaintain,
 		readOnly,
 		saving,
@@ -636,6 +657,10 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 		failureMessage,
 		editorAccessMessage,
 		onSave,
+		onValidateAuthoring,
+		onCommitAuthoring,
+		onForkPublished,
+		onOpenRawNode,
 		onConfirmDimension,
 		onRefresh,
 		onDialog,
@@ -645,38 +670,47 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 	} = props;
 	const conceptDimension = isConceptDimensionDraft(draft);
 	const persisted = Boolean(selectedModel);
-	const visualAccess = resolveModelingModeAccess({
-		view: "visual",
-		canMaintain,
-		allowedActions: representation?.allowedActions || [],
-		capabilityReasons: representation?.capabilityReasons || [],
-	});
-	const dbtVisualReadOnly = isPersistedVisualReadOnly(persisted, visualAccess.access);
-	const effectiveReadOnly = readOnly || dbtVisualReadOnly;
+	const published = Boolean(
+		selectedModel && (authoringContext?.publishedForkRequired || selectedModel.status === "PUBLISHED"),
+	);
+	const effectiveReadOnly = readOnly;
+	const busy = saving || Boolean(authoringBusy);
+	const projection = authoringContext?.projection;
+	const validationBlocked = Boolean(authoringValidation?.modelIssues.length);
 
 	return (
 		<div className="dmx-workbench-editor">
 			{selectedModel ? (
 				<div className="dmx-model-context">
-					<span>模型 r{selectedModel.revision}</span>
-					<span title={selectedModel.checksum}>模型校验和 {selectedModel.checksum?.slice(0, 12) || "—"}</span>
+					<span>模型 r{authoringContext?.model.revision || selectedModel.revision}</span>
+					<span title={authoringContext?.model.checksum || selectedModel.checksum}>
+						模型校验和 {(authoringContext?.model.checksum || selectedModel.checksum)?.slice(0, 12) || "—"}
+					</span>
 					<span>
-						实现 {representation?.implementationRevision ? `r${representation.implementationRevision}` : "尚无"}
+						实现{" "}
+						{authoringContext?.implementation?.implementationRevision
+							? `r${authoringContext.implementation.implementationRevision}`
+							: "尚无"}
 					</span>
-					<span title={representation?.implementationChecksum || undefined}>
-						实现校验和 {representation?.implementationChecksum?.slice(0, 12) || "—"}
+					<span title={authoringContext?.implementation?.implementationChecksum || undefined}>
+						实现校验和 {authoringContext?.implementation?.implementationChecksum?.slice(0, 12) || "—"}
 					</span>
-					<span>所有权 {representation?.ownershipMode || selectedModel.implementationMode}</span>
-					<span>可视化 {representation?.visualizationCapability || "读取中"}</span>
-					<span>漂移 {representation?.driftStatus || "—"}</span>
+					<span>来源 {authoringOriginLabel(authoringContext)}</span>
+					<span>投影 {projection?.coverage || (authoringBusy === "load" ? "读取中" : "UNKNOWN")}</span>
+					<span>原始代码节点 {projection?.rawNodes.length || 0}</span>
 					<ModelServingSyncStatus canMaintain={canMaintain} modelSpecId={selectedModel.id} />
 				</div>
 			) : null}
-			{representationFailure ? <div className="dmx-capability-note">{representationFailure}</div> : null}
+			{authoringFailure ? <div className="dmx-capability-note">{authoringFailure}</div> : null}
+			{authoringConflict ? (
+				<div className="dmx-inline-error" role="alert">
+					草稿版本已变化，请刷新后继续，平台不会自动覆盖他人修改。
+				</div>
+			) : null}
 			{selectedModel ? (
 				<ModelMaterializationStatusCard
 					canMaintain={canMaintain}
-					currentImplementationRevision={representation?.implementationRevision}
+					currentImplementationRevision={authoringContext?.implementation?.implementationRevision}
 					key={`${selectedModel.id}:${materializationRefreshKey || 0}`}
 					model={selectedModel}
 					onOpen={() => onDialog("publish")}
@@ -684,6 +718,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			) : null}
 			{editorAccessMessage ? <output className="dmx-editor-access-note">{editorAccessMessage}</output> : null}
 			{selectedModel ? (
+				// biome-ignore lint/a11y/useSemanticElements: this is a styled navigation switch rather than a form fieldset.
 				<div aria-label="模型表现模式" className="dmx-workbench-mode-switch" role="group">
 					<Button className={view === "visual" ? "active" : ""} onClick={() => onViewChange("visual")} type="text">
 						可视化模式
@@ -693,67 +728,72 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					</Button>
 				</div>
 			) : null}
-			{dbtVisualReadOnly && selectedModel?.implementationMode === "DBT_MANAGED" ? (
-				<div className="dmx-capability-note">当前由代码维护 · 可视化只读。本模型由代码维护，请在代码模式修改实现。</div>
-			) : null}
-			{representation?.visualizationCapability === "BLOCKED" ? (
-				<div className="dmx-inline-error" role="alert">
-					{modelingCapabilityReasonsText(representation.capabilityReasons) ||
-						"当前可视化投影不可用，请在代码模式查看实现。"}
-				</div>
+			{projection?.reasons.length ? (
+				<div className="dmx-capability-note">{modelingCapabilityReasonsText(projection.reasons)}</div>
 			) : null}
 			<div className="dmx-editor-toolbar" role="toolbar">
-				<Button
-					disabled={
-						!canMaintain ||
-						effectiveReadOnly ||
-						saving ||
-						!dirty ||
-						(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
-					}
-					onClick={onSave}
-					primary
-					title={
-						!canMaintain
-							? "当前账号无建模维护权限"
-							: conceptDimension && draft.definitionBase && draft.definitionBase.status !== "DRAFT"
-								? "已确认或已退役的维度不能修改，请新建维度"
-								: !dirty
-									? "当前没有待保存变更"
-									: conceptDimension
-										? "保存维度草稿"
-										: "保存模型草稿"
-					}
-				>
-					{saving ? "保存中…" : "保存"}
-				</Button>
+				{published ? (
+					<Button disabled={!canMaintain || busy} onClick={onForkPublished} primary>
+						{authoringBusy === "create" ? "创建中…" : "创建新草稿版本"}
+					</Button>
+				) : (
+					<Button
+						disabled={
+							!canMaintain ||
+							effectiveReadOnly ||
+							busy ||
+							!dirty ||
+							(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
+						}
+						onClick={onSave}
+						primary
+						title={!dirty ? "当前没有待保存变更" : conceptDimension ? "保存维度草稿" : "保存模型创作草稿"}
+					>
+						{saving || authoringBusy === "save" ? "保存中…" : conceptDimension || !persisted ? "保存" : "保存草稿"}
+					</Button>
+				)}
 				{conceptDimension && draft.definitionBase?.status === "DRAFT" ? (
 					<Button
-						disabled={!canMaintain || effectiveReadOnly || saving}
+						disabled={!canMaintain || effectiveReadOnly || busy}
 						onClick={onConfirmDimension}
 						title="确认后，该定义将成为维度表可绑定的当前定义"
 					>
 						确认定义
 					</Button>
 				) : null}
+				{!conceptDimension && persisted && !published ? (
+					<>
+						<Button disabled={!canMaintain || busy} onClick={onValidateAuthoring}>
+							{authoringBusy === "validate" ? "校验中…" : "校验"}
+						</Button>
+						<Button
+							disabled={
+								!canMaintain || busy || dirty || validationBlocked || !authoringValidation?.implementationValidation
+							}
+							onClick={onCommitAuthoring}
+						>
+							{authoringBusy === "commit" ? "提交中…" : "提交实现"}
+						</Button>
+					</>
+				) : null}
 				{conceptDimension ? null : (
 					<>
-						<Button disabled={saving || !persisted} onClick={() => onDialog("gates")}>
-							提交
+						<Button disabled={busy || !persisted} onClick={() => onDialog("gates")}>
+							交付检查
 						</Button>
-						<Button disabled={saving} onClick={onRefresh}>
+						<Button disabled={busy} onClick={onRefresh}>
 							刷新
 						</Button>
-						<Button disabled={saving || !persisted} onClick={() => onDialog("association")}>
+						<Button disabled={busy || !persisted} onClick={() => onDialog("association")}>
 							关联关系
 						</Button>
-						<Button disabled={saving || !persisted || !canMaintain} onClick={() => onDialog("publish")}>
+						<Button disabled={busy || !persisted || !canMaintain} onClick={() => onDialog("publish")}>
 							发布
 						</Button>
-						<Button disabled={saving || !persisted} onClick={() => onDialog("logs")}>
+						<Button disabled={busy || !persisted} onClick={() => onDialog("logs")}>
 							日志
 						</Button>
-						<Button disabled={saving || !persisted} onClick={() => onDialog("quality")}>
+						<Button disabled={busy || !persisted} onClick={() => onDialog("quality")}>
 							质量规则
 						</Button>
 						<Button disabled title="尚无模型导出服务端契约">
@@ -767,11 +807,37 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					{failureMessage}
 				</div>
 			) : null}
+			{authoringValidation?.modelIssues.length ? (
+				<div className="dmx-dbt-diagnostics" role="alert">
+					<h3>模型定义校验</h3>
+					{authoringValidation.modelIssues.map((issue) => (
+						<div key={`${issue.code}:${issue.field}`}>
+							<b>{issue.field}</b>
+							<p>{issue.message}</p>
+						</div>
+					))}
+				</div>
+			) : null}
+			{projection?.rawNodes.length ? (
+				<section className="dmx-dbt-diagnostics" aria-label="原始代码节点">
+					<h3>原始代码节点</h3>
+					{projection.rawNodes.map((node) => (
+						<div key={node.nodeId}>
+							<b>{node.sourcePath || node.nodeId}</b>
+							<span>{node.kind}</span>
+							<p>该实现片段无法安全转换成结构化表单，原始代码保持不变。</p>
+							<Button onClick={() => onOpenRawNode(node)} type="link">
+								在代码视图定位
+							</Button>
+						</div>
+					))}
+				</section>
+			) : null}
 			<fieldset
 				className="dmx-editor-fieldset dmx-editor-scroll"
 				disabled={
 					effectiveReadOnly ||
-					saving ||
+					busy ||
 					(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
 				}
 			>

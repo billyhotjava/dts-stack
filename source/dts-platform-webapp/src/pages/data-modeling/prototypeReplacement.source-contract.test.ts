@@ -70,6 +70,7 @@ describe("prototype-owned data modeling frontend", () => {
 
 	it("keeps workbench route selection and navigation guards deterministic", async () => {
 		vi.doMock("@/api/modelRepresentationApi", () => ({}));
+		vi.doMock("@/api/modelAuthoringApi", () => ({}));
 		vi.doMock("@/api/dimensionDefinitionApi", () => ({}));
 		vi.doMock("@/api/modelSpecApi", () => ({}));
 		vi.doMock("@/store/userStore", () => ({}));
@@ -140,10 +141,9 @@ describe("prototype-owned data modeling frontend", () => {
 
 		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量规则"])
 			expect(editor).toContain(label);
-		// Sprint-91 双模收敛后「高级 dbt 工作区」由 AdvancedDbtWorkspace 承载，
-		// 编辑器只在实现绑定区留入口提示。
-		expect(read("./prototype/AdvancedDbtWorkspace.tsx")).toContain("高级 dbt 工作区");
-		expect(implementationBinding).toContain("高级 dbt 工作区");
+		// Sprint-92：可视化与代码是同一创作草稿的两个视图，不再暴露第二套“高级工作区”心智。
+		expect(read("./prototype/AdvancedDbtWorkspace.tsx")).toContain("可视化与代码使用同一个模型草稿");
+		expect(implementationBinding).not.toContain("高级 dbt 工作区");
 		expect(editor).not.toContain("<span>业务分类</span>");
 		expect(fieldTable).toMatch(/"序号".*"字段名称".*"类型".*"字段显示名".*"主键".*"非空".*"维度属性编码"/s);
 		expect(fieldTable).not.toContain("安全等级");
@@ -239,11 +239,9 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(catalogList).toContain("克隆");
 		expect(modeling).toMatch(/useCatalogActions/);
 		expect(catalogActions).toMatch(/deleteModelSpec|deleteDimensionDefinition|retireDimensionDefinition/);
-		expect(modeling).toMatch(
-			/getModelLifecycle|getModelRepresentation|implementationRevision|representationScope: "BUSINESS"|useDataModelingMenuGrant/,
-		);
-		expect(advancedDbtWorkspace).toMatch(/representationScope: "TECHNICAL"|OPEN_ADVANCED_DBT|canMaintain/);
-		expect(advancedDbtWorkspace).toMatch(/导入 dbt ZIP|intent=advanced/);
+		expect(modeling).toMatch(/getModelAuthoringContext|authoringContext|implementationRevision|useDataModelingMenuGrant/);
+		expect(advancedDbtWorkspace).toMatch(/EDIT_IMPLEMENTATION|canMaintain|来源只用于追溯/);
+		expect(`${modeling}\n${advancedDbtWorkspace}`).not.toMatch(/接管代码实现|当前由代码维护|转为可视化维护/);
 		expect(`${modelDialogs}\n${advancedDbtWorkspace}`).not.toMatch(/\/api\/etl\/dbt\/files|\/etl\/dbt\/files/);
 		expect(modelPublishDialog).toMatch(/getModelLifecycle|compileModelLifecycle/);
 		expect(modelPublishDialog).toMatch(
@@ -256,7 +254,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modelReleaseWorkflow).toMatch(/ruleVersionId|bindingId|runId|evidenceChecksum|violations/);
 		expect(modelReleaseWorkflow).toMatch(/PUBLISHED|ONLINE|latestRelation/);
 		expect(modelDialogs.trimEnd().split("\n").length).toBeLessThanOrEqual(850);
-		expect(advancedDbtWorkspace).toMatch(/state: "COMMITTED"|创建新草稿/);
+		expect(advancedDbtWorkspace).toMatch(/state === "COMMITTED"|创建新草稿版本/);
 		expect(reverse).toMatch(/inspectDbtModelArchive|previewModelSpecImport|applyModelSpecImport/);
 		expect(reverse).toMatch(/retryModelSpecImport|forwardUndoModelSpecImport|renameMappings/);
 		expect(reverse).toMatch(/defaultImportConflictResolutions|key=\{mapping\._clientId\}/);
@@ -285,7 +283,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(tools).not.toMatch(/mock|demo/i);
 		expect(tools).toContain("本页不创建统一工具运行台账，也不拼接模拟历史");
 		expect(toolWorkflows).toContain('title: "dbt ZIP 建模"');
-		expect(toolWorkflows).toContain('owner: "ModelSpec / 高级 dbt 实现"');
+		expect(toolWorkflows).toContain('owner: "统一模型创作"');
 	});
 
 	it("keeps the product copy aligned with the approved menu corrections", () => {

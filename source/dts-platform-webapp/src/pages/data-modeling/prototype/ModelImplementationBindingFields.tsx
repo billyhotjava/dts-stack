@@ -43,10 +43,7 @@ const modeOptions = (draft: ModelSpecDraft): Array<{ value: ModelImplementationI
 	if (draft.createKind === "dimension-table") {
 		return [
 			{ value: "PHYSICAL_ASSET", label: "关联数仓来源" },
-			{
-				value: "GENERATED",
-				label: draft.implementationMode === "DBT_MANAGED" ? "无上游（手工 SQL 生成）" : "受控日期维度生成器",
-			},
+			{ value: "GENERATED", label: "受控日期维度生成器" },
 		];
 	}
 	if (draft.createKind === "fact") {
@@ -82,7 +79,6 @@ export function ModelImplementationBindingFields({
 }: Props) {
 	const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
-	const dbtManaged = draft.implementationMode === "DBT_MANAGED";
 	const modes = modeOptions(draft);
 	const targetType = MODEL_KIND_CONFIG[draft.createKind].modelType;
 	const upstreamCandidates = context.models.filter(
@@ -129,7 +125,7 @@ export function ModelImplementationBindingFields({
 	const changeMode = (mode: ModelImplementationInputMode | "") => {
 		patch({
 			implementationInputMode: mode,
-			generationStrategyType: mode === "GENERATED" && !dbtManaged ? "DATE_DIMENSION" : "",
+			generationStrategyType: mode === "GENERATED" ? "DATE_DIMENSION" : "",
 			sourceRefs: mode === "PHYSICAL_ASSET" ? draft.sourceRefs : [],
 			dependsOn: mode === "UPSTREAM_MODEL" ? draft.dependsOn : [],
 		});
@@ -195,32 +191,7 @@ export function ModelImplementationBindingFields({
 			<h3>实现绑定</h3>
 			<div className="dmx-workbench-editor__basic-grid">
 				<label>
-					<span className="required">实现维护方式</span>
-					<select
-						aria-label="实现维护方式"
-						disabled={Boolean(draft.base)}
-						onChange={(event) => {
-							const implementationMode = event.target.value as ModelSpecDraft["implementationMode"];
-							patch({
-								implementationMode,
-								...(implementationMode === "DBT_MANAGED" && draft.implementationInputMode === "GENERATED"
-									? { implementationInputMode: "PHYSICAL_ASSET", generationStrategyType: "" as const }
-									: {}),
-							});
-						}}
-						value={draft.implementationMode}
-					>
-						<option value="DESIGNER_GENERATED">可视化配置</option>
-						<option value="DBT_MANAGED">手工 dbt SQL</option>
-					</select>
-					<small>
-						{dbtManaged
-							? "保存逻辑模型后，从“高级 dbt 工作区”创建并维护 dbt SQL；来源与上游关系仍在此处登记。"
-							: "由平台根据来源、字段映射和目标配置生成实现。"}
-					</small>
-				</label>
-				<label>
-					<span className="required">{dbtManaged ? "模型来源关系" : "实现输入方式"}</span>
+					<span className="required">实现输入方式</span>
 					<select
 						aria-label="实现输入方式"
 						disabled={modes.length === 1}
@@ -235,17 +206,20 @@ export function ModelImplementationBindingFields({
 						))}
 					</select>
 					<ValidationMessage message={validationErrors.implementationInputMode} />
-					{dbtManaged ? <small>这里登记可追溯的来源关系；SQL/Jinja 在高级 dbt 工作区维护。</small> : null}
+					<small>来源、上游关系与生成策略在模型定义中统一登记；具体实现可在可视化或代码视图继续编辑。</small>
 				</label>
 
 				{draft.implementationInputMode === "GENERATED" ? (
 					<label>
 						<span>生成策略</span>
-						<input disabled value={dbtManaged ? "手工 dbt SQL" : "受控日期维度生成器"} />
+						<input
+							disabled
+							value={draft.generationStrategyType === "DATE_DIMENSION" ? "受控日期维度生成器" : "生成策略未配置"}
+						/>
 						<small>
-							{dbtManaged
-								? "当前 SQL 不读取物理来源或上游模型；实现提交后仍由候选版本固定并审计。"
-								: "保存模型时创建统一日期维度实现，可在后续版本继续物化。"}
+							{draft.generationStrategyType === "DATE_DIMENSION"
+								? "保存模型时创建统一日期维度实现，可在后续版本继续物化。"
+								: "请选择受控日期维度生成器，或切换到代码模式维护原始实现。"}
 						</small>
 					</label>
 				) : null}

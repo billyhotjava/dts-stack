@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.DraftException;
+import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.AuthoringOrigin;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.FileInput;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.SaveFilesRequest;
 import jakarta.validation.Validation;
@@ -17,6 +18,13 @@ import org.junit.jupiter.params.provider.ValueSource;
 class DbtImplementationDraftContractTest {
 
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+
+    @Test
+    void treatsMissingOrFutureAuthoringOriginsAsUnknownWithoutRejectingLegacyRows() {
+        assertThat(AuthoringOrigin.fromStorage(null)).isEqualTo(AuthoringOrigin.UNKNOWN);
+        assertThat(AuthoringOrigin.fromStorage("future_origin")).isEqualTo(AuthoringOrigin.UNKNOWN);
+        assertThat(AuthoringOrigin.fromStorage("dbt_zip_import")).isEqualTo(AuthoringOrigin.DBT_ZIP_IMPORT);
+    }
 
     @Test
     void normalizesProjectRelativePathsAndRejectsTraversalOrAbsolutePaths() {

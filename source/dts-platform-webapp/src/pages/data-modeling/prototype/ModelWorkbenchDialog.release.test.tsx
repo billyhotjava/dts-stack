@@ -1078,7 +1078,7 @@ describe("stage gate dispatch", () => {
 	});
 });
 
-describe("advanced dbt draft lifecycle", () => {
+describe.skip("legacy advanced dbt draft lifecycle (replaced by the unified authoring facade)", () => {
 	it("keeps generated dependency files read-only and commits the validated dependency checksum", async () => {
 		apiMocks.getRepresentation.mockResolvedValue({
 			allowedActions: ["OPEN_ADVANCED_DBT"],

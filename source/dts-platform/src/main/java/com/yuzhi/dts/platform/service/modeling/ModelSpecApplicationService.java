@@ -452,7 +452,7 @@ public class ModelSpecApplicationService {
         validateReferences(
             serverTenantId,
             command.planId(),
-            modelSpecId,
+            current.id(),
             command.modelType(),
             command.dependsOn(),
             command.dimensionRefs()
@@ -473,7 +473,7 @@ public class ModelSpecApplicationService {
             throw translateConstraint(exception);
         }
         if (updated == 0) {
-            StoredModelSpec latest = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+            StoredModelSpec latest = repository.findCurrent(serverTenantId, current.id()).orElseThrow(() -> notFound(current.id()));
             throw revisionConflict(compatibilityReader.read(latest));
         }
         repository.insertV2Revision(serverTenantId, actorId, replacement, snapshot);
@@ -541,6 +541,73 @@ public class ModelSpecApplicationService {
             return update(serverTenantId, actorId, modelSpecId, expected, command);
         }
 
+        return createDraftFromPublished(
+            serverTenantId,
+            actorId,
+            current,
+            command,
+            "MODELING_MODEL_SPEC_DBT_SCHEMA_REVISION_CREATE"
+        );
+    }
+
+    /**
+     * Explicitly forks one immutable published revision into the next editable head while keeping
+     * the stable ModelSpec identity and the published revision row intact.
+     */
+    @Transactional
+    public ModelSpecView forkPublishedForAuthoring(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected
+    ) {
+        requireServerContext(serverTenantId, actorId);
+        requireCanonicalWriteEnabled();
+        if (modelSpecId == null) throw notFound(null);
+        if (expected == null || !modelSpecId.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "A strong If-Match precondition for this ModelSpec is required",
+                expected == null ? ModelSpecException.Kind.PRECONDITION_REQUIRED : ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+
+        StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+        ModelSpecView current = compatibilityReader.read(stored);
+        validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
+        requireExpected(current, expected);
+        if (ModelSpecContract.hasHistoricalTypeBoundaryViolation(current)) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_LEGACY_READONLY",
+                "Historical ModelSpec rows with non-canonical type boundaries are read-only",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        if (current.status() != ModelStatus.PUBLISHED) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_PUBLISHED_FORK_REQUIRED",
+                "Only a PUBLISHED ModelSpec can be forked into a new authoring draft",
+                ModelSpecException.Kind.CONFLICT,
+                Map.of("status", current.status())
+            );
+        }
+        return createDraftFromPublished(
+            serverTenantId,
+            actorId,
+            current,
+            commandWithFields(current, current.fields()),
+            "MODELING_MODEL_SPEC_AUTHORING_DRAFT_FORK"
+        );
+    }
+
+    private ModelSpecView createDraftFromPublished(
+        String serverTenantId,
+        String actorId,
+        ModelSpecView current,
+        UpdateModelSpecCommand command,
+        String auditAction
+    ) {
+
         command = resolveWarehouseLayerSelection(command);
         rejectIssues(ModelSpecContract.validateUpdate(command));
         Instant now = clock.instant();
@@ -571,7 +638,7 @@ public class ModelSpecApplicationService {
         validateReferences(
             serverTenantId,
             command.planId(),
-            modelSpecId,
+            current.id(),
             command.modelType(),
             command.dependsOn(),
             command.dimensionRefs()
@@ -591,11 +658,11 @@ public class ModelSpecApplicationService {
             throw translateConstraint(exception);
         }
         if (updated == 0) {
-            StoredModelSpec latest = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+            StoredModelSpec latest = repository.findCurrent(serverTenantId, current.id()).orElseThrow(() -> notFound(current.id()));
             throw revisionConflict(compatibilityReader.read(latest));
         }
         repository.insertV2Revision(serverTenantId, actorId, replacement, snapshot);
-        audit("MODELING_MODEL_SPEC_DBT_SCHEMA_REVISION_CREATE", serverTenantId, actorId, replacement);
+        audit(auditAction, serverTenantId, actorId, replacement);
         return replacement;
     }
 
@@ -607,6 +674,42 @@ public class ModelSpecApplicationService {
             current.dimensionRefs(), current.metricRefs(), current.standardBindings(), current.generationStrategy(),
             current.dimensionProfile(), current.dataMartId(), current.variantCode(), current.implementationPolicy(),
             current.warehouseLayerCode(), current.businessProcessId(), current.subjectDomainId()
+        );
+    }
+
+    /**
+     * Commits the logical authoring snapshot and its dbt-backed implementation mode through the
+     * ordinary ModelSpec CAS writer, producing exactly one new logical revision.
+     */
+    @Transactional
+    public ModelSpecView synchronizeAuthoringDraft(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected,
+        UpdateModelSpecCommand command
+    ) {
+        if (command == null) {
+            throw new ModelSpecException(
+                "MODEL_AUTHORING_SNAPSHOT_REQUIRED",
+                "A canonical ModelSpec authoring snapshot is required",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        return update(
+            serverTenantId,
+            actorId,
+            modelSpecId,
+            expected,
+            new UpdateModelSpecCommand(
+                command.planId(), command.domainId(), command.modelType(), command.layer(), command.name(),
+                command.description(), ImplementationMode.DBT_MANAGED, command.materialization(),
+                command.businessActivityRef(), command.consumptionScenario(), command.grain(), command.factShape(),
+                command.timeSemantics(), command.fields(), command.sourceRefs(), command.dependsOn(),
+                command.dimensionRefs(), command.metricRefs(), command.standardBindings(), command.generationStrategy(),
+                command.dimensionProfile(), command.dataMartId(), command.variantCode(), command.implementationPolicy(),
+                command.warehouseLayerCode(), command.businessProcessId(), command.subjectDomainId()
+            )
         );
     }
 

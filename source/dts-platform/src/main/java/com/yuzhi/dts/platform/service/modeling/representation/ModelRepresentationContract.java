@@ -29,6 +29,34 @@ public final class ModelRepresentationContract {
         BLOCKED,
     }
 
+    /** Safe structural coverage of the implementation bundle; never an ownership or permission decision. */
+    public enum ProjectionCoverage {
+        FULL,
+        PARTIAL,
+        NONE,
+        UNKNOWN,
+    }
+
+    /** Lifecycle state of the shared visual/code authoring draft. */
+    public enum AuthoringDraftState {
+        NONE,
+        DRAFT,
+        VALIDATED,
+        COMMITTED,
+    }
+
+    /** Stable command vocabulary consumed by the unified model workbench. */
+    public enum AuthoringAction {
+        OPEN_VISUAL,
+        OPEN_CODE,
+        EDIT_MODEL,
+        EDIT_IMPLEMENTATION,
+        SAVE,
+        VALIDATE,
+        COMMIT,
+        FORK_DRAFT,
+    }
+
     /** Stable, allow-listed reason codes safe for both BUSINESS and TECHNICAL responses. */
     public enum CapabilityReason {
         MODEL_REPRESENTATION_NO_IMPLEMENTATION,

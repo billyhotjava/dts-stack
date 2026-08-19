@@ -26,7 +26,7 @@
 | Sprint-89 | 采集来源 locator、稳定 ID、Schema 漂移和建模来源重确认 | 消费其来源身份与失效语义，不建设第二个元数据采集流程 |
 | Sprint-90 | 血缘事实正确性、人工登记/核验和血缘运营 UI | 只补模型物化到既有血缘写入 seam 的证据，不重复血缘页面 |
 | Sprint-91 | 同一 ModelSpec 的可视化/dbt 双模式和统一发布入口 | 在现有工作台增加资产、质量和同步深链，不增加发布控制面 |
-| Sprint-92（预留） | `DBT_MANAGED → DESIGNER_GENERATED` 安全回切 | 本 Sprint 不占用该编号，也不进入回切范围 |
+| Sprint-92 | 来源无关的统一模型创作草稿、visual/code 双视图与 PUBLISHED fork | 本 Sprint 不实现创作入口；只消费相同 model/implementation/dependency pins，provenance 不改变 AssetKey、质量、血缘或消费资格 |
 
 详细边界见 `assets/dependency-boundary.md`。
 
@@ -206,7 +206,7 @@ Sprint-89 F3/F4 与 Sprint-90 F1/F5 是外部依赖，任务不得复制其源�
 - 不重做 Sprint-88 的资产概览布局，不恢复独立资产台账页面。
 - 不重做 Sprint-89 的来源身份、Schema drift 和来源重确认。
 - 不重做 Sprint-90 的人工血缘、血缘核验或采集运营 UI。
-- 不实现 Sprint-92 的 dbt 回切，也不改造 SQL/dbt parser。
+- 不实现 Sprint-92 的统一 authoring draft、双视图投影或兼容迁移，也不改造 SQL/dbt parser；本 Sprint 只消费其稳定 pins。
 - 不引入多租户产品模型；当前按平台全局与部门数据范围运行。
 - 不扩展 `read/write/export` 之外的权限动作集。
 - 不把业务标签与密级 `classification` 合并。

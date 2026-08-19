@@ -1,22 +1,22 @@
 // @vitest-environment jsdom
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { listDataMarts } from "@/api/dataMartApi";
 import {
 	confirmDimensionDefinition,
 	createDimensionDefinition,
 	listDimensionDefinitions,
 	updateDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
-import { listDataMarts } from "@/api/dataMartApi";
 import { saveModelImplementation } from "@/api/modelImplementationApi";
 import { listModelFieldStandardOptions } from "@/api/modelingStandardsApi";
 import { createModelSpec, getModelLifecycle, listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
-import { listSubjectDomains } from "@/api/subjectDomainApi";
 import catalogDomainService from "@/api/services/catalogDomainService";
 import {
 	collectCurrentWarehousePlanSources,
 	resolveDefaultModelingContextId,
 } from "@/api/services/modelingImportContextService";
+import { listSubjectDomains } from "@/api/subjectDomainApi";
 import { listWarehouseLayers, type WarehouseLayerView } from "@/api/warehouseLayerApi";
 import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
@@ -28,8 +28,10 @@ import {
 	emptyModelDraft,
 	loadModelWorkbenchContext,
 	loadModelWorkbenchDraft,
+	modelDraftFromAuthoringSnapshot,
 	modelDraftFromView,
 	modelDraftNeedsImplementationRecovery,
+	modelDraftToAuthoringSnapshot,
 	prepareModelDraftForSave,
 	saveDimensionDefinitionDraft,
 	saveModelDraft,
@@ -340,7 +342,7 @@ describe("model workbench draft preparation", () => {
 		});
 	});
 
-	it("loads the logical upstream relation instead of a generated DBT implementation input", () => {
+	it("keeps imported logical upstream relations without pretending they are already visual inputs", () => {
 		const upstream = canonicalFactView();
 		const application = {
 			...canonicalFactView(),
@@ -362,7 +364,7 @@ describe("model workbench draft preparation", () => {
 		});
 
 		expect(modelDraftFromView(application, implementation)).toMatchObject({
-			implementationInputMode: "UPSTREAM_MODEL",
+			implementationInputMode: "",
 			dependsOn: application.dependsOn,
 		});
 	});
@@ -445,15 +447,38 @@ describe("model workbench draft validation", () => {
 		});
 	});
 
-	it("accepts a DBT-managed dimension whose constant SQL has no upstream", () => {
+	it("accepts an existing code-authored dimension without inventing a visual input mode", () => {
 		const draft = validDimensionDraft();
+		const base = {
+			...canonicalFactView(),
+			modelType: "DIMENSION" as const,
+			implementationMode: "DBT_MANAGED" as const,
+			dimensionDefinitionRef: { dimensionDefinitionId: "dimension-1", revision: 1 },
+		};
+		draft.base = base;
 		draft.implementationMode = "DBT_MANAGED";
-		draft.implementationInputMode = "GENERATED";
+		draft.implementationBase = generatedImplementation(base, {
+			ownership: "DBT_MANAGED",
+			inputMode: "GENERATED",
+			inputs: [{ generatorType: "DBT_SQL", config: {} }],
+		});
+		draft.implementationInputMode = "";
 		draft.generationStrategyType = "";
 		draft.sourceRefs = [];
 		draft.dependsOn = [];
 
 		expect(validateModelDraftInput(draft)).not.toHaveProperty("implementationInputMode");
+	});
+
+	it("does not let DBT provenance bypass an invalid visual generator selection", () => {
+		const draft = validDimensionDraft();
+		draft.implementationMode = "DBT_MANAGED";
+		draft.implementationInputMode = "GENERATED";
+		draft.generationStrategyType = "";
+
+		expect(validateModelDraftInput(draft)).toMatchObject({
+			implementationInputMode: "当前模型不支持所选生成器",
+		});
 	});
 
 	it("updates a saved DRAFT definition with attributes instead of blocking the edit", async () => {
@@ -844,6 +869,173 @@ describe("model workbench draft validation", () => {
 				}),
 			}),
 		);
+	});
+
+	it("hydrates logical and structured implementation state from one versioned authoring snapshot", () => {
+		const base = canonicalFactView();
+		const implementation = generatedImplementation(base, {
+			inputMode: "PHYSICAL_ASSET",
+			inputs: [{ sourceBindingId: physicalSource.bindingId, resolvedVersion: "source-v1" }],
+		});
+		const modelSpec = {
+			...base,
+			name: "预算执行明细",
+			description: "统一创作草稿",
+		};
+		const snapshot = {
+			schemaVersion: 1 as const,
+			modelSpec,
+			visualImplementation: {
+				projectKey: "system-managed",
+				dbtUniqueId: `model.${base.id}`,
+				inputMode: "PHYSICAL_ASSET" as const,
+				inputs: [{ sourceBindingId: physicalSource.bindingId, resolvedVersion: "source-v1" }],
+				fieldMappings: [{ sourceField: "budget_id", targetField: "record_id" }],
+				settings: {
+					targetPhysicalName: "dwd_budget_execution_v2",
+					loadStrategy: "INCREMENTAL",
+					partitionFields: ["event_time"],
+					casts: { event_time: "timestamp" },
+				},
+				ownership: "DESIGNER_GENERATED" as const,
+				materialization: "incremental",
+				idempotencyKey: "authoring-visual-92",
+			},
+		};
+
+		expect(modelDraftFromAuthoringSnapshot(base, implementation, snapshot)).toMatchObject({
+			name: "预算执行明细",
+			description: "统一创作草稿",
+			physicalName: "dwd_budget_execution_v2",
+			loadStrategy: "INCREMENTAL",
+			partitionFields: "event_time",
+			fieldMappings: [{ sourceField: "budget_id", targetField: "record_id" }],
+			casts: { event_time: "timestamp" },
+			implementationBase: implementation,
+		});
+	});
+
+	it("serializes a structured visual implementation beside the canonical model snapshot", () => {
+		const base = {
+			...canonicalFactView(),
+			sourceRefs: [
+				{
+					kind: "TABLE" as const,
+					ref: "预算执行 ODS",
+					layer: "ODS" as const,
+					role: "PRIMARY" as const,
+					alias: null,
+					joinType: null,
+					joinExpression: null,
+					sortOrder: 0,
+					sourceBindingId: physicalSource.bindingId,
+					resolvedVersion: "source-v1",
+				},
+			],
+		};
+		const implementation = generatedImplementation(base, {
+			inputMode: "PHYSICAL_ASSET",
+			inputs: [{ sourceBindingId: physicalSource.bindingId, resolvedVersion: "source-v1" }],
+		});
+		const draft = {
+			...modelDraftFromView(base, implementation),
+			physicalName: "dwd_budget_execution_v2",
+			fieldMappings: [{ sourceField: "budget_id", targetField: "record_id" }],
+		};
+
+		const snapshot = modelDraftToAuthoringSnapshot(draft, {
+			ownerId: "owner-1",
+			dimensionDefinitions: [],
+			models: [base],
+		});
+
+		expect(snapshot).toMatchObject({
+			schemaVersion: 1,
+			modelSpec: { name: base.name },
+			visualImplementation: {
+				inputMode: "PHYSICAL_ASSET",
+				ownership: "DESIGNER_GENERATED",
+				settings: { targetPhysicalName: "dwd_budget_execution_v2" },
+				fieldMappings: [{ sourceField: "budget_id", targetField: "record_id" }],
+			},
+		});
+	});
+
+	it("creates a structured visual snapshot after an imported model explicitly selects visual inputs", () => {
+		const base = {
+			...canonicalFactView(),
+			implementationMode: "DBT_MANAGED" as const,
+			sourceRefs: [
+				{
+					kind: "TABLE" as const,
+					ref: "预算执行 ODS",
+					layer: "ODS" as const,
+					role: "PRIMARY" as const,
+					alias: null,
+					joinType: null,
+					joinExpression: null,
+					sortOrder: 0,
+					sourceBindingId: physicalSource.bindingId,
+					resolvedVersion: "source-v1",
+				},
+			],
+		};
+		const codeImplementation = generatedImplementation(base, {
+			ownership: "DBT_MANAGED",
+			inputMode: "GENERATED",
+			inputs: [{ generatorType: "DBT_SQL", config: {} }],
+		});
+		const draft = {
+			...modelDraftFromView(base, codeImplementation),
+			implementationInputMode: "PHYSICAL_ASSET" as const,
+			sourceRefs: base.sourceRefs,
+			physicalName: "dwd_budget_execution",
+		};
+
+		const snapshot = modelDraftToAuthoringSnapshot(draft, {
+			ownerId: "owner-1",
+			dimensionDefinitions: [],
+			models: [base],
+		});
+
+		expect(snapshot.visualImplementation).toMatchObject({
+			inputMode: "PHYSICAL_ASSET",
+			ownership: "DESIGNER_GENERATED",
+			settings: { targetPhysicalName: "dwd_budget_execution" },
+		});
+	});
+
+	it("does not resurrect a stale visual implementation after a code-authored snapshot invalidates it", () => {
+		const base = canonicalFactView();
+		const implementation = generatedImplementation(base, {
+			inputMode: "PHYSICAL_ASSET",
+			inputs: [{ sourceBindingId: physicalSource.bindingId, resolvedVersion: "source-v1" }],
+			fieldMappings: [{ sourceField: "old_id", targetField: "record_id" }],
+		});
+		const snapshot = {
+			schemaVersion: 1 as const,
+			modelSpec: { ...base, sourceRefs: [] },
+		};
+
+		expect(modelDraftFromAuthoringSnapshot(base, implementation, snapshot)).toMatchObject({
+			physicalName: "",
+			fieldMappings: [],
+			implementationBase: implementation,
+		});
+	});
+
+	it("omits structured implementation when the active code edit invalidates the visual projection", () => {
+		const base = canonicalFactView();
+		const implementation = generatedImplementation(base);
+		const draft = modelDraftFromView(base, implementation);
+
+		const snapshot = modelDraftToAuthoringSnapshot(
+			draft,
+			{ ownerId: "owner-1", dimensionDefinitions: [], models: [base] },
+			false,
+		);
+
+		expect(snapshot).not.toHaveProperty("visualImplementation");
 	});
 
 	it("saves a selected warehouse source through logical and implementation bindings", async () => {

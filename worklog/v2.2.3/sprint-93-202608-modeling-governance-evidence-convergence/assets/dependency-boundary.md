@@ -2,7 +2,7 @@
 
 ## 1. 编号说明
 
-Sprint-91 已在 `assets/sprint-92-back-conversion-handoff.md` 明确把 Sprint-92 预留给 `DBT_MANAGED → DESIGNER_GENERATED` 安全回切。本项不占用该编号，因此使用 Sprint-93。
+Sprint-91 曾在 `assets/sprint-92-back-conversion-handoff.md` 把 Sprint-92 预留给安全回切；2026-08-19 该范围已升级为来源无关的统一模型创作。本项仍使用 Sprint-93，并且只消费 Sprint-92 commit 产生的稳定 pins，不进入其草稿、投影和兼容迁移范围。
 
 ## 2. 既有 Owner 与本 Sprint 接缝
 
@@ -24,7 +24,7 @@ Sprint-91 已在 `assets/sprint-92-back-conversion-handoff.md` 明确把 Sprint-
 | Sprint-89 F1/F2 稳定来源身份与 soft invalidation | F1、F4 | 对应 producer 保持 DRAFT，不复制修复 |
 | Sprint-90 F1 字段血缘有效期/匹配修复 | F4 | 仅做表级观察，字段级验收 BLOCKED |
 | Sprint-91 统一发布与物化主链 | F2、F3、F6 | 不绕过主链直接写 candidate 状态 |
-| Sprint-92 dbt 回切 | 无 | 完全独立，不阻塞 Sprint-93 |
+| Sprint-92 统一 authoring commit | F2～F6 的模型结果消费 | 只消费 model/implementation/dependency pins；Sprint-92 未完成时沿 Sprint-91 既有 commit 输入验收，不复制创作实现 |
 
 ## 4. 文件冲突守卫
 

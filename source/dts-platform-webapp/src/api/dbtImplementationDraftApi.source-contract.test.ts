@@ -30,38 +30,40 @@ describe("advanced dbt implementation draft contract", () => {
 
 	it("keeps maintainer-only editing in the data-modeling workbench with dirty and conflict states", () => {
 		const workbench = read("../pages/data-modeling/prototype/ModelingWorkbenchPage.tsx");
+		const authoringSession = read("../pages/data-modeling/prototype/useModelAuthoringSession.ts");
 		const dialogs = read("../pages/data-modeling/prototype/ModelWorkbenchDialog.tsx");
 		const editor = read("../pages/data-modeling/prototype/AdvancedDbtWorkspace.tsx");
+		const authoringApi = read("./modelAuthoringApi.ts");
 
 		expect(workbench).toContain("useDataModelingMenuGrant");
 		expect(workbench).toMatch(/<AdvancedDbtWorkspace[\s\S]*canMaintain=\{canMaintain\}/);
-		expect(workbench).toContain("onDirtyChange={setAdvancedDbtDirty}");
-		expect(workbench).toContain("const unsavedChanges = dirty || advancedDbtDirty");
+		expect(authoringSession).toContain("setCodeDirty");
+		expect(workbench).toContain("const unsavedChanges = dirty || authoringCodeDirty");
 		expect(workbench).toContain('import { AdvancedDbtWorkspace } from "./AdvancedDbtWorkspace"');
-		// Sprint-91：高级 dbt 工作区的挂载条件由 dialog 状态改为 URL 的 view=code 模式。
 		expect(workbench).toMatch(/requestedView === "code" && selectedModel \? \(\s*<AdvancedDbtWorkspace/s);
 		expect(dialogs).not.toContain("AdvancedDbtDialog");
-		// 原断言禁止任何 <Modal>，本意是“工作区是内联页面而不是弹窗”。
-		// Sprint-91 用 TransitionConfirmation(Modal) 取代了 window.confirm，故改为表达真实意图：
-		// 工作区本体内联渲染，Modal 只用于接管确认。
-		expect(editor).toMatch(/<section aria-label="高级 dbt 工作区"/);
-		expect(editor.match(/<Modal/g) ?? []).toHaveLength(1);
-		expect(editor).toContain("TransitionConfirmation");
-		expect(editor).toContain("返回模型设计");
-		expect(editor).toContain('representationScope: "TECHNICAL"');
-		expect(editor).toContain("if (!canMaintain)");
-		expect(editor).toContain('includes("OPEN_ADVANCED_DBT")');
+		expect(editor).toMatch(/<section aria-label="模型代码视图"/);
+		expect(editor).not.toContain("<Modal");
+		expect(editor).not.toContain("TransitionConfirmation");
+		expect(editor).toContain('includes("EDIT_IMPLEMENTATION")');
 		expect(editor).toContain("dirty");
 		expect(editor).toContain("conflict");
-		expect(editor).toContain("validateDbtImplementationDraft");
-		expect(editor).toContain("commitDbtImplementationDraft");
-		expect(editor).toContain("dependencyChecksum: validation.dependencyValidation?.dependencyChecksum");
+		expect(authoringSession).toContain("validateModelAuthoringDraft");
+		expect(authoringSession).toContain("commitModelAuthoringDraft");
+		expect(authoringSession).toContain("dependencyChecksum: checked.dependencyValidation?.dependencyChecksum");
 		expect(editor).toContain("isManagedDependencyPath");
 		expect(editor).toContain("系统依赖");
-		expect(editor).toContain("created.sourceBundle?.files");
-		expect(editor).not.toContain("initialFiles");
-		expect(editor).not.toContain('path: "dbt_project.yml"');
-		expect(editor).not.toContain("model-paths: [models]");
+		expect(authoringApi).toContain("/authoring-context");
+		expect(authoringApi).toContain("/authoring-drafts");
+		expect(authoringApi).toContain('activeView: "VISUAL" | "CODE"');
+		expect(authoringApi).toContain("modelSpecSnapshot: ModelAuthoringSnapshot");
+		expect(authoringApi).toContain("files: DbtDraftFile[]");
+		expect(authoringSession).toContain("saved.files");
+		expect(authoringSession).toContain("modelDraftToAuthoringSnapshot");
+		expect(authoringSession).toContain("Boolean(prepared.implementationInputMode)");
+		expect(`${workbench}\n${authoringSession}\n${authoringApi}`).not.toMatch(
+			/transitionImplementationOwnership|convertToDesignerGenerated/,
+		);
 		expect(`${workbench}\n${dialogs}\n${editor}`).not.toContain("/api/etl/dbt/files");
 	});
 });

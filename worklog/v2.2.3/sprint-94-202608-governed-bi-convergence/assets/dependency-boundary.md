@@ -37,6 +37,6 @@
 
 **仍需 Sprint-94 自行取得**：当前会话登录/API 复验、本地 BI 基线样本、A1～A4 四角色的职责分离与部门/角色/密级绑定、Chrome 95、目标环境容量与调用观测画像。
 
-## 3. Sprint-92 预留范围
+## 3. Sprint-92 上游范围
 
-Sprint-92 已预留 dbt 安全回切范围，Sprint-94 不占用、不修改其涉及的 `DBT_MANAGED`/`DESIGNER_GENERATED` 转换路径。
+Sprint-92 已升级为来源无关的统一模型创作。Sprint-94 不占用、不修改 authoring draft、projection、PUBLISHED fork 或旧建模 API 兼容路径；它只消费 Sprint-92/93 发布后形成的稳定、已治理数据集身份。

@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type BlockerFunction, useBlocker, useNavigate, useSearchParams } from "react-router";
-import { getModelRepresentation } from "@/api/modelRepresentationApi";
-import { getModelLifecycle } from "@/api/modelSpecApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import type { ModelRepresentationView } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { useUserInfo } from "@/store/userStore";
 import { dataModelingPath } from "../navigation";
@@ -16,8 +13,8 @@ import { ModelingWorkbenchEditor } from "./ModelingWorkbenchEditor";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
 import { ModelWorkbenchDialog, type WorkbenchDialog } from "./ModelWorkbenchDialog";
+import { type ModelingWorkbenchView, normalizeWorkbenchView } from "./modelingWorkbenchMode";
 import { modelDraftFingerprint } from "./modelWorkbenchPresentation";
-import { normalizeWorkbenchView, type ModelingWorkbenchView } from "./modelingWorkbenchMode";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
 	conceptDimensionDraftFromView,
@@ -44,6 +41,7 @@ import { normalizeModelingRequestFailure } from "./services/planningProjectionSe
 import { useCatalogActions } from "./useCatalogActions";
 import { useConceptDimensionWorkflow } from "./useConceptDimensionWorkflow";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
+import { useModelAuthoringSession } from "./useModelAuthoringSession";
 import { resolveWorkbenchEditorAccess } from "./workbenchEditorAccess";
 
 const DISCARD_PROMPT = "当前工作区有未保存修改，确认放弃吗？";
@@ -105,17 +103,15 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [selectedModelId, setSelectedModelId] = useState("");
 	const [selectedDimensionId, setSelectedDimensionId] = useState("");
 	const [dialog, setDialog] = useState<WorkbenchDialog>(null);
-	const [advancedDbtDirty, setAdvancedDbtDirty] = useState(false);
 	const [batchMaterializationModels, setBatchMaterializationModels] = useState<ModelSpecView[]>([]);
 	const [materializationRefreshKey, setMaterializationRefreshKey] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [editorLoading, setEditorLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
-	const [representation, setRepresentation] = useState<ModelRepresentationView | null>(null);
-	const [representationFailure, setRepresentationFailure] = useState("");
 	const { message, show } = useTransientMessage();
 	const draftBase = draft && isModelSpecDraft(draft) ? draft.base : null;
+	const selectedModel = draftBase;
 	const conceptDraft = draft && isConceptDimensionDraft(draft) ? draft : null;
 	const draftCreateKind = draft?.createKind || null;
 	const draftDimensionDefinitionId = draft && isDimensionTableDraft(draft) ? draft.dimensionDefinitionId : "";
@@ -123,15 +119,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const editorAccess = useMemo(() => resolveWorkbenchEditorAccess(canMaintain, draft), [canMaintain, draft]);
 	const dirty = draft !== null && cleanFingerprint !== null && modelDraftFingerprint(draft) !== cleanFingerprint;
 	const saveNeeded = dirty || modelDraftNeedsImplementationRecovery(draft);
-	const unsavedChanges = dirty || advancedDbtDirty;
-	const blocker = useBlocker(
-		useCallback<BlockerFunction>(
-			({ currentLocation, nextLocation }) =>
-				shouldBlockWorkbenchNavigation(unsavedChanges, currentLocation.pathname, nextLocation.pathname),
-			[unsavedChanges],
-		),
-	);
-	const confirmDiscard = useCallback(() => !unsavedChanges || window.confirm(DISCARD_PROMPT), [unsavedChanges]);
 	const replaceDraft = useCallback((nextDraft: ModelDraft | null) => {
 		setDraft(nextDraft);
 		setCleanFingerprint(nextDraft ? modelDraftFingerprint(nextDraft) : null);
@@ -225,6 +212,49 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		},
 		[replaceDraft, syncWorkbenchUrl],
 	);
+	const authoring = useModelAuthoringSession({
+		canMaintain,
+		context,
+		dimensionDefinitions,
+		dirty,
+		draft,
+		loadWorkbench: load,
+		ownerId: ownerIdOf(userInfo),
+		replaceDraft,
+		selectedModel,
+		selectedModelId,
+		setContext,
+		setFailure,
+		setValidationErrors,
+		show,
+	});
+	const {
+		busy: authoringBusy,
+		changeFiles: setAuthoringFiles,
+		codeDirty: authoringCodeDirty,
+		commit: authoringCommit,
+		commitDraft: commitAuthoring,
+		conflict: authoringConflict,
+		context: authoringContext,
+		create: createAuthoring,
+		failure: authoringFailure,
+		files: authoringFiles,
+		focusNode: authoringFocusNode,
+		invalidateValidation,
+		save: saveAuthoring,
+		setFocusNode: setAuthoringFocusNode,
+		validate: validateAuthoring,
+		validation: authoringValidation,
+	} = authoring;
+	const unsavedChanges = dirty || authoringCodeDirty;
+	const blocker = useBlocker(
+		useCallback<BlockerFunction>(
+			({ currentLocation, nextLocation }) =>
+				shouldBlockWorkbenchNavigation(unsavedChanges, currentLocation.pathname, nextLocation.pathname),
+			[unsavedChanges],
+		),
+	);
+	const confirmDiscard = useCallback(() => !unsavedChanges || window.confirm(DISCARD_PROMPT), [unsavedChanges]);
 
 	useEffect(() => {
 		void load();
@@ -364,6 +394,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		const nextValidationErrors = validateModelDraftInput(preparedDraft);
 		setValidationErrors(nextValidationErrors);
 		if (Object.keys(nextValidationErrors).length) return;
+		if (preparedDraft.base) {
+			await authoring.save("VISUAL");
+			return;
+		}
 		savingRef.current = true;
 		setSaving(true);
 		try {
@@ -481,7 +515,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			};
 		});
 	};
-	const selectedModel = draft && isModelSpecDraft(draft) ? draft.base : null;
 	useEffect(() => {
 		if (!legacyAdvanced || !requestedModelId || selectedModel?.id !== requestedModelId) return;
 		syncWorkbenchUrl((params) => {
@@ -489,8 +522,8 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			params.delete("open");
 		});
 	}, [legacyAdvanced, requestedModelId, selectedModel?.id, syncWorkbenchUrl]);
-	const setWorkbenchView = (view: ModelingWorkbenchView, discardConfirmed = false) => {
-		if (view === requestedView || savingRef.current || (!discardConfirmed && !confirmDiscard())) return;
+	const setWorkbenchView = (view: ModelingWorkbenchView) => {
+		if (view === requestedView || savingRef.current) return;
 		syncWorkbenchUrl((params) => {
 			params.set("view", view);
 			params.delete("open");
@@ -537,37 +570,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		show,
 		syncWorkbenchUrl,
 	});
-	useEffect(() => {
-		if (!selectedModel) {
-			setRepresentation(null);
-			setRepresentationFailure("");
-			return;
-		}
-		let active = true;
-		setRepresentation(null);
-		setRepresentationFailure("");
-		void getModelLifecycle(selectedModel.id)
-			.then(({ implementation }) => {
-				const exactImplementation =
-					implementation?.revision === selectedModel.revision &&
-					implementation.modelChecksum === selectedModel.checksum;
-				return getModelRepresentation(selectedModel.id, {
-					modelRevision: selectedModel.revision,
-					implementationRevision: exactImplementation ? implementation.implementationRevision : undefined,
-					representationScope: "BUSINESS",
-				});
-			})
-			.then((value) => {
-				if (active) setRepresentation(value);
-			})
-			.catch((error) => {
-				if (active) setRepresentationFailure(normalizeModelingRequestFailure(error, "统一模型表示读取失败。").message);
-			});
-		return () => {
-			active = false;
-		};
-	}, [selectedModel]);
-
 	return (
 		<main className="dmx-workbench-page">
 			<PageHeader description={route.description} title="维度建模" trail="数据建模 / 维度建模" />
@@ -619,29 +621,38 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							<RequestState description="正在读取所选模型的版本与实现信息。" kind="loading" title="正在打开模型" />
 						) : requestedView === "code" && selectedModel ? (
 							<AdvancedDbtWorkspace
+								busy={authoringBusy}
 								canMaintain={canMaintain}
+								commit={authoringCommit}
+								conflict={authoringConflict}
+								context={authoringContext}
+								dirty={authoringCodeDirty || dirty}
+								failure={authoringFailure}
+								files={authoringFiles}
+								initialFocusNode={authoringFocusNode}
 								initialTargetPhysicalName={draft && isModelSpecDraft(draft) ? draft.physicalName : ""}
 								model={selectedModel}
-								onBack={() => {
-									if (!confirmDiscard()) return;
-									setAdvancedDbtDirty(false);
-									setWorkbenchView("visual", true);
-								}}
-								onCommitSuccess={() => void load(selectedModel.id)}
-								onDirtyChange={setAdvancedDbtDirty}
-								onTransitionSuccess={(result) => {
-									setAdvancedDbtDirty(false);
-									void load(result.model.id);
-								}}
+								onBack={() => setWorkbenchView("visual")}
+								onCommit={() => void commitAuthoring()}
+								onCreate={(targetPhysicalName) => void createAuthoring(targetPhysicalName)}
+								onFilesChange={setAuthoringFiles}
+								onSave={() => void saveAuthoring("CODE")}
+								onValidate={() => void validateAuthoring("CODE")}
+								validation={authoringValidation}
 							/>
 						) : draft ? (
 							<ModelingWorkbenchEditor
+								authoringBusy={authoringBusy}
+								authoringConflict={authoringConflict}
+								authoringContext={authoringContext}
+								authoringFailure={authoringFailure}
+								authoringValidation={authoringValidation}
 								canMaintain={canMaintain}
 								context={context}
 								currentOwnerId={ownerIdOf(userInfo)}
 								dimensionDefinitionFailure={dimensionDefinitionFailure}
 								dimensionDefinitions={dimensionDefinitions}
-								dirty={saveNeeded}
+								dirty={saveNeeded || authoringCodeDirty}
 								draft={draft}
 								editorAccessMessage={editorAccess.message}
 								failureMessage={failure?.message || ""}
@@ -657,21 +668,27 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 											: nextDraft,
 									);
 									setValidationErrors({});
+									invalidateValidation();
 								}}
 								onDeleteField={deleteField}
 								onConfirmDimension={() => void confirmConceptVersion()}
+								onCommitAuthoring={() => void commitAuthoring()}
 								onDialog={(nextDialog) => {
 									if (!savingRef.current) setDialog(nextDialog);
 								}}
 								onRefresh={refresh}
+								onForkPublished={() => void createAuthoring()}
+								onOpenRawNode={(node) => {
+									setAuthoringFocusNode(node);
+									setWorkbenchView("code");
+								}}
 								onRemoveBlankFields={removeBlankFields}
 								onSave={() => void save()}
 								onStandardChange={updateStandardBinding}
 								onSourcesChanged={(sources) => setContext((current) => (current ? { ...current, sources } : current))}
 								onUpdateField={updateField}
+								onValidateAuthoring={() => void validateAuthoring("VISUAL")}
 								readOnly={editorAccess.readOnly}
-								representation={representation}
-								representationFailure={representationFailure}
 								saving={saving}
 								selectedModel={selectedModel}
 								validationErrors={validationErrors}

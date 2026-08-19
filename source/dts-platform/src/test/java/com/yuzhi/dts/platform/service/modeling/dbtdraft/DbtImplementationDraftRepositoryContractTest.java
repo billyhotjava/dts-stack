@@ -18,5 +18,20 @@ class DbtImplementationDraftRepositoryContractTest {
         assertThat(source).contains("on conflict (tenant_id, plan_id, model_spec_id, actor_id, idempotency_key)");
         assertThat(source).contains("expires_at <= ?", "for update skip locked", "limit ?");
         assertThat(source).contains("bundle_checksum", "bundle_manifest", "project_checksum");
+        assertThat(source).contains("model_spec_snapshot", "projection_summary", "authoring_origin");
+        assertThat(source).contains(
+            "findOpenForActor",
+            "replaceAuthoringContent",
+            "listAuthoringMigrationCandidates",
+            "backfillAuthoringMetadata",
+            "authoringMetadataMatches",
+            "rollbackAuthoringMetadata"
+        );
+        assertThat(source).contains(
+            "model_spec_snapshot = cast(? as jsonb)",
+            "projection_summary = cast(? as jsonb)",
+            "last_modified_date = ?",
+            "is not distinct from cast(? as jsonb)"
+        );
     }
 }

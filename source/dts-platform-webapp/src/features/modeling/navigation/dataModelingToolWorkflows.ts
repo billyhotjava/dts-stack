@@ -22,10 +22,10 @@ const WORKFLOWS: readonly DataModelingToolWorkflow[] = [
 	{
 		key: "dbt-zip-import",
 		title: "dbt ZIP 建模",
-		description: "统一导入 dbt ZIP，完成安全检查、业务语义补齐和预检，并生成可视化模型及模型级高级 dbt 实现。",
+		description: "统一导入 dbt ZIP，完成安全检查、业务语义补齐和预检，并生成可在可视化与代码模式间继续编辑的模型草稿。",
 		group: "import",
 		path: "/data-modeling/dimensions/reverse",
-		owner: "ModelSpec / 高级 dbt 实现",
+		owner: "统一模型创作",
 		resultOwner: "目标流程",
 	},
 	{

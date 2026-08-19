@@ -270,4 +270,6 @@
     <include file="config/liquibase/changelog/20260817_03_query_dataset_semantic_contract.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260817_04_bi_report_asset_registration.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260819_01_model_query_dataset_projection.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260819_02_model_authoring_draft_expand.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260820_01_model_authoring_migration_ledger.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

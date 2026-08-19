@@ -1,4 +1,6 @@
 import api from "@/api/apiClient";
+import type { ModelImplementationWriteCommand } from "@/features/modeling/contracts/modelImplementationContract";
+import type { UpdateModelSpecCommand } from "@/features/modeling/contracts/modelSpecV2Contract";
 
 export type DbtDraftFile = { path: string; content: string };
 
@@ -39,6 +41,14 @@ export type DbtDraftSourceBundle = {
 	managedDependencyAliases: Record<string, string>;
 };
 
+export type ModelAuthoringSnapshot = {
+	schemaVersion: 1;
+	modelSpec: UpdateModelSpecCommand;
+	visualImplementation?: ModelImplementationWriteCommand | null;
+};
+
+export type ModelAuthoringSnapshotInput = ModelAuthoringSnapshot | UpdateModelSpecCommand;
+
 export type DbtImplementationDraft = {
 	draftId: string;
 	planId: string;
@@ -51,6 +61,9 @@ export type DbtImplementationDraft = {
 	etag: string;
 	expiresAt: string;
 	sourceBundle?: DbtDraftSourceBundle | null;
+	modelSpecSnapshot?: ModelAuthoringSnapshotInput | null;
+	projectionSummary?: unknown;
+	authoringOrigin?: "SYSTEM_GENERATED" | "MANUAL_CODE" | "DBT_ZIP_IMPORT" | "UNKNOWN";
 };
 
 export type DbtDraftValidation = {

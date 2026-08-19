@@ -1917,6 +1917,87 @@ class ModelSpecApplicationServiceTest {
         );
     }
 
+    @Test
+    void forksAnImmutablePublishedRevisionIntoANewDraftHead() {
+        ModelSpecView created = codec.toCreatedView(MODEL_ID, command("published-fork", "progress_kpi"), NOW);
+        ModelSpecView published = codec.toLifecycleView(created, ModelStatus.PUBLISHED, created.revision(), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(published, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(published);
+        when(
+            repository.compareAndSetPublishedToDraftV2(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(published.revision()),
+                eq(published.checksum()),
+                any(),
+                anyString()
+            )
+        ).thenReturn(1);
+
+        ModelSpecView draft = service.forkPublishedForAuthoring(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, published.revision(), published.checksum())
+        );
+
+        assertThat(draft.id()).isEqualTo(published.id());
+        assertThat(draft.status()).isEqualTo(ModelStatus.DRAFT);
+        assertThat(draft.revision()).isEqualTo(published.revision() + 1);
+        assertThat(draft.fields()).containsExactlyElementsOf(published.fields());
+        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(draft), anyString());
+        verify(auditService).auditAction(
+            eq("MODELING_MODEL_SPEC_AUTHORING_DRAFT_FORK"),
+            eq(AuditStage.SUCCESS),
+            eq(MODEL_ID.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void refusesAuthoringForkWhenTheCurrentHeadIsNotPublished() {
+        ModelSpecView draft = codec.toCreatedView(MODEL_ID, command("draft-fork", "progress_kpi"), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(draft, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(draft);
+
+        assertThatThrownBy(
+            () ->
+                service.forkPublishedForAuthoring(
+                    TENANT,
+                    ACTOR,
+                    MODEL_ID,
+                    new ExpectedVersion(MODEL_ID, draft.revision(), draft.checksum())
+                )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_PUBLISHED_FORK_REQUIRED");
+
+        verify(repository, never()).compareAndSetPublishedToDraftV2(any(), any(), anyInt(), anyString(), any(), anyString());
+    }
+
+    @Test
+    void commitsVisualAndCodeChangesAsOneDbtBackedModelRevision() {
+        CreateModelSpecCommand base = command("authoring-commit", "progress_kpi");
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, base, NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.compareAndSetV2(eq(TENANT), eq(ACTOR), eq(current.revision()), eq(current.checksum()), any(), anyString()))
+            .thenReturn(1);
+
+        ModelSpecView committed = service.synchronizeAuthoringDraft(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, current.revision(), current.checksum()),
+            update(base)
+        );
+
+        assertThat(committed.revision()).isEqualTo(current.revision() + 1);
+        assertThat(committed.implementationMode()).isEqualTo(ImplementationMode.DBT_MANAGED);
+        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(committed), anyString());
+    }
+
     private void assertCreateCode(String idempotencyKey, String code) {
         assertThatThrownBy(() -> service.create(TENANT, ACTOR, command(idempotencyKey, "customer_detail_" + idempotencyKey)))
             .isInstanceOf(ModelSpecException.class)
