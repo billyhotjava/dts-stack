@@ -63,7 +63,7 @@ public final class DbtSqlProjectionParser {
         );
         Matcher qualified = qualifiedPattern.matcher(source);
         Set<String> qualifiers = new LinkedHashSet<>();
-        StringBuffer withoutQualified = new StringBuffer();
+        StringBuilder withoutQualified = new StringBuilder();
         while (qualified.find()) {
             qualifiers.add(normalizeColumnName(unquoteIdentifier(qualified.group(1))));
             qualified.appendReplacement(withoutQualified, " ");
