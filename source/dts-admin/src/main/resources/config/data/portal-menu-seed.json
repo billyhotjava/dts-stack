@@ -623,8 +623,8 @@
           "path": "screens",
           "icon": "solar:monitor-bold-duotone",
           "titleKey": "sys.nav.portal.biScreens",
-          "title": "数据大屏",
-          "externalLink": "/bi/screens"
+          "title": "数据门户",
+          "externalLink": "/bi/portal"
         },
         {
           "key": "services",

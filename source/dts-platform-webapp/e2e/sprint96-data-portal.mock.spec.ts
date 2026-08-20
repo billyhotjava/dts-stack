@@ -116,10 +116,10 @@ test("browses published screens by domain, deep-links a leaf, and renders publis
 	await installApis(page, "success");
 	const failures = collectFailures(page);
 
-	await page.goto("/bi/portal");
+	await page.goto("/#/bi/portal");
 	await expect(page.getByTestId("data-portal-page")).toBeVisible();
 	await expect(page.getByText("质量管理", { exact: true })).toBeVisible();
-	await expect(page.getByText("质量运营大屏", { exact: true })).toBeVisible();
+	await expect(page.getByRole("tree").getByText("质量运营大屏", { exact: true })).toBeVisible();
 	await expect(page).toHaveURL(/\/bi\/portal\/101$/);
 
 	const runtime = page.getByTestId("data-portal-runtime");
@@ -141,9 +141,9 @@ test("shows an actionable empty state at a narrow viewport", async ({ page }, te
 	await installApis(page, "empty");
 	const failures = collectFailures(page);
 
-	await page.goto("/bi/portal");
+	await page.goto("/#/bi/portal");
 	await expect(page.getByTestId("data-portal-empty")).toBeVisible();
-	await expect(page.getByRole("link", { name: "大屏管理" })).toBeVisible();
+	await expect(page.getByTestId("data-portal-empty").getByRole("link", { name: "大屏管理" })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath("data-portal-empty-narrow.png"), fullPage: true });
 	expect(failures).toEqual({ consoleErrors: [], pageErrors: [], failedResponses: [] });
 });
@@ -152,7 +152,7 @@ test("shows a retryable directory error without rendering a runtime", async ({ p
 	await installIdentity(page);
 	await installApis(page, "error");
 
-	await page.goto("/bi/portal");
+	await page.goto("/#/bi/portal");
 	await expect(page.getByTestId("data-portal-error")).toBeVisible();
 	await expect(page.getByRole("button", { name: "重新加载" })).toBeVisible();
 	await expect(page.getByTestId("data-portal-runtime")).toHaveCount(0);

@@ -1,7 +1,7 @@
 # F2：门户消费体验
 
 **优先级**：P0  
-**状态**：DRAFT（等待 F1/T01）
+**状态**：DONE
 
 ## 目标
 
@@ -40,11 +40,11 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 门户树、搜索、深链与四态 | DRAFT | F1/T01 |
-| T02 | published/embed 运行态与菜单原位收敛 | DRAFT | T01 |
+| T01 | 门户树、搜索、深链与四态 | DONE | F1/T01 |
+| T02 | published/embed 运行态与菜单原位收敛 | DONE | T01 |
 
 ## Definition of Ready
 
 - [x] UI 路由、控件、四态与走查已命名。
 - [x] API/数据/迁移链无 TBD。
-- [ ] F1/T01 已 GREEN。
+- [x] F1/T01 的可运行契约已 GREEN，H2 集成 fixture GAP 已隔离。

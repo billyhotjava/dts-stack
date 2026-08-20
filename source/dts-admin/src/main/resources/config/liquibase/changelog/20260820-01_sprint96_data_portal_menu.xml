@@ -1,0 +1,175 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260820-01-sprint96-data-portal-menu" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="id"/>
+            <columnExists tableName="portal_menu" columnName="name"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_by"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_date"/>
+            <tableExists tableName="system_config"/>
+            <columnExists tableName="system_config" columnName="cfg_key"/>
+            <columnExists tableName="system_config" columnName="cfg_value"/>
+        </preConditions>
+        <comment>
+            将既有“数据大屏”消费入口升级为“数据门户”。只原位更新 sys.nav.portal.biScreens
+            的客户可见标题和外部路由，保留菜单 ID、层级、排序和 portal_menu_visibility 绑定。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT VARCHAR := 'sprint96-data-portal';
+                snapshot_key CONSTANT VARCHAR := 'portal.menu.data-portal.snapshot.20260820-01';
+                seed_hash CONSTANT VARCHAR := '16c58f667c72382e55ddedccca62f2bdad546e3975828e5984f7d0145f674775';
+                target_id BIGINT;
+                target_count INTEGER;
+                updated_count INTEGER;
+                previous_seed_hash TEXT;
+                previous_metadata TEXT;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:data-portal:20260820-01', 0));
+
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = snapshot_key) THEN
+                    RAISE EXCEPTION 'Data-portal menu rollback snapshot already exists: %', snapshot_key;
+                END IF;
+
+                SELECT COUNT(*), MIN(id)
+                  INTO target_count, target_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.biScreens'
+                       OR metadata LIKE '%"titleKey":"sys.nav.portal.biScreens"%'
+                   );
+
+                IF target_count <> 1 THEN
+                    RAISE EXCEPTION 'Data-portal menu migration requires exactly one active sys.nav.portal.biScreens row; found %', target_count;
+                END IF;
+
+                SELECT metadata
+                  INTO previous_metadata
+                  FROM portal_menu
+                 WHERE id = target_id
+                 FOR UPDATE;
+
+                SELECT cfg_value
+                  INTO previous_seed_hash
+                  FROM system_config
+                 WHERE cfg_key = 'portal.menu.seed.hash';
+
+                INSERT INTO system_config (
+                    cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                    display_name, config_scope, restart_required, owner, created_by, created_date,
+                    last_modified_by, last_modified_date
+                ) VALUES (
+                    snapshot_key,
+                    jsonb_build_object(
+                        'menuId', target_id,
+                        'metadata', previous_metadata,
+                        'seedHash', previous_seed_hash
+                    )::TEXT,
+                    'Rollback snapshot for Sprint-96 data portal menu',
+                    'SYSTEM', FALSE, 'JSON', FALSE, 0,
+                    'Sprint-96 data portal menu rollback snapshot', 'RUNTIME', FALSE, 'platform',
+                    actor, now(), actor, now()
+                );
+
+                UPDATE portal_menu
+                   SET metadata = jsonb_set(
+                                      jsonb_set(
+                                          COALESCE(NULLIF(metadata, '')::jsonb, '{}'::jsonb),
+                                          '{title}',
+                                          to_jsonb('数据门户'::TEXT),
+                                          TRUE
+                                      ),
+                                      '{externalLink}',
+                                      to_jsonb('/bi/portal'::TEXT),
+                                      TRUE
+                                  )::TEXT,
+                       last_modified_by = actor,
+                       last_modified_date = now()
+                 WHERE id = target_id
+                   AND deleted = FALSE;
+
+                GET DIAGNOSTICS updated_count = ROW_COUNT;
+                IF updated_count <> 1 THEN
+                    RAISE EXCEPTION 'Data-portal menu migration expected one update, updated %', updated_count;
+                END IF;
+
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = 'portal.menu.seed.hash') THEN
+                    UPDATE system_config
+                       SET cfg_value = seed_hash,
+                           description = COALESCE(NULLIF(description, ''), 'Portal menu seed hash'),
+                           last_modified_by = actor,
+                           last_modified_date = now()
+                     WHERE cfg_key = 'portal.menu.seed.hash';
+                ELSE
+                    INSERT INTO system_config (
+                        cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                        display_name, config_scope, restart_required, owner, created_by, created_date,
+                        last_modified_by, last_modified_date
+                    ) VALUES (
+                        'portal.menu.seed.hash', seed_hash, 'Portal menu seed hash', 'SYSTEM', FALSE, 'STRING', FALSE, 0,
+                        'Portal menu seed hash', 'RUNTIME', FALSE, 'platform', actor, now(), actor, now()
+                    );
+                END IF;
+            END $do$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    actor CONSTANT VARCHAR := 'sprint96-data-portal';
+                    snapshot_key CONSTANT VARCHAR := 'portal.menu.data-portal.snapshot.20260820-01';
+                    snapshot JSONB;
+                    previous_seed_hash TEXT;
+                    restored_count INTEGER;
+                BEGIN
+                    PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:data-portal:20260820-01', 0));
+
+                    SELECT cfg_value::jsonb
+                      INTO snapshot
+                      FROM system_config
+                     WHERE cfg_key = snapshot_key;
+
+                    IF snapshot IS NULL OR snapshot ->> 'menuId' IS NULL THEN
+                        RAISE EXCEPTION 'Data-portal menu rollback snapshot is missing: %', snapshot_key;
+                    END IF;
+
+                    UPDATE portal_menu
+                       SET metadata = snapshot ->> 'metadata',
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                     WHERE id = (snapshot ->> 'menuId')::BIGINT
+                       AND last_modified_by = actor;
+
+                    GET DIAGNOSTICS restored_count = ROW_COUNT;
+                    IF restored_count <> 1 THEN
+                        RAISE EXCEPTION 'Data-portal menu rollback refused because the target row changed after migration';
+                    END IF;
+
+                    previous_seed_hash := snapshot ->> 'seedHash';
+                    IF previous_seed_hash IS NULL THEN
+                        DELETE FROM system_config
+                         WHERE cfg_key = 'portal.menu.seed.hash'
+                           AND last_modified_by = actor;
+                    ELSE
+                        UPDATE system_config
+                           SET cfg_value = previous_seed_hash,
+                               last_modified_by = actor || '-rollback',
+                               last_modified_date = now()
+                         WHERE cfg_key = 'portal.menu.seed.hash';
+                    END IF;
+
+                    DELETE FROM system_config WHERE cfg_key = snapshot_key;
+                END $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

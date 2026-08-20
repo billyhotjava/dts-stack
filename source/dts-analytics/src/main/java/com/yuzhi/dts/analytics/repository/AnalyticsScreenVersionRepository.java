@@ -14,6 +14,8 @@ public interface AnalyticsScreenVersionRepository extends JpaRepository<Analytic
 
     Optional<AnalyticsScreenVersion> findFirstByScreenIdAndCurrentPublishedTrue(Long screenId);
 
+    List<AnalyticsScreenVersion> findAllByScreenIdInAndCurrentPublishedTrue(List<Long> screenIds);
+
     Optional<AnalyticsScreenVersion> findFirstByScreenIdOrderByVersionNoDesc(Long screenId);
 
     Optional<AnalyticsScreenVersion> findByIdAndScreenId(Long id, Long screenId);

@@ -40,6 +40,7 @@ const QualityRoutePage = lazy(() => import("@/features/data-quality/QualityRoute
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
 const AnalyticsHomePage = lazy(() => import("@/analytics/pages/HomePage"));
 const ScreensPage = lazy(() => import("@/analytics/pages/screens/ScreensPage"));
+const DataPortalPage = lazy(() => import("@/analytics/pages/screens/DataPortalPage"));
 const DashboardsPage = lazy(() => import("@/analytics/pages/DashboardsPage"));
 const DashboardDetailPage = lazy(() => import("@/analytics/pages/DashboardDetailPage"));
 const DashboardEditorPage = lazy(() => import("@/analytics/pages/DashboardEditorPage"));
@@ -674,6 +675,22 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		element: (
 			<S>
 				<ScreensPage />
+			</S>
+		),
+	},
+	{
+		path: "bi/portal",
+		element: (
+			<S>
+				<DataPortalPage />
+			</S>
+		),
+	},
+	{
+		path: "bi/portal/:screenId",
+		element: (
+			<S>
+				<DataPortalPage />
 			</S>
 		),
 	},

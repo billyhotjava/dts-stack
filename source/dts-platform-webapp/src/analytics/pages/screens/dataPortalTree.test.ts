@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { ScreenListItem } from "../../api/analyticsApi";
-import { buildDataPortalTree, countScreenLeaves } from "./dataPortalTree";
+import { buildDataPortalTree, countScreenLeaves } from "./dataPortalTree.ts";
 
 const domains = [
 	{

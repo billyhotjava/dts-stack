@@ -133,6 +133,7 @@ public class ScreenResource {
     public ResponseEntity<?> list(
             @RequestParam(value = "domainId", required = false) String domainId,
             @RequestParam(value = "domainUnassigned", required = false, defaultValue = "false") boolean domainUnassigned,
+            @RequestParam(value = "publishedOnly", required = false, defaultValue = "false") boolean publishedOnly,
             HttpServletRequest request) {
         Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
         if (user.isEmpty()) {
@@ -153,6 +154,17 @@ public class ScreenResource {
         }
 
         String normalizedDomainId = readOptionalDomainId(domainId);
+        List<Long> screenIds = screens.stream().map(AnalyticsScreen::getId).toList();
+        Map<Long, AnalyticsScreenVersion> publishedVersionsByScreenId = new HashMap<>();
+        if (!screenIds.isEmpty()) {
+            screenVersionRepository.findAllByScreenIdInAndCurrentPublishedTrue(screenIds).forEach(version ->
+                publishedVersionsByScreenId.merge(
+                    version.getScreenId(),
+                    version,
+                    (existing, candidate) -> candidate.getVersionNo() > existing.getVersionNo() ? candidate : existing
+                )
+            );
+        }
 
         List<ObjectNode> result = screens.stream()
                 .filter(screen -> matchesDomainFilter(screen, normalizedDomainId, domainUnassigned))
@@ -161,8 +173,10 @@ public class ScreenResource {
                     if (!permissions.canRead()) {
                         return null;
                     }
-                    AnalyticsScreenVersion currentPublished =
-                            screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
+                    AnalyticsScreenVersion currentPublished = publishedVersionsByScreenId.get(screen.getId());
+                    if (publishedOnly && currentPublished == null) {
+                        return null;
+                    }
                     return toListResponse(screen, currentPublished, permissions);
                 })
                 .filter(node -> node != null)

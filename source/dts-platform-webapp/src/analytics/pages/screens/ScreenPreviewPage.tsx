@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 import { analyticsApi } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
 import { PreviewScaleControl } from './components/PreviewScaleControl';
@@ -133,6 +133,9 @@ function fabDividerBg(isDark: boolean): string {
 
 export default function ScreenPreviewPage() {
 	const { id } = useParams<{ id: string }>();
+	const [runtimeParams] = useSearchParams();
+	const previewMode = runtimeParams.get('mode') === 'published' ? 'published' : 'draft';
+	const isEmbedded = runtimeParams.get('embed') === '1';
 	const [screen, setScreen] = useState<ScreenConfig | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -159,9 +162,9 @@ export default function ScreenPreviewPage() {
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_BATCH_SIZE);
 	// ScaleAdapter mode: activated via ?scaleMode=fit|fill|stretch
 	const scaleModeParam = useMemo(() => {
-		const p = new URLSearchParams(window.location.search).get('scaleMode');
+		const p = runtimeParams.get('scaleMode');
 		return (p === 'fit' || p === 'fill' || p === 'stretch') ? p as ScaleMode : null;
-	}, []);
+	}, [runtimeParams]);
 	const [fabOpen, setFabOpen] = useState(false);
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 	const fabRef = useRef<HTMLDivElement | null>(null);
@@ -173,21 +176,25 @@ export default function ScreenPreviewPage() {
 			return;
 		}
 
-			analyticsApi.getScreen(id, { mode: 'draft' })
+		analyticsApi
+			.getScreen(id, {
+				mode: previewMode,
+				fallbackDraft: previewMode !== 'published',
+			})
 				.then((data) => {
 					const normalized = normalizeScreenConfig(data, { id: data.id });
 					if (normalized.warnings.length > 0) {
 						console.warn('[screen-spec] normalized with warnings:', normalized.warnings);
 					}
-				setScreen(normalized.config);
-				setLoading(false);
-			})
-			.catch((err) => {
-				console.error('Failed to load screen:', err);
-				setError('加载大屏失败');
-				setLoading(false);
-			});
-	}, [id]);
+					setScreen(normalized.config);
+					setLoading(false);
+				})
+				.catch((err) => {
+					console.error('Failed to load screen:', err);
+					setError('加载大屏失败');
+					setLoading(false);
+				});
+	}, [id, previewMode]);
 
 	// Multi-page carousel support
 	const carousel = useScreenCarousel(screen?.pages, screen?.components || [], screen?.carouselConfig);
@@ -629,7 +636,8 @@ export default function ScreenPreviewPage() {
 			</div>
 
 			{/* Floating controls FAB */}
-			<div ref={fabRef} className="fixed bottom-6 right-6 z-[11000]">
+			{!isEmbedded && (
+				<div ref={fabRef} className="fixed bottom-6 right-6 z-[11000]">
 				<button
 					type="button"
 					className="flex items-center justify-center w-12 h-12 border-none rounded-full text-white text-[22px] cursor-pointer transition-[background,transform] duration-200"
@@ -669,7 +677,7 @@ export default function ScreenPreviewPage() {
 									className="inline-flex items-center rounded-full text-xs font-semibold"
 									style={{ minHeight: 34, padding: '0 12px', border: '1px solid', ...badgeStyle(isDark, 'info') }}
 								>
-									Published
+									{previewMode === 'published' ? 'Published' : 'Draft preview'}
 								</span>
 								<span
 									className="inline-flex items-center rounded-full text-xs font-semibold"
@@ -715,7 +723,8 @@ export default function ScreenPreviewPage() {
 						</div>
 					</div>
 				)}
-			</div>
+				</div>
+			)}
 		</div>
 		</SharedStoreProvider>
 		</ScreenRuntimeProvider>

@@ -385,8 +385,8 @@
   },
   {
     "code": "sys.nav.portal.biScreens",
-    "title": "数据大屏",
-    "route": "/bi/screens",
+    "title": "数据门户",
+    "route": "/bi/portal",
     "requiredRoles": []
   },
   {

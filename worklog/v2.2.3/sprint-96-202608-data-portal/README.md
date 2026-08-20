@@ -1,7 +1,7 @@
 # Sprint-96：客户数据门户消费闭环
 
 **时间**：2026-08-20 ～ 2026-09-04  
-**状态**：IN_PROGRESS  
+**状态**：IMPLEMENTED_WITH_GAPS
 **类型**：Architecture / Full-stack / UI Productization / Governed Consumption  
 **目标**：登录用户从唯一“数据门户”入口进入，左侧按主题域浏览自己有权访问的已发布大屏，点击大屏名称后在右侧加载当前发布版本，并可通过稳定 URL 深链、刷新和进入大屏管理。
 
@@ -32,7 +32,7 @@
 | 运行 API | `GET /bi/api/screens/{id}?mode=published&fallbackDraft=false` | 无发布版本 409；无权 403；不存在/归档 404 |
 | Service | `ScreenPermissionService.listAccessibleScreenIds/snapshot` | 目录预筛 + 详情二次授权，沿用 `read/write/export` 粒度 |
 | 数据 | `analytics_screen` + `analytics_screen_version` | `screen.id` 稳定；`current_published=true` 指向消费版本；`domain_id` 仅分组 |
-| 迁移 | dts-admin 菜单原位变更 changelog | 只更新 name/metadata 与 seed hash，禁止删除菜单/可见性 |
+| 迁移 | dts-admin 菜单原位变更 changelog | 只更新 metadata 与 seed hash，禁止删除菜单/可见性 |
 
 ## 现状勘察账本（Context Ledger）
 
@@ -62,18 +62,18 @@
 | G0 | DTS 不变量 | PASS | ADR-96-01～08 | - |
 | G1 | 契约链与 UI 规格 | PASS | 本文与 Feature README | - |
 | G1 | 非功能预算 | PASS | `assets/nfr-budget.md` | - |
-| G2 | 变更范围与测试先行 | PENDING | RED/GREEN commits + GitNexus staged detect | - |
-| G3 | 发布安全 | PENDING | `assets/release-plan.md` | F3/T01 |
-| G4 | 可运维与 DoD | PENDING | `assets/runbook.md`、`it/` | F3/T01 |
+| G2 | 变更范围与测试先行 | PASS | RED commit `b1f753c40`、GREEN 聚焦测试/构建/E2E | - |
+| G3 | 发布安全 | PASS_WITH_GAP | `assets/release-plan.md`；隔离 PostgreSQL rollback 尚未演练 | F3/T01 |
+| G4 | 可运维与 DoD | PASS_WITH_GAPS | `assets/runbook.md`、`it/README.md`；Chrome95/真实发布大屏缺失 | F3/T01 |
 
 ## Feature 列表
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
 | F0 | 交付基线与契约冻结 | 1 | P0 | DONE |
-| F1 | 发布态目录契约 | 1 | P0 | READY |
-| F2 | 门户消费体验 | 2 | P0 | DRAFT |
-| F3 | 集中验收与交付 | 1 | P0 | DRAFT |
+| F1 | 发布态目录契约 | 1 | P0 | DONE_WITH_TEST_FIXTURE_GAP |
+| F2 | 门户消费体验 | 2 | P0 | DONE |
+| F3 | 集中验收与交付 | 1 | P0 | DONE_WITH_GAPS |
 
 **执行顺序**：F0 → F1/T01 → F2/T01 → F2/T02 → F3/T01。
 
@@ -89,11 +89,12 @@
 
 ## 完成标准
 
-- [ ] `publishedOnly=true` 服务端排除草稿并保持旧列表兼容，且列表水合无 N+1。
-- [ ] 门户左树、搜索、深链、默认选择及空/加载/错误/成功四态可操作。
-- [ ] 右侧请求明确使用 published + fallbackDraft=false，不泄漏草稿。
-- [ ] 菜单原位迁移不删除 `portal_menu_visibility`，回滚可恢复标题、路由和 seed hash。
-- [ ] 聚焦测试、三个受影响模块构建、Chrome 150 E2E 通过；Chrome 95 缺失则明确保留 GAP。
+- [x] `publishedOnly=true` 服务端排除草稿并保持旧列表兼容，且列表水合无 N+1。
+- [x] 门户左树、搜索、深链、默认选择及空/加载/错误/成功四态可操作。
+- [x] 右侧请求明确使用 published + fallbackDraft=false，不泄漏草稿。
+- [x] 菜单原位迁移不删除 `portal_menu_visibility`，回滚可恢复标题、路由和 seed hash。
+- [x] 聚焦契约测试、受影响模块构建、Chrome 150 Mock E2E 通过。
+- [ ] Chrome 95 实机、真实已发布大屏和隔离 PostgreSQL migration rollback 验收（环境/授权 GAP）。
 
 ## 非目标
 

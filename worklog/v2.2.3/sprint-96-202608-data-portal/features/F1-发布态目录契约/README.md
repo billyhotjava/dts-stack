@@ -1,7 +1,7 @@
 # F1：发布态目录契约
 
 **优先级**：P0  
-**状态**：READY
+**状态**：DONE_WITH_TEST_FIXTURE_GAP
 
 ## 目标
 
@@ -24,7 +24,7 @@
 
 | ID | Task | 状态 | 依赖 |
 |---|---|---|---|
-| T01 | 发布态列表参数与批量版本水合 | READY | F0/T01 |
+| T01 | 发布态列表参数与批量版本水合 | DONE_WITH_TEST_FIXTURE_GAP | F0/T01 |
 
 ## Definition of Ready
 

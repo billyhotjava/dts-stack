@@ -2249,10 +2249,11 @@ export const analyticsApi = {
 		sendJson<ScreenAiGenerationResponse>("/bi/api/screens/ai/generate", body),
 	reviseScreenSpec: (body: ScreenAiRevisionRequest) =>
 		sendJson<ScreenAiGenerationResponse>("/bi/api/screens/ai/revise", body),
-	listScreens: (params?: { domainId?: string; domainUnassigned?: boolean }) => {
+	listScreens: (params?: { domainId?: string; domainUnassigned?: boolean; publishedOnly?: boolean }) => {
 		const qs = new URLSearchParams();
 		if (params?.domainId) qs.set("domainId", params.domainId);
 		if (params?.domainUnassigned) qs.set("domainUnassigned", "true");
+		if (params?.publishedOnly) qs.set("publishedOnly", "true");
 		const query = qs.toString();
 		return fetchJson<ScreenListItem[]>(query ? "/bi/api/screens?" + query : "/bi/api/screens");
 	},
