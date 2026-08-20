@@ -29,6 +29,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,7 @@ public class ModelAuthoringMigrationService {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    @Autowired
     public ModelAuthoringMigrationService(
         DbtImplementationDraftRepository drafts,
         DbtImplementationDraftService draftService,

@@ -31,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -61,6 +62,25 @@ class ModelAuthoringMigrationServiceTest {
         objectMapper,
         Clock.fixed(NOW, ZoneOffset.UTC)
     );
+
+    @Test
+    void springSelectsTheProductionConstructor() {
+        try (var context = new AnnotationConfigApplicationContext()) {
+            context.registerBean(DbtImplementationDraftRepository.class, () -> drafts);
+            context.registerBean(DbtImplementationDraftService.class, () -> draftService);
+            context.registerBean(ModelSpecApplicationService.class, () -> modelSpecs);
+            context.registerBean(ModelLifecycleService.class, () -> lifecycle);
+            context.registerBean(ModelAuthoringProjectionService.class, () -> projections);
+            context.registerBean(ModelAuthoringSnapshotFactory.class, () -> snapshots);
+            context.registerBean(JdbcTemplate.class, () -> jdbc);
+            context.registerBean(ObjectMapper.class, () -> objectMapper);
+            context.registerBean(ModelAuthoringMigrationService.class);
+
+            context.refresh();
+
+            assertThat(context.getBean(ModelAuthoringMigrationService.class)).isNotNull();
+        }
+    }
 
     @Test
     void previewIsDeterministicAndContainsNoBundleBody() {
