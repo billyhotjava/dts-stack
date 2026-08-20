@@ -29,3 +29,11 @@
 - Playwright 静态生产包旅程覆盖：HTML5 拖拽、自动预览、柱状图、显示数值、派生指标、草稿保存、受众阻断、发布只读、CSV 下载、联动配置保存/重载、来源不自筛、目标卡注入筛选、768×900 无页面级溢出。
 - 截图：`analysis-authoring-published-1366x768.png`、`dashboard-targeted-linkage-768x900.png`，保存在 `/tmp/dts-sprint95-playwright-results/.../`。
 - 运行部署与镜像/健康证据见 `it/deployment-20260820.md`。
+
+## 2026-08-20 图表类型选择器增强证据
+
+- `AnalysisWorkspace` 将隐藏下拉框替换为常驻 3×2 图标矩阵，覆盖明细表、柱状图、折线图、面积图、饼图和指标卡；保留选中、只读、键盘焦点和 `aria-pressed` 状态。
+- RED/GREEN 契约：`Sprint95IndustrialBi.source-contract.test.ts` 从 3/4（缺少矩阵）收敛到 4/4 PASS。
+- Chrome 95 目标生产构建：`LEGACY_BROWSER_BUILD=1 pnpm build` PASS，10593 modules transformed；未引入 `:has()`、container query、新 viewport unit 或 Chrome 95 不支持的 JS API。
+- Chrome 150 Mock API 完整旅程：1/1 PASS（8.6s），验证 6 个图表按钮全部可见、Table→Bar 切换与 `aria-pressed` 往返、保存后的 `visualization.type=bar`、1366×768 桌面布局和 390×844 三列窄屏布局；console/page/network error 0。
+- 截图：`analysis-authoring-published-1366x768.png`、`analysis-chart-picker-390x844.png`，保存在 `/tmp/dts-sprint95-playwright-results/.../`。当前机器仍没有 Chrome 95 executable，故不将本次 Chrome 150 运行证据记作 Chrome 95 实机 PASS。
