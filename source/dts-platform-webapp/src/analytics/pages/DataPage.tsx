@@ -213,7 +213,7 @@ export default function DataPage() {
 				render: (_, row) => (
 					<Space size={4}>
 						<Button type="link" onClick={() => void openContract(row)}>
-							查看契约
+							查看详情
 						</Button>
 						<Tooltip title={canCreateAnalysis ? undefined : "当前角色没有分析写入权限"}>
 							<Button type="link" disabled={!canCreateAnalysis} onClick={() => createAnalysis(row)}>
@@ -238,7 +238,7 @@ export default function DataPage() {
 			</div>
 			<PageSection
 				title="已发布分析数据集"
-				description="仅展示已钉定版本、语义契约和密级策略的 DWS / ADS 数据集。"
+				description="仅展示已发布且版本确定、字段指标定义完整、密级策略已生效的 DWS / ADS 数据集。"
 			>
 				<Space wrap className="mb-4" size={12}>
 					<Input.Search
@@ -329,7 +329,7 @@ export default function DataPage() {
 			</PageSection>
 
 			<Drawer
-				title={selected ? `数据集契约 · ${selected.name}` : "数据集契约"}
+				title={selected ? `数据集详情 · ${selected.name}` : "数据集详情"}
 				open={Boolean(selected)}
 				width={720}
 				destroyOnClose
@@ -339,19 +339,19 @@ export default function DataPage() {
 					setDetailError(null);
 				}}
 			>
-				<Spin spinning={detailLoading} tip="加载契约详情">
+				<Spin spinning={detailLoading} tip="加载数据集详情">
 					{detailError ? (
 						<Alert
 							type="error"
 							showIcon
-							message="契约详情加载失败"
+							message="数据集详情加载失败"
 							description={detailError.correlationId ? `${detailError.message}（请求号：${detailError.correlationId}）` : detailError.message}
 						/>
 					) : detail ? (
 						<Space direction="vertical" size={20} className="w-full">
 							<Descriptions bordered size="small" column={2}>
 								<Descriptions.Item label="数据集版本">v{detail.dataset.version}</Descriptions.Item>
-								<Descriptions.Item label="契约版本">{detail.dataset.semanticContractVersion}</Descriptions.Item>
+								<Descriptions.Item label="字段定义版本">{detail.dataset.semanticContractVersion}</Descriptions.Item>
 								<Descriptions.Item label="数仓分层">{detail.dataset.warehouseLayer}</Descriptions.Item>
 								<Descriptions.Item label="数据密级">{detail.dataset.classification || "未标注"}</Descriptions.Item>
 								<Descriptions.Item label="责任部门">{detail.dataset.ownerDept || "-"}</Descriptions.Item>
@@ -359,7 +359,7 @@ export default function DataPage() {
 								<Descriptions.Item label="语义模型" span={2}>
 									{detail.dataset.semanticModelNames.join("、") || "-"}
 								</Descriptions.Item>
-								<Descriptions.Item label="契约校验值" span={2}>
+								<Descriptions.Item label="版本校验值" span={2}>
 									<Typography.Text copyable code>{detail.dataset.contractChecksum}</Typography.Text>
 								</Descriptions.Item>
 							</Descriptions>

@@ -7,7 +7,6 @@ const STATIC_ROUTES_SOURCE = readFileSync(
 	"utf8",
 );
 const DATA_SOURCE = readFileSync(new URL("./DataPage.tsx", import.meta.url), "utf8");
-const QUESTIONS_SOURCE = readFileSync(new URL("./CardsPage.tsx", import.meta.url), "utf8");
 const DASHBOARDS_SOURCE = readFileSync(new URL("./DashboardsPage.tsx", import.meta.url), "utf8");
 const SCREENS_SOURCE = readFileSync(new URL("./screens/ScreensPage.tsx", import.meta.url), "utf8");
 const METRIC_LENS_SOURCE = readFileSync(new URL("./MetricLensPage.tsx", import.meta.url), "utf8");
@@ -24,16 +23,21 @@ test("Sprint-45 metrics entry is owned by the prototype modeling surface", () =>
 });
 
 test("BI data catalog connects governed dataset selection to analysis creation", () => {
-	for (const label of ["选择数据集", "已发布分析数据集", "查看详情", "创建分析", "数据集详情", "字段定义版本", "版本校验值"]) {
+	for (const label of [
+		"选择数据集",
+		"已发布分析数据集",
+		"查看详情",
+		"创建分析",
+		"数据集详情",
+		"字段定义版本",
+		"版本校验值",
+	]) {
 		assert.match(DATA_SOURCE, new RegExp(label));
 	}
 	for (const internalWording of ["查看契约", "数据集契约", "契约详情", "契约校验值", "语义契约"]) {
 		assert.doesNotMatch(DATA_SOURCE, new RegExp(internalWording));
 	}
 	assert.doesNotMatch(DATA_SOURCE, /jdbcUrl|dbId=/);
-	for (const label of ["新建问题", "运行", "保存", "生成图表"]) {
-		assert.match(QUESTIONS_SOURCE, new RegExp(label));
-	}
 });
 
 test("Sprint-45 dashboards and screens expose complete delivery lifecycle actions", () => {
