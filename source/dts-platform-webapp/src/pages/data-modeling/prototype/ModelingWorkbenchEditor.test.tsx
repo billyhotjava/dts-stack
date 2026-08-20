@@ -501,20 +501,22 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')).toBeNull();
 	});
 
-	it("locks a confirmed concept dimension", async () => {
+	it("keeps a CURRENT concept dimension editable", async () => {
 		await render(
 			makeProps({
 				draft: makeConceptDraft({ definitionBase: { ...definition, status: "CURRENT" as const } }),
 				dimensionDefinitions: [],
 				fieldRowIds: [],
+				readOnly: false,
+				dirty: true,
 			}),
 		);
 
-		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		expect(button("保存")).toHaveProperty("disabled", true);
+		expect(container.querySelector("fieldset")).not.toHaveProperty("disabled", true);
+		expect(button("保存")).toHaveProperty("disabled", false);
 	});
 
-	it("shows the returned system code and locks a confirmed concept dimension", async () => {
+	it("shows the returned system code for a confirmed concept dimension", async () => {
 		await render(
 			makeProps({
 				draft: makeConceptDraft({ definitionBase: { ...definition, status: "CURRENT" as const } }),
@@ -527,8 +529,6 @@ describe("ModelingWorkbenchEditor", () => {
 			"value",
 			"DIM000001",
 		);
-		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		expect(button("保存")).toHaveProperty("disabled", true);
 	});
 
 	it("renders the approved dimension form and toolbar without compatibility-only controls", async () => {

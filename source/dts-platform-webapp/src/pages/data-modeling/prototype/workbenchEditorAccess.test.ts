@@ -47,10 +47,18 @@ describe("workbench editor access", () => {
 			mode: "LEGACY_READONLY",
 			readOnly: true,
 		});
-		expect(resolveWorkbenchEditorAccess(true, conceptDraft("CURRENT"))).toMatchObject({
+		expect(resolveWorkbenchEditorAccess(true, conceptDraft("RETIRED"))).toMatchObject({
 			mode: "VIEW_VERSION",
 			readOnly: true,
-			message: expect.stringContaining("CURRENT"),
+			message: expect.stringContaining("RETIRED"),
+		});
+	});
+
+	it("lets maintainers revise a CURRENT dimension while preserving immutable historical revisions", () => {
+		expect(resolveWorkbenchEditorAccess(true, conceptDraft("CURRENT"))).toMatchObject({
+			mode: "EDIT_DRAFT",
+			readOnly: false,
+			message: expect.stringContaining("新修订"),
 		});
 	});
 });

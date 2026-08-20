@@ -171,11 +171,23 @@ describe("ModelWorkbenchCatalogList", () => {
 		expect(container.textContent).toContain("日期");
 		// antd 给“恰好两个汉字”的带边框按钮自动插空格（编辑 → 编 辑），比对前先去掉空白。
 		const label = (button: Element) => (button.textContent ?? "").replace(/\s/g, "");
-		const edit = Array.from(container.querySelectorAll("button")).find((button) => label(button) === "编辑");
+		const edits = Array.from(container.querySelectorAll("button")).filter((button) => label(button) === "编辑");
 		const views = Array.from(container.querySelectorAll("button")).filter((button) => label(button) === "查看");
-		expect(edit).toBeDefined();
-		expect(views).toHaveLength(2);
-		await act(async () => edit?.click());
+		expect(edits).toHaveLength(2);
+		expect(views).toHaveLength(1);
+		const dimensionRow = Array.from(container.querySelectorAll("tr")).find((row) => row.textContent?.includes("DIM_DATE"));
+		const dimensionEdit = Array.from(dimensionRow?.querySelectorAll("button") || []).find(
+			(button) => label(button) === "编辑",
+		);
+		await act(async () => dimensionEdit?.click());
+		expect(onChooseDimension).toHaveBeenCalledWith(currentDimension);
+		const draftModelRow = Array.from(container.querySelectorAll("tr")).find((row) =>
+			row.textContent?.includes("日期维度表"),
+		);
+		const modelEdit = Array.from(draftModelRow?.querySelectorAll("button") || []).find(
+			(button) => label(button) === "编辑",
+		);
+		await act(async () => modelEdit?.click());
 		expect(onChooseModel).toHaveBeenCalledWith(draftModel);
 
 		const search = container.querySelector<HTMLInputElement>('input[aria-label="搜索模型列表"]');

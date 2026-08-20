@@ -503,11 +503,31 @@ describe("model workbench draft validation", () => {
 		expect(saved.attributes).toEqual(draft.attributes);
 	});
 
-	it("rejects edits to confirmed or retired dimension definitions", async () => {
+	it("updates a CURRENT dimension as a new revision", async () => {
 		const draft = conceptDraft();
 		draft.definitionBase = { ...definitionView, status: "CURRENT" };
+		vi.mocked(updateDimensionDefinition).mockResolvedValue({
+			...definitionView,
+			status: "CURRENT",
+			revision: 2,
+			name: "预算科目（调整）",
+		});
+		draft.name = "预算科目（调整）";
 
-		await expect(saveDimensionDefinitionDraft(draft, "owner-1")).rejects.toThrow("已确认或已退役的维度不能修改");
+		const saved = await saveDimensionDefinitionDraft(draft, "owner-1");
+
+		expect(updateDimensionDefinition).toHaveBeenCalledWith(
+			{ id: "dimension-1", revision: 1, checksum: "checksum-1" },
+			expect.objectContaining({ name: "预算科目（调整）" }),
+		);
+		expect(saved).toMatchObject({ status: "CURRENT", revision: 2, name: "预算科目（调整）" });
+	});
+
+	it("keeps retired dimension definitions read-only", async () => {
+		const draft = conceptDraft();
+		draft.definitionBase = { ...definitionView, status: "RETIRED" };
+
+		await expect(saveDimensionDefinitionDraft(draft, "owner-1")).rejects.toThrow("已退役的维度不能修改");
 		expect(updateDimensionDefinition).not.toHaveBeenCalled();
 	});
 
