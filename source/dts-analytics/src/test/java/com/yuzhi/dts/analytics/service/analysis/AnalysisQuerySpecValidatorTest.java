@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -34,6 +35,37 @@ class AnalysisQuerySpecValidatorTest {
 
         assertThat(normalized.limit()).isEqualTo(5000);
         assertThat(normalized.dataset().checksum()).isEqualTo(contract.contractChecksum());
+    }
+
+    @Test
+    void validate_shouldPreserveNullableVisualizationSettingsInAnImmutableCopy() {
+        GovernedAnalysisDatasetContract contract = contract();
+        AnalysisQuerySpec base = specWith(List.of(), 100);
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("stackable.stack_type", null);
+        settings.put("graph.show_values", true);
+        AnalysisQuerySpec spec = new AnalysisQuerySpec(
+            base.apiVersion(),
+            base.dataset(),
+            base.dimensions(),
+            base.metrics(),
+            base.derivedMetrics(),
+            base.filters(),
+            base.timeRange(),
+            base.orderBy(),
+            base.limit(),
+            new AnalysisQuerySpec.Visualization("bar", settings)
+        );
+
+        AnalysisQuerySpec normalized = validator.validateAndNormalize(spec, contract);
+
+        assertThat(normalized.visualization().settings())
+            .containsEntry("stackable.stack_type", null)
+            .containsEntry("graph.show_values", true);
+        settings.put("graph.show_values", false);
+        assertThat(normalized.visualization().settings()).containsEntry("graph.show_values", true);
+        assertThatThrownBy(() -> normalized.visualization().settings().put("graph.smooth", true))
+            .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
