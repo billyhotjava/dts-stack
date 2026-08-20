@@ -1,4 +1,12 @@
 import {
+	AreaChartOutlined,
+	BarChartOutlined,
+	FieldNumberOutlined,
+	LineChartOutlined,
+	PieChartOutlined,
+	TableOutlined,
+} from "@ant-design/icons";
+import {
 	Alert,
 	Button,
 	Card,
@@ -15,21 +23,22 @@ import {
 	Tag,
 	Typography,
 } from "antd";
-import { useMemo, useState, type DragEvent } from "react";
+import { type DragEvent, useMemo, useState } from "react";
 import type { AnalysisDatasetDetail } from "@/api/sql-workbench";
-import { ChartRenderer, type VisualizationType } from "../../components/charts";
+import "./AnalysisWorkspace.css";
 import type {
 	AnalysisFilterSelection,
 	AnalysisQueryResult,
 	AnalysisQuerySpec,
 } from "../../api/analysisApi";
+import { ChartRenderer, type VisualizationType } from "../../components/charts";
 import {
+	type AnalysisShelf,
+	type AnalysisWorkspaceField,
 	CANONICAL_VISUALIZATIONS,
 	placeFieldOnShelf,
 	removeFieldFromAnalysis,
 	setVisualizationSetting,
-	type AnalysisShelf,
-	type AnalysisWorkspaceField,
 } from "../analysisWorkspaceModel";
 
 const { Text } = Typography;
@@ -107,6 +116,15 @@ const PALETTES = [
 	["#2B6CB0", "#2F855A", "#B7791F", "#C53030", "#6B46C1"],
 	["#0F6CBD", "#038387", "#986F0B", "#C50F1F", "#8764B8"],
 ];
+
+const VISUALIZATION_ICONS = {
+	table: TableOutlined,
+	bar: BarChartOutlined,
+	line: LineChartOutlined,
+	area: AreaChartOutlined,
+	pie: PieChartOutlined,
+	number: FieldNumberOutlined,
+} as const;
 
 export function AnalysisWorkspace({
 	contract,
@@ -292,13 +310,34 @@ export function AnalysisWorkspace({
 					<Space direction="vertical" size={10} style={{ width: "100%" }}>
 						<Input value={name} maxLength={255} disabled={!canWrite} placeholder="分析名称" onChange={(event) => onNameChange(event.target.value)} />
 						<Input.TextArea value={description} rows={2} disabled={!canWrite} placeholder="分析说明" onChange={(event) => onDescriptionChange(event.target.value)} />
-						<Select
-							value={spec.visualization.type}
-							disabled={!canWrite}
-							options={CANONICAL_VISUALIZATIONS.map((item) => ({ ...item }))}
-							onChange={(type) => updateSpec((current) => ({ ...current, visualization: { ...current.visualization, type } }))}
-							style={{ width: "100%" }}
-						/>
+						<div className="analysis-visualization-picker">
+							<div className="analysis-visualization-picker__header">
+								<Text strong>图表类型</Text>
+								<Text type="secondary">{canWrite ? "点击切换" : "只读"}</Text>
+							</div>
+							<div className="analysis-visualization-grid">
+								{CANONICAL_VISUALIZATIONS.map((item) => {
+									const Icon = VISUALIZATION_ICONS[item.value];
+									const active = spec.visualization.type === item.value;
+									return (
+										<button
+											key={item.value}
+											type="button"
+											className={`analysis-visualization-option${active ? " is-selected" : ""}`}
+											data-testid={`analysis-visualization-${item.value}`}
+											data-visualization-type={item.value}
+											aria-label={`切换为${item.label}`}
+											aria-pressed={active}
+											disabled={!canWrite}
+											onClick={() => updateSpec((current) => ({ ...current, visualization: { ...current.visualization, type: item.value } }))}
+										>
+											<Icon className="analysis-visualization-option__icon" aria-hidden="true" />
+											<span>{item.label}</span>
+										</button>
+									);
+								})}
+							</div>
+						</div>
 						<Collapse
 							defaultActiveKey={["style", "calculation"]}
 							items={[
