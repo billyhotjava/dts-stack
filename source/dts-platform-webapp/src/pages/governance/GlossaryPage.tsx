@@ -16,6 +16,7 @@ import {
 	updateGlossaryTerm,
 } from "@/api/platformApi";
 import { normalizeText } from "@/utils/textUtils";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text } = Typography;
 const GLOSSARY_EXPORT_HEADER_LINE =
@@ -495,7 +496,7 @@ export default function GlossaryPage() {
 					<Descriptions.Item label="所属部门">{detailTerm?.ownerDept || "-"}</Descriptions.Item>
 					<Descriptions.Item label="标签">{detailTerm?.tags || "-"}</Descriptions.Item>
 					<Descriptions.Item label="当前版本">{detailTerm?.version || "-"}</Descriptions.Item>
-					<Descriptions.Item label="状态">{detailTerm?.status || "-"}</Descriptions.Item>
+					<Descriptions.Item label="状态">{statusLabel(detailTerm?.status, "-")}</Descriptions.Item>
 					<Descriptions.Item label="版本说明">{detailTerm?.versionNotes || "-"}</Descriptions.Item>
 				</Descriptions>
 				<Divider />
@@ -512,7 +513,7 @@ export default function GlossaryPage() {
 							renderItem={(item) => (
 								<List.Item>
 									<List.Item.Meta
-										title={`${displayValue(item.version)} · ${displayValue(item.status)}`}
+										title={`${displayValue(item.version)} · ${statusLabel(item.status, "-")}`}
 										description={
 											<Space direction="vertical" size={0}>
 												<Text>{displayValue(item.changeSummary)}</Text>
@@ -542,7 +543,7 @@ export default function GlossaryPage() {
 							renderItem={(item) => (
 								<List.Item>
 									<List.Item.Meta
-										title={`${displayValue(item.version)} · ${displayValue(item.status)}`}
+										title={`${displayValue(item.version)} · ${statusLabel(item.status, "-")}`}
 										description={
 											<Space direction="vertical" size={0}>
 												<Text>{displayValue(item.reviewNotes)}</Text>

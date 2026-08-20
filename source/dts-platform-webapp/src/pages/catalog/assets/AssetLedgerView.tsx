@@ -1,4 +1,4 @@
-import { Alert, Button, Select, Space, Tag } from "antd";
+import { Alert, Button, Descriptions, Drawer, Empty, List, Select, Space, Tag, Typography } from "antd";
 import type { Key, MouseEvent as ReactMouseEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { batchTagAssets } from "@/api/catalogTagsApi";
 import { updateCatalogAssetV2Governance } from "@/api/platformApi";
 import { writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
+import { GovernedAssetTagPanel } from "@/components/catalog/tags/GovernedAssetTagPanel";
 import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
 import { type AssetDomainAssignmentFailure, assignAssetsToDomain } from "./assetBatchDomainAssignment";
@@ -41,6 +42,29 @@ const QUALITY_STATUS_META: Record<string, { label: string; color: string }> = {
 	UNKNOWN: { label: "暂无证据", color: "default" },
 };
 
+const ASSET_FAMILY_LABELS: Record<string, string> = {
+	DATASET: "数据表",
+	SEMANTIC_MODEL: "数据模型",
+	GOV_INDICATOR: "指标",
+	BI_DATASET: "分析数据集",
+	SCREEN: "看板",
+	DATA_PRODUCT: "数据产品",
+	API_SERVICE: "数据服务",
+};
+
+const RELATION_TYPE_LABELS: Record<string, string> = {
+	MATERIALIZES_TO: "物化为数据表",
+	MATERIALIZED_FROM: "由数据模型物化",
+	DERIVED_FROM: "来源于数据模型",
+	SERVES_BI_DATASET: "支撑分析数据集",
+	VISUALIZES: "使用分析数据集",
+	VISUALIZED_BY: "用于看板展示",
+	SERVES: "基于数据表提供服务",
+	SERVED_BY: "由数据服务提供",
+	CALCULATED_FROM: "基于数据表计算",
+	SUPPORTS_INDICATOR: "支撑指标计算",
+};
+
 export type AssetDirectoryRow = AssetRow & {
 	service?: string;
 	columnCount?: number;
@@ -57,6 +81,9 @@ export interface AssetLedgerViewProps {
 	onPageChange: (page: number, pageSize: number) => void;
 	onAssetChanged?: () => void;
 }
+
+const selectionKey = (row: AssetDirectoryRow) =>
+	row.catalogIdentity || `${row.assetType || "DATASET"}\u0000${row.assetKey || row.id}`;
 
 /** 数据资产目录表格：仅承载检索结果、批量动作和详情导航。 */
 export function AssetLedgerView({
@@ -78,6 +105,7 @@ export function AssetLedgerView({
 	const [batchDomainId, setBatchDomainId] = useState("");
 	const [batchSubmitting, setBatchSubmitting] = useState(false);
 	const [batchFailures, setBatchFailures] = useState<AssetDomainAssignmentFailure[]>([]);
+	const [detailAsset, setDetailAsset] = useState<AssetDirectoryRow | null>(null);
 	const scopeDomain = searchParams.get("domain") || "";
 
 	const domainOptions = useMemo(
@@ -100,7 +128,7 @@ export function AssetLedgerView({
 	}, [associationTagId]);
 
 	useEffect(() => {
-		const visibleIds = new Set(records.map((row) => row.id));
+		const visibleIds = new Set(records.map(selectionKey));
 		setSelectedAssetIds((current) => current.filter((id) => visibleIds.has(String(id))));
 	}, [records]);
 
@@ -112,7 +140,9 @@ export function AssetLedgerView({
 	};
 
 	const associateSelectedAssets = async () => {
-		const selectedRows = records.filter((row) => selectedAssetIds.includes(row.id) && row.assetType && row.assetKey);
+		const selectedRows = records.filter(
+			(row) => selectedAssetIds.includes(selectionKey(row)) && row.assetType && row.assetKey,
+		);
 		if (!associationTagId || selectedRows.length === 0 || associationSubmitting) return;
 		setAssociationSubmitting(true);
 		try {
@@ -141,14 +171,24 @@ export function AssetLedgerView({
 
 	const assignSelectedAssets = async () => {
 		if (!batchDomainId || selectedAssetIds.length === 0 || batchSubmitting) return;
+		const selectedDatasets = records.filter(
+			(row) => selectedAssetIds.includes(selectionKey(row)) && row.assetType === "DATASET",
+		);
+		if (selectedDatasets.length === 0) {
+			toast.error("仅数据表资产支持批量归域");
+			return;
+		}
 		setBatchSubmitting(true);
 		setBatchFailures([]);
 		try {
-			const result = await assignAssetsToDomain(selectedAssetIds.map(String), batchDomainId, (id, domainId) =>
-				updateCatalogAssetV2Governance(id, { domainId }),
+			const result = await assignAssetsToDomain(
+				selectedDatasets.map((row) => row.id),
+				batchDomainId,
+				(id, domainId) => updateCatalogAssetV2Governance(id, { domainId }),
 			);
 			setBatchFailures(result.failures);
-			setSelectedAssetIds(result.failures.map((failure) => failure.assetId));
+			const failedIds = new Set(result.failures.map((failure) => failure.assetId));
+			setSelectedAssetIds(selectedDatasets.filter((row) => failedIds.has(row.id)).map(selectionKey));
 			if (result.succeededIds.length > 0) {
 				toast.success(`已完成 ${result.succeededIds.length} 个资产归域`);
 				onAssetChanged?.();
@@ -163,7 +203,13 @@ export function AssetLedgerView({
 		}
 	};
 
-	const openDetail = (row: AssetDirectoryRow) => router.push(`/catalog/datasets/${row.id}`);
+	const openDetail = (row: AssetDirectoryRow) => {
+		if (row.assetType !== "DATASET") {
+			setDetailAsset(row);
+			return;
+		}
+		router.push(`/catalog/datasets/${row.id}`);
+	};
 
 	const isInteractiveTarget = (event: ReactMouseEvent<HTMLElement>) =>
 		Boolean((event.target as HTMLElement).closest("a, button, input, .ant-checkbox-wrapper, .ant-select"));
@@ -231,7 +277,7 @@ export function AssetLedgerView({
 			) : null}
 
 			<CompactTable<AssetDirectoryRow>
-				rowKey="id"
+				rowKey={selectionKey}
 				loading={loading}
 				dataSource={records}
 				className="catalog-assets-table"
@@ -252,8 +298,14 @@ export function AssetLedgerView({
 						setSelectedAssetIds(keys);
 					},
 					getCheckboxProps: (row) => ({
-						disabled: Boolean(associationTagId) && (!row.assetType || !row.assetKey),
-						title: associationTagId && (!row.assetType || !row.assetKey) ? "资产身份不完整，无法关联标签" : undefined,
+						disabled: associationTagId ? !row.assetType || !row.assetKey : row.assetType !== "DATASET",
+						title: associationTagId
+							? !row.assetType || !row.assetKey
+								? "资产身份不完整，无法关联标签"
+								: undefined
+							: row.assetType !== "DATASET"
+								? "仅数据表资产支持批量归域"
+								: undefined,
 					}),
 				}}
 				onRow={(row) => ({
@@ -268,16 +320,36 @@ export function AssetLedgerView({
 						width: 260,
 						render: (value, row) => (
 							<div className="min-w-0">
-								<Link
-									to={`/catalog/datasets/${row.id}`}
-									className="block truncate font-medium text-blue-600 hover:text-blue-700"
-									onClick={(event) => event.stopPropagation()}
-								>
-									{value || "-"}
-								</Link>
+								{row.assetType === "DATASET" ? (
+									<Link
+										to={`/catalog/datasets/${row.id}`}
+										className="block truncate font-medium text-blue-600 hover:text-blue-700"
+										onClick={(event) => event.stopPropagation()}
+									>
+										{value || "-"}
+									</Link>
+								) : (
+									<button
+										type="button"
+										className="block max-w-full truncate font-medium text-blue-600 hover:text-blue-700"
+										onClick={(event) => {
+											event.stopPropagation();
+											openDetail(row);
+										}}
+									>
+										{value || "-"}
+									</button>
+								)}
 								<div className="truncate text-xs text-slate-500">{row.description || "暂无业务说明"}</div>
 							</div>
 						),
+					},
+					{
+						title: "资产家族",
+						dataIndex: "assetFamily",
+						width: 120,
+						render: (value, row) =>
+							ASSET_FAMILY_LABELS[String(value || row.assetType || "DATASET")] || value || "待识别",
 					},
 					{
 						title: "技术标识",
@@ -289,7 +361,8 @@ export function AssetLedgerView({
 						title: "数据源类型",
 						dataIndex: "type",
 						width: 120,
-						render: (value) => resolveEnumLabel(DATA_SOURCE_TYPE_DICT, value, "待识别"),
+						render: (value, row) =>
+							row.assetType !== "DATASET" ? "不适用" : resolveEnumLabel(DATA_SOURCE_TYPE_DICT, value, "待识别"),
 					},
 					{
 						title: "来源系统",
@@ -368,6 +441,93 @@ export function AssetLedgerView({
 					},
 				]}
 			/>
+
+			<UnifiedAssetDetailDrawer asset={detailAsset} onClose={() => setDetailAsset(null)} />
 		</div>
+	);
+}
+
+function UnifiedAssetDetailDrawer({ asset, onClose }: { asset: AssetDirectoryRow | null; onClose: () => void }) {
+	const family = String(asset?.assetFamily || asset?.assetType || "");
+	const relationships = asset?.relationships || [];
+	return (
+		<Drawer
+			open={Boolean(asset)}
+			onClose={onClose}
+			width={720}
+			title={asset ? `${ASSET_FAMILY_LABELS[family] || "数据资产"}详情` : "数据资产详情"}
+			destroyOnClose
+		>
+			{asset ? (
+				<div className="space-y-6">
+					<Descriptions bordered size="small" column={2}>
+						<Descriptions.Item label="资产名称" span={2}>
+							{asset.name}
+						</Descriptions.Item>
+						<Descriptions.Item label="资产家族">{ASSET_FAMILY_LABELS[family] || family || "待识别"}</Descriptions.Item>
+						<Descriptions.Item label="资产子类型">{asset.subtype || "不适用"}</Descriptions.Item>
+						<Descriptions.Item label="生命周期">{asset.lifecycleStatus || "待明确"}</Descriptions.Item>
+						<Descriptions.Item label="密级">{classificationText(asset.classification)}</Descriptions.Item>
+						<Descriptions.Item label="数据分层">
+							{LAYER_META[normalizeLayer(asset.warehouseLayer)].label}
+						</Descriptions.Item>
+						<Descriptions.Item label="责任人">{asset.owner || "待明确"}</Descriptions.Item>
+						<Descriptions.Item label="责任部门">{asset.ownerDept || "待明确"}</Descriptions.Item>
+						<Descriptions.Item label="质量状态">
+							{QUALITY_STATUS_META[String(asset.qualityStatus || "UNKNOWN")]?.label || "暂无证据"}
+						</Descriptions.Item>
+						<Descriptions.Item label="来源功能">{asset.service || "平台登记"}</Descriptions.Item>
+						<Descriptions.Item label="技术标识" span={2}>
+							<Typography.Text code copyable>
+								{asset.assetKey || asset.id}
+							</Typography.Text>
+						</Descriptions.Item>
+						<Descriptions.Item label="业务说明" span={2}>
+							{asset.description || "暂无业务说明"}
+						</Descriptions.Item>
+					</Descriptions>
+
+					<div>
+						<div className="mb-2 font-medium text-slate-900">资产关系</div>
+						{relationships.length ? (
+							<List
+								bordered
+								size="small"
+								dataSource={relationships}
+								renderItem={(relation) => (
+									<List.Item extra={<Tag>{relation.direction === "OUTGOING" ? "本资产关联" : "关联到本资产"}</Tag>}>
+										<div className="min-w-0">
+											<div className="font-medium">{relation.displayName || relation.assetKey || "未命名资产"}</div>
+											<div className="truncate text-xs text-slate-500">
+												{RELATION_TYPE_LABELS[String(relation.relationType)] || "其他已登记关系"} ·{" "}
+												{ASSET_FAMILY_LABELS[String(relation.assetType)] || relation.assetType}
+											</div>
+										</div>
+										{relation.detailRoute ? <Link to={relation.detailRoute}>查看</Link> : null}
+									</List.Item>
+								)}
+							/>
+						) : (
+							<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无已登记关系" />
+						)}
+					</div>
+
+					<div>
+						<div className="mb-2 font-medium text-slate-900">业务数据标签</div>
+						{asset.assetType && asset.assetKey ? (
+							<GovernedAssetTagPanel assetType={asset.assetType} assetKey={asset.assetKey} />
+						) : (
+							<Alert type="warning" showIcon message="资产身份不完整，暂不能治理标签" />
+						)}
+					</div>
+
+					{asset.detailRoute ? (
+						<div className="flex justify-end">
+							<Link to={asset.detailRoute}>进入来源功能</Link>
+						</div>
+					) : null}
+				</div>
+			) : null}
+		</Drawer>
 	);
 }

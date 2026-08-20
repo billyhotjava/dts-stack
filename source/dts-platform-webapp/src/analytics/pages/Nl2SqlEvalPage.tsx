@@ -220,7 +220,7 @@ export default function Nl2SqlEvalPage() {
 			setGateSummary(result);
 			setRunSummary(result.summary ?? null);
 			await loadRuns();
-			setActionMessage("Gated 评测执行完成");
+			setActionMessage("门禁评测执行完成");
 		} catch (e) {
 			setActionError(e);
 		} finally {
@@ -276,7 +276,7 @@ export default function Nl2SqlEvalPage() {
 								<Input value={caseDomain} onChange={(event) => setCaseDomain(event.target.value)} placeholder="manufacturing" />
 							</div>
 							<div>
-								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Prompt</label>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>提问内容</label>
 								<Input.TextArea value={casePrompt} onChange={(event) => setCasePrompt(event.target.value)} rows={3} />
 							</div>
 							<div>
@@ -284,7 +284,7 @@ export default function Nl2SqlEvalPage() {
 								<Input.TextArea value={caseNotes} onChange={(event) => setCaseNotes(event.target.value)} rows={2} />
 							</div>
 							<div>
-								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Expected(JSON)</label>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>预期结果（JSON）</label>
 								<Input.TextArea value={caseExpected} onChange={(event) => setCaseExpected(event.target.value)} rows={3} />
 							</div>
 						</div>
@@ -299,21 +299,21 @@ export default function Nl2SqlEvalPage() {
 						<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)" }}>
 							<label style={{ display: "inline-flex", gap: "var(--spacing-xs)", alignItems: "center", fontSize: "var(--font-size-sm)" }}>
 								<input type="checkbox" checked={enabledOnly} onChange={(event) => setEnabledOnly(event.target.checked)} />
-								仅执行 enabled 样例
+								仅执行已启用样例
 							</label>
 							<div>
 								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>样例上限</label>
 								<Input value={limit} onChange={(event) => setLimit(event.target.value)} />
 							</div>
 							<div>
-								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>指定 CaseIds(逗号分隔，可选)</label>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>指定样例编号（逗号分隔，可选）</label>
 								<Input value={caseIdsCsv} onChange={(event) => setCaseIdsCsv(event.target.value)} placeholder="1,2,5" />
 							</div>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
 							<Button type="default" onClick={runEval} loading={saving}>执行评测</Button>
-							<Button type="primary" onClick={runEvalGated} loading={saving}>执行 Gated</Button>
+							<Button type="primary" onClick={runEvalGated} loading={saving}>执行门禁评测</Button>
 						</div>
 					</div>
 				</Card>
@@ -343,10 +343,10 @@ export default function Nl2SqlEvalPage() {
 										{t(locale, "common.name")}
 									</SortableHeader>
 									<SortableHeader sortKey="domain" sortState={caseSortState} onSort={requestCaseSort}>
-										Domain
+										业务域
 									</SortableHeader>
 									<SortableHeader sortKey="enabled" sortState={caseSortState} onSort={requestCaseSort}>
-										Enabled
+										是否启用
 									</SortableHeader>
 								</tr>
 							</thead>
@@ -356,7 +356,7 @@ export default function Nl2SqlEvalPage() {
 										<td>{toIdString(item.id)}</td>
 										<td>{item.name || "-"}</td>
 										<td>{item.domain || "-"}</td>
-										<td>{item.enabled ? "yes" : "no"}</td>
+										<td>{item.enabled ? "是" : "否"}</td>
 									</tr>
 								))}
 							</tbody>
@@ -366,7 +366,7 @@ export default function Nl2SqlEvalPage() {
 
 			<div className="grid grid-cols-2 gap-md">
 				<Card
-					title="Run 历史与对比"
+				title="运行历史与对比"
 					extra={runsState.state === "loaded" ? <Tag>{runsState.value.length}</Tag> : null}
 				>
 						{runsState.state === "loading" && (
@@ -379,16 +379,16 @@ export default function Nl2SqlEvalPage() {
 							<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)" }}>
 								<div className="grid grid-cols-2 gap-md">
 									<div>
-										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Baseline Run</label>
+										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>基准运行</label>
 										<Select value={baselineRunId} onChange={(value) => setBaselineRunId(value)} options={runOptions} style={{ width: "100%" }} />
 									</div>
 									<div>
-										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Candidate Run</label>
+										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>候选运行</label>
 										<Select value={candidateRunId} onChange={(value) => setCandidateRunId(value)} options={runOptions} style={{ width: "100%" }} />
 									</div>
 								</div>
 								<Button type="primary" onClick={() => void compareRuns()} disabled={!baselineRunId || !candidateRunId}>
-									执行 Run 对比
+									执行运行对比
 								</Button>
 								<table>
 									<thead>

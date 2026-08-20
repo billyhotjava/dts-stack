@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { JourneyContextBar } from "@/components/journey";
 import apiServicesService, { type ApiServiceSummary, type ApiServiceUpsert } from "@/api/services/apiServicesService";
 import { listDatasets } from "@/api/platformApi";
+import { classificationLabel, statusLabel } from "@/utils/customerDisplayLabels";
 
 const METHOD_OPTIONS = [
 	{ label: "GET", value: "GET" },
@@ -18,10 +19,10 @@ const METHOD_OPTIONS = [
 ];
 
 const CLASSIFICATION_OPTIONS = [
-	{ label: "PUBLIC", value: "PUBLIC" },
-	{ label: "INTERNAL", value: "INTERNAL" },
-	{ label: "SECRET", value: "SECRET" },
-	{ label: "CONFIDENTIAL", value: "CONFIDENTIAL" },
+	{ label: "公开", value: "PUBLIC" },
+	{ label: "内部", value: "INTERNAL" },
+	{ label: "秘密", value: "SECRET" },
+	{ label: "机密", value: "CONFIDENTIAL" },
 ];
 
 export default function Page() {
@@ -131,8 +132,8 @@ export default function Page() {
 		},
 		{ title: "方法", dataIndex: "method", width: 90, render: (v) => <Tag>{v || "-"}</Tag> },
 		{ title: "路径", dataIndex: "path", render: (v) => v || "-" },
-		{ title: "分类", dataIndex: "classification", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
-		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "密级", dataIndex: "classification", width: 120, render: (v) => <Tag>{classificationLabel(v)}</Tag> },
+		{ title: "状态", dataIndex: "status", width: 120, render: (v) => <Tag>{statusLabel(v, "-")}</Tag> },
 		{ title: "近7日调用", dataIndex: "recentCalls", width: 120, render: (v) => v ?? 0 },
 		actionColumn<ApiServiceSummary>(
 			(record) => [

@@ -3,11 +3,17 @@ import { expect, type Page, type Route, test } from "@playwright/test";
 const dataset = {
 	datasetId: "6d5770dc-6daf-4f8b-8441-2be60caa61bd",
 	name: "项目经营分析数据集",
+	description: "用于项目经营分析",
 	version: 1,
 	semanticContractVersion: "dts.query-dataset-contract/v1",
 	contractChecksum: "checksum-dataset-v1",
 	warehouseLayer: "DWS",
 	classification: "DATA_INTERNAL",
+	ownerDept: "项目管理部",
+	bizDomain: "项目经营",
+	semanticModelNames: ["项目经营模型"],
+	refreshStrategy: "每日刷新",
+	updatedAt: "2026-08-17T06:00:00Z",
 };
 
 const querySpec = {
@@ -172,6 +178,15 @@ async function installApis(page: Page) {
 					published_revision_id: 91,
 				}]);
 			}
+			if (path === "/bi/api/dashboard" && request.method() === "GET") {
+				return json(route, [{
+					id: 22,
+					name: "项目经营驾驶舱",
+					description: "受治理项目经营看板",
+					archived: false,
+					updated_at: "2026-08-17T06:00:00Z",
+				}]);
+			}
 			if (path === "/bi/api/dashboard/22" && request.method() === "GET") {
 				return json(route, {
 					id: 22,
@@ -243,6 +258,15 @@ async function installApis(page: Page) {
 			return json(route, {});
 		}
 
+		if (path === "/api/sql/query-datasets/published") {
+			return json(route, {
+				items: [dataset],
+				page: 0,
+				size: 10,
+				totalElements: 1,
+				totalPages: 1,
+			}, true);
+		}
 		if (path === `/api/sql/query-datasets/${dataset.datasetId}/published/1`) {
 			return json(route, {
 				dataset,
@@ -278,6 +302,58 @@ async function enterFirstTag(page: Page, drawerTitle: string, value: string) {
 	await input.fill(value);
 	await input.press("Enter");
 }
+
+async function expectStandardTableActions(page: Page, labels: string[]) {
+	const table = page.locator(".dts-compact-table");
+	await expect(table).toBeVisible();
+	await expect(table.locator(".ant-table-tbody .ant-table-cell-fix-right").first()).toBeVisible();
+	for (const label of labels) {
+		const accessibleName = new RegExp(`^${[...label].join("\\s*")}$`);
+		const button = table.getByRole("button", { name: accessibleName });
+		await expect(button).toBeVisible();
+		await expect(button).toHaveClass(/ant-btn-sm/);
+		await expect(button).not.toHaveClass(/ant-btn-link/);
+	}
+	const actionWrap = await table.locator(".ant-table-tbody .ant-table-cell-fix-right .ant-space").first().evaluate((element) =>
+		getComputedStyle(element).flexWrap,
+	);
+	expect(actionWrap).not.toBe("wrap");
+	const noPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
+	expect(noPageOverflow).toBe(true);
+}
+
+test("aligns all BI analysis management tables with the standard action style", async ({ page }, testInfo) => {
+	await installIdentity(page);
+	await installApis(page);
+	const failures = collectFailures(page);
+	const routes = [
+		{ path: "/#/bi/questions", ready: "分析", actions: ["查看", "编辑", "归档"], screenshot: "analysis-list" },
+		{
+			path: "/#/bi/dashboards",
+			ready: "项目经营驾驶舱",
+			actions: ["查看", "编辑", "发布", "分享", "删除"],
+			screenshot: "dashboard-list",
+		},
+		{ path: "/#/bi/data", ready: "项目经营分析数据集", actions: ["查看详情", "创建分析"], screenshot: "dataset-list" },
+	];
+
+	for (const viewport of [{ width: 1366, height: 768 }, { width: 768, height: 900 }]) {
+		await page.setViewportSize(viewport);
+		for (const route of routes) {
+			await page.goto(route.path);
+			await expect(page.getByText(route.ready, { exact: true }).first()).toBeVisible();
+			await expectStandardTableActions(page, route.actions);
+			await page.screenshot({
+				path: testInfo.outputPath(`${route.screenshot}-${viewport.width}x${viewport.height}.png`),
+				fullPage: true,
+			});
+		}
+	}
+
+	expect(failures.pageErrors).toEqual([]);
+	expect(failures.consoleErrors).toEqual([]);
+	expect(failures.failedResponses).toEqual([]);
+});
 
 test("publishes governed analysis and dashboard, then safely retries registration", async ({ page }, testInfo) => {
 	analysisPublished = false;

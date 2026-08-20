@@ -2,6 +2,7 @@ import { BarChart3, Boxes, Database, GitBranch, Ruler, Sparkles } from "lucide-r
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { type CompactColumns, CompactTable } from "@/components/table";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
@@ -89,7 +90,7 @@ function OverviewContent({
 			{
 				title: "状态",
 				dataIndex: "status",
-				render: (status: string) => <Status tone={status === "PUBLISHED" ? "success" : "warning"}>{status}</Status>,
+				render: (status: string) => <Status tone={status === "PUBLISHED" ? "success" : "warning"}>{statusLabel(status)}</Status>,
 			},
 			{ title: "更新时间", dataIndex: "updatedAt" },
 		],

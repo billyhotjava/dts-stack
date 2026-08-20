@@ -6,6 +6,7 @@ import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sp
 import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { parseIndicatorDependencyCodes } from "@/features/modeling/indicators/indicatorDefinitionContract";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import type { DataModelingRoute } from "../types";
 import { MetricDefinitionBindingFields } from "./MetricDefinitionBindingFields";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
@@ -317,7 +318,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			width: 110,
 			render: (value) => {
 				const status = String(value || "DRAFT");
-				return <Status tone={status === "PUBLISHED" ? "success" : "warning"}>{status}</Status>;
+				return <Status tone={status === "PUBLISHED" ? "success" : "warning"}>{statusLabel(status)}</Status>;
 			},
 		},
 		actionColumn<IndicatorDefinition>((row) => [
@@ -390,7 +391,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	};
 	const calculationColumns: CompactColumns<IndicatorCalculationBatch["items"][number]> = [
 		{ title: "指标编码", dataIndex: "code", width: 190, render: (value) => String(value || "—") },
-		{ title: "状态", dataIndex: "status", width: 100, render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{String(value)}</Status> },
+		{ title: "状态", dataIndex: "status", width: 100, render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{statusLabel(value)}</Status> },
 		{ title: "计算值", dataIndex: "value", width: 120, render: (value) => String(value ?? "—") },
 		{ title: "来源", dataIndex: "sourceMode", width: 120, render: (value) => value === "MODEL_FIELD" ? "模型字段" : value === "FORMULA" ? "受控公式" : "—" },
 		{ title: "物理实现", key: "implementation", width: 260, render: (_, row) => row.relation && row.field ? `${row.relation}.${row.field}` : "—" },
@@ -398,7 +399,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	];
 	const historyColumns: CompactColumns<IndicatorCalculationHistory> = [
 		{ title: "提交时间", dataIndex: "runAt", width: 190, render: (value) => String(value || "—") },
-		{ title: "状态", dataIndex: "status", width: 100, render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{String(value)}</Status> },
+		{ title: "状态", dataIndex: "status", width: 100, render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{statusLabel(value)}</Status> },
 		{ title: "计算值", dataIndex: "computedValue", width: 120, render: (value) => String(value ?? "—") },
 		{ title: "上次值", dataIndex: "previousValue", width: 120, render: (value) => String(value ?? "—") },
 		{ title: "处理行数", dataIndex: "rowsProcessed", width: 110, render: (value) => String(value ?? "—") },
@@ -425,7 +426,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 										? "当前账号无指标维护权限"
 										: supportsIndicatorCreation(metricType)
 											? `新建${metricType}`
-											: "当前 owner 不支持新建该对象"
+											: "当前功能入口不支持新建该对象"
 								}
 							>
 								新建{metricType}
@@ -450,7 +451,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 							<span>△</span>
 							<strong>{selected.name || `新建${metricType}`}</strong>
 							{selected.status ? (
-								<Status tone={selected.status === "PUBLISHED" ? "success" : "warning"}>{selected.status}</Status>
+								<Status tone={selected.status === "PUBLISHED" ? "success" : "warning"}>{statusLabel(selected.status)}</Status>
 							) : null}
 						</div>
 						<div className="dmx-metric-toolbar">
@@ -785,7 +786,7 @@ export function MetricEditor({
 			<section className="dmx-metric-section">
 				<h3>业务计算语义</h3>
 				<p className="dmx-capability-note">
-					普通指标页不显示或编辑原始 SQL；SQL/Jinja 只在具备维护权限的高级 dbt 实现中处理。当前 owner
+					普通指标页不显示或编辑原始 SQL；SQL/Jinja 只在具备维护权限的高级 dbt 实现中处理。当前功能入口
 					尚未提供独立业务表达式契约，因此此处只维护聚合、度量和依赖语义。
 				</p>
 				<div>

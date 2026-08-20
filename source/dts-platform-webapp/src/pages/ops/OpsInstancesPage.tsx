@@ -14,16 +14,16 @@ const { Text } = Typography;
 
 const STATUS_OPTIONS = [
 	{ label: "全部", value: "ALL" },
-	{ label: "RUNNING", value: "RUNNING" },
-	{ label: "SUCCESS", value: "SUCCESS" },
-	{ label: "FAILED", value: "FAILED" },
+	{ label: "运行中", value: "RUNNING" },
+	{ label: "成功", value: "SUCCESS" },
+	{ label: "失败", value: "FAILED" },
 ];
 
 const ENTRY_OPTIONS = [
 	{ label: "全部", value: "ALL" },
 	{ label: "入湖任务", value: "INGESTION_TASK" },
 	{ label: "指标/dbt 运行", value: "DBT_RUN" },
-	{ label: "Airflow DAG", value: "AIRFLOW_DAG" },
+	{ label: "Airflow 调度工作流", value: "AIRFLOW_DAG" },
 ];
 
 const formatDate = (value?: string) => {

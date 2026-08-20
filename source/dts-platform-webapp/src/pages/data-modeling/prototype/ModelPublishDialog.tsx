@@ -37,6 +37,7 @@ import {
 } from "@/api/modelSpecApi";
 import { type CompactColumns, CompactTable } from "@/components/table";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { ModelAssetDeliveryResult } from "./ModelAssetDeliveryResult";
 import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
@@ -569,6 +570,9 @@ export function ModelPublishDialog({
 						<div className="dmx-inline-error" role="alert">
 							{failure}
 						</div>
+					) : null}
+					{!selectionProblem ? (
+						<ModelAssetDeliveryResult key={workspace?.candidate?.status || "none"} models={selection} />
 					) : null}
 					{selectionProblem ? (
 						<RequestState description={selectionProblem} kind="empty" title="当前选择不可物化" />

@@ -8,7 +8,7 @@ import {
 	type AnalysisDatasetSummary,
 } from "@/api/sql-workbench";
 import { PageHeader } from "@/components/page-header";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useUserRoles } from "@/store/userStore";
 import type { ColumnsType } from "antd/es/table";
 import {
@@ -205,24 +205,19 @@ export default function DataPage() {
 				width: 180,
 				render: formatTime,
 			},
-			{
-				title: "操作",
-				key: "actions",
-				width: 190,
-				fixed: "right",
-				render: (_, row) => (
-					<Space size={4}>
-						<Button type="link" onClick={() => void openContract(row)}>
-							查看详情
-						</Button>
-						<Tooltip title={canCreateAnalysis ? undefined : "当前角色没有分析写入权限"}>
-							<Button type="link" disabled={!canCreateAnalysis} onClick={() => createAnalysis(row)}>
-								创建分析
-							</Button>
-						</Tooltip>
-					</Space>
-				),
-			},
+			actionColumn<AnalysisDatasetSummary>(
+				(row) => [
+					{ key: "detail", label: "查看详情", onClick: () => void openContract(row) },
+					{
+						key: "create",
+						label: "创建分析",
+						disabled: !canCreateAnalysis,
+						tooltip: canCreateAnalysis ? undefined : "当前角色没有分析写入权限",
+						onClick: () => createAnalysis(row),
+					},
+				],
+				{ maxActions: 2 },
+			),
 		],
 		[canCreateAnalysis, createAnalysis, openContract],
 	);

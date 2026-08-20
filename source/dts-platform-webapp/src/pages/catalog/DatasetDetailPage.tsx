@@ -11,7 +11,7 @@ import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useRouter } from "@/routes/hooks";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
 import { AssetClassificationFactPanel } from "./assets/AssetClassificationFactPanel";
-import { AssetDeliveryEligibilityNotice, AssetDeliveryStatusItems } from "./assets/AssetDeliveryStatusPanel";
+import { AssetDeliveryEligibilityNotice, AssetDeliveryStatusPanel } from "./assets/AssetDeliveryStatusPanel";
 import { AssetLifecycleWorkbenchDrawer } from "./assets/AssetLifecycleWorkbenchDrawer";
 import type { AssetRow } from "./assets/assetPageShared";
 import {
@@ -22,7 +22,6 @@ import {
 } from "./DatasetDetailSupportTabs";
 import { resolveDatasetDetailId } from "./datasetDetailRoute";
 import { OpenMetadataGovernanceTab } from "./OpenMetadataGovernanceTab";
-
 const DETAIL_TAB_KEYS = [
 	"overview",
 	"classification-lifecycle",
@@ -522,7 +521,6 @@ function DatasetOverviewTab({
 				<Descriptions.Item label="资产来源">
 					{assetContract?.metadataSource ?? dataset.metadataSource ?? "-"}
 				</Descriptions.Item>
-				<AssetDeliveryStatusItems dataset={dataset} />
 				{profile.rowCount != null && (
 					<Descriptions.Item label="数据行数">{profile.rowCount.toLocaleString()}</Descriptions.Item>
 				)}
@@ -530,6 +528,7 @@ function DatasetOverviewTab({
 					<Descriptions.Item label="最近采样">{String(profile.profileDate).slice(0, 19)}</Descriptions.Item>
 				)}
 			</Descriptions>
+			<AssetDeliveryStatusPanel dataset={dataset} />
 			{tags.length > 0 && (
 				<div className="flex flex-wrap items-center gap-1">
 					<span className="text-xs text-slate-500 mr-1">OpenMetadata 技术标签：</span>

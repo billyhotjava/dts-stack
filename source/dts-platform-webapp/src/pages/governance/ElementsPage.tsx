@@ -20,6 +20,7 @@ import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
+import { classificationLabel } from "@/utils/customerDisplayLabels";
 import {
 	createMetadataStandard,
 	deleteMetadataStandard,
@@ -308,7 +309,7 @@ export default function ElementsPage({ embedded = false }: ElementsPageProps = {
 		{
 			title: "脱敏等级",
 			dataIndex: "securityLevel",
-			render: (s) => <Tag color={s === "SECRET" || s === "CONFIDENTIAL" ? "red" : "default"}>{s || "-"}</Tag>,
+			render: (s) => <Tag color={s === "SECRET" || s === "CONFIDENTIAL" ? "red" : "default"}>{classificationLabel(s)}</Tag>,
 		},
 		actionColumn<MetadataStandard>(
 			(row) => [

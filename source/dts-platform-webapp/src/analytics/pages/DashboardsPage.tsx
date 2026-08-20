@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Button, Card, Input, Modal, Space, Spin, message } from "antd";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import { } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -102,35 +102,21 @@ export default function DashboardsPage() {
 			sorter: (a, b) => (a.updated_at ?? "").localeCompare(b.updated_at ?? ""),
 			defaultSortOrder: "descend",
 		},
-		{
-			title: t(locale, "common.actions"),
-			key: "actions",
-			width: 240,
-			render: (_, record) => (
-				<Space size={4} wrap>
-					<Link to={`/bi/dashboards/${record.id}`}>
-						<Button type="link" size="small">查看</Button>
-					</Link>
-					<Link to={`/bi/dashboards/${record.id}/edit`}>
-						<Button type="link" size="small">编辑</Button>
-					</Link>
-					<Button type="link" size="small" disabled title="请进入编辑器完成发布门禁">
-						发布
-					</Button>
-					<Button type="link" size="small" onClick={() => void handleShare(record.id)}>
-						分享
-					</Button>
-					<Button
-						type="link"
-						size="small"
-						danger
-						onClick={() => handleDelete(record.id, record.name || "")}
-					>
-						删除
-					</Button>
-				</Space>
-			),
-		},
+		actionColumn<DashboardListItem>(
+			(record) => [
+				{ key: "view", label: "查看", href: `/bi/dashboards/${record.id}` },
+				{ key: "edit", label: "编辑", href: `/bi/dashboards/${record.id}/edit` },
+				{ key: "publish", label: "发布", disabled: true, tooltip: "请进入编辑器完成发布门禁" },
+				{ key: "share", label: "分享", onClick: () => void handleShare(record.id) },
+				{
+					key: "delete",
+					label: "删除",
+					danger: true,
+					onClick: () => handleDelete(record.id, record.name || ""),
+				},
+			],
+			{ width: 320, title: t(locale, "common.actions") },
+		),
 	];
 
 	return (

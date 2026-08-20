@@ -14,7 +14,10 @@ test("Sprint-82 keeps the map summary-only and makes the directory the tag works
 	assert.doesNotMatch(MAP, /TagManagementTab/);
 	assert.match(SEARCH_PAGE, /AssetTagsWorkspace/);
 	assert.match(SEARCH_PAGE, /searchParams\.get\("tab"\) === "catalog-tags"/);
-	assert.match(SEARCH_PAGE, /return <AssetTagsWorkspace \/>/);
+	assert.match(
+		SEARCH_PAGE,
+		/activeTab === "catalog-tags" \? <AssetTagsWorkspace \/> : <DataAssetDirectoryPage \/>/,
+	);
 });
 
 test("Sprint-82 removes row actions and uses the asset detail as the single workbench", () => {
@@ -24,8 +27,8 @@ test("Sprint-82 removes row actions and uses the asset detail as the single work
 });
 
 test("Sprint-82 exposes discoverable tag-to-asset journeys", () => {
-	assert.match(TAG_MANAGEMENT, />\s*查看资产\s*</);
-	assert.match(TAG_MANAGEMENT, />\s*关联资产\s*</);
+	assert.match(TAG_MANAGEMENT, /label:\s*"查看资产"/);
+	assert.match(TAG_MANAGEMENT, /label:\s*"关联资产"/);
 	assert.match(TAG_MANAGEMENT, /onViewAssets/);
 	assert.match(TAG_MANAGEMENT, /onAssociateAssets/);
 });

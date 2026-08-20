@@ -23,4 +23,6 @@ test("published dataset catalog keeps the frozen pagination and four-state UX co
 	for (const state of ["加载已发布数据集", "暂无已发布数据集", "没有符合筛选条件的数据集", "重新加载"]) {
 		assert.match(PAGE_SOURCE, new RegExp(state));
 	}
+	assert.match(PAGE_SOURCE, /actionColumn<AnalysisDatasetSummary>/);
+	assert.doesNotMatch(PAGE_SOURCE, /type="link"/);
 });

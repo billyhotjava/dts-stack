@@ -70,6 +70,8 @@ test("dependency materialization preview owns BUILD REUSE ordering and candidate
 test("semantic serving delivery exposes status and version-CAS retry without changing model CAS", () => {
 	const source = readFileSync(API_URL, "utf8");
 	assert.match(source, /export const getModelServingSyncStatus/);
+	assert.match(source, /export const getModelServingSyncStatuses/);
+	assert.match(source, /params: \{ modelSpecIds: modelSpecIds\.join\(","\) \}/);
 	assert.match(source, /export const retryModelServingSync/);
 	assert.match(source, /serving-sync\/retry/);
 	assert.match(source, /model-serving-sync:/);

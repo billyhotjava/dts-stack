@@ -12,13 +12,14 @@ import dataProductsService, {
 	type DataProductSummary,
 } from "@/api/services/dataProductsService";
 import { listDatasets } from "@/api/platformApi";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text } = Typography;
 
 const STATUS_OPTIONS = [
-	{ label: "DRAFT", value: "DRAFT" },
-	{ label: "PUBLISHED", value: "PUBLISHED" },
-	{ label: "ARCHIVED", value: "ARCHIVED" },
+	{ label: "草稿", value: "DRAFT" },
+	{ label: "已发布", value: "PUBLISHED" },
+	{ label: "已归档", value: "ARCHIVED" },
 ];
 
 const parseJson = (value?: string) => {
@@ -166,7 +167,7 @@ export default function Page() {
 			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
 		},
 		{ title: "类型", dataIndex: "productType", render: (v) => v || "-" },
-		{ title: "状态", dataIndex: "status", render: (v) => <Tag>{v || "-"}</Tag> },
+		{ title: "状态", dataIndex: "status", render: (v) => <Tag>{statusLabel(v, "-")}</Tag> },
 		{ title: "版本", dataIndex: "currentVersion", width: 120, render: (v) => v || "-" },
 		{ title: "数据集", dataIndex: "datasets", render: (v: string[]) => (v?.length ? v.join(", ") : "-") },
 		actionColumn<DataProductSummary>(

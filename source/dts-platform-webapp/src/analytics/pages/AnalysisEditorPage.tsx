@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
 import { getPublishedQueryDataset, type AnalysisDatasetDetail } from "@/api/sql-workbench";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import {
 	AnalysisApiError,
 	cancelAnalysisQuery,
@@ -429,7 +430,7 @@ export default function AnalysisEditorPage() {
 							<Space wrap>
 								<Title level={4} style={{ margin: 0 }}>治理分析编辑器</Title>
 								<Tag color="blue">{contract.dataset.warehouseLayer}</Tag>
-								<Tag>{analysis?.lifecycleStatus ?? "DRAFT"}</Tag>
+								<Tag>{statusLabel(analysis?.lifecycleStatus ?? "DRAFT")}</Tag>
 							</Space>
 							<Text type="secondary">
 								{contract.dataset.name} · v{contract.dataset.version} · {contract.dataset.semanticContractVersion}
@@ -600,7 +601,7 @@ export default function AnalysisEditorPage() {
 							<Card
 								key={version.revisionId}
 								size="small"
-								title={<Space><Text strong>v{version.versionNo}</Text><Tag>{version.status}</Tag></Space>}
+									title={<Space><Text strong>v{version.versionNo}</Text><Tag>{statusLabel(version.status)}</Tag></Space>}
 								extra={<Button size="small" onClick={() => void createDraftFromVersion(version.revisionId)}>基于此版本创建草稿</Button>}
 							>
 								<Text type="secondary">

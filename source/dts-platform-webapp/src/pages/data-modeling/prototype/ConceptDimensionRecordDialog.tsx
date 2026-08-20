@@ -1,3 +1,4 @@
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
 import type { ConceptDimensionDraft } from "./services/modelWorkbenchService";
 
@@ -40,7 +41,7 @@ export function ConceptDimensionRecordDialog({
 				<p>系统编码：{definition.systemCode}</p>
 				<p>
 					当前状态：
-					<Status tone={definition.status === "CURRENT" ? "success" : "warning"}>{definition.status}</Status>
+					<Status tone={definition.status === "CURRENT" ? "success" : "warning"}>{statusLabel(definition.status)}</Status>
 				</p>
 			</div>
 			{dialog === "versions" ? (

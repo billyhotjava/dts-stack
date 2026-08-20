@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Button, Card, Input, Modal, Space, Spin, Tag, message } from "antd";
+import { Button, Card, Input, Modal, Spin, Tag, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
-import { CompactTable } from "@/components/table";
+import { actionColumn, CompactTable } from "@/components/table";
 import {
 	archiveAnalysis,
 	listAnalyses,
@@ -156,32 +156,25 @@ export default function CardsPage() {
 			width: 170,
 			render: (value: string | null) => <span className="text-text-muted">{formatTime(value)}</span>,
 		},
-		{
-			title: "操作",
-			key: "actions",
-			width: 180,
-			render: (_, record) => (
-				<Space size={4}>
-					<Link to={`/bi/questions/${record.id}`}>
-						<Button type="link" size="small">
-							查看
-						</Button>
-					</Link>
-					{record.permissions.write && record.lifecycleStatus !== "ARCHIVED" && (
-						<>
-							<Link to={`/bi/questions/${record.id}/edit`}>
-								<Button type="link" size="small">
-									编辑
-								</Button>
-							</Link>
-							<Button type="link" size="small" danger onClick={() => handleArchive(record)}>
-								归档
-							</Button>
-						</>
-					)}
-				</Space>
-			),
-		},
+		actionColumn<Analysis>(
+			(record) => [
+				{ key: "view", label: "查看", href: `/bi/questions/${record.id}` },
+				{
+					key: "edit",
+					label: "编辑",
+					href: `/bi/questions/${record.id}/edit`,
+					hidden: !record.permissions.write || record.lifecycleStatus === "ARCHIVED",
+				},
+				{
+					key: "archive",
+					label: "归档",
+					danger: true,
+					hidden: !record.permissions.write || record.lifecycleStatus === "ARCHIVED",
+					onClick: () => handleArchive(record),
+				},
+			],
+			{ maxActions: 3 },
+		),
 	];
 
 	return (

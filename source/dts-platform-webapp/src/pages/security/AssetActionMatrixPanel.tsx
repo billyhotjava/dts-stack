@@ -397,7 +397,7 @@ export function AssetActionMatrixPanel({
 						{
 							title: "状态",
 							width: 100,
-							render: () => <Tag color="processing">PENDING</Tag>,
+							render: () => <Tag color="processing">待审批</Tag>,
 						},
 						{
 							title: "审批",

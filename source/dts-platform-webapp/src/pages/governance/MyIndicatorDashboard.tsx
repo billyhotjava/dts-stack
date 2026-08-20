@@ -16,6 +16,7 @@ import {
 	updateSubscription,
 	deleteSubscription,
 } from "@/api/platformApi";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text, Paragraph } = Typography;
 
@@ -132,7 +133,7 @@ export default function MyIndicatorDashboard() {
 										<Space>
 											<Text strong>{ind?.name ?? "指标已删除"}</Text>
 											{ind?.domain && <Tag color="blue">{ind.domain}</Tag>}
-											{ind?.status && <Tag color={STATUS_COLORS[ind.status] ?? "default"}>{ind.status}</Tag>}
+											{ind?.status && <Tag color={STATUS_COLORS[ind.status] ?? "default"}>{statusLabel(ind.status)}</Tag>}
 										</Space>
 									}
 									extra={

@@ -118,14 +118,14 @@ export default function ModelsPage() {
 						type={viewMode === "grid" ? "primary" : "default"}
 						size="small"
 						onClick={() => setViewMode("grid")}
-						aria-label="Grid view"
-					>Grid view</Button>
+						aria-label="网格视图"
+					>网格视图</Button>
 					<Button
 						type={viewMode === "list" ? "primary" : "default"}
 						size="small"
 						onClick={() => setViewMode("list")}
-						aria-label="List view"
-					>List view</Button>
+						aria-label="列表视图"
+					>列表视图</Button>
 				</div>
 			</div>
 

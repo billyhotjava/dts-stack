@@ -3,6 +3,7 @@ import { Card, DatePicker, Input, Select, Space, Tag } from "antd";
 import { CompactTable, RecordDetailDrawer, appendDetailAction } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { listPermissionAudit } from "@/api/platformApi";
+import { assetTypeLabel, auditActionLabel, permissionLabel } from "@/utils/customerDisplayLabels";
 
 type AuditEntry = {
 	id: number;
@@ -18,11 +19,11 @@ type AuditEntry = {
 };
 
 const ACTION_OPTIONS = [
-	{ label: "CHECK_ALLOW", value: "CHECK_ALLOW" },
-	{ label: "CHECK_DENY", value: "CHECK_DENY" },
-	{ label: "GRANT", value: "GRANT" },
-	{ label: "REVOKE", value: "REVOKE" },
-	{ label: "CHANGE_OWNERSHIP", value: "CHANGE_OWNERSHIP" },
+	{ label: "权限校验通过", value: "CHECK_ALLOW" },
+	{ label: "权限校验拒绝", value: "CHECK_DENY" },
+	{ label: "授权", value: "GRANT" },
+	{ label: "撤销授权", value: "REVOKE" },
+	{ label: "变更所有者", value: "CHANGE_OWNERSHIP" },
 ];
 
 const ACTION_COLORS: Record<string, string> = {
@@ -72,11 +73,11 @@ export default function PermissionAuditPage() {
 		{ title: "时间", dataIndex: "createdDate", key: "time", width: 170,
 			render: (v?: string) => v ? new Date(v).toLocaleString() : "-" },
 		{ title: "操作", dataIndex: "action", key: "actionType", width: 140,
-			render: (v: string) => <Tag color={ACTION_COLORS[v] || "default"}>{v}</Tag> },
+			render: (v: string) => <Tag color={ACTION_COLORS[v] || "default"}>{auditActionLabel(v)}</Tag> },
 		{ title: "资产", dataIndex: "assetId", key: "asset", width: 200,
-			render: (_: any, r: AuditEntry) => r.assetType ? `${r.assetType}:${r.assetId}` : "-" },
+			render: (_: any, r: AuditEntry) => r.assetType ? `${assetTypeLabel(r.assetType)}：${r.assetId}` : "-" },
 		{ title: "目标用户", dataIndex: "targetUser", key: "targetUser", width: 120 },
-		{ title: "权限", dataIndex: "permission", key: "permission", width: 100 },
+		{ title: "权限", dataIndex: "permission", key: "permission", width: 100, render: (v?: string) => v ? permissionLabel(v) : "-" },
 		{ title: "操作者", dataIndex: "operator", key: "operator", width: 120 },
 		{ title: "OA 单号", dataIndex: "oaReference", key: "oaReference", width: 120 },
 	];

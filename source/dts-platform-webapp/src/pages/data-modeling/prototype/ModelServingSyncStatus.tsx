@@ -6,24 +6,13 @@ import {
 	type ModelServingSyncStatus as ServingSyncStatus,
 } from "@/api/modelSpecApi";
 import { useRouter } from "@/routes/hooks";
+import {
+	formatModelServingSyncTime,
+	MODEL_SERVING_SYNC_PRESENTATION,
+	resolveModelServingPhysicalAssetId,
+} from "./modelServingSyncPresentation";
 import { Button, Status } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
-
-const PRESENTATION: Record<
-	ServingSyncStatus["syncStatus"],
-	{ label: string; tone: "neutral" | "info" | "success" | "danger" }
-> = {
-	NOT_REGISTERED: { label: "目录待登记", tone: "neutral" },
-	SYNC_PENDING: { label: "目录同步中", tone: "info" },
-	SYNCED: { label: "目录同步成功", tone: "success" },
-	SYNC_FAILED: { label: "目录同步失败", tone: "danger" },
-};
-
-const formatTime = (value?: string | null) => {
-	if (!value) return "—";
-	const parsed = new Date(value);
-	return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString("zh-CN", { hour12: false });
-};
 
 export function ModelServingSyncStatus({ modelSpecId, canMaintain }: { modelSpecId: string; canMaintain: boolean }) {
 	const router = useRouter();
@@ -63,12 +52,8 @@ export function ModelServingSyncStatus({ modelSpecId, canMaintain }: { modelSpec
 		}
 	};
 
-	const presentation = status ? PRESENTATION[status.syncStatus] : null;
-	const physicalAssetId = String(
-		(status?.servingRef as { physicalAssetId?: string } | null)?.physicalAssetId ||
-			(status?.latestPublishedRef as { physicalAssetId?: string } | null)?.physicalAssetId ||
-			"",
-	).trim();
+	const presentation = status ? MODEL_SERVING_SYNC_PRESENTATION[status.syncStatus] : null;
+	const physicalAssetId = resolveModelServingPhysicalAssetId(status);
 	return (
 		<div aria-label="目录同步状态" className="dmx-serving-sync-status">
 			<RefreshCw className={loading || retrying ? "spin" : ""} size={13} />
@@ -84,7 +69,7 @@ export function ModelServingSyncStatus({ modelSpecId, canMaintain }: { modelSpec
 					<Status tone={presentation?.tone || "neutral"}>
 						{loading ? "目录同步读取中" : presentation?.label || "—"}
 					</Status>
-					{status?.updatedAt ? <span>更新 {formatTime(status.updatedAt)}</span> : null}
+					{status?.updatedAt ? <span>更新 {formatModelServingSyncTime(status.updatedAt)}</span> : null}
 					{physicalAssetId ? (
 						<Button onClick={() => router.push(`/catalog/datasets/${encodeURIComponent(physicalAssetId)}`)} type="text">
 							查看资产
@@ -94,7 +79,11 @@ export function ModelServingSyncStatus({ modelSpecId, canMaintain }: { modelSpec
 						<>
 							<span title={status.lastSyncError || undefined}>{status.lastSyncError || "同步失败"}</span>
 							<span>第 {status.syncAttempts} 次</span>
-							{status.nextSyncAt ? <span>下次 {formatTime(status.nextSyncAt)}</span> : <span>已停止自动重试</span>}
+							{status.nextSyncAt ? (
+								<span>下次 {formatModelServingSyncTime(status.nextSyncAt)}</span>
+							) : (
+								<span>已停止自动重试</span>
+							)}
 							<Button disabled={!canMaintain || retrying} onClick={() => void retry()} type="text">
 								{retrying ? "重试中…" : "重试同步"}
 							</Button>

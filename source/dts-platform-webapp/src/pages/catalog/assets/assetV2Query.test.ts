@@ -13,6 +13,7 @@ describe("buildAssetV2Query", () => {
 			page: 2,
 			size: 10,
 			keyword: undefined,
+			assetFamily: undefined,
 			domainId: undefined,
 			domainUnassigned: undefined,
 			type: undefined,
@@ -22,6 +23,9 @@ describe("buildAssetV2Query", () => {
 			matchStatus: undefined,
 			unclassified: undefined,
 			stale: undefined,
+			eligibility: undefined,
+			servingStatus: undefined,
+			qualityStatus: undefined,
 			tagIds: undefined,
 		});
 	});
@@ -29,6 +33,7 @@ describe("buildAssetV2Query", () => {
 	it("passes concrete filters through and trims keyword", () => {
 		const query = buildAssetV2Query({
 			keyword: "  客户  ",
+			assetFamily: "SEMANTIC_MODEL",
 			domainId: "dom-1",
 			assetType: "DATASET",
 			classification: "PUBLIC",
@@ -38,6 +43,7 @@ describe("buildAssetV2Query", () => {
 			tagIds: ["t1", "t2"],
 		});
 		expect(query.keyword).toBe("客户");
+		expect(query.assetFamily).toBe("SEMANTIC_MODEL");
 		expect(query.type).toBe("DATASET");
 		expect(query.classification).toBe("PUBLIC");
 		expect(query.warehouseLayer).toBe("DWD");

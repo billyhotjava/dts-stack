@@ -405,7 +405,7 @@ export default function ExploreSessionsPage() {
 												<td>
 													<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)" }}>
 														<span>{row.title || "未命名会话"}</span>
-														{row.archived ? <Tag>archived</Tag> : null}
+												{row.archived ? <Tag>已归档</Tag> : null}
 													</div>
 												</td>
 												<td>{row.stepCount ?? (Array.isArray(row.steps) ? row.steps.length : 0)}</td>

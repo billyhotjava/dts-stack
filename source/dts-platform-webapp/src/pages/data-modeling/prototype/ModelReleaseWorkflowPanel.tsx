@@ -6,6 +6,7 @@ import type {
 	ReleaseCandidateGovernanceQuality,
 	ReleaseCandidateLifecycleAction,
 } from "@/api/modelSpecApi";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import { Button, Status } from "./PrototypePrimitives";
 
 type ReleaseWorkflowAction = Extract<
@@ -223,7 +224,7 @@ export function ModelReleaseWorkflowPanel({
 				<Status
 					tone={candidate?.status === "PUBLISHED" ? "success" : candidate?.status === "PARTIAL" ? "danger" : "info"}
 				>
-					{candidate?.status || "尚无候选"}
+					{candidate?.status ? statusLabel(candidate.status) : "尚无候选"}
 				</Status>
 			</div>
 			<ol className="dmx-release-steps">
@@ -274,13 +275,13 @@ export function ModelReleaseWorkflowPanel({
 				</div>
 				<p>{governanceQualityText(governanceQuality)}</p>
 				{governanceQuality ? (
-					<small>有效期：{governanceQuality.maxAgeSeconds} 秒 · 状态：{governanceQuality.state}</small>
+					<small>有效期：{governanceQuality.maxAgeSeconds} 秒 · 状态：{statusLabel(governanceQuality.state)}</small>
 				) : null}
 				{governanceQuality?.evidence.length ? (
 					<ul>
 						{governanceQuality.evidence.map((item, index) => (
 							<li key={`${item.assetKey}-${item.ruleVersionId || index}`}>
-								<strong>{item.status}</strong>
+								<strong>{statusLabel(item.status)}</strong>
 								<span>资产 {item.assetKey}</span>
 								<span>规则版本 {item.ruleVersionId || "—"}</span>
 								<span>绑定 {item.bindingId || "—"}</span>

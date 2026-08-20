@@ -577,6 +577,7 @@
                         <testInclude>**/service/modeling/dbtdraft/*.java</testInclude>
                         <testInclude>**/service/modeling/observability/*.java</testInclude>
                         <testInclude>**/web/rest/ModelRepresentationResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/CatalogModelSemanticSyncResourceTest.java</testInclude>
                         <testInclude>**/web/rest/DimensionModelResourceTest.java</testInclude>
                         <testInclude>**/web/rest/DimensionDefinitionReservedIdempotencyBoundaryTest.java</testInclude>
                         <testInclude>**/web/rest/DimensionModelAuthorizationIT.java</testInclude>
@@ -841,12 +842,16 @@
                         <testInclude>**/service/catalog/CatalogExternalAssetIdentity*.java</testInclude>
                         <testInclude>**/service/catalog/CatalogTag*.java</testInclude>
                         <testInclude>**/service/catalog/CatalogAssetStatusViewServiceTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogUnifiedAssetDirectoryServiceTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetDirectoryReadAdapterTest.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogAssetDirectoryVisibilityPolicyTest.java</testInclude>
                         <testInclude>**/service/infra/JdbcClassificationLifecycleIT.java</testInclude>
                         <testInclude>**/service/infra/Sprint89JdbcCatalogSyncRollbackIT.java</testInclude>
                         <testInclude>**/security/ServiceDependencyAuthenticationFilterTest.java</testInclude>
                         <testInclude>**/web/rest/CatalogSearchResourceTagFilterTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogAssetPortalResourceTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogAssetPortalTagFilterResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogAssetPortalUnifiedResourceTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogAssetTagSearchResourceTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogDomainResourceAuditTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogDomainResourceFactsTest.java</testInclude>

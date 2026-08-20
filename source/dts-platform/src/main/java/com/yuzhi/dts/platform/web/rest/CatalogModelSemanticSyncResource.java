@@ -5,6 +5,7 @@ import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticSyncC
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticSyncCommandService.RetryResult;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticSyncCommandService.ServingSyncView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /** Status and controlled retry facade for model-to-Analytics semantic delivery. */
@@ -52,6 +54,11 @@ public class CatalogModelSemanticSyncResource {
         ResponseEntity.BodyBuilder response = ResponseEntity.ok();
         if (status.version() > 0) response.eTag(etag(status));
         return response.body(ApiResponses.ok(status));
+    }
+
+    @GetMapping("/serving-sync")
+    public ApiResponse<List<ServingSyncView>> list(@RequestParam List<UUID> modelSpecIds) {
+        return ApiResponses.ok(service.getMany(tenantId, modelSpecIds));
     }
 
     @PostMapping("/{modelSpecId}/serving-sync/retry")

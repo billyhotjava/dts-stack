@@ -21,6 +21,7 @@ import type {
 	PhysicalPreviewScope,
 } from "@/features/modeling/contracts/modelRepresentationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import { ModelLifecycleArtifactsTable } from "./ModelLifecycleArtifactsTable";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelStageGatePanel } from "./ModelStageGatePanel";
@@ -156,7 +157,7 @@ function DialogContent({
 			{
 				title: "状态",
 				dataIndex: "state",
-				render: (value: string) => <Status tone={value === "CURRENT" ? "success" : "warning"}>{value}</Status>,
+				render: (value: string) => <Status tone={value === "CURRENT" ? "success" : "warning"}>{statusLabel(value)}</Status>,
 			},
 		];
 		return (

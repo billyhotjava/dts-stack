@@ -30,14 +30,19 @@ beforeAll(() => {
 
 const apiMocks = vi.hoisted(() => ({
 	getMaterializationStatuses: vi.fn(),
+	getServingSyncStatuses: vi.fn(),
 	listWorkbenchCatalogPage: vi.fn(),
 }));
+const routerPush = vi.hoisted(() => vi.fn());
 
 vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/api/modelSpecApi")>()),
 	getModelMaterializationStatuses: apiMocks.getMaterializationStatuses,
+	getModelServingSyncStatuses: apiMocks.getServingSyncStatuses,
 	listModelWorkbenchCatalogPage: apiMocks.listWorkbenchCatalogPage,
 }));
+
+vi.mock("@/routes/hooks", () => ({ useRouter: () => ({ push: routerPush }) }));
 
 let container: HTMLDivElement;
 let root: Root;
@@ -76,6 +81,9 @@ beforeEach(() => {
 	root = createRoot(container);
 	apiMocks.getMaterializationStatuses.mockReset();
 	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
+	apiMocks.getServingSyncStatuses.mockReset();
+	apiMocks.getServingSyncStatuses.mockResolvedValue([]);
+	routerPush.mockReset();
 	apiMocks.listWorkbenchCatalogPage.mockReset();
 	const content = [
 		{
@@ -262,6 +270,53 @@ describe("ModelWorkbenchCatalogList", () => {
 		await act(async () => materialize?.click());
 
 		expect(onMaterialize).toHaveBeenCalledWith([draftModel, publishedModel]);
+	});
+
+	it("shows one batch-read asset delivery status and deep-links the canonical asset", async () => {
+		apiMocks.getServingSyncStatuses.mockResolvedValue([
+			{
+				modelSpecId: publishedModel.id,
+				catalogAssetKey: `semantic-model:${publishedModel.id}`,
+				syncStatus: "SYNCED",
+				syncAttempts: 0,
+				version: 8,
+				servingReady: true,
+				servingRef: { physicalAssetId: "33333333-3333-3333-3333-333333333333" },
+			},
+		]);
+
+		await act(async () =>
+			root.render(
+				<ModelWorkbenchCatalogList
+					busy={false}
+					canMaintain
+					dimensions={[currentDimension]}
+					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
+					failureMessage=""
+					models={[draftModel, publishedModel]}
+					onCloneDimension={vi.fn()}
+					onChooseDimension={vi.fn()}
+					onChooseModel={vi.fn()}
+					onCreate={vi.fn()}
+					onGoToGraphDimension={vi.fn()}
+					onGoToGraphModel={vi.fn()}
+					onImport={vi.fn()}
+					onMaterialize={vi.fn()}
+					onRefresh={vi.fn()}
+					onRemoveDimension={vi.fn()}
+					onRemoveModel={vi.fn()}
+				/>,
+			),
+		);
+		await act(async () => Promise.resolve());
+
+		expect(apiMocks.getServingSyncStatuses).toHaveBeenCalledWith([draftModel.id, publishedModel.id]);
+		const row = Array.from(container.querySelectorAll("tr")).find((item) => item.textContent?.includes("订单明细表"));
+		expect(row?.textContent).toContain("目录同步成功");
+		const viewAsset = Array.from(row?.querySelectorAll("button") || []).find((item) => item.textContent === "查看资产");
+		await act(async () => viewAsset?.click());
+
+		expect(routerPush).toHaveBeenCalledWith("/catalog/datasets/33333333-3333-3333-3333-333333333333");
 	});
 
 	it("requests a server page and preserves model selection while paging", async () => {

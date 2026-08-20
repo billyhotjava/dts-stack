@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetOverviewAggregator;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetPortalService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetTagWriteGuard;
+import com.yuzhi.dts.platform.service.catalog.CatalogUnifiedAssetDirectoryService;
 import com.yuzhi.dts.platform.service.catalog.OpenMetadataAssetSyncService;
 import com.yuzhi.dts.platform.service.catalog.dto.AssetRef;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -23,6 +24,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -49,6 +51,7 @@ public class CatalogAssetPortalResource {
     private final AuditService audit;
     private final CatalogResourceHelper helper;
     private final CatalogAssetTagWriteGuard assetTagWriteGuard;
+    private final CatalogUnifiedAssetDirectoryService unifiedAssetDirectoryService;
 
     public CatalogAssetPortalResource(
         CatalogAssetPortalService assetPortalService,
@@ -59,6 +62,29 @@ public class CatalogAssetPortalResource {
         CatalogResourceHelper helper,
         CatalogAssetTagWriteGuard assetTagWriteGuard
     ) {
+        this(
+            assetPortalService,
+            mappingReportService,
+            resolutionAuditService,
+            syncService,
+            audit,
+            helper,
+            assetTagWriteGuard,
+            null
+        );
+    }
+
+    @Autowired
+    public CatalogAssetPortalResource(
+        CatalogAssetPortalService assetPortalService,
+        CatalogAssetMappingReportService mappingReportService,
+        CatalogAssetIdentityResolutionAuditService resolutionAuditService,
+        OpenMetadataAssetSyncService syncService,
+        AuditService audit,
+        CatalogResourceHelper helper,
+        CatalogAssetTagWriteGuard assetTagWriteGuard,
+        CatalogUnifiedAssetDirectoryService unifiedAssetDirectoryService
+    ) {
         this.assetPortalService = assetPortalService;
         this.mappingReportService = mappingReportService;
         this.resolutionAuditService = resolutionAuditService;
@@ -66,11 +92,12 @@ public class CatalogAssetPortalResource {
         this.audit = audit;
         this.helper = helper;
         this.assetTagWriteGuard = assetTagWriteGuard;
+        this.unifiedAssetDirectoryService = unifiedAssetDirectoryService;
     }
 
     @GetMapping
     @Transactional(readOnly = true)
-    public ApiResponse<CatalogAssetPortalService.AssetPage> listAssets(
+    public ApiResponse<?> listAssets(
         @RequestParam(value = "keyword", required = false) String keyword,
         @RequestParam(value = "service", required = false) String service,
         @RequestParam(value = "type", required = false) String type,
@@ -92,41 +119,62 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "eligibility", required = false) String eligibility,
         @RequestParam(value = "servingStatus", required = false) String servingStatus,
         @RequestParam(value = "qualityStatus", required = false) String qualityStatus,
+        @RequestParam(value = "assetFamily", required = false) String assetFamily,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String effDept = resolveActiveDepartment(activeDept);
-        CatalogAssetPortalService.AssetPage result = assetPortalService.listAssets(
-            new CatalogAssetPortalService.AssetQuery(
-                keyword,
-                service,
-                type,
-                database,
-                schema,
-                syncStatus,
-                classification,
-                warehouseLayer,
-                ownerDept,
-                governanceStatus,
-                matchStatus,
-                domainId,
-                domainUnassigned,
-                tagIds,
-                page,
-                size,
-                unclassified,
-                stale,
-                eligibility,
-                servingStatus,
-                qualityStatus
-            ),
-            effDept
+        CatalogAssetPortalService.AssetQuery query = new CatalogAssetPortalService.AssetQuery(
+            keyword,
+            service,
+            type,
+            database,
+            schema,
+            syncStatus,
+            classification,
+            warehouseLayer,
+            ownerDept,
+            governanceStatus,
+            matchStatus,
+            domainId,
+            domainUnassigned,
+            tagIds,
+            page,
+            size,
+            unclassified,
+            stale,
+            eligibility,
+            servingStatus,
+            qualityStatus
         );
+        boolean datasetOnly = !StringUtils.hasText(assetFamily) || "DATASET".equalsIgnoreCase(assetFamily.trim());
+        Object result;
+        long returned;
+        long total;
+        if (datasetOnly) {
+            CatalogAssetPortalService.AssetPage pageResult = assetPortalService.listAssets(query, effDept);
+            result = pageResult;
+            returned = pageResult.returned();
+            total = pageResult.total();
+        } else {
+            if (unifiedAssetDirectoryService == null) {
+                throw new IllegalStateException("统一资产目录服务尚未初始化");
+            }
+            CatalogUnifiedAssetDirectoryService.UnifiedAssetPage pageResult = unifiedAssetDirectoryService.list(
+                query,
+                assetFamily,
+                effDept
+            );
+            result = pageResult;
+            returned = pageResult.returned();
+            total = pageResult.total();
+        }
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("summary", "浏览OpenMetadata主目录资产");
-        payload.put("returned", result.returned());
-        payload.put("total", result.total());
+        payload.put("summary", datasetOnly ? "浏览数据表资产目录" : "浏览统一数据资产目录");
+        payload.put("returned", returned);
+        payload.put("total", total);
         helper.putIfHasText(payload, "activeDept", effDept);
         helper.putIfHasText(payload, "keyword", keyword);
+        helper.putIfHasText(payload, "assetFamily", assetFamily);
         if (tagIds != null && !tagIds.isEmpty()) {
             payload.put("tagCount", tagIds.stream().distinct().count());
         }

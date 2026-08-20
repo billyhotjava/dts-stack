@@ -85,6 +85,7 @@ const EMPTY_ASSET_QUERY = {
 	page: 0,
 	size: 10,
 	keyword: undefined,
+	assetFamily: "ALL",
 	domainId: undefined,
 	domainUnassigned: undefined,
 	type: undefined,
@@ -94,6 +95,9 @@ const EMPTY_ASSET_QUERY = {
 	matchStatus: undefined,
 	unclassified: undefined,
 	stale: undefined,
+	eligibility: undefined,
+	servingStatus: undefined,
+	qualityStatus: undefined,
 	tagIds: undefined,
 };
 

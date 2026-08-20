@@ -59,10 +59,10 @@ test("data asset directory preserves filter deep links and provides an explicit 
 	assert.match(SOURCE, /const handleReset/);
 });
 
-test("the legacy tag workspace remains a compatible branch without conditional hooks", () => {
+test("the tag workspace remains a compatible in-page tab without conditional hooks", () => {
 	assert.match(SOURCE, /function DataAssetDirectoryPage\(\)/);
 	assert.match(SOURCE, /searchParams\.get\("tab"\) === "catalog-tags"/);
-	assert.match(SOURCE, /return <AssetTagsWorkspace \/>/);
+	assert.match(SOURCE, /activeTab === "catalog-tags" \? <AssetTagsWorkspace \/> : <DataAssetDirectoryPage \/>/);
 	const wrapperStart = SOURCE.indexOf("export default function DataSearchPage");
 	const directoryStart = SOURCE.indexOf("function DataAssetDirectoryPage");
 	assert.ok(wrapperStart >= 0 && directoryStart > wrapperStart);

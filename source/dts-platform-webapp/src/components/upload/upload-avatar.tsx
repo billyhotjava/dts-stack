@@ -42,7 +42,7 @@ export function UploadAvatar({ helperText, defaultAvatar = "", ...other }: Props
 			className="absolute z-10 flex h-full w-full flex-col items-center justify-center"
 		>
 			<Icon icon="solar:camera-add-bold" size={32} />
-			<div className="mt-1 text-xs">Upload Photo</div>
+			<div className="mt-1 text-xs">上传照片</div>
 		</div>
 	);
 

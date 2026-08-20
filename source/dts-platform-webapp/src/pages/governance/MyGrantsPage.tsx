@@ -3,6 +3,7 @@ import { Card, Tabs, Tag } from "antd";
 import { CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { listMyGrants, listGrantedByMe } from "@/api/platformApi";
+import { assetTypeLabel, permissionLabel, subjectTypeLabel } from "@/utils/customerDisplayLabels";
 
 type AssetGrant = {
 	id: number;
@@ -55,9 +56,9 @@ export default function MyGrantsPage() {
 	};
 
 	const receivedColumns: ColumnsType<AssetGrant> = [
-		{ title: "资产", key: "asset", render: (_: any, r: AssetGrant) => `${r.assetType}:${r.assetId}` },
+		{ title: "资产", key: "asset", render: (_: any, r: AssetGrant) => `${assetTypeLabel(r.assetType)}：${r.assetId}` },
 		{ title: "权限", dataIndex: "permission", width: 100,
-			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{v}</Tag> },
+			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{permissionLabel(v)}</Tag> },
 		{ title: "有效期至", dataIndex: "validTo", width: 160,
 			render: (v?: string) => {
 				if (!v) return <Tag color="green">永久</Tag>;
@@ -69,10 +70,10 @@ export default function MyGrantsPage() {
 	];
 
 	const grantedColumns: ColumnsType<AssetGrant> = [
-		{ title: "资产", key: "asset", render: (_: any, r: AssetGrant) => `${r.assetType}:${r.assetId}` },
-		{ title: "被授权人", key: "grantee", render: (_: any, r: AssetGrant) => `${r.granteeType}:${r.granteeId}` },
+		{ title: "资产", key: "asset", render: (_: any, r: AssetGrant) => `${assetTypeLabel(r.assetType)}：${r.assetId}` },
+		{ title: "被授权人", key: "grantee", render: (_: any, r: AssetGrant) => `${subjectTypeLabel(r.granteeType)}：${r.granteeId}` },
 		{ title: "权限", dataIndex: "permission", width: 100,
-			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{v}</Tag> },
+			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{permissionLabel(v)}</Tag> },
 		{ title: "有效期至", dataIndex: "validTo", width: 160,
 			render: (v?: string) => v ? new Date(v).toLocaleDateString() : "永久" },
 		{ title: "原因", dataIndex: "grantReason", ellipsis: true },

@@ -18,6 +18,7 @@ import { DatasetAccessRequestDialog } from "@/components/security/DatasetAccessR
 import { actionColumn, CompactTable } from "@/components/table";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text } = Typography;
 
@@ -618,10 +619,10 @@ export default function Page() {
 							{detail?.request?.targetName || detail?.request?.targetUsername || "-"}
 						</Descriptions.Item>
 						<Descriptions.Item label="申请状态">
-							<Tag color={statusColor(detail?.request?.status)}>{detail?.request?.status || "-"}</Tag>
+							<Tag color={statusColor(detail?.request?.status)}>{statusLabel(detail?.request?.status, "-")}</Tag>
 						</Descriptions.Item>
 						<Descriptions.Item label="生效状态">
-							<Tag color={statusColor(detail?.effectiveStatus)}>{detail?.effectiveStatus || "-"}</Tag>
+							<Tag color={statusColor(detail?.effectiveStatus)}>{statusLabel(detail?.effectiveStatus, "-")}</Tag>
 						</Descriptions.Item>
 						<Descriptions.Item label="有效期">{`${formatDate(detail?.request?.validFrom)} ~ ${formatDate(detail?.request?.validTo)}`}</Descriptions.Item>
 						<Descriptions.Item label="审批说明">{detail?.request?.decisionNotes || "-"}</Descriptions.Item>

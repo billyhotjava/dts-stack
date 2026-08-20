@@ -30,7 +30,9 @@ test("asset ledger exposes the three delivery facts without introducing another 
 test("asset detail links model evidence back to the existing modeling workbench", () => {
 	const source = `${DETAIL}\n${DELIVERY_STATUS}`;
 	assert.match(source, /modelRefs/);
-	assert.match(source, /\/modeling\/models\//);
+	assert.match(source, /\/data-modeling\/dimensions\/workbench\?modelSpecId=/);
+	assert.doesNotMatch(source, /href=\{`\/modeling\/models\//);
+	assert.match(DETAIL, /<AssetDeliveryStatusPanel dataset=\{dataset\} \/>/);
 	assert.match(source, /消费资格/);
 	assert.match(source, /服务同步/);
 	assert.match(MODEL_SYNC, /查看资产/);

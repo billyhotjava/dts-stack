@@ -10,6 +10,7 @@ import reportsService, { type ReportLink, type ReportLinkUpsertRequest } from "@
 import { listQueryDatasets, type QueryDatasetAsset } from "@/api/sql-workbench";
 import { useUserRoles } from "@/store/userStore";
 import { normalizeBiLinkForSave, resolveBiLinkForOpen } from "@/utils/biLinkUrl";
+import { assetTypeLabel, reportTypeLabel, statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text } = Typography;
 
@@ -362,7 +363,7 @@ export default function Page({ embedded }: Props) {
 				title: "类型",
 				dataIndex: "reportType",
 				width: 120,
-				render: (value: string) => (value ? <Tag color="blue">{value}</Tag> : <Text type="secondary">-</Text>),
+				render: (value: string) => (value ? <Tag color="blue">{reportTypeLabel(value)}</Tag> : <Text type="secondary">-</Text>),
 			},
 			{
 				title: "受管资产",
@@ -370,7 +371,7 @@ export default function Page({ embedded }: Props) {
 				width: 210,
 				render: (_value, record) => record.assetType && record.assetKey ? (
 					<Space direction="vertical" size={0}>
-						<Tag color="geekblue">{record.assetType}</Tag>
+						<Tag color="geekblue">{assetTypeLabel(record.assetType)}</Tag>
 						<Text type="secondary" ellipsis style={{ maxWidth: 190 }}>{record.assetKey}</Text>
 						<Text type="secondary" style={{ fontSize: 12 }}>发布版本 v{record.assetVersion ?? "-"}</Text>
 					</Space>
@@ -381,7 +382,7 @@ export default function Page({ embedded }: Props) {
 				dataIndex: "reconcileStatus",
 				width: 110,
 				render: (value: string | null | undefined, record) => record.assetKey
-					? <Tag color={value === "SYNCED" ? "green" : "gold"}>{value || "PENDING"}</Tag>
+					? <Tag color={value === "SYNCED" ? "green" : "gold"}>{statusLabel(value || "PENDING")}</Tag>
 					: <Text type="secondary">-</Text>,
 			},
 			{

@@ -5,13 +5,14 @@ import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } fr
 import type { ColumnsType } from "antd/es/table";
 import { listAssetOwnership, updateAssetOwnership, batchUpdateAssetOwnership } from "@/api/platformApi";
 import { getOrgTree } from "@/api/services/directoryService";
+import { assetTypeLabel } from "@/utils/customerDisplayLabels";
 
 const ASSET_TYPE_OPTIONS = [
-	{ label: "TABLE", value: "TABLE" },
-	{ label: "CARD", value: "CARD" },
-	{ label: "DASHBOARD", value: "DASHBOARD" },
-	{ label: "SCREEN", value: "SCREEN" },
-	{ label: "MODEL", value: "MODEL" },
+	{ label: "数据表", value: "TABLE" },
+	{ label: "分析卡片", value: "CARD" },
+	{ label: "分析看板", value: "DASHBOARD" },
+	{ label: "数据大屏", value: "SCREEN" },
+	{ label: "数据模型", value: "MODEL" },
 ];
 
 type AssetOwnership = {
@@ -120,7 +121,7 @@ export default function AssetOwnershipPage() {
 			ellipsis: true,
 			sorter: (a, b) => (a.assetId || "").localeCompare(b.assetId || ""),
 		},
-		{ title: "类型", dataIndex: "assetType", key: "assetType", width: 120, render: (v: string) => <Tag>{v}</Tag> },
+		{ title: "类型", dataIndex: "assetType", key: "assetType", width: 120, render: (v: string) => <Tag>{assetTypeLabel(v)}</Tag> },
 		{
 			title: "所有者部门",
 			dataIndex: "ownerDeptCode",

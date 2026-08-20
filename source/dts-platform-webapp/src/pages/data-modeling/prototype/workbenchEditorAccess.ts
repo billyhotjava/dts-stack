@@ -1,4 +1,5 @@
 import type { ModelDraft } from "./services/modelWorkbenchService";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 
 export type WorkbenchEditorMode = "CREATE_DRAFT" | "EDIT_DRAFT" | "VIEW_VERSION" | "LEGACY_READONLY" | "NO_PERMISSION";
 
@@ -24,13 +25,13 @@ export function resolveWorkbenchEditorAccess(canMaintain: boolean, draft: ModelD
 			return {
 				mode: "EDIT_DRAFT",
 				readOnly: false,
-				message: "当前维度定义为 CURRENT；保存修改将生成新的 CURRENT 修订，已绑定模型继续使用原修订。",
+				message: "当前维度定义为当前有效版本；保存修改将生成新的当前有效修订，已绑定模型继续使用原修订。",
 			};
 		}
 		return {
 			mode: "VIEW_VERSION",
 			readOnly: true,
-			message: `当前维度定义为 ${draft.definitionBase.status}，只能查看。`,
+			message: `当前维度定义为${statusLabel(draft.definitionBase.status)}，只能查看。`,
 		};
 	}
 	if (!draft.base) return { mode: "CREATE_DRAFT", readOnly: false, message: "" };
@@ -48,6 +49,6 @@ export function resolveWorkbenchEditorAccess(canMaintain: boolean, draft: ModelD
 		message:
 			draft.base.status === "PUBLISHED"
 				? "发布版本不可原地修改；创建新草稿版本后，可继续使用可视化或代码方式编辑。"
-				: `当前模型版本为 ${draft.base.status}，只能查看。`,
+				: `当前模型版本为${statusLabel(draft.base.status)}，只能查看。`,
 	};
 }

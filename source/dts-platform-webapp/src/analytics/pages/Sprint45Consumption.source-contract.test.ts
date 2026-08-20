@@ -44,6 +44,8 @@ test("Sprint-45 dashboards and screens expose complete delivery lifecycle action
 	for (const label of ["新建看板", "添加图表", "发布", "分享", "删除"]) {
 		assert.match(DASHBOARDS_SOURCE, new RegExp(label));
 	}
+	assert.match(DASHBOARDS_SOURCE, /actionColumn<DashboardListItem>/);
+	assert.doesNotMatch(DASHBOARDS_SOURCE, /type="link"/);
 	for (const label of ["新建大屏", "编辑", "预览", "发布", "复制", "导出", "删除"]) {
 		assert.match(SCREENS_SOURCE, new RegExp(label));
 	}

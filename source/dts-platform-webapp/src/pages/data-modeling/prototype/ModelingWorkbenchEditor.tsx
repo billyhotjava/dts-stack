@@ -8,6 +8,7 @@ import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sp
 import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { materializationLabel } from "@/utils/customerDisplayLabels";
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
 import { ModelImplementationBindingFields } from "./ModelImplementationBindingFields";
 import { ModelMaterializationStatusCard } from "./ModelMaterializationStatus";
@@ -593,10 +594,10 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 					<label>
 						<span>物化方式</span>
 						<select onChange={(event) => patch({ materialization: event.target.value })} value={draft.materialization}>
-							<option value="table">table</option>
-							<option value="incremental">incremental</option>
-							<option value="view">view</option>
-							<option value="ephemeral">ephemeral</option>
+							<option value="table">{materializationLabel("table")}</option>
+							<option value="incremental">{materializationLabel("incremental")}</option>
+							<option value="view">{materializationLabel("view")}</option>
+							<option value="ephemeral">{materializationLabel("ephemeral")}</option>
 						</select>
 					</label>
 					<label>

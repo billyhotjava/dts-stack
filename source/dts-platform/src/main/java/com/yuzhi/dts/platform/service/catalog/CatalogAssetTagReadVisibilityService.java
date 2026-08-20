@@ -63,14 +63,19 @@ public class CatalogAssetTagReadVisibilityService {
 
         List<String> roles = SecurityUtils.getCurrentUserAuthorities();
         List<String> permissionRoles = roles.isEmpty() ? List.of("__NO_ROLE__") : roles;
+        boolean institutePrivileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES
+        );
         String department = resolveEffectiveDepartment(activeDept);
         Set<UUID> explicitDatasetIds = loadExplicitDatasetIds(actor, identities);
-        Map<String, PermissionResult> accessibleByAsset = loadAccessibleNonDatasetIds(
-            actor,
-            permissionRoles,
-            department,
-            identities
-        );
+        Map<String, PermissionResult> accessibleByAsset = institutePrivileged
+            ? Map.of()
+            : loadAccessibleNonDatasetIds(
+                  actor,
+                  permissionRoles,
+                  department,
+                  identities
+              );
         Set<AssetRef> readable = new LinkedHashSet<>();
         for (ResolvedPermissionIdentity identity : identities) {
             AssetRef ref = new AssetRef(identity.requestedType().name(), identity.canonicalAssetKey());
@@ -81,6 +86,10 @@ public class CatalogAssetTagReadVisibilityService {
                 if (isReadableDataset(identity.dataset(), department, explicitDatasetIds)) {
                     readable.add(ref);
                 }
+                continue;
+            }
+            if (institutePrivileged) {
+                readable.add(ref);
                 continue;
             }
             PermissionResult accessible = accessibleByAsset.get(

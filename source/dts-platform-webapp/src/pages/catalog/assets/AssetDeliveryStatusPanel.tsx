@@ -1,6 +1,8 @@
 import { Alert, Button, Descriptions, Space, Tag } from "antd";
+import { useRouter } from "@/routes/hooks";
 
-export function AssetDeliveryStatusItems({ dataset }: { dataset: Record<string, any> }) {
+export function AssetDeliveryStatusPanel({ dataset }: { dataset: Record<string, any> }) {
+	const router = useRouter();
 	const modelRefs: any[] = Array.isArray(dataset.modelRefs) ? dataset.modelRefs : [];
 	const eligibility = String(dataset.consumptionEligibility || "CONDITIONAL");
 	const eligibilityLabel =
@@ -10,7 +12,7 @@ export function AssetDeliveryStatusItems({ dataset }: { dataset: Record<string, 
 	const axisEntries = Object.entries(dataset.statusAxes || {});
 
 	return (
-		<>
+		<Descriptions bordered column={2} size="small" title="交付与模型证据">
 			<Descriptions.Item label="消费资格">
 				<Tag color={eligibility === "ELIGIBLE" ? "green" : eligibility === "BLOCKED" ? "red" : "gold"}>
 					{eligibilityLabel}
@@ -45,24 +47,30 @@ export function AssetDeliveryStatusItems({ dataset }: { dataset: Record<string, 
 			<Descriptions.Item label="模型证据" span={2}>
 				{modelRefs.length ? (
 					<Space size={[4, 4]} wrap>
-						{modelRefs.map((ref) => (
-							<Button
-								key={`${ref.tenantId || "default"}-${ref.modelSpecId}`}
-								type="link"
-								size="small"
-								className="px-0"
-								href={`/modeling/models/${ref.modelSpecId}?activeStage=logical&tab=design`}
-							>
-								模型 r{ref.modelRevision ?? "-"}
-								{ref.serving ? "（当前服务）" : ""} →
-							</Button>
-						))}
+						{modelRefs
+							.filter((ref) => ref?.modelSpecId)
+							.map((ref) => (
+								<Button
+									key={`${ref.tenantId || "default"}-${ref.modelSpecId}`}
+									type="link"
+									size="small"
+									className="px-0"
+									onClick={() =>
+										router.push(
+											`/data-modeling/dimensions/workbench?modelSpecId=${encodeURIComponent(ref.modelSpecId)}`,
+										)
+									}
+								>
+									模型 r{ref.modelRevision ?? "-"}
+									{ref.serving ? "（当前服务）" : ""} →
+								</Button>
+							))}
 					</Space>
 				) : (
 					"暂无关联模型"
 				)}
 			</Descriptions.Item>
-		</>
+		</Descriptions>
 	);
 }
 

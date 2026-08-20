@@ -13,6 +13,8 @@ import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContra
 import java.time.Clock;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -24,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 /** Read and controlled-retry boundary for the durable Analytics semantic delivery state. */
 @Service
 public class CatalogModelSemanticSyncCommandService {
+
+    private static final int MAX_BATCH_SIZE = 64;
 
     private final CatalogModelServingProjectionRepository repository;
     private final ModelSpecApplicationService modelSpecs;
@@ -65,6 +69,22 @@ public class CatalogModelSemanticSyncCommandService {
             .findSyncState(tenantId, modelSpecId)
             .map(CatalogModelSemanticSyncCommandService::toView)
             .orElseGet(() -> ServingSyncView.notRegistered(modelSpecId));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ServingSyncView> getMany(String tenantId, List<UUID> modelSpecIds) {
+        LinkedHashSet<UUID> requested = modelSpecIds == null
+            ? new LinkedHashSet<>()
+            : new LinkedHashSet<>(modelSpecIds);
+        if (requested.isEmpty() || requested.contains(null) || requested.size() > MAX_BATCH_SIZE) {
+            throw error(
+                "MODEL_SEMANTIC_SYNC_BATCH_WINDOW_INVALID",
+                "Serving sync status requests must contain between 1 and " + MAX_BATCH_SIZE + " unique model ids",
+                ModelSpecException.Kind.BAD_REQUEST,
+                Map.of("maximum", MAX_BATCH_SIZE, "requested", requested.size())
+            );
+        }
+        return requested.stream().map(modelSpecId -> get(tenantId, modelSpecId)).toList();
     }
 
     @Transactional

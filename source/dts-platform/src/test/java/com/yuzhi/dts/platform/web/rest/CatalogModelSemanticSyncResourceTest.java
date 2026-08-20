@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticSyncC
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticSyncCommandService.ServingSyncView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -53,6 +54,17 @@ class CatalogModelSemanticSyncResourceTest {
         assertThat(response.getHeaders().getETag()).isEqualTo("\"model-serving-sync:" + MODEL_ID + ":8\"");
         assertThat(response.getBody()).isNotNull();
         verify(service).retry("tenant-a", "xiezm", MODEL_ID, 7);
+    }
+
+    @Test
+    void listsAClientBoundedServingStatusBatch() {
+        ServingSyncView synced = status("SYNCED", 8);
+        when(service.getMany("tenant-a", List.of(MODEL_ID))).thenReturn(List.of(synced));
+
+        var response = resource.list(List.of(MODEL_ID));
+
+        assertThat(response.getData()).containsExactly(synced);
+        verify(service).getMany("tenant-a", List.of(MODEL_ID));
     }
 
     @Test

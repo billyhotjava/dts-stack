@@ -320,6 +320,13 @@ export const getModelServingSyncStatus = (id: string) =>
 		_skipErrorToast: true,
 	} as any);
 
+export const getModelServingSyncStatuses = (modelSpecIds: string[]) =>
+	api.get<ModelServingSyncStatus[]>({
+		url: `${MODEL_SPEC_RESOURCE}/serving-sync`,
+		params: { modelSpecIds: modelSpecIds.join(",") },
+		_skipErrorToast: true,
+	} as any);
+
 export const retryModelServingSync = (status: ModelServingSyncStatus) =>
 	api.post<ModelServingSyncRetryResult>({
 		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(status.modelSpecId)}/serving-sync/retry`,

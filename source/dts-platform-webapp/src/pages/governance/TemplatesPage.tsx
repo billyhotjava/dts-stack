@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { createModelTemplate, deleteModelTemplate, getModelTemplateReferences, listModelTemplates, updateModelTemplate } from "@/api/platformApi";
 import { normalizeText } from "@/utils/textUtils";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text } = Typography;
 
@@ -446,7 +447,7 @@ export default function TemplatesPage() {
 								<div>
 									<Text type="secondary">状态</Text>
 									<div className="mt-1">
-										<Tag color="green">{activeTemplate.status || "ACTIVE"}</Tag>
+										<Tag color="green">{statusLabel(activeTemplate.status || "ACTIVE")}</Tag>
 									</div>
 								</div>
 								<div>
@@ -586,7 +587,12 @@ export default function TemplatesPage() {
 					</div>
 					<div className="grid gap-4 md:grid-cols-2">
 						<Form.Item name="status" label="状态">
-							<Input placeholder="ACTIVE" />
+							<Select
+								options={[
+									{ label: "生效", value: "ACTIVE" },
+									{ label: "未启用", value: "INACTIVE" },
+								]}
+							/>
 						</Form.Item>
 						<Form.Item name="version" label="版本">
 							<Input placeholder="v1" />

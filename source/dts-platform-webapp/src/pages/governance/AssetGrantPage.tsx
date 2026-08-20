@@ -5,6 +5,7 @@ import { Button, Card, DatePicker, Form, Input, Modal, Radio, Select, Space, Tag
 import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { listAssetGrants, createAssetGrant, deleteAssetGrant } from "@/api/platformApi";
+import { permissionLabel, subjectTypeLabel } from "@/utils/customerDisplayLabels";
 
 type AssetGrant = {
 	id: number;
@@ -21,9 +22,9 @@ type AssetGrant = {
 };
 
 const PERMISSION_OPTIONS = [
-	{ label: "READ", value: "READ" },
-	{ label: "EDIT", value: "EDIT" },
-	{ label: "MANAGE", value: "MANAGE" },
+	{ label: "查看", value: "READ" },
+	{ label: "编辑", value: "EDIT" },
+	{ label: "管理", value: "MANAGE" },
 ];
 
 const GRANTEE_TYPE_OPTIONS = [
@@ -33,11 +34,11 @@ const GRANTEE_TYPE_OPTIONS = [
 ];
 
 const ASSET_TYPE_OPTIONS = [
-	{ label: "TABLE", value: "TABLE" },
-	{ label: "CARD", value: "CARD" },
-	{ label: "DASHBOARD", value: "DASHBOARD" },
-	{ label: "SCREEN", value: "SCREEN" },
-	{ label: "MODEL", value: "MODEL" },
+	{ label: "数据表", value: "TABLE" },
+	{ label: "分析卡片", value: "CARD" },
+	{ label: "分析看板", value: "DASHBOARD" },
+	{ label: "数据大屏", value: "SCREEN" },
+	{ label: "数据模型", value: "MODEL" },
 ];
 
 export default function AssetGrantPage() {
@@ -112,7 +113,7 @@ export default function AssetGrantPage() {
 			dataIndex: "granteeType",
 			key: "granteeType",
 			width: 100,
-			render: (v: string) => <Tag color={v === "USER" ? "blue" : v === "ROLE" ? "green" : "orange"}>{v}</Tag>,
+			render: (v: string) => <Tag color={v === "USER" ? "blue" : v === "ROLE" ? "green" : "orange"}>{subjectTypeLabel(v)}</Tag>,
 		},
 		{ title: "被授权人", dataIndex: "granteeId", key: "granteeId" },
 		{
@@ -120,7 +121,7 @@ export default function AssetGrantPage() {
 			dataIndex: "permission",
 			key: "permission",
 			width: 100,
-			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{v}</Tag>,
+			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{permissionLabel(v)}</Tag>,
 		},
 		{
 			title: "有效期至",

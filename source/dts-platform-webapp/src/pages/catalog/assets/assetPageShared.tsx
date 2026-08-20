@@ -29,6 +29,18 @@ export type AssetRow = {
 	snapshotTime?: string;
 	assetType?: string;
 	assetKey?: string;
+	assetFamily?: string;
+	subtype?: string;
+	catalogIdentity?: string;
+	detailRoute?: string;
+	relationships?: Array<{
+		relationType?: string;
+		direction?: string;
+		assetType?: string;
+		assetKey?: string;
+		displayName?: string;
+		detailRoute?: string;
+	}>;
 	assetTags?: CatalogTagDto[];
 	statusAxes?: {
 		discovery?: string;

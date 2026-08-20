@@ -14,6 +14,7 @@ import {
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Alert, App, Button, Card, Drawer, Empty, Input, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import { PlusOutlined, } from "@ant-design/icons";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { useDashboardCrossFilter } from "../hooks/useDashboardCrossFilter";
 import { useDrillFilter } from "../hooks/useDrillFilter";
@@ -527,7 +528,7 @@ export default function DashboardEditorPage() {
 								<h2 className="m-0 min-w-0 flex-1 truncate text-lg font-semibold">{name || t(locale, "dashboards.untitled")}</h2>
 							)}
 							<div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-								{dashboardValue?.lifecycle_status && <Tag>{dashboardValue.lifecycle_status}</Tag>}
+								{dashboardValue?.lifecycle_status && <Tag>{statusLabel(dashboardValue.lifecycle_status)}</Tag>}
 								{dashboardValue?.registration_status && (
 									<Tag color={dashboardValue.registration_status === "AVAILABLE" ? "green" : dashboardValue.registration_status === "REGISTRATION_FAILED" ? "red" : "gold"}>
 										{dashboardValue.registration_status}
@@ -779,7 +780,7 @@ export default function DashboardEditorPage() {
 								<Card
 									key={version.revisionId}
 									size="small"
-									title={<Space><Text strong>v{version.versionNo}</Text><Tag>{version.status}</Tag></Space>}
+									title={<Space><Text strong>v{version.versionNo}</Text><Tag>{statusLabel(version.status)}</Tag></Space>}
 									extra={<Button size="small" onClick={() => void createDraftFromVersion(version.revisionId)}>基于此版本创建草稿</Button>}
 								>
 									<Text type="secondary">

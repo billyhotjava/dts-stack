@@ -22,6 +22,7 @@ import {
 } from "@/api/platformApi";
 import IndicatorCard from "./components/IndicatorCard";
 import type { IndicatorCardData } from "./components/IndicatorCard";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Title, Text } = Typography;
 
@@ -280,7 +281,7 @@ export default function IndicatorDashboardPage() {
 								{detailData.indicator.direction}
 							</Descriptions.Item>
 							<Descriptions.Item label="状态">
-								<Tag>{detailData.indicator.status}</Tag>
+								<Tag>{statusLabel(detailData.indicator.status)}</Tag>
 							</Descriptions.Item>
 							<Descriptions.Item label="当前值">
 								<span style={{ fontSize: 18, fontWeight: 700 }}>

@@ -7,6 +7,7 @@ import opsService, { type ExternalRun } from "@/api/services/opsService";
 import { getDbtRunLog } from "@/api/platformApi";
 import { PageHeader } from "@/components/page-header";
 import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text } = Typography;
 
@@ -19,7 +20,7 @@ const STATUS_TAG_COLOR: Record<string, string> = {
 
 const ENTRY_OPTIONS = [
 	{ label: "全部类型", value: "" },
-	{ label: "Airflow DAG", value: "AIRFLOW_DAG" },
+	{ label: "Airflow 调度工作流", value: "AIRFLOW_DAG" },
 	{ label: "入湖任务", value: "INGESTION_TASK" },
 	{ label: "dbt 任务", value: "DBT_RUN" },
 ];
@@ -109,7 +110,7 @@ export default function OpsLogCenterPage() {
 			title: "状态",
 			dataIndex: "status",
 			width: 110,
-			render: (v) => <Tag color={STATUS_TAG_COLOR[v] ?? "default"}>{v || "-"}</Tag>,
+			render: (v) => <Tag color={STATUS_TAG_COLOR[v] ?? "default"}>{statusLabel(v, "-")}</Tag>,
 		},
 		{ title: "DAG ID", dataIndex: "dagId", width: 180, render: (v) => v || "-" },
 		{

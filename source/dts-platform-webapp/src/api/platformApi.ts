@@ -77,6 +77,7 @@ export const getTechMetadataTableDetail = (fqn: string) =>
 	api.get({ url: "/catalog/metadata/tables/detail", params: { fqn } });
 export type CatalogAssetV2Query = {
 	keyword?: string;
+	assetFamily?: string;
 	tagIds?: string[];
 	service?: string;
 	type?: string;

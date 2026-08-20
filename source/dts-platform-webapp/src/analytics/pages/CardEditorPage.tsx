@@ -467,7 +467,7 @@ export default function CardEditorPage() {
 								justifyContent: "space-between",
 								marginBottom: "var(--spacing-xs)",
 							}}>
-								<strong>Explainability</strong>
+								<strong>结果解释</strong>
 								<Button
 									type="text"
 									size="small"

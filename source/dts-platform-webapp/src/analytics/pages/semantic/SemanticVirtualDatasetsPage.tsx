@@ -81,7 +81,7 @@ export default function SemanticVirtualDatasetsPage() {
 			title: "状态",
 			key: "status",
 			width: 120,
-			render: (_value, record) => <Tag color="blue">{record.archived ? "archived" : "shared"}</Tag>,
+			render: (_value, record) => <Tag color="blue">{record.archived ? "已归档" : "已共享"}</Tag>,
 		},
 		actionColumn<SemanticVirtualDataset>(
 			(record) => [

@@ -50,7 +50,7 @@ describe("workbench editor access", () => {
 		expect(resolveWorkbenchEditorAccess(true, conceptDraft("RETIRED"))).toMatchObject({
 			mode: "VIEW_VERSION",
 			readOnly: true,
-			message: expect.stringContaining("RETIRED"),
+			message: expect.stringContaining("已退役"),
 		});
 	});
 
@@ -58,7 +58,7 @@ describe("workbench editor access", () => {
 		expect(resolveWorkbenchEditorAccess(true, conceptDraft("CURRENT"))).toMatchObject({
 			mode: "EDIT_DRAFT",
 			readOnly: false,
-			message: expect.stringContaining("CURRENT 修订"),
+			message: expect.stringContaining("当前有效修订"),
 		});
 	});
 });

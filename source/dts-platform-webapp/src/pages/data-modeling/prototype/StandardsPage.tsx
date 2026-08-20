@@ -269,7 +269,7 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 					</div>
 				) : (
 					<RequestState
-						description={capability.disabledReason || "当前 owner 未返回任何标准记录。"}
+						description={capability.disabledReason || "当前功能入口未返回任何标准记录。"}
 						kind="empty"
 						title={`暂无${route.title}`}
 					/>

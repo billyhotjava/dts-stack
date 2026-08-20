@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.catalog;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -221,6 +222,18 @@ class CatalogAssetTagReadVisibilityServiceTest {
             );
 
         assertThat(service.filterReadable(List.of(unresolved), "D01")).isEmpty();
+    }
+
+    @Test
+    void instituteDataOwnerCanReadVisibleNonDatasetGovernanceMetadataWithoutExplicitGrant() {
+        authenticate("ROLE_INST_DATA_OWNER", "1152");
+        AssetRef screen = new AssetRef("SCREEN", "screen:executive-overview");
+        UUID grantId = UUID.fromString("10000000-0000-0000-0000-000000000004");
+        when(identityResolver.resolveAll(List.of(screen)))
+            .thenReturn(List.of(identity(screen, grantId, null)));
+
+        assertThat(service.filterReadable(List.of(screen), null)).containsExactly(screen);
+        verifyNoInteractions(permissionService);
     }
 
     private CatalogDataset dataset(String ownerDept) {

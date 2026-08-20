@@ -600,7 +600,7 @@ describe("ModelingWorkbenchEditor", () => {
 			}),
 		);
 
-		expect(container.querySelector("output.dmx-editor-access-note")?.textContent).toContain("PUBLISHED");
+			expect(container.querySelector("output.dmx-editor-access-note")?.textContent).toContain("PUBLISHED");
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
 	});
 

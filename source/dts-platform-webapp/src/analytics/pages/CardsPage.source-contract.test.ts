@@ -15,6 +15,8 @@ test("analysis workspace lists and archives governed analyses only", () => {
 	assert.match(PAGE_SOURCE, /useState\(10\)/);
 	assert.doesNotMatch(PAGE_SOURCE, /listCards|createCard|deleteCard/);
 	assert.doesNotMatch(PAGE_SOURCE, /BatchImportCardsModal|CollectionTree|MoveToCollectionModal/);
+	assert.match(PAGE_SOURCE, /actionColumn<Analysis>/);
+	assert.doesNotMatch(PAGE_SOURCE, /type="link"/);
 });
 
 test("analysis creation starts from the published dataset catalog", () => {

@@ -21,8 +21,10 @@ import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContra
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 
 class CatalogModelSemanticSyncCommandServiceTest {
@@ -30,6 +32,7 @@ class CatalogModelSemanticSyncCommandServiceTest {
     private static final String TENANT = "tenant-a";
     private static final String ACTOR = "xiezm";
     private static final UUID MODEL_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
+    private static final UUID SECOND_MODEL_ID = UUID.fromString("30000000-0000-0000-0000-000000000002");
     private static final UUID PLAN_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final Instant NOW = Instant.parse("2026-08-17T06:00:00Z");
 
@@ -91,6 +94,37 @@ class CatalogModelSemanticSyncCommandServiceTest {
         assertThat(status.syncStatus()).isEqualTo("NOT_REGISTERED");
         assertThat(status.version()).isZero();
         assertThat(status.servingReady()).isFalse();
+    }
+
+    @Test
+    void readsOneBoundedBatchInRequestOrderAndKeepsNotRegisteredExplicit() {
+        Fixture fixture = fixture();
+        ServingSyncState synced = state("SYNCED", 0, 8, null);
+        when(fixture.repository.findSyncState(TENANT, MODEL_ID)).thenReturn(Optional.of(synced));
+        when(fixture.repository.findSyncState(TENANT, SECOND_MODEL_ID)).thenReturn(Optional.empty());
+
+        var statuses = fixture.service.getMany(TENANT, List.of(MODEL_ID, SECOND_MODEL_ID, MODEL_ID));
+
+        assertThat(statuses).extracting(CatalogModelSemanticSyncCommandService.ServingSyncView::modelSpecId)
+            .containsExactly(MODEL_ID, SECOND_MODEL_ID);
+        assertThat(statuses).extracting(CatalogModelSemanticSyncCommandService.ServingSyncView::syncStatus)
+            .containsExactly("SYNCED", "NOT_REGISTERED");
+        verify(fixture.repository).findSyncState(TENANT, MODEL_ID);
+        verify(fixture.repository).findSyncState(TENANT, SECOND_MODEL_ID);
+    }
+
+    @Test
+    void rejectsAnUnboundedServingStatusBatch() {
+        Fixture fixture = fixture();
+        List<UUID> modelSpecIds = IntStream.range(0, 65)
+            .mapToObj(index -> UUID.nameUUIDFromBytes(("model-" + index).getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+            .toList();
+
+        assertThatThrownBy(() -> fixture.service.getMany(TENANT, modelSpecIds))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SEMANTIC_SYNC_BATCH_WINDOW_INVALID");
+        verify(fixture.repository, never()).findSyncState(any(), any());
     }
 
     private static Fixture fixture() {

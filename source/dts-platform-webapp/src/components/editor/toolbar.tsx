@@ -44,7 +44,7 @@ export default function Toolbar({ id, isSimple }: EditorToolbarProps) {
 								{heading}
 							</option>
 						))}
-						<option value="">Normal</option>
+						<option value="">正文</option>
 					</select>
 				</div>
 

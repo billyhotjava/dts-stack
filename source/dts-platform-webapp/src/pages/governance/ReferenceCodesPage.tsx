@@ -7,6 +7,7 @@ import {} from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import {
 	applyStructuredReferenceCodeImport,
 	createReferenceCode,
@@ -884,7 +885,7 @@ export default function ReferenceCodesPage() {
 			width: 260,
 			render: (value) => <Text className="font-mono text-xs">{value || "-"}</Text>,
 		},
-		{ title: "状态", dataIndex: "status", width: 120, render: (value) => <Tag>{value || "-"}</Tag> },
+		{ title: "状态", dataIndex: "status", width: 120, render: (value) => <Tag>{statusLabel(value, "-")}</Tag> },
 		{ title: "策略", dataIndex: "conflictPolicy", width: 100, render: (value) => value || "-" },
 		{ title: "新增", dataIndex: "createCount", width: 80, render: (value) => value ?? 0 },
 		{ title: "更新", dataIndex: "updateCount", width: 80, render: (value) => value ?? 0 },
@@ -1334,7 +1335,7 @@ export default function ReferenceCodesPage() {
 								loading={structuredHistoryDetailLoading}
 							>
 								<Space wrap split={<span>|</span>}>
-									<Text>状态：{structuredHistoryDetail.status || "-"}</Text>
+									<Text>状态：{statusLabel(structuredHistoryDetail.status, "-")}</Text>
 									<Text>策略：{structuredHistoryDetail.conflictPolicy || "-"}</Text>
 									<Text>摘要：{structuredHistoryDetail.summary || "-"}</Text>
 									<Text>变更数：{structuredHistoryDetail.diffCount ?? 0}</Text>

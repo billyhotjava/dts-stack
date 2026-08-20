@@ -1,9 +1,12 @@
+import { Space } from "antd";
 import { Search } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
 	getModelMaterializationStatuses,
+	getModelServingSyncStatuses,
 	listModelWorkbenchCatalogPage,
 	type ModelMaterializationStatus,
+	type ModelServingSyncStatus,
 	type ModelWorkbenchCatalogEntry,
 	type ModelWorkbenchCatalogPage,
 } from "@/api/modelSpecApi";
@@ -11,8 +14,11 @@ import type { CatalogDomain } from "@/api/services/catalogDomainService";
 import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecLayer, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { useRouter } from "@/routes/hooks";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import { resolveMaterializationPresentation } from "./ModelMaterializationStatus";
 import { ModelWorkbenchCreateMenu } from "./ModelWorkbenchCreateMenu";
+import { MODEL_SERVING_SYNC_PRESENTATION, resolveModelServingPhysicalAssetId } from "./modelServingSyncPresentation";
 import { Button, RequestState, Status } from "./PrototypePrimitives";
 import type { ModelCreateKind } from "./services/modelWorkbenchService";
 import "./modeling-workbench.css";
@@ -83,6 +89,7 @@ export function ModelWorkbenchCatalogList({
 	onRemoveDimension,
 	onRemoveModel,
 }: ModelWorkbenchCatalogListProps) {
+	const router = useRouter();
 	const [createOpen, setCreateOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [planFilter, setPlanFilter] = useState("");
@@ -98,6 +105,9 @@ export function ModelWorkbenchCatalogList({
 	const [materializationByModel, setMaterializationByModel] = useState<Map<string, ModelMaterializationStatus>>(
 		() => new Map(),
 	);
+	const [servingByModel, setServingByModel] = useState<Map<string, ModelServingSyncStatus>>(() => new Map());
+	const [servingLoading, setServingLoading] = useState(false);
+	const [servingFailure, setServingFailure] = useState(false);
 	const domainById = useMemo(() => new Map(domains.map((domain) => [domain.id, domain.name])), [domains]);
 	const modelById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models]);
 	const dimensionById = useMemo(() => new Map(dimensions.map((dimension) => [dimension.id, dimension])), [dimensions]);
@@ -266,6 +276,37 @@ export function ModelWorkbenchCatalogList({
 	const pageRows = compatibilityFallback
 		? filteredLocalRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 		: serverRows;
+	const pageModelIdsKey = pageRows
+		.map((row) => row.model?.id || "")
+		.filter(Boolean)
+		.join(",");
+	useEffect(() => {
+		const modelSpecIds = pageModelIdsKey.split(",").filter(Boolean);
+		if (!modelSpecIds.length) {
+			setServingByModel(new Map());
+			setServingLoading(false);
+			setServingFailure(false);
+			return;
+		}
+		let active = true;
+		setServingLoading(true);
+		setServingFailure(false);
+		void getModelServingSyncStatuses(modelSpecIds)
+			.then((statuses) => {
+				if (active) setServingByModel(new Map(statuses.map((status) => [status.modelSpecId, status])));
+			})
+			.catch(() => {
+				if (!active) return;
+				setServingByModel(new Map());
+				setServingFailure(true);
+			})
+			.finally(() => {
+				if (active) setServingLoading(false);
+			});
+		return () => {
+			active = false;
+		};
+	}, [pageModelIdsKey]);
 	const totalElements = compatibilityFallback ? filteredLocalRows.length : catalogPage?.totalElements || 0;
 	const pageCount = Math.max(1, compatibilityFallback ? localPageCount : catalogPage?.totalPages || 0);
 	const currentPage = Math.min(page, pageCount);
@@ -348,7 +389,7 @@ export function ModelWorkbenchCatalogList({
 			{
 				title: "状态",
 				dataIndex: "status",
-				render: (value: string) => <Status tone={value === "DRAFT" ? "warning" : "info"}>{value}</Status>,
+				render: (value: string) => <Status tone={value === "DRAFT" ? "warning" : "info"}>{statusLabel(value)}</Status>,
 			},
 			{
 				title: "版本",
@@ -365,6 +406,37 @@ export function ModelWorkbenchCatalogList({
 						row.model.revision,
 					);
 					return <Status tone={materialization.tone}>{materialization.label}</Status>;
+				},
+			},
+			{
+				title: "资产联动",
+				key: "serving-sync",
+				render: (_, row) => {
+					if (!row.model) return "不适用";
+					const serving = servingByModel.get(row.model.id) || null;
+					const physicalAssetId = resolveModelServingPhysicalAssetId(serving);
+					const presentation = serving
+						? MODEL_SERVING_SYNC_PRESENTATION[serving.syncStatus]
+						: MODEL_SERVING_SYNC_PRESENTATION.NOT_REGISTERED;
+					return (
+						<Space size={4}>
+							<Status tone={servingFailure && !serving ? "danger" : presentation.tone}>
+								{servingLoading && !serving
+									? "目录同步读取中"
+									: servingFailure && !serving
+										? "目录同步读取失败"
+										: presentation.label}
+							</Status>
+							{physicalAssetId ? (
+								<Button
+									onClick={() => router.push(`/catalog/datasets/${encodeURIComponent(physicalAssetId)}`)}
+									type="text"
+								>
+									查看资产
+								</Button>
+							) : null}
+						</Space>
+					);
 				},
 			},
 			actionColumn<CatalogRow>(
@@ -432,8 +504,12 @@ export function ModelWorkbenchCatalogList({
 			onMaterialize,
 			onRemoveDimension,
 			onRemoveModel,
+			router,
 			selectedIds,
 			selectedPlanId,
+			servingByModel,
+			servingFailure,
+			servingLoading,
 			toggleCurrentPage,
 			toggleModel,
 		],

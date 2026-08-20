@@ -54,6 +54,7 @@ const apiMocks = vi.hoisted(() => ({
 	getExecutionWorkspace: vi.fn(),
 	getModelSpec: vi.fn(),
 	getMaterializationStatuses: vi.fn(),
+	getServingSyncStatuses: vi.fn(),
 	previewMaterializationPlan: vi.fn(),
 	repairExecutionBinding: vi.fn(),
 	runExecutionNow: vi.fn(),
@@ -89,6 +90,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	getPlanExecutionWorkspace: apiMocks.getExecutionWorkspace,
 	getModelSpec: apiMocks.getModelSpec,
 	getModelMaterializationStatuses: apiMocks.getMaterializationStatuses,
+	getModelServingSyncStatuses: apiMocks.getServingSyncStatuses,
 	previewMaterializationPlan: apiMocks.previewMaterializationPlan,
 	repairPlanExecutionBinding: apiMocks.repairExecutionBinding,
 	runPlanExecutionNow: apiMocks.runExecutionNow,
@@ -124,6 +126,9 @@ vi.mock("react-router", async (importOriginal) => ({
 	...(await importOriginal<typeof import("react-router")>()),
 	useNavigate: () => vi.fn(),
 }));
+
+const routerPush = vi.hoisted(() => vi.fn());
+vi.mock("@/routes/hooks", () => ({ useRouter: () => ({ push: routerPush }) }));
 
 const model = {
 	id: "10000000-0000-0000-0000-000000000001",
@@ -239,6 +244,8 @@ beforeEach(() => {
 		bindings: [],
 	} satisfies PlanExecutionWorkspace);
 	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
+	apiMocks.getServingSyncStatuses.mockResolvedValue([]);
+	routerPush.mockReset();
 	apiMocks.getModelSpec.mockImplementation((id: string) =>
 		Promise.resolve(id === secondModel.id ? secondModel : model),
 	);
@@ -685,6 +692,33 @@ describe("release and materialization dispatch", () => {
 
 		expect(apiMocks.publishCandidate).toHaveBeenCalledWith(model.planId, approved, "idem-1", "从模型工作台发布");
 		expect(apiMocks.startPublicationIntent).not.toHaveBeenCalled();
+	});
+
+	it("shows the published asset registration result and opens the governed asset detail", async () => {
+		const published = candidate("BATCH_WORKBENCH", "PUBLISHED");
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], published));
+		apiMocks.getServingSyncStatuses.mockResolvedValue([
+			{
+				modelSpecId: model.id,
+				catalogAssetKey: `semantic-model:${model.id}`,
+				syncStatus: "SYNCED",
+				syncAttempts: 0,
+				version: 8,
+				servingReady: true,
+				servingRef: { physicalAssetId: "33333333-3333-3333-3333-333333333333" },
+			},
+		]);
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("发布模型")?.click());
+
+		expect(container.textContent).toContain("资产登记结果");
+		expect(container.textContent).toContain("目录同步成功");
+		await act(async () => button("查看资产")?.click());
+		expect(routerPush).toHaveBeenCalledWith("/catalog/datasets/33333333-3333-3333-3333-333333333333");
 	});
 
 	it("starts the strict single-model publication intent at the quality boundary", async () => {

@@ -1,4 +1,4 @@
-import { Button, Card, Input, Select } from "antd";
+import { Button, Card, Input, Select, Tabs } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import type { CatalogTagDto } from "@/api/catalogTagsApi";
@@ -13,6 +13,7 @@ import { buildAssetV2Query } from "./assets/assetV2Query";
 
 type AssetDirectoryFilters = {
 	keyword: string;
+	assetFamily: string;
 	domainId?: string;
 	datasetType?: string;
 	classification?: string;
@@ -25,6 +26,17 @@ type AssetDirectoryFilters = {
 	stale: boolean;
 	tagIds: string[];
 };
+
+const ASSET_FAMILY_OPTIONS = [
+	{ label: "全部资产", value: "ALL" },
+	{ label: "数据表", value: "DATASET" },
+	{ label: "数据模型", value: "SEMANTIC_MODEL" },
+	{ label: "指标", value: "GOV_INDICATOR" },
+	{ label: "分析数据集", value: "BI_DATASET" },
+	{ label: "看板", value: "SCREEN" },
+	{ label: "数据产品", value: "DATA_PRODUCT" },
+	{ label: "数据服务", value: "API_SERVICE" },
+];
 
 const DATASET_TYPE_OPTIONS = [
 	{ label: "PostgreSQL", value: "POSTGRESQL" },
@@ -71,6 +83,7 @@ const QUALITY_STATUS_OPTIONS = [
 
 const FILTER_PARAM_KEYS = [
 	"keyword",
+	"family",
 	"domain",
 	"datasetType",
 	"assetType",
@@ -90,6 +103,7 @@ const concreteParam = (value: string | null) => (value && value !== "ALL" ? valu
 function readUrlFilters(searchParams: URLSearchParams): AssetDirectoryFilters {
 	return {
 		keyword: searchParams.get("keyword") || "",
+		assetFamily: concreteParam(searchParams.get("family")) || "ALL",
 		domainId: concreteParam(searchParams.get("domain")),
 		datasetType: concreteParam(searchParams.get("datasetType") || searchParams.get("assetType")),
 		classification: concreteParam(searchParams.get("classification")),
@@ -117,6 +131,11 @@ function normalizeAssetRows(payload: any): AssetDirectoryRow[] {
 		type: String(item.type || item.sourceType || ""),
 		assetType: item.assetType || item.grantAssetType || undefined,
 		assetKey: item.assetKey || item.fqn || undefined,
+		assetFamily: item.assetFamily || item.assetType || item.grantAssetType || "DATASET",
+		subtype: item.subtype || undefined,
+		catalogIdentity: item.catalogIdentity || undefined,
+		detailRoute: item.detailRoute || undefined,
+		relationships: Array.isArray(item.relationships) ? item.relationships : [],
 		assetTags: Array.isArray(item.assetTags) ? (item.assetTags as CatalogTagDto[]) : [],
 		domainId: item.domainId ? String(item.domainId) : undefined,
 		domain: item.domainName || item.domain || undefined,
@@ -147,11 +166,29 @@ function normalizeAssetRows(payload: any): AssetDirectoryRow[] {
 }
 
 export default function DataSearchPage() {
-	const [searchParams] = useSearchParams();
-	if (searchParams.get("tab") === "catalog-tags") {
-		return <AssetTagsWorkspace />;
-	}
-	return <DataAssetDirectoryPage />;
+	const [searchParams, setSearchParams] = useSearchParams();
+	const activeTab = searchParams.get("tab") === "catalog-tags" ? "catalog-tags" : "asset-directory";
+	const changeTab = (key: string) => {
+		const next = new URLSearchParams(searchParams);
+		if (key === "catalog-tags") next.set("tab", "catalog-tags");
+		else next.delete("tab");
+		setSearchParams(next);
+	};
+
+	return (
+		<div className="min-w-0 space-y-3">
+			<PageHeader title="数据资产目录" />
+			<Tabs
+				activeKey={activeTab}
+				onChange={changeTab}
+				items={[
+					{ key: "asset-directory", label: "资产目录" },
+					{ key: "catalog-tags", label: "数据标签" },
+				]}
+			/>
+			{activeTab === "catalog-tags" ? <AssetTagsWorkspace /> : <DataAssetDirectoryPage />}
+		</div>
+	);
 }
 
 function DataAssetDirectoryPage() {
@@ -159,6 +196,7 @@ function DataAssetDirectoryPage() {
 	const searchParamsKey = searchParams.toString();
 	const urlFilters = useMemo(() => readUrlFilters(new URLSearchParams(searchParamsKey)), [searchParamsKey]);
 	const [keyword, setKeyword] = useState("");
+	const [assetFamily, setAssetFamily] = useState("ALL");
 	const [domain, setDomain] = useState<string | undefined>(undefined);
 	const [datasetType, setDatasetType] = useState<string | undefined>(undefined);
 	const [classification, setClassification] = useState<string | undefined>(undefined);
@@ -207,6 +245,7 @@ function DataAssetDirectoryPage() {
 				buildAssetV2Query(
 					{
 						keyword: filters.keyword,
+						assetFamily: filters.assetFamily,
 						tagIds: filters.tagIds,
 						domainId: filters.domainId,
 						assetType: filters.datasetType,
@@ -242,6 +281,7 @@ function DataAssetDirectoryPage() {
 
 	useEffect(() => {
 		setKeyword(urlFilters.keyword);
+		setAssetFamily(urlFilters.assetFamily);
 		setDomain(urlFilters.domainId);
 		setDatasetType(urlFilters.datasetType);
 		setClassification(urlFilters.classification);
@@ -256,6 +296,7 @@ function DataAssetDirectoryPage() {
 	const handleSearch = () => {
 		const next = new URLSearchParams(searchParams);
 		setFilterParam(next, "keyword", keyword.trim());
+		setFilterParam(next, "family", assetFamily === "ALL" ? undefined : assetFamily);
 		setFilterParam(next, "domain", domain);
 		setFilterParam(next, "datasetType", datasetType);
 		next.delete("assetType");
@@ -271,6 +312,7 @@ function DataAssetDirectoryPage() {
 				{
 					...urlFilters,
 					keyword: keyword.trim(),
+					assetFamily,
 					domainId: domain,
 					datasetType,
 					classification,
@@ -290,6 +332,7 @@ function DataAssetDirectoryPage() {
 
 	const handleReset = () => {
 		setKeyword("");
+		setAssetFamily("ALL");
 		setDomain(undefined);
 		setDatasetType(undefined);
 		setClassification(undefined);
@@ -307,6 +350,7 @@ function DataAssetDirectoryPage() {
 			void loadAssets(
 				{
 					keyword: "",
+					assetFamily: "ALL",
 					unclassified: false,
 					stale: false,
 					tagIds: [],
@@ -321,10 +365,8 @@ function DataAssetDirectoryPage() {
 
 	return (
 		<div className="min-w-0 space-y-3">
-			<PageHeader title="数据资产目录" />
-
 			<Card size="small" className="min-w-0" styles={{ body: { padding: 12 } }}>
-				<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-9">
+				<div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-10">
 					<Input.Search
 						id="catalog-search-keyword"
 						aria-label="关键词"
@@ -333,6 +375,16 @@ function DataAssetDirectoryPage() {
 						onChange={(event) => setKeyword(event.target.value)}
 						onSearch={handleSearch}
 						allowClear
+					/>
+					<Select
+						id="catalog-search-asset-family"
+						aria-label="资产家族"
+						value={assetFamily}
+						onChange={(value) => {
+							setAssetFamily(value);
+							if (value !== "ALL" && value !== "DATASET") setDatasetType(undefined);
+						}}
+						options={ASSET_FAMILY_OPTIONS}
 					/>
 					<Select
 						id="catalog-search-domain"
@@ -352,6 +404,7 @@ function DataAssetDirectoryPage() {
 						placeholder="数据源类型"
 						value={datasetType}
 						onChange={setDatasetType}
+						disabled={assetFamily !== "ALL" && assetFamily !== "DATASET"}
 						options={DATASET_TYPE_OPTIONS}
 					/>
 					<Select

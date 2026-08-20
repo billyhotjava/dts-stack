@@ -2,6 +2,7 @@ import { LEDGER_PAGE_SIZE } from "./assetPageShared";
 
 export type AssetV2FilterState = {
 	keyword?: string;
+	assetFamily?: string;
 	domainId?: string;
 	domainUnassigned?: boolean;
 	assetType?: string;
@@ -21,6 +22,7 @@ export const buildAssetV2Query = (filters: AssetV2FilterState, page = 0, size = 
 	page,
 	size,
 	keyword: filters.keyword?.trim() || undefined,
+	assetFamily: filters.assetFamily || undefined,
 	domainId: filters.domainId,
 	domainUnassigned: filters.domainUnassigned || undefined,
 	type: filters.assetType === "ALL" ? undefined : filters.assetType,

@@ -3,6 +3,7 @@ import { type BlockerFunction, useBlocker, useNavigate, useSearchParams } from "
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { useUserInfo } from "@/store/userStore";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 
@@ -610,10 +611,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								{draft?.name || (draft ? `新建${MODEL_KIND_CONFIG[draft.createKind].label}` : "模型编辑器")}
 							</strong>
 							{draft && isConceptDimensionDraft(draft) && draft.definitionBase ? (
-								<Status tone="warning">{draft.definitionBase.status}</Status>
+								<Status tone="warning">{statusLabel(draft.definitionBase.status)}</Status>
 							) : selectedModel ? (
 								<Status tone={selectedModel.status === "PUBLISHED" ? "success" : "warning"}>
-									{selectedModel.status} · r{selectedModel.revision}
+									{statusLabel(selectedModel.status)} · r{selectedModel.revision}
 								</Status>
 							) : null}
 						</div>
