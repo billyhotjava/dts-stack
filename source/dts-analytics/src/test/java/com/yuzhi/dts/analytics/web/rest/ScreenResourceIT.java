@@ -205,6 +205,65 @@ class ScreenResourceIT {
     }
 
     @Test
+    void publishedOnlyScreenDirectoryShouldExcludeDraftsAndServeCurrentPublishedVersion() throws Exception {
+        Cookie sessionCookie = authenticate();
+
+        MvcResult publishedCandidate = mockMvc.perform(post("/api/screens")
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "质量运营大屏",
+                                  "description": "门户发布态样本",
+                                  "classification": "INTERNAL",
+                                  "components": []
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andReturn();
+        long publishedScreenId = objectMapper.readTree(publishedCandidate.getResponse().getContentAsString()).path("id").asLong();
+
+        mockMvc.perform(post("/api/screens")
+                        .cookie(sessionCookie)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name": "仍在编辑的大屏",
+                                  "description": "不得进入门户目录",
+                                  "classification": "INTERNAL",
+                                  "components": []
+                                }
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/screens").param("publishedOnly", "true").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        mockMvc.perform(post("/api/screens/{id}/publish", publishedScreenId).cookie(sessionCookie))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/screens").param("publishedOnly", "true").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(publishedScreenId))
+                .andExpect(jsonPath("$[0].name").value("质量运营大屏"))
+                .andExpect(jsonPath("$[0].publishedVersionNo").value(1));
+
+        mockMvc.perform(get("/api/screens").cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+
+        mockMvc.perform(get("/api/screens/{id}", publishedScreenId)
+                        .param("mode", "published")
+                        .param("fallbackDraft", "false")
+                        .cookie(sessionCookie))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sourceMode").value("published"))
+                .andExpect(jsonPath("$.publishedVersionNo").value(1));
+    }
+
+    @Test
     void forwardedPlatformIdentityShouldOverrideStaleMetabaseSessionForScreenIsolation() throws Exception {
         MvcResult aliceCreate = mockMvc.perform(withPlatformHeaders(
                         post("/api/screens")

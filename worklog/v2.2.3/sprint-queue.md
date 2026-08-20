@@ -2088,3 +2088,24 @@
 **执行顺序**: F0 → F1/T01 → F1/T02 → F2/T01 → F3/T01 → F3/T02；编码完成后只运行一次集中 E2E。
 **关键决策**: canonical 页面和 `dts.analysis/v1` 保持唯一 owner；原生 DnD + 键盘 fallback；只开放真实图表；联动复用 dashcard；导出复用查询网关、流式服务、密级封印与 EXPORT 权限；无 schema 迁移。
 **已知风险**: 当前 shell 无真实 E2E 凭据，Chrome 95 executable 缺失；本地 25 个发布数据集只代表功能样本，容量不外推；共享工作区有未提交的数据建模改动，Sprint-95 不触碰、不暂存、不回滚。
+
+## Sprint-96: 客户数据门户消费闭环 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-96-202608-data-portal`
+**时间盒**: 2026-08-20 ～ 2026-09-04
+**状态**: IN_PROGRESS（G0/G1 已完成；运行库当前无已发布大屏，填充态以隔离 IT/Mock E2E 验证，真实填充态保留 G4 GAP）
+**类型**: Architecture / Full-stack / UI Productization / Governed Consumption
+**目标**: 登录用户从唯一“数据门户”入口进入，左侧按主题域浏览自己有权访问的已发布大屏，点击大屏名称后在右侧加载当前发布版本，并可深链、刷新和进入大屏管理。
+**依赖**: 复用 `AnalyticsScreen`、`AnalyticsScreenVersion.currentPublished`、`ScreenPermissionService`、`ScreenPreviewPage` 和治理主题域；承接 Sprint-24 大屏密级、Sprint-66 大屏交互、Sprint-95 BI 创作闭环；不使用小时级 `BiReportLink` 镜像作为门户事实源。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与契约冻结 | P0 | 1 | DONE |
+| F1-发布态目录契约 | P0 | 1 | READY |
+| F2-门户消费体验 | P0 | 2 | DRAFT（依赖 F1） |
+| F3-集中验收与交付 | P0 | 1 | DRAFT（依赖 F1/F2） |
+
+**统计**: DONE=1，READY=1，DRAFT=3，IN_PROGRESS=0，BLOCKED=0（共 5 Task）。
+**执行顺序**: F0 → F1/T01 → F2/T01 → F2/T02 → F3/T01；编码完成后集中执行一次构建与 E2E。
+**关键决策**: `dts-analytics` 保持大屏/发布/权限唯一 owner；`GET /bi/api/screens?publishedOnly=true` 是门户目录契约；治理主题域只分组不替代权限；叶子以稳定 screenId 深链；现有 `sys.nav.portal.biScreens` 原位改名改路由以保留角色绑定；发布运行态复用同源预览路由的 published/embed 模式。
+**已知风险**: 本地 2 个有效大屏均未发布，而现有镜像有 2 条启用 preview 链接；真实登录和 Chrome 95 executable 缺失；共享工作区已有未提交改动，本 Sprint 不触碰、不暂存、不回滚。

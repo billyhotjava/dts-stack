@@ -80,9 +80,10 @@ class PortalMenuSeedDefaultsContractTest {
             .filter(node -> "screens".equals(node.get("key")))
             .findFirst()
             .orElse(null);
-        assertNotNull(screens, "数据大屏 must live under 数据分析与服务");
+        assertNotNull(screens, "数据门户 must live under 数据分析与服务");
         assertEquals("screens", screens.get("path"));
-        assertEquals("/bi/screens", screens.get("externalLink"));
+        assertEquals("数据门户", screens.get("title"));
+        assertEquals("/bi/portal", screens.get("externalLink"));
 
         Map<String, Object> biAppsRoot = listOfMaps(consumptionRoot.get("children"))
             .stream()
@@ -92,7 +93,7 @@ class PortalMenuSeedDefaultsContractTest {
         assertNotNull(biAppsRoot, "商业智能应用 menu must still exist under 数据分析与服务");
         assertFalse(
             containsTitleKey(listOfMaps(biAppsRoot.get("children")), "sys.nav.portal.biScreens"),
-            "商业智能应用 subtree must not own 数据大屏"
+            "商业智能应用 subtree must not own 数据门户"
         );
 
         ClassPathResource defaultsResource = new ClassPathResource("config/data/role-menu-defaults.json");
@@ -105,9 +106,29 @@ class PortalMenuSeedDefaultsContractTest {
             .filter(rule -> "sys.nav.portal.biScreens".equals(rule.get("code")))
             .findFirst()
             .orElse(null);
-        assertNotNull(screensDefault, "数据大屏 role default entry must stay documented");
-        assertEquals("/bi/screens", screensDefault.get("route"));
-        assertTrue(((List<?>) screensDefault.get("requiredRoles")).isEmpty(), "数据大屏 seed must not add default role bindings");
+        assertNotNull(screensDefault, "数据门户 role default entry must stay documented");
+        assertEquals("数据门户", screensDefault.get("title"));
+        assertEquals("/bi/portal", screensDefault.get("route"));
+        assertTrue(((List<?>) screensDefault.get("requiredRoles")).isEmpty(), "数据门户 seed must not add default role bindings");
+    }
+
+    @Test
+    void sprint96DataPortalMenuMigrationUpdatesExistingRowAndPreservesVisibilityBindings() throws Exception {
+        String changelogFile = "20260820-01_sprint96_data_portal_menu.xml";
+        ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
+        assertTrue(master.getContentAsString(StandardCharsets.UTF_8).contains(changelogFile));
+
+        ClassPathResource changelog = new ClassPathResource("config/liquibase/changelog/" + changelogFile);
+        assertTrue(changelog.exists(), "Sprint-96 data portal menu changelog must exist");
+        String xml = changelog.getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(xml.contains("sys.nav.portal.biScreens"));
+        assertTrue(xml.contains("/bi/portal"));
+        assertTrue(xml.contains("portal.menu.seed.hash"));
+        assertTrue(xml.contains("snapshot"));
+
+        String lowerXml = xml.toLowerCase(Locale.ROOT);
+        assertFalse(lowerXml.contains("delete from portal_menu_visibility"));
+        assertFalse(lowerXml.contains("delete from portal_menu "));
     }
 
     @Test
