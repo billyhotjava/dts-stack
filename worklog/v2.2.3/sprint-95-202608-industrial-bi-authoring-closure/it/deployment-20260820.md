@@ -32,3 +32,13 @@
 - 当前环境没有 Chrome 95 executable，不能以 Chrome 150 替代客户兼容门禁。
 - 当前 shell 没有真实验收账号；未执行真实 QueryDataset、真实导出文件密级头/审计、真实 revision 数据库对账。
 - 为避免再次中断在线用户，未执行生产镜像切回演练；回滚标签和命令已验证存在。
+
+## 已提交全量代码重建复验（2026-08-20 08:24）
+
+- 构建来源更新为 `94cbe7cf5 fix(platform): select authoring migration constructor`，已推送至 `origin/v2.2.3`，本地与远端一致。
+- 首次切换 `272e03155` 的 platform 镜像时，Spring 因多构造器未选定生产构造器而报 `No default constructor found`；立即回滚到预留镜像后恢复 healthy、0 次重启。新增 Spring BeanFactory 回归测试先复现同一异常，再以 `@Autowired` 明确生产构造器，聚焦测试 5/5 通过。
+- 最终镜像：`dts-platform sha256:a9e8a7943547...`、`dts-analytics sha256:03ecd258a2c2...`、`dts-platform-webapp sha256:7a978454842f...`。三个容器均运行，两个后端 healthy，重启次数均为 0，webapp `nginx -t` 通过。
+- Platform `/management/health` 与 Analytics `/api/health` 均为 `UP`，外部 `/`、`/data-modeling`、`/bi` 均返回 HTTP 200；三容器启动后关键错误匹配均为 0。
+- 两个 Liquibase changeSet 均为 `EXECUTED`；3 个 authoring 增量列和 2 张 migration ledger 表已存在。
+- 部署静态包 Sprint-95 旅程 1/1 通过（Chrome 150，9.3 秒），console/page/network failure 为 0；截图为 `analysis-authoring-published-1366x768.png` 与 `dashboard-targeted-linkage-768x900.png`。
+- 回滚标签保留为 `rollback-pre-272e03155-20260820-075006`；失败镜像另保留为 `dts-platform:failed-272e03155-20260820-075006` 供诊断。
