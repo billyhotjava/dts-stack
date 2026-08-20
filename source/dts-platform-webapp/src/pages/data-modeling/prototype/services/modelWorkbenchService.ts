@@ -614,8 +614,8 @@ export async function saveDimensionDefinitionDraft(
 	draft: ConceptDimensionDraft,
 	ownerId: string,
 ): Promise<DimensionDefinitionView> {
-	if (draft.definitionBase && draft.definitionBase.status !== "DRAFT") {
-		throw new Error("已确认或已退役的维度不能修改，请新建维度。");
+	if (draft.definitionBase?.status === "RETIRED") {
+		throw new Error("已退役的维度不能修改。");
 	}
 	if (!ownerId.trim()) throw new Error("当前登录身份缺少人员 ID，不能创建维度定义");
 	const errors = Object.values(validateConceptDimensionDraftInput(draft));

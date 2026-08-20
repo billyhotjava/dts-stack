@@ -58,7 +58,7 @@ describe("workbench editor access", () => {
 		expect(resolveWorkbenchEditorAccess(true, conceptDraft("CURRENT"))).toMatchObject({
 			mode: "EDIT_DRAFT",
 			readOnly: false,
-			message: expect.stringContaining("新修订"),
+			message: expect.stringContaining("CURRENT 修订"),
 		});
 	});
 });

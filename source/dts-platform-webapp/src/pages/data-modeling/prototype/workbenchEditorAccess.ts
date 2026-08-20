@@ -20,10 +20,17 @@ export function resolveWorkbenchEditorAccess(canMaintain: boolean, draft: ModelD
 	if (draft.createKind === "dimension") {
 		if (!draft.definitionBase) return { mode: "CREATE_DRAFT", readOnly: false, message: "" };
 		if (draft.definitionBase.status === "DRAFT") return { mode: "EDIT_DRAFT", readOnly: false, message: "" };
+		if (draft.definitionBase.status === "CURRENT") {
+			return {
+				mode: "EDIT_DRAFT",
+				readOnly: false,
+				message: "当前维度定义为 CURRENT；保存修改将生成新的 CURRENT 修订，已绑定模型继续使用原修订。",
+			};
+		}
 		return {
 			mode: "VIEW_VERSION",
 			readOnly: true,
-			message: `当前维度定义为 ${draft.definitionBase.status}，只能查看；如需调整请新建维度草稿。`,
+			message: `当前维度定义为 ${draft.definitionBase.status}，只能查看。`,
 		};
 	}
 	if (!draft.base) return { mode: "CREATE_DRAFT", readOnly: false, message: "" };

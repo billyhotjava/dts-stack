@@ -738,13 +738,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					</Button>
 				) : (
 					<Button
-						disabled={
-							!canMaintain ||
-							effectiveReadOnly ||
-							busy ||
-							!dirty ||
-							(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
-						}
+						disabled={!canMaintain || effectiveReadOnly || busy || !dirty}
 						onClick={onSave}
 						primary
 						title={!dirty ? "当前没有待保存变更" : conceptDimension ? "保存维度草稿" : "保存模型创作草稿"}
@@ -835,11 +829,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			) : null}
 			<fieldset
 				className="dmx-editor-fieldset dmx-editor-scroll"
-				disabled={
-					effectiveReadOnly ||
-					busy ||
-					(conceptDimension && draft.definitionBase?.status != null && draft.definitionBase.status !== "DRAFT")
-				}
+				disabled={effectiveReadOnly || busy}
 			>
 				{conceptDimension ? (
 					<ConceptDimensionForm {...props} draft={draft} />

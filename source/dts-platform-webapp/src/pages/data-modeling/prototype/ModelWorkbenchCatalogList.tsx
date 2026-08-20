@@ -158,7 +158,7 @@ export function ModelWorkbenchCatalogList({
 				layer: null,
 				status: dimension.status,
 				revision: dimension.revision,
-				editable: canMaintain && dimension.status === "DRAFT",
+				editable: canMaintain && dimension.status !== "RETIRED",
 				dimension,
 				model: null,
 				open: () => onChooseDimension(dimension),
@@ -252,7 +252,7 @@ export function ModelWorkbenchCatalogList({
 					revision: entry.revision,
 					editable: Boolean(
 						canMaintain &&
-							((dimension && dimension.status === "DRAFT") ||
+							((dimension && dimension.status !== "RETIRED") ||
 								(model && model.status === "DRAFT" && model.compatibilityMode === "CANONICAL")),
 					),
 					dimension,
