@@ -24,6 +24,23 @@ test("analysis editor exposes the complete governed authoring chain", () => {
 	assert.doesNotMatch(EDITOR, /\["table", "bar", "line", "area", "pie", "number", "scatter"\]/);
 });
 
+test("analysis editor keeps every supported chart type visible as an icon matrix", () => {
+	for (const token of [
+		"图表类型",
+		"analysis-visualization-grid",
+		"aria-pressed",
+		"TableOutlined",
+		"BarChartOutlined",
+		"LineChartOutlined",
+		"AreaChartOutlined",
+		"PieChartOutlined",
+		"FieldNumberOutlined",
+	]) {
+		assert.match(WORKSPACE, new RegExp(token));
+	}
+	assert.doesNotMatch(WORKSPACE, /<Select[\s\S]{0,240}value=\{spec\.visualization\.type\}/);
+});
+
 test("dashboard editor wires authored parameter mappings and targeted linkage", () => {
 	assert.match(DASHBOARD_CARD, /ParameterMappingPopover/);
 	assert.match(DASHBOARD_CARD, /InteractionSettingsPopover/);
