@@ -267,9 +267,15 @@ test("completes governed BI authoring, publication, export, and targeted linkage
 	await page.getByTestId("analysis-field-metric-project_count").dragTo(page.getByTestId("analysis-shelf-y"));
 	await expect(page.getByText(/2 行 · 18 ms · 实时查询/)).toBeVisible();
 
-	const visualization = page.locator(".ant-select").filter({ hasText: "明细表" }).first();
-	await visualization.click();
-	await page.getByText("柱状图", { exact: true }).click();
+	const visualizationPicker = page.locator(".analysis-visualization-grid");
+	await expect(visualizationPicker).toBeVisible();
+	await expect(visualizationPicker.getByRole("button")).toHaveCount(6);
+	for (const label of ["明细表", "柱状图", "折线图", "面积图", "饼图", "指标卡"]) {
+		await expect(visualizationPicker.getByText(label, { exact: true })).toBeVisible();
+	}
+	await expect(page.getByTestId("analysis-visualization-table")).toHaveAttribute("aria-pressed", "true");
+	await page.getByTestId("analysis-visualization-bar").click();
+	await expect(page.getByTestId("analysis-visualization-bar")).toHaveAttribute("aria-pressed", "true");
 	await page.getByRole("checkbox", { name: "显示数值" }).check();
 	await page.getByPlaceholder("编码，如 conversion_rate").fill("avg_projects");
 	await page.getByPlaceholder("表达式，如 approved_count / NULLIF(total_count, 0)").fill("project_count / 2");
@@ -300,6 +306,14 @@ test("completes governed BI authoring, publication, export, and targeted linkage
 	expect(download.suggestedFilename()).toBe("project-analysis.csv");
 	await expect(page.getByText("已导出 project-analysis.csv", { exact: true })).toBeVisible();
 	await page.screenshot({ path: testInfo.outputPath("analysis-authoring-published-1366x768.png"), fullPage: true });
+	await page.setViewportSize({ width: 390, height: 844 });
+	await expect(visualizationPicker).toBeVisible();
+	const narrowColumnCount = await visualizationPicker.evaluate((element) =>
+		getComputedStyle(element).gridTemplateColumns.split(" ").length,
+	);
+	expect(narrowColumnCount).toBe(3);
+	await visualizationPicker.screenshot({ path: testInfo.outputPath("analysis-chart-picker-390x844.png") });
+	await page.setViewportSize({ width: 1366, height: 768 });
 
 	await page.goto("/#/bi/dashboards/22/edit");
 	await expect(page.getByTestId("analytics-dashboard-editor")).toBeVisible();
