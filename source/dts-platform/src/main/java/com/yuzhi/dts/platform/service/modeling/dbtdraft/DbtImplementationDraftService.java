@@ -25,6 +25,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecPlanWriteAccessPort;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
@@ -1900,13 +1901,52 @@ public class DbtImplementationDraftService {
             return dependencies.resolveForDraft(
                 tenantId,
                 model,
-                implementation,
+                dependencyImplementation(model, implementation),
                 projectKey,
                 targetName
             );
         } catch (ModelSpecException failure) {
             throw dependencyFailure(failure.code(), failure.getMessage(), failure.details());
         }
+    }
+
+    /**
+     * A new logical draft inherits the last active implementation as its editing base. Rebind only
+     * the owner pins used to resolve the draft dependency snapshot; source artifact reconstruction
+     * continues to use the immutable implementation's original model pins.
+     */
+    private static ImplementationView dependencyImplementation(
+        ModelSpecView model,
+        ImplementationView implementation
+    ) {
+        if (
+            model == null ||
+            implementation == null ||
+            model.status() != ModelStatus.DRAFT ||
+            !Objects.equals(model.id(), implementation.modelSpecId()) ||
+            !Objects.equals(model.planId(), implementation.planId()) ||
+            implementation.revision() >= model.revision()
+        ) {
+            return implementation;
+        }
+        return new ImplementationView(
+            implementation.id(),
+            implementation.modelSpecId(),
+            implementation.planId(),
+            model.revision(),
+            model.checksum(),
+            implementation.ownership(),
+            implementation.projectKey(),
+            implementation.dbtUniqueId(),
+            implementation.status(),
+            implementation.implementationRevision(),
+            implementation.implementationChecksum(),
+            implementation.inputMode(),
+            implementation.inputs(),
+            implementation.fieldMappings(),
+            implementation.settings(),
+            implementation.materialization()
+        );
     }
 
     private static DraftException dependencyFailure(String sourceCode, String message, Object details) {

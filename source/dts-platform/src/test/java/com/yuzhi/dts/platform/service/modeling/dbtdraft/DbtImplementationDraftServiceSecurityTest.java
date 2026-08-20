@@ -18,10 +18,14 @@ import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftReposito
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TimelineView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleCompilerPort;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyReadPort;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.DependencyFacts;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Grain;
@@ -613,6 +617,71 @@ class DbtImplementationDraftServiceSecurityTest {
         assertThat(created.sourceBundle().files())
             .extracting(DbtImplementationDraftContract.BundleFileView::path)
             .containsExactly("dbt_project.yml", "models/orders.sql", "models/schema.yml");
+        verify(representationEvidence).findExact(TENANT, MODEL_ID, 3, MODEL_CHECKSUM, 2, true);
+    }
+
+    @Test
+    void rebasesThePriorImplementationPinWhenCreatingAnAuthoringDraftForAnAdvancedModelRevision() {
+        String advancedModelChecksum = "f".repeat(64);
+        List<FileRow> files = List.of(
+            file("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            file("models/orders.sql", "select 1\n"),
+            file("models/schema.yml", "version: 2\nmodels: []\n")
+        );
+        BundleSnapshot bundle = bundle(files, project());
+        ModelSpecView model = model(4, advancedModelChecksum);
+        when(model.id()).thenReturn(MODEL_ID);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        TimelineView timeline = org.mockito.Mockito.mock(TimelineView.class);
+        ImplementationView implementation = baseImplementation();
+        when(implementation.status()).thenReturn("ACTIVE");
+        when(implementation.inputMode()).thenReturn(InputMode.GENERATED);
+        when(implementation.inputs()).thenReturn(List.of(new GeneratedInput("DBT", Map.of())));
+        when(implementation.fieldMappings()).thenReturn(List.of());
+        when(implementation.settings()).thenReturn(Map.of());
+        when(implementation.materialization()).thenReturn("table");
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(timeline);
+        when(timeline.implementation()).thenReturn(implementation);
+        when(representationEvidence.findExact(TENANT, MODEL_ID, 3, MODEL_CHECKSUM, 2, true))
+            .thenReturn(Optional.of(representation(bundle)));
+        when(repository.create(any())).thenAnswer(invocation -> draft(invocation.getArgument(0)));
+        ModelImplementationDependencyReadPort dependencyFacts = org.mockito.Mockito.mock(
+            ModelImplementationDependencyReadPort.class
+        );
+        when(dependencyFacts.readFacts(TENANT, model)).thenReturn(new DependencyFacts(List.of(), List.of()));
+        DbtImplementationDraftService dependencyAwareService = new DbtImplementationDraftService(
+            repository,
+            modelSpecs,
+            lifecycle,
+            writeAccess,
+            validator,
+            artifactImports,
+            representationEvidence,
+            audit,
+            objectMapper,
+            new ModelImplementationDependencyService(dependencyFacts),
+            org.mockito.Mockito.mock(ModelLifecycleCompilerPort.class),
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        var created = dependencyAwareService.createAuthoring(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new CreateDraftRequest(PLAN_ID, 4, advancedModelChecksum, 2, IMPLEMENTATION_CHECKSUM, "advance-authoring-92"),
+            new AuthoringSeed(
+                objectMapper.createObjectNode(),
+                objectMapper.createObjectNode(),
+                AuthoringOrigin.UNKNOWN,
+                "e".repeat(64)
+            )
+        );
+
+        assertThat(created.baseModelRevision()).isEqualTo(4);
+        assertThat(created.baseImplementationRevision()).isEqualTo(2);
+        assertThat(created.sourceBundle().dependencySnapshot().modelRevision()).isEqualTo(4);
+        assertThat(created.sourceBundle().dependencySnapshot().modelChecksum()).isEqualTo(advancedModelChecksum);
         verify(representationEvidence).findExact(TENANT, MODEL_ID, 3, MODEL_CHECKSUM, 2, true);
     }
 
