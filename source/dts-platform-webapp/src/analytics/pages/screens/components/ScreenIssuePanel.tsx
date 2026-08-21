@@ -27,17 +27,26 @@ export function ScreenIssuePanel({ open, issues, onClose, onLocate }: ScreenIssu
 			onClose={onClose}
 			zIndex={10020}
 			destroyOnClose
+			styles={{
+				header: { background: "#1f2330", color: "#e2e8f0", borderBottomColor: "rgba(148,163,184,0.2)" },
+				body: { background: "#1f2330", color: "#e2e8f0" },
+			}}
 		>
 			<div data-testid="analytics-screen-issue-center" className="flex h-full flex-col gap-4">
-				<div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-sm text-[var(--color-text-secondary)]">
-					<div className="font-semibold text-[var(--color-text-primary)]">发布前检查</div>
+				<div
+					className="rounded-lg border p-3 text-sm"
+					style={{ borderColor: "rgba(148,163,184,0.24)", background: "#181c28", color: "#94a3b8" }}
+				>
+					<div className="font-semibold" style={{ color: "#e2e8f0" }}>
+						发布前检查
+					</div>
 					<div className="mt-1">
 						{blockerCount} 项须处理，{warningCount} 项建议关注
 					</div>
 				</div>
 
 				{issues.length === 0 ? (
-					<div className="flex flex-1 items-center justify-center text-sm text-[var(--color-text-secondary)]">
+					<div className="flex flex-1 items-center justify-center text-sm" style={{ color: "#94a3b8" }}>
 						当前未发现影响发布的问题
 					</div>
 				) : (
@@ -46,7 +55,8 @@ export function ScreenIssuePanel({ open, issues, onClose, onLocate }: ScreenIssu
 							<button
 								key={issue.id}
 								type="button"
-								className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-left transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)]"
+								className="w-full rounded-lg border p-3 text-left transition-colors hover:border-[#509ee3] hover:bg-[#293044]"
+								style={{ borderColor: "rgba(148,163,184,0.24)", background: "#181c28" }}
 								onClick={() => onLocate(issue)}
 								disabled={!issue.componentId && !issue.tab}
 							>
@@ -61,11 +71,15 @@ export function ScreenIssuePanel({ open, issues, onClose, onLocate }: ScreenIssu
 									>
 										{issue.level === "blocker" ? "须处理" : "建议关注"}
 									</span>
-									<span className="text-xs text-[var(--color-text-secondary)]">{CATEGORY_LABELS[issue.category]}</span>
+									<span className="text-xs" style={{ color: "#94a3b8" }}>
+										{CATEGORY_LABELS[issue.category]}
+									</span>
 								</div>
-								<div className="mt-2 text-sm font-medium text-[var(--color-text-primary)]">{issue.message}</div>
+								<div className="mt-2 text-sm font-medium" style={{ color: "#e2e8f0" }}>
+									{issue.message}
+								</div>
 								{issue.pageName || issue.componentName ? (
-									<div className="mt-1 text-xs text-[var(--color-text-secondary)]">
+									<div className="mt-1 text-xs" style={{ color: "#94a3b8" }}>
 										{[issue.pageName, issue.componentName].filter(Boolean).join(" / ")}
 									</div>
 								) : null}
