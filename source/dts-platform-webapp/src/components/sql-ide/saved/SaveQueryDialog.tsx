@@ -6,6 +6,8 @@ import { createSavedQuery } from "../api/sqlIdeSaved";
 interface SaveQueryDialogProps {
   open: boolean;
   initialSql: string;
+  datasourceId?: string | null;
+  datasourceName?: string | null;
   existingFolders: string[];
   onClose: () => void;
 }
@@ -18,6 +20,8 @@ interface FormValues {
 export const SaveQueryDialog: FC<SaveQueryDialogProps> = ({
   open,
   initialSql,
+  datasourceId,
+  datasourceName,
   existingFolders,
   onClose,
 }) => {
@@ -30,6 +34,8 @@ export const SaveQueryDialog: FC<SaveQueryDialogProps> = ({
       return createSavedQuery({
         name: values.name,
         sqlText: initialSql,
+        datasourceId: datasourceId ?? null,
+        datasourceName: datasourceName ?? null,
         folder: folderValue || null,
       });
     },
@@ -74,6 +80,9 @@ export const SaveQueryDialog: FC<SaveQueryDialogProps> = ({
       destroyOnClose
     >
       <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
+        <Form.Item label="当前数据源">
+          <Input value={datasourceName || "未选择数据源"} disabled />
+        </Form.Item>
         <Form.Item
           name="name"
           label="查询名称"

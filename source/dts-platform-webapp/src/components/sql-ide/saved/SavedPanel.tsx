@@ -3,6 +3,8 @@ import { Button, Empty, Input, List, Popconfirm, Spin, Typography } from "antd";
 import { type FC, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { deleteSavedQuery, listSavedQueries, type SavedQueryItem } from "../api/sqlIdeSaved";
+import { normalizeCatalogEngine } from "../editor/completion/sqlIdeCatalogSource";
+import { useDatasourcesQuery } from "../schema/useSchemaTreeData";
 import { useTabStore } from "../tabs/useTabStore";
 
 const { Text } = Typography;
@@ -14,6 +16,7 @@ export const SavedPanel: FC = () => {
   const [filterText, setFilterText] = useState("");
   const queryClient = useQueryClient();
   const openTab = useTabStore((s) => s.openTab);
+  const { data: datasources } = useDatasourcesQuery();
 
   const { data, isLoading } = useQuery({
     queryKey: ["sqlide", "saved"],
@@ -57,10 +60,17 @@ export const SavedPanel: FC = () => {
   }, [filtered]);
 
   const handleOpen = (item: SavedQueryItem) => {
+    const datasource = datasources?.find(
+      (candidate) =>
+        candidate.id === item.datasourceId ||
+        candidate.name === item.datasourceName ||
+        candidate.label === item.datasourceName,
+    );
     openTab({
       title: item.name,
       sqlText: item.sqlText ?? "",
-      engine: "generic", // TODO: map datasource → engine when datasource→engine registry exists (F3 followup)
+      datasourceId: datasource?.id ?? item.datasourceId ?? null,
+      engine: normalizeCatalogEngine(datasource?.engine),
     });
   };
 

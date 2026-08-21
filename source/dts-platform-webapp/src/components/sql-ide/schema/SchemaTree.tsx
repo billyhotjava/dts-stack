@@ -9,20 +9,28 @@ import {
   useSchemasQuery,
   useTablesQuery,
 } from "./useSchemaTreeData";
+import type { CatalogDatasource } from "../api/sqlIdeCatalog";
 
 type TreeNode =
   | { id: string; name: string; kind: "schema"; schema: string; children?: TreeNode[] }
   | { id: string; name: string; kind: "table"; schema: string; table: string };
 
 export interface SchemaTreeProps {
+  datasourceId?: string | null;
+  onDatasourceChange?: (datasource: CatalogDatasource) => void;
   /** Called when user double-clicks a table — receives "schema.table". */
   onInsertIdentifier?: (qualifiedName: string) => void;
   /** Called when context-menu item generates SQL — receives the SQL string. */
   onInsertSqlAtCursor?: (sql: string) => void;
 }
 
-export const SchemaTree: FC<SchemaTreeProps> = ({ onInsertIdentifier, onInsertSqlAtCursor }) => {
-  const [dsId, setDsId] = useState<string | null>(null);
+export const SchemaTree: FC<SchemaTreeProps> = ({
+  datasourceId,
+  onDatasourceChange,
+  onInsertIdentifier,
+  onInsertSqlAtCursor,
+}) => {
+  const [dsId, setDsId] = useState<string | null>(datasourceId ?? null);
   const [filter, setFilter] = useState("");
   const [debouncedFilter, setDebouncedFilter] = useState("");
   const [treeData, setTreeData] = useState<TreeNode[]>([]);
@@ -51,6 +59,10 @@ export const SchemaTree: FC<SchemaTreeProps> = ({ onInsertIdentifier, onInsertSq
   const { data: datasources } = useDatasourcesQuery();
   const { data: schemas, isLoading: schemasLoading } = useSchemasQuery(dsId);
 
+  useEffect(() => {
+    setDsId(datasourceId ?? null);
+  }, [datasourceId]);
+
   // B6: search mode when debounced filter has >= 2 chars
   const isSearchMode = debouncedFilter.length >= 2;
   const { data: searchHits, isFetching: searchFetching } = useSearchCatalogQuery(
@@ -58,12 +70,24 @@ export const SchemaTree: FC<SchemaTreeProps> = ({ onInsertIdentifier, onInsertSq
     debouncedFilter,
   );
 
-  // Default-pick first datasource
+  // Default-pick first datasource and report it to the active SQL tab so
+  // execution, completion and saving all use the same database context.
   useEffect(() => {
-    if (dsId === null && datasources && datasources.length > 0) {
-      setDsId(datasources[0].id);
-    }
-  }, [dsId, datasources]);
+    if (!datasources || datasources.length === 0) return;
+    if (dsId && datasources.some((datasource) => datasource.id === dsId)) return;
+    const first = datasources[0];
+    setDsId(first.id);
+    onDatasourceChange?.(first);
+  }, [dsId, datasources, onDatasourceChange]);
+
+  const handleDatasourceChange = useCallback(
+    (nextId: string) => {
+      setDsId(nextId);
+      const datasource = datasources?.find((item) => item.id === nextId);
+      if (datasource) onDatasourceChange?.(datasource);
+    },
+    [datasources, onDatasourceChange],
+  );
 
   // B1: build treeData from schemas into controlled state; reset when dsId or schemas change
   useEffect(() => {
@@ -122,7 +146,7 @@ export const SchemaTree: FC<SchemaTreeProps> = ({ onInsertIdentifier, onInsertSq
         <Select
           size="small"
           value={dsId ?? undefined}
-          onChange={(v) => setDsId(v)}
+          onChange={handleDatasourceChange}
           options={(datasources ?? []).map((d) => ({ value: d.id, label: d.label }))}
           style={{ width: "100%" }}
           placeholder="选择数据源"

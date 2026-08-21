@@ -18,6 +18,7 @@ import {
 	listTables,
 	saveQuery,
 	submitSql,
+	updateSavedQuery,
 } from "@/api/sql-workbench";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import { Button } from "@/ui/button";
@@ -40,6 +41,7 @@ import {
 } from "@/ui/dialog";
 import { cn } from "@/utils";
 import { writeTextToClipboard } from "@/utils/clipboard";
+import { SqlTableAutocomplete } from "./SqlTableAutocomplete";
 
 const DEFAULT_SQL = `SELECT * FROM your_table LIMIT 100;`;
 
@@ -150,6 +152,7 @@ export const SqlWorkbenchExperimental = () => {
 	const [showSaveDialog, setShowSaveDialog] = useState(false);
 	const [saveQueryName, setSaveQueryName] = useState("");
 	const [saveQueryDesc, setSaveQueryDesc] = useState("");
+	const [savedQueryId, setSavedQueryId] = useState<string | null>(null);
 	const [showSavedQueries, setShowSavedQueries] = useState(false);
 
 	// 结果
@@ -168,6 +171,7 @@ export const SqlWorkbenchExperimental = () => {
 
 	// 行数限制
 	const [rowLimit, setRowLimit] = useState(1000);
+	const [cursorPosition, setCursorPosition] = useState(0);
 
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const pollTimerRef = useRef<number | null>(null);
@@ -275,6 +279,18 @@ export const SqlWorkbenchExperimental = () => {
 		[sqlText]
 	);
 
+	const handleAutocompleteSelect = useCallback((table: TableInfo, range: { start: number; end: number }) => {
+		const tableName = `${table.schema}.${table.name}`;
+		setSelectedTable(tableName);
+		setSqlText((previous) => `${previous.slice(0, range.start)}${tableName}${previous.slice(range.end)}`);
+		const nextPosition = range.start + tableName.length;
+		setCursorPosition(nextPosition);
+		window.setTimeout(() => {
+			textareaRef.current?.focus();
+			textareaRef.current?.setSelectionRange(nextPosition, nextPosition);
+		}, 0);
+	}, []);
+
 	// 格式化 SQL
 	const handleFormat = () => {
 		const formatted = formatSql(sqlText);
@@ -289,17 +305,22 @@ export const SqlWorkbenchExperimental = () => {
 			return;
 		}
 		try {
-			await saveQuery({
+			const payload = {
 				name: saveQueryName.trim(),
 				description: saveQueryDesc.trim() || undefined,
 				sqlText,
 				datasourceId: selectedDatasourceId || undefined,
 				datasourceName: selectedDatasource?.name,
-			});
-			toast.success("查询已保存");
+			};
+			if (savedQueryId) {
+				await updateSavedQuery(savedQueryId, payload);
+				toast.success("查询修改已保存");
+			} else {
+				const saved = await saveQuery(payload);
+				setSavedQueryId(saved.id);
+				toast.success("查询已保存");
+			}
 			setShowSaveDialog(false);
-			setSaveQueryName("");
-			setSaveQueryDesc("");
 			loadSavedQueries();
 		} catch {
 			toast.error("保存失败");
@@ -332,6 +353,9 @@ export const SqlWorkbenchExperimental = () => {
 	// 加载保存的查询
 	const handleLoadSavedQuery = (query: SavedQueryResponse) => {
 		setSqlText(query.sqlText);
+		setSavedQueryId(query.id);
+		setSaveQueryName(query.name);
+		setSaveQueryDesc(query.description || "");
 		if (query.datasourceId && dataSources.some((ds) => ds.id === query.datasourceId)) {
 			setSelectedDatasourceId(query.datasourceId);
 		}
@@ -711,16 +735,20 @@ export const SqlWorkbenchExperimental = () => {
 									</>
 								)}
 							</Button>
-							{showRunning && (
-								<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleCancel}>
-									取消
-								</Button>
-							)}
+							<Button
+								variant="outline"
+								size="sm"
+								className="h-7 text-xs"
+								disabled={!showRunning}
+								onClick={handleCancel}
+							>
+								停止
+							</Button>
 							<Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleFormat}>
 								格式化
 							</Button>
 							<Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setShowSaveDialog(true)}>
-								保存
+								{savedQueryId ? "保存修改" : "保存查询"}
 							</Button>
 							<Button
 								variant="outline"
@@ -758,8 +786,20 @@ export const SqlWorkbenchExperimental = () => {
 								spellCheck={false}
 								className="flex-1 p-2 font-mono text-sm leading-5 bg-background text-foreground focus:outline-none resize-none"
 								value={sqlText}
-								onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setSqlText(e.target.value)}
+								onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+									setSqlText(e.target.value);
+									setCursorPosition(e.target.selectionStart);
+								}}
+								onClick={(event) => setCursorPosition(event.currentTarget.selectionStart)}
+								onKeyUp={(event) => setCursorPosition(event.currentTarget.selectionStart)}
+								onSelect={(event) => setCursorPosition(event.currentTarget.selectionStart)}
 								placeholder="输入 SQL 语句..."
+							/>
+							<SqlTableAutocomplete
+								cursorPosition={cursorPosition}
+								onSelect={handleAutocompleteSelect}
+								sqlText={sqlText}
+								tables={tables}
 							/>
 						</div>
 					</div>

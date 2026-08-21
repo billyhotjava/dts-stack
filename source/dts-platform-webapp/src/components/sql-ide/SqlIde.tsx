@@ -1,3 +1,4 @@
+import { PlayCircleOutlined, SaveOutlined, StopOutlined } from "@ant-design/icons";
 import { Button, message } from "antd";
 import { type FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
@@ -8,6 +9,9 @@ import { CopilotSlot } from "./copilot/CopilotSlot";
 import { useUiModeStore } from "./store/useUiModeStore";
 import { SqlEditor, type SqlEditorHandle } from "./editor/SqlEditor";
 import { formatSql } from "./editor/formatter";
+import { findStatementAt } from "./editor/statementSplitter";
+import { createSqlIdeCatalogSource, normalizeCatalogEngine } from "./editor/completion/sqlIdeCatalogSource";
+import { NOOP_CATALOG } from "./editor/completion/catalogProvider";
 import { ActivityBar } from "./layout/ActivityBar";
 import { BottomPanel } from "./layout/BottomPanel";
 import { SidePanel } from "./layout/SidePanel";
@@ -24,6 +28,7 @@ import { SaveQueryDialog } from "./saved/SaveQueryDialog";
 import { listSavedQueries } from "./api/sqlIdeSaved";
 import { getExecutionMeta } from "./api/sqlIdeExecution";
 import { useSqlExecution } from "./hooks/useSqlExecution";
+import { useDatasourcesQuery } from "./schema/useSchemaTreeData";
 
 export const SqlIde: FC = () => {
   const activeActivity = useLayoutStore((s) => s.activeActivity);
@@ -137,6 +142,20 @@ export const SqlIde: FC = () => {
   const uiMode = useUiModeStore((s) => s.mode);
 
   const sqlExec = useSqlExecution();
+  const { data: datasources } = useDatasourcesQuery();
+
+  const activeDatasource = useMemo(
+    () => datasources?.find((datasource) => datasource.id === activeTab?.datasourceId) ?? null,
+    [activeTab?.datasourceId, datasources],
+  );
+
+  const catalogSource = useMemo(
+    () =>
+      activeTab?.datasourceId
+        ? createSqlIdeCatalogSource(activeTab.datasourceId)
+        : NOOP_CATALOG,
+    [activeTab?.datasourceId],
+  );
 
   // Read activeTabId at call time, not from closure — prevents Monaco onChange
   // events triggered mid-switch from writing back into the previously-active tab.
@@ -202,6 +221,64 @@ export const SqlIde: FC = () => {
     }
   }, [activeTab, updateTab]);
 
+  const handleDatasourceChange = useCallback(
+    (datasource: NonNullable<typeof activeDatasource>) => {
+      const state = useTabStore.getState();
+      const tab = state.tabs.find((item) => item.id === state.activeTabId);
+      if (!tab || tab.datasourceId === datasource.id) return;
+      updateTab(tab.id, {
+        datasourceId: datasource.id,
+        schemaContext: null,
+        engine: normalizeCatalogEngine(datasource.engine),
+      });
+    },
+    [updateTab],
+  );
+
+  const handleExecute = useCallback(
+    (sql: string) => {
+      if (!sql.trim() || !activeTab || sqlExec.state === "running") return;
+      const targetTabId = activeTab.id;
+      void sqlExec
+        .submit({
+          sqlText: sql,
+          datasource: activeTab.datasourceId,
+          catalog: activeTab.schemaContext,
+          schema: null,
+        })
+        .then((id) => {
+          if (!id) return;
+          const live = resolveId(targetTabId) ?? targetTabId;
+          updateTab(live, { lastExecutionId: id });
+        });
+    },
+    [activeTab, sqlExec.state, sqlExec.submit, updateTab],
+  );
+
+  const handleRun = useCallback(() => {
+    if (!activeTab) return;
+    const editor = editorHandleRef.current?.getEditor();
+    const model = editor?.getModel();
+    if (!editor || !model) {
+      handleExecute(activeTab.sqlText);
+      return;
+    }
+    const selection = editor.getSelection();
+    if (selection && !selection.isEmpty()) {
+      handleExecute(model.getValueInRange(selection));
+      return;
+    }
+    const position = editor.getPosition() ?? { lineNumber: 1, column: 1 };
+    const offset = model.getOffsetAt(position);
+    handleExecute(findStatementAt(model.getValue(), offset)?.text ?? activeTab.sqlText);
+  }, [activeTab, handleExecute]);
+
+  const handleOpenSave = useCallback((sql: string) => {
+    if (!sql.trim()) return;
+    setPendingSql(sql);
+    setSaveDialogOpen(true);
+  }, []);
+
   return (
     <div
       data-testid="sqlide-root"
@@ -211,6 +288,9 @@ export const SqlIde: FC = () => {
       <SidePanel>
         {activeActivity === "schema" && (
           <SchemaTree
+            key={activeTab?.id ?? "no-active-tab"}
+            datasourceId={activeTab?.datasourceId}
+            onDatasourceChange={handleDatasourceChange}
             onInsertIdentifier={(name) => {
               insertAtCursor("sqlide.schema-insert", name);
             }}
@@ -222,7 +302,7 @@ export const SqlIde: FC = () => {
         {activeActivity === "history" && <HistoryPanel />}
         {activeActivity === "saved" && <SavedPanel />}
         {activeActivity === "search" && (
-          <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>Search · 暂未实现</div>
+          <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>搜索 · 暂未开放</div>
         )}
         {activeActivity === "copilot" && <CopilotSlot />}
       </SidePanel>
@@ -241,7 +321,7 @@ export const SqlIde: FC = () => {
       >
         <div style={{
           display: "flex",
-          justifyContent: "flex-end",
+          justifyContent: "space-between",
           alignItems: "center",
           padding: "4px 8px",
           borderBottom: "1px solid var(--ant-color-border-secondary)",
@@ -252,6 +332,34 @@ export const SqlIde: FC = () => {
           zIndex: 5,
           background: "var(--ant-color-bg-container, #fff)",
         }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlayCircleOutlined />}
+              disabled={!activeTab?.sqlText.trim() || sqlExec.state === "running"}
+              onClick={handleRun}
+            >
+              运行
+            </Button>
+            <Button
+              danger
+              size="small"
+              icon={<StopOutlined />}
+              disabled={sqlExec.state !== "running"}
+              onClick={sqlExec.cancel}
+            >
+              停止
+            </Button>
+            <Button
+              size="small"
+              icon={<SaveOutlined />}
+              disabled={!activeTab?.sqlText.trim()}
+              onClick={() => handleOpenSave(activeTab?.sqlText ?? "")}
+            >
+              保存
+            </Button>
+          </div>
           <ModeSwitcher />
         </div>
         <TabBar />
@@ -269,35 +377,13 @@ export const SqlIde: FC = () => {
               engine={activeTab.engine}
               mode={uiMode}
               isDark={true}
-              onExecute={(s) => {
-                if (!s.trim() || !activeTab) return;
-                // Fix #5 (Important): hammer guard — no re-submit while running
-                if (sqlExec.state === "running") return;
-                // Fix #2 (Critical): capture tabId at submit time so a mid-flight
-                // tab switch cannot write lastExecutionId to the wrong tab.
-                // If the tab's id is remapped by syncDirty() between submit and
-                // the promise resolving, resolveId() walks the oldId→newId chain
-                // so updateTab still lands on the live tab instead of silently
-                // failing (which is what produced the "tab not found" toast).
-                const targetTabId = activeTab.id;
-                void sqlExec
-                  .submit({
-                    sqlText: s,
-                    datasource: activeTab.datasourceId,
-                    catalog: activeTab.schemaContext,
-                    schema: null,
-                  })
-                  .then((id) => {
-                    if (!id) return;
-                    const live = resolveId(targetTabId) ?? targetTabId;
-                    updateTab(live, { lastExecutionId: id });
-                  });
-              }}
+              catalog={catalogSource}
+              onExecute={handleExecute}
               onExecuteInNewTab={(s) =>
                 console.info("[SqlIde] executeInNewTab:", s)
               }
               onFormat={handleFormat}
-              onSaveAsQuery={(s) => { setPendingSql(s); setSaveDialogOpen(true); }}
+              onSaveAsQuery={handleOpenSave}
               onToggleBottomPanel={() =>
                 console.info("[SqlIde] toggleBottomPanel")
               }
@@ -357,7 +443,7 @@ export const SqlIde: FC = () => {
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {sqlExec.state === "running" && (
                   <Button danger size="small" onClick={sqlExec.cancel}>
-                    取消
+                    停止
                   </Button>
                 )}
                 {activeTab?.lastExecutionId && (
@@ -367,7 +453,7 @@ export const SqlIde: FC = () => {
                   <SubQueryButton executionId={activeTab.lastExecutionId} />
                 )}
                 <Button size="small" onClick={() => setHelpOpen(true)}>
-                  ⌨ Shortcuts
+                  ⌨ 快捷键
                 </Button>
               </div>
             </div>
@@ -403,6 +489,8 @@ export const SqlIde: FC = () => {
       <SaveQueryDialog
         open={saveDialogOpen}
         initialSql={pendingSql}
+        datasourceId={activeTab?.datasourceId}
+        datasourceName={activeDatasource?.name ?? activeDatasource?.label}
         existingFolders={existingFolders}
         onClose={() => setSaveDialogOpen(false)}
       />
