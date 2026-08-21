@@ -11,6 +11,9 @@ test("ScreenHeader validates and saves the draft before publishing", async () =>
 
 	assert.match(source, /const payload = buildScreenPayload\(persistedConfig\)/);
 	assert.match(source, /const validation = validateScreenPayload\(payload\)/);
+	assert.match(source, /deriveScreenAuthoringIssues\(persistedConfig\)/);
+	assert.match(source, /blockingIssues\.length > 0/);
+	assert.match(source, /onOpenIssuePanel\(\)/);
 	assert.match(source, /const screenId = await saveScreen\(\)/);
 	assert.match(source, /await analyticsApi\.publishScreen\(screenId\)/);
 });
