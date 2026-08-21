@@ -1,4 +1,5 @@
-import React, { useMemo } from "react";
+import type React from "react";
+import { useMemo, useRef } from "react";
 import { WidthProvider, Responsive } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import "../../components/DashboardGrid/DashboardGrid.css";
@@ -9,6 +10,7 @@ import type { DrillFilter } from "../../hooks/useDrillFilter";
 import type { Locale } from "../../i18n";
 import type { DashboardParameter } from "./DashboardFilterBar";
 import type { ParameterMapping } from "./ParameterMappingPopover";
+import { DASHBOARD_ANALYSIS_DRAG_TYPE } from "./DashboardAnalysisLibrary";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
 
@@ -31,6 +33,10 @@ export interface DashboardEditorGridProps {
 	drillFilters?: DrillFilter[];
 	onDrillClear?: () => void;
 	onDrillRemoveFrom?: (index: number) => void;
+	selectedDashcardId?: number | null;
+	onSelectCard?: (dashcardId: number) => void;
+	onReplaceCard?: (dashcardIndex: number) => void;
+	onDropCard?: (cardId: number, layout: Pick<Layout, "x" | "y" | "w" | "h">) => void;
 }
 
 const COLS = 12;
@@ -51,7 +57,12 @@ export function DashboardEditorGrid({
 	drillFilters,
 	onDrillClear,
 	onDrillRemoveFrom,
+	selectedDashcardId,
+	onSelectCard,
+	onReplaceCard,
+	onDropCard,
 }: DashboardEditorGridProps) {
+	const activeColumns = useRef(COLS);
 	const layout = useMemo<Layout[]>(() => {
 		return dashcards.map((dc, idx) => ({
 			i: String(dc.id || `new-${idx}`),
@@ -64,13 +75,54 @@ export function DashboardEditorGrid({
 			static: !isEditing,
 		}));
 	}, [dashcards, isEditing]);
+	const responsiveLayouts = useMemo(() => {
+		const stacked = (columns: number): Layout[] => {
+			let nextRow = 0;
+			return layout.map((item) => {
+				const stackedItem = {
+					...item,
+					x: 0,
+					y: nextRow,
+					w: columns,
+					minW: Math.min(3, columns),
+				};
+				nextRow += item.h;
+				return stackedItem;
+			});
+		};
+		return {
+			lg: layout,
+			md: layout,
+			sm: stacked(6),
+			xs: stacked(6),
+			xxs: stacked(3),
+		};
+	}, [layout]);
 
-	const breakpoints = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
+	// Breakpoints are based on the canvas width, not the browser viewport.
+	// The three-column desktop composer leaves roughly 560px for the grid.
+	const breakpoints = { lg: 520, md: 480, sm: 400, xs: 300, xxs: 0 };
 	const colsConfig = { lg: COLS, md: COLS, sm: 6, xs: 6, xxs: 3 };
 
 	const handleLayoutChange = (newLayout: Layout[]) => {
-		if (isEditing) {
+		if (isEditing && activeColumns.current === COLS) {
 			onLayoutChange(newLayout);
+		}
+	};
+
+	const handleDrop = (_layout: Layout[], item: Layout, event: Event) => {
+		if (!isEditing || !onDropCard) return;
+		const transfer = (event as DragEvent).dataTransfer;
+		const rawCardId = transfer?.getData(DASHBOARD_ANALYSIS_DRAG_TYPE) || transfer?.getData("text/plain");
+		const cardId = Number.parseInt(rawCardId || "", 10);
+		if (Number.isFinite(cardId) && cardId > 0) {
+			const scale = COLS / activeColumns.current;
+			onDropCard(cardId, {
+				x: Math.round(item.x * scale),
+				y: item.y,
+				w: Math.round(item.w * scale),
+				h: item.h,
+			});
 		}
 	};
 
@@ -80,7 +132,7 @@ export function DashboardEditorGrid({
 		>
 			<ResponsiveGridLayout
 				className="min-h-[inherit]"
-				layouts={{ lg: layout }}
+				layouts={responsiveLayouts}
 				breakpoints={breakpoints}
 				cols={colsConfig}
 				rowHeight={ROW_HEIGHT}
@@ -88,8 +140,13 @@ export function DashboardEditorGrid({
 				containerPadding={[0, 0]}
 				isDraggable={isEditing}
 				isResizable={isEditing}
+				isDroppable={isEditing && Boolean(onDropCard)}
+				droppingItem={{ i: "__dts_analysis_drop__", w: 6, h: 4 }}
 				onLayoutChange={handleLayoutChange}
+				onBreakpointChange={(_breakpoint, columns) => { activeColumns.current = columns; }}
+				onDrop={handleDrop}
 				draggableHandle=".mb-dashboard-card__drag-handle"
+				draggableCancel=".ant-btn,.ant-select,.mb-dashboard-card__action"
 				resizeHandles={["se"]}
 				useCSSTransforms
 			>
@@ -106,6 +163,9 @@ export function DashboardEditorGrid({
 									parameters={parameters}
 									dashcards={dashcards}
 									onRemove={() => onRemoveCard(idx)}
+									selected={selectedDashcardId === dc.id}
+									onSelect={() => onSelectCard?.(dc.id)}
+									onReplace={() => onReplaceCard?.(idx)}
 									onParameterMappingsChange={(mappings) => onParameterMappingsChange(dc.id, mappings)}
 									onInteractionSettingsChange={(settings) => onInteractionSettingsChange(dc.id, settings)}
 								onSeriesClick={

@@ -1846,6 +1846,15 @@ export type PlatformRole = {
 	source?: "builtin" | "custom" | "assignment" | string;
 };
 
+export type PlatformOrgNode = {
+	id: number | string;
+	name: string;
+	deptCode?: string;
+	parentId?: number | string;
+	children?: PlatformOrgNode[];
+	isRoot?: boolean;
+};
+
 export const analyticsApi = {
 	getCurrentUser: () => fetchJson<CurrentUser>("/bi/api/user/current"),
 	getUser: (id: number | string) =>
@@ -1867,6 +1876,12 @@ export const analyticsApi = {
 		if (!response.ok) return [];
 		const body = await response.json();
 		// Platform returns { data: [...] } or raw array
+		return Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
+	},
+	listPlatformOrgs: async (): Promise<PlatformOrgNode[]> => {
+		const response = await apiFetch("/api/directory/orgs", { method: "GET" }, true);
+		if (!response.ok) return [];
+		const body = await response.json();
 		return Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
 	},
 	getHealth: () => fetchJson<{ status?: string }>("/bi/api/health"),

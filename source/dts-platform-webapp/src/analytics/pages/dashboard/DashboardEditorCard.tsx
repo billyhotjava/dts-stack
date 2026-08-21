@@ -1,6 +1,6 @@
-import React from "react";
+import type React from "react";
 import { Button, Spin, Tag } from "antd";
-import { HolderOutlined } from "@ant-design/icons";
+import { DeleteOutlined, EditOutlined, HolderOutlined, SwapOutlined } from "@ant-design/icons";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings, type SeriesClickParams } from "../../components/charts";
 import { ErrorNotice } from "../../components/ErrorNotice";
 import type { DashboardCard, DashboardQueryResponse } from "../../api/analyticsApi";
@@ -30,6 +30,9 @@ export interface DashboardEditorCardProps {
 	drillFilters?: DrillFilter[];
 	onDrillClear?: () => void;
 	onDrillRemoveFrom?: (index: number) => void;
+	selected?: boolean;
+	onSelect?: () => void;
+	onReplace?: () => void;
 }
 
 export function DashboardEditorCard({
@@ -46,6 +49,9 @@ export function DashboardEditorCard({
 	drillFilters,
 	onDrillClear,
 	onDrillRemoveFrom,
+	selected = false,
+	onSelect,
+	onReplace,
 }: DashboardEditorCardProps) {
 	const card: any = dashcard.card as any;
 	const cardName = (card && typeof card.name === "string" && card.name) || `Card ${dashcard.card_id ?? "-"}`;
@@ -63,7 +69,9 @@ export function DashboardEditorCard({
 	const hasDrill = drillFilters && drillFilters.length > 0;
 
 	return (
-		<div data-testid={`dashboard-card-${dashcard.id}`} className="flex flex-col h-full rounded-md border border-border-default shadow-sm overflow-hidden"
+		<div
+			data-testid={`dashboard-card-${dashcard.id}`}
+			className={`mb-dashboard-card flex flex-col h-full rounded-md border shadow-sm overflow-hidden${selected ? " mb-dashboard-card--selected" : ""}`}
 			style={{ background: "var(--surface-card, #fff)" }}
 		>
 			{/* Header bar - always show in editing mode, minimal in preview */}
@@ -71,13 +79,38 @@ export function DashboardEditorCard({
 				<div className="flex items-center justify-between px-3 py-1.5 border-b border-border-default shrink-0"
 					style={{ background: "var(--surface-muted, #f7f9fc)" }}
 				>
-					<div className="flex items-center gap-2 min-w-0">
-						<span className="mb-dashboard-card__drag-handle cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600">
+					<button
+						type="button"
+						className="flex min-w-0 items-center gap-2 border-0 bg-transparent p-0 text-left"
+						onClick={onSelect}
+					>
+						<span className="mb-dashboard-card__drag-handle cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-700" title="拖动组件">
 							<HolderOutlined />
 						</span>
 						<span className="text-sm font-medium truncate">{cardName}</span>
-					</div>
-					<div className="flex items-center gap-1">
+						{card?.type !== "analysis" || card?.lifecycle_status !== "PUBLISHED" || typeof card?.published_revision_id !== "number"
+							? <Tag color="error">需替换</Tag>
+							: null}
+					</button>
+					<div className="mb-dashboard-card__action flex items-center gap-1">
+						<Button
+							type="text"
+							size="small"
+							icon={<SwapOutlined />}
+							aria-label="替换分析"
+							title="替换分析"
+							onClick={(event) => { event.stopPropagation(); onReplace?.(); }}
+						/>
+						<Button
+							type="link"
+							size="small"
+							icon={<EditOutlined />}
+							aria-label="打开分析"
+							title="打开分析"
+							href={dashcard.card_id ? `/bi/questions/${encodeURIComponent(String(dashcard.card_id))}/edit` : undefined}
+							target="_blank"
+							onClick={(event) => event.stopPropagation()}
+						/>
 						{dashcard.card_id && onParameterMappingsChange ? (
 							<ParameterMappingPopover
 								parameters={parameters}
@@ -97,7 +130,15 @@ export function DashboardEditorCard({
 						) : (
 							<Button type="text" size="small" disabled title="请先保存仪表板，再配置组件联动">联动</Button>
 						)}
-						<Button type="text" size="small" danger onClick={onRemove}>删除</Button>
+						<Button
+							type="text"
+							size="small"
+							danger
+							icon={<DeleteOutlined />}
+							aria-label="删除组件"
+							title="删除组件"
+							onClick={(event) => { event.stopPropagation(); onRemove?.(); }}
+						/>
 					</div>
 				</div>
 			)}
@@ -108,7 +149,7 @@ export function DashboardEditorCard({
 					style={{ background: "var(--status-info-soft, #e8f2fd)" }}
 				>
 					<span className="text-gray-500 mr-1">{t(locale, "dashboards.drillBreadcrumb")}:</span>
-					{drillFilters!.map((df, idx) => (
+					{drillFilters?.map((df, idx) => (
 						<Tag
 							key={`${df.column}:${df.value}`}
 							closable

@@ -1,7 +1,7 @@
 # Sprint-98：BI 看板发布与可视化编排闭环
 
 **时间**：2026-08-21 ～ 2026-09-04
-**状态**：IN_PROGRESS
+**状态**：IN_PROGRESS（F1/F2 已完成；F3 自动化验收完成，待容器与真实发布验收）
 **类型**：Full-stack / UI Productization / Governed BI
 **目标**：看板作者在同一编辑器中完成“选择已发布分析 → 拖放编排 → 编辑组件 → 保存最新草稿 → 选择发布范围 → 校验并发布”，且错误可直接定位和修复。
 
@@ -46,7 +46,7 @@ Sprint-95 已接通治理分析、联动和发布，但当前运行态暴露出�
 | L9 | 平台已有组织树和角色目录，无需新增目录 API | `DirectoryResource.java:26-41` |
 | L10 | `ReportRegistrationService` 同样拒绝空部门+空角色 | `ReportRegistrationService.java:66-86` |
 | L11 | RGL 及布局列均已有 Chrome 95 静态兼容证据 | `sprint-12-202604/it/chrome-95-evidence/T01-grid-layout/static-checks.md` |
-| L12 | 共享工作区只有 SQL Workbench 用户改动，本 Sprint 不触碰、不暂存、不回滚 | 2026-08-21 `git status --short` |
+| L12 | 共享工作区存在 SQL Workbench / SQL IDE 用户改动，本 Sprint 不触碰、不暂存、不回滚 | 2026-08-21 `git status --short` |
 
 ## Gate Registry
 
@@ -57,18 +57,18 @@ Sprint-95 已接通治理分析、联动和发布，但当前运行态暴露出�
 | G0 | DTS 不变量 | PASS | ADR-98-01～06 | - |
 | G1 | 契约链与 UI 规格 | PASS | 本文、`assets/ui-wireframe.md` | - |
 | G1 | 非功能预算 | PASS | `assets/nfr-budget.md` | - |
-| G2 | RED→GREEN 与范围守卫 | IN_PROGRESS | 聚焦测试与 GitNexus detect | F1/F2 |
-| G3 | 发布安全 | PENDING | `assets/release-plan.md` | F3/T01 |
-| G4 | 可运维与 DoD | PENDING | `it/README.md` | F3/T01 |
+| G2 | RED→GREEN 与范围守卫 | PASS | RED 提交 `729ee413d`、聚焦测试与 GitNexus detect | - |
+| G3 | 发布安全 | PASS | `assets/release-plan.md` | - |
+| G4 | 可运维与 DoD | PASS_WITH_GAPS | `it/README.md` | 容器、真实发布、Chrome 95；F3/T01 |
 
 ## Feature 列表
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---:|---|---|
 | F0 | 交付基线与契约冻结 | 1 | P0 | DONE |
-| F1 | 发布一致性与治理修复 | 2 | P0 | IN_PROGRESS |
-| F2 | 可视化看板编排 | 2 | P0 | READY |
-| F3 | 发布安全与集中验收 | 1 | P0 | DRAFT |
+| F1 | 发布一致性与治理修复 | 2 | P0 | DONE |
+| F2 | 可视化看板编排 | 2 | P0 | DONE |
+| F3 | 发布安全与集中验收 | 1 | P0 | IN_PROGRESS |
 
 **执行顺序**：F0 → F1/T01 → F1/T02 → F2/T01 → F2/T02 → F3/T01；全部编码结束后集中执行一次 E2E。
 
@@ -85,11 +85,11 @@ Sprint-95 已接通治理分析、联动和发布，但当前运行态暴露出�
 
 ## 完成标准
 
-- [ ] 发布动作保存当前草稿后再校验，服务端组件数与页面一致。
-- [ ] 部门/角色来自真实目录，空范围在表单内中文提示，不展示英文错误码。
-- [ ] 历史非治理组件显示名称、原因和“替换分析”操作；新绑定不能绕过治理边界。
-- [ ] 分析可从左侧资源库拖入 12 列画布，移动/缩放/属性修改刷新后保持。
-- [ ] 完整分析编辑继续进入 canonical 分析编辑器。
+- [x] 发布动作保存当前草稿后再校验，服务端组件数与页面一致。
+- [x] 部门/角色来自真实目录，空范围在表单内中文提示，不展示英文错误码。
+- [x] 历史非治理组件显示名称、原因和“替换分析”操作；新绑定不能绕过治理边界。
+- [x] 分析可从左侧资源库拖入 12 列画布，移动/缩放/属性修改刷新后保持。
+- [x] 完整分析编辑继续进入 canonical 分析编辑器。
 - [ ] 聚焦测试、构建、mock E2E、目标浏览器检查和运行页面验收有真实证据。
 
 ## 非目标

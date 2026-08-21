@@ -47,7 +47,7 @@ class DashboardResourceGovernedBindingTest {
     void save_rejects_a_new_binding_to_a_legacy_question_before_writing() throws Exception {
         Fixture fixture = fixture();
         AnalyticsCard legacy = card(2L, "question", "DRAFT", null);
-        when(fixture.cards.findById(2L)).thenReturn(Optional.of(legacy));
+        when(fixture.cards.findAllById(any())).thenReturn(List.of(legacy));
 
         ResponseEntity<?> response = fixture.resource.save(body(2L, null, 2L), fixture.request);
 
@@ -61,11 +61,12 @@ class DashboardResourceGovernedBindingTest {
     @Test
     void save_accepts_a_new_binding_to_a_published_governed_analysis() throws Exception {
         Fixture fixture = fixture();
-        when(fixture.cards.findById(3L)).thenReturn(Optional.of(card(3L, "analysis", "PUBLISHED", 9L)));
+        when(fixture.cards.findAllById(any())).thenReturn(List.of(card(3L, "analysis", "PUBLISHED", 9L)));
 
         ResponseEntity<?> response = fixture.resource.save(body(2L, null, 3L), fixture.request);
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
+        verify(fixture.cards).findAllById(any());
         verify(fixture.dashboardCards).save(any(AnalyticsDashboardCard.class));
     }
 

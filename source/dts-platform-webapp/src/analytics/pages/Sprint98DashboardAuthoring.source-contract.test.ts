@@ -9,7 +9,7 @@ const API = readFileSync(new URL("../api/analyticsApi.ts", import.meta.url), "ut
 
 test("dashboard publication saves the current draft before validating it", () => {
 	assert.match(EDITOR, /saveDraft/);
-	assert.match(EDITOR, /validateDashboardPublication\(saved\.id/);
+	assert.match(EDITOR, /validatePublication\(saved\.id/);
 	assert.match(EDITOR, /\/bi\/dashboards\/\$\{saved\.id\}\/edit/);
 	assert.match(EDITOR, /发布范围（必填）/);
 });

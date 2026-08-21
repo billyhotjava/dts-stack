@@ -1,6 +1,6 @@
 # F3：发布安全与集中验收
 
-**优先级**：P0  **状态**：DRAFT
+**优先级**：P0  **状态**：IN_PROGRESS
 
 ## 目标
 
@@ -10,10 +10,10 @@
 
 | ID | Task | 状态 |
 |---|---|---|
-| T01 | 构建、部署、Chrome 检查与发布旅程验收 | DRAFT |
+| T01 | 构建、部署、Chrome 检查与发布旅程验收 | IN_PROGRESS |
 
-## 进入 READY 的条件
+## 当前结论
 
-- F1/F2 全部 GREEN。
-- `assets/release-plan.md` 与运行回滚命令固定。
-- 可用真实登录态；若仍缺失，真实发布态保持 GAP，不伪称完成。
+- F1/F2 已 GREEN，自动化构建和 mock 发布旅程已完成。
+- `assets/release-plan.md` 已固定范围、健康检查与回滚步骤。
+- 容器重建、真实登录发布和 Chrome 95 实机仍待执行，因此 F3 不置 DONE。

@@ -98,6 +98,18 @@ async function installApis(page: Page) {
 		const path = url.pathname;
 
 		if (path.startsWith("/bi/api/")) {
+			if (path === "/bi/api/analysis/preview") {
+				return json(route, {
+					queryId: request.headers()["x-correlation-id"] ?? "sprint94-preview",
+					columns: [{ name: "project_count", display_name: "项目数", base_type: "type/Integer" }],
+					rows: [[8]],
+					rowCount: 1,
+					truncated: false,
+					cacheHit: false,
+					durationMs: 12,
+					contractChecksum: dataset.contractChecksum,
+				});
+			}
 			if (path === "/bi/api/analysis" && request.method() === "GET") {
 				return json(route, {
 					items: [{
@@ -207,8 +219,40 @@ async function installApis(page: Page) {
 						size_y: 4,
 						parameter_mappings: [],
 						visualization_settings: {},
-						card: { id: 11, name: "项目综合分析", type: "analysis", display: "table" },
+						card: {
+							id: 11,
+							name: "项目综合分析",
+							type: "analysis",
+							display: "table",
+							lifecycle_status: "PUBLISHED",
+							published_revision_id: 91,
+						},
 					}],
+				});
+			}
+			if (path === "/bi/api/dashboard/save") {
+				const body = JSON.parse(request.postData() ?? "{}") as {
+					dashboard?: Record<string, unknown>;
+					dashcards?: Array<Record<string, unknown>>;
+				};
+				return json(route, {
+					id: 22,
+					name: "项目经营驾驶舱",
+					lifecycle_status: "DRAFT",
+					registration_status: "NOT_REGISTERED",
+					parameters: body.dashboard?.parameters ?? [],
+					ordered_cards: (body.dashcards ?? []).map((dashcard, index) => ({
+						...dashcard,
+						id: index + 1,
+						card: {
+							id: 11,
+							name: "项目综合分析",
+							type: "analysis",
+							display: "table",
+							lifecycle_status: "PUBLISHED",
+							published_revision_id: 91,
+						},
+					})),
 				});
 			}
 			if (path === "/bi/api/dashboard/22/validate") {
@@ -278,6 +322,12 @@ async function installApis(page: Page) {
 		}
 		if (path === "/api/session/status") return json(route, { authenticated: true, remainingSeconds: 3600 }, true);
 		if (path === "/api/menu/tree") return json(route, [], true);
+		if (path === "/api/directory/orgs") {
+			return json(route, [{ id: 1, name: "项目管理部", deptCode: "D1", children: [] }], true);
+		}
+		if (path === "/api/directory/roles") {
+			return json(route, [{ id: "analyst", name: "ROLE_ANALYST", description: "分析人员" }], true);
+		}
 		return json(route, {}, true);
 	});
 }
@@ -368,7 +418,7 @@ test("publishes governed analysis and dashboard, then safely retries registratio
 	await expect(page.getByRole("button", { name: "从已发布数据集创建分析" })).toBeVisible();
 	await expect(page.getByRole("link", { name: "项目综合分析" })).toBeVisible();
 	await expect(page.getByText("已发布", { exact: true })).toBeVisible();
-	await expect(page.getByRole("button", { name: "查看" })).toBeVisible();
+	await expect(page.getByRole("link", { name: /^查\s*看$/ })).toBeVisible();
 	let noPageOverflow = await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1);
 	expect(noPageOverflow).toBe(true);
 	await page.screenshot({ path: testInfo.outputPath("analysis-list-1366x768.png"), fullPage: true });
@@ -401,9 +451,11 @@ test("publishes governed analysis and dashboard, then safely retries registratio
 	await expect(page.getByTestId("analytics-dashboard-editor")).toBeVisible();
 	await expect(page.getByRole("textbox", { name: "未命名看板" })).toHaveValue("项目经营驾驶舱");
 	await page.getByRole("button", { name: /^校\s*验$/ }).click();
-	await expect(page.getByText("DASHBOARD_AUDIENCE_REQUIRED", { exact: true })).toBeVisible();
-	await enterFirstTag(page, "发布仪表板", "D1");
-	await page.locator(".ant-drawer").filter({ hasText: "发布仪表板" }).getByRole("button", { name: "重新校验" }).click();
+	await expect(page.getByText("请选择至少一个可见部门或可见角色。", { exact: true })).toBeVisible();
+	const dashboardDrawer = page.locator(".ant-drawer").filter({ hasText: "发布仪表板" });
+	await dashboardDrawer.locator(".ant-select").first().click();
+	await page.getByText("项目管理部", { exact: true }).last().click();
+	await dashboardDrawer.getByRole("button", { name: "重新校验" }).click();
 	await expect(page.getByText("校验通过，可以发布", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "确认发布" }).click();
 	await expect(page.getByText("业务入口正在注册", { exact: true })).toBeVisible();

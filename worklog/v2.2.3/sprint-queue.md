@@ -2113,18 +2113,18 @@
 ## Sprint-98: BI 看板发布与可视化编排闭环 (202608)
 
 **目录**: `worklog/v2.2.3/sprint-98-202608-bi-dashboard-authoring-closure`
-**状态**: IN_PROGRESS（G0/G1 完成；F1 开始 RED→GREEN）
+**状态**: IN_PROGRESS（F1/F2 DONE；F3 自动化验收完成，待容器、真实发布与 Chrome 95）
 **目标**: 看板作者在同一编辑器完成治理分析拖放编排、组件修复、最新草稿保存、真实发布范围选择和可操作的发布校验。
 **依赖**: 承接 Sprint-94/95 的 Analysis/Dashboard revision、查询网关和发布门禁，复用现有 RGL、DashboardCard 布局字段与平台目录 API；不新增菜单、schema 或分析编辑器。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---|---|---:|---|
 | F0-交付基线与契约冻结 | P0 | 1 | DONE |
-| F1-发布一致性与治理修复 | P0 | 2 | IN_PROGRESS×1 / READY×1 |
-| F2-可视化看板编排 | P0 | 2 | READY×2 |
-| F3-发布安全与集中验收 | P0 | 1 | DRAFT |
+| F1-发布一致性与治理修复 | P0 | 2 | DONE×2 |
+| F2-可视化看板编排 | P0 | 2 | DONE×2 |
+| F3-发布安全与集中验收 | P0 | 1 | IN_PROGRESS |
 
-**统计**: DONE=1，IN_PROGRESS=1，READY=3，DRAFT=1（共 6 Task）。
+**统计**: DONE=5，IN_PROGRESS=1（共 6 Task）。
 **执行顺序**: F0 → F1/T01 → F1/T02 → F2/T01 → F2/T02 → F3/T01；全部编码完成后集中执行一次 E2E。
 **关键决策**: 发布前保存当前草稿；发布范围复用组织/角色目录；旧 Card 可读可替换不可发布；RGL 和 canonical AnalysisEditor 继续作为唯一 owner。
 **已知风险**: 当前只有 1 张可发布治理分析；真实 E2E 登录态过期且 Chrome 95 executable 缺失；共享 SQL Workbench 改动不纳入本 Sprint。

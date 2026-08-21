@@ -37,6 +37,7 @@ import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -287,6 +288,13 @@ public class DashboardResource {
         ResponseEntity<?> immutable = requireDraft(dashboard);
         if (immutable != null) return immutable;
 
+        JsonNode dashcardsNode = dashboardCardsNode(body);
+        List<AnalyticsDashboardCard> existingDashcards = dashcardsNode != null && dashcardsNode.isArray()
+                ? dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(dashboardId)
+                : List.of();
+        ResponseEntity<?> invalidBinding = validateGovernedBindingChanges(dashcardsNode, existingDashcards);
+        if (invalidBinding != null) return invalidBinding;
+
         if (dashboardNode != null && dashboardNode.has("name")) {
             String name = trimToNull(dashboardNode.path("name").asText(null));
             if (name == null) {
@@ -310,21 +318,11 @@ public class DashboardResource {
         }
         dashboardRepository.save(dashboard);
 
-        JsonNode dashcardsNode = null;
-        if (body != null) {
-            if (body.has("dashcards")) {
-                dashcardsNode = body.path("dashcards");
-            } else if (body.has("ordered_cards")) {
-                dashcardsNode = body.path("ordered_cards");
-            } else if (body.has("cards")) {
-                dashcardsNode = body.path("cards");
-            }
-        }
-
         if (dashcardsNode != null && dashcardsNode.isArray()) {
-            List<AnalyticsDashboardCard> existing = dashboardCardRepository.findAllByDashboardIdOrderByIdAsc(dashboardId);
+            Map<Long, AnalyticsDashboardCard> existingById = existingDashcards.stream()
+                    .collect(Collectors.toMap(AnalyticsDashboardCard::getId, dashcard -> dashcard));
             Set<Long> incomingIds = collectLongIds(dashcardsNode);
-            for (AnalyticsDashboardCard dashcard : existing) {
+            for (AnalyticsDashboardCard dashcard : existingDashcards) {
                 if (!incomingIds.contains(dashcard.getId())) {
                     dashboardCardRepository.delete(dashcard);
                 }
@@ -332,11 +330,8 @@ public class DashboardResource {
 
             for (JsonNode dc : dashcardsNode) {
                 Long dashcardId = dc.path("id").canConvertToLong() ? dc.path("id").asLong() : null;
-                AnalyticsDashboardCard dashcard = dashcardId == null || dashcardId <= 0 ? null : dashboardCardRepository.findById(dashcardId).orElse(null);
-
-                Long cardId = dc.path("card_id").canConvertToLong()
-                        ? dc.path("card_id").asLong()
-                        : dc.has("card") && dc.path("card").path("id").canConvertToLong() ? dc.path("card").path("id").asLong() : null;
+                AnalyticsDashboardCard dashcard = dashcardId == null || dashcardId <= 0 ? null : existingById.get(dashcardId);
+                Long cardId = resolveCardId(dc);
 
                 if (dashcard == null) {
                     if (cardId == null || cardId <= 0) {
@@ -1235,6 +1230,10 @@ public class DashboardResource {
         map.put("collection_id", card.getCollectionId());
         map.put("database_id", card.getDatabaseId());
         map.put("display", card.getDisplay());
+        map.put("type", card.getCardType());
+        map.put("lifecycle_status", card.getLifecycleStatus());
+        map.put("published_revision_id", card.getPublishedRevisionId());
+        map.put("version_no", card.getAnalysisVersion());
         map.put("dataset_query", parseJsonObject(card.getDatasetQueryJson()));
         map.put("visualization_settings", parseJsonObject(card.getVisualizationSettingsJson()));
         map.put("creator_id", card.getCreatorId());
@@ -1322,5 +1321,69 @@ public class DashboardResource {
             return body.path("card").path("id").asLong();
         }
         return null;
+    }
+
+    private static JsonNode dashboardCardsNode(JsonNode body) {
+        if (body == null) {
+            return null;
+        }
+        if (body.has("dashcards")) {
+            return body.path("dashcards");
+        }
+        if (body.has("ordered_cards")) {
+            return body.path("ordered_cards");
+        }
+        return body.has("cards") ? body.path("cards") : null;
+    }
+
+    private ResponseEntity<?> validateGovernedBindingChanges(
+            JsonNode dashcardsNode,
+            List<AnalyticsDashboardCard> existingDashcards) {
+        if (dashcardsNode == null || !dashcardsNode.isArray()) {
+            return null;
+        }
+
+        Map<Long, AnalyticsDashboardCard> existingById = existingDashcards.stream()
+                .collect(Collectors.toMap(AnalyticsDashboardCard::getId, dashcard -> dashcard));
+        Map<Integer, Long> changedCardIds = new LinkedHashMap<>();
+        Set<Long> uniqueCardIds = new HashSet<>();
+        for (int index = 0; index < dashcardsNode.size(); index++) {
+            JsonNode requested = dashcardsNode.get(index);
+            Long dashcardId = requested.path("id").canConvertToLong() ? requested.path("id").asLong() : null;
+            AnalyticsDashboardCard existing = dashcardId == null || dashcardId <= 0 ? null : existingById.get(dashcardId);
+            Long cardId = resolveCardId(requested);
+            boolean changed = existing == null || (cardId != null && !cardId.equals(existing.getCardId()));
+            if (!changed || cardId == null || cardId <= 0) {
+                continue;
+            }
+            changedCardIds.put(index, cardId);
+            uniqueCardIds.add(cardId);
+        }
+        if (changedCardIds.isEmpty()) {
+            return null;
+        }
+
+        Map<Long, AnalyticsCard> cardsById = new HashMap<>();
+        for (AnalyticsCard card : cardRepository.findAllById(uniqueCardIds)) {
+            cardsById.put(card.getId(), card);
+        }
+        for (Map.Entry<Integer, Long> entry : changedCardIds.entrySet()) {
+            AnalyticsCard card = cardsById.get(entry.getValue());
+            if (!isPublishedGovernedAnalysis(card)) {
+                return ResponseEntity.unprocessableEntity().body(Map.of(
+                        "code", "DASHBOARD_ANALYSIS_REQUIRED",
+                        "path", "dashcards[" + entry.getKey() + "].card_id",
+                        "message", "dashboard components must reference a published governed analysis"
+                ));
+            }
+        }
+        return null;
+    }
+
+    private static boolean isPublishedGovernedAnalysis(AnalyticsCard card) {
+        return card != null
+                && "analysis".equals(card.getCardType())
+                && "PUBLISHED".equals(card.getLifecycleStatus())
+                && card.getPublishedRevisionId() != null;
     }
 }

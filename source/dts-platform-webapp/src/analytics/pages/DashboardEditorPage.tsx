@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import type { Layout } from "react-grid-layout";
 import {
@@ -10,10 +10,11 @@ import {
 	type DashboardPublicationAudience,
 	type DashboardPublicationValidation,
 	type DashboardVersion,
+	type PlatformOrgNode,
+	type PlatformRole,
 } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Alert, App, Button, Card, Drawer, Empty, Input, Modal, Select, Space, Spin, Tag, Typography } from "antd";
-import { PlusOutlined, } from "@ant-design/icons";
 import { statusLabel } from "@/utils/customerDisplayLabels";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { useDashboardCrossFilter } from "../hooks/useDashboardCrossFilter";
@@ -21,10 +22,20 @@ import { useDrillFilter } from "../hooks/useDrillFilter";
 import { DashboardEditorGrid } from "./dashboard/DashboardEditorGrid";
 import { DashboardFilterBar, type DashboardParameter } from "./dashboard/DashboardFilterBar";
 import { CardPickerModal } from "./dashboard/CardPickerModal";
+import { DashboardAnalysisLibrary } from "./dashboard/DashboardAnalysisLibrary";
+import { DashboardComponentInspector } from "./dashboard/DashboardComponentInspector";
 import type { SeriesClickParams } from "../components/charts";
 import { CROSS_FILTER_ENABLED, CROSS_FILTER_TARGETS } from "./dashboard/InteractionSettingsPopover";
 import type { ParameterMapping } from "./dashboard/ParameterMappingPopover";
-import { publicationErrorMessage, toDashboardParams, toEditableDashcards } from "./dashboard/dashboardEditorModel";
+import {
+	flattenDepartmentOptions,
+	hasRequiredPublicationAudience,
+	isPublishedAnalysisCard,
+	publicationErrorMessage,
+	publicationIssueMessage,
+	toDashboardParams,
+	toEditableDashcards,
+} from "./dashboard/dashboardEditorModel";
 import { useDashboardCardQueries } from "./dashboard/useDashboardCardQueries";
 
 const { Text } = Typography;
@@ -44,6 +55,9 @@ export default function DashboardEditorPage() {
 	// Collections & cards for picker
 	const [collections, setCollections] = useState<LoadState<CollectionListItem[]>>({ state: "loading" });
 	const [allCards, setAllCards] = useState<LoadState<CardListItem[]>>({ state: "loading" });
+	const [platformOrgs, setPlatformOrgs] = useState<LoadState<PlatformOrgNode[]>>({ state: "loading" });
+	const [platformRoles, setPlatformRoles] = useState<LoadState<PlatformRole[]>>({ state: "loading" });
+	const [directoryReloadKey, setDirectoryReloadKey] = useState(0);
 	const [dashboard, setDashboard] = useState<LoadState<DashboardDetail> | null>(dashboardId ? { state: "loading" } : null);
 
 	// Dashboard state
@@ -57,6 +71,8 @@ export default function DashboardEditorPage() {
 	const [isEditing, setIsEditing] = useState(true);
 	const [saveState, setSaveState] = useState<LoadState<DashboardDetail> | null>(null);
 	const [cardPickerOpen, setCardPickerOpen] = useState(false);
+	const [replacementIndex, setReplacementIndex] = useState<number | null>(null);
+	const [selectedDashcardId, setSelectedDashcardId] = useState<number | null>(null);
 	const [publishOpen, setPublishOpen] = useState(false);
 	const [publicationBusy, setPublicationBusy] = useState(false);
 	const [publicationError, setPublicationError] = useState<string | null>(null);
@@ -70,9 +86,27 @@ export default function DashboardEditorPage() {
 	const [versionsOpen, setVersionsOpen] = useState(false);
 	const [versionsLoading, setVersionsLoading] = useState(false);
 	const [versions, setVersions] = useState<DashboardVersion[]>([]);
+	const nextTemporaryDashcardId = useRef(-1);
 
 	const dashboardValue = dashboard?.state === "loaded" ? dashboard.value : null;
 	const canModify = !dashboardValue?.lifecycle_status || dashboardValue.lifecycle_status === "DRAFT";
+	const publishedAnalysisCards = useMemo(
+		() => allCards.state === "loaded" ? allCards.value.filter(isPublishedAnalysisCard) : [],
+		[allCards],
+	);
+	const departmentOptions = useMemo(
+		() => platformOrgs.state === "loaded" ? flattenDepartmentOptions(platformOrgs.value) : [],
+		[platformOrgs],
+	);
+	const roleOptions = useMemo(
+		() => platformRoles.state === "loaded"
+			? platformRoles.value.map((role) => ({
+				value: role.name,
+				label: role.description ? `${role.name} · ${role.description}` : role.name,
+			}))
+			: [],
+		[platformRoles],
+	);
 
 	// Cross-filter and drill
 	const crossFilter = useDashboardCrossFilter();
@@ -87,6 +121,23 @@ export default function DashboardEditorPage() {
 			.catch((e) => !cancelled && setCollections({ state: "error", error: e }));
 		return () => { cancelled = true; };
 	}, []);
+
+	// Fetch governed publication audiences once per editor session.
+	useEffect(() => {
+		void directoryReloadKey;
+		let cancelled = false;
+		setPlatformOrgs({ state: "loading" });
+		setPlatformRoles({ state: "loading" });
+		analyticsApi
+			.listPlatformOrgs()
+			.then((value) => !cancelled && setPlatformOrgs({ state: "loaded", value }))
+			.catch((error) => !cancelled && setPlatformOrgs({ state: "error", error }));
+		analyticsApi
+			.listPlatformRoles()
+			.then((value) => !cancelled && setPlatformRoles({ state: "loaded", value }))
+			.catch((error) => !cancelled && setPlatformRoles({ state: "error", error }));
+		return () => { cancelled = true; };
+	}, [directoryReloadKey]);
 
 	// Fetch all cards
 	useEffect(() => {
@@ -110,7 +161,9 @@ export default function DashboardEditorPage() {
 				setName(d.name ?? "");
 				setDescription(d.description ?? "");
 				setCollectionId(typeof d.collection_id === "number" ? d.collection_id : null);
-				setDashcards(toEditableDashcards(d));
+				const editableDashcards = toEditableDashcards(d);
+				setDashcards(editableDashcards);
+				setSelectedDashcardId(editableDashcards[0]?.id ?? null);
 				setParameters(toDashboardParams(d));
 				setIsEditing(!d.lifecycle_status || d.lifecycle_status === "DRAFT");
 			})
@@ -182,8 +235,9 @@ export default function DashboardEditorPage() {
 
 	// Remove card
 	const handleRemoveCard = useCallback((index: number) => {
+		if (dashcards[index]?.id === selectedDashcardId) setSelectedDashcardId(null);
 		setDashcards((prev) => prev.filter((_, i) => i !== index));
-	}, []);
+	}, [dashcards, selectedDashcardId]);
 
 	const onParameterMappingsChange = useCallback((dashcardId: number, mappings: ParameterMapping[]) => {
 		setDashcards((prev) => prev.map((item) =>
@@ -197,40 +251,86 @@ export default function DashboardEditorPage() {
 		));
 	}, []);
 
-	// Add cards from picker
-	const handleAddCards = useCallback((cards: CardListItem[]) => {
-		const accepted = cards.slice(0, Math.max(0, 50 - dashcards.length));
-		if (accepted.length < cards.length) message.warning("仪表板最多允许 50 个分析组件");
-		setDashcards((prev) => {
-			let maxBottom = 0;
-			for (const dc of prev) {
-				const bottom = (dc.row ?? 0) + (dc.size_y ?? 4);
-				if (bottom > maxBottom) maxBottom = bottom;
-			}
+	// Add published analyses from the picker or external drag source.
+	const handleAddCards = useCallback((
+		cards: CardListItem[],
+		placement?: Pick<Layout, "x" | "y" | "w" | "h">,
+	) => {
+		const currentCardIds = new Set(dashcards.map((dashcard) => dashcard.card_id));
+		const accepted = cards
+			.filter((card) => isPublishedAnalysisCard(card) && !currentCardIds.has(card.id))
+			.slice(0, Math.max(0, 50 - dashcards.length));
+		if (accepted.length < cards.length) {
+			message.warning(dashcards.length >= 50 ? "仪表板最多允许 50 个分析组件" : "该分析已在画布中");
+		}
+		if (accepted.length === 0) return;
 
-			const newCards: DashboardCard[] = accepted.map((c, i) => ({
-				id: -(Date.now() + i), // Negative temp id
-				card_id: c.id,
-				row: maxBottom,
-				col: (i * 6) % 12,
-				size_x: 6,
-				size_y: 4,
+		const maxBottom = dashcards.reduce(
+			(bottom, dashcard) => Math.max(bottom, (dashcard.row ?? 0) + (dashcard.size_y ?? 4)),
+			0,
+		);
+		const newCards: DashboardCard[] = accepted.map((card, index) => {
+			const id = nextTemporaryDashcardId.current--;
+			const row = placement && index === 0 ? placement.y : maxBottom + Math.floor(index / 2) * 4;
+			const width = placement && index === 0 ? Math.max(3, Math.min(12, placement.w)) : 6;
+			const col = placement && index === 0
+				? Math.max(0, Math.min(12 - width, placement.x))
+				: (index % 2) * 6;
+			return {
+				id,
+				card_id: card.id,
+				row,
+				col,
+				size_x: width,
+				size_y: placement && index === 0 ? Math.max(2, Math.min(20, placement.h)) : 4,
 				parameter_mappings: [],
 				visualization_settings: {},
-				card: c,
-			}));
-
-			// Adjust row for cards that would overlap
-			for (let i = 1; i < newCards.length; i++) {
-				if (newCards[i].col === 0 && i > 0) {
-					maxBottom += 4;
-					newCards[i] = { ...newCards[i], row: maxBottom };
-				}
-			}
-
-			return [...prev, ...newCards];
+				card,
+			};
 		});
-	}, [dashcards.length]);
+		setDashcards((current) => [...current, ...newCards]);
+		setSelectedDashcardId(newCards[0].id);
+	}, [dashcards, message]);
+
+	const handleDropCard = useCallback((cardId: number, placement: Pick<Layout, "x" | "y" | "w" | "h">) => {
+		const card = publishedAnalysisCards.find((candidate) => candidate.id === cardId);
+		if (card) handleAddCards([card], placement);
+	}, [handleAddCards, publishedAnalysisCards]);
+
+	const handleReplaceCards = useCallback((cards: CardListItem[]) => {
+		const replacement = cards.find(isPublishedAnalysisCard);
+		if (replacementIndex == null || !replacement) return;
+		setDashcards((current) => current.map((dashcard, index) => index === replacementIndex
+			? {
+				...dashcard,
+				card_id: replacement.id,
+				card: replacement,
+				parameter_mappings: [],
+				visualization_settings: {},
+			}
+			: dashcard));
+		setSelectedDashcardId(dashcards[replacementIndex]?.id ?? null);
+		setReplacementIndex(null);
+		message.success("已替换分析，原位置和尺寸已保留");
+	}, [dashcards, message, replacementIndex]);
+
+	const handleSelectedLayoutChange = useCallback((
+		patch: Partial<Pick<DashboardCard, "row" | "col" | "size_x" | "size_y">>,
+	) => {
+		if (selectedDashcardId == null) return;
+		setDashcards((current) => current.map((dashcard) => {
+			if (dashcard.id !== selectedDashcardId) return dashcard;
+			const next = { ...dashcard, ...patch };
+			const width = Math.max(3, Math.min(12, next.size_x ?? 6));
+			return {
+				...next,
+				col: Math.max(0, Math.min(12 - width, next.col ?? 0)),
+				row: Math.max(0, next.row ?? 0),
+				size_x: width,
+				size_y: Math.max(2, Math.min(20, next.size_y ?? 4)),
+			};
+		}));
+	}, [selectedDashcardId]);
 
 	// Series click handler (for cross-filter)
 	const handleSeriesClick = useCallback(
@@ -301,7 +401,7 @@ export default function DashboardEditorPage() {
 				]);
 			},
 		});
-	}, [locale, parameters.length]);
+	}, [locale, message.warning, modal.confirm, parameters.length]);
 
 	// Remove parameter
 	const handleRemoveParam = useCallback((paramId: string) => {
@@ -313,11 +413,11 @@ export default function DashboardEditorPage() {
 		});
 	}, []);
 
-	// Save
-	const save = async () => {
-		if (!canModify) return;
+	// Save the exact draft that publication validation will inspect.
+	const saveDraft = async ({ notify = true }: { notify?: boolean } = {}): Promise<DashboardDetail | null> => {
+		if (!canModify) return null;
 		const trimmedName = name.trim();
-		if (!trimmedName) return;
+		if (!trimmedName) return null;
 		setSaveState({ state: "loading" });
 		try {
 			let id = dashboardId;
@@ -356,11 +456,23 @@ export default function DashboardEditorPage() {
 				})),
 			};
 			const saved = await analyticsApi.saveDashboard(body);
+			const savedDashcards = toEditableDashcards(saved);
+			const selectedCardId = dashcards.find((dashcard) => dashcard.id === selectedDashcardId)?.card_id;
 			setSaveState({ state: "loaded", value: saved });
-			message.success(t(locale, "dashboards.save"));
-			navigate(`/bi/dashboards/${saved.id}`, { replace: true });
+			setDashboard({ state: "loaded", value: saved });
+			setDashcards(savedDashcards);
+			setSelectedDashcardId(
+				savedDashcards.find((dashcard) => dashcard.card_id === selectedCardId)?.id
+					?? savedDashcards[0]?.id
+					?? null,
+			);
+			if (notify) message.success(t(locale, "dashboards.save"));
+			navigate(`/bi/dashboards/${saved.id}/edit`, { replace: true });
+			return saved;
 		} catch (e) {
 			setSaveState({ state: "error", error: e });
+			if (!notify) setPublicationError(publicationErrorMessage(e));
+			return null;
 		}
 	};
 
@@ -369,15 +481,20 @@ export default function DashboardEditorPage() {
 		expiresAt: audience.expiresAt ? new Date(audience.expiresAt).toISOString() : null,
 	});
 
-	const validatePublication = async (): Promise<DashboardPublicationValidation | null> => {
-		if (!dashboardId) {
+	const validatePublication = async (targetId: string | number | null = dashboardId): Promise<DashboardPublicationValidation | null> => {
+		if (!targetId) {
 			setPublicationError("请先保存仪表板草稿，再进行发布校验。");
+			return null;
+		}
+		if (!hasRequiredPublicationAudience(audience)) {
+			setPublicationValidation(null);
+			setPublicationError("请选择至少一个可见部门或可见角色。");
 			return null;
 		}
 		setPublicationBusy(true);
 		setPublicationError(null);
 		try {
-			const result = await analyticsApi.validateDashboardPublication(dashboardId, publicationPayload());
+			const result = await analyticsApi.validateDashboardPublication(targetId, publicationPayload());
 			setPublicationValidation(result);
 			return result;
 		} catch (error) {
@@ -388,16 +505,27 @@ export default function DashboardEditorPage() {
 		}
 	};
 
-	const openPublication = () => {
+	const openPublication = async () => {
 		setPublishOpen(true);
 		setPublicationValidation(null);
 		setPublicationError(null);
-		if (dashboardId) void validatePublication();
+		setPublicationBusy(true);
+		const saved = await saveDraft({ notify: false });
+		if (!saved) {
+			setPublicationBusy(false);
+			return;
+		}
+		if (!hasRequiredPublicationAudience(audience)) {
+			setPublicationError("请选择至少一个可见部门或可见角色。");
+			setPublicationBusy(false);
+			return;
+		}
+		await validatePublication(saved.id);
 	};
 
 	const publish = async () => {
 		if (!dashboardId) return;
-		const checked = await validatePublication();
+		const checked = await validatePublication(dashboardId);
 		if (!checked?.valid) return;
 		setPublicationBusy(true);
 		try {
@@ -443,7 +571,7 @@ export default function DashboardEditorPage() {
 		try {
 			const draft = await analyticsApi.createDashboardDraftFromVersion(dashboardId, revisionId);
 			message.success("已从历史版本创建独立草稿");
-			navigate(`/bi/dashboards/${draft.id}`);
+			navigate(`/bi/dashboards/${draft.id}/edit`);
 		} catch (error) {
 			message.error(publicationErrorMessage(error));
 		} finally {
@@ -472,6 +600,11 @@ export default function DashboardEditorPage() {
 	const existingCardIds = useMemo(() => {
 		return new Set(dashcards.map((dc) => dc.card_id).filter((id): id is number => typeof id === "number"));
 	}, [dashcards]);
+	const selectedDashcardIndex = useMemo(
+		() => dashcards.findIndex((dashcard) => dashcard.id === selectedDashcardId),
+		[dashcards, selectedDashcardId],
+	);
+	const selectedDashcard = selectedDashcardIndex >= 0 ? dashcards[selectedDashcardIndex] : null;
 
 	// Collection options
 	const collectionOptions = useMemo(() => [
@@ -552,7 +685,7 @@ export default function DashboardEditorPage() {
 					)}
 
 					<Button
-						onClick={() => setCardPickerOpen(true)}
+						onClick={() => { setReplacementIndex(null); setCardPickerOpen(true); }}
 						disabled={allCards.state !== "loaded" || !isEditing || !canModify || dashcards.length >= 50}
 					>
 						{t(locale, "dashboards.addCard")}
@@ -566,15 +699,15 @@ export default function DashboardEditorPage() {
 					</Button>
 
 					{dashboardId && <Button onClick={() => void openVersions()}>版本历史</Button>}
-					{dashboardId && canModify && <Button onClick={openPublication}>校验</Button>}
-					{dashboardId && canModify && <Button type="primary" ghost onClick={openPublication}>发布</Button>}
+					{dashboardId && canModify && <Button onClick={() => void openPublication()}>校验</Button>}
+					{dashboardId && canModify && <Button type="primary" ghost onClick={() => void openPublication()}>发布</Button>}
 					{dashboardValue?.registration_status === "REGISTRATION_FAILED" && (
 						<Button danger onClick={() => void retryRegistration()}>重试注册</Button>
 					)}
 
 					<Button
 						type="primary"
-						onClick={save}
+						onClick={() => void saveDraft()}
 						disabled={!canModify || !name.trim() || saveState?.state === "loading"}
 						loading={saveState?.state === "loading"}
 					>
@@ -623,34 +756,80 @@ export default function DashboardEditorPage() {
 					onRemoveParam={handleRemoveParam}
 				/>
 
-				{/* Grid layout */}
-				{dashcards.length === 0 ? (
-					<div className="flex flex-col items-center justify-center min-h-[300px] border-2 border-dashed border-gray-300 rounded-lg text-gray-400">
-						<PlusOutlined className="text-3xl mb-2" />
-						<p className="text-sm">{t(locale, "dashboards.noCards")}</p>
-						{isEditing && canModify && (
-							<Button
-								type="primary"
-								ghost
-								onClick={() => setCardPickerOpen(true)}
-								disabled={allCards.state !== "loaded" || dashcards.length >= 50}
-								className="mt-2"
-							>
-								{t(locale, "dashboards.addCard")}
-							</Button>
-						)}
+				{/* Governed analysis composer */}
+				{isEditing && canModify ? (
+					<div className="mb-dashboard-composer">
+						<DashboardAnalysisLibrary
+							cards={publishedAnalysisCards}
+							existingCardIds={existingCardIds}
+							disabled={dashcards.length >= 50}
+							loading={allCards.state === "loading"}
+							onAdd={(card) => handleAddCards([card])}
+						/>
+						<section className="mb-dashboard-composer__panel mb-dashboard-composer__canvas" aria-label="看板编排画布">
+							<div className="mb-dashboard-composer__panel-title">
+								<div>
+									<strong>12 列编排画布</strong>
+									<div className="mb-dashboard-composer__panel-caption">拖动标题条移动，拖动右下角调整尺寸</div>
+								</div>
+								<Tag>{dashcards.length} / 50</Tag>
+							</div>
+							{dashcards.length === 0 ? (
+								<Alert
+									className="mb-3"
+									type="info"
+									showIcon
+									message="从左侧拖入已发布分析"
+									description="也可以点击分析项右侧的添加按钮，组件将进入 12 列网格。"
+								/>
+							) : null}
+							<DashboardEditorGrid
+								dashcards={dashcards}
+								cardResults={cardResults}
+								isEditing
+								locale={locale}
+								parameters={parameters}
+								onLayoutChange={handleLayoutChange}
+								onRemoveCard={handleRemoveCard}
+								onParameterMappingsChange={onParameterMappingsChange}
+								onInteractionSettingsChange={onInteractionSettingsChange}
+								onSeriesClick={handleSeriesClick}
+								drillFilters={drill.filters}
+								onDrillClear={drill.clearAll}
+								onDrillRemoveFrom={drill.removeFiltersFrom}
+								selectedDashcardId={selectedDashcardId}
+								onSelectCard={setSelectedDashcardId}
+								onReplaceCard={(index) => { setReplacementIndex(index); setCardPickerOpen(true); }}
+								onDropCard={handleDropCard}
+							/>
+						</section>
+						<DashboardComponentInspector
+							dashcard={selectedDashcard}
+							onLayoutChange={handleSelectedLayoutChange}
+							onReplace={() => {
+								if (selectedDashcardIndex >= 0) {
+									setReplacementIndex(selectedDashcardIndex);
+									setCardPickerOpen(true);
+								}
+							}}
+							onDelete={() => {
+								if (selectedDashcardIndex >= 0) handleRemoveCard(selectedDashcardIndex);
+							}}
+						/>
 					</div>
+				) : dashcards.length === 0 ? (
+					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(locale, "dashboards.noCards")} />
 				) : (
 					<DashboardEditorGrid
-							dashcards={dashcards}
-							cardResults={cardResults}
-							isEditing={isEditing && canModify}
-							locale={locale}
-							parameters={parameters}
-							onLayoutChange={handleLayoutChange}
-							onRemoveCard={handleRemoveCard}
-							onParameterMappingsChange={onParameterMappingsChange}
-							onInteractionSettingsChange={onInteractionSettingsChange}
+						dashcards={dashcards}
+						cardResults={cardResults}
+						isEditing={false}
+						locale={locale}
+						parameters={parameters}
+						onLayoutChange={handleLayoutChange}
+						onRemoveCard={handleRemoveCard}
+						onParameterMappingsChange={onParameterMappingsChange}
+						onInteractionSettingsChange={onInteractionSettingsChange}
 						onSeriesClick={handleSeriesClick}
 						drillFilters={drill.filters}
 						onDrillClear={drill.clearAll}
@@ -662,14 +841,12 @@ export default function DashboardEditorPage() {
 				{allCards.state === "loaded" && (
 					<CardPickerModal
 						open={cardPickerOpen}
-						onClose={() => setCardPickerOpen(false)}
-						onAdd={handleAddCards}
-						allCards={allCards.value.filter((card) =>
-							card.type === "analysis"
-							&& card.lifecycle_status === "PUBLISHED"
-							&& typeof card.published_revision_id === "number"
-						)}
+						onClose={() => { setCardPickerOpen(false); setReplacementIndex(null); }}
+						onAdd={replacementIndex == null ? handleAddCards : handleReplaceCards}
+						allCards={publishedAnalysisCards}
 						existingCardIds={existingCardIds}
+						title={replacementIndex == null ? "添加已发布分析" : "替换为已发布分析"}
+						singleSelect={replacementIndex != null}
 					/>
 				)}
 
@@ -680,11 +857,17 @@ export default function DashboardEditorPage() {
 					onClose={() => setPublishOpen(false)}
 					extra={(
 						<Space>
-							<Button loading={publicationBusy} onClick={() => void validatePublication()}>重新校验</Button>
+							<Button
+								loading={publicationBusy}
+								disabled={!hasRequiredPublicationAudience(audience)}
+								onClick={() => void validatePublication()}
+							>
+								重新校验
+							</Button>
 							<Button
 								type="primary"
 								loading={publicationBusy}
-								disabled={!publicationValidation?.valid}
+								disabled={!hasRequiredPublicationAudience(audience) || !publicationValidation?.valid}
 								onClick={() => void publish()}
 							>
 								确认发布
@@ -699,26 +882,54 @@ export default function DashboardEditorPage() {
 							message="发布后将钉定分析版本、参数映射与查询预算"
 							description={`当前 ${dashcards.length}/50 个分析组件，${parameters.length}/20 个筛选参数。业务入口注册成功后才会对消费者开放。`}
 						/>
+						<Text strong>发布范围（必填）</Text>
 						<div>
 							<Text strong>可见部门</Text>
 							<Select
-								mode="tags"
+								mode="multiple"
 								value={audience.deptCodes}
-								onChange={(deptCodes) => { setAudience((value) => ({ ...value, deptCodes })); setPublicationValidation(null); }}
-								placeholder="输入部门编码后回车"
+								onChange={(deptCodes) => {
+									setAudience((value) => ({ ...value, deptCodes }));
+									setPublicationValidation(null);
+									setPublicationError(null);
+								}}
+								options={departmentOptions}
+								loading={platformOrgs.state === "loading"}
+								disabled={platformOrgs.state !== "loaded"}
+								showSearch
+								optionFilterProp="label"
+								placeholder="选择可见部门"
 								style={{ width: "100%" }}
 							/>
 						</div>
 						<div>
 							<Text strong>可见角色</Text>
 							<Select
-								mode="tags"
+								mode="multiple"
 								value={audience.roleCodes}
-								onChange={(roleCodes) => { setAudience((value) => ({ ...value, roleCodes })); setPublicationValidation(null); }}
-								placeholder="输入角色编码后回车"
+								onChange={(roleCodes) => {
+									setAudience((value) => ({ ...value, roleCodes }));
+									setPublicationValidation(null);
+									setPublicationError(null);
+								}}
+								options={roleOptions}
+								loading={platformRoles.state === "loading"}
+								disabled={platformRoles.state !== "loaded"}
+								showSearch
+								optionFilterProp="label"
+								placeholder="选择可见角色"
 								style={{ width: "100%" }}
 							/>
 						</div>
+						{platformOrgs.state === "error" ? (
+							<Alert type="error" showIcon message="部门目录加载失败" action={<Button size="small" onClick={() => setDirectoryReloadKey((value) => value + 1)}>重试</Button>} />
+						) : null}
+						{platformRoles.state === "error" ? (
+							<Alert type="error" showIcon message="角色目录加载失败" action={<Button size="small" onClick={() => setDirectoryReloadKey((value) => value + 1)}>重试</Button>} />
+						) : null}
+						{platformOrgs.state === "loaded" && platformRoles.state === "loaded" && departmentOptions.length === 0 && roleOptions.length === 0 ? (
+							<Alert type="warning" showIcon message="目录暂无可选部门或角色" action={<Button size="small" onClick={() => setDirectoryReloadKey((value) => value + 1)}>重新加载</Button>} />
+						) : null}
 						<div>
 							<Text strong>发布密级</Text>
 							<Select
@@ -742,7 +953,7 @@ export default function DashboardEditorPage() {
 								onChange={(event) => { setAudience((value) => ({ ...value, expiresAt: event.target.value || null })); setPublicationValidation(null); }}
 							/>
 						</div>
-						{publicationError && <Alert type="error" showIcon message="发布校验失败" description={publicationError} />}
+						{publicationError && <Alert type="error" showIcon message="发布校验未通过" description={publicationError} />}
 						{publicationValidation && (
 							<>
 								<Alert
@@ -751,10 +962,10 @@ export default function DashboardEditorPage() {
 									message={publicationValidation.valid ? "校验通过，可以发布" : "存在发布阻断项"}
 								/>
 								{publicationValidation.blockers.map((blocker) => (
-									<Alert key={`${blocker.code}-${blocker.path}`} type="error" showIcon message={blocker.code} description={`${blocker.path}：${blocker.message}`} />
+									<Alert key={`${blocker.code}-${blocker.path}`} type="error" showIcon message={publicationIssueMessage(blocker, dashcards)} />
 								))}
 								{publicationValidation.warnings.map((warning) => (
-									<Alert key={`${warning.code}-${warning.path}`} type="warning" showIcon message={warning.code} description={`${warning.path}：${warning.message}`} />
+									<Alert key={`${warning.code}-${warning.path}`} type="warning" showIcon message={publicationIssueMessage(warning, dashcards)} />
 								))}
 								<Card size="small" title="依赖快照">
 									<pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 260, overflow: "auto" }}>

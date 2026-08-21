@@ -18,9 +18,19 @@ interface CardPickerModalProps {
 	onAdd: (cards: CardListItem[]) => void;
 	allCards: CardListItem[];
 	existingCardIds: Set<number>;
+	title?: string;
+	singleSelect?: boolean;
 }
 
-export function CardPickerModal({ open, onClose, onAdd, allCards, existingCardIds }: CardPickerModalProps) {
+export function CardPickerModal({
+	open,
+	onClose,
+	onAdd,
+	allCards,
+	existingCardIds,
+	title = "添加分析卡片",
+	singleSelect = false,
+}: CardPickerModalProps) {
 	const navigate = useNavigate();
 	const [search, setSearch] = useState("");
 	const [selectedKeys, setSelectedKeys] = useState<number[]>([]);
@@ -75,7 +85,7 @@ export function CardPickerModal({ open, onClose, onAdd, allCards, existingCardId
 
 	return (
 		<Modal
-			title="添加分析卡片"
+			title={title}
 			open={open}
 			onOk={handleOk}
 			onCancel={handleCancel}
@@ -101,7 +111,7 @@ export function CardPickerModal({ open, onClose, onAdd, allCards, existingCardId
 				size="small"
 				pagination={available.length > 8 ? { pageSize: 8 } : false}
 				rowSelection={{
-					type: "checkbox",
+					type: singleSelect ? "radio" : "checkbox",
 					selectedRowKeys: selectedKeys,
 					onChange: (keys) => setSelectedKeys(keys as number[]),
 				}}
