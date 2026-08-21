@@ -129,10 +129,10 @@ export function AdvancedDbtWorkspace({
 					{/* biome-ignore lint/a11y/useSemanticElements: this is a styled navigation switch rather than a form fieldset. */}
 					<div aria-label="模型表现模式" className="dmx-workbench-mode-switch" role="group">
 						<Button onClick={onBack} type="text">
-							可视化
+							返回可视化模式
 						</Button>
 						<Button className="active" type="text">
-							代码
+							代码模式
 						</Button>
 					</div>
 					<div>

@@ -109,6 +109,17 @@ const render = async (value: AdvancedDbtWorkspaceProps) =>
 	act(async () => root.render(<AdvancedDbtWorkspace {...value} />));
 
 describe("AdvancedDbtWorkspace unified authoring view", () => {
+	it("returns from code view to visual mode", async () => {
+		const value = props();
+		await render(value);
+		const backButton = Array.from(container.querySelectorAll("button")).find(
+			(item) => item.textContent === "返回可视化模式",
+		);
+		expect(backButton).toBeDefined();
+		act(() => backButton?.click());
+		expect(value.onBack).toHaveBeenCalledTimes(1);
+	});
+
 	it("edits the shared file state without calling a second API owner", async () => {
 		const value = props({ dirty: true });
 		await render(value);

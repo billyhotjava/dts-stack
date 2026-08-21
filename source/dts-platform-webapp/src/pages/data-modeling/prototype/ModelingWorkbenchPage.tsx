@@ -603,9 +603,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				<div className="dmx-model-workbench dmx-model-workbench--editor-only">
 					<section className="dmx-model-editor">
 						<div className="dmx-editor-tab">
-							<Button className="dmx-table-action" onClick={returnToList} type="link">
-								返回模型列表
-							</Button>
 							<span>▤</span>
 							<strong>
 								{draft?.name || (draft ? `新建${MODEL_KIND_CONFIG[draft.createKind].label}` : "模型编辑器")}
@@ -617,6 +614,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 									{statusLabel(selectedModel.status)} · r{selectedModel.revision}
 								</Status>
 							) : null}
+							<Button className="dmx-editor-tab__back dmx-table-action" onClick={returnToList} type="link">
+								返回模型列表
+							</Button>
 						</div>
 						{editorLoading ? (
 							<RequestState description="正在读取所选模型的版本与实现信息。" kind="loading" title="正在打开模型" />

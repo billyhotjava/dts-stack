@@ -718,7 +718,7 @@
 	grid-template-columns: minmax(650px, 1fr) 52px;
 }
 
-.dmx-model-workbench--editor-only .dmx-editor-tab .dmx-table-action {
+.dmx-model-workbench--editor-only .dmx-editor-tab__back {
 	min-height: 28px;
 	padding: 3px 9px;
 	border: 1px solid var(--dmx-border);
@@ -815,7 +815,7 @@
 .dmx-editor-tab strong {
 	font-size: 13px;
 }
-.dmx-editor-tab button {
+.dmx-editor-tab .dmx-editor-tab__back {
 	margin-left: auto;
 	border: 0;
 	background: transparent;
@@ -2182,7 +2182,7 @@
 	overflow-wrap: anywhere;
 }
 .dmx-editor-tab .dmx-status {
-	margin-left: auto;
+	margin-left: 0;
 }
 .dmx-form-grid small {
 	color: var(--dmx-muted);
