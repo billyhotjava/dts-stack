@@ -15,6 +15,7 @@ import type { ScreenUpdateConflict } from '../ScreenConflictPanel';
 import { Modal, message } from 'antd';
 import { toast } from 'sonner';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../../screenSpec';
+import { deriveScreenAuthoringIssues } from '../../screenAuthoringIssues';
 import { commitScreenPageDraft, materializeScreenPage } from '../../screenPageState';
 import {
     buildScreenDraftRecoveryKey,
@@ -52,6 +53,8 @@ interface ScreenHeaderProps {
     onToggleLibraryPanel?: () => void;
     showInspectorPanel?: boolean;
     onToggleInspectorPanel?: () => void;
+    authoringIssueCount?: number;
+    onOpenIssuePanel?: () => void;
 }
 
 export function ScreenHeader({
@@ -63,6 +66,8 @@ export function ScreenHeader({
     onToggleLibraryPanel,
     showInspectorPanel,
     onToggleInspectorPanel,
+    authoringIssueCount = 0,
+    onOpenIssuePanel,
 }: ScreenHeaderProps = {}) {
     const navigate = useNavigate();
     const { id } = useParams<{ id: string }>();
@@ -95,17 +100,6 @@ export function ScreenHeader({
         [config.id, id],
     );
     const recoveryPromptedKeyRef = useRef<string | null>(null);
-    // DEBUG: expose live config on window so we can inspect in Console.
-    useEffect(() => {
-        (window as any)._dtsScreenState = {
-            name: config.name,
-            id: config.id,
-            components: config.components?.length ?? 0,
-            pages: config.pages?.length ?? 0,
-            currentPageIndex,
-            ts: Date.now(),
-        };
-    }, [config, currentPageIndex]);
     const [isEditingName, setIsEditingName] = useState(false);
     const [nameValue, setNameValue] = useState(config.name);
     const [isPublishing, setIsPublishing] = useState(false);
@@ -118,15 +112,12 @@ export function ScreenHeader({
     const [showVersionComparePicker, setShowVersionComparePicker] = useState(false);
     const [showVersionRollbackPanel, setShowVersionRollbackPanel] = useState(false);
     const [showVersionHistoryPanel, setShowVersionHistoryPanel] = useState(false);
-    // designAction state removed — "编辑" menu uses direct buttons now
-    // governanceAction state removed — "安全" menu uses direct buttons now
     const [previewDeviceMode, setPreviewDeviceMode] = useState<PreviewDeviceMode>('auto');
     const [versionAction, setVersionAction] = useState<'history' | 'compare'>(() => {
         if (typeof window === 'undefined') return 'history';
         const raw = window.localStorage.getItem(VERSION_ACTION_STORAGE_KEY);
         return raw === 'compare' ? 'compare' : 'history';
     });
-    // toolsSection removed — toolbox split into 3 independent header menus
     // --- Merged toolbar state (from CanvasToolbar "更多工具") ---
     const [themeApplyMode, setThemeApplyMode] = useState<ThemeComponentApplyMode>('force');
     const [showLinkageGraph, setShowLinkageGraph] = useState(false);
@@ -760,6 +751,13 @@ export function ScreenHeader({
 
     const handlePublish = useCallback(async () => {
         if (isPublishing) return;
+        const blockingIssues = deriveScreenAuthoringIssues(persistedConfig)
+            .filter((issue) => issue.level === 'blocker');
+        if (blockingIssues.length > 0) {
+            if (onOpenIssuePanel) onOpenIssuePanel();
+            toast.error(`发布检查未通过，请先处理 ${blockingIssues.length} 项问题`);
+            return;
+        }
         setIsPublishing(true);
         try {
             const screenId = await saveScreen();
@@ -806,7 +804,7 @@ export function ScreenHeader({
         } finally {
             setIsPublishing(false);
         }
-    }, [handleLockHttpError, handleUpdateConflictError, isPublishing, saveScreen]);
+    }, [handleLockHttpError, handleUpdateConflictError, isPublishing, onOpenIssuePanel, persistedConfig, saveScreen]);
 
     useEffect(() => {
         if (!id || !permissions.canRead || publishInfo) {
@@ -1062,6 +1060,7 @@ export function ScreenHeader({
                         theme={config.theme || 'legacy-dark'}
                         showGrid={showGrid}
                         cycleWarningCount={cycleWarnings.length}
+                        authoringIssueCount={authoringIssueCount}
                         permissions={permissions}
                         lockedByOther={lockedByOther}
                         lockOwnerText={lockOwnerText}
@@ -1085,6 +1084,7 @@ export function ScreenHeader({
                         onShortcutHelp={handleShortcutHelp}
                         onToggleLinkageGraph={() => setShowLinkageGraph((prev) => !prev)}
                         onOpenVariableManager={() => setShowVariableManager(true)}
+                        onOpenIssuePanel={onOpenIssuePanel}
                         onExportPng={handleExportPng}
                         onExportPdf={handleExportPdf}
                     />

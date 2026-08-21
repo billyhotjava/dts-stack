@@ -46,6 +46,7 @@ interface ScreenHeaderMenusProps {
     theme: ScreenTheme;
     showGrid: boolean;
     cycleWarningCount: number;
+    authoringIssueCount: number;
     permissions: ScreenHeaderPermissions;
     lockedByOther: boolean;
     lockOwnerText: string;
@@ -69,6 +70,7 @@ interface ScreenHeaderMenusProps {
     onShortcutHelp: () => void;
     onToggleLinkageGraph: () => void;
     onOpenVariableManager: () => void;
+    onOpenIssuePanel?: () => void;
     onExportPng: () => void | Promise<void>;
     onExportPdf: () => void | Promise<void>;
 }
@@ -170,6 +172,7 @@ export function ScreenHeaderMenus({
     theme,
     showGrid,
     cycleWarningCount,
+    authoringIssueCount,
     permissions,
     lockedByOther,
     lockOwnerText,
@@ -193,6 +196,7 @@ export function ScreenHeaderMenus({
     onShortcutHelp,
     onToggleLinkageGraph,
     onOpenVariableManager,
+    onOpenIssuePanel,
     onExportPng,
     onExportPdf,
 }: ScreenHeaderMenusProps) {
@@ -281,10 +285,20 @@ export function ScreenHeaderMenus({
             </HeaderMenu>
 
             <HeaderMenu
-                label={`编辑${cycleWarningCount > 0 ? `(${cycleWarningCount})` : ''}`}
+                label={`编辑${authoringIssueCount > 0 ? `(${authoringIssueCount})` : (cycleWarningCount > 0 ? `(${cycleWarningCount})` : '')}`}
                 open={activeMenu === 'tools-edit'}
                 onToggle={() => setActiveMenu((prev) => (prev === 'tools-edit' ? null : 'tools-edit'))}
             >
+                {onOpenIssuePanel ? (
+                    <MenuSection title="编排检查">
+                        <MenuButton
+                            onClick={() => executeMenuAction(onOpenIssuePanel)}
+                            title="集中查看并定位发布前问题"
+                        >
+                            问题中心{authoringIssueCount > 0 ? `（${authoringIssueCount}）` : ''}
+                        </MenuButton>
+                    </MenuSection>
+                ) : null}
                 <MenuSection title="联动配置">
                     <MenuButton
                         onClick={() => {

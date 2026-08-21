@@ -10,6 +10,7 @@ import { analyticsApi } from '../../api/analyticsApi';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './screenSpec';
 import { commitScreenPageDraft, materializeScreenPage, resolveScreenPages, switchScreenPage } from './screenPageState';
+import { deriveScreenAuthoringIssues, type ScreenAuthoringIssue } from './screenAuthoringIssues';
 import {
     clampSidePanelWidth,
     getSidePanelVisibilityStorageKey,
@@ -30,6 +31,7 @@ import {
     ScreenHeader,
 } from './components';
 import { PageManagerPanel } from './components/PageManagerPanel';
+import { ScreenIssuePanel } from './components/ScreenIssuePanel';
 import type { ScreenPage } from './types';
 import './ScreenDesigner.css';
 
@@ -70,11 +72,17 @@ function ScreenDesignerContent() {
     );
     const [sidePanelWidths, setSidePanelWidths] = useState(initialSidePanelWidths);
     const [hasLoadedInitialState, setHasLoadedInitialState] = useState(false);
+    const [showIssuePanel, setShowIssuePanel] = useState(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
         window.localStorage.setItem('dts.analytics.screenDesigner.rightPanelTab', rightPanelTab);
     }, [rightPanelTab]);
+    useEffect(() => {
+        if (selectedIds.length === 0 && rightPanelTab !== 'style' && rightPanelTab !== 'layer') {
+            setRightPanelTab('style');
+        }
+    }, [rightPanelTab, selectedIds.length]);
     useEffect(() => {
         if (typeof window === 'undefined') return;
         window.localStorage.setItem('dts.analytics.screenDesigner.focusMode', focusMode ? 'true' : 'false');
@@ -214,6 +222,29 @@ function ScreenDesignerContent() {
         selectComponents([]);
         setCurrentPageIndex(nextIndex);
     }, [config, currentPageIndex, selectComponents, updateConfig]);
+
+    const persistedConfig = useMemo(
+        () => commitScreenPageDraft(config, currentPageIndex),
+        [config, currentPageIndex],
+    );
+    const authoringIssues = useMemo(
+        () => deriveScreenAuthoringIssues(persistedConfig),
+        [persistedConfig],
+    );
+    const handleLocateIssue = useCallback((issue: ScreenAuthoringIssue) => {
+        if (issue.pageIndex !== undefined && issue.pageIndex !== currentPageIndex) {
+            handleSwitchPage(issue.pageIndex);
+        }
+        if (issue.componentId) {
+            selectComponents([issue.componentId]);
+        } else {
+            selectComponents([]);
+        }
+        setRightPanelTab(issue.tab ?? 'style');
+        setFocusMode(false);
+        setShowInspectorPanel(true);
+        setShowIssuePanel(false);
+    }, [currentPageIndex, handleSwitchPage, selectComponents]);
 
     // Load existing screen if editing
     useEffect(() => {
@@ -426,6 +457,8 @@ function ScreenDesignerContent() {
                     onToggleLibraryPanel={() => setShowLibraryPanel((prev) => !prev)}
                     showInspectorPanel={showInspectorPanel}
                     onToggleInspectorPanel={() => setShowInspectorPanel((prev) => !prev)}
+                    authoringIssueCount={authoringIssues.length}
+                    onOpenIssuePanel={() => setShowIssuePanel(true)}
                 />
 
                 <div className="flex flex-1 min-h-0 overflow-hidden">
@@ -505,6 +538,12 @@ function ScreenDesignerContent() {
                 </div>
             </div>
         </ScreenRuntimeProvider>
+            <ScreenIssuePanel
+                open={showIssuePanel}
+                issues={authoringIssues}
+                onClose={() => setShowIssuePanel(false)}
+                onLocate={handleLocateIssue}
+            />
             {/* Shortcuts Panel (Ctrl+/) */}
             {showShortcuts && (
                 <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowShortcuts(false)}>
