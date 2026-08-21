@@ -20,6 +20,19 @@
 - Sprint-98 覆盖分析拖入、尺寸修改、保存刷新、历史组件替换、真实目录选值、保存后校验和发布注册。
 - Sprint-94 覆盖治理分析发布、看板发布和注册失败重试；其 mock 已补正式自动预览响应契约。
 
+## 草稿命名修复补充（2026-08-21）
+
+| 验收项 | 状态 | 证据 |
+|---|---|---|
+| 空名称静默禁用复现 | PASS | RED 提交 `b027812fd`；新用例按预期失败，3 条既有用例通过 |
+| 名称必填与保存反馈 | PASS | GREEN 提交 `44b03af05`；必填名称框、空名称提示与聚焦、保存动作恢复 |
+| Chrome 页面旅程 | PASS_WITH_ENV_NOTE | Chrome 150：Sprint-98 2/2；1366×768 与 768×900 均通过；Chrome 95 executable 缺失 |
+| 前端部署 | PASS | 镜像 `sha256:b91035e148c...`；Nginx 配置通过，本机 Traefik `/bi/dashboards/new` 返回 200 |
+
+- `/tmp/dts-sprint98-playwright-results/.../dashboard-name-required-1366x768.png`
+- `/tmp/dts-sprint98-playwright-results/.../dashboard-name-required-768x900.png`
+- 新建看板验证空名称不发起请求；填写名称后只执行一次创建、一次保存，并跳转到持久化草稿编辑页。
+
 ## 环境裁决
 
 代码与隔离自动化完成不等于运行交付。容器重建、授权账号下的真实发布/门户消费和 Chrome 95 实机证据齐备前，Sprint 保持 `IN_PROGRESS / PASS_WITH_GAPS`。

@@ -316,3 +316,75 @@ test("authors, repairs and publishes a governed dashboard from the visual compos
 	expect(failures.consoleErrors).toEqual([]);
 	expect(failures.failedResponses).toEqual([]);
 });
+
+test("names and saves a new dashboard draft without a silent disabled action", async ({ page }, testInfo) => {
+	await installIdentity(page);
+	await installApis(page);
+	const failures = collectFailures(page);
+	let createCount = 0;
+	let saveCount = 0;
+	let savedDashboard = {
+		id: 23,
+		name: "新建项目进度看板",
+		description: null,
+		collection_id: null,
+		lifecycle_status: "DRAFT",
+		published_revision_id: null,
+		registration_status: "NOT_REGISTERED",
+		version_no: 0,
+		parameters: [],
+		ordered_cards: [],
+	};
+
+	await page.route("**/bi/api/dashboard", async (route) => {
+		if (route.request().method() !== "POST") return route.fallback();
+		createCount += 1;
+		const body = JSON.parse(route.request().postData() ?? "{}") as { name?: string };
+		savedDashboard = { ...savedDashboard, name: body.name ?? savedDashboard.name };
+		return json(route, savedDashboard);
+	});
+	await page.route("**/bi/api/dashboard/save", async (route) => {
+		saveCount += 1;
+		const body = JSON.parse(route.request().postData() ?? "{}") as {
+			dashboard?: { name?: string; parameters?: unknown[] };
+			dashcards?: Array<Record<string, unknown>>;
+		};
+		savedDashboard = {
+			...savedDashboard,
+			name: body.dashboard?.name ?? savedDashboard.name,
+			parameters: body.dashboard?.parameters ?? [],
+			ordered_cards: body.dashcards ?? [],
+		};
+		return json(route, savedDashboard);
+	});
+	await page.route("**/bi/api/dashboard/23", (route) => json(route, savedDashboard));
+
+	await page.goto("/#/bi/dashboards/new");
+	const nameInput = page.getByRole("textbox", { name: "看板名称" });
+	const saveButton = page.getByRole("button", { name: "保存草稿" });
+	await expect(nameInput).toHaveAttribute("placeholder", "请输入看板名称（必填）");
+	await expect(nameInput).toBeFocused();
+	await expect(saveButton).toBeEnabled();
+	await page.screenshot({ path: testInfo.outputPath("dashboard-name-required-1366x768.png"), fullPage: true });
+
+	await saveButton.click();
+	await expect(page.getByText("请输入看板名称后再保存草稿", { exact: true })).toBeVisible();
+	await expect(nameInput).toBeFocused();
+	expect(createCount).toBe(0);
+	expect(saveCount).toBe(0);
+
+	await page.setViewportSize({ width: 768, height: 900 });
+	await expect(nameInput).toBeVisible();
+	await expect(saveButton).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath("dashboard-name-required-768x900.png"), fullPage: true });
+
+	await nameInput.fill("新建项目进度看板");
+	await saveButton.click();
+	await expect(page).toHaveURL(/#\/bi\/dashboards\/23\/edit$/);
+	await expect(nameInput).toHaveValue("新建项目进度看板");
+	expect(createCount).toBe(1);
+	expect(saveCount).toBe(1);
+	expect(failures.pageErrors).toEqual([]);
+	expect(failures.consoleErrors).toEqual([]);
+	expect(failures.failedResponses).toEqual([]);
+});
