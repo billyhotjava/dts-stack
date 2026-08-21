@@ -15,6 +15,7 @@ import {
 } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Alert, App, Button, Card, Drawer, Empty, Input, Modal, Select, Space, Spin, Tag, Typography } from "antd";
+import type { InputRef } from "antd";
 import { statusLabel } from "@/utils/customerDisplayLabels";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { useDashboardCrossFilter } from "../hooks/useDashboardCrossFilter";
@@ -24,6 +25,7 @@ import { DashboardFilterBar, type DashboardParameter } from "./dashboard/Dashboa
 import { CardPickerModal } from "./dashboard/CardPickerModal";
 import { DashboardAnalysisLibrary } from "./dashboard/DashboardAnalysisLibrary";
 import { DashboardComponentInspector } from "./dashboard/DashboardComponentInspector";
+import { DashboardNameField } from "./dashboard/DashboardNameField";
 import type { SeriesClickParams } from "../components/charts";
 import { CROSS_FILTER_ENABLED, CROSS_FILTER_TARGETS } from "./dashboard/InteractionSettingsPopover";
 import type { ParameterMapping } from "./dashboard/ParameterMappingPopover";
@@ -87,6 +89,7 @@ export default function DashboardEditorPage() {
 	const [versionsLoading, setVersionsLoading] = useState(false);
 	const [versions, setVersions] = useState<DashboardVersion[]>([]);
 	const nextTemporaryDashcardId = useRef(-1);
+	const nameInputRef = useRef<InputRef>(null);
 
 	const dashboardValue = dashboard?.state === "loaded" ? dashboard.value : null;
 	const canModify = !dashboardValue?.lifecycle_status || dashboardValue.lifecycle_status === "DRAFT";
@@ -417,7 +420,12 @@ export default function DashboardEditorPage() {
 	const saveDraft = async ({ notify = true }: { notify?: boolean } = {}): Promise<DashboardDetail | null> => {
 		if (!canModify) return null;
 		const trimmedName = name.trim();
-		if (!trimmedName) return null;
+		if (!trimmedName) {
+			nameInputRef.current?.focus();
+			if (notify) message.warning("请输入看板名称后再保存草稿");
+			else setPublicationError("请输入看板名称后再保存草稿");
+			return null;
+		}
 		setSaveState({ state: "loading" });
 		try {
 			let id = dashboardId;
@@ -648,18 +656,10 @@ export default function DashboardEditorPage() {
 						</Link>
 
 						<div className="flex min-w-0 flex-1 items-center gap-2">
-							{isEditing && canModify ? (
-								<Input
-									value={name}
-									onChange={(e) => setName(e.target.value)}
-									placeholder={t(locale, "dashboards.untitled")}
-									variant="borderless"
-									className="min-w-0 flex-1 text-lg font-semibold"
-									style={{ fontSize: 18, fontWeight: 600 }}
-								/>
-							) : (
-								<h2 className="m-0 min-w-0 flex-1 truncate text-lg font-semibold">{name || t(locale, "dashboards.untitled")}</h2>
-							)}
+							<DashboardNameField name={name} editable={isEditing && canModify} onNameChange={setName}
+								inputRef={nameInputRef} autoFocus={!dashboardId}
+								placeholder="请输入看板名称（必填）" untitledLabel={t(locale, "dashboards.untitled")}
+							/>
 							<div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
 								{dashboardValue?.lifecycle_status && <Tag>{statusLabel(dashboardValue.lifecycle_status)}</Tag>}
 								{dashboardValue?.registration_status && (
@@ -708,7 +708,7 @@ export default function DashboardEditorPage() {
 					<Button
 						type="primary"
 						onClick={() => void saveDraft()}
-						disabled={!canModify || !name.trim() || saveState?.state === "loading"}
+						disabled={!canModify || saveState?.state === "loading"}
 						loading={saveState?.state === "loading"}
 					>
 						保存草稿
