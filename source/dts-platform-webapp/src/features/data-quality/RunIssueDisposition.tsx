@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { appendIssueAction, closeIssue, createIssue, getIssueBySource, updateIssue } from "@/api/platformApi";
 import { CompactTable } from "@/components/table";
 import { useUserInfo } from "@/store/userStore";
+import { qualityLabel } from "@/utils/customerDisplayLabels";
 import { formatTime } from "@/utils/textUtils";
 import { QualityStatus } from "./QualityShared";
 import {
@@ -203,7 +204,7 @@ export function RunIssueDisposition({
 			title: "动作",
 			dataIndex: "actionType",
 			width: 140,
-			render: (value: unknown) => <Tag>{String(value || "-")}</Tag>,
+			render: (value: unknown) => <Tag>{qualityLabel(value, "其他操作")}</Tag>,
 		},
 		{ title: "处理记录", dataIndex: "notes", render: (value: unknown) => String(value || "-") },
 	];

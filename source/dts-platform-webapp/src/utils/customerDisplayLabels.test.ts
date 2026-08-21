@@ -5,8 +5,8 @@ import {
 	auditActionLabel,
 	changeTypeLabel,
 	classificationLabel,
-	granularityLabel,
 	governanceEventLabel,
+	granularityLabel,
 	indicatorDomainLabel,
 	indicatorTypeLabel,
 	materializationLabel,
@@ -24,6 +24,9 @@ describe("customer display labels", () => {
 		["PUBLISHED", "已发布"],
 		["draft", "草稿"],
 		["SUCCESS", "成功"],
+		["OPEN", "待处理"],
+		["RESOLVED", "已解决"],
+		["CLOSED", "已关闭"],
 	])("renders status %s in Chinese", (value, expected) => {
 		expect(statusLabel(value)).toBe(expected);
 	});
@@ -62,8 +65,12 @@ describe("customer display labels", () => {
 		["MANUAL", "手动执行"],
 		["DRY_RUN", "试跑"],
 		["COMPLETENESS", "完整性"],
+		["MEDIUM", "中"],
 		["CRITICAL", "严重"],
 		["SQL_EXECUTION_FAILED", "检测语句执行失败"],
+		["COMMENT", "处理意见"],
+		["AUTO_NOTE", "系统记录"],
+		["NOTE", "处理记录"],
 	])("renders quality enum %s in Chinese", (value, expected) => {
 		expect(qualityLabel(value)).toBe(expected);
 	});

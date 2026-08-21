@@ -29,7 +29,7 @@ export function QualityWorkspace({ routeKey, children }: { routeKey: QualityRout
 		<div className="dq-workspace">
 			<header className="dq-workspace__header">
 				<div>
-					<div className="dq-workspace__eyebrow">DATA QUALITY CENTER</div>
+					<div className="dq-workspace__eyebrow">数据质量中心</div>
 					<div className="dq-workspace__title-row">
 						<h1>数据质量</h1>
 						<Tag color="blue">默认数据湖</Tag>

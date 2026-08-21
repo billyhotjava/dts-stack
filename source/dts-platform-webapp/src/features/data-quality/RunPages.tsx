@@ -6,15 +6,16 @@ import { useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { getQualityRun, listFailingRows, listQualityRules, listQualityRuns } from "@/api/platformApi";
 import { CompactTable } from "@/components/table";
+import { qualityLabel } from "@/utils/customerDisplayLabels";
 import { formatTime } from "@/utils/textUtils";
 import { QualityEmpty, QualityMetric, QualityPageHeading, QualityStatus, UnavailableCapability } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
 import {
 	displayName,
 	getQualityRunCounts,
-	qualityRuleNameLabel,
 	type QualityRule,
 	type QualityRun,
+	qualityRuleNameLabel,
 	toList,
 } from "./qualityTypes";
 import { RunIssueDisposition } from "./RunIssueDisposition";
@@ -244,7 +245,7 @@ export function RunDetailPage() {
 					showIcon
 					type="error"
 					message="质量检测未通过"
-					description={run.message || run.errorCategory || "请检查失败样本与执行 SQL。"}
+					description={run.message || qualityLabel(run.errorCategory, "请检查失败样本与执行 SQL。")}
 				/>
 			) : null}
 			<div className="dq-metric-grid">

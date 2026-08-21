@@ -13,7 +13,18 @@ describe("data quality customer-facing labels", () => {
 		expect(runs).toContain('["QUEUED", "RUNNING", "PASSED", "SUCCESS", "SUCCEEDED", "FAILED", "ERROR", "SKIPPED"]');
 		expect(runs).toContain("label: displayName(value)");
 		expect(runs).toContain("qualityRuleNameLabel(item.name || item.id)");
-		expect(runs).not.toContain("`${Number(value).toLocaleString()} ms`");
+		expect(runs).toContain('qualityLabel(run.errorCategory, "请检查失败样本与执行 SQL。")');
+		expect(runs).not.toMatch(/toLocaleString\(\)\}\sms/);
+	});
+
+	it("removes English chrome and localizes issue action enums", () => {
+		const workspace = source("src/features/data-quality/QualityWorkspace.tsx");
+		const disposition = source("src/features/data-quality/RunIssueDisposition.tsx");
+
+		expect(workspace).toContain("数据质量中心");
+		expect(workspace).not.toContain("DATA QUALITY CENTER");
+		expect(disposition).toContain('qualityLabel(value, "其他操作")');
+		expect(disposition).not.toContain('<Tag>{String(value || "-")}</Tag>');
 	});
 
 	it("localizes rule dimensions and severity without changing form values", () => {
