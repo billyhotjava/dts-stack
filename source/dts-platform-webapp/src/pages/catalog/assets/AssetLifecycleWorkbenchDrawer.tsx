@@ -29,6 +29,7 @@ import {
 } from "@/api/platformApi";
 import { actionColumn, CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
+import { governanceEventLabel, migrationDecisionLabel, qualityLabel, statusLabel } from "@/utils/customerDisplayLabels";
 import type { AssetRow } from "./assetPageShared";
 import { classificationText, formatTime } from "./assetPageShared";
 
@@ -87,7 +88,7 @@ const LIFECYCLE_STATUS_LABELS: Record<string, string> = {
 
 const lifecycleStatusText = (status?: string | null) => {
 	const normalized = String(status || "NOT_STARTED").toUpperCase();
-	return LIFECYCLE_STATUS_LABELS[normalized] || normalized;
+	return LIFECYCLE_STATUS_LABELS[normalized] || statusLabel(normalized);
 };
 
 const lifecycleStatusColor = (status?: string | null) => {
@@ -393,11 +394,13 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 										<Tag color={fact.effectiveLevel ? "orange" : "red"}>{classificationText(fact.effectiveLevel)}</Tag>
 									</Descriptions.Item>
 									<Descriptions.Item label="最高来源类型">
-										{fact.highestSourceType || fact.originType || "-"}
+										{fact.highestSourceType || fact.originType
+											? qualityLabel(fact.highestSourceType || fact.originType, "其他来源")
+											: "-"}
 									</Descriptions.Item>
 									<Descriptions.Item label="传播状态">
 										<Tag color={fact.propagationStatus === "PROPAGATED" ? "green" : "orange"}>
-											{fact.propagationStatus || "-"}
+											{statusLabel(fact.propagationStatus, "-")}
 										</Tag>
 									</Descriptions.Item>
 									<Descriptions.Item label="快照版本">v{fact.snapshotVersion ?? 0}</Descriptions.Item>
@@ -429,10 +432,18 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 									dataSource={fact.events || []}
 									columns={[
 										{ title: "时间", dataIndex: "occurredAt", render: formatTime },
-										{ title: "事件", dataIndex: "eventType" },
+										{
+											title: "事件",
+											dataIndex: "eventType",
+											render: (value) => governanceEventLabel(value),
+										},
 										{ title: "候选密级", dataIndex: "candidateLevel", render: classificationText },
 										{ title: "结果密级", dataIndex: "resultingLevel", render: classificationText },
-										{ title: "来源类型", dataIndex: "triggerType" },
+										{
+											title: "来源类型",
+											dataIndex: "triggerType",
+											render: (value) => qualityLabel(value, "其他来源"),
+										},
 										{ title: "版本", dataIndex: "snapshotVersion", render: (value) => `v${value ?? 0}` },
 									]}
 								/>
@@ -449,13 +460,15 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 								<div className="space-y-4">
 									<Descriptions bordered size="small" column={2}>
 										<Descriptions.Item label="生命周期状态">
-											{workspace.lifecycle.lifecycleStatus || "-"}
+											{lifecycleStatusText(workspace.lifecycle.lifecycleStatus)}
 										</Descriptions.Item>
 										<Descriptions.Item label="当前密级">
 											{classificationText(workspace.lifecycle.effectiveLevel)}
 										</Descriptions.Item>
 										<Descriptions.Item label="回收站状态">
-											{workspace.lifecycle.trash?.status || "未进入回收站"}
+											{workspace.lifecycle.trash?.status
+												? lifecycleStatusText(workspace.lifecycle.trash.status)
+												: "未进入回收站"}
 										</Descriptions.Item>
 										<Descriptions.Item label="保留至">
 											{formatTime(workspace.lifecycle.trash?.retainUntil)}
@@ -478,8 +491,16 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 										pagination={{ pageSize: 10 }}
 										dataSource={workspace.actions || []}
 										columns={[
-											{ title: "动作", dataIndex: "actionType" },
-											{ title: "状态", dataIndex: "status", render: (value) => <Tag>{value}</Tag> },
+											{
+												title: "动作",
+												dataIndex: "actionType",
+												render: (value) => ACTION_LABELS[value] || governanceEventLabel(value, "治理操作"),
+											},
+											{
+												title: "状态",
+												dataIndex: "status",
+												render: (value) => <Tag>{lifecycleStatusText(value)}</Tag>,
+											},
 											{ title: "申请人", dataIndex: "requester" },
 											{ title: "密级", dataIndex: "effectiveLevel", render: classificationText },
 											{ title: "申请时间", dataIndex: "createdAt", render: formatTime },
@@ -523,9 +544,13 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 												{
 													title: "阶段",
 													dataIndex: "stage",
-													render: (value) => LIFECYCLE_STAGE_LABELS[value] || value || "-",
+													render: (value) => LIFECYCLE_STAGE_LABELS[value] || "其他阶段",
 												},
-												{ title: "事件", dataIndex: "eventType" },
+												{
+													title: "事件",
+													dataIndex: "eventType",
+													render: (value) => governanceEventLabel(value),
+												},
 												{
 													title: "状态",
 													dataIndex: "status",
@@ -535,7 +560,11 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 												},
 												{ title: "密级", dataIndex: "effectiveLevel", render: classificationText },
 												{ title: "操作人", dataIndex: "actor", render: (value) => value || "-" },
-												{ title: "来源", dataIndex: "requestSource", render: (value) => value || "-" },
+												{
+													title: "来源",
+													dataIndex: "requestSource",
+													render: (value) => (value ? qualityLabel(value, "其他来源") : "-"),
+												},
 												{ title: "时间", dataIndex: "occurredAt", render: formatTime },
 											]}
 										/>
@@ -571,7 +600,7 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 														dataIndex: "resultStatus",
 														width: 110,
 														render: (value) => (
-															<Tag color={value === "SUCCEEDED" ? "green" : "red"}>{value || "-"}</Tag>
+															<Tag color={value === "SUCCEEDED" ? "green" : "red"}>{statusLabel(value, "-")}</Tag>
 														),
 													},
 													{
@@ -634,7 +663,7 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 										{
 											title: "阶段",
 											dataIndex: "lifecycleBucket",
-											render: (value) => LIFECYCLE_LABELS[value] || value,
+											render: (value) => LIFECYCLE_LABELS[value] || "其他阶段",
 										},
 										{ title: "密级", dataIndex: "effectiveLevel", render: classificationText },
 										{ title: "资产数量", dataIndex: "assetCount" },
@@ -652,8 +681,16 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 									dataSource={metrics.trends || []}
 									columns={[
 										{ title: "日期", dataIndex: "day", render: formatTime },
-										{ title: "阶段", dataIndex: "stage" },
-										{ title: "状态", dataIndex: "status" },
+										{
+											title: "阶段",
+											dataIndex: "stage",
+											render: (value) => LIFECYCLE_STAGE_LABELS[value] || "其他阶段",
+										},
+										{
+											title: "状态",
+											dataIndex: "status",
+											render: (value) => lifecycleStatusText(value),
+										},
 										{ title: "密级", dataIndex: "effectiveLevel", render: classificationText },
 										{ title: "事件数", dataIndex: "eventCount" },
 									]}
@@ -674,7 +711,7 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 										loading={actingId === "migration-dry-run"}
 										onClick={() => void startMigrationDryRun()}
 									>
-										新建 Dry-run
+										新建试跑
 									</Button>
 									<Button
 										disabled={!migrationRun || migrationRun.status === "PAUSED"}
@@ -705,7 +742,7 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 								</Space>
 								{migrationRun ? (
 									<Descriptions bordered size="small" column={3}>
-										<Descriptions.Item label="状态">{migrationRun.status}</Descriptions.Item>
+										<Descriptions.Item label="状态">{statusLabel(migrationRun.status)}</Descriptions.Item>
 										<Descriptions.Item label="总记录">{migrationRun.totalItems}</Descriptions.Item>
 										<Descriptions.Item label="可自动迁移">{migrationRun.eligibleItems}</Descriptions.Item>
 										<Descriptions.Item label="已应用">{migrationRun.appliedItems}</Descriptions.Item>
@@ -730,10 +767,16 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 											title: "决策",
 											dataIndex: "decision",
 											render: (value) => (
-												<Tag color={String(value).startsWith("BLOCKED_") ? "red" : "blue"}>{value}</Tag>
+												<Tag color={String(value).startsWith("BLOCKED_") ? "red" : "blue"}>
+													{migrationDecisionLabel(value)}
+												</Tag>
 											),
 										},
-										{ title: "应用状态", dataIndex: "applyStatus" },
+										{
+											title: "应用状态",
+											dataIndex: "applyStatus",
+											render: (value) => statusLabel(value),
+										},
 										{ title: "原因", dataIndex: "decisionReason", ellipsis: true },
 									]}
 								/>
@@ -764,8 +807,16 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 								pagination={{ pageSize: 10 }}
 								dataSource={issues}
 								columns={[
-									{ title: "问题类型", dataIndex: "issueType" },
-									{ title: "状态", dataIndex: "status", render: (value) => <Tag color="orange">{value}</Tag> },
+									{
+										title: "问题类型",
+										dataIndex: "issueType",
+										render: (value) => governanceEventLabel(value, "治理问题"),
+									},
+									{
+										title: "状态",
+										dataIndex: "status",
+										render: (value) => <Tag color="orange">{statusLabel(value)}</Tag>,
+									},
 									{ title: "资产引用", dataIndex: "redactedSubjectRef" },
 									{
 										title: "责任人/部门",

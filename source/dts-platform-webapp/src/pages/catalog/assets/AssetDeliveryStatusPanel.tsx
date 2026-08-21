@@ -1,5 +1,6 @@
 import { Alert, Button, Descriptions, Space, Tag } from "antd";
 import { useRouter } from "@/routes/hooks";
+import { statusAxisLabel, statusLabel } from "@/utils/customerDisplayLabels";
 
 export function AssetDeliveryStatusPanel({ dataset }: { dataset: Record<string, any> }) {
 	const router = useRouter();
@@ -20,12 +21,12 @@ export function AssetDeliveryStatusPanel({ dataset }: { dataset: Record<string, 
 			</Descriptions.Item>
 			<Descriptions.Item label="服务同步">
 				<Tag color={servingStatus === "SYNCED" ? "green" : servingStatus === "SYNC_FAILED" ? "red" : "default"}>
-					{servingStatus}
+					{statusLabel(servingStatus)}
 				</Tag>
 			</Descriptions.Item>
 			<Descriptions.Item label="质量状态">
 				<Tag color={qualityStatus === "PASSED" ? "green" : qualityStatus === "FAILED" ? "red" : "default"}>
-					{qualityStatus}
+					{statusLabel(qualityStatus)}
 				</Tag>
 			</Descriptions.Item>
 			<Descriptions.Item label="状态投影时间">
@@ -36,7 +37,7 @@ export function AssetDeliveryStatusPanel({ dataset }: { dataset: Record<string, 
 					<Space size={[4, 4]} wrap>
 						{axisEntries.map(([axis, value]) => (
 							<Tag key={axis}>
-								{axis}: {String(value)}
+								{statusAxisLabel(axis)}：{statusLabel(value)}
 							</Tag>
 						))}
 					</Space>

@@ -11,6 +11,7 @@ import {
 import { LineageGraph } from "@/components/lineage";
 import { CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
+import { indicatorTypeLabel, statusLabel } from "@/utils/customerDisplayLabels";
 import type { ImpactEdge, ImpactNode } from "./lineageShared";
 
 export function MetadataJsonBlock({ title, value }: { title: string; value?: string }) {
@@ -127,7 +128,8 @@ export function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
 	}
 
 	const score = health?.healthScore ?? health?.quality?.healthScore;
-	const hasQualityEvidence = health?.quality?.evidenceState === "AVAILABLE" || Number(health?.quality?.totalRuns ?? 0) > 0;
+	const hasQualityEvidence =
+		health?.quality?.evidenceState === "AVAILABLE" || Number(health?.quality?.totalRuns ?? 0) > 0;
 	return (
 		<div className="space-y-4 py-2 text-sm">
 			{hasQualityEvidence && score != null ? (
@@ -174,14 +176,14 @@ export function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
 								title: "类型",
 								dataIndex: "type",
 								width: 100,
-								render: (value: any) => (value ? <Tag>{value}</Tag> : "-"),
+								render: (value: any) => (value ? <Tag>{indicatorTypeLabel(value)}</Tag> : "-"),
 							},
 							{
 								title: "状态",
 								dataIndex: "status",
 								width: 90,
 								render: (value: any) =>
-									value ? <Tag color={value === "PUBLISHED" ? "green" : "default"}>{value}</Tag> : "-",
+									value ? <Tag color={value === "PUBLISHED" ? "green" : "default"}>{statusLabel(value)}</Tag> : "-",
 							},
 						]}
 					/>

@@ -14,14 +14,14 @@ const stageCopy: Record<
 	}
 > = {
 	DESIGNED: {
-		note: "本次提交只校验当前逻辑设计。构建、测试、标准、质量、权限和字段分类分级属于发布门禁，不会阻断逻辑设计提交。",
+		note: "本次提交只校验当前逻辑设计。构建、模型测试、标准、权限和字段分类分级属于模型版本交付检查，不会阻断逻辑设计提交。",
 		ready: "逻辑设计提交检查已通过，可以继续配置或验证数据实现。",
 		blocked: "逻辑设计仍有阻断项，请按修复入口补齐后重新检查。",
 	},
 	RELEASE_READY: {
-		note: "发布门禁独立校验当前版本的构建、测试、标准、质量、权限和字段分类分级证据。",
-		ready: "发布门禁检查已通过，可以进入发布流程。",
-		blocked: "发布前证据仍需处理；这些阻断项不会回溯影响已完成的逻辑设计提交。",
+		note: "模型版本交付检查校验构建、模型测试、标准、权限和字段分类分级；治理质量将在物理构建后的候选发布流程按资产规则运行证据核验。",
+		ready: "模型版本交付检查已通过，可以进入候选发布流程。",
+		blocked: "模型版本交付证据仍需处理；这些阻断项不会回溯影响已完成的逻辑设计提交。",
 	},
 };
 
@@ -29,32 +29,54 @@ export function ModelStageGatePanel({ gates, targetStage }: { gates: ModelSpecSt
 	const gate = gates.find((item) => item.stage === targetStage);
 	const columns = useMemo<CompactColumns<ModelSpecStageGate>>(
 		() => [
-			{ title: "阶段", dataIndex: "stage" },
+			{ title: "阶段", dataIndex: "stage", width: 128 },
 			{
 				title: "状态",
 				dataIndex: "status",
+				width: 88,
 				render: (value: string) => <Status tone={value === "READY" ? "success" : "danger"}>{value}</Status>,
 			},
 			{
 				title: "阻断项",
 				dataIndex: "blockers",
+				width: 500,
 				render: (blockers: ModelSpecStageGate["blockers"]) =>
-					blockers.length
-						? blockers.map((blocker) => (
-								<div key={`${blocker.code}-${blocker.field}`}>
+					blockers.length ? (
+						<div className="dmx-stage-gate-blockers">
+							{blockers.map((blocker, index) => (
+								<div className="dmx-stage-gate-blocker" key={`${blocker.code}-${blocker.field}-${index}`}>
 									<b>{blocker.code}</b>：{blocker.message}
 								</div>
-							))
-						: "无",
+							))}
+						</div>
+					) : (
+						"无"
+					),
 			},
 			{
 				title: "修复入口",
 				dataIndex: "blockers",
-				render: (blockers: ModelSpecStageGate["blockers"]) =>
-					blockers
-						.map((blocker) => blocker.repairRoute)
-						.filter(Boolean)
-						.join("；") || "—",
+				width: 140,
+				render: (blockers: ModelSpecStageGate["blockers"]) => {
+					const routes = Array.from(
+						new Set(blockers.map((blocker) => blocker.repairRoute).filter((route): route is string => Boolean(route))),
+					);
+					if (!routes.length) return "—";
+					return (
+						<div className="dmx-stage-gate-repairs">
+							{routes.map((route, index) => (
+								<a
+									aria-label={`打开修复入口：${route}`}
+									href={route.startsWith("#") ? route : `#${route}`}
+									key={route}
+									title={route}
+								>
+									{routes.length === 1 ? "前往修复" : `修复入口 ${index + 1}`}
+								</a>
+							))}
+						</div>
+					);
+				},
 			},
 		],
 		[],
@@ -78,11 +100,17 @@ export function ModelStageGatePanel({ gates, targetStage }: { gates: ModelSpecSt
 				{ready ? copy.ready : copy.blocked}
 			</output>
 			<CompactTable<ModelSpecStageGate>
+				autoEllipsis={false}
+				autoSort={false}
 				className="dmx-stage-gate-table"
+				compact={false}
 				columns={columns}
 				dataSource={[gate]}
 				pagination={false}
 				rowKey="stage"
+				scroll={{ x: 856 }}
+				size="small"
+				tableLayout="fixed"
 			/>
 		</>
 	);

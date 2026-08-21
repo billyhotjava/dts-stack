@@ -1,5 +1,6 @@
 import { Alert, Button, Modal, Space, Tabs, Tag } from "antd";
 import { actionColumn, CompactTable } from "@/components/table";
+import { assetTypeLabel, governanceEventLabel, qualityLabel } from "@/utils/customerDisplayLabels";
 import { GOVERNANCE_STATUS_DICT, LIFECYCLE_STATUS_DICT, resolveEnumLabel } from "./assetEnumLabels";
 import {
 	formatTime,
@@ -102,7 +103,7 @@ export function AssetLedgerDialogs({
 											width: 100,
 											render: (value) => (
 												<Tag color={value === "BLOCKING" ? "red" : value === "READY" ? "green" : "orange"}>
-													{value || "-"}
+													{value ? qualityLabel(value, "治理提示") : "-"}
 												</Tag>
 											),
 										},
@@ -189,7 +190,11 @@ export function AssetLedgerDialogs({
 											title: "严重度",
 											dataIndex: "severity",
 											width: 100,
-											render: (value, row) => <Tag color={row.blocking ? "red" : "orange"}>{value || "-"}</Tag>,
+											render: (value, row) => (
+												<Tag color={row.blocking ? "red" : "orange"}>
+													{value ? qualityLabel(value, "治理提示") : "-"}
+												</Tag>
+											),
 										},
 										{
 											title: "原因",
@@ -268,13 +273,13 @@ export function AssetLedgerDialogs({
 							title: "类型猜测",
 							dataIndex: "typeHintGuess",
 							width: 120,
-							render: (value) => (value ? <Tag>{value}</Tag> : "-"),
+							render: (value) => (value ? <Tag>{assetTypeLabel(value)}</Tag> : "-"),
 						},
 						{
 							title: "原因",
 							dataIndex: "reason",
 							width: 180,
-							render: (value) => (value ? <Tag color="orange">{value}</Tag> : "-"),
+							render: (value) => (value ? <Tag color="orange">{governanceEventLabel(value, "解析失败")}</Tag> : "-"),
 						},
 						{
 							title: "调用方",

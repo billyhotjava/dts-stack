@@ -465,7 +465,7 @@ describe("ModelingWorkbenchEditor", () => {
 			"关联关系",
 			"发布",
 			"日志",
-			"质量规则",
+			"质量约束",
 			"高级 dbt 工作区",
 			"导出",
 		])
@@ -560,7 +560,7 @@ describe("ModelingWorkbenchEditor", () => {
 		])
 			expect(container.textContent).not.toContain(label);
 
-		for (const label of ["保存", "交付检查", "刷新", "关联关系", "发布", "日志", "质量规则", "导出"])
+		for (const label of ["保存", "交付检查", "刷新", "关联关系", "发布", "日志", "质量约束", "导出"])
 			expect(button(label)).toBeDefined();
 		// Sprint-91：工具栏的「高级 dbt 工作区」入口已下线，可视化/代码切换只在选中模型时出现。
 		expect(container.textContent).not.toContain("高级 dbt 工作区");
@@ -631,7 +631,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(makeProps({ saving: true, selectedModel }));
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		for (const label of ["保存中…", "交付检查", "刷新", "关联关系", "发布", "日志", "质量规则", "导出"])
+		for (const label of ["保存中…", "交付检查", "刷新", "关联关系", "发布", "日志", "质量约束", "导出"])
 			expect(button(label)).toHaveProperty("disabled", true);
 	});
 
@@ -694,7 +694,7 @@ describe("ModelingWorkbenchEditor", () => {
 
 	it("disables unpublished actions and maps every supported toolbar dialog", async () => {
 		const unpublished = await render();
-		for (const label of ["交付检查", "关联关系", "发布", "日志", "质量规则", "导出"]) {
+		for (const label of ["交付检查", "关联关系", "发布", "日志", "质量约束", "导出"]) {
 			expect(button(label)).toHaveProperty("disabled", true);
 			act(() => button(label).click());
 		}
@@ -711,7 +711,7 @@ describe("ModelingWorkbenchEditor", () => {
 			["关联关系", "association"],
 			["发布", "publish"],
 			["日志", "logs"],
-			["质量规则", "quality"],
+			["质量约束", "quality"],
 		] as const) {
 			act(() => button(label).click());
 			expect(published.onDialog).toHaveBeenLastCalledWith(dialog);

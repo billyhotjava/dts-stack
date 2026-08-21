@@ -1,22 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import {
-	Button,
-	Card,
-	Empty,
-	Space,
-	Spin,
-	Tag,
-	Typography,
-} from "antd";
-import { } from "@ant-design/icons";
-import {
-	getIndicator,
-	listSubscriptions,
-	updateSubscription,
-	deleteSubscription,
-} from "@/api/platformApi";
-import { statusLabel } from "@/utils/customerDisplayLabels";
+import { Button, Card, Empty, Space, Spin, Tag, Typography } from "antd";
+import {} from "@ant-design/icons";
+import { getIndicator, listSubscriptions, updateSubscription, deleteSubscription } from "@/api/platformApi";
+import { aggregationLabel, granularityLabel, indicatorDomainLabel, statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text, Paragraph } = Typography;
 
@@ -59,7 +46,11 @@ export default function MyIndicatorDashboard() {
 		setLoading(true);
 		try {
 			const subRes = await listSubscriptions();
-			const subs: Subscription[] = Array.isArray((subRes as any)?.data) ? (subRes as any).data : Array.isArray(subRes) ? subRes as any : [];
+			const subs: Subscription[] = Array.isArray((subRes as any)?.data)
+				? (subRes as any).data
+				: Array.isArray(subRes)
+					? (subRes as any)
+					: [];
 			const enriched: SubWithIndicator[] = await Promise.all(
 				subs.map(async (sub) => {
 					try {
@@ -114,7 +105,9 @@ export default function MyIndicatorDashboard() {
 	return (
 		<div className="p-6">
 			<div className="mb-4 flex items-center justify-between">
-				<Typography.Title level={4} className="!mb-0">我的指标看板</Typography.Title>
+				<Typography.Title level={4} className="!mb-0">
+					我的指标看板
+				</Typography.Title>
 				<Text type="secondary">{items.length} 个已订阅指标</Text>
 			</div>
 
@@ -132,54 +125,52 @@ export default function MyIndicatorDashboard() {
 									title={
 										<Space>
 											<Text strong>{ind?.name ?? "指标已删除"}</Text>
-											{ind?.domain && <Tag color="blue">{ind.domain}</Tag>}
-											{ind?.status && <Tag color={STATUS_COLORS[ind.status] ?? "default"}>{statusLabel(ind.status)}</Tag>}
+											{ind?.domain && <Tag color="blue">{indicatorDomainLabel(ind.domain)}</Tag>}
+											{ind?.status && (
+												<Tag color={STATUS_COLORS[ind.status] ?? "default"}>{statusLabel(ind.status)}</Tag>
+											)}
 										</Space>
 									}
 									extra={
 										<Space size={0}>
-											<Button
-												type="text"
-												size="small"
-												disabled={index === 0}
-												onClick={() => handleMove(index, "up")}
-											>操作</Button>
+											<Button type="text" size="small" disabled={index === 0} onClick={() => handleMove(index, "up")}>
+												操作
+											</Button>
 											<Button
 												type="text"
 												size="small"
 												disabled={index === items.length - 1}
 												onClick={() => handleMove(index, "down")}
-											>操作</Button>
-											<Button
-												type="text"
-												size="small"
-												danger
-												onClick={() => handleUnsubscribe(item.sub.id)}
-											>删除</Button>
+											>
+												操作
+											</Button>
+											<Button type="text" size="small" danger onClick={() => handleUnsubscribe(item.sub.id)}>
+												删除
+											</Button>
 										</Space>
 									}
 								>
 									{ind ? (
 										<>
 											{ind.expressionSql && (
-												<Paragraph
-													type="secondary"
-													ellipsis={{ rows: 2 }}
-													className="!mb-1 font-mono text-xs"
-												>
+												<Paragraph type="secondary" ellipsis={{ rows: 2 }} className="!mb-1 font-mono text-xs">
 													{ind.expressionSql}
 												</Paragraph>
 											)}
 											<div className="flex flex-wrap gap-1 mt-1">
-												{ind.aggregationType && <Tag>{ind.aggregationType}</Tag>}
-												{ind.granularity && <Tag color="purple">{ind.granularity}</Tag>}
+												{ind.aggregationType && <Tag>{aggregationLabel(ind.aggregationType)}</Tag>}
+												{ind.granularity && <Tag color="purple">{granularityLabel(ind.granularity)}</Tag>}
 												{ind.category && <Tag color="cyan">{ind.category}</Tag>}
 											</div>
 											{ind.dimensionNames && ind.dimensionNames.length > 0 && (
 												<div className="mt-1">
-													<Text type="secondary" className="text-xs">维度: </Text>
+													<Text type="secondary" className="text-xs">
+														维度:{" "}
+													</Text>
 													{ind.dimensionNames.map((d) => (
-														<Tag key={d} className="text-xs">{d}</Tag>
+														<Tag key={d} className="text-xs">
+															{d}
+														</Tag>
 													))}
 												</div>
 											)}

@@ -21,7 +21,14 @@ import {
 	UnavailableCapability,
 } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
-import { displayName, hasEffectiveQualityScore, type QualityRule, type QualityTemplate, toList } from "./qualityTypes";
+import {
+	displayName,
+	hasEffectiveQualityScore,
+	qualityRuleNameLabel,
+	type QualityRule,
+	type QualityTemplate,
+	toList,
+} from "./qualityTypes";
 import { buildBatchTemplatePreviewTargets } from "./templateBindings";
 import { useDefaultLakeDatasets } from "./useDefaultLakeDatasets";
 import { useQualityMaintainerAccess } from "./useQualityAccess";
@@ -110,7 +117,7 @@ export function RulesByTablePage() {
 							</Button>
 						),
 					},
-					{ title: "Schema", dataIndex: "schemaName", width: 180, render: (value) => displayName(value) },
+					{ title: "数据库模式", dataIndex: "schemaName", width: 180, render: (value) => displayName(value) },
 					{ title: "业务域", dataIndex: "domainName", width: 160, render: (value) => displayName(value) },
 					{ title: "规则数", dataIndex: "ruleCount", width: 100 },
 					{
@@ -183,12 +190,12 @@ export function TableQualityDetailPage() {
 			dataIndex: "name",
 			render: (value, row) => (
 				<Button type="link" onClick={() => navigate(qualityPath("rule-detail", { ruleId: row.id }))}>
-					{displayName(value)}
+					{qualityRuleNameLabel(value)}
 				</Button>
 			),
 		},
 		{ title: "类型", dataIndex: "type", width: 140, render: (value) => <Tag>{displayName(value)}</Tag> },
-		{ title: "严重性", dataIndex: "severity", width: 110 },
+		{ title: "严重性", dataIndex: "severity", width: 110, render: (value) => displayName(value) },
 		{ title: "状态", dataIndex: "enabled", width: 100, render: (value) => <QualityStatus status={Boolean(value)} /> },
 	];
 
@@ -213,8 +220,8 @@ export function TableQualityDetailPage() {
 			/>
 			<Card loading={datasetsLoading} size="small">
 				<Descriptions column={{ xs: 1, md: 3 }} size="small">
-					<Descriptions.Item label="数据资产 ID">{datasetId}</Descriptions.Item>
-					<Descriptions.Item label="Schema">{displayName(dataset?.schemaName)}</Descriptions.Item>
+					<Descriptions.Item label="数据资产编号">{datasetId}</Descriptions.Item>
+					<Descriptions.Item label="数据库模式">{displayName(dataset?.schemaName)}</Descriptions.Item>
 					<Descriptions.Item label="物理表">{displayName(dataset?.tableName || dataset?.name)}</Descriptions.Item>
 				</Descriptions>
 			</Card>
@@ -240,7 +247,7 @@ export function TableQualityDetailPage() {
 						{(hasEffectiveRuns ? visibleScore?.dimensions || [] : []).slice(0, 3).map((item) => (
 							<QualityMetric
 								key={item.type}
-								label={item.type}
+								label={displayName(item.type)}
 								value={item.score}
 								note={item.delta == null ? "暂无环比" : `环比 ${item.delta > 0 ? "+" : ""}${item.delta}`}
 								color="#13c2c2"

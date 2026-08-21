@@ -37,4 +37,14 @@ describe("data-modeling natural-height layout contract", () => {
 		expect(scrollRegion).toMatch(/flex:\s*none/);
 		expect(scrollRegion).toMatch(/overflow:\s*visible/);
 	});
+
+	it("keeps model release gate evidence readable inside the wide modal", () => {
+		const cells = ruleBody(".dmx-stage-gate-table td");
+		const blocker = ruleBody(".dmx-stage-gate-blocker");
+
+		expect(cells).toMatch(/white-space:\s*normal/);
+		expect(cells).toMatch(/text-overflow:\s*clip/);
+		expect(cells).toMatch(/vertical-align:\s*top/);
+		expect(blocker).toMatch(/overflow-wrap:\s*anywhere/);
+	});
 });

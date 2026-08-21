@@ -24,6 +24,7 @@ import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Con
 import { statusLabel } from "@/utils/customerDisplayLabels";
 import { ModelLifecycleArtifactsTable } from "./ModelLifecycleArtifactsTable";
 import { ModelPublishDialog } from "./ModelPublishDialog";
+import { ModelQualityConstraintPanel } from "./ModelQualityConstraintPanel";
 import { ModelStageGatePanel } from "./ModelStageGatePanel";
 import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
@@ -95,7 +96,7 @@ export function ModelWorkbenchDialog({
 		versions: "版本证据",
 		releases: "发布记录",
 		logs: "生命周期日志",
-		quality: "质量与发布门禁",
+		quality: "质量约束",
 		gates: "设计提交检查",
 	}[dialog];
 	return (
@@ -175,9 +176,11 @@ function DialogContent({
 			</>
 		);
 	}
-	if ((dialog === "gates" || dialog === "quality") && payload.gates)
+	if (dialog === "quality" && payload.gates)
+		return <ModelQualityConstraintPanel gates={payload.gates} modelName={model.name} />;
+	if (dialog === "gates" && payload.gates)
 		return (
-			<ModelStageGatePanel gates={payload.gates} targetStage={dialog === "gates" ? "DESIGNED" : "RELEASE_READY"} />
+			<ModelStageGatePanel gates={payload.gates} targetStage="DESIGNED" />
 		);
 	if ((dialog === "versions" || dialog === "releases" || dialog === "logs") && payload.lifecycle) {
 		const events =

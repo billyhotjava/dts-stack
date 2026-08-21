@@ -9,7 +9,14 @@ import { CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import { QualityEmpty, QualityMetric, QualityPageHeading, QualityStatus, UnavailableCapability } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
-import { displayName, getQualityRunCounts, type QualityRule, type QualityRun, toList } from "./qualityTypes";
+import {
+	displayName,
+	getQualityRunCounts,
+	qualityRuleNameLabel,
+	type QualityRule,
+	type QualityRun,
+	toList,
+} from "./qualityTypes";
 import { RunIssueDisposition } from "./RunIssueDisposition";
 import { useDefaultLakeDatasets } from "./useDefaultLakeDatasets";
 
@@ -42,7 +49,10 @@ export function RunListPage() {
 		void load();
 	}, [load]);
 
-	const ruleNames = useMemo(() => new Map(rules.map((item) => [item.id, item.name || item.id])), [rules]);
+	const ruleNames = useMemo(
+		() => new Map(rules.map((item) => [item.id, qualityRuleNameLabel(item.name || item.id)])),
+		[rules],
+	);
 	const datasetNames = useMemo(() => new Map(datasets.map((item) => [item.id, item.name])), [datasets]);
 	const filtered = useMemo(() => {
 		const query = keyword.trim().toLowerCase();
@@ -89,7 +99,7 @@ export function RunListPage() {
 			title: "耗时",
 			dataIndex: "durationMs",
 			width: 110,
-			render: (value) => (value == null ? "-" : `${Number(value).toLocaleString()} ms`),
+			render: (value) => (value == null ? "-" : `${Number(value).toLocaleString()} 毫秒`),
 		},
 		{ title: "失败行数", dataIndex: "failingRowCount", width: 110, render: (value) => value ?? "-" },
 	];
@@ -124,7 +134,7 @@ export function RunListPage() {
 						options={["QUEUED", "RUNNING", "PASSED", "SUCCESS", "SUCCEEDED", "FAILED", "ERROR", "SKIPPED"].map(
 							(value) => ({
 								value,
-								label: value,
+								label: displayName(value),
 							}),
 						)}
 					/>
@@ -257,13 +267,13 @@ export function RunDetailPage() {
 				}
 			>
 				<Descriptions column={{ xs: 1, md: 2, xl: 3 }} size="small">
-					<Descriptions.Item label="运行 ID">{runId}</Descriptions.Item>
-					<Descriptions.Item label="规则 ID">{displayName(run?.ruleId)}</Descriptions.Item>
+					<Descriptions.Item label="运行编号">{runId}</Descriptions.Item>
+					<Descriptions.Item label="规则编号">{displayName(run?.ruleId)}</Descriptions.Item>
 					<Descriptions.Item label="数据资产">{displayName(datasetName)}</Descriptions.Item>
 					<Descriptions.Item label="触发方式">{displayName(run?.triggerType)}</Descriptions.Item>
 					<Descriptions.Item label="开始时间">{formatTime(run?.startedAt)}</Descriptions.Item>
 					<Descriptions.Item label="完成时间">{formatTime(run?.finishedAt)}</Descriptions.Item>
-					<Descriptions.Item label="耗时">{run?.durationMs == null ? "-" : `${run.durationMs} ms`}</Descriptions.Item>
+					<Descriptions.Item label="耗时">{run?.durationMs == null ? "-" : `${run.durationMs} 毫秒`}</Descriptions.Item>
 					<Descriptions.Item label="错误分类">{displayName(run?.errorCategory)}</Descriptions.Item>
 				</Descriptions>
 			</Card>

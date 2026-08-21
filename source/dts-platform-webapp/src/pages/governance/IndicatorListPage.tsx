@@ -6,6 +6,7 @@ import type { ColumnsType } from "antd/es/table";
 import { SearchOutlined } from "@ant-design/icons";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { listIndicators, deleteIndicator, previewIndicatorSql, generateAndRunIndicators } from "@/api/platformApi";
+import { aggregationLabel, indicatorDomainLabel, statusLabel } from "@/utils/customerDisplayLabels";
 
 const DOMAIN_OPTIONS = [
 	{ label: "全部", value: "" },
@@ -172,13 +173,13 @@ export default function Page() {
 			title: "领域",
 			dataIndex: "domain",
 			width: 100,
-			render: (v: string) => (v ? <Tag color={DOMAIN_COLORS[v] ?? "default"}>{v}</Tag> : "-"),
+			render: (v: string) => (v ? <Tag color={DOMAIN_COLORS[v] ?? "default"}>{indicatorDomainLabel(v)}</Tag> : "-"),
 		},
 		{
 			title: "聚合方式",
 			dataIndex: "aggregation",
 			width: 100,
-			render: (v: string) => v ?? "-",
+			render: (v: string) => (v ? aggregationLabel(v) : "-"),
 		},
 		{
 			title: "源表",
@@ -192,7 +193,7 @@ export default function Page() {
 			title: "状态",
 			dataIndex: "status",
 			width: 100,
-			render: (v: string) => (v ? <Tag color={STATUS_COLORS[v] ?? "default"}>{v}</Tag> : "-"),
+			render: (v: string) => (v ? <Tag color={STATUS_COLORS[v] ?? "default"}>{statusLabel(v)}</Tag> : "-"),
 		},
 		actionColumn<Indicator>(
 			(record) => [

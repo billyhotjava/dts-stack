@@ -124,8 +124,8 @@ export function TemplateListPage() {
 			width: 130,
 			render: (value) => <Tag color="blue">{displayName(value)}</Tag>,
 		},
-		{ title: "默认严重性", dataIndex: "severityDefault", width: 130 },
-		{ title: "默认策略", dataIndex: "actionDefault", width: 120 },
+		{ title: "默认严重性", dataIndex: "severityDefault", width: 130, render: (value) => displayName(value) },
+		{ title: "默认策略", dataIndex: "actionDefault", width: 120, render: (value) => displayName(value) },
 		{ title: "说明", dataIndex: "description", ellipsis: true },
 		actionColumn<QualityTemplate>(
 			(row) => [
@@ -202,7 +202,12 @@ function TemplateFormBody({ form }: { form: ReturnType<typeof Form.useForm<Templ
 					<Input placeholder="完整性 / 唯一性" />
 				</Form.Item>
 				<Form.Item name="severityDefault" label="默认严重性" style={{ width: 180 }}>
-					<Select options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((value) => ({ value, label: value }))} />
+					<Select
+						options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((value) => ({
+							value,
+							label: displayName(value),
+						}))}
+					/>
 				</Form.Item>
 				<Form.Item name="actionDefault" label="默认失败策略" style={{ width: 180 }}>
 					<Select
@@ -383,6 +388,7 @@ export function TemplateDetailPage() {
 							<Tag color="blue">{displayName(visibleTemplate?.category)}</Tag>
 							<Tag>{displayName(visibleTemplate?.code)}</Tag>
 							<Tag>{displayName(visibleTemplate?.severityDefault)}</Tag>
+							<Tag>{displayName(visibleTemplate?.actionDefault)}</Tag>
 						</div>
 						<div>{displayName(visibleTemplate?.description, "暂无说明")}</div>
 						<pre className="dq-code-block">{displayName(visibleTemplate?.sqlTemplate)}</pre>

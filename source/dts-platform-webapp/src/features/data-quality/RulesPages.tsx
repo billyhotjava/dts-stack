@@ -17,7 +17,14 @@ import { actionColumn, CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
 import { ManagePermissionHint, QualityEmpty, QualityPageHeading, QualityStatus } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
-import { displayName, isExecutableQualityRule, type QualityRule, type QualityRun, toList } from "./qualityTypes";
+import {
+	displayName,
+	isExecutableQualityRule,
+	qualityRuleNameLabel,
+	type QualityRule,
+	type QualityRun,
+	toList,
+} from "./qualityTypes";
 import { useDefaultLakeDatasets } from "./useDefaultLakeDatasets";
 import { useQualityMaintainerAccess } from "./useQualityAccess";
 
@@ -104,7 +111,7 @@ export function RuleListPage() {
 			minWidth: 180,
 			render: (value, row) => (
 				<Button type="link" onClick={() => navigate(qualityPath("rule-detail", { ruleId: row.id }))}>
-					{displayName(value)}
+					{qualityRuleNameLabel(value)}
 				</Button>
 			),
 		},
@@ -309,7 +316,7 @@ export function RuleDetailPage() {
 	return (
 		<div className="dq-page">
 			<QualityPageHeading
-				title={rule?.name || "规则详情"}
+				title={qualityRuleNameLabel(rule?.name, "规则详情")}
 				description="查看规则当前版本、版本变更与最近执行结果。"
 				actions={[
 					<Button key="back" onClick={() => navigate(qualityPath("rule-list"))}>

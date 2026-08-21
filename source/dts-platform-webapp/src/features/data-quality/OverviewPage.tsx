@@ -147,7 +147,7 @@ export function OverviewPage() {
 							</Card>
 						</Col>
 						<Col xs={24} xl={9}>
-							<Card title="异常资产 TOP">
+							<Card title="异常资产排行">
 								<Space direction="vertical" size={12} style={{ width: "100%" }}>
 									{dashboard.topFailingDatasets.length ? (
 										dashboard.topFailingDatasets.map((item, index) => (

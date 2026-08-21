@@ -101,4 +101,31 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 		expect(container.textContent).not.toContain("重新运行治理质量");
 		expect(container.textContent).toContain("配置质量规则");
 	});
+
+	it("opens the authoritative rule catalog without passing an asset key as a dataset UUID", async () => {
+		await act(async () => {
+			root.render(
+				<ModelReleaseWorkflowPanel
+					binding={null}
+					candidate={candidate}
+					evidence={[]}
+					governanceQuality={{
+						...failedQuality,
+						evidence: [
+							{
+								assetKey: "source:lake/schema:dwd/table:budget",
+								status: "MISSING",
+								violations: ["MISSING"],
+							},
+						],
+					}}
+					onRerunGovernanceQuality={vi.fn()}
+					releaseActions={[]}
+				/>,
+			);
+		});
+
+		expect(container.querySelector<HTMLAnchorElement>('a[href="#/governance/rules/catalog"]')).not.toBeNull();
+		expect(container.querySelector('a[href*="datasetId="]')).toBeNull();
+	});
 });

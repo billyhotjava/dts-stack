@@ -9,7 +9,7 @@ import { Chart } from "@/components/chart/chart";
 import { CompactTable } from "@/components/table";
 import { QualityMetric, QualityPageHeading, QualityStatus, UnavailableCapability } from "./QualityShared";
 import { qualityPath } from "./qualityRoutes";
-import { displayName, hasEffectiveQualityScore, type QualityRule, toList } from "./qualityTypes";
+import { displayName, hasEffectiveQualityScore, qualityRuleNameLabel, type QualityRule, toList } from "./qualityTypes";
 import { useDefaultLakeDatasets } from "./useDefaultLakeDatasets";
 
 const PERIOD_OPTIONS = [
@@ -122,7 +122,7 @@ function LiveQualityReport({ preview = false }: { preview?: boolean }) {
 	};
 
 	const ruleColumns: ColumnsType<QualityRule> = [
-		{ title: "规则名称", dataIndex: "name", render: (value) => displayName(value) },
+		{ title: "规则名称", dataIndex: "name", render: (value) => qualityRuleNameLabel(value) },
 		{
 			title: "质量维度",
 			dataIndex: "type",
@@ -239,7 +239,7 @@ function LiveQualityReport({ preview = false }: { preview?: boolean }) {
 						{(hasEffectiveRuns ? score?.dimensions || [] : []).slice(0, 3).map((item) => (
 							<QualityMetric
 								key={item.type}
-								label={item.type}
+								label={displayName(item.type)}
 								value={item.score}
 								note={item.delta == null ? "暂无环比" : `环比 ${item.delta > 0 ? "+" : ""}${item.delta}`}
 								color="#13c2c2"

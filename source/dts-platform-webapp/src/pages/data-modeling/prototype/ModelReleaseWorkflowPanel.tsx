@@ -260,9 +260,7 @@ export function ModelReleaseWorkflowPanel({
 								查看质量运行
 							</a>
 						) : governanceQuality?.evidence[0]?.assetKey ? (
-							<a
-								href={`#/governance/rules/catalog?datasetId=${encodeURIComponent(governanceQuality.evidence[0].assetKey)}`}
-							>
+							<a href="#/governance/rules/catalog" title={`物理资产：${governanceQuality.evidence[0].assetKey}`}>
 								配置质量规则
 							</a>
 						) : null}

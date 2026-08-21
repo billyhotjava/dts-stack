@@ -64,7 +64,7 @@ test("Sprint-72 dataset governance only raises a manual floor and routes lifecyc
 });
 
 test("Sprint-72 migration UI keeps dry-run, batch apply, reconciliation and freeze ordered", () => {
-	for (const label of ["新建 Dry-run", "应用下一批", "暂停", "恢复", "双读对账", "冻结旧降密入口"]) {
+	for (const label of ["新建试跑", "应用下一批", "暂停", "恢复", "双读对账", "冻结旧降密入口"]) {
 		assert.match(WORKBENCH, new RegExp(label));
 	}
 	for (const apiName of [

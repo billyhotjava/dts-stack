@@ -18,7 +18,7 @@ import { DatasetAccessRequestDialog } from "@/components/security/DatasetAccessR
 import { actionColumn, CompactTable } from "@/components/table";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
 import { useRouter } from "@/routes/hooks";
-import { statusLabel } from "@/utils/customerDisplayLabels";
+import { permissionLabel, statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text } = Typography;
 
@@ -295,7 +295,11 @@ export default function Page() {
 				return tags.length ? tags.map((item) => <Tag key={item}>{item}</Tag>) : "-";
 			},
 		},
-		{ title: "状态", dataIndex: "status", render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag> },
+		{
+			title: "状态",
+			dataIndex: "status",
+			render: (v) => <Tag color={statusColor(v)}>{statusLabel(v, "-")}</Tag>,
+		},
 		{ title: "有效期", render: (_, record) => `${formatDate(record?.validFrom)} ~ ${formatDate(record?.validTo)}` },
 		actionColumn<AccessRequest>(
 			(record) => [
@@ -321,7 +325,7 @@ export default function Page() {
 			title: "状态",
 			dataIndex: ["task", "status"],
 			width: 120,
-			render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag>,
+			render: (v) => <Tag color={statusColor(v)}>{statusLabel(v, "-")}</Tag>,
 		},
 		{ title: "创建时间", dataIndex: ["task", "createdDate"], render: (v) => formatDate(v) },
 		actionColumn<TaskView>(
@@ -349,7 +353,11 @@ export default function Page() {
 		{ title: "数据集", dataIndex: ["request", "datasetName"], render: (v) => v || "-" },
 		{ title: "申请人", dataIndex: ["request", "requesterName"], render: (v) => v || "-" },
 		{ title: "审批人", dataIndex: ["task", "decidedBy"], render: (v) => v || "-" },
-		{ title: "结果", dataIndex: ["task", "status"], render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag> },
+		{
+			title: "结果",
+			dataIndex: ["task", "status"],
+			render: (v) => <Tag color={statusColor(v)}>{statusLabel(v, "-")}</Tag>,
+		},
 		{ title: "审批时间", dataIndex: ["task", "decidedAt"], render: (v) => formatDate(v) },
 		{ title: "备注", dataIndex: ["task", "decisionNotes"], render: (v) => v || "-" },
 		actionColumn<TaskView>(
@@ -641,7 +649,7 @@ export default function Page() {
 									title: "状态",
 									dataIndex: "status",
 									width: 120,
-									render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag>,
+									render: (v) => <Tag color={statusColor(v)}>{statusLabel(v, "-")}</Tag>,
 								},
 								{ title: "审批人", dataIndex: "decidedBy", width: 140, render: (v) => v || "-" },
 								{
@@ -662,7 +670,9 @@ export default function Page() {
 
 					<Card title="授权结果" size="small" loading={detailLoading}>
 						<Descriptions bordered size="small" column={1}>
-							<Descriptions.Item label="授权类型">{detail?.grant?.grantType || "-"}</Descriptions.Item>
+							<Descriptions.Item label="授权类型">
+								{detail?.grant?.grantType ? permissionLabel(detail.grant.grantType) : "-"}
+							</Descriptions.Item>
 							<Descriptions.Item label="授权用户">
 								{detail?.grant?.granteeName || detail?.grant?.granteeUsername || "-"}
 							</Descriptions.Item>

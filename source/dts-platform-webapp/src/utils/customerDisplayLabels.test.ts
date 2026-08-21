@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+	aggregationLabel,
 	assetTypeLabel,
 	auditActionLabel,
+	changeTypeLabel,
 	classificationLabel,
+	granularityLabel,
+	governanceEventLabel,
+	indicatorDomainLabel,
+	indicatorTypeLabel,
 	materializationLabel,
+	migrationDecisionLabel,
 	permissionLabel,
+	qualityLabel,
+	statusAxisLabel,
 	statusLabel,
 	subjectTypeLabel,
 } from "./customerDisplayLabels";
@@ -38,5 +47,36 @@ describe("customer display labels", () => {
 		expect(subjectTypeLabel("DEPARTMENT")).toBe("部门");
 		expect(classificationLabel("CONFIDENTIAL")).toBe("机密");
 		expect(auditActionLabel("CHANGE_OWNERSHIP")).toBe("变更所有者");
+	});
+
+	it.each([
+		["SUCCEEDED", "成功"],
+		["PASSED", "通过"],
+		["ERROR", "异常"],
+		["SKIPPED", "已跳过"],
+	])("renders quality run status %s in Chinese", (value, expected) => {
+		expect(statusLabel(value)).toBe(expected);
+	});
+
+	it.each([
+		["MANUAL", "手动执行"],
+		["DRY_RUN", "试跑"],
+		["COMPLETENESS", "完整性"],
+		["CRITICAL", "严重"],
+		["SQL_EXECUTION_FAILED", "检测语句执行失败"],
+	])("renders quality enum %s in Chinese", (value, expected) => {
+		expect(qualityLabel(value)).toBe(expected);
+	});
+
+	it("renders indicator and catalog governance enums in Chinese", () => {
+		expect(indicatorDomainLabel("FINANCE")).toBe("财务");
+		expect(indicatorTypeLabel("DERIVED")).toBe("派生指标");
+		expect(aggregationLabel("DISTINCT_COUNT")).toBe("去重计数");
+		expect(granularityLabel("MONTH")).toBe("月");
+		expect(statusAxisLabel("publication")).toBe("发布状态");
+		expect(governanceEventLabel("SEMANTIC_DELIVERY")).toBe("语义交付");
+		expect(migrationDecisionLabel("BLOCKED_DOWNGRADE")).toBe("禁止降级");
+		expect(changeTypeLabel("UPDATED")).toBe("更新");
+		expect(permissionLabel("DATA_ACCESS")).toBe("数据访问");
 	});
 });

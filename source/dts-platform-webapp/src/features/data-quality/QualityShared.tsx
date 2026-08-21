@@ -1,5 +1,6 @@
 import { Alert, Button, Card, Empty, Space, Tag, Tooltip } from "antd";
 import type { ReactNode } from "react";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import { UNAVAILABLE_CAPABILITIES } from "./qualityRoutes";
 
 export function QualityPageHeading({
@@ -58,7 +59,7 @@ export function QualityStatus({ status }: { status?: string | boolean }) {
 			: ["RUNNING", "QUEUED", "DRAFT"].includes(normalized)
 				? "blue"
 				: "default";
-	return <Tag color={color}>{normalized}</Tag>;
+	return <Tag color={color}>{statusLabel(normalized)}</Tag>;
 }
 
 export function UnavailableCapability({

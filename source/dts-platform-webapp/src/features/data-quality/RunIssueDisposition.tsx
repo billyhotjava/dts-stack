@@ -242,7 +242,7 @@ export function RunIssueDisposition({
 							<QualityStatus status={issue.status} />
 						</Descriptions.Item>
 						<Descriptions.Item label="责任人">{issue.assignedTo || "待认领"}</Descriptions.Item>
-						<Descriptions.Item label="SLA">
+						<Descriptions.Item label="处置时限">
 							<Tag color={issue.overdue ? "red" : "green"}>{issue.overdue ? "已逾期" : "未逾期"}</Tag>{" "}
 							{formatTime(issue.dueAt)}
 						</Descriptions.Item>

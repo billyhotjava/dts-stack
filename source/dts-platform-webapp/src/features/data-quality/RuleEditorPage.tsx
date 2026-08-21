@@ -11,7 +11,7 @@ import {
 } from "@/api/platformApi";
 import { ManagePermissionHint, QualityEmpty, QualityPageHeading } from "./QualityShared";
 import { buildQualityRulePayload, qualityPath } from "./qualityRoutes";
-import { type QualityRule, type QualityTemplate, toList } from "./qualityTypes";
+import { displayName, type QualityRule, type QualityTemplate, toList } from "./qualityTypes";
 import { bindTemplateTargetTable } from "./templateBindings";
 import { useDefaultLakeDatasets } from "./useDefaultLakeDatasets";
 import { useQualityMaintainerAccess } from "./useQualityAccess";
@@ -46,7 +46,7 @@ type LoadedTemplateIdentity = {
 };
 
 const TYPE_OPTIONS = ["COMPLETENESS", "CONSISTENCY", "ACCURACY", "UNIQUENESS", "TIMELINESS", "VALIDITY"].map(
-	(value) => ({ value, label: value }),
+	(value) => ({ value, label: displayName(value) }),
 );
 
 export function RuleEditorPage() {
@@ -370,8 +370,8 @@ export function RuleEditorPage() {
 				title={isEditing ? "编辑质量规则" : "新建质量规则"}
 				description={
 					currentTemplate
-						? "从模板渲染单资产规则；保存时同步写入 definition.sql、datasetId 与版本 bindings。"
-						: "规则只允许绑定默认数据湖资产；保存时同步写入版本 bindings，发布后才可执行。"
+						? "从模板生成单资产规则；保存后同步建立数据资产绑定和规则版本。"
+						: "规则只允许绑定默认数据湖资产；保存并发布当前版本后才可执行。"
 				}
 				actions={<ManagePermissionHint canManage={canManage} />}
 			/>
@@ -396,7 +396,12 @@ export function RuleEditorPage() {
 							<Select options={TYPE_OPTIONS} />
 						</Form.Item>
 						<Form.Item name="severity" label="严重性" rules={[{ required: true }]} style={{ width: 220 }}>
-							<Select options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((value) => ({ value, label: value }))} />
+							<Select
+								options={["LOW", "MEDIUM", "HIGH", "CRITICAL"].map((value) => ({
+									value,
+									label: displayName(value),
+								}))}
+							/>
 						</Form.Item>
 						<Form.Item name="dataLevel" label="数据分层" style={{ width: 220 }}>
 							<Input placeholder="可选，例如 D2" />
@@ -416,7 +421,7 @@ export function RuleEditorPage() {
 							<Input placeholder="留空使用系统默认" />
 						</Form.Item>
 						<Form.Item name="frequencyCron" label="调度表达式" style={{ width: 200 }}>
-							<Input placeholder="可选 Cron" />
+							<Input placeholder="可选，例如每天凌晨执行" />
 						</Form.Item>
 					</Space>
 					<Form.Item

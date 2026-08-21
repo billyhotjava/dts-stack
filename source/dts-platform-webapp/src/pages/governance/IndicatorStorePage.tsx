@@ -1,24 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import {
-	Button,
-	Card,
-	Empty,
-	Input,
-	Select,
-	Space,
-	Spin,
-	Tag,
-	Typography,
-} from "antd";
-import { SearchOutlined, } from "@ant-design/icons";
-import {
-	listIndicators,
-	listSubscriptions,
-	createSubscription,
-	deleteSubscription,
-} from "@/api/platformApi";
-import { statusLabel } from "@/utils/customerDisplayLabels";
+import { Button, Card, Empty, Input, Select, Space, Spin, Tag, Typography } from "antd";
+import { SearchOutlined } from "@ant-design/icons";
+import { listIndicators, listSubscriptions, createSubscription, deleteSubscription } from "@/api/platformApi";
+import { aggregationLabel, granularityLabel, indicatorDomainLabel, statusLabel } from "@/utils/customerDisplayLabels";
 
 const { Text, Paragraph } = Typography;
 
@@ -71,7 +56,13 @@ export default function IndicatorStorePage() {
 		setLoading(true);
 		try {
 			const [indRes, subRes] = await Promise.all([
-				listIndicators({ page: 0, size: 200, status: "PUBLISHED", keyword: keyword || undefined, domain: domain || undefined }),
+				listIndicators({
+					page: 0,
+					size: 200,
+					status: "PUBLISHED",
+					keyword: keyword || undefined,
+					domain: domain || undefined,
+				}),
 				listSubscriptions(),
 			]);
 			const content = (indRes as any)?.data?.content ?? (indRes as any)?.content ?? [];
@@ -114,7 +105,9 @@ export default function IndicatorStorePage() {
 	return (
 		<div className="p-6">
 			<div className="mb-4 flex items-center justify-between">
-				<Typography.Title level={4} className="!mb-0">指标商店</Typography.Title>
+				<Typography.Title level={4} className="!mb-0">
+					指标商店
+				</Typography.Title>
 			</div>
 
 			<div className="mb-4 flex gap-3 items-center">
@@ -126,12 +119,7 @@ export default function IndicatorStorePage() {
 					allowClear
 					style={{ width: 260 }}
 				/>
-				<Select
-					value={domain}
-					onChange={setDomain}
-					options={DOMAIN_OPTIONS}
-					style={{ width: 140 }}
-				/>
+				<Select value={domain} onChange={setDomain} options={DOMAIN_OPTIONS} style={{ width: 140 }} />
 			</div>
 
 			<Spin spinning={loading}>
@@ -148,36 +136,40 @@ export default function IndicatorStorePage() {
 									title={
 										<Space>
 											<Text strong>{ind.name}</Text>
-											{ind.domain && <Tag color="blue">{ind.domain}</Tag>}
-											{ind.status && <Tag color={STATUS_COLORS[ind.status] ?? "default"}>{statusLabel(ind.status)}</Tag>}
+											{ind.domain && <Tag color="blue">{indicatorDomainLabel(ind.domain)}</Tag>}
+											{ind.status && (
+												<Tag color={STATUS_COLORS[ind.status] ?? "default"}>{statusLabel(ind.status)}</Tag>
+											)}
 										</Space>
 									}
 									extra={
 										<Button
 											type="text"
-											onClick={() => subscribed ? handleUnsubscribe(ind.id) : handleSubscribe(ind.id)}
-										>操作</Button>
+											onClick={() => (subscribed ? handleUnsubscribe(ind.id) : handleSubscribe(ind.id))}
+										>
+											操作
+										</Button>
 									}
 								>
 									{ind.expressionSql && (
-										<Paragraph
-											type="secondary"
-											ellipsis={{ rows: 2 }}
-											className="!mb-1 font-mono text-xs"
-										>
+										<Paragraph type="secondary" ellipsis={{ rows: 2 }} className="!mb-1 font-mono text-xs">
 											{ind.expressionSql}
 										</Paragraph>
 									)}
 									<div className="flex flex-wrap gap-1 mt-1">
-										{ind.aggregationType && <Tag>{ind.aggregationType}</Tag>}
-										{ind.granularity && <Tag color="purple">{ind.granularity}</Tag>}
+										{ind.aggregationType && <Tag>{aggregationLabel(ind.aggregationType)}</Tag>}
+										{ind.granularity && <Tag color="purple">{granularityLabel(ind.granularity)}</Tag>}
 										{ind.category && <Tag color="cyan">{ind.category}</Tag>}
 									</div>
 									{ind.dimensionNames && ind.dimensionNames.length > 0 && (
 										<div className="mt-1">
-											<Text type="secondary" className="text-xs">维度: </Text>
+											<Text type="secondary" className="text-xs">
+												维度:{" "}
+											</Text>
 											{ind.dimensionNames.map((d) => (
-												<Tag key={d} className="text-xs">{d}</Tag>
+												<Tag key={d} className="text-xs">
+													{d}
+												</Tag>
 											))}
 										</div>
 									)}

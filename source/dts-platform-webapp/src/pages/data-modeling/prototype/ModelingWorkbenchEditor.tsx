@@ -789,7 +789,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 							日志
 						</Button>
 						<Button disabled={busy || !persisted} onClick={() => onDialog("quality")}>
-							质量规则
+							质量约束
 						</Button>
 						<Button disabled title="尚无模型导出服务端契约">
 							导出

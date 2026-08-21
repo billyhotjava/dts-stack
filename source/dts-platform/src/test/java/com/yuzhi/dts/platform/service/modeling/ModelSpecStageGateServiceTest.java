@@ -694,7 +694,7 @@ class ModelSpecStageGateServiceTest {
     }
 
     @Test
-    void releaseGateAppliesKeyAndMeasureCoverageAndAdvisoryQualityOnlyAtRelease() {
+    void releaseGateAppliesKeyAndMeasureCoverageWithoutOwningGovernanceQuality() {
         ModelSpecView model = withStandardsForRoles(releaseReadyFact(), Set.of(FieldRole.KEY, FieldRole.MEASURE));
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository repository = mock(ModelSpecRepository.class);
@@ -742,7 +742,7 @@ class ModelSpecStageGateServiceTest {
     }
 
     @Test
-    void releaseGateRequiresAllFieldsWhenConfiguredAndFailsClosedWhenPolicyIsUnreadable() {
+    void releaseGateRequiresStandardsButLeavesGovernanceQualityToTheCandidateControlPlane() {
         ModelSpecView model = withStandardsForRoles(releaseReadyFact(), Set.of(FieldRole.KEY));
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository repository = mock(ModelSpecRepository.class);
@@ -782,7 +782,8 @@ class ModelSpecStageGateServiceTest {
 
         assertThat(strict.blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
-            .contains("MODEL_SPEC_STANDARD_EVIDENCE_STALE", "MODEL_SPEC_QUALITY_EVIDENCE_UNKNOWN");
+            .contains("MODEL_SPEC_STANDARD_EVIDENCE_STALE")
+            .doesNotContain("MODEL_SPEC_QUALITY_EVIDENCE_UNKNOWN");
         assertThat(unavailable.blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .contains("MODEL_GOVERNANCE_POLICY_UNAVAILABLE");

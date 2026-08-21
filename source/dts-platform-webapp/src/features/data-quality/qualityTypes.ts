@@ -1,3 +1,5 @@
+import { qualityLabel } from "@/utils/customerDisplayLabels";
+
 export type QualityDataset = {
 	id: string;
 	name: string;
@@ -165,5 +167,11 @@ export const collectCompletePages = async <T extends { id?: unknown }>(
 
 export const displayName = (value: unknown, fallback = "-") => {
 	const text = String(value ?? "").trim();
-	return text || fallback;
+	return text ? qualityLabel(text, text) : fallback;
+};
+
+export const qualityRuleNameLabel = (value: unknown, fallback = "-") => {
+	const text = String(value ?? "").trim();
+	if (!text) return fallback;
+	return text.replace(/^Sprint\s*\d+\s*[-_:：]?\s*/i, "").replace(/KPI/gi, "指标");
 };

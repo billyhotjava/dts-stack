@@ -2128,3 +2128,24 @@
 **执行顺序**: F0 → F1/T01 → F1/T02 → F2/T01 → F2/T02 → F3/T01；全部编码完成后集中执行一次 E2E。
 **关键决策**: 发布前保存当前草稿；发布范围复用组织/角色目录；旧 Card 可读可替换不可发布；RGL 和 canonical AnalysisEditor 继续作为唯一 owner。
 **已知风险**: 当前只有 1 张可发布治理分析；真实 E2E 登录态过期且 Chrome 95 executable 缺失；共享 SQL Workbench 改动不纳入本 Sprint。
+
+## Sprint-99: 协议合规硬门槛缺口闭合（第一波） (202608)
+
+**目录**: `worklog/v2.2.3/sprint-99-202608-protocol-compliance-gap-closure`
+**状态**: DRAFT（G0 交付基线未过；F1 纯配置/后端可先行 READY）
+**目标**: 甲方测评人员能在平台内看到并导出一份对齐 BMB17.1/17.2-2024 条款的符合性证据，其中口令策略、登录失败锁定、敏感数据识别、系统告警四项由平台真实执行并自动判定，而非人工填写的截图台账。
+**依赖**: 扩展既有 `SecurityBaselineService` / `SecurityBaselineRemediation`（不新建合规模块）；复用既有密级控制面 `SecurityLevelCatalog` + `CatalogClassificationPropagationService`（只升不降）与 `CatalogMaskingRule`；复用已暴露的 actuator prometheus 端点。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与缺口冻结 | P0 | 1 | READY |
+| F1-口令策略与登录失败锁定 | P0 | 3 | READY |
+| F2-BMB符合性映射与测评台账 | P0 | 4 | DRAFT（依赖 F0；T01 另阻塞于条款目录来源）|
+| F3-敏感数据识别与密级脱敏联动 | P0 | 4 | DRAFT（依赖 F0）|
+| F4-系统监控告警与业务仪表盘 | P0 | 3 | DRAFT（依赖 F0）|
+
+**统计**: READY=4，DRAFT=11，IN_PROGRESS=0，BLOCKED=0（共 15 Task）。
+**执行顺序**: F0 与 F1 并行起步 → F2 → F3 ∥ F4（F3/F4 无相互依赖）。
+**关键决策**: 审批模型未定 → 一切审批流接线移出本 Sprint，审批决策统一收敛到既有 `CatalogLifecycleRequestService` request/decision seam，禁建第二套审批表；敏感识别只产出候选，密级判定权仍归密级控制面（只升不降）；BMB 台账扩展既有安全基线服务而非新建模块；告警栈用 Prometheus+Alertmanager 复用现有 actuator 端点，平台内不重画监控页。
+**已知风险**: ①BMB17.1/17.2-2024 条款目录非公开，F2/T01 须由甲方或测评机构提供，拿到前保持 DRAFT，禁止编造条款号；②口令策略具体数值待甲方确认；③浏览器验收基线长期不稳，G0 不过则 F2/F3/F4 停在 DRAFT；④新增监控三服务约占 1.5～2GB 内存，须记入 nfr-budget。
+**未承接项**: 剩余 6 项 P0 + 25 项 P1 已按 Feature/Task 粒度登记在 `assets/protocol-gap-register.md`（波次 2～4 + 3 项 `BLOCKED-审批模型未定`）。

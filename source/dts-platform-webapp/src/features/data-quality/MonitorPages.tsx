@@ -477,7 +477,7 @@ export function MonitorDetailPage() {
 							title: "耗时",
 							dataIndex: "durationMs",
 							width: 110,
-							render: (value) => (value == null ? "-" : `${value} ms`),
+							render: (value) => (value == null ? "-" : `${value} 毫秒`),
 						},
 						actionColumn<QualityRun>(
 							(row) => [

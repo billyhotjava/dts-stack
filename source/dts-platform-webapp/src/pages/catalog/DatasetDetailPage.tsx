@@ -9,6 +9,7 @@ import {
 } from "@/api/platformApi";
 import { useCatalogDomainOptions } from "@/hooks/useCatalogDomainOptions";
 import { useRouter } from "@/routes/hooks";
+import { assetTypeLabel, classificationLabel, statusLabel } from "@/utils/customerDisplayLabels";
 import { buildAssetGrantUrl, resolveAssetReadiness } from "./assetPortalUx.helpers";
 import { AssetClassificationFactPanel } from "./assets/AssetClassificationFactPanel";
 import { AssetDeliveryEligibilityNotice, AssetDeliveryStatusPanel } from "./assets/AssetDeliveryStatusPanel";
@@ -502,19 +503,19 @@ function DatasetOverviewTab({
 			{dataset.metadataSource === "openmetadata" && <Tag color="blue">OpenMetadata主目录</Tag>}
 			<Descriptions bordered size="small" column={2}>
 				<Descriptions.Item label="仓库分层">{dataset.warehouseLayer ?? "-"}</Descriptions.Item>
-				<Descriptions.Item label="密级">{dataset.classification ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="密级">{classificationLabel(dataset.classification)}</Descriptions.Item>
 				<Descriptions.Item label="负责人">{dataset.owner ?? "-"}</Descriptions.Item>
 				<Descriptions.Item label="所属部门">{dataset.ownerDept ?? "-"}</Descriptions.Item>
-				<Descriptions.Item label="类型">{dataset.type ?? "-"}</Descriptions.Item>
-				<Descriptions.Item label="生命周期">{dataset.lifecycleStatus ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="类型">{assetTypeLabel(dataset.type)}</Descriptions.Item>
+				<Descriptions.Item label="生命周期">{statusLabel(dataset.lifecycleStatus)}</Descriptions.Item>
 				<Descriptions.Item label="技术表">
 					{dataset.hiveDatabase && dataset.hiveTable ? `${dataset.hiveDatabase}.${dataset.hiveTable}` : "-"}
 				</Descriptions.Item>
 				<Descriptions.Item label="业务归属数据域">
 					{domainName || dataset.domainName || dataset.domain || "-"}
 				</Descriptions.Item>
-				<Descriptions.Item label="治理状态">{dataset.governanceStatus ?? "-"}</Descriptions.Item>
-				<Descriptions.Item label="映射状态">{dataset.matchStatus ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="治理状态">{statusLabel(dataset.governanceStatus)}</Descriptions.Item>
+				<Descriptions.Item label="映射状态">{statusLabel(dataset.matchStatus)}</Descriptions.Item>
 				<Descriptions.Item label="字段合同">
 					{schemaContract?.columnCount ?? dataset.columnCount ?? "-"}
 				</Descriptions.Item>

@@ -100,6 +100,43 @@ describe("ModelStageGatePanel", () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.textContent).toContain("RELEASE_READY");
 		expect(rows[0]?.textContent).toContain("MODEL_SPEC_PERMISSION_EVIDENCE_STALE");
-		expect(container.textContent).toContain("发布前证据仍需处理");
+		expect(container.textContent).toContain("模型版本交付证据仍需处理");
+	});
+
+	it("wraps long release blockers and exposes compact repair links instead of raw routes", async () => {
+		const releaseGates = gates.map((gate) =>
+			gate.stage === "RELEASE_READY"
+				? {
+						...gate,
+						blockers: [
+							...gate.blockers,
+							{
+								code: "MODEL_SPEC_STANDARD_EVIDENCE_STALE",
+								field: "standards",
+								message: "发布策略要求多个字段绑定标准，修复信息必须在弹窗中完整换行显示",
+								repairRoute: "/modeling/models/model-1?tab=standards",
+							},
+							{
+								code: "CLASSIFICATION_INPUT_REQUIRED",
+								field: "fields",
+								message: "至少需要一项已确认的上游或字段分类分级输入",
+								repairRoute: "/modeling/models/model-1?tab=governance",
+							},
+						],
+					}
+				: gate,
+		);
+
+		await act(async () => root.render(<ModelStageGatePanel gates={releaseGates} targetStage="RELEASE_READY" />));
+
+		expect(container.querySelectorAll(".dmx-stage-gate-blocker")).toHaveLength(3);
+		expect(container.querySelector(".dmx-stage-gate-table .ant-table-cell-ellipsis")).toBeNull();
+		const repairLinks = Array.from(container.querySelectorAll<HTMLAnchorElement>(".dmx-stage-gate-repairs a"));
+		expect(repairLinks).toHaveLength(2);
+		expect(repairLinks.map((link) => link.getAttribute("href"))).toEqual([
+			"#/modeling/models/model-1?tab=governance",
+			"#/modeling/models/model-1?tab=standards",
+		]);
+		expect(container.textContent).not.toContain("/modeling/models/model-1?tab=governance");
 	});
 });

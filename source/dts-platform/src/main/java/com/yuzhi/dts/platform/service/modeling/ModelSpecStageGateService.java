@@ -215,16 +215,8 @@ public class ModelSpecStageGateService {
 
         LinkedHashMap<String, GateBlocker> blockers = blockersWithoutGovernanceEvidence(gate);
         applyStandardCoverage(tenantId, view, policy.standardCoverage(), blockers);
-        if (policy.qualityGate() == ModelGovernancePolicyPort.QualityGate.BLOCKING) {
-            evidenceBlocker(
-                view,
-                evidence.quality(),
-                "MODEL_SPEC_QUALITY_EVIDENCE",
-                "平台模型治理策略要求质量测试通过后才能发布",
-                "fields",
-                blockers
-            );
-        }
+        // Governance data-quality evidence is resolved only after a physical candidate build.
+        // The candidate control plane enforces that policy; this ModelSpec gate owns revision-bound engineering tests.
         return gateWithBlockers(gate, blockers);
     }
 
@@ -832,7 +824,6 @@ public class ModelSpecStageGateService {
             return;
         }
         evidenceBlocker(view, evidence.standards(), "MODEL_SPEC_STANDARD_EVIDENCE", "字段标准未覆盖当前版本", "standards", blockers);
-        evidenceBlocker(view, evidence.quality(), "MODEL_SPEC_QUALITY_EVIDENCE", "质量测试证据不可用", "fields", blockers);
         evidenceBlocker(view, evidence.permissions(), "MODEL_SPEC_PERMISSION_EVIDENCE", "字段权限分级未完成", "fields", blockers);
         evidenceBlocker(view, evidence.build(), "MODEL_SPEC_BUILD_EVIDENCE", "当前版本尚无完整构建产物", "design", blockers);
         evidenceBlocker(view, evidence.tests(), "MODEL_SPEC_TEST_EVIDENCE", "当前版本尚无测试产物", "design", blockers);

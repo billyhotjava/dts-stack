@@ -30,4 +30,20 @@ describe("data governance and service customer-facing labels", () => {
 		expect(links).toContain("reportTypeLabel(value)");
 		expect(links).toContain('statusLabel(value || "PENDING")');
 	});
+
+	it("localizes quality, indicator, approval and catalog lifecycle enums", () => {
+		const qualityRuns = source("src/features/data-quality/RunPages.tsx");
+		const indicators = source("src/pages/governance/IndicatorListPage.tsx");
+		const approvals = source("src/pages/security/DatasetAccessApprovalPage.tsx");
+		const lifecycle = source("src/pages/catalog/assets/AssetLifecycleWorkbenchDrawer.tsx");
+
+		expect(qualityRuns).toContain("displayName(value)");
+		expect(qualityRuns).toContain('"SUCCEEDED"');
+		expect(indicators).toContain("indicatorDomainLabel(v)");
+		expect(indicators).toContain("aggregationLabel(v)");
+		expect(approvals).toContain('statusLabel(v, "-")');
+		expect(lifecycle).toContain("governanceEventLabel(value");
+		expect(lifecycle).toContain("migrationDecisionLabel(value)");
+		expect(lifecycle).toContain("新建试跑");
+	});
 });

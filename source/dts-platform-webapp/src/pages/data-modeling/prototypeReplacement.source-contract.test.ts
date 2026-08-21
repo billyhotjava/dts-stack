@@ -139,7 +139,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const implementationBinding = read("./prototype/ModelImplementationBindingFields.tsx");
 		const modelingLineCount = modeling.trimEnd().split("\n").length;
 
-		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量规则"])
+		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量约束"])
 			expect(editor).toContain(label);
 		// Sprint-92：可视化与代码是同一创作草稿的两个视图，不再暴露第二套“高级工作区”心智。
 		expect(read("./prototype/AdvancedDbtWorkspace.tsx")).toContain("可视化与代码使用同一个模型草稿");

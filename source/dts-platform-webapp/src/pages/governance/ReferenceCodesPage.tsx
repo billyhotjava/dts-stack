@@ -7,7 +7,7 @@ import {} from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
-import { statusLabel } from "@/utils/customerDisplayLabels";
+import { changeTypeLabel, statusLabel } from "@/utils/customerDisplayLabels";
 import {
 	applyStructuredReferenceCodeImport,
 	createReferenceCode,
@@ -918,7 +918,12 @@ export default function ReferenceCodesPage() {
 	];
 
 	const importDiffColumns: ColumnsType<Record<string, any>> = [
-		{ title: "类型", dataIndex: "changeType", width: 100, render: (value) => <Tag>{value || "-"}</Tag> },
+		{
+			title: "类型",
+			dataIndex: "changeType",
+			width: 100,
+			render: (value) => <Tag>{value ? changeTypeLabel(value) : "-"}</Tag>,
+		},
 		{
 			title: "码值",
 			dataIndex: "codeValue",

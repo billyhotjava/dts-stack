@@ -5,6 +5,7 @@ import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } fr
 import type { ColumnsType } from "antd/es/table";
 import {} from "@ant-design/icons";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
+import { indicatorDomainLabel } from "@/utils/customerDisplayLabels";
 import {
 	listIndicatorTemplates,
 	getIndicatorTemplate,
@@ -189,7 +190,7 @@ export default function Page() {
 			title: "领域",
 			dataIndex: "domain",
 			width: 100,
-			render: (v: string) => (v ? <Tag color="default">{v}</Tag> : "-"),
+			render: (v: string) => (v ? <Tag color="default">{indicatorDomainLabel(v)}</Tag> : "-"),
 		},
 		{
 			title: "蓝图数量",
