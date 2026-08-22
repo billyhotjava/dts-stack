@@ -306,12 +306,16 @@ class ScreenResourceIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].name").value("Bob Screen"))
+                .andExpect(jsonPath("$[0].creatorId").isNumber())
+                .andExpect(jsonPath("$[0].creatorName").value("Bob"))
                 .andExpect(jsonPath("$[0].isOwner").value(true));
 
         mockMvc.perform(withPlatformHeaders(get("/api/screens").cookie(aliceSession), "alice", "Alice", "alice-id", "ROLE_ANALYST"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].name").value("Alice Screen"))
+                .andExpect(jsonPath("$[0].creatorId").isNumber())
+                .andExpect(jsonPath("$[0].creatorName").value("Alice"))
                 .andExpect(jsonPath("$[0].isOwner").value(true));
     }
 

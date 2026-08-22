@@ -4,6 +4,7 @@ import test from "node:test";
 
 const screensPagePath = new URL("./ScreensPage.tsx", import.meta.url);
 const globalCssPath = new URL("../../../global.css", import.meta.url);
+const analyticsApiPath = new URL("../../api/analyticsApi.ts", import.meta.url);
 
 test("ScreensPage does not depend on removed legacy page shell classes", async () => {
 	const source = await readFile(screensPagePath, "utf8");
@@ -236,6 +237,22 @@ test("ScreensPage management table uses responsive column sizing for common moni
 		globalCss,
 		/@media\s*\(min-width:\s*2560px\)\s*\{[\s\S]*\.analytics-screen-col-name\s*\{[\s\S]*width:\s*28%;/,
 	);
+});
+
+test("ScreensPage shows the screen creator returned by the list contract", async () => {
+	const [source, apiSource, globalCss] = await Promise.all([
+		readFile(screensPagePath, "utf8"),
+		readFile(analyticsApiPath, "utf8"),
+		readFile(globalCssPath, "utf8"),
+	]);
+	const tableSource = source.slice(source.indexOf("<table"), source.indexOf("</table>"));
+
+	assert.match(apiSource, /creatorId\?: number \| string \| null/);
+	assert.match(apiSource, /creatorName\?: string \| null/);
+	assert.match(tableSource, /className="analytics-screen-col-creator"/);
+	assert.match(tableSource, />\s*创建者\s*</);
+	assert.match(tableSource, /screen\.creatorName \|\| `用户 \$\{screen\.creatorId\}`/);
+	assert.match(globalCss, /\.analytics-screen-col-creator\s*\{[\s\S]*width:/);
 });
 
 test("ScreensPage prioritizes long screen names and descriptions in the management table", async () => {
