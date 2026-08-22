@@ -1048,6 +1048,7 @@ export default function ScreensPage() {
 									<colgroup>
 										<col className="analytics-screen-col-name" />
 										<col className="analytics-screen-col-description" />
+										<col className="analytics-screen-col-creator" />
 										<col className="analytics-screen-col-classification" />
 										<col className="analytics-screen-col-status" />
 										<col className="analytics-screen-col-updated" />
@@ -1059,37 +1060,18 @@ export default function ScreensPage() {
 											<SortableHeader sortKey="name" sortState={sortState} onSort={requestSort} className="font-bold">
 												名称
 											</SortableHeader>
-											<SortableHeader
-												sortKey="description"
-												sortState={sortState}
-												onSort={requestSort}
-												className="font-bold"
-											>
+											<SortableHeader sortKey="description" sortState={sortState} onSort={requestSort} className="font-bold">
 												描述
 											</SortableHeader>
+											<th className="px-4 py-3 text-center font-bold whitespace-nowrap">创建者</th>
 											{/* 展示按所有数据源派生出的有效密级。 */}
-											<SortableHeader
-												sortKey="classification"
-												sortState={sortState}
-												onSort={requestSort}
-												className="font-bold whitespace-nowrap"
-											>
+											<SortableHeader sortKey="classification" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">
 												有效密级
 											</SortableHeader>
-											<SortableHeader
-												sortKey="published"
-												sortState={sortState}
-												onSort={requestSort}
-												className="font-bold whitespace-nowrap"
-											>
+											<SortableHeader sortKey="published" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">
 												状态
 											</SortableHeader>
-											<SortableHeader
-												sortKey="updatedAt"
-												sortState={sortState}
-												onSort={requestSort}
-												className="font-bold whitespace-nowrap"
-											>
+											<SortableHeader sortKey="updatedAt" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">
 												更新时间
 											</SortableHeader>
 											<th className="analytics-screen-action-header bg-surface-muted text-center font-bold px-4 py-3 whitespace-nowrap border-l border-border-default">操作</th>
@@ -1117,12 +1099,17 @@ export default function ScreensPage() {
 															{screen.name || "未命名大屏"}
 														</a>
 													</td>
-													<td className="min-w-0 px-4 py-3 align-top text-text-secondary">
-														<span className="line-clamp-2 whitespace-normal break-words leading-5" title={screen.description || "无描述"}>
-															{screen.description || "无描述"}
-														</span>
-													</td>
-													<td className="px-4 py-3 align-top whitespace-nowrap">
+												<td className="min-w-0 px-4 py-3 align-top text-text-secondary">
+													<span className="line-clamp-2 whitespace-normal break-words leading-5" title={screen.description || "无描述"}>
+														{screen.description || "无描述"}
+													</span>
+												</td>
+												<td className="px-4 py-3 align-top text-text-primary whitespace-nowrap">
+													<span className="block truncate" title={screen.creatorName || undefined}>
+														{screen.creatorName || (screen.creatorId == null ? "—" : `用户 ${screen.creatorId}`)}
+													</span>
+												</td>
+												<td className="px-4 py-3 align-top whitespace-nowrap">
 														<div
 															title={[
 																"有效密级取所有展示数据的最高密级",

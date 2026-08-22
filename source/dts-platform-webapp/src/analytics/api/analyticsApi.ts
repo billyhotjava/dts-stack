@@ -622,6 +622,8 @@ export type ScreenListItem = {
 	height?: number;
 	createdAt?: string;
 	updatedAt?: string;
+	creatorId?: number | string | null;
+	creatorName?: string | null;
 	publishedVersionNo?: number | null;
 	publishedAt?: string | null;
 	canRead?: boolean;

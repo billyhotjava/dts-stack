@@ -106,7 +106,7 @@
 	}
 
 	main[data-slot="slash-layout-main"] .analytics-screen-management-table {
-		min-width: 1080px;
+		min-width: 1200px;
 		table-layout: fixed;
 	}
 
@@ -116,6 +116,10 @@
 
 	main[data-slot="slash-layout-main"] .analytics-screen-col-description {
 		width: auto;
+	}
+
+	main[data-slot="slash-layout-main"] .analytics-screen-col-creator {
+		width: clamp(110px, 10%, 180px);
 	}
 
 	main[data-slot="slash-layout-main"] .analytics-screen-col-classification {

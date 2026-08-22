@@ -170,7 +170,7 @@ test("ScreensPage fixed action column stays on the same visual layer as each tab
 test("ScreensPage action buttons fit inside the fixed action cell", async () => {
 	const globalCss = await readFile(globalCssPath, "utf8");
 
-	assert.match(globalCss, /\.analytics-screen-management-table\s*\{[\s\S]*min-width:\s*1080px;/);
+	assert.match(globalCss, /\.analytics-screen-management-table\s*\{[\s\S]*min-width:\s*1200px;/);
 	assert.match(globalCss, /\.analytics-screen-col-actions\s*\{[\s\S]*width:\s*280px;/);
 	assert.match(globalCss, /\.analytics-screen-action-cell\s*\{[\s\S]*overflow:\s*hidden;/);
 	assert.doesNotMatch(globalCss, /analytics-screen-col-actions\s*\{[\s\S]*clamp\(/);
@@ -226,7 +226,7 @@ test("ScreensPage management table uses responsive column sizing for common moni
 	assert.match(tableSource, /className="analytics-screen-col-name"/);
 	assert.match(tableSource, /className="analytics-screen-col-description"/);
 	assert.match(tableSource, /className="analytics-screen-col-actions"/);
-	assert.match(globalCss, /\.analytics-screen-management-table\s*\{[\s\S]*min-width:\s*1080px;/);
+	assert.match(globalCss, /\.analytics-screen-management-table\s*\{[\s\S]*min-width:\s*1200px;/);
 	assert.match(globalCss, /\.analytics-screen-col-name\s*\{[\s\S]*width:\s*clamp\(170px,\s*24%,\s*620px\);/);
 	assert.match(globalCss, /\.analytics-screen-col-description\s*\{[\s\S]*width:\s*auto;/);
 	assert.match(
@@ -251,7 +251,7 @@ test("ScreensPage shows the screen creator returned by the list contract", async
 	assert.match(apiSource, /creatorName\?: string \| null/);
 	assert.match(tableSource, /className="analytics-screen-col-creator"/);
 	assert.match(tableSource, />\s*创建者\s*</);
-	assert.match(tableSource, /screen\.creatorName \|\| `用户 \$\{screen\.creatorId\}`/);
+	assert.match(tableSource, /screen\.creatorName \|\| \(screen\.creatorId == null \? "—" : `用户 \$\{screen\.creatorId\}`\)/);
 	assert.match(globalCss, /\.analytics-screen-col-creator\s*\{[\s\S]*width:/);
 });
 

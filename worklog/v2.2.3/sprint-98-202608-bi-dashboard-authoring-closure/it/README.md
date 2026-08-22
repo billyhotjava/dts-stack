@@ -33,6 +33,19 @@
 - `/tmp/dts-sprint98-playwright-results/.../dashboard-name-required-768x900.png`
 - 新建看板验证空名称不发起请求；填写名称后只执行一次创建、一次保存，并跳转到持久化草稿编辑页。
 
+## 大屏管理创建者列补充（2026-08-22）
+
+| 验收项 | 状态 | 证据 |
+|---|---|---|
+| 创建者列表契约 | PASS | RED 提交 `9b7793efa`；列表类型、表头、单元格和列宽契约随后转绿 |
+| 后端实现 | PASS_WITH_ENV_NOTE | `dts-analytics` 编译通过；定向集成用例被存量 H2/Liquibase `WITH ... UPDATE ... FROM` 语法兼容问题阻断在应用启动阶段 |
+| webapp legacy build | PASS | `LEGACY_BROWSER_BUILD=1` 的 `pnpm build` 通过，禁用 CSS/API 静态扫描无命中 |
+| Chrome 页面烟测 | PASS_WITH_ENV_NOTE | Chrome 150：1366×768 初始视图、1200×768 横向滚动视图均显示“创建者=张工”，固定操作列可用，无 console/page/HTTP failure；Chrome 95 executable 缺失 |
+
+- `/tmp/dts-screen-creator-smoke/screen-creator-desktop-1366x768.png`
+- `/tmp/dts-screen-creator-smoke/screen-creator-narrow-1200x768.png`
+- 1024/820 宽度下主导航、数据域侧栏和 280px 固定操作列会明显压缩非固定列；属于既有管理页响应式债务，本次“补创建者”未扩展处理。
+
 ## 环境裁决
 
 代码与隔离自动化完成不等于运行交付。容器重建、授权账号下的真实发布/门户消费和 Chrome 95 实机证据齐备前，Sprint 保持 `IN_PROGRESS / PASS_WITH_GAPS`。

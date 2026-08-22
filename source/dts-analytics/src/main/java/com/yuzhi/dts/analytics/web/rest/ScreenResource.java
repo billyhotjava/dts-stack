@@ -165,6 +165,15 @@ public class ScreenResource {
                 )
             );
         }
+        Map<Long, AnalyticsUser> creatorsById = new HashMap<>();
+        List<Long> creatorIds = screens.stream()
+                .map(AnalyticsScreen::getCreatorId)
+                .filter(id -> id != null)
+                .distinct()
+                .toList();
+        if (!creatorIds.isEmpty()) {
+            userRepository.findAllById(creatorIds).forEach(creator -> creatorsById.put(creator.getId(), creator));
+        }
 
         List<ObjectNode> result = screens.stream()
                 .filter(screen -> matchesDomainFilter(screen, normalizedDomainId, domainUnassigned))
@@ -177,7 +186,9 @@ public class ScreenResource {
                     if (publishedOnly && currentPublished == null) {
                         return null;
                     }
-                    return toListResponse(screen, currentPublished, permissions);
+                    ObjectNode item = toListResponse(screen, currentPublished, permissions);
+                    appendCreator(item, screen, creatorsById.get(screen.getCreatorId()));
+                    return item;
                 })
                 .filter(node -> node != null)
                 .toList();
@@ -1552,6 +1563,26 @@ public class ScreenResource {
             node.putNull("publishedAt");
         }
         return node;
+    }
+
+    private void appendCreator(ObjectNode node, AnalyticsScreen screen, AnalyticsUser creator) {
+        Long creatorId = screen.getCreatorId();
+        node.putPOJO("creatorId", creatorId);
+        if (creatorId == null) {
+            node.putNull("creatorName");
+            return;
+        }
+        String firstName = creator == null ? null : trimToNull(creator.getFirstName());
+        String lastName = creator == null ? null : trimToNull(creator.getLastName());
+        String fullName = ((firstName == null ? "" : firstName) + " " + (lastName == null ? "" : lastName)).trim();
+        String creatorName = trimToNull(fullName);
+        if (creatorName == null && creator != null) {
+            creatorName = trimToNull(creator.getPlatformUsername());
+        }
+        if (creatorName == null && creator != null) {
+            creatorName = trimToNull(creator.getEmail());
+        }
+        node.put("creatorName", creatorName == null ? "用户 " + creatorId : creatorName);
     }
 
     private ObjectNode toVersionResponse(AnalyticsScreenVersion version) {
