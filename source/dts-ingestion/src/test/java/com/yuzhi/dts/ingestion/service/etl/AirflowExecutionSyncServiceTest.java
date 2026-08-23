@@ -13,6 +13,7 @@ import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
+import com.yuzhi.dts.ingestion.service.PostIngestionQualityWorkflowService;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
@@ -27,6 +28,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class AirflowExecutionSyncServiceTest {
@@ -52,6 +55,9 @@ class AirflowExecutionSyncServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private PostIngestionQualityWorkflowService postIngestionQualityWorkflowService;
+
     private AirflowExecutionSyncService syncService;
 
     @BeforeEach
@@ -67,6 +73,7 @@ class AirflowExecutionSyncServiceTest {
             incrementalSyncService,
             auditService
         );
+        syncService.setPostIngestionQualityWorkflowService(postIngestionQualityWorkflowService);
         org.mockito.Mockito
             .lenient()
             .when(settingsService.getSettings(IngestionSettingsService.SERVICE_AIRFLOW))
@@ -129,27 +136,41 @@ class AirflowExecutionSyncServiceTest {
     }
 
     @Test
-    void shouldUseBoundOfficialQualityPolicyAndPersistRunId() {
+    void shouldPersistPendingAndDispatchOfficialQualityWorkflowAfterCommit() {
         IngestionTask task = task(21L, "task-quality", "dag-quality");
+        task.setQualityPreCheckEnabled(true);
         IngestionExecution execution = runningExecution(203L, "manual__quality", task);
         execution.setQualityPolicyRef("dataset:00000000-0000-0000-0000-000000000021");
         when(executionRepository.findByStatusWithTask("running")).thenReturn(List.of(execution));
         when(airflowClient.getDagRunLookup("dag-quality", "manual__quality"))
             .thenReturn(AirflowClient.DagRunLookupResult.found(200, Map.of("state", "success")));
-        when(
-            platformInfraClient.triggerQualityRunByPolicyRef(
-                "dataset:00000000-0000-0000-0000-000000000021",
-                "INGESTION"
+        when(postIngestionQualityWorkflowService.trigger(203L)).thenReturn(
+            new PostIngestionQualityWorkflowService.AttemptResult(
+                203L,
+                "quality-workflow-21",
+                "quality-run-21",
+                "TRIGGERED",
+                1,
+                null,
+                null
             )
-        ).thenReturn("quality-run-21");
-
-        syncService.syncRunningExecutions();
-
-        verify(platformInfraClient).triggerQualityRunByPolicyRef(
-            "dataset:00000000-0000-0000-0000-000000000021",
-            "INGESTION"
         );
-        assertThat(execution.getQualityRunId()).isEqualTo("quality-run-21");
+
+        TransactionSynchronizationManager.initSynchronization();
+        List<TransactionSynchronization> synchronizations;
+        try {
+            syncService.syncRunningExecutions();
+            synchronizations = TransactionSynchronizationManager.getSynchronizations();
+            verify(postIngestionQualityWorkflowService, never()).trigger(203L);
+            assertThat(execution.getQualityWorkflowStatus()).isEqualTo("PENDING");
+            assertThat(execution.getQualityWorkflowNextRetryAt()).isNotNull();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        assertThat(synchronizations).hasSize(1);
+        synchronizations.forEach(TransactionSynchronization::afterCommit);
+        verify(postIngestionQualityWorkflowService).trigger(203L);
     }
 
     @Test
@@ -164,7 +185,7 @@ class AirflowExecutionSyncServiceTest {
         syncService.syncRunningExecutions();
 
         verify(platformInfraClient, never()).triggerQualityRun(any(), any());
-        verify(platformInfraClient, never()).triggerQualityRunByPolicyRef(any(), any());
+        verify(postIngestionQualityWorkflowService, never()).trigger(any());
     }
 
     @Test

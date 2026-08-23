@@ -8,9 +8,11 @@ export interface BizDomainSelectProps {
 	onChange: (value: string | "ALL") => void;
 	/** Notifies the parent whether the domain select has renderable data. */
 	onAvailabilityChange: (available: boolean) => void;
+	/** Shares the configured code-to-name mapping with sibling workbench blocks. */
+	onDomainLabelsChange?: (labels: Readonly<Record<string, string>>) => void;
 }
 
-export function BizDomainSelect({ value, onChange, onAvailabilityChange }: BizDomainSelectProps) {
+export function BizDomainSelect({ value, onChange, onAvailabilityChange, onDomainLabelsChange }: BizDomainSelectProps) {
 	const [domains, setDomains] = useState<CatalogDomain[] | null>(null);
 	const [available, setAvailable] = useState(false);
 
@@ -19,6 +21,8 @@ export function BizDomainSelect({ value, onChange, onAvailabilityChange }: BizDo
 	// re-render.
 	const availabilityRef = useRef(onAvailabilityChange);
 	availabilityRef.current = onAvailabilityChange;
+	const domainLabelsRef = useRef(onDomainLabelsChange);
+	domainLabelsRef.current = onDomainLabelsChange;
 
 	useEffect(() => {
 		let cancelled = false;
@@ -30,18 +34,23 @@ export function BizDomainSelect({ value, onChange, onAvailabilityChange }: BizDo
 					setDomains(null);
 					setAvailable(false);
 					availabilityRef.current(false);
+					domainLabelsRef.current?.({});
 					auditLog("WORKBENCH_DOMAIN_API_EMPTY", { when: "fetch_list" });
 					return;
 				}
+				const labels: Record<string, string> = {};
+				for (const domain of list) labels[domain.code] = domain.name;
 				setDomains(list);
 				setAvailable(true);
 				availabilityRef.current(true);
+				domainLabelsRef.current?.(labels);
 			})
 			.catch(() => {
 				if (cancelled) return;
 				setDomains(null);
 				setAvailable(false);
 				availabilityRef.current(false);
+				domainLabelsRef.current?.({});
 				auditLog("WORKBENCH_DOMAIN_API_FAIL", { when: "fetch_list" });
 			});
 		return () => {
@@ -51,10 +60,7 @@ export function BizDomainSelect({ value, onChange, onAvailabilityChange }: BizDo
 
 	if (!available || !domains) return null;
 
-	const options = [
-		{ value: "ALL", label: "全部业务域" },
-		...domains.map((d) => ({ value: d.code, label: d.name })),
-	];
+	const options = [{ value: "ALL", label: "全部业务域" }, ...domains.map((d) => ({ value: d.code, label: d.name }))];
 
 	return (
 		<Select

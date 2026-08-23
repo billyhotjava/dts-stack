@@ -104,6 +104,22 @@ final class QualityRunQueryService {
         return toSafeDtos(filteredRuns);
     }
 
+    List<QualityRunDto> byWorkflow(UUID workflowRunId, String activeDeptHeader) {
+        if (workflowRunId == null) {
+            return Collections.emptyList();
+        }
+        return toSafeDtos(filterReadableRuns(runRepository.findByJobIdOrderByCreatedDateAsc(workflowRunId), activeDeptHeader));
+    }
+
+    List<QualityRunDto> byWorkflowTrusted(UUID workflowRunId, DefaultLakeDatasetGuard defaultLakeDatasetGuard) {
+        if (workflowRunId == null) {
+            return Collections.emptyList();
+        }
+        List<GovQualityRun> runs = runRepository.findByJobIdOrderByCreatedDateAsc(workflowRunId);
+        runs.forEach(run -> defaultLakeDatasetGuard.requireDefaultLakeDataset(run.getDatasetId()));
+        return toSafeDtos(runs);
+    }
+
     List<QualityRunDto> findDtosByIds(List<UUID> runIds) {
         if (runIds == null || runIds.isEmpty()) {
             return Collections.emptyList();

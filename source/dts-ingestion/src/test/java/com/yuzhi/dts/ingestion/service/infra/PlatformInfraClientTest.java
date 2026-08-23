@@ -158,6 +158,34 @@ class PlatformInfraClientTest {
     }
 
     @Test
+    void triggerQualityWorkflowReturnsAggregateAndRuleRunIdentities() {
+        PlatformInfraClient client = buildClient(props("env-runtime-secret"));
+        MockRestServiceServer server = bindServer(client);
+        String datasetId = "00000000-0000-0000-0000-000000000021";
+        server
+            .expect(requestTo("http://platform.test/api/governance/quality/runs"))
+            .andExpect(method(POST))
+            .andExpect(header("Idempotency-Key", "ingestion-quality:" + datasetId + ":203"))
+            .andExpect(header("X-Quality-Trigger-Ref", "ingestion:203"))
+            .andRespond(
+                withSuccess(
+                    "{\"status\":200,\"data\":[{\"id\":\"quality-run-21\",\"jobId\":\"quality-workflow-21\"}]}",
+                    MediaType.APPLICATION_JSON
+                ).header("X-Quality-Workflow-Id", "quality-workflow-21")
+            );
+
+        PlatformInfraClient.QualityWorkflowReceipt receipt = client.triggerQualityWorkflowByPolicyRef(
+            "dataset:" + datasetId,
+            "INGESTION",
+            "203"
+        );
+
+        assertThat(receipt.workflowId()).isEqualTo("quality-workflow-21");
+        assertThat(receipt.qualityRunId()).isEqualTo("quality-run-21");
+        server.verify();
+    }
+
+    @Test
     void syncIngestionExecutionLineageIncludesRowCountFacets() {
         IngestionSchemaSnapshot snapshot = new IngestionSchemaSnapshot();
         snapshot.setSourceSchema("erp");

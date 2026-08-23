@@ -28,8 +28,10 @@ import com.yuzhi.dts.platform.service.governance.QualityDatasetReadGuard;
 import com.yuzhi.dts.platform.service.governance.QualityReportExportService;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
+import com.yuzhi.dts.platform.service.governance.QualityWorkflowOrchestrator;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
+import com.yuzhi.dts.platform.service.governance.dto.QualityWorkflowRunDto;
 import com.yuzhi.dts.platform.service.governance.SqlRepairService;
 import com.yuzhi.dts.platform.service.governance.SqlTemplateRenderer;
 import jakarta.servlet.ServletOutputStream;
@@ -81,6 +83,9 @@ class GovernanceResourceQualityAuditTest {
 
     @Mock
     private QualityRunService qualityRunService;
+
+    @Mock
+    private QualityWorkflowOrchestrator qualityWorkflowOrchestrator;
 
     @Mock
     private QualityRuleService qualityRuleService;
@@ -487,12 +492,26 @@ class GovernanceResourceQualityAuditTest {
             );
         com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest request =
             new com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest();
-        when(qualityRunService.trigger(request, "service:rogue", "D01")).thenReturn(List.of());
+        QualityWorkflowRunDto workflow = mock(QualityWorkflowRunDto.class);
+        when(workflow.ruleRuns()).thenReturn(List.of());
+        when(
+            qualityWorkflowOrchestrator.startAuthorizedRule(
+                eq(request),
+                eq("service:rogue"),
+                eq("D01"),
+                any(String.class)
+            )
+        ).thenReturn(workflow);
 
         resource.triggerQualityRun(request, "D01");
 
-        verify(qualityRunService).trigger(request, "service:rogue", "D01");
-        verify(qualityRunService, org.mockito.Mockito.never()).trigger(request, "service:rogue");
+        verify(qualityWorkflowOrchestrator).startAuthorizedRule(
+            eq(request),
+            eq("service:rogue"),
+            eq("D01"),
+            any(String.class)
+        );
+        verify(qualityWorkflowOrchestrator, org.mockito.Mockito.never()).startTrustedIngestion(any(), any(), any());
     }
 
     @Test
@@ -508,12 +527,25 @@ class GovernanceResourceQualityAuditTest {
             );
         com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest request =
             new com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest();
-        when(qualityRunService.triggerTrustedIngestion(request)).thenReturn(List.of());
+        UUID datasetId = UUID.fromString("90000000-0000-0000-0000-000000000031");
+        UUID workflowId = UUID.fromString("90000000-0000-0000-0000-000000000032");
+        request.setDatasetId(datasetId);
+        QualityWorkflowRunDto workflow = mock(QualityWorkflowRunDto.class);
+        jakarta.servlet.http.HttpServletResponse response = mock(jakarta.servlet.http.HttpServletResponse.class);
+        when(workflow.id()).thenReturn(workflowId);
+        when(workflow.ruleRuns()).thenReturn(List.of());
+        when(qualityWorkflowOrchestrator.startTrustedIngestion(datasetId, "ingestion:31", "ingestion-quality-31"))
+            .thenReturn(workflow);
 
-        resource.triggerQualityRun(request, "D01");
+        resource.triggerQualityRun(request, "ingestion-quality-31", "ingestion:31", "D01", response);
 
-        verify(qualityRunService).triggerTrustedIngestion(request);
+        verify(qualityWorkflowOrchestrator).startTrustedIngestion(
+            datasetId,
+            "ingestion:31",
+            "ingestion-quality-31"
+        );
         verify(qualityRunService, org.mockito.Mockito.never()).trigger(request, "service:dts-ingestion", "D01");
+        verify(response).setHeader("X-Quality-Workflow-Id", workflowId.toString());
         verify(qualityAuditRecorder).recordMachine(
             eq("ingestion"),
             org.mockito.ArgumentMatchers.startsWith("quality-ingestion-trigger:"),
@@ -538,12 +570,26 @@ class GovernanceResourceQualityAuditTest {
             );
         com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest request =
             new com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest();
-        when(qualityRunService.trigger(request, "service:dts-ingestion", "D01")).thenReturn(List.of());
+        QualityWorkflowRunDto workflow = mock(QualityWorkflowRunDto.class);
+        when(workflow.ruleRuns()).thenReturn(List.of());
+        when(
+            qualityWorkflowOrchestrator.startAuthorizedRule(
+                eq(request),
+                eq("service:dts-ingestion"),
+                eq("D01"),
+                any(String.class)
+            )
+        ).thenReturn(workflow);
 
         resource.triggerQualityRun(request, "D01");
 
-        verify(qualityRunService).trigger(request, "service:dts-ingestion", "D01");
-        verify(qualityRunService, org.mockito.Mockito.never()).triggerTrustedIngestion(request);
+        verify(qualityWorkflowOrchestrator).startAuthorizedRule(
+            eq(request),
+            eq("service:dts-ingestion"),
+            eq("D01"),
+            any(String.class)
+        );
+        verify(qualityWorkflowOrchestrator, org.mockito.Mockito.never()).startTrustedIngestion(any(), any(), any());
         verify(qualityAuditRecorder, org.mockito.Mockito.never()).recordMachine(
             eq("ingestion"),
             any(),

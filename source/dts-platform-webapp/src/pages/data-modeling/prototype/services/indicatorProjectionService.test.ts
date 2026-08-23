@@ -95,6 +95,45 @@ describe("indicator draft validation", () => {
 		expect(createIndicatorDraft("复合指标").category).toBeNull();
 	});
 
+	it("creates a modifier as a reusable scope definition instead of an atomic metric", async () => {
+		expect(supportsIndicatorCreation("修饰词")).toBe(true);
+		const draft = createIndicatorDraft("修饰词", "budget");
+		expect(draft).toMatchObject({
+			category: "MODIFIER",
+			metricType: null,
+			aggregationType: null,
+			measureField: null,
+			isDerived: false,
+		});
+		apiMocks.createIndicator.mockResolvedValue({
+			...draft,
+			id: "modifier-1",
+			code: "CUMULATIVE",
+			name: "累计",
+			definition: "限定指标值为统计期内累计结果",
+		});
+
+		const saved = await saveIndicatorDraft(draft, {
+			code: "CUMULATIVE",
+			name: "累计",
+			definition: "限定指标值为统计期内累计结果",
+			businessCategoryId: "category-1",
+			dataDomainId: "domain-1",
+			category: "MODIFIER",
+		});
+
+		expect(apiMocks.createIndicator).toHaveBeenCalledWith(
+			expect.objectContaining({
+				category: "MODIFIER",
+				metricType: null,
+				aggregationType: null,
+				measureField: null,
+			}),
+		);
+		expect(apiMocks.createModelFieldIndicatorDraft).not.toHaveBeenCalled();
+		expect(saved.id).toBe("modifier-1");
+	});
+
 	it("classifies and filters by stable metric and data-domain ids before legacy text", () => {
 		const rows = [
 			{ code: "ATOMIC_1", metricType: "ATOMIC", dataDomainId: "domain-a", domain: "legacy-a" },

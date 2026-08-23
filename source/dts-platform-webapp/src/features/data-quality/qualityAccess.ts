@@ -20,5 +20,4 @@ export const normalizeQualityRoleCode = (role: unknown) => {
 export const hasQualityMaintainerRole = (roles: readonly unknown[]) =>
 	roles.some((role) => QUALITY_MAINTAINER_ROLES.has(normalizeQualityRoleCode(role)));
 
-export const hasQualityTaskDeleteRole = (roles: readonly unknown[]) =>
-	roles.some((role) => normalizeQualityRoleCode(role) === "ROLE_OP_ADMIN");
+export const hasQualityTaskDeleteRole = (roles: readonly unknown[]) => hasQualityMaintainerRole(roles);

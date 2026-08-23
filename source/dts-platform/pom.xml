@@ -540,6 +540,8 @@
                         <testInclude>**/repository/audit/PlatformAuditOutboxRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/service/modeling/DataMartContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelingWordRootLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/modeling/WordRootServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/SubjectDomainContractTest.java</testInclude>
                         <testInclude>**/service/modeling/SubjectDomainGovernanceLiquibaseTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleRepositoryTest.java</testInclude>
@@ -577,6 +579,7 @@
                         <testInclude>**/service/modeling/dbtdraft/*.java</testInclude>
                         <testInclude>**/service/modeling/observability/*.java</testInclude>
                         <testInclude>**/web/rest/ModelRepresentationResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelingWordRootResourceTest.java</testInclude>
                         <testInclude>**/web/rest/CatalogModelSemanticSyncResourceTest.java</testInclude>
                         <testInclude>**/web/rest/DimensionModelResourceTest.java</testInclude>
                         <testInclude>**/web/rest/DimensionDefinitionReservedIdempotencyBoundaryTest.java</testInclude>
@@ -616,6 +619,13 @@
                         <testInclude>**/service/governance/QualityReportExportServiceTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServiceExecutableDefinitionTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServicePinnedTriggerTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityRunServiceWorkflowTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityIssueIdentityTest.java</testInclude>
+                        <testInclude>**/service/governance/IssueTicketServiceAutomaticAuditTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityWorkflowLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityWorkflowOrchestratorTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityWorkflowQueryServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityWorkflowReconcilerTest.java</testInclude>
                         <testInclude>**/service/governance/QualityScoreServiceTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunOutcomeSemanticsTest.java</testInclude>
                         <testInclude>**/service/governance/SqlTemplateRendererTest.java</testInclude>
@@ -786,6 +796,7 @@
                         <testInclude>**/web/rest/ModelSpecImport*.java</testInclude>
                         <testInclude>**/web/rest/IngestionTaskProxyResourceTest.java</testInclude>
                         <testInclude>**/web/rest/GovernanceResourceQualityAuditTest.java</testInclude>
+                        <testInclude>**/web/rest/GovernanceQualityWorkflowResourceTest.java</testInclude>
                         <testInclude>**/web/rest/RollbackProxyResourceTest.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetTag*.java</testInclude>
                         <testInclude>**/repository/catalog/CatalogAssetSemanticStoreIT.java</testInclude>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { confirmDataMart, createDataMart, listDataMarts, retireDataMart, updateDataMart } from "@/api/dataMartApi";
 import { createBusinessProcessApi } from "@/api/sprint64GovernanceApi";
 import {
@@ -173,6 +173,15 @@ export function WarehouseLayerForm({
 	const [namingPrefix, setNamingPrefix] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
+	const [focusCodeAfterRequest, setFocusCodeAfterRequest] = useState(false);
+	const codeInputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (busy || !focusCodeAfterRequest) return;
+		codeInputRef.current?.focus();
+		codeInputRef.current?.select();
+		setFocusCodeAfterRequest(false);
+	}, [busy, focusCodeAfterRequest]);
 
 	const create = async () => {
 		const normalizedCode = code.trim().toLocaleUpperCase();
@@ -196,7 +205,15 @@ export function WarehouseLayerForm({
 			});
 			await onDone("数仓分层已创建");
 		} catch (cause) {
-			setError(normalizeModelingRequestFailure(cause, "数仓分层创建失败。").message);
+			const failure = normalizeModelingRequestFailure(cause, "数仓分层创建失败。");
+			if (failure.code === "WAREHOUSE_LAYER_CODE_CONFLICT") {
+				setFocusCodeAfterRequest(true);
+				setError(
+					`分层编码 ${normalizedCode} 已存在或曾被使用，请更换一个未使用过的编码（已删除编码不能复用）。`,
+				);
+			} else {
+				setError(failure.message);
+			}
 		} finally {
 			setBusy(false);
 		}
@@ -211,6 +228,7 @@ export function WarehouseLayerForm({
 						disabled={!canMaintain || busy}
 						onChange={(event) => setCode(event.target.value)}
 						placeholder="例如：FIN_DETAIL"
+						ref={codeInputRef}
 						value={code}
 					/>
 				</label>

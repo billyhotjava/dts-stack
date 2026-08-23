@@ -3,7 +3,6 @@ package com.yuzhi.dts.platform.service.governance;
 import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
-import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.service.modeling.GovernanceQualityRerunPort;
 import com.yuzhi.dts.platform.service.modeling.QualityEvidencePort.QualityEvidence;
 import java.nio.charset.StandardCharsets;
@@ -20,11 +19,14 @@ public class GovernanceQualityRerunAdapter implements GovernanceQualityRerunPort
 
     private static final int MAX_RUNS = 100;
 
-    private final QualityRunService qualityRuns;
+    private final QualityWorkflowOrchestrator workflows;
     private final GovQualityRunRepository runRepository;
 
-    public GovernanceQualityRerunAdapter(QualityRunService qualityRuns, GovQualityRunRepository runRepository) {
-        this.qualityRuns = qualityRuns;
+    public GovernanceQualityRerunAdapter(
+        QualityWorkflowOrchestrator workflows,
+        GovQualityRunRepository runRepository
+    ) {
+        this.workflows = workflows;
         this.runRepository = runRepository;
     }
 
@@ -61,26 +63,21 @@ public class GovernanceQualityRerunAdapter implements GovernanceQualityRerunPort
             throw new IllegalArgumentException("governance quality rerun must contain between 1 and 100 bindings");
         }
         String prefix = triggerPrefix(candidateId, idempotencyKey);
-        java.util.ArrayList<QualityRunRef> created = new java.util.ArrayList<>(scope.size());
-        for (int index = 0; index < scope.size(); index++) {
-            QualityEvidence item = scope.get(index);
-            QualityRunTriggerRequest request = new QualityRunTriggerRequest();
-            request.setRuleId(item.ruleId());
-            request.setBindingId(item.bindingId());
-            request.setTriggerType("MODEL_RELEASE");
-            List<QualityRunDto> runs = qualityRuns.triggerPinnedAuthorized(
-                request,
-                item.ruleVersionId(),
-                actorId,
-                activeDepartmentId,
-                prefix + index
-            );
-            if (runs.size() != 1) {
-                throw new IllegalStateException("a pinned quality binding must create exactly one run");
-            }
-            created.add(toRef(runs.getFirst()));
+        var workflow = workflows.startPinnedModelQuality(
+            scope
+                .stream()
+                .map(item -> new PinnedQualityBinding(item.ruleId(), item.ruleVersionId(), item.bindingId()))
+                .toList(),
+            actorId,
+            activeDepartmentId,
+            prefix,
+            prefix
+        );
+        List<QualityRunDto> runs = workflow.ruleRuns();
+        if (runs.size() != scope.size()) {
+            throw new IllegalStateException("all pinned quality bindings must create one run in the same workflow");
         }
-        return new RerunReceipt(false, created);
+        return new RerunReceipt(false, runs.stream().map(GovernanceQualityRerunAdapter::toRef).toList());
     }
 
     private static String triggerPrefix(UUID candidateId, String idempotencyKey) {

@@ -52,6 +52,24 @@ public class IngestionExecution {
     private String qualityRunId;
 
     @Size(max = 200)
+    @Column(name = "quality_workflow_id", length = 200)
+    private String qualityWorkflowId;
+
+    @Size(max = 32)
+    @Column(name = "quality_workflow_status", length = 32)
+    private String qualityWorkflowStatus;
+
+    @Column(name = "quality_workflow_attempt_count", nullable = false)
+    private int qualityWorkflowAttemptCount = 0;
+
+    @Column(name = "quality_workflow_next_retry_at")
+    private Instant qualityWorkflowNextRetryAt;
+
+    @Size(max = 1000)
+    @Column(name = "quality_workflow_error", length = 1000)
+    private String qualityWorkflowError;
+
+    @Size(max = 200)
     @Column(name = "airflow_dag_id", length = 200)
     private String airflowDagId;
 
@@ -209,6 +227,46 @@ public class IngestionExecution {
 
     public void setQualityRunId(String qualityRunId) {
         this.qualityRunId = qualityRunId;
+    }
+
+    public String getQualityWorkflowId() {
+        return qualityWorkflowId;
+    }
+
+    public void setQualityWorkflowId(String qualityWorkflowId) {
+        this.qualityWorkflowId = qualityWorkflowId;
+    }
+
+    public String getQualityWorkflowStatus() {
+        return qualityWorkflowStatus;
+    }
+
+    public void setQualityWorkflowStatus(String qualityWorkflowStatus) {
+        this.qualityWorkflowStatus = qualityWorkflowStatus;
+    }
+
+    public int getQualityWorkflowAttemptCount() {
+        return qualityWorkflowAttemptCount;
+    }
+
+    public void setQualityWorkflowAttemptCount(int qualityWorkflowAttemptCount) {
+        this.qualityWorkflowAttemptCount = qualityWorkflowAttemptCount;
+    }
+
+    public Instant getQualityWorkflowNextRetryAt() {
+        return qualityWorkflowNextRetryAt;
+    }
+
+    public void setQualityWorkflowNextRetryAt(Instant qualityWorkflowNextRetryAt) {
+        this.qualityWorkflowNextRetryAt = qualityWorkflowNextRetryAt;
+    }
+
+    public String getQualityWorkflowError() {
+        return qualityWorkflowError;
+    }
+
+    public void setQualityWorkflowError(String qualityWorkflowError) {
+        this.qualityWorkflowError = qualityWorkflowError;
     }
 
     public String getAirflowDagId() {

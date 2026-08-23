@@ -20,6 +20,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityTaskRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
 import com.yuzhi.dts.platform.service.governance.dto.IssueTicketDto;
+import com.yuzhi.dts.platform.service.governance.dto.QualityWorkflowRunDto;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
@@ -48,7 +49,7 @@ class QualityTaskServiceAuditTest {
     @Mock private GovQualityTaskRepository taskRepository;
     @Mock private GovRuleBindingRepository bindingRepository;
     @Mock private CatalogDatasetRepository datasetRepository;
-    @Mock private QualityRunService qualityRunService;
+    @Mock private QualityWorkflowOrchestrator workflowOrchestrator;
     @Mock private QualityAuditRecorder qualityAuditRecorder;
     @Mock private IssueTicketService issueTicketService;
     @Mock private DataStandardSecurity security;
@@ -66,7 +67,7 @@ class QualityTaskServiceAuditTest {
             taskRepository,
             bindingRepository,
             datasetRepository,
-            qualityRunService,
+            workflowOrchestrator,
             qualityAuditRecorder,
             issueTicketService,
             security,
@@ -78,7 +79,7 @@ class QualityTaskServiceAuditTest {
         );
         org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
         org.mockito.Mockito.lenient()
-            .when(bindingRepository.findByDatasetIdAndRuleVersionStatus(DATASET_ID, "PUBLISHED"))
+            .when(bindingRepository.findWorkflowBindings(DATASET_ID, "PUBLISHED"))
             .thenReturn(List.of(binding(rule(RULE_ID, true))));
         org.mockito.Mockito.lenient()
             .when(taskRepository.claimDueExecution(eq(TASK_ID), any(Instant.class), any(Instant.class)))
@@ -124,7 +125,7 @@ class QualityTaskServiceAuditTest {
     void scheduledTaskUsesTrustedMachineAuditIdentity() {
         GovQualityTask task = dueTask();
         when(taskRepository.findByEnabledTrue()).thenReturn(List.of(task));
-        when(qualityRunService.triggerScheduled(any())).thenReturn(List.of());
+        when(workflowOrchestrator.startScheduledTask(eq(task), any(Instant.class), any())).thenReturn(workflow("RUNNING"));
 
         service.runDueTasks();
 
@@ -161,13 +162,13 @@ class QualityTaskServiceAuditTest {
         when(taskRepository.findByEnabledTrue()).thenReturn(List.of(task));
         when(taskRepository.claimDueExecution(eq(TASK_ID), any(Instant.class), any(Instant.class)))
             .thenReturn(1, 0);
-        when(qualityRunService.triggerScheduled(any())).thenReturn(List.of());
+        when(workflowOrchestrator.startScheduledTask(eq(task), any(Instant.class), any())).thenReturn(workflow("RUNNING"));
 
         service.runDueTasks();
         service.runDueTasks();
 
         verify(taskRepository, times(2)).claimDueExecution(eq(TASK_ID), any(Instant.class), any(Instant.class));
-        verify(qualityRunService, times(1)).triggerScheduled(any());
+        verify(workflowOrchestrator, times(1)).startScheduledTask(eq(task), any(Instant.class), any());
         verify(qualityAuditRecorder, times(1)).recordMachineAttempt(
             eq("scheduler"),
             any(),
@@ -204,7 +205,8 @@ class QualityTaskServiceAuditTest {
         GovQualityTask task = dueTask();
         task.setRuleId(null);
         when(taskRepository.findByEnabledTrue()).thenReturn(List.of(task));
-        when(bindingRepository.findByDatasetIdAndRuleVersionStatus(DATASET_ID, "PUBLISHED")).thenReturn(List.of());
+        when(workflowOrchestrator.startScheduledTask(eq(task), any(Instant.class), any()))
+            .thenThrow(new IllegalStateException("no executable rules"));
         UUID issueId = UUID.fromString("40000000-0000-0000-0000-000000000041");
         IssueTicketDto issue = new IssueTicketDto();
         issue.setId(issueId);
@@ -237,7 +239,8 @@ class QualityTaskServiceAuditTest {
         GovQualityTask task = dueTask();
         task.setRuleId(null);
         when(taskRepository.findByEnabledTrue()).thenReturn(List.of(task));
-        when(bindingRepository.findByDatasetIdAndRuleVersionStatus(DATASET_ID, "PUBLISHED")).thenReturn(List.of());
+        when(workflowOrchestrator.startScheduledTask(eq(task), any(Instant.class), any()))
+            .thenThrow(new IllegalStateException("no executable rules"));
         when(issueTicketService.createOrTouchWithDisposition(
             eq("QUALITY_TASK"), eq(TASK_ID), any(), eq("system"), any()
         )).thenThrow(new IllegalStateException("issue repository unavailable"));
@@ -287,7 +290,7 @@ class QualityTaskServiceAuditTest {
         CatalogDataset dataset = mock(CatalogDataset.class);
         when(defaultLakeDatasetGuard.requireDefaultLakeDataset(DATASET_ID)).thenReturn(dataset);
         when(accessChecker.canRead(dataset)).thenReturn(true);
-        when(bindingRepository.findByDatasetIdAndRuleVersionStatus(DATASET_ID, "PUBLISHED")).thenReturn(List.of());
+        when(bindingRepository.findWorkflowBindings(DATASET_ID, "PUBLISHED")).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.create(request, "alice", null))
             .isInstanceOf(IllegalArgumentException.class)
@@ -296,26 +299,20 @@ class QualityTaskServiceAuditTest {
     }
 
     @Test
-    void datasetWideTaskRunsOnlyEnabledPublishedRules() {
+    void manualTaskDelegatesToTheUnifiedWorkflowBoundary() {
         GovQualityTask task = dueTask();
         task.setRuleId(null);
-        GovRule enabledRule = rule(RULE_ID, true);
-        GovRule disabledRule = rule(UUID.fromString("30000000-0000-0000-0000-000000000042"), false);
         when(taskRepository.findById(TASK_ID)).thenReturn(java.util.Optional.of(task));
         when(security.hasInstituteScope()).thenReturn(true);
         CatalogDataset dataset = mock(CatalogDataset.class);
         when(datasetRepository.findById(DATASET_ID)).thenReturn(java.util.Optional.of(dataset));
         when(accessChecker.canRead(dataset)).thenReturn(true);
-        when(bindingRepository.findByDatasetIdAndRuleVersionStatus(DATASET_ID, "PUBLISHED"))
-            .thenReturn(List.of(binding(enabledRule), binding(disabledRule)));
-        when(qualityRunService.trigger(any(), eq("alice"))).thenReturn(List.of());
+        when(workflowOrchestrator.startAuthorizedTask(eq(task), eq("alice"), eq(null), eq("MANUAL"), eq("manual-102")))
+            .thenReturn(workflow("RUNNING"));
 
-        service.trigger(TASK_ID, "alice", null);
+        service.trigger(TASK_ID, "alice", null, "manual-102");
 
-        ArgumentCaptor<com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest> request =
-            ArgumentCaptor.forClass(com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest.class);
-        verify(qualityRunService).trigger(request.capture(), eq("alice"));
-        assertThat(request.getValue().getRuleId()).isEqualTo(RULE_ID);
+        verify(workflowOrchestrator).startAuthorizedTask(task, "alice", null, "MANUAL", "manual-102");
     }
 
     private GovQualityTask taskRequest(String name) {
@@ -349,5 +346,35 @@ class QualityTaskServiceAuditTest {
         binding.setDatasetId(DATASET_ID);
         binding.setRuleVersion(version);
         return binding;
+    }
+
+    private QualityWorkflowRunDto workflow(String status) {
+        return new QualityWorkflowRunDto(
+            UUID.fromString("50000000-0000-0000-0000-000000000041"),
+            TASK_ID,
+            DATASET_ID,
+            RULE_ID,
+            null,
+            1,
+            1,
+            0,
+            "MANUAL",
+            "quality-workflow:manual:test",
+            status,
+            1,
+            0,
+            0,
+            0,
+            0,
+            Instant.now(),
+            Instant.now(),
+            null,
+            null,
+            null,
+            null,
+            Instant.now(),
+            "alice",
+            List.of()
+        );
     }
 }

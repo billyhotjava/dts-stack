@@ -38,6 +38,7 @@ export {
 	createGlossaryTerm,
 	createReferenceCode,
 	createStandard,
+	createWordRoot,
 	deleteGlossaryTerm,
 	getGlossaryTermReferences,
 	getMetadataStandardReferences,
@@ -51,8 +52,10 @@ export {
 	listReferenceCodes,
 	listStandards,
 	listStandardVersions,
+	listWordRoots,
 	previewStandardPackageImport,
 	updateGlossaryTerm,
 	updateReferenceCode,
 	updateStandard,
+	updateWordRoot,
 } from "./platformApi";

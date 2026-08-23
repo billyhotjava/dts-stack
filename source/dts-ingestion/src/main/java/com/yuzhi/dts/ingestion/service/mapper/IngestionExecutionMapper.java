@@ -28,6 +28,11 @@ public class IngestionExecutionMapper {
         dto.setEffectiveConfigChecksum(entity.getEffectiveConfigChecksum());
         dto.setQualityPolicyRef(entity.getQualityPolicyRef());
         dto.setQualityRunId(entity.getQualityRunId());
+        dto.setQualityWorkflowId(entity.getQualityWorkflowId());
+        dto.setQualityWorkflowStatus(entity.getQualityWorkflowStatus());
+        dto.setQualityWorkflowAttemptCount(entity.getQualityWorkflowAttemptCount());
+        dto.setQualityWorkflowNextRetryAt(entity.getQualityWorkflowNextRetryAt());
+        dto.setQualityWorkflowError(entity.getQualityWorkflowError());
         dto.setAirflowDagId(entity.getAirflowDagId());
         dto.setBatchId(entity.getBatchId());
         dto.setStatus(entity.getStatus());
@@ -75,6 +80,11 @@ public class IngestionExecutionMapper {
         entity.setEffectiveConfigChecksum(dto.getEffectiveConfigChecksum());
         entity.setQualityPolicyRef(dto.getQualityPolicyRef());
         entity.setQualityRunId(dto.getQualityRunId());
+        entity.setQualityWorkflowId(dto.getQualityWorkflowId());
+        entity.setQualityWorkflowStatus(dto.getQualityWorkflowStatus());
+        entity.setQualityWorkflowAttemptCount(dto.getQualityWorkflowAttemptCount());
+        entity.setQualityWorkflowNextRetryAt(dto.getQualityWorkflowNextRetryAt());
+        entity.setQualityWorkflowError(dto.getQualityWorkflowError());
         entity.setAirflowDagId(dto.getAirflowDagId());
         entity.setBatchId(dto.getBatchId());
         entity.setStatus(dto.getStatus());

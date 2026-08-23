@@ -12,7 +12,10 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.governance.GovIssueAction;
 import com.yuzhi.dts.platform.domain.governance.GovIssueTicket;
+import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
+import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.governance.GovComplianceBatchRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIssueActionRepository;
@@ -92,6 +95,59 @@ class IssueTicketServiceAutomaticAuditTest {
         assertThat(result.disposition()).isEqualTo(IssueTicketService.CreateOrTouchDisposition.CREATED);
         assertThat(result.ticket().getId()).isEqualTo(TICKET_ID);
         verify(qualityAuditRecorder, never()).recordAction(eq("GOV_ISSUE_CREATE"), any(AuditStage.class), any(), any());
+    }
+
+    @Test
+    void repeatedQualityFailureReopensAndTouchesTheSameProblem() {
+        String problemKey = "quality:dataset:binding:EXECUTION_ERROR";
+        GovIssueTicket existing = new GovIssueTicket();
+        existing.setId(TICKET_ID);
+        existing.setStatus("RESOLVED");
+        existing.setResolution("previous recovery");
+        existing.setProblemKey(problemKey);
+        when(ticketRepository.findFirstByProblemKeyAndStatusInOrderByCreatedDateDesc(
+            problemKey,
+            List.of("OPEN", "IN_PROGRESS", "RESOLVED")
+        )).thenReturn(Optional.of(existing));
+
+        IssueTicketService.CreateOrTouchResult result = service.createOrTouchQualityProblem(
+            problemKey,
+            SOURCE_ID,
+            request(),
+            "quality-workflow",
+            "new failure evidence"
+        );
+
+        assertThat(result.disposition()).isEqualTo(IssueTicketService.CreateOrTouchDisposition.TOUCHED);
+        assertThat(existing.getStatus()).isEqualTo("OPEN");
+        assertThat(existing.getResolution()).isNull();
+        verify(actionRepository).save(any(GovIssueAction.class));
+    }
+
+    @Test
+    void successfulRunResolvesAllOpenProblemsForTheSameBinding() {
+        UUID datasetId = UUID.fromString("30000000-0000-0000-0000-000000000081");
+        UUID bindingId = UUID.fromString("40000000-0000-0000-0000-000000000081");
+        GovRuleBinding binding = new GovRuleBinding();
+        binding.setId(bindingId);
+        GovQualityRun run = new GovQualityRun();
+        run.setId(SOURCE_ID);
+        run.setDatasetId(datasetId);
+        run.setBinding(binding);
+        GovIssueTicket open = new GovIssueTicket();
+        open.setId(TICKET_ID);
+        open.setStatus("OPEN");
+        when(ticketRepository.findByProblemKeyStartingWithAndStatusInOrderByCreatedDateDesc(
+            QualityIssueIdentity.problemPrefix(run),
+            List.of("OPEN", "IN_PROGRESS")
+        )).thenReturn(List.of(open));
+
+        List<UUID> resolved = service.resolveQualityProblems(run, "quality-workflow");
+
+        assertThat(resolved).containsExactly(TICKET_ID);
+        assertThat(open.getStatus()).isEqualTo("RESOLVED");
+        assertThat(open.getResolution()).contains("自动转为已恢复");
+        verify(actionRepository).save(any(GovIssueAction.class));
     }
 
     @Test

@@ -1,31 +1,27 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { createPortal } from "react-dom";
+import type { MenuProps } from "antd";
+import { Dropdown, message, Modal, Select, Spin, Tree } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Modal, Pagination, Select, Spin, Tree, message } from "antd";
 import { toast } from "sonner";
 import { getDomainTree } from "@/api/platformApi";
-import { analyticsApi, type ScreenListItem, type ScreenAiGenerationResponse } from "../../api/analyticsApi";
-import { resolveRouteForOpen } from "../../helpers/resolveAnalyticsUrl";
+import { actionColumn, CompactTable } from "@/components/table";
+import { useUserRoles } from "@/store/userStore";
+import { analyticsApi, type ScreenAiGenerationResponse, type ScreenListItem } from "../../api/analyticsApi";
 import { PageContainer } from "../../components/PageContainer/PageContainer";
+import { resolveRouteForOpen } from "../../helpers/resolveAnalyticsUrl";
 import { writeTextToClipboard } from "../../hooks/clipboard";
-import { TemplateGallery, ScreenAclPanel, type TemplateSelection } from "./components";
+import { ScreenAclPanel, TemplateGallery, type TemplateSelection } from "./components";
 import { ClassificationTag } from "./components/ClassificationTag";
 import { CreateScreenIntakeModal, type CreateScreenIntakePayload } from "./components/CreateScreenIntakeModal";
-import { UnclassifiedScreensModal } from "./components/UnclassifiedScreensModal";
 import { ImportPreviewModal } from "./components/ImportPreviewModal";
-import { SortableHeader } from "../../components/SortableHeader";
-import { dateComparator, numberComparator, stringComparator, useTableSort } from "../../hooks/useTableSort";
-import { useUserRoles } from "@/store/userStore";
+import { UnclassifiedScreensModal } from "./components/UnclassifiedScreensModal";
 import { createConfigFromTemplate } from "./screenTemplates";
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from "./screenSpec";
-import { buildScreenPackageZip, parseScreenImportFile } from "./utils/screenPackage";
 import type { ScreenConfig } from "./types";
+import { buildScreenPackageZip, parseScreenImportFile } from "./utils/screenPackage";
 const SCREEN_LIST_PREF_KEY = "dts.analytics.screens.listPref.v1";
 const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
-const SCREEN_CARD_MENU_ITEM_CLASS =
-	"border border-transparent rounded-md px-3 py-2 bg-transparent text-text-primary text-sm text-left cursor-pointer transition-colors duration-150 hover:border-[rgba(37,99,235,0.35)] hover:bg-[rgba(37,99,235,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:opacity-55 disabled:cursor-not-allowed";
-const SCREEN_CARD_MENU_DANGER_ITEM_CLASS =
-	"border border-transparent rounded-md px-3 py-2 bg-transparent text-[rgb(220,38,38)] text-sm text-left cursor-pointer transition-colors duration-150 hover:border-[rgba(220,38,38,0.35)] hover:bg-[rgba(220,38,38,0.10)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(220,38,38,0.25)]";
 
 type DomainNode = {
 	id?: string;
@@ -165,10 +161,6 @@ export default function ScreensPage() {
 	const [aiRefineMode, setAiRefineMode] = useState<"apply" | "suggest">("apply");
 	const [aiResult, setAiResult] = useState<ScreenAiGenerationResponse | null>(null);
 	const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
-	const [activeCardMenuId, setActiveCardMenuId] = useState<string | number | null>(null);
-	// 「更多」菜单改用 portal + fixed 定位渲染到 body，规避 sticky 操作列产生的层叠上下文
-	// 以及表格容器横向滚动强制的 overflow-y 裁剪，避免菜单被后续行或表格边缘遮挡。
-	const [cardMenuAnchor, setCardMenuAnchor] = useState<{ right: number; top?: number; bottom?: number } | null>(null);
 	const [aclScreenId, setAclScreenId] = useState<string | number | null>(null);
 	const [domainEditorScreen, setDomainEditorScreen] = useState<ScreenListItem | null>(null);
 	const [domainEditorValue, setDomainEditorValue] = useState<string | undefined>(undefined);
@@ -225,40 +217,6 @@ export default function ScreensPage() {
 		}
 	});
 	const searchInputRef = useRef<HTMLInputElement | null>(null);
-
-	useEffect(() => {
-		if (activeCardMenuId === null) {
-			return;
-		}
-		const handlePointerDown = (event: MouseEvent) => {
-			const node = event.target as HTMLElement | null;
-			if (!node?.closest(".screen-card-menu")) {
-				setActiveCardMenuId(null);
-				setCardMenuAnchor(null);
-			}
-		};
-		const handleEscape = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				setActiveCardMenuId(null);
-				setCardMenuAnchor(null);
-			}
-		};
-		// 菜单 fixed 定位不随滚动联动,任意滚动/缩放都直接关闭,避免菜单与按钮错位。
-		const handleReposition = () => {
-			setActiveCardMenuId(null);
-			setCardMenuAnchor(null);
-		};
-		window.addEventListener("mousedown", handlePointerDown);
-		window.addEventListener("keydown", handleEscape);
-		window.addEventListener("scroll", handleReposition, true);
-		window.addEventListener("resize", handleReposition);
-		return () => {
-			window.removeEventListener("mousedown", handlePointerDown);
-			window.removeEventListener("keydown", handleEscape);
-			window.removeEventListener("scroll", handleReposition, true);
-			window.removeEventListener("resize", handleReposition);
-		};
-	}, [activeCardMenuId]);
 
 	useEffect(() => {
 		if (typeof window === "undefined") return;
@@ -401,27 +359,6 @@ export default function ScreensPage() {
 		});
 	}, [domainMap, publishFilter, screens, searchKeyword, selectedDomain, selectedDomainIds]);
 
-	// Table sort columns: 操作列不参与排序。密级用 classification 字典序
-	// （CONFIDENTIAL/INTERNAL/PUBLIC/SECRET 或 S1-S4 都是稳定可比的字符串）。
-	const sortColumns = useMemo(
-		() => ({
-			name: stringComparator<ScreenListItem>((s) => s.name),
-			description: stringComparator<ScreenListItem>((s) => s.description),
-			classification: stringComparator<ScreenListItem>((s) => s.classification),
-			published: numberComparator<ScreenListItem>((s) => Number(s.publishedVersionNo || 0)),
-			updatedAt: dateComparator<ScreenListItem>((s) => s.updatedAt),
-		}),
-		[],
-	);
-	const {
-		sortedItems: sortedScreens,
-		sortState,
-		requestSort,
-	} = useTableSort(visibleScreens, {
-		columns: sortColumns,
-		defaultSort: { key: "updatedAt", direction: "desc" },
-	});
-
 	// 列表分页：默认 10 条/页，过滤条件变化时回到第 1 页，越界自动回正。
 	const [currentPage, setCurrentPage] = useState(1);
 	const [pageSize, setPageSize] = useState(10);
@@ -431,7 +368,7 @@ export default function ScreensPage() {
 	useEffect(() => {
 		setCurrentPage(1);
 	}, [selectedDomain]);
-	const totalCount = sortedScreens.length;
+	const totalCount = visibleScreens.length;
 	const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 	const safePage = Math.min(currentPage, totalPages);
 	useEffect(() => {
@@ -439,11 +376,6 @@ export default function ScreensPage() {
 			setCurrentPage(safePage);
 		}
 	}, [currentPage, safePage]);
-	const pagedScreens = useMemo(() => {
-		const start = (safePage - 1) * pageSize;
-		return sortedScreens.slice(start, start + pageSize);
-	}, [sortedScreens, safePage, pageSize]);
-
 	const handleCreate = () => {
 		// Sprint-24 F3：先弹 intake 收集名称 + 密级，提交后再开模板库。
 		setIntakeOpen(true);
@@ -754,8 +686,6 @@ export default function ScreensPage() {
 
 	const openDomainEditor = useCallback((screen: ScreenListItem) => {
 		const currentDomainId = typeof screen.domainId === "string" ? screen.domainId.trim() : "";
-		setActiveCardMenuId(null);
-		setCardMenuAnchor(null);
 		setDomainEditorScreen(screen);
 		setDomainEditorValue(currentDomainId || undefined);
 	}, []);
@@ -910,6 +840,178 @@ export default function ScreensPage() {
 		});
 	};
 
+	const buildMoreMenu = (screen: ScreenListItem, rowPermissions: ScreenRowPermissions): MenuProps => {
+		const items: NonNullable<MenuProps["items"]> = [];
+		if (rowPermissions.canEdit) {
+			items.push({ key: "preview", label: "预览" });
+		}
+		if (rowPermissions.canManage) {
+			items.push({ key: "permission", label: "权限设置" });
+		}
+		items.push(
+			{ key: "copy", label: "复制链接" },
+			{ key: "publish", label: "发布", disabled: true, title: "请进入编辑器完成发布门禁" },
+		);
+		if (rowPermissions.canEdit) {
+			items.push(
+				{ type: "divider" },
+				{ key: "domain", label: "修改所属域" },
+				{ key: "export", label: exportingId === screen.id ? "导出中..." : "导出大屏", disabled: exportingId === screen.id },
+				{ key: "template", label: savingTemplateId === screen.id ? "保存中..." : "保存为模板", disabled: savingTemplateId === screen.id },
+			);
+		}
+		if (rowPermissions.canDelete) {
+			items.push({ type: "divider" }, { key: "delete", label: "删除", danger: true });
+		}
+		return {
+			items,
+			onClick: ({ key, domEvent }) => {
+				domEvent.stopPropagation();
+				switch (key) {
+					case "preview":
+						handlePreview(screen.id);
+						break;
+					case "permission":
+						if (!screen.publishedVersionNo) {
+							message.warning("只有已经发布的大屏才能进行权限设置");
+							return;
+						}
+						setAclScreenId(screen.id);
+						break;
+					case "copy":
+						void handleCopyScreenLink(screen.id);
+						break;
+					case "domain":
+						openDomainEditor(screen);
+						break;
+					case "export":
+						void handleExportScreenPackage(screen);
+						break;
+					case "template":
+						void handleSaveAsTemplate(screen.id, screen.name);
+						break;
+					case "delete":
+						void handleDelete(screen.id);
+						break;
+				}
+			},
+		};
+	};
+
+	const screenColumns: ColumnsType<ScreenListItem> = [
+		{
+			title: "名称",
+			dataIndex: "name",
+			key: "name",
+			ellipsis: { showTitle: false },
+			sorter: (left, right) => String(left.name || "").localeCompare(String(right.name || ""), "zh-CN"),
+			render: (_value, screen) => (
+				<a
+					className="font-medium text-brand hover:underline"
+					data-testid={`analytics-screen-name-link-${screen.id}`}
+					href={resolveRouteForOpen(`/bi/screens/${screen.id}/preview`)}
+					rel="noopener noreferrer"
+					target="_blank"
+					title={screen.name || "未命名大屏"}
+				>
+					{screen.name || "未命名大屏"}
+				</a>
+			),
+		},
+		{
+			title: "创建者",
+			dataIndex: "creatorName",
+			key: "creatorName",
+			width: "12%",
+			sorter: (left, right) => String(left.creatorName || "").localeCompare(String(right.creatorName || ""), "zh-CN"),
+			render: (_value, screen) => {
+				const creator = screen.creatorName || (screen.creatorId == null ? "—" : `用户 ${screen.creatorId}`);
+				return <span title={creator}>{creator}</span>;
+			},
+		},
+		{
+			title: "描述",
+			dataIndex: "description",
+			key: "description",
+			ellipsis: { showTitle: false },
+			responsive: ["xl"],
+			sorter: (left, right) => String(left.description || "").localeCompare(String(right.description || ""), "zh-CN"),
+			render: (_value, screen) => (
+				<span className="text-text-secondary" title={screen.description || "无描述"}>
+					{screen.description || "无描述"}
+				</span>
+			),
+		},
+		{
+			title: "有效密级",
+			dataIndex: "classification",
+			key: "classification",
+			width: "10%",
+			responsive: ["lg"],
+			sorter: (left, right) => String(left.classification || "").localeCompare(String(right.classification || "")),
+			render: (_value, screen) => (
+				<div
+					title={[
+						"有效密级取所有展示数据的最高密级",
+						screen.manualClassificationFloor ? `人工下限：${screen.manualClassificationFloor}` : "未设置人工下限",
+						screen.classificationSnapshotVersion != null
+							? `快照版本：${screen.classificationSnapshotVersion}`
+							: "密级快照待生成",
+					].join("；")}
+				>
+					<ClassificationTag value={screen.classification ?? null} style={{ fontSize: "inherit" }} />
+				</div>
+			),
+		},
+		{
+			title: "状态",
+			dataIndex: "publishedVersionNo",
+			key: "published",
+			width: "10%",
+			responsive: ["lg"],
+			sorter: (left, right) => Number(left.publishedVersionNo || 0) - Number(right.publishedVersionNo || 0),
+			render: (_value, screen) => (
+				<span className="font-semibold text-text-primary">
+					{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : "未发布"}
+				</span>
+			),
+		},
+		{
+			title: "更新时间",
+			dataIndex: "updatedAt",
+			key: "updatedAt",
+			width: "15%",
+			responsive: ["xl"],
+			defaultSortOrder: "descend",
+			sorter: (left, right) => new Date(left.updatedAt || 0).getTime() - new Date(right.updatedAt || 0).getTime(),
+			render: (value?: string) => <span className="text-text-secondary">{formatDate(value)}</span>,
+		},
+		actionColumn<ScreenListItem>(
+			(screen) => {
+				const rowPermissions = resolveScreenRowPermissions(screen);
+				return [
+					{
+						key: "primary",
+						label: rowPermissions.canEdit ? "编辑" : "预览",
+						onClick: () => (rowPermissions.canEdit ? handleEdit(screen.id) : handlePreview(screen.id)),
+						testId: rowPermissions.canEdit
+							? `analytics-screen-edit-button-${screen.id}`
+							: `analytics-screen-preview-${screen.id}`,
+					},
+					{
+						key: "more",
+						label: (
+							<Dropdown menu={buildMoreMenu(screen, rowPermissions)} trigger={["click"]} placement="bottomRight">
+								<span data-testid={`analytics-screen-more-${screen.id}`}>更多</span>
+							</Dropdown>
+						),
+					},
+				];
+			},
+			{ maxActions: 2 },
+		),
+	];
+
 	return (
 		<PageContainer>
 			<div className="space-y-4" data-testid="analytics-screens-page">
@@ -948,7 +1050,7 @@ export default function ScreensPage() {
 				</div>
 
 				<div className="flex min-h-[620px] gap-4 overflow-hidden">
-					<aside className="w-[240px] flex-none rounded-lg border border-border-default bg-surface-card p-3">
+					<aside className="hidden w-[240px] flex-none rounded-lg border border-border-default bg-surface-card p-3 2xl:block">
 						<div className="mb-3 text-sm font-semibold text-text-primary">数据域</div>
 						<Spin spinning={domainTreeLoading}>
 							<Tree
@@ -967,6 +1069,26 @@ export default function ScreensPage() {
 					<div className="min-w-0 flex-1 space-y-4 overflow-hidden">
 						<div className="flex items-center justify-between gap-2.5 rounded-lg border border-border-default bg-surface-card px-4 py-3 flex-wrap">
 							<div className="flex items-center gap-2 flex-wrap">
+								<label className="2xl:hidden">
+									<span className="sr-only">数据域</span>
+									<select
+										className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
+										data-testid="analytics-screen-domain-select"
+										value={selectedDomain || "ALL"}
+										onChange={(event) => {
+											const next = event.target.value;
+											setSelectedDomain(next === "ALL" ? undefined : next);
+										}}
+									>
+										<option value="ALL">全部数据域</option>
+										<option value={UNASSIGNED_DOMAIN_KEY}>未归类</option>
+										{domainOptions.map((option) => (
+											<option key={option.value} value={option.value}>
+												{option.label}
+											</option>
+										))}
+									</select>
+								</label>
 								<input
 									ref={searchInputRef}
 									className="min-w-[220px] max-w-[420px] flex-1 border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
@@ -1043,257 +1165,33 @@ export default function ScreensPage() {
 								</button>
 							</div>
 						) : (
-							<div className="analytics-screen-table-scroll max-w-full overflow-x-scroll rounded-lg border border-border-default">
-								<table className="analytics-screen-management-table w-full border-collapse text-sm">
-									<colgroup>
-										<col className="analytics-screen-col-name" />
-										<col className="analytics-screen-col-description" />
-										<col className="analytics-screen-col-creator" />
-										<col className="analytics-screen-col-classification" />
-										<col className="analytics-screen-col-status" />
-										<col className="analytics-screen-col-updated" />
-										<col className="analytics-screen-col-actions" />
-									</colgroup>
-									<thead>
-										<tr className="bg-surface-muted text-text-secondary text-sm">
-											{/* 大屏管理表头：居中 + 加粗（font-bold 覆盖 SortableHeader 默认 font-semibold） */}
-											<SortableHeader sortKey="name" sortState={sortState} onSort={requestSort} className="font-bold">
-												名称
-											</SortableHeader>
-											<SortableHeader sortKey="description" sortState={sortState} onSort={requestSort} className="font-bold">
-												描述
-											</SortableHeader>
-											<th className="px-4 py-3 text-center font-bold whitespace-nowrap">创建者</th>
-											{/* 展示按所有数据源派生出的有效密级。 */}
-											<SortableHeader sortKey="classification" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">
-												有效密级
-											</SortableHeader>
-											<SortableHeader sortKey="published" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">
-												状态
-											</SortableHeader>
-											<SortableHeader sortKey="updatedAt" sortState={sortState} onSort={requestSort} className="font-bold whitespace-nowrap">
-												更新时间
-											</SortableHeader>
-											<th className="analytics-screen-action-header bg-surface-muted text-center font-bold px-4 py-3 whitespace-nowrap border-l border-border-default">操作</th>
-										</tr>
-									</thead>
-									<tbody>
-										{pagedScreens.map((screen) => {
-											const rowPermissions = resolveScreenRowPermissions(screen);
-											const showMoreMenu = rowPermissions.canEdit || rowPermissions.canDelete;
-											return (
-												<tr
-													key={screen.id}
-													className="group border-t border-border-default bg-surface-card hover:bg-brand/5 transition-colors duration-150"
-													data-testid={`analytics-screen-row-${screen.id}`}
-												>
-													<td className="min-w-0 px-4 py-3 align-top font-medium text-text-primary">
-														<a
-															className="line-clamp-2 whitespace-normal break-words leading-5 text-brand hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 rounded-sm"
-															data-testid={`analytics-screen-name-link-${screen.id}`}
-															href={resolveRouteForOpen(`/bi/screens/${screen.id}/preview`)}
-															rel="noopener noreferrer"
-															target="_blank"
-															title={screen.name || "未命名大屏"}
-														>
-															{screen.name || "未命名大屏"}
-														</a>
-													</td>
-												<td className="min-w-0 px-4 py-3 align-top text-text-secondary">
-													<span className="line-clamp-2 whitespace-normal break-words leading-5" title={screen.description || "无描述"}>
-														{screen.description || "无描述"}
-													</span>
-												</td>
-												<td className="px-4 py-3 align-top text-text-primary whitespace-nowrap">
-													<span className="block truncate" title={screen.creatorName || undefined}>
-														{screen.creatorName || (screen.creatorId == null ? "—" : `用户 ${screen.creatorId}`)}
-													</span>
-												</td>
-												<td className="px-4 py-3 align-top whitespace-nowrap">
-														<div
-															title={[
-																"有效密级取所有展示数据的最高密级",
-																screen.manualClassificationFloor
-																	? `人工下限：${screen.manualClassificationFloor}`
-																	: "未设置人工下限",
-																screen.classificationSnapshotVersion != null
-																	? `快照版本：${screen.classificationSnapshotVersion}`
-																	: "密级快照待生成",
-															].join("；")}
-														>
-															<ClassificationTag value={screen.classification ?? null} style={{ fontSize: "inherit" }} />
-														</div>
-													</td>
-													<td className="px-4 py-3 align-top whitespace-nowrap">
-														<span className="font-semibold text-text-primary">
-															{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : "未发布"}
-														</span>
-													</td>
-													<td className="px-4 py-3 align-top text-text-secondary whitespace-nowrap">
-														{formatDate(screen.updatedAt)}
-													</td>
-													<td className="analytics-screen-action-cell bg-surface-card px-3 py-3 align-middle border-l border-border-default transition-colors duration-150">
-														<div className="flex flex-wrap items-center justify-end gap-1.5">
-															<button
-																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
-																data-testid={`analytics-screen-preview-${screen.id}`}
-																onClick={() => handlePreview(screen.id)}
-															>
-																预览
-															</button>
-															{rowPermissions.canEdit ? (
-																<button
-																	className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
-																	data-testid={`analytics-screen-edit-button-${screen.id}`}
-																	onClick={() => handleEdit(screen.id)}
-																>
-																	编辑
-																</button>
-															) : null}
-															{rowPermissions.canManage ? (
-																<button
-																	className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
-																	onClick={() => {
-																		if (!screen.publishedVersionNo) {
-																			message.warning("只有已经发布的大屏才能进行权限设置");
-																			return;
-																		}
-																		setAclScreenId(screen.id);
-																	}}
-																>
-																	权限
-																</button>
-															) : null}
-															<button
-																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
-																onClick={() => void handleCopyScreenLink(screen.id)}
-															>
-																复制
-															</button>
-															<button
-																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card text-sm font-medium text-text-secondary opacity-60 cursor-not-allowed"
-																disabled
-																title="请进入编辑器完成发布门禁"
-															>
-																发布
-															</button>
-															{showMoreMenu ? (
-																<div className="screen-card-menu relative">
-																	<button
-																		className={`px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-sm font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary ${activeCardMenuId === screen.id ? "border-brand bg-brand/10" : ""}`}
-																		onClick={(event) => {
-																			if (activeCardMenuId === screen.id) {
-																				setActiveCardMenuId(null);
-																				setCardMenuAnchor(null);
-																				return;
-																			}
-																			const rect = event.currentTarget.getBoundingClientRect();
-																			const right = Math.max(8, window.innerWidth - rect.right);
-																			// 下方空间不足时向上展开,避免菜单冲出视口底部。
-																			const spaceBelow = window.innerHeight - rect.bottom;
-																			setCardMenuAnchor(
-																				spaceBelow < 220
-																					? { right, bottom: window.innerHeight - rect.top + 4 }
-																					: { right, top: rect.bottom + 4 },
-																			);
-																			setActiveCardMenuId(screen.id);
-																		}}
-																	>
-																		更多
-																	</button>
-																	{activeCardMenuId === screen.id && cardMenuAnchor
-																		? createPortal(
-																			<div
-																				className="screen-card-menu fixed min-w-[160px] z-[1100] bg-surface-card text-text-primary text-sm border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5"
-																				style={{
-																					right: cardMenuAnchor.right,
-																					...(cardMenuAnchor.top !== undefined ? { top: cardMenuAnchor.top } : {}),
-																					...(cardMenuAnchor.bottom !== undefined ? { bottom: cardMenuAnchor.bottom } : {}),
-																				}}
-																			>
-																			{rowPermissions.canEdit ? (
-																				<>
-																					<button
-																						type="button"
-																						className={SCREEN_CARD_MENU_ITEM_CLASS}
-																						onClick={() => openDomainEditor(screen)}
-																					>
-																						修改所属域
-																					</button>
-																					<button
-																						type="button"
-																						className={SCREEN_CARD_MENU_ITEM_CLASS}
-																						data-testid={`analytics-screen-export-${screen.id}`}
-																						onClick={() => {
-																							setActiveCardMenuId(null);
-																							void handleExportScreenPackage(screen);
-																						}}
-																						disabled={exportingId === screen.id}
-																						title="导出当前大屏为 zip 大屏包（含图片资源）"
-																					>
-																						{exportingId === screen.id ? "导出中..." : "导出大屏"}
-																					</button>
-																					<button
-																						type="button"
-																						className={SCREEN_CARD_MENU_ITEM_CLASS}
-																						onClick={() => {
-																							setActiveCardMenuId(null);
-																							void handleSaveAsTemplate(screen.id, screen.name);
-																						}}
-																						disabled={savingTemplateId === screen.id}
-																					>
-																						{savingTemplateId === screen.id ? "保存中..." : "保存为模板"}
-																					</button>
-																				</>
-																			) : null}
-																			{rowPermissions.canDelete ? (
-																				<button
-																					type="button"
-																					className={SCREEN_CARD_MENU_DANGER_ITEM_CLASS}
-																					onClick={() => {
-																						setActiveCardMenuId(null);
-																						void handleDelete(screen.id);
-																					}}
-																				>
-																					删除
-																				</button>
-																			) : null}
-																		</div>,
-																		document.body,
-																		)
-																		: null}
-																</div>
-															) : null}
-														</div>
-													</td>
-												</tr>
-											);
-										})}
-									</tbody>
-								</table>
-							</div>
-						)}
-						{totalCount > 0 ? (
-							<div className="mt-4 flex justify-end" data-testid="analytics-screen-pagination">
-								<Pagination
-									current={safePage}
-									pageSize={pageSize}
-									total={totalCount}
-									onChange={(p, ps) => {
-										if (ps && ps !== pageSize) {
-											setPageSize(ps);
+							<CompactTable<ScreenListItem>
+								autoSort={false}
+								className="analytics-screen-table"
+								columns={screenColumns}
+								dataSource={visibleScreens}
+								rowKey={(screen) => String(screen.id)}
+								scroll={{ x: "100%" }}
+								tableLayout="fixed"
+								rowClassName={() => "bg-surface-card hover:bg-brand/5 transition-colors duration-150"}
+								pagination={{
+									current: safePage,
+									pageSize,
+									total: totalCount,
+									pageSizeOptions: ["10", "20", "50", "100"],
+									showSizeChanger: true,
+									showTotal: (total, [from, to]) => `${from}-${to} / 共 ${total} 条`,
+									onChange: (nextPage, nextSize) => {
+										if (nextSize !== pageSize) {
+											setPageSize(nextSize);
 											setCurrentPage(1);
 										} else {
-											setCurrentPage(p);
+											setCurrentPage(nextPage);
 										}
-									}}
-									showSizeChanger
-									pageSizeOptions={["10", "20", "50", "100"]}
-									showTotal={(t, [from, to]) => `${from}-${to} / 共 ${t} 条`}
-									size="small"
-								/>
-							</div>
-						) : null}
+									},
+								}}
+							/>
+						)}
 					</div>
 				</div>
 			</div>

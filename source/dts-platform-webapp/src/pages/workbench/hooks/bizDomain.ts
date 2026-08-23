@@ -16,11 +16,17 @@ const SENTINEL_LABELS: Record<string, string> = {
 	[BIZ_DOMAIN_UNCATEGORIZED]: "未分类",
 };
 
-export function humanizeBizDomain(raw: string | null | undefined): string | null {
+export function humanizeBizDomain(
+	raw: string | null | undefined,
+	domainLabels?: Readonly<Record<string, string>>,
+): string | null {
 	if (raw == null) return null;
 	const trimmed = raw.trim();
 	if (trimmed.length === 0) return null;
-	return SENTINEL_LABELS[trimmed] ?? trimmed;
+	const sentinelLabel = SENTINEL_LABELS[trimmed];
+	if (sentinelLabel) return sentinelLabel;
+	if (domainLabels) return domainLabels[trimmed] ?? "未命名业务域";
+	return trimmed;
 }
 
 export function isBizDomainSentinel(raw: string | null | undefined): boolean {

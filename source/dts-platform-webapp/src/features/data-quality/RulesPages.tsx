@@ -11,7 +11,7 @@ import {
 	listQualityRuleVersions,
 	toggleQualityRule,
 	triggerQualityDryRun,
-	triggerQualityRun,
+	triggerQualityWorkflow,
 } from "@/api/platformApi";
 import { actionColumn, CompactTable } from "@/components/table";
 import { formatTime } from "@/utils/textUtils";
@@ -20,9 +20,9 @@ import { qualityPath } from "./qualityRoutes";
 import {
 	displayName,
 	isExecutableQualityRule,
-	qualityRuleNameLabel,
 	type QualityRule,
 	type QualityRun,
+	qualityRuleNameLabel,
 	toList,
 } from "./qualityTypes";
 import { useDefaultLakeDatasets } from "./useDefaultLakeDatasets";
@@ -38,6 +38,9 @@ type RuleVersion = {
 	createdBy?: string;
 	createdDate?: string;
 };
+
+const qualityWorkflowRequestKey = (scope: string) =>
+	`quality-workflow:${scope}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
 
 export function RuleListPage() {
 	const navigate = useNavigate();
@@ -91,12 +94,25 @@ export function RuleListPage() {
 		setActingId(rule.id);
 		try {
 			if (action === "toggle") await toggleQualityRule(rule.id, !rule.enabled);
-			if (action === "run") await triggerQualityRun({ ruleId: rule.id });
+			let workflowId = "";
+			if (action === "run") {
+				const binding = (rule.bindings || []).find((item) => item.datasetId === rule.datasetId) || rule.bindings?.[0];
+				const workflow = (await triggerQualityWorkflow(
+					{ ruleId: rule.id, datasetId: binding?.datasetId || rule.datasetId, bindingId: binding?.id },
+					qualityWorkflowRequestKey(`rule:${rule.id}:manual`),
+				)) as { id?: string; status?: string; message?: string };
+				workflowId = String(workflow.id || "");
+				if (["FAILED", "BLOCKED", "CANCELLED"].includes(String(workflow.status || "").toUpperCase())) {
+					throw new Error(workflow.message || "质量验证未能启动");
+				}
+			}
 			if (action === "dry-run") await triggerQualityDryRun({ ruleId: rule.id, datasetId: rule.datasetId });
 			if (action === "delete") await deleteQualityRule(rule.id);
-			toast.success(action === "run" ? "质量检测已提交" : action === "dry-run" ? "试跑完成" : "操作成功");
+			toast.success(action === "run" ? "质量验证已启动" : action === "dry-run" ? "试跑完成" : "操作成功");
 			if (["toggle", "delete"].includes(action)) await load();
-			if (action === "run") navigate(qualityPath("run-records"));
+			if (action === "run") {
+				navigate(`${qualityPath("run-records")}${workflowId ? `?workflowId=${encodeURIComponent(workflowId)}` : ""}`);
+			}
 		} catch (error) {
 			toast.error(error instanceof Error ? error.message : "操作失败");
 		} finally {

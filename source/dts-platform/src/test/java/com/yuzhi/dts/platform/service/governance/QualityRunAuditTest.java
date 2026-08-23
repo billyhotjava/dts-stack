@@ -15,6 +15,7 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
 import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
+import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.domain.governance.GovRuleVersion;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityMetricRepository;
@@ -177,8 +178,8 @@ class QualityRunAuditTest {
         UUID issueId = UUID.fromString("40000000-0000-0000-0000-000000000051");
         IssueTicketDto issue = new IssueTicketDto();
         issue.setId(issueId);
-        when(issueTicketService.createOrTouchWithDisposition(
-            eq("QUALITY_RUN"), eq(RUN_ID), any(), eq("system"), any()
+        when(issueTicketService.createOrTouchQualityProblem(
+            any(), eq(RUN_ID), any(), eq("system"), any()
         )).thenReturn(new IssueTicketService.CreateOrTouchResult(
             issue,
             IssueTicketService.CreateOrTouchDisposition.CREATED
@@ -230,8 +231,8 @@ class QualityRunAuditTest {
         UUID issueId = UUID.fromString("50000000-0000-0000-0000-000000000051");
         IssueTicketDto issue = new IssueTicketDto();
         issue.setId(issueId);
-        when(issueTicketService.createOrTouchWithDisposition(
-            eq("QUALITY_RUN"), eq(RUN_ID), any(), eq("alice"), any()
+        when(issueTicketService.createOrTouchQualityProblem(
+            any(), eq(RUN_ID), any(), eq("alice"), any()
         )).thenReturn(new IssueTicketService.CreateOrTouchResult(
             issue,
             IssueTicketService.CreateOrTouchDisposition.CREATED
@@ -260,8 +261,8 @@ class QualityRunAuditTest {
                 1
             )
         );
-        when(issueTicketService.createOrTouchWithDisposition(
-            eq("QUALITY_RUN"), eq(RUN_ID), any(), eq("system"), any()
+        when(issueTicketService.createOrTouchQualityProblem(
+            any(), eq(RUN_ID), any(), eq("system"), any()
         )).thenThrow(new IllegalStateException("issue repository unavailable"));
 
         ReflectionTestUtils.invokeMethod(service, "doExecuteRun", RUN_ID, Map.of());
@@ -341,6 +342,12 @@ class QualityRunAuditTest {
         run.setId(RUN_ID);
         run.setRule(rule);
         run.setRuleVersion(version);
+        GovRuleBinding binding = new GovRuleBinding();
+        binding.setId(UUID.fromString("60000000-0000-0000-0000-000000000051"));
+        binding.setDatasetId(UUID.fromString("70000000-0000-0000-0000-000000000051"));
+        binding.setRuleVersion(version);
+        run.setBinding(binding);
+        run.setDatasetId(binding.getDatasetId());
         run.setTriggerType(triggerType);
         run.setTriggerRef(triggerRef);
         run.setStatus("QUEUED");

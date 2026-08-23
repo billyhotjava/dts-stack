@@ -1572,12 +1572,12 @@ public class ScreenResource {
             node.putNull("creatorName");
             return;
         }
+        String creatorName = creator == null ? null : trimToNull(creator.getPlatformUsername());
         String firstName = creator == null ? null : trimToNull(creator.getFirstName());
         String lastName = creator == null ? null : trimToNull(creator.getLastName());
         String fullName = ((firstName == null ? "" : firstName) + " " + (lastName == null ? "" : lastName)).trim();
-        String creatorName = trimToNull(fullName);
-        if (creatorName == null && creator != null) {
-            creatorName = trimToNull(creator.getPlatformUsername());
+        if (creatorName == null) {
+            creatorName = trimToNull(fullName);
         }
         if (creatorName == null && creator != null) {
             creatorName = trimToNull(creator.getEmail());

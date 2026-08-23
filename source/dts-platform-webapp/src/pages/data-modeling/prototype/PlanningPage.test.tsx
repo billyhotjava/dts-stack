@@ -271,6 +271,61 @@ describe("PlanningPage", () => {
 		expect(mocks.loadPlanningProjection).toHaveBeenCalledTimes(2);
 	});
 
+	it("explains a reserved layer code conflict and returns focus to the code field", async () => {
+		mocks.canMaintain = true;
+		mocks.createWarehouseLayer.mockRejectedValue({
+			response: { status: 409, data: { code: "WAREHOUSE_LAYER_CODE_CONFLICT" } },
+		});
+		mocks.normalizeModelingRequestFailure.mockReturnValue({
+			kind: "request",
+			message: "数仓分层创建失败。（错误码 WAREHOUSE_LAYER_CODE_CONFLICT）",
+			code: "WAREHOUSE_LAYER_CODE_CONFLICT",
+		});
+		mocks.loadPlanningProjection.mockResolvedValue({
+			headers: ["分层编码"],
+			rows: [],
+			readOnlyReason: null,
+		});
+
+		await renderPlanning(layerRoute());
+		await act(async () => {
+			(
+				[...container.querySelectorAll("button")].find((button) =>
+					button.textContent?.includes("新建数仓分层"),
+				) as HTMLButtonElement
+			).click();
+		});
+
+		const setReactInputValue = (input: HTMLInputElement, value: string) => {
+			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+			setter?.call(input, value);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		};
+		const codeInput = [...container.querySelectorAll("input")].find(
+			(input) => input.placeholder === "例如：FIN_DETAIL",
+		) as HTMLInputElement;
+		const nameInput = [...container.querySelectorAll("input")].find(
+			(input) => input.placeholder === "例如：财务明细层",
+		) as HTMLInputElement;
+		await act(async () => {
+			setReactInputValue(codeInput, "test1");
+			setReactInputValue(nameInput, "测试分层");
+		});
+		await act(async () => {
+			(
+				[...container.querySelectorAll(".dmx-drawer button")].find((button) =>
+					button.textContent?.includes("新建数仓分层"),
+				) as HTMLButtonElement
+			).click();
+		});
+
+		expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+			"分层编码 TEST1 已存在或曾被使用，请更换一个未使用过的编码",
+		);
+		expect(document.activeElement).toBe(codeInput);
+		expect(mocks.loadPlanningProjection).toHaveBeenCalledTimes(1);
+	});
+
 	it("deletes a custom layer through the row action after confirmation", async () => {
 		mocks.canMaintain = true;
 		mocks.deleteWarehouseLayer.mockResolvedValue({});

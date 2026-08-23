@@ -1,50 +1,77 @@
 import { SearchOutlined } from "@ant-design/icons";
-import { Alert, Button, Card, Descriptions, Input, Progress, Select, Space, Tag } from "antd";
+import { Alert, Button, Card, Descriptions, Input, Progress, Select, Space, Tabs, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { getQualityRun, listFailingRows, listQualityRules, listQualityRuns } from "@/api/platformApi";
-import { CompactTable } from "@/components/table";
+import {
+	cancelQualityWorkflow,
+	getQualityRun,
+	getQualityWorkflow,
+	listFailingRows,
+	listQualityRules,
+	listQualityRuns,
+	listQualityWorkflows,
+	retryQualityWorkflow,
+} from "@/api/platformApi";
+import { actionColumn, CompactTable } from "@/components/table";
 import { qualityLabel } from "@/utils/customerDisplayLabels";
 import { formatTime } from "@/utils/textUtils";
 import { QualityEmpty, QualityMetric, QualityPageHeading, QualityStatus, UnavailableCapability } from "./QualityShared";
+import {
+	hasRetryCapacity,
+	isActiveWorkflow,
+	isRetryableWorkflow,
+	QualityWorkflowEvidenceDrawer,
+	workflowTriggerLabel,
+} from "./QualityWorkflowEvidenceDrawer";
 import { qualityPath } from "./qualityRoutes";
 import {
 	displayName,
 	getQualityRunCounts,
 	type QualityRule,
 	type QualityRun,
+	type QualityWorkflowRun,
 	qualityRuleNameLabel,
 	toList,
 } from "./qualityTypes";
 import { RunIssueDisposition } from "./RunIssueDisposition";
 import { useDefaultLakeDatasets } from "./useDefaultLakeDatasets";
+import { useQualityMaintainerAccess } from "./useQualityAccess";
 
 export function RunListPage() {
 	const navigate = useNavigate();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const canManage = useQualityMaintainerAccess();
 	const { datasets } = useDefaultLakeDatasets();
 	const [runs, setRuns] = useState<QualityRun[]>([]);
+	const [workflows, setWorkflows] = useState<QualityWorkflowRun[]>([]);
 	const [rules, setRules] = useState<QualityRule[]>([]);
+	const [selectedWorkflow, setSelectedWorkflow] = useState<QualityWorkflowRun>();
+	const [workflowLoading, setWorkflowLoading] = useState(false);
+	const [actingId, setActingId] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [status, setStatus] = useState<string>();
 	const [keyword, setKeyword] = useState("");
+	const [view, setView] = useState<"workflow" | "legacy">("workflow");
 
-	const load = useCallback(async () => {
-		setLoading(true);
+	const load = useCallback(async (silent = false) => {
+		if (!silent) setLoading(true);
 		try {
-			const [runResponse, ruleResponse] = await Promise.all([
-				listQualityRuns({ limit: 300, ...(status ? { status } : {}) }),
+			const [workflowResponse, runResponse, ruleResponse] = await Promise.all([
+				listQualityWorkflows({ limit: 200 }),
+				listQualityRuns({ limit: 300 }),
 				listQualityRules(),
 			]);
+			setWorkflows(toList<QualityWorkflowRun>(workflowResponse));
 			setRuns(toList<QualityRun>(runResponse));
 			setRules(toList<QualityRule>(ruleResponse));
 		} catch (error) {
-			toast.error(error instanceof Error ? error.message : "运行记录加载失败");
+			if (!silent) toast.error(error instanceof Error ? error.message : "运行记录加载失败");
 		} finally {
-			setLoading(false);
+			if (!silent) setLoading(false);
 		}
-	}, [status]);
+	}, []);
 
 	useEffect(() => {
 		void load();
@@ -55,17 +82,107 @@ export function RunListPage() {
 		[rules],
 	);
 	const datasetNames = useMemo(() => new Map(datasets.map((item) => [item.id, item.name])), [datasets]);
-	const filtered = useMemo(() => {
+	const filteredRuns = useMemo(() => {
 		const query = keyword.trim().toLowerCase();
-		if (!query) return runs;
-		return runs.filter((run) =>
-			[run.id, ruleNames.get(String(run.ruleId)), datasetNames.get(String(run.datasetId))].some((value) =>
-				String(value || "")
-					.toLowerCase()
-					.includes(query),
-			),
-		);
-	}, [datasetNames, keyword, ruleNames, runs]);
+		return runs
+			.filter((run) => !run.jobId)
+			.filter((run) => !status || String(run.status || "").toUpperCase() === status)
+			.filter(
+				(run) =>
+					!query ||
+					[run.id, ruleNames.get(String(run.ruleId)), datasetNames.get(String(run.datasetId))].some((value) =>
+						String(value || "")
+							.toLowerCase()
+							.includes(query),
+					),
+			);
+	}, [datasetNames, keyword, ruleNames, runs, status]);
+	const filteredWorkflows = useMemo(() => {
+		const query = keyword.trim().toLowerCase();
+		return workflows
+			.filter((workflow) => !status || String(workflow.status || "").toUpperCase() === status)
+			.filter(
+				(workflow) =>
+					!query ||
+					[datasetNames.get(String(workflow.datasetId)), workflowTriggerLabel(workflow.triggerType)].some((value) =>
+						String(value || "")
+							.toLowerCase()
+							.includes(query),
+					),
+			);
+	}, [datasetNames, keyword, status, workflows]);
+
+	const openWorkflow = useCallback(async (workflowId: string, silent = false) => {
+		if (!silent) setWorkflowLoading(true);
+		try {
+			setSelectedWorkflow((await getQualityWorkflow(workflowId)) as QualityWorkflowRun);
+		} catch (error) {
+			if (!silent) toast.error(error instanceof Error ? error.message : "验证详情加载失败");
+		} finally {
+			if (!silent) setWorkflowLoading(false);
+		}
+	}, []);
+
+	useEffect(() => {
+		const workflowId = searchParams.get("workflowId");
+		if (workflowId) void openWorkflow(workflowId);
+	}, [openWorkflow, searchParams]);
+
+	const hasActiveWorkflow = workflows.some((workflow) => isActiveWorkflow(workflow.status));
+	useEffect(() => {
+		if (!hasActiveWorkflow && !isActiveWorkflow(selectedWorkflow?.status)) return undefined;
+		const timer = window.setInterval(() => {
+			void load(true);
+			if (selectedWorkflow?.id) void openWorkflow(selectedWorkflow.id, true);
+		}, 5_000);
+		return () => window.clearInterval(timer);
+	}, [hasActiveWorkflow, load, openWorkflow, selectedWorkflow?.id, selectedWorkflow?.status]);
+
+	const selectWorkflow = (workflowId: string) => {
+		const next = new URLSearchParams(searchParams);
+		next.set("workflowId", workflowId);
+		setSearchParams(next);
+	};
+
+	const closeWorkflow = () => {
+		setSelectedWorkflow(undefined);
+		const next = new URLSearchParams(searchParams);
+		next.delete("workflowId");
+		setSearchParams(next, { replace: true });
+	};
+
+	const retryWorkflow = async (workflow: QualityWorkflowRun) => {
+		if (!canManage || !isRetryableWorkflow(workflow.status) || !hasRetryCapacity(workflow)) return;
+		setActingId(workflow.id);
+		try {
+			const retried = (await retryQualityWorkflow(
+				workflow.id,
+				`quality-workflow:retry:${workflow.id}`,
+			)) as QualityWorkflowRun;
+			toast.success("重新验证已启动");
+			await load();
+			setSelectedWorkflow(retried);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : "重新验证启动失败");
+		} finally {
+			setActingId("");
+		}
+	};
+
+	const cancelWorkflow = async (workflow: QualityWorkflowRun) => {
+		if (!canManage || !isActiveWorkflow(workflow.status)) return;
+		setActingId(workflow.id);
+		try {
+			const cancelled = (await cancelQualityWorkflow(workflow.id)) as QualityWorkflowRun;
+			toast.success("本次质量验证已取消，已生成的规则证据继续保留");
+			await load(true);
+			setSelectedWorkflow(cancelled);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : "取消质量验证失败");
+		} finally {
+			setActingId("");
+		}
+	};
 
 	const columns: ColumnsType<QualityRun> = [
 		{
@@ -104,12 +221,53 @@ export function RunListPage() {
 		},
 		{ title: "失败行数", dataIndex: "failingRowCount", width: 110, render: (value) => value ?? "-" },
 	];
+	const workflowColumns: ColumnsType<QualityWorkflowRun> = [
+		{ title: "触发方式", dataIndex: "triggerType", width: 150, render: workflowTriggerLabel },
+		{ title: "状态", dataIndex: "status", width: 110, render: (value) => <QualityStatus status={value} /> },
+		{
+			title: "数据资产",
+			dataIndex: "datasetId",
+			minWidth: 180,
+			ellipsis: true,
+			render: (value) => datasetNames.get(String(value)) || "当前数据资产",
+		},
+		{
+			title: "规则进度",
+			width: 120,
+			render: (_, row) => `${row.completedRunCount || 0}/${row.expectedRunCount || 0}`,
+		},
+		{ title: "开始时间", dataIndex: "startedAt", width: 180, render: formatTime },
+		{ title: "完成时间", dataIndex: "finishedAt", width: 180, render: formatTime },
+		actionColumn<QualityWorkflowRun>(
+			(row) => [
+				{ key: "view", label: "查看", onClick: () => selectWorkflow(row.id) },
+				{
+					key: "cancel",
+					label: "取消",
+					danger: true,
+					hidden: !isActiveWorkflow(row.status),
+					disabled: !canManage,
+					confirm: "确认取消本次质量验证？已生成的规则记录会保留。",
+					loading: actingId === row.id,
+					onClick: () => void cancelWorkflow(row),
+				},
+				{
+					key: "retry",
+					label: "重新验证",
+					disabled: !canManage || !isRetryableWorkflow(row.status) || !hasRetryCapacity(row),
+					loading: actingId === row.id,
+					onClick: () => void retryWorkflow(row),
+				},
+			],
+			{ width: 220, fixed: false },
+		),
+	];
 
 	return (
 		<div className="dq-page">
 			<QualityPageHeading
 				title="运行记录"
-				description="检索手动、调度与试跑执行，进入运行详情核对指标和失败样本。"
+				description="先查看一次完整验证，再进入规则明细核对指标、失败样本和恢复记录。"
 				actions={
 					<Button loading={loading} onClick={() => void load()}>
 						刷新
@@ -132,7 +290,7 @@ export function RunListPage() {
 						value={status}
 						onChange={setStatus}
 						style={{ width: 160 }}
-						options={["QUEUED", "RUNNING", "PASSED", "SUCCESS", "SUCCEEDED", "FAILED", "ERROR", "SKIPPED"].map(
+						options={["QUEUED", "RUNNING", "PASSED", "SUCCEEDED", "FAILED", "BLOCKED", "CANCELLED", "SKIPPED"].map(
 							(value) => ({
 								value,
 								label: displayName(value),
@@ -141,12 +299,51 @@ export function RunListPage() {
 					/>
 				</Space>
 			</Card>
-			<CompactTable
-				rowKey="id"
-				loading={loading}
-				columns={columns}
-				dataSource={filtered}
-				pagination={{ pageSize: 10 }}
+			<Tabs
+				activeKey={view}
+				onChange={(key) => {
+					setView(key as "workflow" | "legacy");
+					setStatus(undefined);
+				}}
+				items={[
+					{
+						key: "workflow",
+						label: `验证工作流（${workflows.length}）`,
+						children: (
+							<CompactTable
+								rowKey="id"
+								loading={loading}
+								columns={workflowColumns}
+								dataSource={filteredWorkflows}
+								pagination={{ pageSize: 10 }}
+							/>
+						),
+					},
+					{
+						key: "legacy",
+						label: `历史规则运行（${runs.filter((run) => !run.jobId).length}）`,
+						children: (
+							<CompactTable
+								rowKey="id"
+								loading={loading}
+								columns={columns}
+								dataSource={filteredRuns}
+								pagination={{ pageSize: 10 }}
+							/>
+						),
+					},
+				]}
+			/>
+			<QualityWorkflowEvidenceDrawer
+				workflow={selectedWorkflow}
+				loading={workflowLoading}
+				canManage={canManage}
+				retrying={Boolean(selectedWorkflow && actingId === selectedWorkflow.id)}
+				cancelling={Boolean(selectedWorkflow && actingId === selectedWorkflow.id)}
+				ruleNames={ruleNames}
+				onClose={closeWorkflow}
+				onRetry={(workflow) => void retryWorkflow(workflow)}
+				onCancel={(workflow) => void cancelWorkflow(workflow)}
 			/>
 		</div>
 	);
@@ -235,6 +432,16 @@ export function RunDetailPage() {
 					<Button key="back" onClick={() => navigate(qualityPath("run-records"))}>
 						返回运行记录
 					</Button>,
+					run?.jobId ? (
+						<Button
+							key="workflow"
+							onClick={() =>
+								navigate(`${qualityPath("run-records")}?workflowId=${encodeURIComponent(run.jobId || "")}`)
+							}
+						>
+							查看完整验证
+						</Button>
+					) : null,
 					<Button key="reload" loading={loading} onClick={() => void load()}>
 						刷新
 					</Button>,

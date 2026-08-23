@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Select, Space, Tag } from "antd";
-import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { CheckCircle2, RefreshCw, Shield, Workflow } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import workbenchService, { type WorkbenchTodoItem } from "@/api/services/workbenchService";
 import { PlatformSummaryCards } from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
-import workbenchService, { type WorkbenchTodoItem } from "@/api/services/workbenchService";
+import { actionColumn, CompactTable } from "@/components/table";
 import { useRouter } from "@/routes/hooks";
+import { statusLabel } from "@/utils/customerDisplayLabels";
+import { formatTime } from "@/utils/textUtils";
 
 const TYPE_OPTIONS = [
 	{ label: "全部", value: "ALL" },
@@ -15,17 +17,17 @@ const TYPE_OPTIONS = [
 	{ label: "结构漂移", value: "SCHEMA_DRIFT" },
 ];
 
+const TODO_TYPE_LABELS = Object.fromEntries(
+	TYPE_OPTIONS.filter((option) => option.value !== "ALL").map((option) => [option.value, option.label]),
+) as Readonly<Record<string, string>>;
+
 const TODO_COLORS: Record<string, string> = {
 	ACCESS_APPROVAL: "orange",
 	QUALITY: "blue",
 	SCHEMA_DRIFT: "green",
 };
 
-const formatDate = (value?: string) => {
-	if (!value) return "-";
-	const date = new Date(value);
-	return Number.isNaN(date.valueOf()) ? value : date.toLocaleString();
-};
+const todoTypeLabel = (value: unknown): string => TODO_TYPE_LABELS[String(value ?? "")] ?? "其他待办";
 
 export default function Page() {
 	const { push } = useRouter();
@@ -92,7 +94,7 @@ export default function Page() {
 			title: "类型",
 			dataIndex: "type",
 			width: 140,
-			render: (value) => <Tag color={TODO_COLORS[value || ""] || "default"}>{value || "TODO"}</Tag>,
+			render: (value) => <Tag color={TODO_COLORS[value || ""] || "default"}>{todoTypeLabel(value)}</Tag>,
 		},
 		{
 			title: "事项",
@@ -109,7 +111,7 @@ export default function Page() {
 			title: "状态",
 			dataIndex: "status",
 			width: 140,
-			render: (value) => value || "-",
+			render: (value) => statusLabel(value),
 		},
 		{
 			title: "时间",
@@ -120,7 +122,7 @@ export default function Page() {
 				return ta - tb;
 			},
 			width: 200,
-			render: (value) => formatDate(value),
+			render: (value) => formatTime(value),
 		},
 		actionColumn<WorkbenchTodoItem>(
 			(record) => [

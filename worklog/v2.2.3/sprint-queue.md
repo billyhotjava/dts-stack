@@ -2149,3 +2149,24 @@
 **关键决策**: 审批模型未定 → 一切审批流接线移出本 Sprint，审批决策统一收敛到既有 `CatalogLifecycleRequestService` request/decision seam，禁建第二套审批表；敏感识别只产出候选，密级判定权仍归密级控制面（只升不降）；BMB 台账扩展既有安全基线服务而非新建模块；告警栈用 Prometheus+Alertmanager 复用现有 actuator 端点，平台内不重画监控页。
 **已知风险**: ①BMB17.1/17.2-2024 条款目录非公开，F2/T01 须由甲方或测评机构提供，拿到前保持 DRAFT，禁止编造条款号；②口令策略具体数值待甲方确认；③浏览器验收基线长期不稳，G0 不过则 F2/F3/F4 停在 DRAFT；④新增监控三服务约占 1.5～2GB 内存，须记入 nfr-budget。
 **未承接项**: 剩余 6 项 P0 + 25 项 P1 已按 Feature/Task 粒度登记在 `assets/protocol-gap-register.md`（波次 2～4 + 3 项 `BLOCKED-审批模型未定`）。
+
+## Sprint-102: 数据质量自动化工作流闭环 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-102-202608-data-quality-workflow-automation`
+**状态**: IN_PROGRESS（F0～F5 DONE；F6 READY，等待集中 E2E 与运维交接）
+**目标**: 将运行策略、人工验证、模型构建、入湖校验、规则执行、问题处置和发布门禁收敛到同一条可追踪、可重试、可审计的质量工作流。
+**依赖**: 复用 `QualityRunService`、`gov_quality_task`、`gov_quality_run.job_id`、现有治理权限 guard、问题单与 Sprint-93 模型质量证据；不新增第二套规则执行器、调度定义或顶级菜单。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与契约冻结 | P0 | 1 | DONE |
+| F1-质量工作流账本与状态机 | P0 | 4 | DONE |
+| F2-运行策略与触发入口收敛 | P0 | 4 | DONE |
+| F3-建模与数据接入事件 | P0 | 4 | DONE |
+| F4-重试问题与恢复闭环 | P0 | 4 | DONE |
+| F5-质量工作流前端 | P0 | 4 | DONE |
+| F6-集中验收与运维交接 | P0 | 1 | READY |
+
+**统计**: DONE=21，READY=1，IN_PROGRESS=0，DRAFT=0（共 22 Task）。
+**关键决策**: `QualityRunService` 是唯一执行 owner；工作流新增聚合账本并复用 `job_id`；运行策略演进既有 task；失败不自动回滚已发布模型；问题按稳定根因身份去重；所有 Feature 完成后集中执行一次 E2E。
+**编号说明**: Sprint-100/101 已由 Sprint-99 路线图预留给生命周期/文件合规与高可用/性能，本任务使用 Sprint-102。

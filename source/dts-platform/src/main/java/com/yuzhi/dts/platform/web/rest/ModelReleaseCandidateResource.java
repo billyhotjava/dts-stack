@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -388,19 +389,46 @@ public class ModelReleaseCandidateResource {
         @PathVariable UUID candidateId,
         @RequestHeader(value = "If-Match", required = false) String ifMatch,
         @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
         @RequestBody(required = false) ReasonRequest request
     ) {
-        return write(
-            service.runQuality(
+        String actor = actorId();
+        String key = requiredIdempotencyKey(idempotencyKey);
+        CommandResult command = service.runQuality(
+            serverTenantId,
+            actor,
+            planId,
+            candidateId,
+            expectedVersion(candidateId, ifMatch),
+            key,
+            requiredRequest(request, "quality request").reason()
+        );
+        try {
+            governanceQualityReruns.rerun(
                 serverTenantId,
-                actorId(),
+                actor,
                 planId,
                 candidateId,
-                expectedVersion(candidateId, ifMatch),
-                requiredIdempotencyKey(idempotencyKey),
-                requiredRequest(request, "quality request").reason()
-            )
-        );
+                command.candidate().version(),
+                key + ":governance",
+                activeDept
+            );
+        } catch (RuntimeException ex) {
+            throw new ModelReleaseCandidateException(
+                "MODEL_SPEC_GOVERNANCE_QUALITY_START_FAILED",
+                "质量验证工作流启动失败，请修复规则绑定或执行服务后重试",
+                Kind.CONFLICT,
+                Map.of(
+                    "candidateId",
+                    candidateId.toString(),
+                    "errorType",
+                    ex.getClass().getSimpleName(),
+                    "retriable",
+                    true
+                )
+            );
+        }
+        return write(command);
     }
 
     @PostMapping("/{candidateId}/governance-quality/runs")

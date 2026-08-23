@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 // jsdom + antd 的整树渲染在并行跑批下会超过 vitest 默认的 5s，
 // 这些用例本身很快，单跑 <1s，放宽文件级超时避免假红。
 vi.setConfig({ testTimeout: 20_000 });
@@ -61,13 +63,20 @@ describe("BizDomainSelect", () => {
 			{ code: "D2", name: "财务" },
 		]);
 		const availability = vi.fn();
+		const domainLabels = vi.fn();
 		const { BizDomainSelect } = await import("./BizDomainSelect");
 		const { container, unmount } = await renderAndFlush(
-			<BizDomainSelect value={null} onChange={() => {}} onAvailabilityChange={availability} />,
+			<BizDomainSelect
+				value={null}
+				onChange={() => {}}
+				onAvailabilityChange={availability}
+				onDomainLabelsChange={domainLabels}
+			/>,
 		);
 		// A select has been rendered; ant-design renders the selector with role=combobox.
 		expect(container.querySelector(".ant-select")).not.toBeNull();
 		expect(availability).toHaveBeenCalledWith(true);
+		expect(domainLabels).toHaveBeenCalledWith({ D1: "科研", D2: "财务" });
 		unmount();
 	});
 

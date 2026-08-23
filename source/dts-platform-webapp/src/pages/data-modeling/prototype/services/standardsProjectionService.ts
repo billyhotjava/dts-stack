@@ -3,14 +3,24 @@ import {
 	createGlossaryTerm,
 	createReferenceCode,
 	createStandard,
+	createWordRoot,
 	listGlossaryTerms,
 	listMetadataStandards,
 	listReferenceCodes,
 	listStandards,
+	listWordRoots,
 	updateGlossaryTerm,
 	updateReferenceCode,
 	updateStandard,
+	updateWordRoot,
 } from "@/api/modelingStandardsApi";
+import { listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
+import type {
+	CanonicalModelSpecView,
+	ModelSpecStandardBinding,
+	ModelSpecView,
+	UpdateModelSpecCommand,
+} from "@/features/modeling/contracts/modelSpecV2Contract";
 
 export type StandardsView = "fields" | "codes" | "roots" | "dictionary" | "mappings";
 
@@ -48,9 +58,28 @@ export type StandardsEditorValues = {
 	version: string;
 };
 
+export type StandardMappingValues = {
+	modelId: string;
+	fieldName: string;
+	standardId: string;
+};
+
+export type StandardMappingOptions = {
+	models: Array<{
+		id: string;
+		name: string;
+		status: string;
+		fields: Array<{ name: string; displayName: string; dataType: string }>;
+	}>;
+	standards: Array<{ id: string; code: string; name: string; version: number }>;
+};
+
 const STATUS_LABELS: Record<string, string> = {
 	ACTIVE: "已生效",
 	DRAFT: "草稿",
+	DESIGNING: "设计中",
+	VALIDATING: "校验中",
+	READY_TO_PUBLISH: "待发布",
 	IN_REVIEW: "评审中",
 	PUBLISHED: "已发布",
 	DEPRECATED: "已弃用",
@@ -117,39 +146,103 @@ const adaptGlossary = (row: Record<string, unknown>): StandardsRow => ({
 	source: row,
 });
 
-const adaptMapping = (row: Record<string, unknown>): StandardsRow => ({
+const adaptWordRoot = (row: Record<string, unknown>): StandardsRow => ({
 	id: text(row.id),
-	code: text(row.fieldNameEn),
-	name: text(row.fieldNameCn),
-	dataType: text(row.dataType, "—"),
-	definition: text(row.codeSet, "未绑定码表"),
+	code: text(row.code),
+	name: text(row.nameCn),
+	dataType: "—",
+	definition: text(row.nameEn, "—"),
 	domain: text(row.domain, "—"),
-	scope: "模型字段引用",
-	version: row.version == null ? "—" : `v${row.version}`,
-	state: "有效",
+	scope: text(row.abbreviation, "—"),
+	version: text(row.version, "—"),
+	state: status(row.status),
 	valueCount: "—",
 	source: row,
 });
 
+const isCanonicalModel = (model: ModelSpecView): model is CanonicalModelSpecView =>
+	model.contractVersion === 2 && model.compatibilityMode === "CANONICAL";
+
+const positiveVersion = (value: unknown) => {
+	const version = Number(value);
+	return Number.isInteger(version) && version > 0 ? version : null;
+};
+
+const loadMappingOwners = async () => {
+	const [modelPayload, standardPayload] = await Promise.all([
+		listModelSpecs(),
+		listMetadataStandards({ page: 0, size: 500 }),
+	]);
+	return {
+		models: modelPayload.filter(isCanonicalModel),
+		standards: content(standardPayload),
+	};
+};
+
+const standardLabel = (standard?: Record<string, unknown>, fallback = "未解析标准") => {
+	if (!standard) return fallback;
+	const code = text(standard.fieldNameEn);
+	const name = text(standard.fieldNameCn, code);
+	return code && name !== code ? `${name}（${code}）` : name || fallback;
+};
+
+const mappingRows = (
+	models: CanonicalModelSpecView[],
+	standards: Record<string, unknown>[],
+	keyword?: string,
+): StandardsRow[] => {
+	const standardsById = new Map(standards.map((standard) => [text(standard.id), standard]));
+	const rows = models.flatMap((model) => {
+		const fieldsByName = new Map(model.fields.map((field) => [field.name, field]));
+		return model.standardBindings.map((binding) => {
+			const field = fieldsByName.get(binding.fieldName);
+			const standardId = text(binding.standardElementId);
+			const standard = standardId ? standardsById.get(standardId) : undefined;
+			const referenceLabel = binding.referenceCode ? `码表 ${binding.referenceCode}` : "未绑定数据元";
+			const version = binding.standardElementVersion || binding.referenceCodeVersion;
+			return {
+				id: `${model.id}:${binding.fieldName}`,
+				code: binding.fieldName,
+				name: text(field?.displayName, binding.fieldName),
+				dataType: text(field?.dataType, "—"),
+				definition: standardLabel(standard, referenceLabel),
+				domain: model.name,
+				scope: model.id,
+				version: version ? `v${version}` : "—",
+				state: status(model.status),
+				valueCount: "—",
+				source: {
+					modelId: model.id,
+					fieldName: binding.fieldName,
+					standardId,
+				},
+			};
+		});
+	});
+	const normalized = text(keyword).toLowerCase();
+	if (!normalized) return rows;
+	return rows.filter((row) =>
+		[row.code, row.name, row.definition, row.domain].some((value) => value.toLowerCase().includes(normalized)),
+	);
+};
+
 export function standardsCapability(view: StandardsView): StandardsCapability {
 	if (view === "roots") {
 		return {
-			list: false,
-			create: false,
-			edit: false,
+			list: true,
+			create: true,
+			edit: true,
 			archive: false,
 			importPackage: true,
-			disabledReason: "当前服务端没有独立词根契约，不能将业务术语冒充词根。",
 		};
 	}
 	if (view === "mappings") {
 		return {
 			list: true,
-			create: false,
-			edit: false,
+			create: true,
+			edit: true,
 			archive: false,
 			importPackage: true,
-			disabledReason: "映射由模型字段保存稳定标准 ID 和版本，本页只读展示引用证据。",
 		};
 	}
 	if (view === "dictionary") {
@@ -174,25 +267,115 @@ export function standardsCapability(view: StandardsView): StandardsCapability {
 export async function loadStandardsRows(view: StandardsView, keyword: string): Promise<StandardsRow[]> {
 	if (!standardsCapability(view).list) return [];
 	const normalized = keyword.trim() || undefined;
+	if (view === "mappings") {
+		const owners = await loadMappingOwners();
+		return mappingRows(owners.models, owners.standards, normalized);
+	}
 	const payload =
 		view === "fields"
 			? await listStandards({ page: 0, size: 200, keyword: normalized })
 			: view === "codes"
 				? await listReferenceCodes({ page: 0, size: 200, keyword: normalized })
-				: view === "dictionary"
-					? await listGlossaryTerms({ keyword: normalized })
-					: await listMetadataStandards({ page: 0, size: 200, keyword: normalized });
+				: view === "roots"
+					? await listWordRoots({ keyword: normalized })
+					: await listGlossaryTerms({ keyword: normalized });
 	const mapper =
-		view === "fields"
-			? adaptField
-			: view === "codes"
-				? adaptCode
-				: view === "dictionary"
-					? adaptGlossary
-					: adaptMapping;
+		view === "fields" ? adaptField : view === "codes" ? adaptCode : view === "roots" ? adaptWordRoot : adaptGlossary;
 	return content(payload)
 		.map(mapper)
 		.filter((row) => Boolean(row.id || row.code || row.name));
+}
+
+export async function loadStandardMappingOptions(): Promise<StandardMappingOptions> {
+	const owners = await loadMappingOwners();
+	return {
+		models: owners.models
+			.filter((model) => model.status === "DRAFT")
+			.map((model) => ({
+				id: model.id,
+				name: model.name,
+				status: status(model.status),
+				fields: model.fields.map((field) => ({
+					name: field.name,
+					displayName: text(field.displayName, field.name),
+					dataType: field.dataType,
+				})),
+			})),
+		standards: owners.standards.flatMap((standard) => {
+			const version = positiveVersion(standard.version);
+			if (!text(standard.id) || !text(standard.fieldNameEn) || version == null) return [];
+			return [
+				{
+					id: text(standard.id),
+					code: text(standard.fieldNameEn),
+					name: text(standard.fieldNameCn, text(standard.fieldNameEn)),
+					version,
+				},
+			];
+		}),
+	};
+}
+
+const modelUpdateCommand = (
+	model: CanonicalModelSpecView,
+	standardBindings: ModelSpecStandardBinding[],
+): UpdateModelSpecCommand => ({
+	planId: model.planId,
+	domainId: model.domainId,
+	modelType: model.modelType,
+	layer: model.layer,
+	warehouseLayerCode: model.warehouseLayerCode,
+	name: model.name,
+	description: model.description,
+	implementationMode: model.implementationMode,
+	materialization: model.materialization,
+	businessActivityRef: model.businessActivityRef,
+	businessProcessId: model.businessProcessId,
+	consumptionScenario: model.consumptionScenario,
+	grain: model.grain,
+	factShape: model.factShape,
+	timeSemantics: model.timeSemantics,
+	generationStrategy: model.generationStrategy,
+	dimensionProfile: model.dimensionProfile,
+	dataMartId: model.dataMartId,
+	subjectDomainId: model.subjectDomainId,
+	variantCode: model.variantCode,
+	implementationPolicy: model.implementationPolicy,
+	fields: model.fields,
+	sourceRefs: model.sourceRefs,
+	dependsOn: model.dependsOn,
+	dimensionRefs: model.dimensionRefs,
+	metricRefs: model.metricRefs,
+	standardBindings,
+});
+
+export async function saveStandardMapping(values: StandardMappingValues) {
+	const modelId = values.modelId.trim();
+	const fieldName = values.fieldName.trim();
+	const standardId = values.standardId.trim();
+	if (!modelId || !fieldName || !standardId) throw new Error("请选择模型、模型字段和数据元标准");
+
+	const owners = await loadMappingOwners();
+	const model = owners.models.find((candidate) => candidate.id === modelId && candidate.status === "DRAFT");
+	if (!model) throw new Error("所选模型不存在或不是可编辑草稿");
+	if (!model.fields.some((field) => field.name === fieldName)) throw new Error("所选字段不属于当前模型");
+	const standard = owners.standards.find((candidate) => text(candidate.id) === standardId);
+	if (!standard) throw new Error("所选数据元标准不存在");
+	const standardVersion = positiveVersion(standard.version);
+	if (standardVersion == null) throw new Error("所选数据元标准缺少有效版本，不能建立映射");
+
+	const existing = model.standardBindings.find((binding) => binding.fieldName === fieldName);
+	const nextBinding: ModelSpecStandardBinding = {
+		...existing,
+		fieldName,
+		standardElementId: standardId,
+		standardElementVersion: standardVersion,
+	};
+	const standardBindings = [
+		...model.standardBindings.filter((binding) => binding.fieldName !== fieldName),
+		nextBinding,
+	];
+	return updateModelSpec(model, modelUpdateCommand(model, standardBindings));
 }
 
 const standardPayload = (values: StandardsEditorValues, current?: Record<string, unknown>) => ({
@@ -240,8 +423,20 @@ const glossaryPayload = (values: StandardsEditorValues, current?: Record<string,
 	status: text(current?.status, "DRAFT"),
 });
 
+const wordRootPayload = (values: StandardsEditorValues) => ({
+	code: values.code.trim(),
+	nameCn: values.name.trim(),
+	nameEn: values.definition.trim(),
+	abbreviation: values.scope.trim(),
+	domain: values.domain.trim() || undefined,
+	version: values.version.trim() || "v1",
+});
+
 export async function saveStandardsRow(view: StandardsView, values: StandardsEditorValues, row?: StandardsRow | null) {
 	if (!values.code.trim() || !values.name.trim()) throw new Error("编码和名称不能为空");
+	if (view === "roots" && (!values.definition.trim() || !values.scope.trim())) {
+		throw new Error("英文全称和英文缩写不能为空");
+	}
 	if (view === "fields") {
 		const payload = standardPayload(values, row?.source);
 		return row?.id ? updateStandard(row.id, payload) : createStandard(payload);
@@ -253,6 +448,10 @@ export async function saveStandardsRow(view: StandardsView, values: StandardsEdi
 	if (view === "dictionary") {
 		const payload = glossaryPayload(values, row?.source);
 		return row?.id ? updateGlossaryTerm(row.id, payload) : createGlossaryTerm(payload);
+	}
+	if (view === "roots") {
+		const payload = wordRootPayload(values);
+		return row?.id ? updateWordRoot(row.id, payload) : createWordRoot(payload);
 	}
 	throw new Error(standardsCapability(view).disabledReason || "当前目录不支持编辑");
 }

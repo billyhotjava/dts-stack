@@ -18,6 +18,7 @@ const CONFIGURATION = read("./ConfigurationPages.tsx");
 const TEMPLATES = read("./TemplatePages.tsx");
 const RUN_ISSUES = read("./RunIssueDisposition.tsx");
 const RUNS = read("./RunPages.tsx");
+const WORKFLOW_EVIDENCE = read("./QualityWorkflowEvidenceDrawer.tsx");
 const DATASET_HOOK = read("./useDefaultLakeDatasets.ts");
 const PLATFORM_API = read("../../api/platformApi.ts");
 const OVERVIEW = read("./OverviewPage.tsx");
@@ -164,12 +165,33 @@ test("monitor detail ignores stale task responses and edits only the loaded rout
 	assert.match(MONITORS, /disabled=\{!canManage \|\| !loadedTaskIsCurrent \|\| loading\}/);
 });
 
+test("running strategies use the idempotent workflow API and expose grouped rule evidence", () => {
+	assert.match(PLATFORM_API, /\/governance\/quality\/workflows/);
+	assert.match(PLATFORM_API, /\/governance\/quality\/workflows\/trigger/);
+	assert.match(PLATFORM_API, /\/governance\/quality\/workflows\/\$\{id\}\/cancel/);
+	assert.match(PLATFORM_API, /"Idempotency-Key": idempotencyKey/);
+	assert.match(RULES, /triggerQualityWorkflow/);
+	assert.match(RULES, /workflowId=/);
+	assert.match(MONITORS, /title="运行策略"/);
+	assert.match(MONITORS, /listQualityWorkflows\(\{ taskId: requestedTaskId, limit: 50 \}\)/);
+	assert.match(MONITORS, /getQualityWorkflow\(workflowId\)/);
+	assert.match(MONITORS, /retryQualityWorkflow/);
+	assert.match(MONITORS, /`quality-workflow:retry:\$\{workflow\.id\}`/);
+	assert.match(MONITORS, /cancelQualityWorkflow/);
+	assert.match(MONITORS, /window\.setInterval/);
+	assert.match(RUNS, /cancelQualityWorkflow/);
+	assert.match(RUNS, /`quality-workflow:retry:\$\{workflow\.id\}`/);
+	assert.match(RUNS, /window\.setInterval/);
+	assert.match(WORKFLOW_EVIDENCE, /dataSource=\{workflow\.ruleRuns \|\| \[\]\}/);
+	assert.match(WORKFLOW_EVIDENCE, /ruleNames\?\.get/);
+	assert.match(RUNS, /验证工作流/);
+	assert.match(RUNS, /历史规则运行/);
+	assert.match(RUNS, /workflowId=/);
+});
+
 test("template detail isolates route loads, saves, and previews to the loaded template identity", () => {
 	assert.match(TEMPLATES, /const requestedTemplateId = templateId/);
-	assert.match(
-		TEMPLATES,
-		/sequence !== loadSequence\.current \|\| activeTemplateId\.current !== requestedTemplateId/,
-	);
+	assert.match(TEMPLATES, /sequence !== loadSequence\.current \|\| activeTemplateId\.current !== requestedTemplateId/);
 	assert.match(TEMPLATES, /const operationTemplateId = templateId/);
 	assert.match(TEMPLATES, /await updateQualityTemplate\(operationTemplateId, templatePayload\(values\)\)/);
 	assert.match(TEMPLATES, /await previewTemplateSQL\(operationTemplateId/);

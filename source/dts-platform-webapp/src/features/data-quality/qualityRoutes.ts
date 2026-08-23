@@ -71,7 +71,7 @@ export const QUALITY_ROUTE_SPECS: QualityRouteSpec[] = [
 	},
 	{
 		key: "monitor",
-		label: "质量监控",
+		label: "运行策略",
 		group: "质量运维",
 		level: "primary",
 		menuOwner: "/governance/rules",
@@ -135,7 +135,7 @@ export const QUALITY_ROUTE_SPECS: QualityRouteSpec[] = [
 	},
 	{
 		key: "monitor-detail",
-		label: "质量监控详情",
+		label: "运行策略详情",
 		group: "质量运维",
 		level: "secondary",
 		menuOwner: "/governance/rules",
@@ -143,7 +143,7 @@ export const QUALITY_ROUTE_SPECS: QualityRouteSpec[] = [
 	},
 	{
 		key: "monitor-editor",
-		label: "配置质量监控",
+		label: "配置运行策略",
 		group: "质量运维",
 		level: "secondary",
 		menuOwner: "/governance/rules",

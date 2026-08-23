@@ -52,19 +52,24 @@ export type QualityTask = {
 	ruleId?: string;
 	ownerDept?: string;
 	intervalMinutes?: number;
+	maxRetryAttempts?: number;
+	retryBackoffSeconds?: number;
 	enabled?: boolean;
 	lastTriggeredAt?: string;
 };
 
 export type QualityRun = {
 	id: string;
+	jobId?: string;
 	runId?: string;
 	time?: string;
 	passRate?: number | null;
 	ruleId?: string;
 	ruleVersionId?: string;
+	bindingId?: string;
 	datasetId?: string;
 	triggerType?: string;
+	triggerRef?: string;
 	status?: string;
 	startedAt?: string;
 	finishedAt?: string;
@@ -77,6 +82,33 @@ export type QualityRun = {
 	failingRows?: number;
 	metrics?: Array<Record<string, unknown>>;
 	failingRowsSample?: Array<Record<string, unknown>>;
+};
+
+export type QualityWorkflowRun = {
+	id: string;
+	taskId?: string;
+	datasetId: string;
+	ruleId?: string;
+	retryOfId?: string;
+	attemptNo?: number;
+	maxRetryAttempts?: number;
+	retryBackoffSeconds?: number;
+	triggerType?: string;
+	status?: string;
+	expectedRunCount?: number;
+	completedRunCount?: number;
+	passedCount?: number;
+	failedCount?: number;
+	dispatchFailureCount?: number;
+	scheduledAt?: string;
+	startedAt?: string;
+	finishedAt?: string;
+	errorCategory?: string;
+	message?: string;
+	createdDate?: string;
+	createdBy?: string;
+	contextJson?: string;
+	ruleRuns?: QualityRun[];
 };
 
 export const getQualityRunCounts = (

@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 beforeAll(() => {
 	if (!window.matchMedia) {
@@ -31,7 +32,7 @@ vi.mock("@/api/services/reportsService", () => ({
 
 const windowOpenMock = vi.fn();
 
-import { TopReportsBlock, type TopReportItem } from "./TopReportsBlock";
+import { type TopReportItem, TopReportsBlock } from "./TopReportsBlock";
 
 function render(element: ReactElement): { container: HTMLElement; unmount: () => void } {
 	const container = document.createElement("div");
@@ -135,10 +136,20 @@ describe("TopReportsBlock", () => {
 	});
 
 	it("renders_items_when_non_empty", () => {
-		const { container, unmount } = render(<TopReportsBlock role="INST_LEADER" items={sample} loading={false} />);
+		const { container, unmount } = render(
+			<TopReportsBlock
+				role="INST_LEADER"
+				items={sample}
+				loading={false}
+				domainLabels={{ SALES: "销售域", HR: "人力资源域" }}
+			/>,
+		);
 		expect(container.textContent).toContain("销售月报");
 		expect(container.textContent).toContain("财务季报");
 		expect(container.textContent).toContain("HR 分析");
+		expect(container.textContent).toContain("销售域");
+		expect(container.textContent).toContain("人力资源域");
+		expect(container.textContent).not.toContain("SALES");
 		// Three list items
 		expect(container.querySelectorAll(".ant-list-item").length).toBe(3);
 		unmount();

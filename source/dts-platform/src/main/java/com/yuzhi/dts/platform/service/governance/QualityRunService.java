@@ -140,6 +140,87 @@ public class QualityRunService {
     }
 
     /**
+     * Executes a rule through the quality-workflow command boundary. The workflow identifier is persisted on every
+     * generated rule run so orchestration can aggregate completion without taking ownership of rule execution.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<QualityRunDto> triggerWorkflowAuthorized(
+        QualityRunTriggerRequest request,
+        String actor,
+        String activeDeptHeader,
+        UUID workflowRunId,
+        String triggerRef
+    ) {
+        if (workflowRunId == null) {
+            throw new IllegalArgumentException("缺少质量工作流实例ID");
+        }
+        if (triggerRef == null || triggerRef.isBlank() || triggerRef.length() > 128) {
+            throw new IllegalArgumentException("质量工作流触发标识无效");
+        }
+        return triggerInternal(
+            request,
+            actor,
+            activeDeptHeader,
+            true,
+            false,
+            false,
+            null,
+            triggerRef.trim(),
+            workflowRunId
+        );
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<QualityRunDto> triggerWorkflowScheduled(
+        QualityRunTriggerRequest request,
+        UUID workflowRunId,
+        String triggerRef
+    ) {
+        if (workflowRunId == null) {
+            throw new IllegalArgumentException("缺少质量工作流实例ID");
+        }
+        if (triggerRef == null || triggerRef.isBlank() || triggerRef.length() > 128) {
+            throw new IllegalArgumentException("质量工作流触发标识无效");
+        }
+        return triggerInternal(
+            request,
+            "scheduler",
+            null,
+            false,
+            true,
+            false,
+            null,
+            triggerRef.trim(),
+            workflowRunId
+        );
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<QualityRunDto> triggerWorkflowTrustedIngestion(
+        QualityRunTriggerRequest request,
+        UUID workflowRunId,
+        String triggerRef
+    ) {
+        if (workflowRunId == null) {
+            throw new IllegalArgumentException("缺少质量工作流实例ID");
+        }
+        if (triggerRef == null || triggerRef.isBlank() || triggerRef.length() > 128) {
+            throw new IllegalArgumentException("质量工作流触发标识无效");
+        }
+        return triggerInternal(
+            request,
+            "service:dts-ingestion",
+            null,
+            false,
+            false,
+            true,
+            null,
+            triggerRef.trim(),
+            workflowRunId
+        );
+    }
+
+    /**
      * Runs the exact rule version pinned by a release candidate. The trigger reference is server generated and
      * provides durable replay semantics while the caller serializes commands on the warehouse-plan lock.
      */
@@ -176,6 +257,41 @@ public class QualityRunService {
         );
     }
 
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<QualityRunDto> triggerPinnedWorkflowAuthorized(
+        QualityRunTriggerRequest request,
+        UUID ruleVersionId,
+        String actor,
+        String activeDeptHeader,
+        UUID workflowRunId,
+        String triggerRef
+    ) {
+        if (workflowRunId == null) throw new IllegalArgumentException("缺少质量工作流实例ID");
+        if (ruleVersionId == null) throw new IllegalArgumentException("缺少规则版本ID");
+        if (triggerRef == null || triggerRef.isBlank() || triggerRef.length() > 128) {
+            throw new IllegalArgumentException("质量工作流触发标识无效");
+        }
+        List<GovQualityRun> replay = runRepository.findByTriggerRefOrderByCreatedDateAsc(triggerRef.trim());
+        if (!replay.isEmpty()) {
+            replay.forEach(run -> qualityDatasetReadGuard.requireReadable(run.getDatasetId(), activeDeptHeader));
+            return replay
+                .stream()
+                .map(run -> qualityRunQueryService.toSafeDto(run, metricRepository.findByRunId(run.getId())))
+                .toList();
+        }
+        return triggerInternal(
+            request,
+            actor,
+            activeDeptHeader,
+            true,
+            false,
+            false,
+            ruleVersionId,
+            triggerRef.trim(),
+            workflowRunId
+        );
+    }
+
     private List<QualityRunDto> triggerInternal(
         QualityRunTriggerRequest request,
         String actor,
@@ -205,6 +321,30 @@ public class QualityRunService {
         boolean trustedIngestionInvocation,
         UUID pinnedRuleVersionId,
         String triggerRef
+    ) {
+        return triggerInternal(
+            request,
+            actor,
+            activeDeptHeader,
+            enforceUserAccess,
+            scheduledInvocation,
+            trustedIngestionInvocation,
+            pinnedRuleVersionId,
+            triggerRef,
+            null
+        );
+    }
+
+    private List<QualityRunDto> triggerInternal(
+        QualityRunTriggerRequest request,
+        String actor,
+        String activeDeptHeader,
+        boolean enforceUserAccess,
+        boolean scheduledInvocation,
+        boolean trustedIngestionInvocation,
+        UUID pinnedRuleVersionId,
+        String triggerRef,
+        UUID workflowRunId
     ) {
         if (!properties.getQuality().isEnabled()) {
             throw new IllegalStateException("质量检测功能已禁用");
@@ -247,6 +387,7 @@ public class QualityRunService {
             run.setRuleVersion(version);
             run.setBinding(binding);
             run.setDatasetId(binding.getDatasetId());
+            run.setJobId(workflowRunId);
             run.setTriggerType(triggerType);
             run.setTriggerRef(triggerRef == null ? actor : triggerRef);
             run.setStatus("QUEUED");
@@ -345,6 +486,16 @@ public class QualityRunService {
     @Transactional(readOnly = true)
     public void assertRunReadable(UUID runId, String activeDeptHeader) {
         qualityRunQueryService.assertRunReadable(runId, activeDeptHeader);
+    }
+
+    @Transactional(readOnly = true)
+    public List<QualityRunDto> runsByWorkflow(UUID workflowRunId, String activeDeptHeader) {
+        return qualityRunQueryService.byWorkflow(workflowRunId, activeDeptHeader);
+    }
+
+    @Transactional(readOnly = true)
+    public List<QualityRunDto> trustedRunsByWorkflow(UUID workflowRunId) {
+        return qualityRunQueryService.byWorkflowTrusted(workflowRunId, defaultLakeDatasetGuard);
     }
 
     @Transactional(readOnly = true)
@@ -452,6 +603,9 @@ public class QualityRunService {
                 payload.put("status", run.getStatus());
                 payload.put("statementCount", results.size());
                 auditRunCompletion(run, AuditStage.SUCCESS, payload);
+                if (aggregate == StatementExecutionResult.Status.SUCCEEDED && !isDryRun(run)) {
+                    runAuditCoordinator.resolveIssuesForSuccessfulRun(run, resolveRunActor(run));
+                }
             }
         } catch (QualityRunAuditWriteException ex) {
             throw ex;

@@ -4,7 +4,7 @@ import { auditLog } from "@/utils/audit";
 import { useWorkbenchRole, type WorkbenchRoleInfo } from "../hooks/useWorkbenchRole";
 import { BizDomainSelect } from "./BizDomainSelect";
 import { DeptSelect } from "./DeptSelect";
-import { TimeRangeSelect, type TimeRange } from "./TimeRangeSelect";
+import { type TimeRange, TimeRangeSelect } from "./TimeRangeSelect";
 
 export interface WorkbenchFilterState {
 	scope: "MINE" | "DEPT" | "ALL";
@@ -29,6 +29,7 @@ export interface WorkbenchFilterState {
 export interface WorkbenchFilterBarProps {
 	value: WorkbenchFilterState;
 	onChange: (next: WorkbenchFilterState) => void;
+	onDomainLabelsChange?: (labels: Readonly<Record<string, string>>) => void;
 }
 
 /**
@@ -96,7 +97,7 @@ export function deriveFilterAfterDeptChange(
 	};
 }
 
-export function WorkbenchFilterBar({ value, onChange }: WorkbenchFilterBarProps) {
+export function WorkbenchFilterBar({ value, onChange, onDomainLabelsChange }: WorkbenchFilterBarProps) {
 	const roleInfo = useWorkbenchRole();
 
 	const handleDeptChange = useCallback(
@@ -153,9 +154,7 @@ export function WorkbenchFilterBar({ value, onChange }: WorkbenchFilterBarProps)
 		[value, onChange],
 	);
 
-	const deptSelectValue: string | "ALL" | null = roleInfo.isInstLeader
-		? (value.deptCode ?? "ALL")
-		: roleInfo.deptCode;
+	const deptSelectValue: string | "ALL" | null = roleInfo.isInstLeader ? (value.deptCode ?? "ALL") : roleInfo.deptCode;
 
 	return (
 		<div
@@ -171,14 +170,12 @@ export function WorkbenchFilterBar({ value, onChange }: WorkbenchFilterBarProps)
 			<Space size="middle" wrap>
 				{/* P0-review HIGH: only attach onChange for INST_LEADER. Non-leaders see a
 				    locked dept and must not be able to mutate scope from the dept widget. */}
-				<DeptSelect
-					value={deptSelectValue}
-					onChange={roleInfo.isInstLeader ? handleDeptChange : undefined}
-				/>
+				<DeptSelect value={deptSelectValue} onChange={roleInfo.isInstLeader ? handleDeptChange : undefined} />
 				<BizDomainSelect
 					value={value.bizDomain ?? "ALL"}
 					onChange={handleDomainChange}
 					onAvailabilityChange={handleBizAvailability}
+					onDomainLabelsChange={onDomainLabelsChange}
 				/>
 				<TimeRangeSelect value={value.timeRange} onChange={handleTimeChange} />
 			</Space>

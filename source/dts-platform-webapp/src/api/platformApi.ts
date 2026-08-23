@@ -1033,6 +1033,9 @@ export const listGlossaryTerms = (params: any = {}) => api.get<any[]>({ url: "/m
 export const createGlossaryTerm = (data: any) => api.post({ url: "/modeling/glossary/terms", data });
 export const updateGlossaryTerm = (id: string, data: any) => api.put({ url: `/modeling/glossary/terms/${id}`, data });
 export const deleteGlossaryTerm = (id: string) => api.delete({ url: `/modeling/glossary/terms/${id}` });
+export const listWordRoots = (params: any = {}) => api.get<any[]>({ url: "/modeling/word-roots", params });
+export const createWordRoot = (data: any) => api.post({ url: "/modeling/word-roots", data });
+export const updateWordRoot = (id: string, data: any) => api.put({ url: `/modeling/word-roots/${id}`, data });
 export const listGlossaryTermVersions = (id: string) =>
 	api.get<any[]>({ url: `/modeling/glossary/terms/${id}/versions` });
 export const listGlossaryTermReviews = (id: string) =>
@@ -1133,14 +1136,33 @@ export const previewTemplateSQL = (id: string, params: any) =>
 export const listFailingRows = (runId: string, params: any = {}) =>
 	api.get({ url: `/governance/quality/runs/${runId}/failing-rows`, params });
 
-// Quality tasks (巡检计划)
+// Quality tasks (运行策略；API 保留兼容命名)
 export const listQualityTasks = () => api.get<any[]>({ url: "/governance/quality/tasks" });
 export const createQualityTask = (data: any) => api.post({ url: "/governance/quality/tasks", data });
 export const updateQualityTask = (id: string, data: any) => api.put({ url: `/governance/quality/tasks/${id}`, data });
 export const toggleQualityTask = (id: string, enabled: boolean) =>
 	api.post({ url: `/governance/quality/tasks/${id}/toggle`, data: { enabled } });
-export const triggerQualityTask = (id: string) => api.post({ url: `/governance/quality/tasks/${id}/trigger` });
+export const triggerQualityTask = (id: string, idempotencyKey: string) =>
+	api.post({
+		url: `/governance/quality/tasks/${id}/trigger`,
+		headers: { "Idempotency-Key": idempotencyKey },
+	});
 export const deleteQualityTask = (id: string) => api.delete({ url: `/governance/quality/tasks/${id}` });
+export const listQualityWorkflows = (params: any = {}) =>
+	api.get<any[]>({ url: "/governance/quality/workflows", params });
+export const getQualityWorkflow = (id: string) => api.get({ url: `/governance/quality/workflows/${id}` });
+export const triggerQualityWorkflow = (data: any, idempotencyKey: string) =>
+	api.post({
+		url: "/governance/quality/workflows/trigger",
+		data,
+		headers: { "Idempotency-Key": idempotencyKey },
+	});
+export const retryQualityWorkflow = (id: string, idempotencyKey: string) =>
+	api.post({
+		url: `/governance/quality/workflows/${id}/retry`,
+		headers: { "Idempotency-Key": idempotencyKey },
+	});
+export const cancelQualityWorkflow = (id: string) => api.post({ url: `/governance/quality/workflows/${id}/cancel` });
 
 export const createComplianceBatch = (data: any) => api.post({ url: "/governance/compliance/batches", data });
 export const listComplianceBatches = (params: any = {}) => api.get({ url: "/governance/compliance/batches", params });

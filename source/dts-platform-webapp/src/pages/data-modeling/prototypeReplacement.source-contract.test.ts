@@ -181,6 +181,14 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modelingLineCount).toBeLessThanOrEqual(800);
 	});
 
+	it("keeps warehouse-layer code conflicts actionable", () => {
+		const planningEditors = read("./prototype/PlanningEditors.tsx");
+
+		expect(planningEditors).toContain('failure.code === "WAREHOUSE_LAYER_CODE_CONFLICT"');
+		expect(planningEditors).toContain("已删除编码不能复用");
+		expect(planningEditors).toMatch(/codeInputRef\.current\?\.focus\(\)/);
+	});
+
 	it("connects production pages to canonical owners and keeps unsupported actions disabled", () => {
 		const planning = read("./prototype/PlanningPage.tsx");
 		const dataArchitecturePage = read("../data-architecture/DataArchitecturePage.tsx");

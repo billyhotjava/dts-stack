@@ -34,7 +34,7 @@ export function QualityWorkspace({ routeKey, children }: { routeKey: QualityRout
 						<h1>数据质量</h1>
 						<Tag color="blue">默认数据湖</Tag>
 					</div>
-					<p>规则、巡检、运行与质量分析的一体化工作台</p>
+					<p>规则、运行策略、验证记录与质量分析的一体化工作台</p>
 				</div>
 				<div className="dq-workspace__context">
 					<span>当前位置</span>

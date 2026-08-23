@@ -7,10 +7,14 @@ import { Button, Modal, PageHeader, RequestState, Status, Toast, useTransientMes
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 import {
 	archiveStandardsRow,
+	loadStandardMappingOptions,
 	loadStandardsRows,
+	type StandardMappingOptions,
+	type StandardMappingValues,
 	type StandardsEditorValues,
 	type StandardsRow,
 	type StandardsView,
+	saveStandardMapping,
 	saveStandardsRow,
 	standardsCapability,
 } from "./services/standardsProjectionService";
@@ -78,7 +82,7 @@ const config: Record<
 			["code", "字段编码"],
 			["name", "字段名称"],
 			["definition", "标准/码表"],
-			["domain", "数据域"],
+			["domain", "所属模型"],
 			["dataType", "数据类型"],
 			["version", "版本"],
 			["state", "状态"],
@@ -186,8 +190,12 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 									key: "edit",
 									label: "编辑",
 									hidden: !capability.edit,
-									disabled: !canMaintain,
-									tooltip: canMaintain ? undefined : "当前账号无标准维护权限",
+									disabled: !canMaintain || (view === "mappings" && row.state !== "草稿"),
+									tooltip: canMaintain
+										? view === "mappings" && row.state !== "草稿"
+											? "仅草稿模型可以修改标准映射"
+											: undefined
+										: "当前账号无标准维护权限",
 									onClick: () => setEditorRow(row),
 								},
 								{
@@ -204,7 +212,7 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 					]
 				: []),
 		],
-		[page, capability.edit, capability.archive, canMaintain, view, load, show],
+		[page, capability.edit, capability.archive, canMaintain, archivingId, archiveError, archiveRow, view],
 	);
 
 	return (
@@ -275,12 +283,30 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 					/>
 				)}
 			</section>
-			{editorRow ? (
+			{editorRow && view === "mappings" ? (
+				<StandardMappingEditor
+					onClose={() => setEditorRow(null)}
+					onComplete={async () => {
+						setEditorRow(null);
+						show(editorRow === "new" ? "标准映射已创建" : "标准映射已更新");
+						await load();
+					}}
+					row={editorRow === "new" ? null : editorRow}
+				/>
+			) : editorRow ? (
 				<StandardsEditor
 					onClose={() => setEditorRow(null)}
 					onComplete={async () => {
 						setEditorRow(null);
-						show(editorRow === "new" ? "标准草稿已创建" : "标准对象已更新");
+						show(
+							view === "roots"
+								? editorRow === "new"
+									? "词根已创建"
+									: "词根已更新"
+								: editorRow === "new"
+									? "标准草稿已创建"
+									: "标准对象已更新",
+						);
 						await load();
 					}}
 					row={editorRow === "new" ? null : editorRow}
@@ -302,6 +328,127 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 	);
 }
 
+function StandardMappingEditor({
+	row,
+	onClose,
+	onComplete,
+}: {
+	row: StandardsRow | null;
+	onClose: () => void;
+	onComplete: () => Promise<void>;
+}) {
+	const [options, setOptions] = useState<StandardMappingOptions | null>(null);
+	const [values, setValues] = useState<StandardMappingValues>({
+		modelId: String(row?.source.modelId ?? ""),
+		fieldName: String(row?.source.fieldName ?? ""),
+		standardId: String(row?.source.standardId ?? ""),
+	});
+	const [loading, setLoading] = useState(true);
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState("");
+	useEffect(() => {
+		let active = true;
+		void loadStandardMappingOptions()
+			.then((next) => {
+				if (active) setOptions(next);
+			})
+			.catch((cause) => {
+				if (active) setError(normalizeModelingRequestFailure(cause, "映射选项读取失败，请重试。").message);
+			})
+			.finally(() => {
+				if (active) setLoading(false);
+			});
+		return () => {
+			active = false;
+		};
+	}, []);
+	const fields = options?.models.find((model) => model.id === values.modelId)?.fields || [];
+	const save = async () => {
+		setSaving(true);
+		setError("");
+		try {
+			await saveStandardMapping(values);
+			await onComplete();
+		} catch (cause) {
+			setError(normalizeModelingRequestFailure(cause, "标准映射保存失败，请重试。").message);
+		} finally {
+			setSaving(false);
+		}
+	};
+	return (
+		<Modal
+			footer={
+				<>
+					<Button disabled={saving} onClick={onClose}>
+						取消
+					</Button>
+					<Button disabled={saving || loading} primary onClick={() => void save()}>
+						{saving ? "保存中…" : "保存映射"}
+					</Button>
+				</>
+			}
+			onClose={onClose}
+			title={row ? "编辑标准映射" : "新建标准映射"}
+		>
+			<div className="dmx-form-grid">
+				<label>
+					<span>所属模型 *</span>
+					<select
+						disabled={saving || loading || Boolean(row)}
+						onChange={(event) => setValues({ ...values, modelId: event.target.value, fieldName: "" })}
+						value={values.modelId}
+					>
+						<option value="">请选择模型</option>
+						{options?.models.map((model) => (
+							<option key={model.id} value={model.id}>
+								{model.name}（{model.status}）
+							</option>
+						))}
+					</select>
+				</label>
+				<label>
+					<span>模型字段 *</span>
+					<select
+						disabled={saving || loading || !values.modelId || Boolean(row)}
+						onChange={(event) => setValues({ ...values, fieldName: event.target.value })}
+						value={values.fieldName}
+					>
+						<option value="">请选择模型字段</option>
+						{fields.map((field) => (
+							<option key={field.name} value={field.name}>
+								{field.displayName}（{field.name}，{field.dataType}）
+							</option>
+						))}
+					</select>
+				</label>
+				<label className="dmx-form-field--wide">
+					<span>数据元标准 *</span>
+					<select
+						disabled={saving || loading}
+						onChange={(event) => setValues({ ...values, standardId: event.target.value })}
+						value={values.standardId}
+					>
+						<option value="">请选择数据元标准</option>
+						{options?.standards.map((standard) => (
+							<option key={standard.id} value={standard.id}>
+								{standard.name}（{standard.code}，v{standard.version}）
+							</option>
+						))}
+					</select>
+				</label>
+			</div>
+			{!loading && options && (!options.models.length || !options.standards.length) ? (
+				<div className="dmx-capability-note">请先准备可编辑模型、模型字段和数据元标准。</div>
+			) : null}
+			{error ? (
+				<div className="dmx-inline-error" role="alert">
+					{error}
+				</div>
+			) : null}
+		</Modal>
+	);
+}
+
 function StandardsEditor({
 	view,
 	row,
@@ -313,6 +460,28 @@ function StandardsEditor({
 	onClose: () => void;
 	onComplete: () => Promise<void>;
 }) {
+	const fields =
+		view === "roots"
+			? (["code", "name", "definition", "scope", "domain", "version"] as const)
+			: (["code", "name", "dataType", "domain", "scope", "version"] as const);
+	const labels: Partial<Record<keyof StandardsEditorValues, string>> =
+		view === "roots"
+			? {
+					code: "词根编码 *",
+					name: "中文词根 *",
+					definition: "英文全称 *",
+					scope: "英文缩写 *",
+					domain: "分类",
+					version: "版本",
+				}
+			: {
+					code: "编码 *",
+					name: "名称 *",
+					dataType: "数据类型",
+					domain: "数据域",
+					scope: "适用范围",
+					version: "版本",
+				};
 	const [values, setValues] = useState<StandardsEditorValues>(() =>
 		row
 			? {
@@ -355,23 +524,12 @@ function StandardsEditor({
 				</>
 			}
 			onClose={onClose}
-			title={row ? "编辑标准对象" : "新建标准对象"}
+			title={view === "roots" ? (row ? "编辑词根" : "新建词根") : row ? "编辑标准对象" : "新建标准对象"}
 		>
 			<div className="dmx-form-grid">
-				{(["code", "name", "dataType", "domain", "scope", "version"] as const).map((key) => (
+				{fields.map((key) => (
 					<label key={key}>
-						<span>
-							{
-								{
-									code: "编码 *",
-									name: "名称 *",
-									dataType: "数据类型",
-									domain: "数据域",
-									scope: "适用范围",
-									version: "版本",
-								}[key]
-							}
-						</span>
+						<span>{labels[key]}</span>
 						<input
 							disabled={saving || (Boolean(row) && key === "code")}
 							onChange={(event) => set(key, event.target.value)}
@@ -379,14 +537,16 @@ function StandardsEditor({
 						/>
 					</label>
 				))}
-				<label className="dmx-form-field--wide">
-					<span>业务定义</span>
-					<textarea
-						disabled={saving}
-						onChange={(event) => set("definition", event.target.value)}
-						value={values.definition}
-					/>
-				</label>
+				{view !== "roots" ? (
+					<label className="dmx-form-field--wide">
+						<span>业务定义</span>
+						<textarea
+							disabled={saving}
+							onChange={(event) => set("definition", event.target.value)}
+							value={values.definition}
+						/>
+					</label>
+				) : null}
 			</div>
 			{error ? (
 				<div className="dmx-inline-error" role="alert">

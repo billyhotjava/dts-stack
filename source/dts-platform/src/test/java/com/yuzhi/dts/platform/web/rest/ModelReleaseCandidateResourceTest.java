@@ -139,6 +139,120 @@ class ModelReleaseCandidateResourceTest {
     }
 
     @Test
+    void enteringQualityStageAutomaticallyStartsTheGovernanceWorkflow() throws Exception {
+        CandidateView qualityRunning = candidateAtVersion(5);
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(
+            service.runQuality(
+                "server-tenant",
+                "xiezm",
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "quality-1",
+                "validate release quality"
+            )
+        )
+            .thenReturn(new CommandResult(qualityRunning, false, List.of()));
+        when(
+            governanceQualityReruns.rerun(
+                "server-tenant",
+                "xiezm",
+                PLAN_ID,
+                CANDIDATE_ID,
+                5,
+                "quality-1:governance",
+                "INST"
+            )
+        )
+            .thenReturn(new RerunResult(CANDIDATE_ID, false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/quality",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "quality-1")
+                    .header("X-Active-Dept", "INST")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"validate release quality\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""));
+
+        verify(governanceQualityReruns).rerun(
+            "server-tenant",
+            "xiezm",
+            PLAN_ID,
+            CANDIDATE_ID,
+            5,
+            "quality-1:governance",
+            "INST"
+        );
+    }
+
+    @Test
+    void replayedQualityCommandRetriesWorkflowStartAndReturnsStableFailure() throws Exception {
+        CandidateView qualityRunning = candidateAtVersion(5);
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(
+            service.runQuality(
+                "server-tenant",
+                "xiezm",
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "quality-replay-1",
+                "retry quality workflow"
+            )
+        )
+            .thenReturn(new CommandResult(qualityRunning, true, List.of()));
+        when(
+            governanceQualityReruns.rerun(
+                "server-tenant",
+                "xiezm",
+                PLAN_ID,
+                CANDIDATE_ID,
+                5,
+                "quality-replay-1:governance",
+                "INST"
+            )
+        )
+            .thenThrow(new IllegalStateException("executor unavailable"));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/quality",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "quality-replay-1")
+                    .header("X-Active-Dept", "INST")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"retry quality workflow\"}")
+            )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MODEL_SPEC_GOVERNANCE_QUALITY_START_FAILED"))
+            .andExpect(jsonPath("$.data.candidateId").value(CANDIDATE_ID.toString()))
+            .andExpect(jsonPath("$.data.retriable").value(true));
+
+        verify(governanceQualityReruns).rerun(
+            "server-tenant",
+            "xiezm",
+            PLAN_ID,
+            CANDIDATE_ID,
+            5,
+            "quality-replay-1:governance",
+            "INST"
+        );
+    }
+
+    @Test
     void workspaceUsesServerTenantAndReturnsOneAggregateWithStrongEtag() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
         when(service.workspace("server-tenant", "alice", PLAN_ID)).thenReturn(workbench());

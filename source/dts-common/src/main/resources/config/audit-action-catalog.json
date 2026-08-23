@@ -878,6 +878,22 @@
                 "SUCCESS"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "MODELING_WORD_ROOT_LIST",
+              "display": "查看词根列表",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "MODELING_WORD_ROOT_EDIT",
+              "display": "维护词根",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
             }
           ]
         },
@@ -2102,11 +2118,11 @@
         },
         {
           "key": "governance.qualityTasks",
-          "title": "质量巡检计划",
+          "title": "运行策略",
           "actions": [
             {
               "code": "GOV_QUALITY_TASK_LIST",
-              "display": "查看质量巡检计划列表",
+              "display": "查看运行策略列表",
               "phases": [
                 "SUCCESS"
               ],
@@ -2114,7 +2130,7 @@
             },
             {
               "code": "GOV_QUALITY_TASK_CREATE",
-              "display": "创建质量巡检计划",
+              "display": "创建运行策略",
               "phases": [
                 "BEGIN",
                 "SUCCESS",
@@ -2124,7 +2140,7 @@
             },
             {
               "code": "GOV_QUALITY_TASK_UPDATE",
-              "display": "更新质量巡检计划",
+              "display": "更新运行策略",
               "phases": [
                 "BEGIN",
                 "SUCCESS",
@@ -2134,7 +2150,7 @@
             },
             {
               "code": "GOV_QUALITY_TASK_DELETE",
-              "display": "删除质量巡检计划",
+              "display": "删除运行策略",
               "phases": [
                 "BEGIN",
                 "SUCCESS",
@@ -2144,7 +2160,7 @@
             },
             {
               "code": "GOV_QUALITY_TASK_TOGGLE",
-              "display": "切换质量巡检计划状态",
+              "display": "切换运行策略状态",
               "phases": [
                 "BEGIN",
                 "SUCCESS",
@@ -2154,9 +2170,53 @@
             },
             {
               "code": "GOV_QUALITY_TASK_EXECUTE",
-              "display": "执行质量巡检计划",
+              "display": "执行运行策略",
               "phases": [
                 "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            }
+          ]
+        },
+        {
+          "key": "governance.qualityWorkflows",
+          "title": "质量工作流",
+          "actions": [
+            {
+              "code": "GOV_QUALITY_WORKFLOW_START",
+              "display": "启动质量工作流",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_WORKFLOW_FINALIZE",
+              "display": "完成质量工作流",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_WORKFLOW_RETRY",
+              "display": "重试质量工作流",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "GOV_QUALITY_WORKFLOW_CANCEL",
+              "display": "取消质量工作流",
+              "phases": [
                 "SUCCESS",
                 "FAIL"
               ],

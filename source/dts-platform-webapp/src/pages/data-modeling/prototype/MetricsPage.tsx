@@ -8,7 +8,7 @@ import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Con
 import { parseIndicatorDependencyCodes } from "@/features/modeling/indicators/indicatorDefinitionContract";
 import { statusLabel } from "@/utils/customerDisplayLabels";
 import type { DataModelingRoute } from "../types";
-import { MetricDefinitionBindingFields } from "./MetricDefinitionBindingFields";
+import { MetricEditor } from "./MetricEditor";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
 	archiveIndicatorDraft,
@@ -18,8 +18,8 @@ import {
 	type IndicatorCalculationHistory,
 	type IndicatorDefinition,
 	type IndicatorEditValues,
-	loadIndicatorCatalog,
 	loadIndicatorCalculationHistory,
+	loadIndicatorCatalog,
 	type MetricSelection,
 	type MetricType,
 	metricSelection,
@@ -28,11 +28,14 @@ import {
 	saveAndValidateIndicatorDraft,
 	saveIndicatorDraft,
 	submitIndicatorCalculation,
+	supportsIndicatorCalculation,
 	supportsIndicatorCreation,
 } from "./services/indicatorProjectionService";
 import { listPlanningCatalogDomains, type PlanningCatalogDomain } from "./services/planningCatalogDomainService";
 import { resolveBusinessProcessBinding } from "./services/planningContextPolicyService";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
+
+export { MetricEditor } from "./MetricEditor";
 
 const typeByView: Record<string, MetricType> = {
 	composite: "复合指标",
@@ -95,6 +98,7 @@ export function reconcileMetricBusinessProcessContext(
 export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	const canMaintain = useDataModelingMenuGrant();
 	const metricType = typeByView[route.view] || "原子指标";
+	const canCalculate = supportsIndicatorCalculation(metricType);
 	const requestEpoch = useRef(0);
 	const [searchParams, setSearchParams] = useSearchParams();
 	const [catalog, setCatalog] = useState<IndicatorDefinition[]>([]);
@@ -121,6 +125,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		setValues(next ? toForm(next) : {});
 	}, []);
 	useEffect(() => {
+		if (!canCalculate) return;
 		let active = true;
 		void listModelSpecs()
 			.then((items) => {
@@ -139,7 +144,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		return () => {
 			active = false;
 		};
-	}, []);
+	}, [canCalculate]);
 	const pinnedModelSource = values.sourceRefs?.find((ref) => ref.sourceType === "SEMANTIC_MODEL_REVISION");
 	const pinnedModelRevision = String(pinnedModelSource?.sourceVersion || "").match(/^r([1-9][0-9]*)$/i)?.[1] || "";
 	useEffect(() => {
@@ -235,7 +240,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		}
 	}, [metricType]);
 	useEffect(() => {
-		if (!selected?.id || String(selected.status || "").toUpperCase() !== "PUBLISHED") {
+		if (!canCalculate || !selected?.id || String(selected.status || "").toUpperCase() !== "PUBLISHED") {
 			setCalculationHistory([]);
 			return;
 		}
@@ -250,7 +255,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		return () => {
 			active = false;
 		};
-	}, [selected?.id, selected?.status]);
+	}, [canCalculate, selected?.id, selected?.status]);
 
 	const visible = useMemo(
 		() => filterIndicators(catalog, { type: metricType, domain, businessCategoryId, query }),
@@ -276,6 +281,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		setSearchParams(next, { replace: true });
 	};
 	const create = () => {
+		const isModifier = metricType === "修饰词";
 		const selectedDomain = dataDomains.find((item) => item.id === domain);
 		const categoryId = businessCategoryId || selectedDomain?.parentId || "";
 		const selectedCategory = businessCategories.find((item) => item.id === categoryId);
@@ -283,7 +289,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			...createIndicatorDraft(metricType, selectedDomain?.code || ""),
 			businessCategoryId: categoryId || null,
 			dataDomainId: selectedDomain?.id || null,
-			category: selectedCategory?.name || null,
+			category: isModifier ? "MODIFIER" : selectedCategory?.name || null,
 		});
 		const next = new URLSearchParams(searchParams);
 		next.delete("indicatorId");
@@ -391,15 +397,35 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	};
 	const calculationColumns: CompactColumns<IndicatorCalculationBatch["items"][number]> = [
 		{ title: "指标编码", dataIndex: "code", width: 190, render: (value) => String(value || "—") },
-		{ title: "状态", dataIndex: "status", width: 100, render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{statusLabel(value)}</Status> },
+		{
+			title: "状态",
+			dataIndex: "status",
+			width: 100,
+			render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{statusLabel(value)}</Status>,
+		},
 		{ title: "计算值", dataIndex: "value", width: 120, render: (value) => String(value ?? "—") },
-		{ title: "来源", dataIndex: "sourceMode", width: 120, render: (value) => value === "MODEL_FIELD" ? "模型字段" : value === "FORMULA" ? "受控公式" : "—" },
-		{ title: "物理实现", key: "implementation", width: 260, render: (_, row) => row.relation && row.field ? `${row.relation}.${row.field}` : "—" },
+		{
+			title: "来源",
+			dataIndex: "sourceMode",
+			width: 120,
+			render: (value) => (value === "MODEL_FIELD" ? "模型字段" : value === "FORMULA" ? "受控公式" : "—"),
+		},
+		{
+			title: "物理实现",
+			key: "implementation",
+			width: 260,
+			render: (_, row) => (row.relation && row.field ? `${row.relation}.${row.field}` : "—"),
+		},
 		{ title: "错误", dataIndex: "errorMessage", width: 260, render: (value) => String(value || "—") },
 	];
 	const historyColumns: CompactColumns<IndicatorCalculationHistory> = [
 		{ title: "提交时间", dataIndex: "runAt", width: 190, render: (value) => String(value || "—") },
-		{ title: "状态", dataIndex: "status", width: 100, render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{statusLabel(value)}</Status> },
+		{
+			title: "状态",
+			dataIndex: "status",
+			width: 100,
+			render: (value) => <Status tone={value === "SUCCESS" ? "success" : "danger"}>{statusLabel(value)}</Status>,
+		},
 		{ title: "计算值", dataIndex: "computedValue", width: 120, render: (value) => String(value ?? "—") },
 		{ title: "上次值", dataIndex: "previousValue", width: 120, render: (value) => String(value ?? "—") },
 		{ title: "处理行数", dataIndex: "rowsProcessed", width: 110, render: (value) => String(value ?? "—") },
@@ -451,7 +477,9 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 							<span>△</span>
 							<strong>{selected.name || `新建${metricType}`}</strong>
 							{selected.status ? (
-								<Status tone={selected.status === "PUBLISHED" ? "success" : "warning"}>{statusLabel(selected.status)}</Status>
+								<Status tone={selected.status === "PUBLISHED" ? "success" : "warning"}>
+									{statusLabel(selected.status)}
+								</Status>
 							) : null}
 						</div>
 						<div className="dmx-metric-toolbar">
@@ -461,24 +489,34 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 							<Button disabled={!canMaintain || Boolean(busy)} primary onClick={() => void mutate("save")}>
 								{busy === "save" ? "保存中…" : "保存"}
 							</Button>
-							<Button disabled={!canMaintain || Boolean(busy) || !selected.id} onClick={() => void mutate("validate")}>
-								{busy === "validate" ? "校验中…" : "校验"}
-							</Button>
-							<Button disabled={!canMaintain || Boolean(busy) || !selected.id} onClick={() => void mutate("publish")}>
-								{busy === "publish" ? "发布中…" : "发布"}
-							</Button>
-							<Button
-								disabled={
-									!canMaintain ||
-									Boolean(busy) ||
-									!selected.id ||
-									String(selected.status || "").toUpperCase() !== "PUBLISHED"
-								}
-								onClick={() => selected.id && void calculate([selected.id])}
-								primary
-							>
-								{busy === "calculate" ? "计算中…" : "提交计算"}
-							</Button>
+							{canCalculate ? (
+								<>
+									<Button
+										disabled={!canMaintain || Boolean(busy) || !selected.id}
+										onClick={() => void mutate("validate")}
+									>
+										{busy === "validate" ? "校验中…" : "校验"}
+									</Button>
+									<Button
+										disabled={!canMaintain || Boolean(busy) || !selected.id}
+										onClick={() => void mutate("publish")}
+									>
+										{busy === "publish" ? "发布中…" : "发布"}
+									</Button>
+									<Button
+										disabled={
+											!canMaintain ||
+											Boolean(busy) ||
+											!selected.id ||
+											String(selected.status || "").toUpperCase() !== "PUBLISHED"
+										}
+										onClick={() => selected.id && void calculate([selected.id])}
+										primary
+									>
+										{busy === "calculate" ? "计算中…" : "提交计算"}
+									</Button>
+								</>
+							) : null}
 							<Button
 								danger
 								disabled={!canMaintain || Boolean(busy) || !selected.id}
@@ -510,7 +548,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								values={values}
 							/>
 						</fieldset>
-						{calculationBatch?.items.some((item) => item.indicatorId === selected.id) ? (
+						{canCalculate && calculationBatch?.items.some((item) => item.indicatorId === selected.id) ? (
 							<section className="dmx-metric-section" aria-label="本次计算结果">
 								<h3>本次计算结果</h3>
 								<p className="dmx-capability-note">请求号：{calculationBatch.requestId}</p>
@@ -522,7 +560,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								/>
 							</section>
 						) : null}
-						{calculationHistory.length ? (
+						{canCalculate && calculationHistory.length ? (
 							<section className="dmx-metric-section dmx-metric-section--history" aria-label="计算历史">
 								<h3>计算历史</h3>
 								<CompactTable
@@ -532,7 +570,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 									rowKey={(row) => row.id}
 								/>
 							</section>
-						) : String(selected.status || "").toUpperCase() === "PUBLISHED" ? (
+						) : canCalculate && String(selected.status || "").toUpperCase() === "PUBLISHED" ? (
 							<div className="dmx-capability-note">该指标尚无计算记录，可点击“提交计算”生成首条运行事实。</div>
 						) : null}
 					</section>
@@ -582,13 +620,15 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 									</option>
 								))}
 						</select>
-						<Button
-							disabled={!canMaintain || Boolean(busy) || !selectedCalculationIds.length}
-							onClick={() => void calculate(selectedCalculationIds)}
-							primary
-						>
-							{busy === "calculate" ? "计算中…" : `提交计算（${selectedCalculationIds.length}）`}
-						</Button>
+						{canCalculate ? (
+							<Button
+								disabled={!canMaintain || Boolean(busy) || !selectedCalculationIds.length}
+								onClick={() => void calculate(selectedCalculationIds)}
+								primary
+							>
+								{busy === "calculate" ? "计算中…" : `提交计算（${selectedCalculationIds.length}）`}
+							</Button>
+						) : null}
 						<span>共 {visible.length} 条</span>
 					</div>
 					{visible.length ? (
@@ -599,15 +639,15 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								dataSource={visible}
 								pagination={{ pageSize: 10 }}
 								rowSelection={
-									canMaintain
+									canMaintain && canCalculate
 										? {
-											selectedRowKeys: selectedCalculationIds,
-											onChange: (keys) => setSelectedCalculationIds(keys.map(String)),
-											getCheckboxProps: (row) => ({
-												disabled: !row.id || String(row.status || "").toUpperCase() !== "PUBLISHED",
-												name: String(row.code || row.name || "indicator"),
-											}),
-										}
+												selectedRowKeys: selectedCalculationIds,
+												onChange: (keys) => setSelectedCalculationIds(keys.map(String)),
+												getCheckboxProps: (row) => ({
+													disabled: !row.id || String(row.status || "").toUpperCase() !== "PUBLISHED",
+													name: String(row.code || row.name || "indicator"),
+												}),
+											}
 										: undefined
 								}
 								rowKey={(row) => row.id || String(row.code)}
@@ -617,11 +657,12 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 					) : (
 						<RequestState description="请调整搜索或筛选条件后重试。" kind="empty" title={`暂无${metricType}`} />
 					)}
-					{calculationBatch ? (
+					{canCalculate && calculationBatch ? (
 						<section className="dmx-metric-section" aria-label="批量计算结果">
 							<h3>批量计算结果</h3>
 							<p className="dmx-capability-note">
-								请求号：{calculationBatch.requestId}；成功 {calculationBatch.successCount} 项，失败 {calculationBatch.failedCount} 项。
+								请求号：{calculationBatch.requestId}；成功 {calculationBatch.successCount} 项，失败{" "}
+								{calculationBatch.failedCount} 项。
 							</p>
 							<CompactTable
 								columns={calculationColumns}
@@ -635,199 +676,5 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			)}
 			<Toast message={message} />
 		</main>
-	);
-}
-
-export function MetricEditor({
-	values,
-	onChange,
-	codeLocked,
-	businessCategories,
-	dataDomains,
-	processes,
-	metricModels = [],
-	indicators = [],
-}: {
-	values: IndicatorEditValues;
-	onChange: (values: IndicatorEditValues) => void;
-	codeLocked: boolean;
-	businessCategories: PlanningCatalogDomain[];
-	dataDomains: PlanningCatalogDomain[];
-	processes: Sprint64BusinessProcess[];
-	metricModels?: ModelSpecView[];
-	indicators?: IndicatorDefinition[];
-}) {
-	const set = (key: keyof IndicatorEditValues, value: unknown) => onChange({ ...values, [key]: value });
-	const metricType = String(values.metricType || "ATOMIC").toUpperCase();
-	const selectedBusinessCategoryId = String(values.businessCategoryId || "");
-	const selectedDomainId = String(values.dataDomainId || "");
-	const availableDomains = dataDomains.filter((item) => item.parentId === selectedBusinessCategoryId);
-	const processBinding = resolveBusinessProcessBinding(values.businessProcessId, processes);
-	return (
-		<div className="dmx-metric-scroll">
-			<section className="dmx-metric-section">
-				<h3>指标基本信息</h3>
-				<div>
-					<MetricField label="英文缩写" required>
-						<input
-							disabled={codeLocked}
-							onChange={(event) => set("code", event.target.value)}
-							value={String(values.code || "")}
-						/>
-					</MetricField>
-					<MetricField label="中文名称" required>
-						<input onChange={(event) => set("name", event.target.value)} value={String(values.name || "")} />
-					</MetricField>
-					<MetricField label="指标类型" required>
-						<input
-							disabled
-							value={{ ATOMIC: "原子指标", DERIVED: "派生指标", COMPOSITE: "复合指标" }[metricType] || metricType}
-						/>
-					</MetricField>
-					<MetricField label="业务分类" required>
-						<select
-							aria-label="业务分类"
-							onChange={(event) => {
-								const id = event.target.value;
-								const category = businessCategories.find((item) => item.id === id);
-								const currentDomain = dataDomains.find((item) => item.id === selectedDomainId && item.parentId === id);
-								onChange({
-									...values,
-									businessCategoryId: id || null,
-									category: category?.name || null,
-									dataDomainId: currentDomain?.id || null,
-									businessProcessId: currentDomain ? values.businessProcessId : null,
-									domain: currentDomain?.code || null,
-								});
-							}}
-							value={selectedBusinessCategoryId}
-						>
-							<option value="">请选择业务分类</option>
-							{businessCategories.map((item) => (
-								<option key={item.id} value={item.id}>
-									{item.name}（{item.code}）
-								</option>
-							))}
-						</select>
-					</MetricField>
-					<MetricField label="数据域" required={metricType !== "COMPOSITE"}>
-						<select
-							disabled={!selectedBusinessCategoryId}
-							onChange={(event) => {
-								const id = event.target.value;
-								const dataDomain = dataDomains.find((item) => item.id === id);
-								const category = businessCategories.find((item) => item.id === dataDomain?.parentId);
-								onChange({
-									...values,
-									businessCategoryId: category?.id || null,
-									category: category?.name || null,
-									dataDomainId: id || null,
-									businessProcessId: null,
-									domain: dataDomain?.code || null,
-								});
-							}}
-							value={selectedDomainId}
-						>
-							<option value="">{metricType === "COMPOSITE" ? "跨域时留空" : "请选择数据域"}</option>
-							{availableDomains.map((item) => (
-								<option key={item.id} value={item.id}>
-									{item.name}（{item.code}）
-								</option>
-							))}
-						</select>
-					</MetricField>
-					{metricType === "ATOMIC" ? (
-						<MetricField label="业务过程" required>
-							{processBinding.showSelector ? (
-								<select
-									aria-label="业务过程"
-									onChange={(event) => set("businessProcessId", event.target.value || null)}
-									value={String(values.businessProcessId || "")}
-								>
-									<option value="">请选择业务过程</option>
-									{processBinding.processes.map((item) => (
-										<option key={item.id} value={item.id}>
-											{item.name}（{item.processId}）
-										</option>
-									))}
-								</select>
-							) : (
-								<small>{processBinding.message}</small>
-							)}
-						</MetricField>
-					) : null}
-					<MetricField label="指标分组编码">
-						<input
-							onChange={(event) => set("metricGroupCode", event.target.value)}
-							placeholder="例如 finance.budget"
-							value={String(values.metricGroupCode || "")}
-						/>
-					</MetricField>
-					<MetricField label="负责人">
-						<input onChange={(event) => set("owner", event.target.value)} value={String(values.owner || "")} />
-					</MetricField>
-					<MetricField label="责任部门">
-						<input onChange={(event) => set("ownerDept", event.target.value)} value={String(values.ownerDept || "")} />
-					</MetricField>
-					<MetricField label="业务口径" required wide>
-						<textarea
-							onChange={(event) => set("definition", event.target.value)}
-							value={String(values.definition || "")}
-						/>
-					</MetricField>
-					<MetricField label="兼容文本" wide>
-						<small>
-							旧业务分类：{String(values.category || "—")}；旧数据域：{String(values.domain || "—")}
-							。兼容字段只展示，不再作为关系主键。
-						</small>
-					</MetricField>
-				</div>
-			</section>
-			<section className="dmx-metric-section">
-				<h3>业务计算语义</h3>
-				<p className="dmx-capability-note">
-					普通指标页不显示或编辑原始 SQL；SQL/Jinja 只在具备维护权限的高级 dbt 实现中处理。当前功能入口
-					尚未提供独立业务表达式契约，因此此处只维护聚合、度量和依赖语义。
-				</p>
-				<div>
-					<MetricDefinitionBindingFields
-						indicators={indicators}
-						models={metricModels}
-						onChange={onChange}
-						values={values}
-					/>
-					<MetricField label="数据单位">
-						<input onChange={(event) => set("unit", event.target.value)} value={String(values.unit || "")} />
-					</MetricField>
-					<MetricField label="小数位数">
-						<input
-							min="0"
-							onChange={(event) => set("precisionScale", Number(event.target.value))}
-							type="number"
-							value={Number(values.precisionScale || 0)}
-						/>
-					</MetricField>
-				</div>
-			</section>
-		</div>
-	);
-}
-
-function MetricField({
-	label,
-	required = false,
-	wide = false,
-	children,
-}: {
-	label: string;
-	required?: boolean;
-	wide?: boolean;
-	children: React.ReactNode;
-}) {
-	return (
-		<div className={`dmx-metric-field${wide ? " wide" : ""}`}>
-			<span className={required ? "required" : ""}>{label}：</span>
-			<div>{children}</div>
-		</div>
 	);
 }

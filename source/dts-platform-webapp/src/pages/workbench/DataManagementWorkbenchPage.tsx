@@ -30,6 +30,7 @@ import goldenChainService, {
 	type GoldenChainSummary,
 } from "@/api/services/goldenChainService";
 import { listWarehouseLayersApi } from "@/api/sprint64GovernanceApi";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import {
 	buildDataManagementThemes,
 	type DataManagementThemeState,
@@ -709,7 +710,10 @@ export default function Page({
 											<div className="font-medium">{chain.displayName}</div>
 											<Text type="secondary">负责人：{chain.owner || "-"}</Text>
 										</div>
-										{statusTag(chain.currentStageLabel || chain.status, chain.status === "BLOCKED" ? "warning" : "success")}
+										{statusTag(
+											chain.currentStageLabel || statusLabel(chain.status),
+											chain.status === "BLOCKED" ? "warning" : "success",
+										)}
 									</div>
 								</div>
 							))}

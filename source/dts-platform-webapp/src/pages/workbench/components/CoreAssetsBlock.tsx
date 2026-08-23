@@ -1,6 +1,6 @@
 import { Card, Empty, List, Skeleton, Tag } from "antd";
-import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
 import { ClassificationTag } from "@/analytics/pages/screens/components/ClassificationTag";
+import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
 import { resolveAppHref } from "@/routes/constants";
 import { humanizeBizDomain } from "../hooks/bizDomain";
 import { relativeTime } from "../hooks/relativeTime";
@@ -19,6 +19,7 @@ export interface CoreAssetsBlockProps {
 	role: WorkbenchRole;
 	items: CoreAssetItem[];
 	loading: boolean;
+	domainLabels?: Readonly<Record<string, string>>;
 }
 
 function titleFor(role: CoreAssetsBlockProps["role"]): string {
@@ -31,7 +32,7 @@ function emptyTextFor(role: CoreAssetsBlockProps["role"]): string {
 	return role === "EMP" ? "还没有常用资产" : "暂无核心资产";
 }
 
-export function CoreAssetsBlock({ role, items, loading }: CoreAssetsBlockProps) {
+export function CoreAssetsBlock({ role, items, loading, domainLabels }: CoreAssetsBlockProps) {
 	const title = titleFor(role);
 
 	const handleRowClick = (item: CoreAssetItem) => {
@@ -56,7 +57,7 @@ export function CoreAssetsBlock({ role, items, loading }: CoreAssetsBlockProps) 
 							<List.Item.Meta
 								title={a.name}
 								description={(() => {
-									const label = humanizeBizDomain(a.bizDomain);
+									const label = humanizeBizDomain(a.bizDomain, domainLabels);
 									return (
 										<span>
 											{a.updatedAt ? relativeTime(a.updatedAt) : "—"}

@@ -37,5 +37,6 @@
     <include file="config/liquibase/changelog/20260801_04_ingestion_rollback_saga_outbox.xml"/>
     <include file="config/liquibase/changelog/20260801_05_ingestion_runtime_resilience.xml"/>
     <include file="config/liquibase/changelog/20260801_06_ingestion_rollback_truncate_guards.xml"/>
+    <include file="config/liquibase/changelog/20260822_01_ingestion_quality_workflow_link.xml"/>
 
 </databaseChangeLog>

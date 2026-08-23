@@ -16,6 +16,7 @@ import {
 	validateIndicator,
 	validateIndicatorDerivation,
 } from "@/api/services/indicatorGovernanceService";
+import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import {
 	buildExistingIndicatorMutationPayload,
 	buildIndicatorUpsertPayload,
@@ -25,7 +26,6 @@ import {
 	normalizeIndicatorEditValues,
 	validateIndicatorDefinition,
 } from "@/features/modeling/indicators/indicatorDefinitionContract";
-import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import {
 	type IndicatorPreflightResult,
 	publishIndicatorWithPreview,
@@ -165,21 +165,25 @@ export function filterIndicators(
 }
 
 export const supportsIndicatorCreation = (type: MetricType) =>
+	type === "原子指标" || type === "派生指标" || type === "复合指标" || type === "修饰词";
+
+export const supportsIndicatorCalculation = (type: MetricType) =>
 	type === "原子指标" || type === "派生指标" || type === "复合指标";
 
 export function createIndicatorDraft(type: MetricType, domain = ""): MetricSelection {
 	const isDerived = type === "派生指标" || type === "复合指标";
+	const isQualifier = type === "修饰词" || type === "时间周期";
 	const category = type === "修饰词" ? "MODIFIER" : type === "时间周期" ? "TIME_PERIOD" : null;
 	return {
 		code: "",
 		name: "",
 		domain,
 		category,
-		metricType: type === "复合指标" ? "COMPOSITE" : type === "派生指标" ? "DERIVED" : "ATOMIC",
+		metricType: isQualifier ? null : type === "复合指标" ? "COMPOSITE" : type === "派生指标" ? "DERIVED" : "ATOMIC",
 		status: "DRAFT",
 		version: "v1",
 		isDerived,
-		aggregationType: isDerived ? "DERIVED" : "SUM",
+		aggregationType: isQualifier ? null : isDerived ? "DERIVED" : "SUM",
 		measureField: null,
 		expressionSql: null,
 		dependencyIndicators: null,
@@ -210,6 +214,7 @@ type ModelFieldDraftRequest = {
 };
 
 async function modelFieldDraftRequest(payload: IndicatorUpsertPayload): Promise<ModelFieldDraftRequest | null> {
+	if (String(payload.category || "").toUpperCase() === "MODIFIER") return null;
 	const metricType = String(payload.metricType || "ATOMIC").toUpperCase();
 	const modelSource = payload.sourceRefs?.find((ref) => ref.sourceType === "SEMANTIC_MODEL_REVISION");
 	let model: ModelSpecView | undefined;

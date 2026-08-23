@@ -2,17 +2,13 @@ import { Alert, Button, Col, Row, Space } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import workbenchService, { type LeaderOverviewResponse } from "@/api/services/workbenchService";
 import { auditLog } from "@/utils/audit";
-import { useWorkbenchRole } from "./hooks/useWorkbenchRole";
-import {
-	WorkbenchFilterBar,
-	initialFilterState,
-	type WorkbenchFilterState,
-} from "./components/WorkbenchFilterBar";
-import { KpiRow } from "./components/KpiRow";
-import { DomainMatrix } from "./components/DomainMatrix";
-import { TopReportsBlock } from "./components/TopReportsBlock";
 import { CoreAssetsBlock } from "./components/CoreAssetsBlock";
+import { DomainMatrix } from "./components/DomainMatrix";
+import { KpiRow } from "./components/KpiRow";
 import { ScreenStrip } from "./components/ScreenStrip";
+import { TopReportsBlock } from "./components/TopReportsBlock";
+import { initialFilterState, WorkbenchFilterBar, type WorkbenchFilterState } from "./components/WorkbenchFilterBar";
+import { useWorkbenchRole } from "./hooks/useWorkbenchRole";
 
 /**
  * Sprint-15 F5/T04 — Leader-overview workbench page shell.
@@ -38,6 +34,7 @@ export function LeaderOverviewPage({ visibleComponentKeys }: LeaderOverviewPageP
 	const [data, setData] = useState<LeaderOverviewResponse | null>(null);
 	const [loading, setLoading] = useState<boolean>(true);
 	const [error, setError] = useState<Error | null>(null);
+	const [domainLabels, setDomainLabels] = useState<Readonly<Record<string, string>>>({});
 
 	// Page-enter audit (once per role/dept identity).
 	useEffect(() => {
@@ -111,7 +108,7 @@ export function LeaderOverviewPage({ visibleComponentKeys }: LeaderOverviewPageP
 
 	return (
 		<div data-testid="platform-workbench-page">
-			<WorkbenchFilterBar value={filter} onChange={setFilter} />
+			<WorkbenchFilterBar value={filter} onChange={setFilter} onDomainLabelsChange={setDomainLabels} />
 
 			<div style={{ padding: 16 }}>
 				<Space direction="vertical" size={16} style={{ width: "100%" }}>
@@ -158,6 +155,7 @@ export function LeaderOverviewPage({ visibleComponentKeys }: LeaderOverviewPageP
 										role={roleInfo.role}
 										items={data?.topReports ?? []}
 										loading={loading}
+										domainLabels={domainLabels}
 									/>
 								</Col>
 							)}
@@ -167,6 +165,7 @@ export function LeaderOverviewPage({ visibleComponentKeys }: LeaderOverviewPageP
 										role={roleInfo.role}
 										items={data?.topAssets ?? []}
 										loading={loading}
+										domainLabels={domainLabels}
 									/>
 								</Col>
 							)}

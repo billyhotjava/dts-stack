@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -29,4 +30,7 @@ public interface GovQualityRunRepository extends JpaRepository<GovQualityRun, UU
     List<GovQualityRun> findByTriggerRefOrderByCreatedDateAsc(String triggerRef);
 
     List<GovQualityRun> findByTriggerRefStartingWithOrderByCreatedDateAsc(String triggerRefPrefix);
+
+    @EntityGraph(attributePaths = { "rule", "ruleVersion", "binding" })
+    List<GovQualityRun> findByJobIdOrderByCreatedDateAsc(UUID jobId);
 }

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260822_02_modeling_word_root" author="codex">
+        <createTable tableName="modeling_word_root">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="code" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name_cn" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name_en" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="abbreviation" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="domain" type="varchar(128)"/>
+            <column name="version" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_dept" type="varchar(128)"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="modeling_word_root"
+            columnNames="code"
+            constraintName="uk_modeling_word_root_code"/>
+        <createIndex tableName="modeling_word_root" indexName="idx_modeling_word_root_owner_dept">
+            <column name="owner_dept"/>
+        </createIndex>
+        <createIndex tableName="modeling_word_root" indexName="idx_modeling_word_root_domain">
+            <column name="domain"/>
+        </createIndex>
+        <createIndex tableName="modeling_word_root" indexName="idx_modeling_word_root_status">
+            <column name="status"/>
+        </createIndex>
+        <rollback>
+            <dropTable tableName="modeling_word_root"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

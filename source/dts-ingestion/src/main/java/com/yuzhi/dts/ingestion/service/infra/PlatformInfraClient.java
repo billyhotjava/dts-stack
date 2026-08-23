@@ -198,6 +198,24 @@ public class PlatformInfraClient {
 
     /** Trigger the official quality bindings referenced by dataset:&lt;uuid&gt;. */
     public String triggerQualityRunByPolicyRef(String qualityPolicyRef, String triggerType) {
+        return triggerQualityRunByPolicyRef(qualityPolicyRef, triggerType, null);
+    }
+
+    /** Trigger one idempotent post-ingestion quality workflow for the given ingestion execution. */
+    public String triggerQualityRunByPolicyRef(
+        String qualityPolicyRef,
+        String triggerType,
+        String ingestionExecutionRef
+    ) {
+        return triggerQualityWorkflowByPolicyRef(qualityPolicyRef, triggerType, ingestionExecutionRef).qualityRunId();
+    }
+
+    /** Trigger one workflow and return both the aggregate workflow and representative rule-run identities. */
+    public QualityWorkflowReceipt triggerQualityWorkflowByPolicyRef(
+        String qualityPolicyRef,
+        String triggerType,
+        String ingestionExecutionRef
+    ) {
         UUID datasetId = com.yuzhi.dts.ingestion.service.IngestionAccessContractService.parseQualityDatasetRef(qualityPolicyRef);
         URI uri = buildUri("/governance/quality/runs");
         Map<String, Object> payload = new LinkedHashMap<>();
@@ -207,6 +225,11 @@ public class PlatformInfraClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
+        if (StringUtils.hasText(ingestionExecutionRef)) {
+            String normalizedRef = ingestionExecutionRef.trim();
+            headers.set("Idempotency-Key", "ingestion-quality:" + datasetId + ":" + normalizedRef);
+            headers.set("X-Quality-Trigger-Ref", "ingestion:" + normalizedRef);
+        }
         applyServiceHeaders(headers);
         try {
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
@@ -214,13 +237,17 @@ public class PlatformInfraClient {
                 throw new IllegalStateException("平台质量检测触发返回异常状态: " + response.getStatusCode().value());
             }
             String qualityRunId = firstQualityRunId(response.getBody());
+            String workflowId = StringUtils.hasText(response.getHeaders().getFirst("X-Quality-Workflow-Id"))
+                ? response.getHeaders().getFirst("X-Quality-Workflow-Id").trim()
+                : firstQualityWorkflowId(response.getBody());
             LOG.info(
-                "Quality run triggered for qualityPolicyRef={} triggerType={} qualityRunId={}",
+                "Quality workflow triggered for qualityPolicyRef={} triggerType={} workflowId={} qualityRunId={}",
                 qualityPolicyRef,
                 triggerType,
+                workflowId,
                 qualityRunId
             );
-            return qualityRunId;
+            return new QualityWorkflowReceipt(workflowId, qualityRunId);
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Platform quality run trigger failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
             throw new IllegalStateException("质量检测触发失败: " + ex.getStatusCode().value());
@@ -246,6 +273,20 @@ public class PlatformInfraClient {
         }
         return null;
     }
+
+    private String firstQualityWorkflowId(Map<?, ?> responseBody) {
+        if (responseBody == null) {
+            return null;
+        }
+        Object payload = responseBody.containsKey("data") ? responseBody.get("data") : responseBody;
+        if (payload instanceof List<?> runs && !runs.isEmpty() && runs.get(0) instanceof Map<?, ?> first) {
+            Object jobId = first.get("jobId");
+            return jobId == null ? null : jobId.toString();
+        }
+        return null;
+    }
+
+    public record QualityWorkflowReceipt(String workflowId, String qualityRunId) {}
 
     public boolean syncIngestionExecutionLineage(IngestionTask task, IngestionExecution execution) {
         if (task == null || execution == null) {

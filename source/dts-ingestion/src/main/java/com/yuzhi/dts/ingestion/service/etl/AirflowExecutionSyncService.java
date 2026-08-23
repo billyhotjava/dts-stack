@@ -8,6 +8,7 @@ import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.IngestionAccessContractService;
 import com.yuzhi.dts.ingestion.service.IngestionTaskService;
+import com.yuzhi.dts.ingestion.service.PostIngestionQualityWorkflowService;
 import com.yuzhi.dts.ingestion.service.etl.rollback.RollbackRecoveryService;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
@@ -30,6 +31,8 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 @Component
@@ -49,6 +52,7 @@ public class AirflowExecutionSyncService {
     private IngestionAccessContractService accessContractService;
     private IngestionTaskService ingestionTaskService;
     private RollbackRecoveryService rollbackRecoveryService;
+    private PostIngestionQualityWorkflowService postIngestionQualityWorkflowService;
 
     public AirflowExecutionSyncService(
         IngestionExecutionRepository executionRepository,
@@ -83,6 +87,13 @@ public class AirflowExecutionSyncService {
     @Autowired
     void setRollbackRecoveryService(@Lazy RollbackRecoveryService rollbackRecoveryService) {
         this.rollbackRecoveryService = rollbackRecoveryService;
+    }
+
+    @Autowired
+    void setPostIngestionQualityWorkflowService(
+        PostIngestionQualityWorkflowService postIngestionQualityWorkflowService
+    ) {
+        this.postIngestionQualityWorkflowService = postIngestionQualityWorkflowService;
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -292,6 +303,15 @@ public class AirflowExecutionSyncService {
             execution.setErrorMessage(null);
             execution.setFailureCategory(null);
             execution.setFailureAdvice(null);
+        }
+        if (
+            "success".equalsIgnoreCase(status) &&
+            StringUtils.hasText(execution.getQualityPolicyRef()) &&
+            !StringUtils.hasText(execution.getQualityWorkflowId()) &&
+            !StringUtils.hasText(execution.getQualityWorkflowStatus())
+        ) {
+            execution.setQualityWorkflowStatus("PENDING");
+            execution.setQualityWorkflowNextRetryAt(Instant.now());
         }
         try {
             executionRepository.save(execution);
@@ -586,17 +606,12 @@ public class AirflowExecutionSyncService {
     }
 
     /**
-     * After a successful ingestion, trigger cleansing + quality check on the platform.
-     * Only fires for non-pre-check tasks (pre-check tasks already ran their quality validation
-     * before data was committed). This is best-effort — failures are logged but do not
-     * affect the ingestion result.
+     * After a successful ingestion, trigger the official platform quality workflow.
+     * The success transaction first persists PENDING; dispatch runs only after commit,
+     * and the retry scheduler recovers a process stop between those two steps.
      */
     private void triggerPostIngestionQualityCheck(IngestionTask task, IngestionExecution execution) {
         if (task == null) {
-            return;
-        }
-        // Pre-check tasks already went through quality validation — skip
-        if (Boolean.TRUE.equals(task.getQualityPreCheckEnabled())) {
             return;
         }
         String qualityPolicyRef = execution == null ? null : execution.getQualityPolicyRef();
@@ -604,37 +619,34 @@ public class AirflowExecutionSyncService {
             LOG.debug("[quality] no official qualityPolicyRef bound for task={}, skipping post-ingestion quality", task.getId());
             return;
         }
+        if (execution == null || execution.getId() == null) {
+            LOG.warn("event=post_ingestion_quality_workflow_not_registered taskId={} reason=execution_id_missing", task.getId());
+            return;
+        }
+        Long executionId = execution.getId();
+        Long taskId = task.getId();
+        Runnable dispatch = () -> triggerPostIngestionQualityCheckNow(taskId, executionId);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    dispatch.run();
+                }
+            });
+            return;
+        }
+        dispatch.run();
+    }
+
+    private void triggerPostIngestionQualityCheckNow(Long taskId, Long executionId) {
         try {
-            LOG.info("[quality] triggering post-ingestion quality check for task={} policy={}", task.getId(), qualityPolicyRef);
-            String qualityRunId = platformInfraClient.triggerQualityRunByPolicyRef(qualityPolicyRef, "INGESTION");
-            execution.setQualityRunId(qualityRunId);
-            executionRepository.save(execution);
-            Map<String, Object> meta = new java.util.LinkedHashMap<>();
-            meta.put("taskId", task.getId());
-            meta.put("executionId", execution.getId());
-            meta.put("qualityPolicyRef", qualityPolicyRef);
-            if (StringUtils.hasText(qualityRunId)) {
-                meta.put("qualityRunId", qualityRunId);
-            }
-            meta.put("triggerType", "INGESTION");
-            auditService.auditAction(
-                "INGESTION_TASK_QUALITY_TRIGGER",
-                AuditStage.SUCCESS,
-                task.getName(),
-                meta
-            );
-        } catch (Exception ex) {
-            LOG.warn("[quality] post-ingestion quality check trigger failed for task={}: {}", task.getId(), ex.getMessage());
-            Map<String, Object> meta = new java.util.LinkedHashMap<>();
-            meta.put("taskId", task.getId());
-            meta.put("executionId", execution.getId());
-            meta.put("qualityPolicyRef", qualityPolicyRef);
-            meta.put("error", ex.getMessage());
-            auditService.auditAction(
-                "INGESTION_TASK_QUALITY_TRIGGER",
-                AuditStage.FAIL,
-                task.getName(),
-                meta
+            postIngestionQualityWorkflowService.trigger(executionId);
+        } catch (RuntimeException ex) {
+            LOG.warn(
+                "event=post_ingestion_quality_workflow_registration_failed taskId={} executionId={} errorType={}",
+                taskId,
+                executionId,
+                ex.getClass().getSimpleName()
             );
         }
     }

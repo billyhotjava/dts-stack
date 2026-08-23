@@ -59,6 +59,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -134,6 +135,9 @@ class IngestionTaskServiceTest {
     private PlatformInfraClient platformInfraClient;
 
     @Mock
+    private PostIngestionQualityWorkflowService postIngestionQualityWorkflowService;
+
+    @Mock
     private SourceConnectorRegistry sourceConnectorRegistry;
 
     @Mock
@@ -195,6 +199,7 @@ class IngestionTaskServiceTest {
             Runnable::run
         );
         ingestionTaskService.setSecretMigrationService(secretMigrationService);
+        ingestionTaskService.setPostIngestionQualityWorkflowService(postIngestionQualityWorkflowService);
         ingestionTaskService.setRequiresNewExecutor(requiresNewExecutor);
         ingestionTaskService.setJdbcMetadataService(jdbcMetadataService);
         lenient().when(requiresNewExecutor.execute(any())).thenAnswer(invocation ->
@@ -1907,10 +1912,17 @@ class IngestionTaskServiceTest {
             execution.setQualityPolicyRef("dataset:00000000-0000-0000-0000-000000000001");
             return null;
         });
-        when(platformInfraClient.triggerQualityRunByPolicyRef(
-            "dataset:00000000-0000-0000-0000-000000000001",
-            "INGESTION"
-        )).thenReturn("quality-run-api-1");
+        when(postIngestionQualityWorkflowService.trigger(anyLong())).thenAnswer(invocation ->
+            new PostIngestionQualityWorkflowService.AttemptResult(
+                invocation.getArgument(0),
+                "quality-workflow-api-1",
+                "quality-run-api-1",
+                "TRIGGERED",
+                1,
+                null,
+                null
+            )
+        );
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(sourceResolver.resolve(sourceId, List.of())).thenReturn(
@@ -1962,10 +1974,7 @@ class IngestionTaskServiceTest {
         verify(sourceConnectorRegistry).find(contextCaptor.capture());
         verify(apiConnector).buildExecutionPlan(contextCaptor.getValue());
         verify(apiIngestionExecutor).execute(eq(plan), eq(task), any(IngestionExecution.class));
-        verify(platformInfraClient).triggerQualityRunByPolicyRef(
-            "dataset:00000000-0000-0000-0000-000000000001",
-            "INGESTION"
-        );
+        verify(postIngestionQualityWorkflowService).trigger(anyLong());
         verify(airflowAdapter, never()).triggerIfRequested(any(), any(), anyBoolean());
         verify(addaxJobService, never()).resolveWriterColumnsIfNeeded(anyString());
 
@@ -1976,7 +1985,6 @@ class IngestionTaskServiceTest {
             assertThat(saved.getRowsRead()).isEqualTo(12L);
             assertThat(saved.getRowsWritten()).isEqualTo(12L);
             assertThat(saved.getEndTime()).isNotNull();
-            assertThat(saved.getQualityRunId()).isEqualTo("quality-run-api-1");
         });
 
         assertThat(contextCaptor.getValue().taskId()).isEqualTo(taskId);

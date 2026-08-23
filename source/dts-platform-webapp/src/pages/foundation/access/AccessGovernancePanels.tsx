@@ -22,13 +22,19 @@ export const qualityDatasetIdFromRef = (value?: string) => {
 
 export const resolveQualityPolicyRef = (
 	task: Pick<IngestionTaskDTO, "qualityPolicyRef">,
-	latestExecution: Pick<IngestionExecutionDTO, "qualityPolicyRef" | "qualityRunId"> | null,
+	latestExecution: Pick<IngestionExecutionDTO, "qualityPolicyRef" | "qualityRunId" | "qualityWorkflowId"> | null,
 ) =>
-	latestExecution?.qualityRunId
+	latestExecution?.qualityWorkflowId || latestExecution?.qualityRunId
 		? latestExecution.qualityPolicyRef
 		: task.qualityPolicyRef || latestExecution?.qualityPolicyRef;
 
-export const qualityRoute = (path: "/governance/rules" | "/governance/quality", datasetId?: string, runId?: string) => {
+export const qualityRoute = (
+	path: "/governance/rules" | "/governance/quality",
+	datasetId?: string,
+	runId?: string,
+	workflowId?: string,
+) => {
+	if (workflowId) return `/governance/rules/runs?workflowId=${encodeURIComponent(workflowId)}`;
 	if (runId) return `/governance/rules/runs/${encodeURIComponent(runId)}`;
 	const params = new URLSearchParams();
 	if (datasetId) params.set("datasetId", datasetId);
@@ -49,6 +55,20 @@ export function AccessQualityPanel({
 	const kind = inferAccessKind(task);
 	const datasetId = qualityDatasetIdFromRef(resolveQualityPolicyRef(task, latestExecution));
 	const runId = latestExecution?.qualityRunId;
+	const workflowId = latestExecution?.qualityWorkflowId;
+	const workflowStatus = String(latestExecution?.qualityWorkflowStatus || "").toUpperCase();
+	const workflowStatusLabel =
+		workflowStatus === "TRIGGERED"
+			? "已启动"
+			: workflowStatus === "PENDING"
+				? "等待启动"
+				: workflowStatus === "TRIGGERING"
+					? "正在登记"
+					: workflowStatus === "RETRY_WAIT"
+						? "等待自动重试"
+						: workflowStatus === "EXHAUSTED"
+							? "自动重试已用尽"
+							: "尚未登记";
 	const stage = kind === "file" ? "可选文件质量检测" : "同步批次写入后检查";
 	const taskId = task.id;
 	const [operation, setOperation] = useState<"parse" | "check" | "recheck" | "drop" | "update" | null>(null);
@@ -208,13 +228,38 @@ export function AccessQualityPanel({
 						<Tag color={datasetId ? "success" : "warning"}>{datasetId ? "已冻结" : "未绑定"}</Tag>
 					</Descriptions.Item>
 					<Descriptions.Item label="质量数据集">{datasetId || "未记录"}</Descriptions.Item>
-					<Descriptions.Item label="最近质量运行">{runId || "尚无运行"}</Descriptions.Item>
+					<Descriptions.Item label="最近验证">
+						{workflowId || runId ? <Tag color="processing">已生成验证记录</Tag> : "尚无验证"}
+					</Descriptions.Item>
+					<Descriptions.Item label="接入后正式验证">
+						<Tag
+							color={workflowStatus === "TRIGGERED" ? "success" : workflowStatus === "EXHAUSTED" ? "error" : "warning"}
+						>
+							{workflowStatusLabel}
+						</Tag>
+						{latestExecution?.qualityWorkflowAttemptCount
+							? ` 第 ${latestExecution.qualityWorkflowAttemptCount} 次尝试`
+							: null}
+					</Descriptions.Item>
 					{kind === "file" ? (
 						<Descriptions.Item label="质量检测状态" span={2}>
 							{task.preCheckStatus || "尚未执行"}
 						</Descriptions.Item>
 					) : null}
 				</Descriptions>
+				{["RETRY_WAIT", "EXHAUSTED"].includes(workflowStatus) ? (
+					<Alert
+						style={{ marginTop: 12 }}
+						type={workflowStatus === "EXHAUSTED" ? "error" : "warning"}
+						showIcon
+						message={workflowStatus === "EXHAUSTED" ? "质量工作流登记失败" : "质量工作流将自动重试"}
+						description={
+							workflowStatus === "EXHAUSTED"
+								? latestExecution?.qualityWorkflowError || "三次自动登记均未成功，请检查平台质量服务。"
+								: `下一次重试：${latestExecution?.qualityWorkflowNextRetryAt || "稍后"}`
+						}
+					/>
+				) : null}
 				{datasetId ? (
 					<Text type="secondary" style={{ display: "block", marginTop: 12 }}>
 						任务运行时按该数据集已发布的规则绑定触发检查，不在接入侧复制规则。
@@ -236,8 +281,8 @@ export function AccessQualityPanel({
 					<Button onClick={() => router.push(qualityRoute("/governance/rules", datasetId))}>配置数据质量规则</Button>
 					<Button
 						type="primary"
-						disabled={!datasetId && !runId}
-						onClick={() => router.push(qualityRoute("/governance/quality", datasetId, runId))}
+						disabled={!datasetId && !runId && !workflowId}
+						onClick={() => router.push(qualityRoute("/governance/quality", datasetId, runId, workflowId))}
 					>
 						查看质量运行
 					</Button>

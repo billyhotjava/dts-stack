@@ -293,8 +293,16 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 	const issues: string[] = [];
 	const code = String(values.code ?? "").trim();
 	const name = String(values.name ?? "").trim();
-	if (!code) issues.push("指标编码不能为空");
-	if (!name) issues.push("指标名称不能为空");
+	const category = String(values.category ?? "")
+		.trim()
+		.toUpperCase();
+	const isModifier = category === "MODIFIER";
+	if (!code) issues.push(isModifier ? "修饰词编码不能为空" : "指标编码不能为空");
+	if (!name) issues.push(isModifier ? "修饰词名称不能为空" : "指标名称不能为空");
+	if (isModifier) {
+		if (!String(values.definition ?? "").trim()) issues.push("修饰词必须填写业务含义与限定范围");
+		return issues;
+	}
 	const metricType = String(values.metricType ?? "")
 		.trim()
 		.toUpperCase();
@@ -382,6 +390,23 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 }
 
 export function normalizeIndicatorEditValues(values: IndicatorEditValues): IndicatorEditValues {
+	if (
+		String(values.category ?? "")
+			.trim()
+			.toUpperCase() === "MODIFIER"
+	) {
+		return {
+			...values,
+			metricType: null,
+			isDerived: false,
+			aggregationType: null,
+			measureField: null,
+			expressionSql: null,
+			datasetId: null,
+			sourceRefs: null,
+			dependencyCodes: [],
+		};
+	}
 	const explicitMetricType = String(values.metricType ?? "")
 		.trim()
 		.toUpperCase();

@@ -38,8 +38,6 @@ export const runNeedsDisposition = (status?: string) =>
 export const buildIssueUpdatePayload = (issue: RunIssue, patch: Partial<RunIssue>) => {
 	const next = { ...issue, ...patch };
 	return {
-		sourceType: next.sourceType,
-		sourceId: next.sourceId,
 		datasetId: next.datasetId,
 		title: next.title,
 		summary: next.summary,

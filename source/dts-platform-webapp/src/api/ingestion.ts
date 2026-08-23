@@ -95,6 +95,11 @@ export interface IngestionExecutionDTO {
 	effectiveConfigChecksum?: string;
 	qualityPolicyRef?: string;
 	qualityRunId?: string;
+	qualityWorkflowId?: string;
+	qualityWorkflowStatus?: "TRIGGERING" | "TRIGGERED" | "RETRY_WAIT" | "EXHAUSTED" | string;
+	qualityWorkflowAttemptCount?: number;
+	qualityWorkflowNextRetryAt?: string;
+	qualityWorkflowError?: string;
 	createdAt?: string;
 }
 

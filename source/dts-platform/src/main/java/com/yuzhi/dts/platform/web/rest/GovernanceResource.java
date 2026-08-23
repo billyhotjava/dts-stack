@@ -21,6 +21,7 @@ import com.yuzhi.dts.platform.service.governance.QualityReportExportService;
 import com.yuzhi.dts.platform.service.governance.QualityAuditRecorder;
 import com.yuzhi.dts.platform.service.governance.QualityDatasetReadGuard;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
+import com.yuzhi.dts.platform.service.governance.QualityWorkflowOrchestrator;
 import com.yuzhi.dts.platform.service.governance.QualityRunOutcomeSemantics;
 import com.yuzhi.dts.platform.service.governance.SqlRepairService;
 import com.yuzhi.dts.platform.service.governance.QualityDashboardService;
@@ -38,6 +39,7 @@ import com.yuzhi.dts.platform.service.governance.dto.IssueTicketDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRuleVersionDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
+import com.yuzhi.dts.platform.service.governance.dto.QualityWorkflowRunDto;
 import com.yuzhi.dts.platform.service.governance.request.ComplianceBatchRequest;
 import com.yuzhi.dts.platform.service.governance.request.ComplianceItemUpdateRequest;
 import com.yuzhi.dts.platform.service.governance.request.IssueActionRequest;
@@ -94,6 +96,7 @@ public class GovernanceResource {
 
     private final QualityRuleService qualityRuleService;
     private final QualityRunService qualityRunService;
+    private final QualityWorkflowOrchestrator qualityWorkflowOrchestrator;
     private final ComplianceService complianceService;
     private final IssueTicketService issueTicketService;
     private final GovernanceOpsMetricsService governanceOpsMetricsService;
@@ -116,6 +119,7 @@ public class GovernanceResource {
     public GovernanceResource(
         QualityRuleService qualityRuleService,
         QualityRunService qualityRunService,
+        QualityWorkflowOrchestrator qualityWorkflowOrchestrator,
         ComplianceService complianceService,
         IssueTicketService issueTicketService,
         GovernanceOpsMetricsService governanceOpsMetricsService,
@@ -137,6 +141,7 @@ public class GovernanceResource {
     ) {
         this.qualityRuleService = qualityRuleService;
         this.qualityRunService = qualityRunService;
+        this.qualityWorkflowOrchestrator = qualityWorkflowOrchestrator;
         this.complianceService = complianceService;
         this.issueTicketService = issueTicketService;
         this.governanceOpsMetricsService = governanceOpsMetricsService;
@@ -356,16 +361,51 @@ public class GovernanceResource {
     @PreAuthorize("(" + GOVERNANCE_MAINTAINER_EXPRESSION + ") or (" + INGESTION_SERVICE_EXPRESSION + ")")
     public ApiResponse<List<QualityRunDto>> triggerQualityRun(
         @RequestBody QualityRunTriggerRequest request,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestHeader(value = "X-Quality-Trigger-Ref", required = false) String qualityTriggerRef,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
+        HttpServletResponse response
     ) {
         String resourceId = request != null && request.getRuleId() != null ? request.getRuleId().toString() : "trigger";
         boolean trustedIngestion = isTrustedIngestionService();
         Instant occurredAt = Instant.now();
         String ingestionEventIdentity = trustedIngestion ? "quality-ingestion-trigger:" + UUID.randomUUID() : null;
         try {
-            List<QualityRunDto> runs = trustedIngestion
-                ? qualityRunService.triggerTrustedIngestion(request)
-                : qualityRunService.trigger(request, currentUser(), activeDept);
+            List<QualityRunDto> runs;
+            if (trustedIngestion) {
+                if (request == null || request.getDatasetId() == null) {
+                    throw new IllegalArgumentException("数据接入后质量验证缺少数据资产");
+                }
+                String effectiveKey = StringUtils.hasText(idempotencyKey)
+                    ? idempotencyKey.trim()
+                    : "ingestion-quality:" + request.getDatasetId() + ":" + UUID.randomUUID();
+                String effectiveRef = StringUtils.hasText(qualityTriggerRef)
+                    ? qualityTriggerRef.trim()
+                    : "ingestion:" + UUID.randomUUID();
+                QualityWorkflowRunDto workflow = qualityWorkflowOrchestrator.startTrustedIngestion(
+                    request.getDatasetId(),
+                    effectiveRef,
+                    effectiveKey
+                );
+                runs = workflow.ruleRuns();
+                if (response != null && workflow.id() != null) {
+                    response.setHeader("X-Quality-Workflow-Id", workflow.id().toString());
+                }
+            } else {
+                String effectiveKey = StringUtils.hasText(idempotencyKey)
+                    ? idempotencyKey.trim()
+                    : "quality-workflow:manual-rule:" + UUID.randomUUID();
+                QualityWorkflowRunDto workflow = qualityWorkflowOrchestrator.startAuthorizedRule(
+                    request,
+                    currentUser(),
+                    activeDept,
+                    effectiveKey
+                );
+                runs = workflow.ruleRuns();
+                if (response != null && workflow.id() != null) {
+                    response.setHeader("X-Quality-Workflow-Id", workflow.id().toString());
+                }
+            }
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("summary", "执行质量检测");
             payload.put("runCount", runs.size());
@@ -414,6 +454,13 @@ public class GovernanceResource {
             }
             throw ex;
         }
+    }
+
+    ApiResponse<List<QualityRunDto>> triggerQualityRun(
+        QualityRunTriggerRequest request,
+        String activeDept
+    ) {
+        return triggerQualityRun(request, null, null, activeDept, null);
     }
 
     private boolean isTrustedIngestionService() {

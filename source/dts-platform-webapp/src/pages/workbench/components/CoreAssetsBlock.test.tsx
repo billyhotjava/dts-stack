@@ -98,10 +98,29 @@ describe("CoreAssetsBlock", () => {
 	});
 
 	it("renders_bizDomain_tag_only_when_not_null", () => {
-		const { container, unmount } = render(<CoreAssetsBlock role="INST_LEADER" items={sample} loading={false} />);
+		const { container, unmount } = render(
+			<CoreAssetsBlock
+				role="INST_LEADER"
+				items={sample}
+				loading={false}
+				domainLabels={{ SALES: "销售域", HR: "人力资源域" }}
+			/>,
+		);
 		const geekblueTags = container.querySelectorAll(".ant-tag-geekblue");
 		// Only two items carry bizDomain in the fixture.
 		expect(geekblueTags.length).toBe(2);
+		expect(container.textContent).toContain("销售域");
+		expect(container.textContent).toContain("人力资源域");
+		expect(container.textContent).not.toContain("SALES");
+		unmount();
+	});
+
+	it("does_not_leak_an_unresolved_domain_code", () => {
+		const { container, unmount } = render(
+			<CoreAssetsBlock role="EMP" items={[sample[0]!]} loading={false} domainLabels={{}} />,
+		);
+		expect(container.textContent).toContain("未命名业务域");
+		expect(container.textContent).not.toContain("SALES");
 		unmount();
 	});
 

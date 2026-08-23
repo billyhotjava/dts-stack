@@ -57,7 +57,9 @@ final class QualityRunAuditCoordinator {
         request.setTags(List.of(
             "QUALITY_RUN",
             "trigger=" + String.valueOf(run.getTriggerType()),
-            "datasetId=" + String.valueOf(run.getDatasetId())
+            "datasetId=" + String.valueOf(run.getDatasetId()),
+            "runId=" + run.getId(),
+            "workflowId=" + String.valueOf(run.getJobId())
         ));
         String effectiveActor = StringUtils.isNotBlank(actor) ? actor : "system";
         String issueActor = "SCHEDULED".equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType()))
@@ -65,12 +67,12 @@ final class QualityRunAuditCoordinator {
             : effectiveActor;
         IssueTicketService.CreateOrTouchResult result;
         try {
-            result = issueTicketService.createOrTouchWithDisposition(
-                "QUALITY_RUN",
+            result = issueTicketService.createOrTouchQualityProblem(
+                QualityIssueIdentity.problemKey(run),
                 run.getId(),
                 request,
                 issueActor,
-                "系统自动生成：质量检测失败"
+                failureEvidenceNote(run)
             );
         } catch (Exception ex) {
             auditAutomaticIssueFailure(run, effectiveActor, ex);
@@ -84,6 +86,65 @@ final class QualityRunAuditCoordinator {
         IssueTicketDto issue = result != null ? result.ticket() : null;
         if (issue != null && issue.getId() != null) {
             auditAutomaticIssue(run, issue.getId(), effectiveActor, result.disposition());
+        }
+    }
+
+    void resolveIssuesForSuccessfulRun(GovQualityRun run, String actor) {
+        if (run == null || run.getId() == null) {
+            return;
+        }
+        String effectiveActor = StringUtils.defaultIfBlank(actor, "quality-workflow");
+        try {
+            List<UUID> issueIds = issueTicketService.resolveQualityProblems(run, effectiveActor);
+            for (UUID issueId : issueIds) {
+                auditAutomaticRecovery(run, issueId, effectiveActor);
+            }
+        } catch (Exception ex) {
+            log.warn(
+                "event=quality_run_issue_recovery_failed runId={} errorType={}",
+                run.getId(),
+                ex.getClass().getSimpleName()
+            );
+        }
+    }
+
+    private String failureEvidenceNote(GovQualityRun run) {
+        StringBuilder note = new StringBuilder("系统自动追加：质量验证未通过；运行编号=").append(run.getId());
+        if (run.getJobId() != null) {
+            note.append("；工作流编号=").append(run.getJobId());
+        }
+        note.append("；错误分类=")
+            .append(StringUtils.defaultIfBlank(run.getErrorCategory(), "EXECUTION_ERROR"));
+        return note.toString();
+    }
+
+    private void auditAutomaticRecovery(GovQualityRun run, UUID issueId, String actor) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("summary", "质量问题自动恢复");
+        payload.put("issueId", issueId.toString());
+        payload.put("qualityRunId", run.getId().toString());
+        if (run.getJobId() != null) {
+            payload.put("workflowId", run.getJobId().toString());
+        }
+        payload.put("triggerActor", actor);
+        String machineActor = runMachineAuditActor(run);
+        if (machineActor != null) {
+            auditRecorder.recordMachine(
+                machineActor,
+                runEventIdentity(run, AuditStage.SUCCESS) + ":ISSUE:RECOVERED:" + issueId,
+                run.getFinishedAt() != null ? run.getFinishedAt() : Instant.now(),
+                "GOV_ISSUE_ACTION_APPEND",
+                AuditStage.SUCCESS,
+                issueId.toString(),
+                payload
+            );
+        } else {
+            auditRecorder.recordAction(
+                "GOV_ISSUE_ACTION_APPEND",
+                AuditStage.SUCCESS,
+                issueId.toString(),
+                payload
+            );
         }
     }
 

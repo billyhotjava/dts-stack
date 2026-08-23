@@ -40,6 +40,12 @@ public class GovQualityTask extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "last_triggered_at")
     private Instant lastTriggeredAt;
 
+    @Column(name = "max_retry_attempts", nullable = false)
+    private Integer maxRetryAttempts = 1;
+
+    @Column(name = "retry_backoff_seconds", nullable = false)
+    private Integer retryBackoffSeconds = 0;
+
     @Override
     public UUID getId() {
         return id;
@@ -104,5 +110,20 @@ public class GovQualityTask extends AbstractAuditingEntity<UUID> implements Seri
     public void setLastTriggeredAt(Instant lastTriggeredAt) {
         this.lastTriggeredAt = lastTriggeredAt;
     }
-}
 
+    public Integer getMaxRetryAttempts() {
+        return maxRetryAttempts;
+    }
+
+    public void setMaxRetryAttempts(Integer maxRetryAttempts) {
+        this.maxRetryAttempts = maxRetryAttempts;
+    }
+
+    public Integer getRetryBackoffSeconds() {
+        return retryBackoffSeconds;
+    }
+
+    public void setRetryBackoffSeconds(Integer retryBackoffSeconds) {
+        this.retryBackoffSeconds = retryBackoffSeconds;
+    }
+}

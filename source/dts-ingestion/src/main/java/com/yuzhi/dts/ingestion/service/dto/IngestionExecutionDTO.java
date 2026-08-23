@@ -24,6 +24,16 @@ public class IngestionExecutionDTO {
 
     private String qualityRunId;
 
+    private String qualityWorkflowId;
+
+    private String qualityWorkflowStatus;
+
+    private int qualityWorkflowAttemptCount;
+
+    private Instant qualityWorkflowNextRetryAt;
+
+    private String qualityWorkflowError;
+
     private String airflowDagId;
 
     private String batchId;
@@ -128,6 +138,46 @@ public class IngestionExecutionDTO {
 
     public void setQualityRunId(String qualityRunId) {
         this.qualityRunId = qualityRunId;
+    }
+
+    public String getQualityWorkflowId() {
+        return qualityWorkflowId;
+    }
+
+    public void setQualityWorkflowId(String qualityWorkflowId) {
+        this.qualityWorkflowId = qualityWorkflowId;
+    }
+
+    public String getQualityWorkflowStatus() {
+        return qualityWorkflowStatus;
+    }
+
+    public void setQualityWorkflowStatus(String qualityWorkflowStatus) {
+        this.qualityWorkflowStatus = qualityWorkflowStatus;
+    }
+
+    public int getQualityWorkflowAttemptCount() {
+        return qualityWorkflowAttemptCount;
+    }
+
+    public void setQualityWorkflowAttemptCount(int qualityWorkflowAttemptCount) {
+        this.qualityWorkflowAttemptCount = qualityWorkflowAttemptCount;
+    }
+
+    public Instant getQualityWorkflowNextRetryAt() {
+        return qualityWorkflowNextRetryAt;
+    }
+
+    public void setQualityWorkflowNextRetryAt(Instant qualityWorkflowNextRetryAt) {
+        this.qualityWorkflowNextRetryAt = qualityWorkflowNextRetryAt;
+    }
+
+    public String getQualityWorkflowError() {
+        return qualityWorkflowError;
+    }
+
+    public void setQualityWorkflowError(String qualityWorkflowError) {
+        this.qualityWorkflowError = qualityWorkflowError;
     }
 
     public String getAirflowDagId() {

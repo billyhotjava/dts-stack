@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReleaseCandidate, ReleaseCandidateGovernanceQuality } from "@/api/modelSpecApi";
+import DIALOG_SOURCE from "./ModelPublishDialog.tsx?raw";
 import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 
 const candidate = {
@@ -47,6 +48,10 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 	afterEach(async () => {
 		await act(async () => root.unmount());
 		container.remove();
+	});
+
+	it("reloads the candidate after a quality workflow start failure so recovery actions become visible", () => {
+		expect(DIALOG_SOURCE).toMatch(/if \(action === "RUN_QUALITY"\) await load\(\);\s*setFailure\(message\);/);
 	});
 
 	it("offers a distinct rerun action for failed bound governance evidence", async () => {

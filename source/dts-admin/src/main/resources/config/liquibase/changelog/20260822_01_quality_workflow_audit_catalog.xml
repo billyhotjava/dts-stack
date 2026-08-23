@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260822-01-quality-workflow-audit-catalog" author="xiezm">
+        <comment>Register strict audit semantics for the unified data-quality workflow lifecycle.</comment>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            UPDATE audit_resource_dictionary
+               SET aliases = CASE
+                       WHEN position('governance.qualityWorkflows' IN coalesce(aliases, '')) > 0 THEN aliases
+                       ELSE concat_ws(',', nullif(aliases, ''), 'governance.qualityWorkflows')
+                   END,
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE resource_key = 'data_quality';
+
+            UPDATE audit_module_catalog
+               SET module_name = '运行策略',
+                   version = 'quality-workflow-v1',
+                   updated_at = CURRENT_TIMESTAMP
+             WHERE source_system = 'platform'
+               AND module_key = 'governance.qualityTasks';
+
+            WITH renamed_actions (action_code, operation_name) AS (
+                VALUES
+                    ('GOV_QUALITY_TASK_LIST', '查看运行策略列表'),
+                    ('GOV_QUALITY_TASK_CREATE', '创建运行策略'),
+                    ('GOV_QUALITY_TASK_UPDATE', '更新运行策略'),
+                    ('GOV_QUALITY_TASK_DELETE', '删除运行策略'),
+                    ('GOV_QUALITY_TASK_TOGGLE', '切换运行策略状态'),
+                    ('GOV_QUALITY_TASK_EXECUTE', '执行运行策略')
+            )
+            UPDATE audit_action_catalog action
+               SET module_name = '运行策略',
+                   operation_name = renamed_actions.operation_name,
+                   version = 'quality-workflow-v1',
+                   updated_at = CURRENT_TIMESTAMP
+              FROM renamed_actions
+             WHERE action.source_system = 'platform'
+               AND action.action_code = renamed_actions.action_code;
+
+            INSERT INTO audit_module_catalog (
+                source_system, module_key, module_name, parent_module_key, owner,
+                enabled, order_value, version, updated_at
+            ) VALUES (
+                'platform', 'governance.qualityWorkflows', '质量工作流', 'governance', 'platform',
+                TRUE, 115, 'quality-workflow-v1', CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                order_value = EXCLUDED.order_value,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+
+            WITH desired (
+                action_code, operation_name, operation_kind
+            ) AS (
+                VALUES
+                    ('GOV_QUALITY_WORKFLOW_START', '启动质量工作流', 'EXECUTE'),
+                    ('GOV_QUALITY_WORKFLOW_FINALIZE', '完成质量工作流', 'UPDATE'),
+                    ('GOV_QUALITY_WORKFLOW_RETRY', '重试质量工作流', 'EXECUTE'),
+                    ('GOV_QUALITY_WORKFLOW_CANCEL', '取消质量工作流', 'UPDATE')
+            )
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            )
+            SELECT
+                'platform', desired.action_code, 'governance.qualityWorkflows', '质量工作流',
+                desired.action_code, desired.operation_name, desired.operation_kind,
+                'data_quality', FALSE, TRUE, 'quality-workflow-v1', CURRENT_TIMESTAMP
+              FROM desired
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" stripComments="false"><![CDATA[
+                -- Forward-only catalog convergence: audit history may already reference these codes.
+                SELECT 1;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

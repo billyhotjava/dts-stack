@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.domain.governance.GovQualityTask;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.governance.QualityTaskService;
+import com.yuzhi.dts.platform.service.governance.dto.QualityWorkflowRunDto;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -74,19 +75,23 @@ public class GovernanceQualityTaskResource {
 
     @PostMapping("/{id}/trigger")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
-    public ApiResponse<List<Map<String, Object>>> trigger(
+    public ApiResponse<QualityWorkflowRunDto> trigger(
+        @PathVariable UUID id,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        String actor = SecurityUtils.getCurrentUserLogin().orElse("system");
+        return ApiResponses.ok(taskService.trigger(id, actor, activeDept, idempotencyKey));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Boolean> delete(
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         String actor = SecurityUtils.getCurrentUserLogin().orElse("system");
-        return ApiResponses.ok(taskService.trigger(id, actor, activeDept));
-    }
-
-    @DeleteMapping("/{id}")
-    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
-    public ApiResponse<Boolean> delete(@PathVariable UUID id) {
-        String actor = SecurityUtils.getCurrentUserLogin().orElse("system");
-        taskService.delete(id, actor);
+        taskService.delete(id, actor, activeDept);
         return ApiResponses.ok(Boolean.TRUE);
     }
 }

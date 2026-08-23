@@ -58,6 +58,18 @@ public class IssueSourcePolicy {
         request.setDatasetId(sourceDatasetId);
     }
 
+    GovQualityRun requireReadableQualityRun(UUID runId, String activeDeptHeader) {
+        if (runId == null) {
+            throw new IllegalArgumentException("质量运行 ID 不能为空");
+        }
+        GovQualityRun run = runRepository.findById(runId).orElseThrow(EntityNotFoundException::new);
+        if (run.getDatasetId() == null) {
+            throw new IllegalArgumentException("质量运行未绑定数据资产");
+        }
+        datasetReadGuard.requireReadable(run.getDatasetId(), activeDeptHeader);
+        return run;
+    }
+
     public void assertImmutable(
         GovIssueTicket ticket,
         IssueTicketUpsertRequest request,

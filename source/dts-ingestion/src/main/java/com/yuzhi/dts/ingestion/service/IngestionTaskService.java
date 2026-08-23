@@ -136,6 +136,7 @@ public class IngestionTaskService {
     private IngestionRequiresNewExecutor requiresNewExecutor;
     private RollbackRecoveryService rollbackRecoveryService;
     private JdbcMetadataService jdbcMetadataService;
+    private PostIngestionQualityWorkflowService postIngestionQualityWorkflowService;
 
     public IngestionTaskService(
         IngestionTaskRepository taskRepository,
@@ -201,6 +202,13 @@ public class IngestionTaskService {
     @Autowired
     void setSecretMigrationService(IngestionTaskSecretMigrationService secretMigrationService) {
         this.secretMigrationService = secretMigrationService;
+    }
+
+    @Autowired
+    void setPostIngestionQualityWorkflowService(
+        PostIngestionQualityWorkflowService postIngestionQualityWorkflowService
+    ) {
+        this.postIngestionQualityWorkflowService = postIngestionQualityWorkflowService;
     }
 
     @Autowired
@@ -1339,6 +1347,7 @@ public class IngestionTaskService {
 
         execution.setStatus("success");
         execution.setEndTime(Instant.now());
+        markPostIngestionQualityPending(execution);
         if (result.rowsRead() != null) {
             execution.setRowsRead(result.rowsRead());
         }
@@ -1388,11 +1397,23 @@ public class IngestionTaskService {
         execution.setRowsWritten(result.rowsWritten());
         execution.setSourceTables(runtimeExecution.getSourceTables());
         execution.setTargetTables(runtimeExecution.getTargetTables());
+        markPostIngestionQualityPending(execution);
         executionRepository.save(execution);
         canonicalTask.setLastExecutedAt(execution.getEndTime());
         canonicalTask.setLastExecutionStatus("success");
         taskRepository.save(canonicalTask);
         return copyApiExecution(execution);
+    }
+
+    private void markPostIngestionQualityPending(IngestionExecution execution) {
+        if (
+            StringUtils.hasText(execution.getQualityPolicyRef()) &&
+            !StringUtils.hasText(execution.getQualityWorkflowId()) &&
+            !StringUtils.hasText(execution.getQualityWorkflowStatus())
+        ) {
+            execution.setQualityWorkflowStatus("PENDING");
+            execution.setQualityWorkflowNextRetryAt(Instant.now());
+        }
     }
 
     private IngestionExecution finalizeApiExecutionFailure(
@@ -1440,6 +1461,11 @@ public class IngestionTaskService {
         copy.setEffectiveConfigChecksum(source.getEffectiveConfigChecksum());
         copy.setQualityPolicyRef(source.getQualityPolicyRef());
         copy.setQualityRunId(source.getQualityRunId());
+        copy.setQualityWorkflowId(source.getQualityWorkflowId());
+        copy.setQualityWorkflowStatus(source.getQualityWorkflowStatus());
+        copy.setQualityWorkflowAttemptCount(source.getQualityWorkflowAttemptCount());
+        copy.setQualityWorkflowNextRetryAt(source.getQualityWorkflowNextRetryAt());
+        copy.setQualityWorkflowError(source.getQualityWorkflowError());
         copy.setAirflowDagId(source.getAirflowDagId());
         copy.setBatchId(source.getBatchId());
         copy.setStatus(source.getStatus());
@@ -1494,13 +1520,9 @@ public class IngestionTaskService {
 
     private record ApiExecutionWork(IngestionTask task, IngestionExecution execution) {}
 
-    /**
-     * API ingestion does not pass through the Airflow status synchronizer, so it
-     * must trigger the same centrally managed post-run quality policy here. The
-     * quality trigger is best-effort and never rewrites the ingestion outcome.
-     */
+    /** API ingestion commits success before invoking the durable post-run quality command. */
     private void triggerPostIngestionQualityCheck(IngestionTask task, IngestionExecution execution) {
-        if (task == null || execution == null || Boolean.TRUE.equals(task.getQualityPreCheckEnabled())) {
+        if (task == null || execution == null) {
             return;
         }
         String qualityPolicyRef = execution.getQualityPolicyRef();
@@ -1508,32 +1530,19 @@ public class IngestionTaskService {
             log.debug("[quality] no official qualityPolicyRef bound for API task={}, skipping", task.getId());
             return;
         }
+        if (execution.getId() == null) {
+            log.warn("event=post_ingestion_quality_workflow_not_registered taskId={} reason=execution_id_missing", task.getId());
+            return;
+        }
         try {
-            String qualityRunId = platformInfraClient.triggerQualityRunByPolicyRef(qualityPolicyRef, "INGESTION");
-            execution.setQualityRunId(qualityRunId);
-            if (execution.getId() != null) {
-                txTemplate.executeWithoutResult(status -> executionRepository.findById(execution.getId()).ifPresent(managed -> {
-                    managed.setQualityRunId(qualityRunId);
-                    executionRepository.save(managed);
-                }));
-            }
-            Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("taskId", task.getId());
-            meta.put("executionId", execution.getId());
-            meta.put("qualityPolicyRef", qualityPolicyRef);
-            if (StringUtils.hasText(qualityRunId)) {
-                meta.put("qualityRunId", qualityRunId);
-            }
-            meta.put("triggerType", "INGESTION");
-            auditService.auditAction("INGESTION_TASK_QUALITY_TRIGGER", AuditStage.SUCCESS, task.getName(), meta);
-        } catch (Exception ex) {
-            log.warn("[quality] API post-ingestion quality trigger failed for task={}: {}", task.getId(), ex.getMessage());
-            Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("taskId", task.getId());
-            meta.put("executionId", execution.getId());
-            meta.put("qualityPolicyRef", qualityPolicyRef);
-            meta.put("error", ex.getMessage());
-            auditService.auditAction("INGESTION_TASK_QUALITY_TRIGGER", AuditStage.FAIL, task.getName(), meta);
+            postIngestionQualityWorkflowService.trigger(execution.getId());
+        } catch (RuntimeException ex) {
+            log.warn(
+                "event=post_ingestion_quality_workflow_registration_failed taskId={} executionId={} errorType={}",
+                task.getId(),
+                execution.getId(),
+                ex.getClass().getSimpleName()
+            );
         }
     }
 

@@ -16,8 +16,8 @@ import {
 	type MaterializationPlanStrategy,
 	type ModelMaterializationStatus,
 	type PlanExecutionWorkspace,
-	publishReleaseCandidate,
 	previewMaterializationPlan,
+	publishReleaseCandidate,
 	type ReleaseCandidateEntryEvidence,
 	type ReleaseCandidateLifecycleAction,
 	type ReleaseCandidateWorkbench,
@@ -462,7 +462,9 @@ export function ModelPublishDialog({
 			else await rollbackReleaseCandidate(planId, candidate, idempotencyKey, publishReason);
 			await load();
 		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, `${RELEASE_ACTION_LABELS[action]}未能完成。`).message);
+			const message = normalizeModelingRequestFailure(error, `${RELEASE_ACTION_LABELS[action]}未能完成。`).message;
+			if (action === "RUN_QUALITY") await load();
+			setFailure(message);
 		} finally {
 			setBusy("");
 			setActiveReleaseAction(null);

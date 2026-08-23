@@ -185,6 +185,50 @@ test("definition preflight distinguishes atomic and derived requirements", () =>
 	);
 });
 
+test("modifier definitions require a clear business scope but no calculation binding", () => {
+	assert.deepEqual(
+		validateIndicatorDefinition({
+			code: "CUMULATIVE",
+			name: "累计",
+			category: "MODIFIER",
+			definition: "限定指标值为统计期内累计结果",
+			businessCategoryId: "category-1",
+			dataDomainId: "domain-1",
+		}),
+		[],
+	);
+	assert.deepEqual(validateIndicatorDefinition({ code: "CUMULATIVE", name: "累计", category: "MODIFIER" }), [
+		"修饰词必须填写业务含义与限定范围",
+	]);
+});
+
+test("modifier normalization clears fields that belong to independently calculated indicators", () => {
+	assert.deepEqual(
+		normalizeIndicatorEditValues({
+			category: "MODIFIER",
+			metricType: null,
+			isDerived: false,
+			aggregationType: "",
+			measureField: "",
+			expressionSql: "",
+			datasetId: "dataset-1",
+			sourceRefs: [{ sourceType: "SEMANTIC_MODEL_REVISION", sourceId: "model-1", sourceVersion: "r1" }],
+			dependencyCodes: ["GMV"],
+		}),
+		{
+			category: "MODIFIER",
+			metricType: null,
+			isDerived: false,
+			aggregationType: null,
+			measureField: null,
+			expressionSql: null,
+			datasetId: null,
+			sourceRefs: null,
+			dependencyCodes: [],
+		},
+	);
+});
+
 test("stable metric type remains the single definition truth", () => {
 	assert.deepEqual(
 		validateIndicatorDefinition({

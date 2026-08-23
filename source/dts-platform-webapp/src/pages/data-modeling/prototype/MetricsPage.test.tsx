@@ -116,6 +116,54 @@ describe("MetricEditor stable business context", () => {
 		expect(container.querySelector<HTMLSelectElement>('select[aria-label="度量字段"]')?.value).toBe("amount");
 		expect(container.textContent).toContain("预算事实表（DWD · r7）");
 	});
+
+	it("keeps modifier identity while exposing only reusable scope fields", async () => {
+		const onChange = vi.fn();
+		await act(async () =>
+			root.render(
+				<MetricEditor
+					businessCategories={[
+						{
+							id: "category-1",
+							code: "finance",
+							name: "财务",
+							owner: "",
+							description: "",
+							parentId: null,
+							parentCode: null,
+						},
+					]}
+					codeLocked={false}
+					dataDomains={[]}
+					onChange={onChange}
+					processes={[]}
+					values={{
+						code: "CUMULATIVE",
+						name: "累计",
+						category: "MODIFIER",
+						metricType: null,
+						definition: "限定指标值为统计期内累计结果",
+					}}
+				/>,
+			),
+		);
+
+		expect(container.textContent).toContain("修饰词用于限定指标统计范围");
+		expect(container.textContent).toContain("修饰词基本信息");
+		expect(container.textContent).not.toContain("业务计算语义");
+		expect(container.querySelector('select[aria-label="来源模型"]')).toBeNull();
+		expect(container.querySelector('select[aria-label="度量字段"]')).toBeNull();
+
+		const categorySelect = container.querySelector<HTMLSelectElement>('select[aria-label="业务分类"]');
+		await act(async () => {
+			const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+			setter?.call(categorySelect, "category-1");
+			categorySelect?.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(onChange).toHaveBeenCalledWith(
+			expect.objectContaining({ category: "MODIFIER", businessCategoryId: "category-1" }),
+		);
+	});
 });
 
 describe("metric catalog table selection", () => {

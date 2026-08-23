@@ -1,9 +1,9 @@
 import { Card, Empty, List, Skeleton, Tag } from "antd";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
+import { ClassificationTag } from "@/analytics/pages/screens/components/ClassificationTag";
 import reportsService from "@/api/services/reportsService";
 import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
-import { ClassificationTag } from "@/analytics/pages/screens/components/ClassificationTag";
 import { resolveAppHref } from "@/routes/constants";
 import { resolveBiLinkForOpen } from "@/utils/biLinkUrl";
 import { humanizeBizDomain } from "../hooks/bizDomain";
@@ -24,6 +24,7 @@ export interface TopReportsBlockProps {
 	role: WorkbenchRole;
 	items: TopReportItem[];
 	loading: boolean;
+	domainLabels?: Readonly<Record<string, string>>;
 	onEmpty?: () => ReactNode;
 }
 
@@ -45,7 +46,7 @@ function emptyNodeFor(role: TopReportsBlockProps["role"]): ReactNode {
 	return <div>暂无已发布大屏</div>;
 }
 
-export function TopReportsBlock({ role, items, loading, onEmpty }: TopReportsBlockProps) {
+export function TopReportsBlock({ role, items, loading, domainLabels, onEmpty }: TopReportsBlockProps) {
 	const title = titleFor(role);
 
 	const handleRowClick = async (item: TopReportItem): Promise<void> => {
@@ -98,7 +99,7 @@ export function TopReportsBlock({ role, items, loading, onEmpty }: TopReportsBlo
 							/>
 							<div>
 								{(() => {
-									const label = humanizeBizDomain(r.bizDomain);
+									const label = humanizeBizDomain(r.bizDomain, domainLabels);
 									return label ? <Tag color="geekblue">{label}</Tag> : null;
 								})()}
 								<ClassificationTag value={r.classification} size="small" />

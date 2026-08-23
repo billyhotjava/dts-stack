@@ -13,8 +13,9 @@ test("governance writes follow the backend governance maintainer role set", () =
 	assert.equal(hasQualityMaintainerRole(["ROLE_EMPLOYEE"]), false);
 });
 
-test("quality task deletion is exposed only to ROLE_OP_ADMIN", () => {
+test("quality task deletion follows the shared governance maintainer role set", () => {
 	assert.equal(hasQualityTaskDeleteRole([{ code: "ROLE_OP_ADMIN" }]), true);
-	assert.equal(hasQualityTaskDeleteRole(["ROLE_ADMIN"]), false);
+	assert.equal(hasQualityTaskDeleteRole(["ROLE_ADMIN"]), true);
+	assert.equal(hasQualityTaskDeleteRole(["ROLE_INST_DATA_OWNER"]), true);
 	assert.equal(hasQualityTaskDeleteRole(["OP_ADMIN"]), false);
 });
