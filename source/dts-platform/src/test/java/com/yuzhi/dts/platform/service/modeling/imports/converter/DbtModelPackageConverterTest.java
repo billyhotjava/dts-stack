@@ -248,6 +248,33 @@ class DbtModelPackageConverterTest {
             .containsExactly("third_column", "first_column", "second_column");
     }
 
+    @Test
+    void preservesExplicitDimensionAttributeCodeFromManifestColumnMetadata() {
+        ObjectNode manifest = (ObjectNode) manifest();
+        ObjectNode column = (ObjectNode) manifest
+            .path("nodes")
+            .path("model.pjm.budget")
+            .path("columns")
+            .path("id");
+        column.putObject("meta").putObject("dts").put("dimensionAttributeCode", "BUDGET_ID");
+
+        var result = converter.convert(new DbtModelPackageConverter.ConversionRequest(
+            "pjm-budget-v1",
+            manifest,
+            null,
+            null,
+            Map.of("model.pjm.budget", ModelPackageFixtures.completeSemantics()),
+            Set.of("model.pjm.budget"),
+            new Defaults(null, null)
+        ));
+
+        assertThat(result.models().getFirst().columns())
+            .filteredOn(item -> "id".equals(item.name()))
+            .singleElement()
+            .extracting("dimensionAttributeCode")
+            .isEqualTo("BUDGET_ID");
+    }
+
     private ObjectNode manifestWithOrderedBudgetColumns(String... names) {
         ObjectNode result = (ObjectNode) manifest();
         ObjectNode columns = objectMapper.createObjectNode();

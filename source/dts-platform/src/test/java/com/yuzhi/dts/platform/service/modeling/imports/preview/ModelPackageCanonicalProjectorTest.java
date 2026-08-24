@@ -183,7 +183,14 @@ class ModelPackageCanonicalProjectorTest {
             base.materialization(),
             base.config(),
             base.tags(),
-            List.of(new Column("budget_id", "预算标识", "timestamp without time zone", "KEY", List.of("not_null_budget_id"))),
+            List.of(new Column(
+                "budget_id",
+                "预算标识",
+                "timestamp without time zone",
+                "KEY",
+                "BUDGET_ID",
+                List.of("not_null_budget_id")
+            )),
             base.tests(),
             base.dependencies(),
             new SemanticMetadata(
@@ -216,8 +223,8 @@ class ModelPackageCanonicalProjectorTest {
         );
 
         assertThat(projection.modelSpecCommand().fields().getFirst())
-            .extracting("dataType", "nullable", "displayName")
-            .containsExactly("timestamp", false, "预算标识");
+            .extracting("dataType", "nullable", "displayName", "dimensionAttributeCode")
+            .containsExactly("timestamp", false, "预算标识", "BUDGET_ID");
         assertThat(projection.modelSpecCommand().generationStrategy().type()).isEqualTo("STATIC_DBT_SQL_TYPE_1");
         assertThat(projection.modelSpecCommand().dimensionProfile().scdPolicy().type()).isEqualTo(ScdType.TYPE1);
     }
