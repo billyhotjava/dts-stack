@@ -76,6 +76,7 @@ public final class ModelPackageValidator {
         "dimensionAttributeCode",
         "tests"
     );
+    private static final Set<String> REQUIRED_COLUMN_FIELDS = Set.of("name", "description", "dataType", "role", "tests");
     private static final Set<String> SQL_FIELDS = Set.of(
         "rawSql",
         "rawSqlChecksum",
@@ -258,7 +259,7 @@ public final class ModelPackageValidator {
     }
 
     private static void validateColumn(JsonNode node, String path, List<ValidationIssue> issues) {
-        if (!requireObject(node, path, COLUMN_FIELDS, COLUMN_FIELDS, issues)) {
+        if (!requireObject(node, path, REQUIRED_COLUMN_FIELDS, COLUMN_FIELDS, issues)) {
             return;
         }
         requireText(node, "name", path + ".name", false, issues);
