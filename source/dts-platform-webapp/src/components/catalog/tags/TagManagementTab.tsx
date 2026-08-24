@@ -1,19 +1,4 @@
-import {
-	Alert,
-	Button,
-	Card,
-	Form,
-	Input,
-	Modal,
-	Select,
-	Space,
-	Spin,
-	Switch,
-	Tag,
-	Tooltip,
-	Tree,
-	TreeSelect,
-} from "antd";
+import { Alert, Button, Card, Form, Input, Modal, Space, Spin, Switch, Tag, Tooltip, Tree, TreeSelect } from "antd";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -35,6 +20,16 @@ import { actionColumn, type CompactColumns, CompactTable } from "@/components/ta
 
 const DEFAULT_PAGE_SIZE = 10;
 const COLOR_PALETTE = ["#1677ff", "#13c2c2", "#52c41a", "#faad14", "#fa541c", "#722ed1", "#eb2f96", "#8c8c8c"] as const;
+const COLOR_PALETTE_LABELS: Readonly<Record<(typeof COLOR_PALETTE)[number], string>> = {
+	"#1677ff": "蓝色",
+	"#13c2c2": "青色",
+	"#52c41a": "绿色",
+	"#faad14": "金色",
+	"#fa541c": "橙色",
+	"#722ed1": "紫色",
+	"#eb2f96": "粉色",
+	"#8c8c8c": "灰色",
+};
 const COLOR_PALETTE_SET = new Set<string>(COLOR_PALETTE);
 const BUILTIN_CATEGORY_DELETE_REASON = "预置分类由系统维护，不可删除；如需停止使用，请将其停用";
 const BUILTIN_TAG_DELETE_REASON = "预置标签由系统维护，不可删除；如需停止使用，请将其停用";
@@ -44,6 +39,55 @@ function displayColor(color?: string | null): string {
 		.trim()
 		.toLowerCase();
 	return COLOR_PALETTE_SET.has(normalized) ? normalized : COLOR_PALETTE[0];
+}
+
+type TagColorPaletteProps = {
+	value?: string;
+	onChange?: (color: string) => void;
+};
+
+export function TagColorPalette({ value, onChange }: TagColorPaletteProps) {
+	const selectedColor = displayColor(value);
+	return (
+		<div role="radiogroup" aria-label="显示颜色调色板" className="grid grid-cols-4 gap-3 sm:grid-cols-8">
+			{COLOR_PALETTE.map((color) => {
+				const selected = color === selectedColor;
+				const label = COLOR_PALETTE_LABELS[color];
+				return (
+					<Tooltip key={color} title={label}>
+						<label className="relative inline-flex cursor-pointer rounded-lg">
+							<input
+								type="radio"
+								name="tag-display-color"
+								checked={selected}
+								aria-label={`选择${label}`}
+								onChange={() => onChange?.(color)}
+								className="peer sr-only"
+							/>
+							<span
+								aria-hidden="true"
+								className="inline-flex items-center justify-center peer-focus-visible:ring-2 peer-focus-visible:ring-blue-500 peer-focus-visible:ring-offset-2"
+								style={{
+									width: 40,
+									height: 40,
+									borderRadius: 8,
+									border: selected ? "3px solid #ffffff" : "2px solid transparent",
+									backgroundColor: color,
+									boxShadow: selected ? `0 0 0 2px ${color}` : "0 0 0 1px #d9d9d9",
+									color: "#ffffff",
+									cursor: "pointer",
+									fontSize: 18,
+									fontWeight: 700,
+								}}
+							>
+								{selected ? "✓" : ""}
+							</span>
+						</label>
+					</Tooltip>
+				);
+			})}
+		</div>
+	);
 }
 
 type CategoryFormValue = {
@@ -245,7 +289,7 @@ export function TagManagementTab({ canManage, onViewAssets, onAssociateAssets }:
 				? {
 						code: tag.code,
 						name: tag.name,
-						color: tag.color || COLOR_PALETTE[0],
+						color: displayColor(tag.color),
 						enabled: tag.enabled,
 						description: tag.description || "",
 					}
@@ -295,7 +339,7 @@ export function TagManagementTab({ canManage, onViewAssets, onAssociateAssets }:
 				categoryId: editingTag?.builtin ? editingTag.categoryId : selectedCategoryId,
 				code: editingTag?.builtin ? editingTag.code : value.code?.trim(),
 				name: editingTag?.builtin ? editingTag.name : value.name?.trim(),
-				color: value.color || COLOR_PALETTE[0],
+				color: displayColor(value.color),
 				enabled: value.enabled !== false,
 				description: editingTag?.builtin ? editingTag.description || null : value.description?.trim() || null,
 			};
@@ -624,12 +668,7 @@ export function TagManagementTab({ canManage, onViewAssets, onAssociateAssets }:
 						<Input placeholder="例如：BUSINESS_FINANCE" disabled={Boolean(editingTag?.builtin)} />
 					</Form.Item>
 					<Form.Item name="color" label="显示颜色">
-						<Select
-							options={COLOR_PALETTE.map((color) => ({
-								value: color,
-								label: color,
-							}))}
-						/>
+						<TagColorPalette />
 					</Form.Item>
 					<Form.Item name="description" label="业务说明">
 						<Input.TextArea

@@ -519,7 +519,7 @@ describe("TagManagementTab", () => {
 		unmount();
 	});
 
-	it("protects builtin definitions and only exposes the controlled color selector", async () => {
+	it("protects builtin definitions and exposes a visual color palette", async () => {
 		listCatalogTags.mockResolvedValue({
 			content: [builtinTag],
 			total: 1,
@@ -545,8 +545,25 @@ describe("TagManagementTab", () => {
 		);
 		expect(nameLabel?.querySelector("input")?.disabled).toBe(true);
 		expect(descriptionLabel?.querySelector("textarea")?.disabled).toBe(true);
-		expect(container.querySelector("select")).not.toBeNull();
+		expect(container.querySelector("[role='radiogroup'][aria-label='显示颜色调色板']")).not.toBeNull();
+		expect(container.querySelectorAll("input[type='radio'][name='tag-display-color']")).toHaveLength(8);
+		expect(container.textContent).not.toContain("#1677ff");
 		expect(container.querySelector("input[type='color']")).toBeNull();
+		unmount();
+	});
+
+	it("selects a palette color without exposing its hexadecimal value", async () => {
+		const onChange = vi.fn();
+		const { TagColorPalette } = await import("./TagManagementTab");
+		const { container, unmount } = await renderAndFlush(<TagColorPalette value="#1677ff" onChange={onChange} />);
+
+		const blue = container.querySelector("input[aria-label='选择蓝色']") as HTMLInputElement;
+		const green = container.querySelector("input[aria-label='选择绿色']") as HTMLInputElement;
+		expect(blue.checked).toBe(true);
+		expect(green.checked).toBe(false);
+		expect(container.textContent).not.toContain("#1677ff");
+		act(() => green.click());
+		expect(onChange).toHaveBeenCalledWith("#52c41a");
 		unmount();
 	});
 

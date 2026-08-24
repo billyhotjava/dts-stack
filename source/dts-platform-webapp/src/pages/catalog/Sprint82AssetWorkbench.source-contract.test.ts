@@ -14,10 +14,7 @@ test("Sprint-82 keeps the map summary-only and makes the directory the tag works
 	assert.doesNotMatch(MAP, /TagManagementTab/);
 	assert.match(SEARCH_PAGE, /AssetTagsWorkspace/);
 	assert.match(SEARCH_PAGE, /searchParams\.get\("tab"\) === "catalog-tags"/);
-	assert.match(
-		SEARCH_PAGE,
-		/activeTab === "catalog-tags" \? <AssetTagsWorkspace \/> : <DataAssetDirectoryPage \/>/,
-	);
+	assert.match(SEARCH_PAGE, /activeTab === "catalog-tags" \? <AssetTagsWorkspace \/> : <DataAssetDirectoryPage \/>/);
 });
 
 test("Sprint-82 removes row actions and uses the asset detail as the single workbench", () => {
@@ -31,6 +28,15 @@ test("Sprint-82 exposes discoverable tag-to-asset journeys", () => {
 	assert.match(TAG_MANAGEMENT, /label:\s*"关联资产"/);
 	assert.match(TAG_MANAGEMENT, /onViewAssets/);
 	assert.match(TAG_MANAGEMENT, /onAssociateAssets/);
+});
+
+test("Sprint-82 uses a visual palette instead of hexadecimal color options", () => {
+	assert.match(TAG_MANAGEMENT, /role="radiogroup" aria-label="显示颜色调色板"/);
+	assert.match(TAG_MANAGEMENT, /type="radio"/);
+	assert.match(TAG_MANAGEMENT, /checked=\{selected\}/);
+	assert.match(TAG_MANAGEMENT, /<TagColorPalette \/>/);
+	assert.doesNotMatch(TAG_MANAGEMENT, /label:\s*color/);
+	assert.doesNotMatch(TAG_MANAGEMENT, /<Select/);
 });
 
 test("Sprint-82 supports a bounded ledger association mode using the canonical batch API", () => {
