@@ -16,6 +16,19 @@
 
 该包使用静态专利生命周期状态维度，不引用现有模型、source、ref 或外部数据库对象。测试数据域编码为 `PATENT`。
 
+## 离线环境重打包
+
+- 文件：`patent-reverse-modeling-offline-import.zip`
+- SHA-256：`86e5399e781113ac093bdbe1ec868c3c7c766621e4cf21290a0389827c2e9f93`
+- dbt 离线解析：通过（dbt Core `1.10.22`、PostgreSQL adapter `1.10.0`）
+- ZIP 完整性：通过，仅包含 README、dbt 项目文件、1 个模型及 `target/manifest.json`
+- 离线依赖：0 个 source、0 个模型依赖、0 个宏依赖
+- 敏感配置：不包含 `profiles.yml`、数据库地址、账号、密码或令牌
+
+本版本保留原始验证包，专门用于最终离线环境。由于离线环境不连接目标数据库生成 dbt catalog，`CATALOG_MISSING` 为预期 WARNING，可忽略。静态维度仍会产生 `SQL_VALUES`、`SQL_CONSTANT`，DTS 将模型归类为 `DBT_BACKED`；只要检查结果为 `IMPORTABLE` 且阻断数为 0，即可继续导入。
+
+模型 SQL 已移除冗余的 dbt `config` 宏和列别名复杂表达式，因此不再触发 `SQL_MACRO`、`SQL_COMPLEX_EXPRESSION`。包内 README 已记录离线导入边界、预期提示及操作条件。
+
 ## DTS 规划前置条件
 
 - 业务分类：`研究所业务（S10_PRJ）`

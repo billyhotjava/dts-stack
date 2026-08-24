@@ -481,6 +481,7 @@ export function SubjectDomainForm({
 	const [martId, setMartId] = useState(editing?.martId || "");
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState("");
+	const purposeInputRef = useRef<HTMLTextAreaElement>(null);
 
 	useEffect(() => {
 		let active = true;
@@ -505,6 +506,11 @@ export function SubjectDomainForm({
 	const save = async () => {
 		if (!canMaintain) return setError("当前账号无主题域维护权限");
 		if (!code.trim() || !name.trim() || !martId) return setError("请补齐编码、名称和数据集市");
+		if (!purpose.trim()) {
+			setError("请填写用途说明");
+			purposeInputRef.current?.focus();
+			return;
+		}
 		setBusy(true);
 		setError("");
 		try {
@@ -590,10 +596,11 @@ export function SubjectDomainForm({
 					</select>
 				</label>
 				<label className="dmx-form-field--wide">
-					<span>用途说明</span>
+					<span className="required">用途说明</span>
 					<textarea
 						disabled={!canMaintain || busy}
 						onChange={(event) => setPurpose(event.target.value)}
+						ref={purposeInputRef}
 						value={purpose}
 					/>
 				</label>

@@ -632,6 +632,7 @@ function ImportSemanticsTable({
 				dataSource={rows}
 				pagination={false}
 				rowKey="key"
+				scroll={{ x: 1250 }}
 			/>
 		</section>
 	);

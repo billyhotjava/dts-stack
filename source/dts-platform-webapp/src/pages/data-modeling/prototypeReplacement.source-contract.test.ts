@@ -189,6 +189,14 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(planningEditors).toMatch(/codeInputRef\.current\?\.focus\(\)/);
 	});
 
+	it("keeps subject-domain purpose validation actionable", () => {
+		const planningEditors = read("./prototype/PlanningEditors.tsx");
+
+		expect(planningEditors).toContain('setError("请填写用途说明")');
+		expect(planningEditors).toMatch(/purposeInputRef\.current\?\.focus\(\)/);
+		expect(planningEditors).toContain('<span className="required">用途说明</span>');
+	});
+
 	it("connects production pages to canonical owners and keeps unsupported actions disabled", () => {
 		const planning = read("./prototype/PlanningPage.tsx");
 		const dataArchitecturePage = read("../data-architecture/DataArchitecturePage.tsx");

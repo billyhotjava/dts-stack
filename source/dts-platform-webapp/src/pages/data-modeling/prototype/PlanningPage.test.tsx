@@ -69,6 +69,7 @@ vi.mock("./services/planningProjectionService", () => ({
 vi.mock("./useDataModelingMenuGrant", () => ({ useDataModelingMenuGrant: () => mocks.canMaintain }));
 
 import { PlanningPage } from "./PlanningPage";
+import { SubjectDomainForm } from "./PlanningEditors";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -393,5 +394,45 @@ describe("PlanningPage", () => {
 			buttonText(button).includes("删除"),
 		) as HTMLButtonElement;
 		expect(deleteButton.disabled).toBe(true);
+	});
+
+	it("prompts for an empty subject-domain purpose before sending an update", async () => {
+		mocks.listDataMarts.mockResolvedValue([
+			{ id: "mart-1", code: "PJM_ANALYTICS", name: "项目管理分析集市", status: "CURRENT" },
+		]);
+		mocks.updateSubjectDomain.mockResolvedValue({});
+		const onDone = vi.fn();
+
+		await act(async () =>
+			root.render(
+				<SubjectDomainForm
+					canMaintain
+					initial={{
+						id: "subject-1",
+						code: "PATENT",
+						name: "专利主题",
+						purpose: "",
+						martId: "mart-1",
+						status: "DRAFT",
+						revision: 1,
+						checksum: "checksum-1",
+					}}
+					onDone={onDone}
+				/>,
+			),
+		);
+
+		const purpose = container.querySelector("textarea") as HTMLTextAreaElement;
+		const purposeLabel = purpose.closest("label");
+		const saveButton = [...container.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("保存主题域"),
+		) as HTMLButtonElement;
+		await act(async () => saveButton.click());
+
+		expect(purposeLabel?.querySelector(".required")?.textContent).toBe("用途说明");
+		expect(container.querySelector('[role="alert"]')?.textContent).toBe("请填写用途说明");
+		expect(document.activeElement).toBe(purpose);
+		expect(mocks.updateSubjectDomain).not.toHaveBeenCalled();
+		expect(onDone).not.toHaveBeenCalled();
 	});
 });
