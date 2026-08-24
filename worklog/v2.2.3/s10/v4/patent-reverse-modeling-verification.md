@@ -19,15 +19,19 @@
 ## 离线环境重打包
 
 - 文件：`patent-reverse-modeling-offline-import.zip`
-- SHA-256：`86e5399e781113ac093bdbe1ec868c3c7c766621e4cf21290a0389827c2e9f93`
+- 包版本：`1.0.2`
+- SHA-256：`39a6d0dcce1cd219d8959821a450207bcc88381804a31d5c3ff54deedd5e1c25`
 - dbt 离线解析：通过（dbt Core `1.10.22`、PostgreSQL adapter `1.10.0`）
 - ZIP 完整性：通过，仅包含 README、dbt 项目文件、1 个模型及 `target/manifest.json`
 - 离线依赖：0 个 source、0 个模型依赖、0 个宏依赖
 - 敏感配置：不包含 `profiles.yml`、数据库地址、账号、密码或令牌
+- 维度属性映射：4/4，`patent_status_code` 主键映射为 `PATENT_STATUS_CODE`
+- DTS 模型包投影校验和：`579246337eeb0c7af4dab763a66149943652d85d5b5654b667fd3087dee7fa69`
+- 目标维度对账：4 个映射编码与当前 `CURRENT` 定义完全一致，主键映射通过
 
-本版本保留原始验证包，专门用于最终离线环境。由于离线环境不连接目标数据库生成 dbt catalog，`CATALOG_MISSING` 为预期 WARNING，可忽略。静态维度仍会产生 `SQL_VALUES`、`SQL_CONSTANT`，DTS 将模型归类为 `DBT_BACKED`；只要检查结果为 `IMPORTABLE` 且阻断数为 0，即可继续导入。
+本版本保留原始验证包，专门用于最终离线环境。由于离线环境不连接目标数据库生成 dbt catalog，`CATALOG_MISSING` 为预期 WARNING，可忽略。静态维度仍会产生 `SQL_VALUES`、`SQL_CONSTANT`、`SQL_COMPLEX_EXPRESSION`，DTS 将模型归类为 `DBT_BACKED`；只要检查结果为 `IMPORTABLE` 且阻断数为 0，即可继续导入。
 
-模型 SQL 已移除冗余的 dbt `config` 宏和列别名复杂表达式，因此不再触发 `SQL_MACRO`、`SQL_COMPLEX_EXPRESSION`。包内 README 已记录离线导入边界、预期提示及操作条件。
+模型 SQL 已移除冗余的 dbt `config` 宏，因此不再触发 `SQL_MACRO`。`FROM (VALUES ...)` 仍会被保守归类为复杂表达式，但不阻断 `DBT_BACKED` 导入。包内 manifest 已为 4 个字段写入显式 `dimensionAttributeCode`；配合本次 DTS 导入器改动，应用后的 ModelSpec 字段将直接具备维度属性映射，不再因 `DIMENSION_ATTRIBUTE_MAPPING_INCOMPLETE` 或 `DIMENSION_PRIMARY_KEY_MAPPING_INVALID` 阻断物化。
 
 ## DTS 规划前置条件
 
