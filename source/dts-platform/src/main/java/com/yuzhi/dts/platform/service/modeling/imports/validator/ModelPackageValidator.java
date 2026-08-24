@@ -68,7 +68,14 @@ public final class ModelPackageValidator {
         "semantics",
         "conversion"
     );
-    private static final Set<String> COLUMN_FIELDS = Set.of("name", "description", "dataType", "role", "tests");
+    private static final Set<String> COLUMN_FIELDS = Set.of(
+        "name",
+        "description",
+        "dataType",
+        "role",
+        "dimensionAttributeCode",
+        "tests"
+    );
     private static final Set<String> SQL_FIELDS = Set.of(
         "rawSql",
         "rawSqlChecksum",
@@ -258,6 +265,7 @@ public final class ModelPackageValidator {
         requireText(node, "description", path + ".description", true, issues);
         requireText(node, "dataType", path + ".dataType", true, issues);
         requireText(node, "role", path + ".role", true, issues);
+        requireText(node, "dimensionAttributeCode", path + ".dimensionAttributeCode", true, issues);
         validateStringArray(node.get("tests"), path + ".tests", issues);
     }
 

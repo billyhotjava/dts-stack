@@ -84,7 +84,19 @@ public final class ModelPackageContract {
         String effectiveSource
     ) {}
 
-    public record Column(String name, String description, String dataType, String role, List<String> tests) {}
+    public record Column(
+        String name,
+        String description,
+        String dataType,
+        String role,
+        String dimensionAttributeCode,
+        List<String> tests
+    ) {
+        /** Compatibility constructor for packages produced before explicit dimension attribute mapping. */
+        public Column(String name, String description, String dataType, String role, List<String> tests) {
+            this(name, description, dataType, role, null, tests);
+        }
+    }
 
     public record SemanticMetadata(
         String modelType,

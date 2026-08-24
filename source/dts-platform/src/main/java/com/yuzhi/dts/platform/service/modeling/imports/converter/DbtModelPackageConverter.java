@@ -487,11 +487,20 @@ public final class DbtModelPackageConverter {
                     manifestColumn == null ? null : text(manifestColumn, "description"),
                     catalogColumn == null ? firstNonBlank(text(manifestColumn, "data_type")) : text(catalogColumn, "type"),
                     semantics == null || semantics.fieldRoles() == null ? null : semantics.fieldRoles().get(name),
+                    dimensionAttributeCode(manifestColumn),
                     columnTests
                 )
             );
         }
         return List.copyOf(result);
+    }
+
+    private static String dimensionAttributeCode(JsonNode manifestColumn) {
+        if (manifestColumn == null) return null;
+        return firstNonBlank(
+            text(manifestColumn.path("meta").path("dts"), "dimensionAttributeCode", "dimension_attribute_code"),
+            text(manifestColumn.path("config").path("meta").path("dts"), "dimensionAttributeCode", "dimension_attribute_code")
+        );
     }
 
     private static List<String> orderedColumnNames(

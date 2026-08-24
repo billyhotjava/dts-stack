@@ -325,7 +325,20 @@ public class ModelPackageCanonicalProjector {
             }
             FieldRole role = fieldRole(column, model, issues);
             boolean nullable = safe(column.tests()).stream().noneMatch(ModelPackageCanonicalProjector::isNotNullTest);
-            result.add(new ModelField(column.name(), displayName(column), dataType, nullable, null, role, null, null, false, null));
+            result.add(
+                new ModelField(
+                    column.name(),
+                    displayName(column),
+                    dataType,
+                    nullable,
+                    null,
+                    role,
+                    null,
+                    column.dimensionAttributeCode(),
+                    false,
+                    null
+                )
+            );
         }
         return List.copyOf(result);
     }
