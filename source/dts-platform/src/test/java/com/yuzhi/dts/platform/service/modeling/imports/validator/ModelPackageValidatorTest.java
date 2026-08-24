@@ -29,6 +29,17 @@ class ModelPackageValidatorTest {
     }
 
     @Test
+    void acceptsV1ColumnsCreatedBeforeDimensionAttributeMappingWasAdded() {
+        ObjectNode legacy = packageJson();
+        ((ObjectNode) legacy.at("/models/0/columns/0")).remove("dimensionAttributeCode");
+
+        assertThat(validator.validateBytes(legacy.toString().getBytes()))
+            .filteredOn(issue -> issue.code().equals("MODEL_PACKAGE_SCHEMA_INVALID"))
+            .extracting(ModelPackageValidator.ValidationIssue::fieldPath)
+            .doesNotContain("$.models[0].columns[0].dimensionAttributeCode");
+    }
+
+    @Test
     void rejectsUnknownFieldUnsupportedVersionChecksumAndOversizeWithStableCodes() throws Exception {
         ObjectNode unknown = objectMapper.valueToTree(ModelPackageFixtures.validPackage());
         unknown.put("unexpected", true);
