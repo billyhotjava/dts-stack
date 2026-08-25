@@ -5,84 +5,42 @@ import {
 	classifyModelingRelationshipGraphFailure,
 	listModelingRelationshipPlans,
 	loadModelingRelationshipGraph,
+	type ModelingRelationshipContextHeader,
 	type ModelingRelationshipGraph,
 	type ModelingRelationshipGraphFailure,
-	type ModelingRelationshipGraphKind,
-	type ModelingRelationshipGraphNode,
 	modelingRelationshipNodePath,
 } from "@/api/services/modelingRelationshipGraphService";
+import { LineageGraph } from "@/components/lineage";
+import { statusLabel } from "@/utils/customerDisplayLabels";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
+import { projectModelingRelationshipGraph } from "./relationshipGraphProjection";
 
-const kindOrder: ModelingRelationshipGraphKind[] = ["DIMENSION", "MODEL", "STANDARD", "INDICATOR"];
-const kindLabel: Record<ModelingRelationshipGraphKind, string> = {
-	PLAN: "规划",
-	DIMENSION: "维度",
-	MODEL: "模型",
-	STANDARD: "数据标准",
-	INDICATOR: "数据指标",
+const emptyStateByView: Record<string, { title: string; description: string }> = {
+	models: {
+		title: "暂无模型关系",
+		description: "当前规划中的模型尚未建立模型依赖或维度引用关系。",
+	},
+	standards: {
+		title: "暂无标准关系",
+		description: "当前规划中的模型字段尚未绑定可展示的数据标准。",
+	},
+	metrics: {
+		title: "暂无指标血缘",
+		description: "当前规划中的模型与指标尚未建立引用或依赖关系。",
+	},
 };
-const classByKind: Record<ModelingRelationshipGraphKind, string> = {
-	PLAN: "domain",
-	DIMENSION: "domain",
-	MODEL: "model",
-	STANDARD: "standard",
-	INDICATOR: "metric",
-};
-
-type PositionedNode = ModelingRelationshipGraphNode & { x: number; y: number };
-
-const allowedKinds = (view: string): Set<ModelingRelationshipGraphKind> =>
-	view === "standards"
-		? new Set(["MODEL", "STANDARD"])
-		: view === "metrics"
-			? new Set(["MODEL", "INDICATOR"])
-			: new Set(["DIMENSION", "MODEL"]);
-
-function positionNodes(graph: ModelingRelationshipGraph, view: string, query: string): PositionedNode[] {
-	const allowed = allowedKinds(view);
-	const candidates = graph.nodes.filter((node) => allowed.has(node.kind));
-	const normalized = query.trim().toLocaleLowerCase();
-	const visibleIds = new Set(
-		(normalized
-			? candidates.filter((node) => `${node.label} ${node.status || ""}`.toLocaleLowerCase().includes(normalized))
-			: candidates
-		).map((node) => node.id),
-	);
-	if (normalized) {
-		for (const edge of graph.edges) {
-			if (visibleIds.has(edge.source) || visibleIds.has(edge.target)) {
-				visibleIds.add(edge.source);
-				visibleIds.add(edge.target);
-			}
-		}
-	}
-	const nodes = candidates.filter((node) => visibleIds.has(node.id)).slice(0, 120);
-	const populated = kindOrder.filter((kind) => nodes.some((node) => node.kind === kind));
-	const rows = new Map<ModelingRelationshipGraphKind, number>();
-	const totals = new Map(populated.map((kind) => [kind, nodes.filter((node) => node.kind === kind).length]));
-	return nodes.map((node) => {
-		const column = Math.max(0, populated.indexOf(node.kind));
-		const row = rows.get(node.kind) || 0;
-		rows.set(node.kind, row + 1);
-		const total = totals.get(node.kind) || 1;
-		return {
-			...node,
-			x: populated.length <= 1 ? 42 : 4 + column * (78 / (populated.length - 1)),
-			y: total <= 1 ? 50 : 10 + row * (80 / (total - 1)),
-		};
-	});
-}
 
 export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const requestEpoch = useRef(0);
 	const initialQuery = useRef(searchParams.get("query") || "");
+	const initialPlanId = useRef(searchParams.get("planId") || "");
+	const [plans, setPlans] = useState<ModelingRelationshipContextHeader[]>([]);
 	const [planId, setPlanId] = useState("");
 	const [graph, setGraph] = useState<ModelingRelationshipGraph | null>(null);
 	const [query, setQuery] = useState("");
-	const [scale, setScale] = useState(1);
 	const [loading, setLoading] = useState(true);
 	const [failure, setFailure] = useState<ModelingRelationshipGraphFailure | null>(null);
 	const load = useCallback(
@@ -93,6 +51,7 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 			try {
 				const nextPlans = await listModelingRelationshipPlans();
 				if (requestEpoch.current !== epoch) return;
+				setPlans(nextPlans);
 				const nextPlanId = nextPlans.some((plan) => plan.id === requestedPlanId)
 					? requestedPlanId || ""
 					: nextPlans[0]?.id || "";
@@ -104,6 +63,7 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 				setGraph(nextGraph);
 			} catch (error) {
 				if (requestEpoch.current !== epoch) return;
+				setPlans([]);
 				setPlanId("");
 				setGraph(null);
 				setFailure(classifyModelingRelationshipGraphFailure(error));
@@ -115,18 +75,27 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 	);
 	useEffect(() => {
 		setQuery(initialQuery.current);
-		setScale(1);
-		void load(undefined, initialQuery.current);
+		void load(initialPlanId.current, initialQuery.current);
 		return () => {
 			requestEpoch.current += 1;
 		};
 	}, [load]);
-	const nodes = useMemo(() => (graph ? positionNodes(graph, route.view, query) : []), [graph, query, route.view]);
-	const nodeMap = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
-	const edges = useMemo(
-		() => graph?.edges.filter((edge) => nodeMap.has(edge.source) && nodeMap.has(edge.target)) || [],
-		[graph?.edges, nodeMap],
+	const projection = useMemo(
+		() => (graph ? projectModelingRelationshipGraph(graph, route.view, query) : null),
+		[graph, query, route.view],
 	);
+	const sourceNodeMap = useMemo(() => new Map(graph?.nodes.map((node) => [node.id, node]) || []), [graph?.nodes]);
+	const sourceNodeMapRef = useRef(sourceNodeMap);
+	sourceNodeMapRef.current = sourceNodeMap;
+	const openNode = useCallback(
+		(node: { id?: string }) => {
+			const source = node.id ? sourceNodeMapRef.current.get(node.id) : null;
+			const path = source ? modelingRelationshipNodePath(source) : null;
+			if (path) navigate(path);
+		},
+		[navigate],
+	);
+	const emptyState = emptyStateByView[route.view] || emptyStateByView.models;
 
 	return (
 		<main className="dmx-page dmx-graph-page">
@@ -141,6 +110,19 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 				trail="数据建模 / 关系图"
 			/>
 			<div className="dmx-graph-toolbar">
+				<select
+					aria-label="选择数仓规划"
+					disabled={loading || !plans.length}
+					onChange={(event) => void load(event.target.value, query)}
+					value={planId}
+				>
+					{plans.length ? null : <option value="">暂无可用规划</option>}
+					{plans.map((plan) => (
+						<option key={plan.id} value={plan.id}>
+							{plan.name} · {statusLabel(plan.lifecycleStatus)}
+						</option>
+					))}
+				</select>
 				<div className="dmx-graph-search">
 					<Search size={14} />
 					<input
@@ -158,23 +140,11 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 					查询
 				</Button>
 				<span />
-				<Button
-					aria-label="缩小"
-					disabled={!nodes.length}
-					onClick={() => setScale((value) => Math.max(0.6, value - 0.1))}
-				>
-					缩小
-				</Button>
-				<Button
-					aria-label="放大"
-					disabled={!nodes.length}
-					onClick={() => setScale((value) => Math.min(1.4, value + 0.1))}
-				>
-					放大
-				</Button>
-				<Button aria-label="适应画布" disabled={!nodes.length} onClick={() => setScale(1)}>
-					适应画布
-				</Button>
+				{projection?.nodes.length ? (
+					<strong className="dmx-graph-summary">
+						{projection.nodes.length} 个节点 · {projection.edges.length} 条关系
+					</strong>
+				) : null}
 			</div>
 			{loading ? (
 				<RequestState description="正在读取模型关系投影。" kind="loading" title="正在加载关系图" />
@@ -187,47 +157,31 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 				/>
 			) : !graph ? (
 				<RequestState description="服务端尚未返回可用的模型关系投影。" kind="empty" title="暂无关系数据" />
-			) : !nodes.length ? (
-				<RequestState description="当前筛选没有返回权威节点，可清空检索词后重试。" kind="empty" title="暂无关系数据" />
+			) : !projection?.nodes.length ? (
+				<RequestState
+					description={query.trim() ? "当前搜索没有命中已建立的关系，请调整关键词后重试。" : emptyState.description}
+					kind="empty"
+					title={query.trim() ? "未找到关联节点" : emptyState.title}
+				/>
 			) : (
 				<div className="dmx-graph-canvas">
-					<div className="dmx-graph-scale" style={{ transform: `scale(${scale})` }}>
-						<svg aria-hidden="true" preserveAspectRatio="none" viewBox="0 0 100 100">
-							{edges.map((edge) => {
-								const from = nodeMap.get(edge.source);
-								const to = nodeMap.get(edge.target);
-								if (!from || !to) return null;
-								return (
-									<path
-										d={`M${from.x + 8} ${from.y} C${(from.x + to.x) / 2} ${from.y}, ${(from.x + to.x) / 2} ${to.y}, ${to.x} ${to.y}`}
-										key={`${edge.source}:${edge.target}:${edge.kind}`}
-									/>
-								);
-							})}
-						</svg>
-						{nodes.map((node) => {
-							const path = modelingRelationshipNodePath(node);
-							return (
-								<button
-									className={`dmx-graph-node dmx-graph-node--${classByKind[node.kind]}`}
-									disabled={!path}
-									key={node.id}
-									onClick={() => path && navigate(path)}
-									style={{ left: `${node.x}%`, top: `${node.y}%` }}
-									title={path ? `打开${kindLabel[node.kind]}` : "服务端未提供可访问详情"}
-									type="button"
-								>
-									<small>{kindLabel[node.kind]}</small>
-									<strong>{node.label}</strong>
-									<span>{node.status || ""}</span>
-								</button>
-							);
-						})}
-					</div>
-					{graph?.truncated ? (
+					<LineageGraph
+						edges={projection.edges}
+						emptyText={emptyState.title}
+						height={620}
+						layoutDirection="LR"
+						minimumReadableZoom={0.65}
+						nodes={projection.nodes}
+						onNodeClick={openNode}
+					/>
+					{graph.truncated || projection.limited ? (
 						<div className="dmx-graph-truncated">
-							<Status tone="warning">投影未完全展开</Status>
-							<span>{graph.nextHint || "请使用搜索缩小范围。"}</span>
+							<Status tone="warning">当前图谱已精简</Status>
+							<span>
+								{projection.limited
+									? `共有 ${projection.totalNodeCount} 个关联节点，当前展示前 80 个，请搜索定位。`
+									: graph.nextHint || "请使用搜索缩小范围。"}
+							</span>
 						</div>
 					) : null}
 				</div>

@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { ModelingRelationshipGraph } from "@/api/services/modelingRelationshipGraphService";
 import { projectModelingRelationshipGraph } from "./relationshipGraphProjection";
 
-const graph = (nodes: ModelingRelationshipGraph["nodes"], edges: ModelingRelationshipGraph["edges"]): ModelingRelationshipGraph => ({
+const graph = (
+	nodes: ModelingRelationshipGraph["nodes"],
+	edges: ModelingRelationshipGraph["edges"],
+): ModelingRelationshipGraph => ({
 	planId: "plan-1",
 	nodes,
 	edges,
@@ -30,19 +33,12 @@ describe("projectModelingRelationshipGraph", () => {
 			"",
 		);
 
-		expect(result.nodes.map((node) => node.id)).toEqual([
-			"dimension:customer",
-			"model:order",
-			"model:summary",
-		]);
-		expect(result.edges.map((edge) => edge.relationType)).toEqual(["引用维度定义", "依赖"]);
+		expect(result.nodes.map((node) => node.id)).toEqual(["dimension:customer", "model:order", "model:summary"]);
+		expect(result.edges.map((edge) => edge.relationType)).toEqual(["依赖", "引用维度定义"]);
 	});
 
 	it("does not render unrelated models when a standard or indicator relationship is absent", () => {
-		const source = graph(
-			[{ id: "model:isolated", kind: "MODEL", label: "无关系模型", status: "ARCHIVED" }],
-			[],
-		);
+		const source = graph([{ id: "model:isolated", kind: "MODEL", label: "无关系模型", status: "ARCHIVED" }], []);
 
 		expect(projectModelingRelationshipGraph(source, "standards", "").nodes).toEqual([]);
 		expect(projectModelingRelationshipGraph(source, "metrics", "").nodes).toEqual([]);

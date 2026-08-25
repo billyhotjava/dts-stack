@@ -218,6 +218,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const toolWorkflows = read("../../features/modeling/navigation/dataModelingToolWorkflows.ts");
 		const standardsService = read("./prototype/services/standardsProjectionService.ts");
 		const relationshipService = read("../../api/services/modelingRelationshipGraphService.ts");
+		const relationshipPage = read("./prototype/RelationshipGraphPage.tsx");
 		const metrics = read("./prototype/MetricsPage.tsx");
 		const prototypeSource = collectSource(fileURLToPath(new URL("./prototype", import.meta.url)));
 
@@ -300,6 +301,9 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(tools).toContain("本页不创建统一工具运行台账，也不拼接模拟历史");
 		expect(toolWorkflows).toContain('title: "dbt ZIP 建模"');
 		expect(toolWorkflows).toContain('owner: "统一模型创作"');
+		expect(relationshipPage).toMatch(/LineageGraph|projectModelingRelationshipGraph/);
+		expect(relationshipPage).toContain('aria-label="选择数仓规划"');
+		expect(relationshipPage).not.toMatch(/positionNodes|<svg/);
 	});
 
 	it("keeps the product copy aligned with the approved menu corrections", () => {

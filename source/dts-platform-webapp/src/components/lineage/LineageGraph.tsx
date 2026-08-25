@@ -26,6 +26,8 @@ export interface LineageGraphProps {
 	emptyText?: string;
 	showMiniMap?: boolean;
 	showToolbar?: boolean;
+	/** 全图过宽时保留的最小可读缩放；未提供时完整适应画布。 */
+	minimumReadableZoom?: number;
 	onNodeClick?: (node: ImpactNode) => void;
 }
 
@@ -460,6 +462,7 @@ export function LineageGraph({
 	emptyText = "暂无血缘节点",
 	showMiniMap = true,
 	showToolbar = true,
+	minimumReadableZoom,
 	onNodeClick,
 }: LineageGraphProps): JSX.Element {
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -633,8 +636,21 @@ export function LineageGraph({
 		};
 		graph.changeData(data);
 		graph.layout();
-		graph.fitView(PADDING);
-	}, [built, showColumns, layoutDirection]);
+		const fitReadableView = () => {
+			graph.fitView(PADDING);
+			if (minimumReadableZoom && graph.getZoom() < minimumReadableZoom) {
+				graph.zoomTo(minimumReadableZoom);
+				graph.fitCenter();
+			}
+		};
+		fitReadableView();
+		// Dagre updates item bounds during the next paint. Re-fit after that paint so
+		// the initial viewport does not retain G6's default zoom and translation.
+		const fitFrame = window.requestAnimationFrame(() => {
+			if (graphRef.current === graph) fitReadableView();
+		});
+		return () => window.cancelAnimationFrame(fitFrame);
+	}, [built, showColumns, layoutDirection, minimumReadableZoom]);
 
 	useEffect(() => {
 		const graph = graphRef.current;

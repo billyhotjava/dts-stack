@@ -27,6 +27,10 @@ describe("customer display labels", () => {
 		["OPEN", "待处理"],
 		["RESOLVED", "已解决"],
 		["CLOSED", "已关闭"],
+		["BASELINE_READY", "基线已就绪"],
+		["DESIGNING", "设计中"],
+		["VALIDATING", "校验中"],
+		["READY_TO_PUBLISH", "待发布"],
 	])("renders status %s in Chinese", (value, expected) => {
 		expect(statusLabel(value)).toBe(expected);
 	});
