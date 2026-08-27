@@ -1955,6 +1955,64 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void appliesStandardElementBindingsWhileForkingPublishedHeadOnce() {
+        UUID standardId = UUID.fromString("80000000-0000-0000-0000-000000000001");
+        ModelSpecView created = codec.toCreatedView(MODEL_ID, command("published-standard-binding", "progress_kpi"), NOW);
+        ModelSpecView published = codec.toLifecycleView(created, ModelStatus.PUBLISHED, created.revision(), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(published, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(published);
+        when(
+            repository.compareAndSetPublishedToDraftV2(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(published.revision()),
+                eq(published.checksum()),
+                any(),
+                anyString()
+            )
+        ).thenReturn(1);
+
+        ModelSpecView draft = service.applyStandardElementBindings(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, published.revision(), published.checksum()),
+            List.of(new ModelSpecApplicationService.StandardElementBindingPatch("customer_id", standardId, 2))
+        );
+
+        assertThat(draft.status()).isEqualTo(ModelStatus.DRAFT);
+        assertThat(draft.revision()).isEqualTo(published.revision() + 1);
+        assertThat(draft.standardBindings())
+            .containsExactly(new StandardBinding("customer_id", standardId, 2, null, null, null, null, null));
+        verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(draft), anyString());
+    }
+
+    @Test
+    void rejectsOversizedStandardElementBindingBatchBeforeReadingTheModel() {
+        UUID standardId = UUID.fromString("80000000-0000-0000-0000-000000000001");
+        List<ModelSpecApplicationService.StandardElementBindingPatch> patches = java.util.stream.IntStream
+            .range(0, 501)
+            .mapToObj(index -> new ModelSpecApplicationService.StandardElementBindingPatch("field_" + index, standardId, 1))
+            .toList();
+
+        assertThatThrownBy(
+            () ->
+                service.applyStandardElementBindings(
+                    TENANT,
+                    ACTOR,
+                    MODEL_ID,
+                    new ExpectedVersion(MODEL_ID, 1, "checksum"),
+                    patches
+                )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_STANDARD_BINDING_BATCH_INVALID");
+
+        verify(repository, never()).findCurrent(any(), any());
+    }
+
+    @Test
     void refusesAuthoringForkWhenTheCurrentHeadIsNotPublished() {
         ModelSpecView draft = codec.toCreatedView(MODEL_ID, command("draft-fork", "progress_kpi"), NOW);
         when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(draft, null, null)));

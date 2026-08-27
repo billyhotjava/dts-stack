@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.CatalogDomainResolutionPort;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerApplicationService;
@@ -600,6 +601,114 @@ public class ModelSpecApplicationService {
         );
     }
 
+    /**
+     * Applies confirmed, revision-pinned data-element bindings through the canonical ModelSpec writer.
+     * Published heads are forked once into the next editable draft; draft heads use the ordinary CAS update.
+     */
+    @Transactional
+    public ModelSpecView applyStandardElementBindings(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected,
+        List<StandardElementBindingPatch> patches
+    ) {
+        requireServerContext(serverTenantId, actorId);
+        requireCanonicalWriteEnabled();
+        if (modelSpecId == null) throw notFound(null);
+        if (expected == null || !modelSpecId.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "A strong If-Match precondition for this ModelSpec is required",
+                expected == null ? ModelSpecException.Kind.PRECONDITION_REQUIRED : ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        if (patches == null || patches.isEmpty() || patches.size() > 500) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_STANDARD_BINDING_BATCH_INVALID",
+                "Select between 1 and 500 standard bindings",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+
+        StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+        ModelSpecView current = compatibilityReader.read(stored);
+        validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
+        requireExpected(current, expected);
+        if (ModelSpecContract.hasHistoricalTypeBoundaryViolation(current)) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_LEGACY_READONLY",
+                "Historical ModelSpec rows with non-canonical type boundaries are read-only",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+        if (current.status() != ModelStatus.DRAFT && current.status() != ModelStatus.PUBLISHED) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_STATUS_READONLY",
+                "Only DRAFT or PUBLISHED ModelSpecs can accept standard bindings",
+                ModelSpecException.Kind.CONFLICT,
+                Map.of("status", current.status())
+            );
+        }
+
+        Set<String> fieldNames = new HashSet<>();
+        current.fields().stream().map(ModelField::name).filter(Objects::nonNull).forEach(fieldNames::add);
+        Map<String, StandardBinding> merged = new LinkedHashMap<>();
+        current.standardBindings().stream()
+            .filter(Objects::nonNull)
+            .filter(binding -> binding.fieldName() != null)
+            .forEach(binding -> merged.put(binding.fieldName(), binding));
+        Set<String> patchedFields = new HashSet<>();
+        for (StandardElementBindingPatch patch : patches) {
+            if (
+                patch == null ||
+                patch.fieldName() == null ||
+                !fieldNames.contains(patch.fieldName()) ||
+                patch.standardElementId() == null ||
+                patch.standardElementVersion() < 1 ||
+                !patchedFields.add(patch.fieldName())
+            ) {
+                throw new ModelSpecException(
+                    "MODEL_SPEC_STANDARD_BINDING_BATCH_INVALID",
+                    "Each standard binding must target one existing field with a unique, positive-version data element",
+                    ModelSpecException.Kind.BAD_REQUEST
+                );
+            }
+            StandardBinding existing = merged.get(patch.fieldName());
+            merged.put(
+                patch.fieldName(),
+                new StandardBinding(
+                    patch.fieldName(),
+                    patch.standardElementId(),
+                    patch.standardElementVersion(),
+                    existing == null ? null : existing.referenceCode(),
+                    existing == null ? null : existing.referenceCodeVersion(),
+                    existing == null ? null : existing.measurementUnitId(),
+                    existing == null ? null : existing.measurementUnitVersion(),
+                    existing == null ? null : existing.securityLevel()
+                )
+            );
+        }
+
+        UpdateModelSpecCommand command = commandWithStandardBindings(current, List.copyOf(merged.values()));
+        if (current.status() == ModelStatus.DRAFT) {
+            return update(serverTenantId, actorId, modelSpecId, expected, command);
+        }
+        return createDraftFromPublished(
+            serverTenantId,
+            actorId,
+            current,
+            command,
+            "MODELING_MODEL_SPEC_AUTHORING_DRAFT_FORK"
+        );
+    }
+
+    public record StandardElementBindingPatch(String fieldName, UUID standardElementId, int standardElementVersion) {
+        public StandardElementBindingPatch {
+            fieldName = fieldName == null ? null : fieldName.trim();
+        }
+    }
+
     private ModelSpecView createDraftFromPublished(
         String serverTenantId,
         String actorId,
@@ -672,6 +781,20 @@ public class ModelSpecApplicationService {
             current.implementationMode(), current.materialization(), current.businessActivityRef(), current.consumptionScenario(),
             current.grain(), current.factShape(), current.timeSemantics(), fields, current.sourceRefs(), current.dependsOn(),
             current.dimensionRefs(), current.metricRefs(), current.standardBindings(), current.generationStrategy(),
+            current.dimensionProfile(), current.dataMartId(), current.variantCode(), current.implementationPolicy(),
+            current.warehouseLayerCode(), current.businessProcessId(), current.subjectDomainId()
+        );
+    }
+
+    private static UpdateModelSpecCommand commandWithStandardBindings(
+        ModelSpecView current,
+        List<StandardBinding> standardBindings
+    ) {
+        return new UpdateModelSpecCommand(
+            current.planId(), current.domainId(), current.modelType(), current.layer(), current.name(), current.description(),
+            current.implementationMode(), current.materialization(), current.businessActivityRef(), current.consumptionScenario(),
+            current.grain(), current.factShape(), current.timeSemantics(), current.fields(), current.sourceRefs(), current.dependsOn(),
+            current.dimensionRefs(), current.metricRefs(), standardBindings, current.generationStrategy(),
             current.dimensionProfile(), current.dataMartId(), current.variantCode(), current.implementationPolicy(),
             current.warehouseLayerCode(), current.businessProcessId(), current.subjectDomainId()
         );

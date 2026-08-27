@@ -211,10 +211,7 @@ public class IndicatorService {
             .toList();
     }
 
-    /**
-     * Projects visible indicator owners and their persisted one-hop INDICATOR references using
-     * three bounded queries: source owners, dependency rows, and target owners.
-     */
+    /** Projects visible indicator owners and their persisted one-hop INDICATOR references. */
     @Transactional(readOnly = true)
     public RelationshipGraphProjection projectForRelationshipGraph(
         Collection<UUID> ids,
@@ -222,15 +219,18 @@ public class IndicatorService {
         int nodeLimit,
         int edgeLimit
     ) {
-        if (ids == null || ids.isEmpty() || nodeLimit < 1 || edgeLimit < 1) {
-            return new RelationshipGraphProjection(List.of(), List.of(), false);
-        }
+        if (nodeLimit < 1 || edgeLimit < 1) return new RelationshipGraphProjection(List.of(), List.of(), false);
         int boundedNodeLimit = Math.min(nodeLimit, 500);
         int boundedEdgeLimit = Math.min(edgeLimit, 1000);
+        Collection<UUID> requestedIds = ids == null || ids.isEmpty()
+            ? referenceRepository.findIndicatorDependencySourceIdsForRelationshipGraph(
+                PageRequest.of(0, boundedNodeLimit + 1)
+            )
+            : ids;
         LinkedHashSet<UUID> sourceIds = new LinkedHashSet<>();
         int inspected = 0;
         boolean truncated = false;
-        for (UUID id : ids) {
+        for (UUID id : requestedIds == null ? List.<UUID>of() : requestedIds) {
             if (++inspected > boundedNodeLimit || sourceIds.size() >= boundedNodeLimit) {
                 truncated = true;
                 break;

@@ -686,14 +686,13 @@ public class WarehousePlanRelationshipGraphService {
         WorkBudget referenceWork,
         Map<String, RelationshipNode> candidates
     ) {
-        if (
-            indicators == null ||
-            (kindFilter != null && kindFilter != NodeKind.INDICATOR) ||
-            references.indicatorIds.isEmpty()
-        ) return new IndicatorOwners(Map.of(), List.of(), false);
+        if (indicators == null || (kindFilter != null && kindFilter != NodeKind.INDICATOR)) {
+            return new IndicatorOwners(Map.of(), List.of(), false);
+        }
+        boolean catalogProjection = references.indicatorIds.isEmpty();
         int dependencyLimit = Math.min(MAX_EDGES, Math.max(1, referenceWork.remaining()));
         RelationshipGraphProjection projection = indicators.projectForRelationshipGraph(
-            references.indicatorIds,
+            catalogProjection ? Set.of() : references.indicatorIds,
             activeDepartmentId,
             MAX_NODES,
             dependencyLimit
@@ -704,10 +703,14 @@ public class WarehousePlanRelationshipGraphService {
             if (indicator != null && indicator.getId() != null) authorized.putIfAbsent(indicator.getId(), indicator);
         }
         Map<UUID, IndicatorDto> visible = new LinkedHashMap<>();
-        for (MetricRevisionKey reference : references.metricReferences) {
-            IndicatorDto indicator = authorized.get(reference.id());
-            if (indicator != null && numericVersion(indicator.getVersion()) == reference.version()) {
-                visible.putIfAbsent(reference.id(), indicator);
+        if (catalogProjection) {
+            visible.putAll(authorized);
+        } else {
+            for (MetricRevisionKey reference : references.metricReferences) {
+                IndicatorDto indicator = authorized.get(reference.id());
+                if (indicator != null && numericVersion(indicator.getVersion()) == reference.version()) {
+                    visible.putIfAbsent(reference.id(), indicator);
+                }
             }
         }
         List<IndicatorDependency> dependencies = new ArrayList<>();

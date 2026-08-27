@@ -14,7 +14,7 @@ import {
 	updateStandard,
 	updateWordRoot,
 } from "@/api/modelingStandardsApi";
-import { listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
+import { applyModelSpecStandardElementBindings, listModelSpecs, updateModelSpec } from "@/api/modelSpecApi";
 import type {
 	CanonicalModelSpecView,
 	ModelSpecStandardBinding,
@@ -72,6 +72,31 @@ export type StandardMappingOptions = {
 		fields: Array<{ name: string; displayName: string; dataType: string }>;
 	}>;
 	standards: Array<{ id: string; code: string; name: string; version: number }>;
+};
+
+export type StandardMappingSuggestion = {
+	id: string;
+	modelId: string;
+	modelName: string;
+	modelStatus: "DRAFT" | "PUBLISHED";
+	modelRevision: number;
+	modelChecksum: string;
+	fieldName: string;
+	fieldLabel: string;
+	fieldDataType: string;
+	standardId: string;
+	standardCode: string;
+	standardName: string;
+	standardVersion: number;
+	createsDraft: boolean;
+};
+
+export type StandardMappingApplyResult = {
+	modelId: string;
+	modelName: string;
+	success: boolean;
+	revision?: number;
+	message?: string;
 };
 
 const STATUS_LABELS: Record<string, string> = {
@@ -166,6 +191,18 @@ const isCanonicalModel = (model: ModelSpecView): model is CanonicalModelSpecView
 const positiveVersion = (value: unknown) => {
 	const version = Number(value);
 	return Number.isInteger(version) && version > 0 ? version : null;
+};
+
+const normalizedCode = (value: unknown) => text(value).normalize("NFKC").toLowerCase();
+
+const normalizedDataType = (value: unknown) => {
+	const base = text(value).toUpperCase().replace(/\(.*/, "").trim();
+	if (["CHAR", "CHARACTER", "VARCHAR", "TEXT", "STRING"].includes(base)) return "STRING";
+	if (["INT", "INTEGER", "INT4"].includes(base)) return "INTEGER";
+	if (["BIGINT", "INT8", "LONG"].includes(base)) return "BIGINT";
+	if (["DECIMAL", "NUMERIC", "NUMBER"].includes(base)) return "DECIMAL";
+	if (["BOOL", "BOOLEAN"].includes(base)) return "BOOLEAN";
+	return base;
 };
 
 const loadMappingOwners = async () => {
@@ -314,6 +351,84 @@ export async function loadStandardMappingOptions(): Promise<StandardMappingOptio
 			];
 		}),
 	};
+}
+
+export async function previewSuggestedStandardMappings(): Promise<StandardMappingSuggestion[]> {
+	const owners = await loadMappingOwners();
+	const standardsByCode = new Map<string, Record<string, unknown>[]>();
+	for (const standard of owners.standards) {
+		const code = normalizedCode(standard.fieldNameEn);
+		const version = positiveVersion(standard.version);
+		if (!code || !text(standard.id) || version == null) continue;
+		standardsByCode.set(code, [...(standardsByCode.get(code) || []), standard]);
+	}
+
+	return owners.models.flatMap((model) => {
+		const modelStatus = model.status === "DRAFT" ? "DRAFT" : model.status === "PUBLISHED" ? "PUBLISHED" : null;
+		if (!modelStatus) return [];
+		const bindingsByField = new Map(model.standardBindings.map((binding) => [binding.fieldName, binding]));
+		return model.fields.flatMap((field): StandardMappingSuggestion[] => {
+			const existing = bindingsByField.get(field.name);
+			if (existing?.standardElementId) return [];
+			const matches = standardsByCode.get(normalizedCode(field.name)) || [];
+			if (matches.length !== 1) return [];
+			const standard = matches[0];
+			if (normalizedDataType(field.dataType) !== normalizedDataType(standard.dataType)) return [];
+			const standardId = text(standard.id);
+			const standardVersion = positiveVersion(standard.version);
+			if (!standardId || standardVersion == null) return [];
+			return [
+				{
+					id: `${model.id}:${field.name}:${standardId}@${standardVersion}`,
+					modelId: model.id,
+					modelName: model.name,
+					modelStatus,
+					modelRevision: model.revision,
+					modelChecksum: model.checksum,
+					fieldName: field.name,
+					fieldLabel: text(field.displayName, field.name),
+					fieldDataType: field.dataType,
+					standardId,
+					standardCode: text(standard.fieldNameEn),
+					standardName: text(standard.fieldNameCn, text(standard.fieldNameEn)),
+					standardVersion,
+					createsDraft: modelStatus === "PUBLISHED",
+				},
+			];
+		});
+	});
+}
+
+export async function applySuggestedStandardMappings(
+	suggestions: StandardMappingSuggestion[],
+): Promise<StandardMappingApplyResult[]> {
+	const groups = new Map<string, StandardMappingSuggestion[]>();
+	for (const suggestion of suggestions) {
+		groups.set(suggestion.modelId, [...(groups.get(suggestion.modelId) || []), suggestion]);
+	}
+	const results: StandardMappingApplyResult[] = [];
+	for (const group of groups.values()) {
+		const first = group[0];
+		try {
+			const updated = await applyModelSpecStandardElementBindings(
+				{ id: first.modelId, revision: first.modelRevision, checksum: first.modelChecksum },
+				group.map((item) => ({
+					fieldName: item.fieldName,
+					standardElementId: item.standardId,
+					standardElementVersion: item.standardVersion,
+				})),
+			);
+			results.push({ modelId: first.modelId, modelName: first.modelName, success: true, revision: updated.revision });
+		} catch (cause) {
+			results.push({
+				modelId: first.modelId,
+				modelName: first.modelName,
+				success: false,
+				message: cause instanceof Error ? cause.message : "标准映射保存失败",
+			});
+		}
+	}
+	return results;
 }
 
 const modelUpdateCommand = (

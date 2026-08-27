@@ -179,6 +179,44 @@ class IndicatorServiceLifecycleTest {
     }
 
     @Test
+    void projectsPersistedCatalogDependenciesWhenSeedIdsAreEmpty() {
+        UUID sourceId = UUID.fromString("72000000-0000-0000-0000-000000000011");
+        UUID targetId = UUID.fromString("72000000-0000-0000-0000-000000000012");
+        GovIndicatorDefinition source = indicator(sourceId, "SOURCE", "Source", "PUBLISHED", "v1");
+        GovIndicatorDefinition target = indicator(targetId, "TARGET", "Target", "PUBLISHED", "v1");
+        source.setOwnerDept("项目管理");
+        target.setOwnerDept("技术管理");
+        source.setDataLevel("DATA_INTERNAL");
+        target.setDataLevel("DATA_INTERNAL");
+        authenticate(AuthoritiesConstants.INST_DATA_OWNER, "1152");
+        when(referenceRepository.findIndicatorDependencySourceIdsForRelationshipGraph(PageRequest.of(0, 501)))
+            .thenReturn(List.of(sourceId));
+        when(indicatorRepository.findAllById(List.of(sourceId))).thenReturn(List.of(source));
+        when(
+            referenceRepository.findIndicatorDependenciesForRelationshipGraph(
+                List.of(sourceId),
+                PageRequest.of(0, 1001)
+            )
+        )
+            .thenReturn(List.of(reference(source, "INDICATOR", targetId.toString())));
+        when(indicatorRepository.findAllById(List.of(targetId))).thenReturn(List.of(target));
+
+        IndicatorService.RelationshipGraphProjection projection = service.projectForRelationshipGraph(
+            Set.of(),
+            "1152",
+            500,
+            1000
+        );
+
+        assertThat(projection.indicators())
+            .extracting(IndicatorDto::getId)
+            .containsExactly(sourceId, targetId);
+        assertThat(projection.dependencies())
+            .containsExactly(new IndicatorService.IndicatorDependency(sourceId, targetId));
+        assertThat(projection.truncated()).isFalse();
+    }
+
+    @Test
     void hiddenIndicatorTargetsDoNotConsumeTheVisibleNodeBudget() {
         UUID sourceId = UUID.fromString("72100000-0000-0000-0000-000000000001");
         UUID hiddenTargetId = UUID.fromString("72100000-0000-0000-0000-000000000002");

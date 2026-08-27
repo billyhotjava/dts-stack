@@ -26,6 +26,17 @@ public interface GovIndicatorReferenceRepository extends JpaRepository<GovIndica
 
     @Query(
         """
+        select distinct i.id
+          from GovIndicatorReference r
+          join r.indicator i
+         where upper(r.refType) = 'INDICATOR'
+         order by i.id
+        """
+    )
+    List<UUID> findIndicatorDependencySourceIdsForRelationshipGraph(Pageable pageable);
+
+    @Query(
+        """
         select r
           from GovIndicatorReference r
           join fetch r.indicator i

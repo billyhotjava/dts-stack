@@ -363,6 +363,40 @@ class WarehousePlanRelationshipGraphServiceTest {
     }
 
     @Test
+    void projectsCatalogIndicatorDependenciesWhenModelsHaveNoMetricReferences() {
+        UUID sourceId = UUID.fromString("80100000-0000-0000-0000-000000000001");
+        UUID targetId = UUID.fromString("80100000-0000-0000-0000-000000000002");
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        IndicatorService indicators = mock(IndicatorService.class);
+        when(modelSpecs.listForRelationshipGraph(TENANT, PLAN_ID, 501))
+            .thenReturn(List.of(model(FACT_ID, "fact", List.of(), List.of())));
+        when(indicators.projectForRelationshipGraph(java.util.Set.of(), "department-1", 500, 1000))
+            .thenReturn(
+                new RelationshipGraphProjection(
+                    List.of(indicator(sourceId, "v1"), indicator(targetId, "v1")),
+                    List.of(new IndicatorDependency(sourceId, targetId)),
+                    false
+                )
+            );
+        WarehousePlanRelationshipGraphService service = service(
+            modelSpecs,
+            mock(DimensionDefinitionApplicationService.class),
+            mock(MetadataStandardService.class),
+            indicators
+        );
+
+        RelationshipGraph graph = service.read(TENANT, plan(), "department-1", null, null, 500);
+
+        assertThat(graph.nodes())
+            .filteredOn(node -> node.kind() == INDICATOR)
+            .extracting(RelationshipNode::id)
+            .containsExactly("INDICATOR:" + sourceId, "INDICATOR:" + targetId);
+        assertThat(graph.edges())
+            .filteredOn(edge -> edge.kind() == INDICATOR_DEPENDS_ON)
+            .hasSize(1);
+    }
+
+    @Test
     void stopsTraversingOversizedSnapshotArraysAtTheGlobalWorkBudget() {
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         AtomicInteger reads = new AtomicInteger();

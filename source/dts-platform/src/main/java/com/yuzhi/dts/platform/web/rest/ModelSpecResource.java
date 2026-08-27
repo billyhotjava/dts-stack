@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.CreateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.StandardElementBindingPatch;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldIssue;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
@@ -168,6 +169,33 @@ public class ModelSpecResource {
         ModelSpecView view = service.reclassify(serverTenantId, actorId(), id, expected, command);
         return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
     }
+
+    @PostMapping("/{id}/standard-element-bindings")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<ModelSpecView>> applyStandardElementBindings(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestBody StandardElementBindingsRequest request
+    ) {
+        ExpectedVersion expected = parseExpected(ifMatch);
+        if (!id.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "If-Match identifies a different ModelSpec",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        ModelSpecView view = service.applyStandardElementBindings(
+            serverTenantId,
+            actorId(),
+            id,
+            expected,
+            request == null ? null : request.bindings()
+        );
+        return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
+    }
+
+    public record StandardElementBindingsRequest(List<StandardElementBindingPatch> bindings) {}
 
     @PutMapping("/{id}")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)

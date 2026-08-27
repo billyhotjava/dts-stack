@@ -171,6 +171,31 @@ class ModelSpecResourceTest {
     }
 
     @Test
+    void appliesRevisionPinnedStandardBindingsWithAStrongCurrentEtag() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.applyStandardElementBindings(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any()))
+            .thenReturn(view());
+
+        mockMvc
+            .perform(
+                post("/api/modeling/model-specs/{id}/standard-element-bindings", MODEL_ID)
+                    .header("If-Match", ETAG)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"bindings":[{"fieldName":"customer_id",
+                         "standardElementId":"40000000-0000-0000-0000-000000000001",
+                         "standardElementVersion":2}]}
+                        """
+                    )
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", ETAG));
+
+        verify(service).applyStandardElementBindings(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any());
+    }
+
+    @Test
     void mapsStaleCasTo409WithCurrentVersionDetails() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
         when(service.update(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any())).thenThrow(

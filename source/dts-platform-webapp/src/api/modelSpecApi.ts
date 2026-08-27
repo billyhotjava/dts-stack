@@ -378,6 +378,23 @@ export const updateModelSpec = (expected: ModelSpecCasToken, data: UpdateModelSp
 		_skipErrorToast: true,
 	} as any);
 
+export type StandardElementBindingPatch = {
+	fieldName: string;
+	standardElementId: string;
+	standardElementVersion: number;
+};
+
+export const applyModelSpecStandardElementBindings = (
+	expected: ModelSpecCasToken,
+	bindings: StandardElementBindingPatch[],
+) =>
+	api.post<CanonicalModelSpecView>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}/standard-element-bindings`,
+		headers: { "If-Match": toModelSpecEtag(expected) },
+		data: { bindings },
+		_skipErrorToast: true,
+	} as any);
+
 export const previewModelSpecReclassification = (id: string, data: ModelSpecReclassificationRequest) =>
 	api.post<ModelSpecReclassificationPreview>({
 		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(id)}/reclassify-preview`,

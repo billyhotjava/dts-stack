@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+	applySuggestedStandardMappings,
 	archiveStandardsRow,
 	loadStandardMappingOptions,
 	loadStandardsRows,
+	previewSuggestedStandardMappings,
 	type StandardsRow,
 	saveStandardMapping,
 	saveStandardsRow,
@@ -17,6 +19,7 @@ const apiMocks = vi.hoisted(() => ({
 	listModelSpecs: vi.fn(),
 	updateReferenceCode: vi.fn(),
 	updateModelSpec: vi.fn(),
+	applyModelSpecStandardElementBindings: vi.fn(),
 	updateWordRoot: vi.fn(),
 }));
 
@@ -38,6 +41,7 @@ vi.mock("@/api/modelingStandardsApi", () => ({
 }));
 
 vi.mock("@/api/modelSpecApi", () => ({
+	applyModelSpecStandardElementBindings: apiMocks.applyModelSpecStandardElementBindings,
 	listModelSpecs: apiMocks.listModelSpecs,
 	updateModelSpec: apiMocks.updateModelSpec,
 }));
@@ -228,6 +232,80 @@ describe("model-field standard mappings", () => {
 					},
 				],
 			}),
+		);
+	});
+
+	it("previews unique type-compatible standard suggestions for published models", async () => {
+		apiMocks.listModelSpecs.mockResolvedValue([
+			{
+				...model,
+				status: "PUBLISHED",
+				standardBindings: [{ fieldName: "payable_amount", securityLevel: "CONFIDENTIAL" }],
+			},
+		]);
+		apiMocks.listMetadataStandards.mockResolvedValue({ content: [standard] });
+
+		await expect(previewSuggestedStandardMappings()).resolves.toMatchObject([
+			{
+				modelId: model.id,
+				modelName: model.name,
+				modelStatus: "PUBLISHED",
+				fieldName: "payable_amount",
+				standardId: standard.id,
+				standardVersion: 2,
+				createsDraft: true,
+			},
+		]);
+	});
+
+	it("rejects ambiguous or type-incompatible name matches from the suggestion preview", async () => {
+		apiMocks.listModelSpecs.mockResolvedValue([{ ...model, status: "PUBLISHED" }]);
+		apiMocks.listMetadataStandards.mockResolvedValue({
+			content: [standard, { ...standard, id: "50000000-0000-0000-0000-000000000001" }],
+		});
+		await expect(previewSuggestedStandardMappings()).resolves.toEqual([]);
+
+		apiMocks.listMetadataStandards.mockResolvedValue({ content: [{ ...standard, dataType: "BOOLEAN" }] });
+		await expect(previewSuggestedStandardMappings()).resolves.toEqual([]);
+	});
+
+	it("groups confirmed suggestions by model and reports each result", async () => {
+		apiMocks.applyModelSpecStandardElementBindings.mockResolvedValue({
+			...model,
+			status: "DRAFT",
+			revision: 4,
+		});
+		const suggestions = [
+			{
+				id: `${model.id}:payable_amount:${standard.id}@2`,
+				modelId: model.id,
+				modelName: model.name,
+				modelStatus: "PUBLISHED" as const,
+				modelRevision: 3,
+				modelChecksum: "model-checksum",
+				fieldName: "payable_amount",
+				fieldLabel: "应付账款金额",
+				fieldDataType: "DECIMAL",
+				standardId: standard.id,
+				standardCode: "payable_amount",
+				standardName: "应付账款金额",
+				standardVersion: 2,
+				createsDraft: true,
+			},
+		];
+
+		await expect(applySuggestedStandardMappings(suggestions)).resolves.toMatchObject([
+			{ modelId: model.id, success: true, revision: 4 },
+		]);
+		expect(apiMocks.applyModelSpecStandardElementBindings).toHaveBeenCalledWith(
+			{ id: model.id, revision: 3, checksum: "model-checksum" },
+			[
+				{
+					fieldName: "payable_amount",
+					standardElementId: standard.id,
+					standardElementVersion: 2,
+				},
+			],
 		);
 	});
 });

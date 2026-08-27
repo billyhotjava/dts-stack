@@ -4,6 +4,7 @@ import { applyStandardPackageImport, previewStandardPackageImport } from "@/api/
 import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 import type { DataModelingRoute } from "../types";
 import { Button, Modal, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
+import { StandardMappingSuggestionModal } from "./StandardMappingSuggestionModal";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 import {
 	archiveStandardsRow,
@@ -113,6 +114,7 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
 	const [editorRow, setEditorRow] = useState<StandardsRow | "new" | null>(null);
 	const [importOpen, setImportOpen] = useState(false);
+	const [suggestionsOpen, setSuggestionsOpen] = useState(false);
 	// 归档动作原先封在行内组件 ArchiveAction 里各自持有 state，改用 RowActions 后上提到页面级。
 	const [archivingId, setArchivingId] = useState<string | null>(null);
 	const [archiveError, setArchiveError] = useState("");
@@ -155,6 +157,7 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 			setQuery("");
 			setEditorRow(null);
 			setImportOpen(false);
+			setSuggestionsOpen(false);
 			previousView.current = view;
 		}
 	}, [view]);
@@ -220,6 +223,15 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 			<PageHeader
 				actions={
 					<>
+						{view === "mappings" ? (
+							<Button
+								disabled={!canMaintain}
+								onClick={() => setSuggestionsOpen(true)}
+								title={canMaintain ? undefined : "当前账号无标准维护权限"}
+							>
+								智能补全标准
+							</Button>
+						) : null}
 						<Button
 							disabled={!canMaintain || !capability.importPackage}
 							onClick={() => setImportOpen(true)}
@@ -319,6 +331,20 @@ export function StandardsPage({ route }: { route: DataModelingRoute }) {
 					onComplete={async () => {
 						setImportOpen(false);
 						show("标准包已应用");
+						await load();
+					}}
+				/>
+			) : null}
+			{suggestionsOpen ? (
+				<StandardMappingSuggestionModal
+					onClose={() => setSuggestionsOpen(false)}
+					onComplete={async (successCount, failureCount) => {
+						setSuggestionsOpen(false);
+						show(
+							failureCount
+								? `标准映射已补全 ${successCount} 个模型，${failureCount} 个模型失败，可重新执行`
+								: `标准映射已补全 ${successCount} 个模型`,
+						);
 						await load();
 					}}
 				/>
