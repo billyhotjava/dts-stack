@@ -173,4 +173,26 @@ class IngestionTaskExecutionFilterTest {
             eq(pageable)
         );
     }
+
+    @Test
+    void getExecutions_shouldApplyTaskRevisionFilter() {
+        Long taskId = 13L;
+        int revisionNumber = 4;
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<IngestionExecution> page = new PageImpl<>(List.of(new IngestionExecution()), pageable, 1);
+
+        when(executionRepository.findByTaskIdAndRevisionNumber(taskId, revisionNumber, pageable)).thenReturn(page);
+        when(executionMapper.toDto(org.mockito.ArgumentMatchers.any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
+
+        Page<IngestionExecutionDTO> result = ingestionTaskService.getExecutions(
+            taskId,
+            pageable,
+            null,
+            null,
+            revisionNumber
+        );
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        verify(executionRepository).findByTaskIdAndRevisionNumber(taskId, revisionNumber, pageable);
+    }
 }

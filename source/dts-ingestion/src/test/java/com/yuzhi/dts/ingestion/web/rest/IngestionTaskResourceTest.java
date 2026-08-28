@@ -127,6 +127,20 @@ class IngestionTaskResourceTest {
     private ApiAuthProviderRegistry apiAuthProviderRegistry;
 
     @Test
+    void executionListForwardsOptionalRevisionScope() throws Exception {
+        when(ingestionTaskService.getExecutions(eq(13L), any(), eq("SUCCESS"), eq(null), eq(4)))
+            .thenReturn(org.springframework.data.domain.Page.empty());
+
+        mockMvc.perform(
+            get("/api/ingestion/tasks/13/executions")
+                .param("status", "SUCCESS")
+                .param("revisionNumber", "4")
+        ).andExpect(status().isOk());
+
+        verify(ingestionTaskService).getExecutions(eq(13L), any(), eq("SUCCESS"), eq(null), eq(4));
+    }
+
+    @Test
     void getTaskDesignReturnsTaskOwnedProjectionAndPlanEtag() throws Exception {
         IngestionTaskDesignDTO design = taskDesign();
         when(ingestionTaskDesignService.getDesign(13L)).thenReturn(design);

@@ -3,8 +3,27 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const PAGE = readFileSync(new URL("./OrchestrationPage.tsx", import.meta.url), "utf8");
+const TASK_LIST = readFileSync(new URL("./OrchestrationTaskList.tsx", import.meta.url), "utf8");
 const RUNS = readFileSync(new URL("./OrchestrationRunsTab.tsx", import.meta.url), "utf8");
 const API = readFileSync(new URL("../../../api/ingestion.ts", import.meta.url), "utf8");
+
+test("orchestration landing is a server-paged task list and never auto-opens the first task", () => {
+	assert.match(PAGE, /!requestedTaskId[\s\S]*<OrchestrationTaskList/);
+	assert.doesNotMatch(PAGE, /loadedTasks\[0\]/);
+	assert.doesNotMatch(PAGE, /getTasks\(\{ page: 0, size: 200/);
+
+	assert.match(TASK_LIST, /page: pagination\.current - 1/);
+	assert.match(TASK_LIST, /size: pagination\.pageSize/);
+	assert.match(TASK_LIST, /pageSize: 10/);
+	assert.match(TASK_LIST, /任务名称、业务说明、来源类型或负责人/);
+	assert.match(TASK_LIST, /目标资产/);
+	assert.match(TASK_LIST, /任务版本/);
+	assert.match(TASK_LIST, /最近运行/);
+	assert.match(TASK_LIST, /onOpenTask\(taskId, "design"\)/);
+	assert.match(TASK_LIST, /onOpenTask\(taskId, "runs"\)/);
+	assert.match(TASK_LIST, /foundation\/data-sources\/access\/new\?kind=/);
+	assert.doesNotMatch(TASK_LIST, /listAirflowJobs|listAirflowJobRuns|triggerAirflowJob/i);
+});
 
 test("task design is versioned server state rather than a local editable DAG", () => {
 	for (const contract of [
@@ -44,6 +63,9 @@ test("run history is task scoped and exposes durable commands and connector-neut
 	assert.match(RUNS, /commandKey\("retry"/);
 	assert.match(RUNS, /resolveExecutionPollIntervalMs\(\)/);
 	assert.match(RUNS, /parentExecutionId/);
+	assert.match(RUNS, /revisionNumber: revisionScope === "CURRENT"/);
+	assert.match(RUNS, /仅显示当前 DTS 接入任务/);
+	assert.match(API, /revisionNumber\?: number/);
 	assert.doesNotMatch(RUNS, /listAirflowJobs|listAirflowJobRuns|triggerAirflowJob|dbt/i);
 });
 
