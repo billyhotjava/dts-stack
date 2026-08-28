@@ -4,6 +4,10 @@ import test from "node:test";
 
 const PAGE = readFileSync(new URL("./OrchestrationPage.tsx", import.meta.url), "utf8");
 const TASK_LIST = readFileSync(new URL("./OrchestrationTaskList.tsx", import.meta.url), "utf8");
+const EDITOR = readFileSync(new URL("./OrchestrationTaskEditor.tsx", import.meta.url), "utf8");
+const DESIGN_PANEL = readFileSync(new URL("./OrchestrationDesignPanel.tsx", import.meta.url), "utf8");
+const DESIGN_MODEL = readFileSync(new URL("./orchestrationDesignModel.ts", import.meta.url), "utf8");
+const DESIGN = `${EDITOR}\n${DESIGN_PANEL}\n${DESIGN_MODEL}`;
 const RUNS = readFileSync(new URL("./OrchestrationRunsTab.tsx", import.meta.url), "utf8");
 const API = readFileSync(new URL("../../../api/ingestion.ts", import.meta.url), "utf8");
 
@@ -34,17 +38,17 @@ test("task design is versioned server state rather than a local editable DAG", (
 		"admitTask",
 		"setTaskSchedule",
 	]) {
-		assert.match(PAGE, new RegExp(`ingestionTaskAPI\\.${contract}`));
+		assert.match(DESIGN, new RegExp(`ingestionTaskAPI\\.${contract}`));
 	}
-	assert.match(PAGE, /targetDatasetId/);
-	assert.match(PAGE, /dataSourcesService\.list\(\)/);
-	assert.match(PAGE, /listDatasets\(\{ page: 0, size: 200, enabledOnly: true \}\)/);
-	assert.match(PAGE, /onSearch=\{handleDatasetSearch\}/);
-	assert.match(PAGE, /getDataset\(selectedDatasetId\)/);
-	assert.match(PAGE, /data-testid="readonly-topology"/);
-	assert.match(PAGE, /If-Match|planChecksum/);
-	assert.match(PAGE, /撤销未保存修改/);
-	assert.doesNotMatch(PAGE, /WorkflowCanvas|BlockSelectorPanel|useWorkflowStore|serializeDsl|localStorage/);
+	assert.match(DESIGN, /targetDatasetId/);
+	assert.match(DESIGN, /dataSourcesService\.list\(\)/);
+	assert.match(DESIGN, /listDatasets\(\{ page: 0, size: 200, enabledOnly: true \}\)/);
+	assert.match(DESIGN, /onSearch=\{onDatasetSearch\}/);
+	assert.match(DESIGN, /getDataset\(selectedDatasetId\)/);
+	assert.match(DESIGN, /data-testid="readonly-topology"/);
+	assert.match(DESIGN, /If-Match|planChecksum/);
+	assert.match(DESIGN, /撤销未保存修改/);
+	assert.doesNotMatch(DESIGN, /WorkflowCanvas|BlockSelectorPanel|useWorkflowStore|serializeDsl|localStorage/);
 });
 
 test("run history is task scoped and exposes durable commands and connector-neutral logs", () => {
@@ -76,8 +80,8 @@ test("asset, quality, evidence freshness and trusted usability remain distinct",
 	assert.match(RUNS, /evidence\.trustedUsable \? "可信可用" : "未形成可信结论"/);
 	assert.match(RUNS, /\/catalog\/datasets\//);
 	assert.match(RUNS, /\/governance\/rules\/runs/);
-	assert.match(PAGE, /质量策略将在数据写入成功后运行/);
-	assert.match(PAGE, /质量未通过不会把资产标记为可信可用/);
+	assert.match(DESIGN, /质量策略将在数据写入成功后运行/);
+	assert.match(DESIGN, /质量未通过不会把资产标记为可信可用/);
 });
 
 test("frontend API carries target identity, concurrency and idempotency headers", () => {

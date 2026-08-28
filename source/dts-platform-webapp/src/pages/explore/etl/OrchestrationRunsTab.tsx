@@ -31,6 +31,8 @@ const { Paragraph, Text } = Typography;
 
 type Props = {
 	taskId: number | null;
+	taskName?: string;
+	revisionNumber?: number;
 	executionId?: number | null;
 	onExecutionSelect?: (executionId: number | null) => void;
 };
@@ -104,12 +106,19 @@ function EvidenceTags({ evidence }: { evidence?: IngestionQualityEvidence }) {
 	);
 }
 
-export default function OrchestrationRunsTab({ taskId, executionId, onExecutionSelect }: Props) {
+export default function OrchestrationRunsTab({
+	taskId,
+	taskName,
+	revisionNumber,
+	executionId,
+	onExecutionSelect,
+}: Props) {
 	const [rows, setRows] = useState<IngestionExecutionDTO[]>([]);
 	const [total, setTotal] = useState(0);
 	const [page, setPage] = useState(1);
 	const [pageSize, setPageSize] = useState(10);
 	const [statusFilter, setStatusFilter] = useState<string>("ALL");
+	const [revisionScope, setRevisionScope] = useState<"CURRENT" | "ALL">("CURRENT");
 	const [loading, setLoading] = useState(false);
 	const [commandLoading, setCommandLoading] = useState<string | null>(null);
 	const [detail, setDetail] = useState<IngestionExecutionDTO | null>(null);
@@ -134,6 +143,7 @@ export default function OrchestrationRunsTab({ taskId, executionId, onExecutionS
 					size: pageSize,
 					sort: "createdAt,desc",
 					status: statusFilter === "ALL" ? undefined : statusFilter,
+					revisionNumber: revisionScope === "CURRENT" ? revisionNumber : undefined,
 				});
 				setRows(Array.isArray(result.content) ? result.content : []);
 				setTotal(result.totalElements || 0);
@@ -143,7 +153,7 @@ export default function OrchestrationRunsTab({ taskId, executionId, onExecutionS
 				if (!silent) setLoading(false);
 			}
 		},
-		[page, pageSize, statusFilter, taskId],
+		[page, pageSize, revisionNumber, revisionScope, statusFilter, taskId],
 	);
 
 	const loadDetail = useCallback(
@@ -361,9 +371,25 @@ export default function OrchestrationRunsTab({ taskId, executionId, onExecutionS
 
 			<Card
 				size="small"
-				title="任务运行实例"
+				title={`任务运行实例 · ${taskName || `#${taskId}`}`}
 				extra={
 					<Space wrap>
+						<Select
+							value={revisionScope}
+							style={{ width: 175 }}
+							onChange={(value: "CURRENT" | "ALL") => {
+								setRevisionScope(value);
+								setPage(1);
+							}}
+							options={[
+								{
+									value: "CURRENT",
+									label: revisionNumber ? `当前版本 R${revisionNumber}` : "当前版本未形成",
+									disabled: !revisionNumber,
+								},
+								{ value: "ALL", label: "全部历史版本" },
+							]}
+						/>
 						<Select
 							value={statusFilter}
 							style={{ width: 150 }}
@@ -390,7 +416,8 @@ export default function OrchestrationRunsTab({ taskId, executionId, onExecutionS
 					style={{ marginBottom: 12 }}
 					type="info"
 					showIcon
-					message="运行实例严格绑定任务版本；重复提交使用同一幂等命令，不会创建重复账本。"
+					message={`仅显示当前 DTS 接入任务 #${taskId} 的运行实例；Airflow DAG/Run 标识只作为运行诊断信息。`}
+					description="默认查看当前生效版本，可切换到全部历史版本；重复提交使用同一幂等命令，不会创建重复账本。"
 				/>
 				<CompactTable<IngestionExecutionDTO>
 					rowKey="id"

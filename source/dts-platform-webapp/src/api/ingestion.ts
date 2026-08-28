@@ -1031,6 +1031,7 @@ class IngestionTaskAPI {
 			sort?: string;
 			status?: string;
 			failureCategory?: string;
+			revisionNumber?: number;
 		},
 	): Promise<PageResult<IngestionExecutionDTO>> {
 		return api.get({ url: `/ingestion/tasks/${taskId}/executions`, params });

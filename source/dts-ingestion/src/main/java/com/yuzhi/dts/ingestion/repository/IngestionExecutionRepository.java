@@ -30,6 +30,27 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
     Page<IngestionExecution> findByTaskId(Long taskId, Pageable pageable);
 
     /**
+     * 根据任务ID + 受控版本查询执行历史
+     */
+    Page<IngestionExecution> findByTaskIdAndRevisionNumber(Long taskId, Integer revisionNumber, Pageable pageable);
+
+    @Query("""
+        select e from IngestionExecution e
+        where e.task.id = :taskId
+          and e.revisionNumber = :revisionNumber
+          and (:status is null or lower(e.status) = lower(:status))
+          and (:filterFailureCategories = false or upper(e.failureCategory) in :failureCategories)
+        """)
+    Page<IngestionExecution> findByTaskIdAndRevisionNumberWithFilters(
+        @Param("taskId") Long taskId,
+        @Param("revisionNumber") Integer revisionNumber,
+        @Param("status") String status,
+        @Param("failureCategories") Collection<String> failureCategories,
+        @Param("filterFailureCategories") boolean filterFailureCategories,
+        Pageable pageable
+    );
+
+    /**
      * 根据任务ID + 状态查询执行历史
      */
     Page<IngestionExecution> findByTaskIdAndStatusIgnoreCase(Long taskId, String status, Pageable pageable);

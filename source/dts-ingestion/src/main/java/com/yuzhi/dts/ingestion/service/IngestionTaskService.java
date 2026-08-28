@@ -2453,23 +2453,67 @@ public class IngestionTaskService {
      */
     @Transactional
     public Page<IngestionExecutionDTO> getExecutions(Long taskId, Pageable pageable) {
-        return getExecutions(taskId, pageable, null, null);
+        return getExecutions(taskId, pageable, null, null, null);
     }
 
     @Transactional
     public Page<IngestionExecutionDTO> getExecutions(Long taskId, Pageable pageable, String status, String failureCategory) {
-        log.debug("Request to get executions for task: {} status={} failureCategory={}", taskId, status, failureCategory);
-        Page<IngestionExecutionDTO> page = queryExecutions(taskId, pageable, status, failureCategory).map(executionMapper::toDto);
+        return getExecutions(taskId, pageable, status, failureCategory, null);
+    }
+
+    @Transactional
+    public Page<IngestionExecutionDTO> getExecutions(
+        Long taskId,
+        Pageable pageable,
+        String status,
+        String failureCategory,
+        Integer revisionNumber
+    ) {
+        if (revisionNumber != null && revisionNumber <= 0) {
+            throw new IllegalArgumentException("revisionNumber must be positive");
+        }
+        log.debug(
+            "Request to get executions for task: {} status={} failureCategory={} revisionNumber={}",
+            taskId,
+            status,
+            failureCategory,
+            revisionNumber
+        );
+        Page<IngestionExecutionDTO> page = queryExecutions(taskId, pageable, status, failureCategory, revisionNumber)
+            .map(executionMapper::toDto);
         if (page.hasContent()) {
             return page;
         }
         backfillExecutionsFromAirflow(taskId, pageable == null ? 20 : pageable.getPageSize());
-        return queryExecutions(taskId, pageable, status, failureCategory).map(executionMapper::toDto);
+        return queryExecutions(taskId, pageable, status, failureCategory, revisionNumber).map(executionMapper::toDto);
     }
 
-    private Page<IngestionExecution> queryExecutions(Long taskId, Pageable pageable, String status, String failureCategory) {
+    private Page<IngestionExecution> queryExecutions(
+        Long taskId,
+        Pageable pageable,
+        String status,
+        String failureCategory,
+        Integer revisionNumber
+    ) {
         String normalizedStatus = toText(status);
         List<String> normalizedFailureCategories = parseFailureCategories(failureCategory);
+        if (revisionNumber != null) {
+            if (!StringUtils.hasText(normalizedStatus) && normalizedFailureCategories.isEmpty()) {
+                return executionRepository.findByTaskIdAndRevisionNumber(taskId, revisionNumber, pageable);
+            }
+            boolean filterFailureCategories = !normalizedFailureCategories.isEmpty();
+            List<String> queryFailureCategories = filterFailureCategories
+                ? normalizedFailureCategories
+                : List.of("__NO_FAILURE_CATEGORY_FILTER__");
+            return executionRepository.findByTaskIdAndRevisionNumberWithFilters(
+                taskId,
+                revisionNumber,
+                StringUtils.hasText(normalizedStatus) ? normalizedStatus : null,
+                queryFailureCategories,
+                filterFailureCategories,
+                pageable
+            );
+        }
         if (StringUtils.hasText(normalizedStatus) && normalizedFailureCategories.size() > 1) {
             return executionRepository.findByTaskIdAndStatusIgnoreCaseAndFailureCategoriesIgnoreCase(
                 taskId,

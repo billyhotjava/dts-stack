@@ -3138,10 +3138,11 @@ public class IngestionTaskResource {
         @PathVariable Long id,
         @RequestParam(value = "status", required = false) String status,
         @RequestParam(value = "failureCategory", required = false) String failureCategory,
+        @RequestParam(value = "revisionNumber", required = false) Integer revisionNumber,
         org.springframework.data.domain.Pageable pageable
     ) {
         org.springframework.data.domain.Page<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> page =
-            ingestionTaskService.getExecutions(id, pageable, status, failureCategory);
+            ingestionTaskService.getExecutions(id, pageable, status, failureCategory, revisionNumber);
         return ResponseEntity.ok(page);
     }
 
