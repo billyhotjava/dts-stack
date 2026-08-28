@@ -241,8 +241,10 @@ export function useComponentInteractions(
                 continue;
             }
             const mappedValues = resolveActionMappingValues(actionParams, action.mappings);
-            for (const [key, value] of Object.entries(mappedValues)) {
-                runtime.setVariable(key, value, `action:${component.id}:${actionType}`);
+            if (actionType !== 'drill-view') {
+                for (const [key, value] of Object.entries(mappedValues)) {
+                    runtime.setVariable(key, value, `action:${component.id}:${actionType}`);
+                }
             }
             if (actionType === 'set-variable') {
                 runtime.trackEvent({

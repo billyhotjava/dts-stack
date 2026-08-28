@@ -17,6 +17,11 @@ function asTrimmedString(value: unknown): string | undefined {
 	return output.length > 0 ? output : undefined;
 }
 
+function isPositiveNumber(value: unknown): boolean {
+	const numberValue = Number(value);
+	return Number.isFinite(numberValue) && numberValue > 0;
+}
+
 function validateInteractionMappings(input: unknown, path: string, errors: string[]) {
 	if (!Array.isArray(input)) {
 		errors.push(`${path} 必须是数组`);
@@ -65,27 +70,95 @@ export function validateComponentBehavior(component: Record<string, unknown>, pa
 	}
 
 	const drillDown = component.drillDown;
+	let hasExecutableDrillChain = false;
 	if (drillDown !== undefined && drillDown !== null) {
 		if (typeof drillDown !== "object" || Array.isArray(drillDown)) {
 			errors.push(`${path}.drillDown 必须是对象`);
 		} else {
-			validateDrillDown(drillDown as Record<string, unknown>, path, errors);
+			hasExecutableDrillChain = validateDrillDown(drillDown as Record<string, unknown>, path, errors);
 		}
 	}
 
-	validateActions(component.actions, path, errors);
+	validateActions(component.actions, path, errors, hasExecutableDrillChain);
 }
 
-function validateDrillDown(drillDown: Record<string, unknown>, path: string, errors: string[]) {
+export function validateDrillTargetDataSource(input: unknown, path: string, errors: string[]): boolean {
+	const errorCount = errors.length;
+	if (!input || typeof input !== "object" || Array.isArray(input)) {
+		errors.push(`${path} 必须是对象`);
+		return false;
+	}
+	const dataSource = input as Record<string, unknown>;
+	const sourceType = String(dataSource.sourceType ?? dataSource.type ?? "")
+		.trim()
+		.toLowerCase();
+	if (!DRILL_TARGET_DATA_SOURCE_TYPES.has(sourceType)) {
+		errors.push(`${path}.sourceType 非法: ${sourceType}`);
+		return false;
+	}
+
+	if (sourceType === "sql" || sourceType === "database") {
+		const config =
+			dataSource.sqlConfig && typeof dataSource.sqlConfig === "object"
+				? (dataSource.sqlConfig as Record<string, unknown>)
+				: dataSource.databaseConfig && typeof dataSource.databaseConfig === "object"
+					? (dataSource.databaseConfig as Record<string, unknown>)
+					: undefined;
+		if (!config) {
+			errors.push(`${path} 必须配置 sqlConfig/databaseConfig`);
+		} else {
+			const databaseId = Number(config.databaseId ?? config.connectionId);
+			if (!Number.isFinite(databaseId) || databaseId <= 0) errors.push(`${path}.databaseId 必须为正整数`);
+			if (!asTrimmedString(config.query)) errors.push(`${path}.query 不能为空`);
+		}
+	}
+	if (sourceType === "card") {
+		const config = dataSource.cardConfig as Record<string, unknown> | undefined;
+		if (!config || !isPositiveNumber(config.cardId)) errors.push(`${path}.cardConfig.cardId 必须为正整数`);
+	}
+	if (sourceType === "metric") {
+		const config = dataSource.metricConfig as Record<string, unknown> | undefined;
+		if (!config || !isPositiveNumber(config.cardId)) errors.push(`${path}.metricConfig.cardId 必须为正整数`);
+	}
+	if (sourceType === "api") {
+		const config = dataSource.apiConfig as Record<string, unknown> | undefined;
+		if (!config || !asTrimmedString(config.url)) errors.push(`${path}.apiConfig.url 不能为空`);
+	}
+	if (sourceType === "dataset") {
+		const config = dataSource.datasetConfig as Record<string, unknown> | undefined;
+		const queryBody = config?.queryBody as Record<string, unknown> | undefined;
+		if (!queryBody || typeof queryBody !== "object" || Array.isArray(queryBody)) {
+			errors.push(`${path}.datasetConfig.queryBody 必须是对象`);
+		} else {
+			if (!isPositiveNumber(queryBody.database)) errors.push(`${path}.datasetConfig.queryBody.database 必须为正整数`);
+			const queryType = String(queryBody.type ?? "query")
+				.trim()
+				.toLowerCase();
+			if (queryType === "native") {
+				const nativeQuery = queryBody.native as Record<string, unknown> | undefined;
+				if (!nativeQuery || !asTrimmedString(nativeQuery.query)) {
+					errors.push(`${path}.datasetConfig.queryBody.native.query 不能为空`);
+				}
+			} else if (!queryBody.query || typeof queryBody.query !== "object" || Array.isArray(queryBody.query)) {
+				errors.push(`${path}.datasetConfig.queryBody.query 必须是对象`);
+			}
+		}
+	}
+	return errors.length === errorCount;
+}
+
+function validateDrillDown(drillDown: Record<string, unknown>, path: string, errors: string[]): boolean {
 	if (drillDown.enabled !== undefined && typeof drillDown.enabled !== "boolean") {
 		errors.push(`${path}.drillDown.enabled 必须是布尔值`);
 	}
 	const levels = drillDown.levels;
 	if (!Array.isArray(levels)) {
 		errors.push(`${path}.drillDown.levels 必须是数组`);
-		return;
+		return false;
 	}
+	let hasExecutableLevel = false;
 	levels.forEach((level, levelIndex) => {
+		const levelErrorCount = errors.length;
 		const levelPath = `${path}.drillDown.levels[${levelIndex}]`;
 		if (!level || typeof level !== "object" || Array.isArray(level)) {
 			errors.push(`${levelPath} 必须是对象`);
@@ -114,16 +187,20 @@ function validateDrillDown(drillDown: Record<string, unknown>, path: string, err
 		if (!isLegacy && !(hasGenericTarget && hasGenericMappings)) {
 			errors.push(`${levelPath} 必须配置下一层数据源和字段映射，或提供旧版 cardId + paramName`);
 		}
-		if (levelDataSourceRow && sourceType && !DRILL_TARGET_DATA_SOURCE_TYPES.has(sourceType)) {
-			errors.push(`${levelPath}.dataSource.sourceType 非法: ${sourceType}`);
+		if (levelDataSourceRow) {
+			validateDrillTargetDataSource(levelDataSourceRow, `${levelPath}.dataSource`, errors);
 		}
 		if (levelRow.mappings !== undefined && levelRow.mappings !== null) {
 			validateInteractionMappings(levelRow.mappings, `${levelPath}.mappings`, errors);
 		}
+		if ((isLegacy || (hasGenericTarget && hasGenericMappings)) && errors.length === levelErrorCount) {
+			hasExecutableLevel = true;
+		}
 	});
+	return drillDown.enabled === true && hasExecutableLevel;
 }
 
-function validateActions(input: unknown, path: string, errors: string[]) {
+function validateActions(input: unknown, path: string, errors: string[], hasExecutableDrillChain: boolean) {
 	if (input === undefined || input === null) return;
 	if (!Array.isArray(input)) {
 		errors.push(`${path}.actions 必须是数组`);
@@ -139,6 +216,9 @@ function validateActions(input: unknown, path: string, errors: string[]) {
 		const actionType = asTrimmedString(actionRow.type);
 		if (!actionType || !COMPONENT_ACTION_TYPES.has(actionType)) {
 			errors.push(`${actionPath}.type 非法: ${String(actionRow.type ?? "")}`);
+		}
+		if ((actionType === "drill-down" || actionType === "drill-up") && !hasExecutableDrillChain) {
+			errors.push(`${actionPath} 必须关联启用有效下钻链路`);
 		}
 		const mappings = actionRow.mappings;
 		if (mappings !== undefined && mappings !== null) {

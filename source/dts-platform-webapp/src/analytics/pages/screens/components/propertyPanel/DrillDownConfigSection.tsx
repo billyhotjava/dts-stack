@@ -1,6 +1,7 @@
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { normalizeDrillLevel } from "../../drillRuntime";
+import { validateDrillTargetDataSource } from "../../screenSpecBehaviorValidation";
 import type { DataSourceConfig, DrillDownConfig, DrillLevel, ScreenComponent, ScreenGlobalVariable } from "../../types";
 import { MappingEditor } from "./BehaviorConfigSection";
 import { renderDataSourceConfig } from "./DataSourceConfigSection";
@@ -12,6 +13,7 @@ function canConfirmDrillLevel(level: DrillLevel | null) {
 	if (!level) return false;
 	const normalized = normalizeDrillLevel(level);
 	if (!normalized) return false;
+	if (!validateDrillTargetDataSource(normalized.dataSource, "dataSource", [])) return false;
 	const targetKeys = normalized.mappings.map((mapping) => String(mapping.variableKey ?? "").trim());
 	return new Set(targetKeys).size === targetKeys.length;
 }
@@ -211,7 +213,7 @@ export function DrillDownConfigSection({
 					{draftLevel ? (
 						<>
 							<div style={{ marginBottom: 6, color: "#f59e0b", fontSize: 11 }}>
-								未保存层级：补全导航标签和字段映射后再确认
+								未保存层级：补全导航标签、下一层数据源和字段映射后再确认
 							</div>
 							<DrillLevelEditor
 								component={component}

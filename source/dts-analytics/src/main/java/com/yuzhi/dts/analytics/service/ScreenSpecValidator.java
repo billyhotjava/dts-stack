@@ -178,6 +178,8 @@ public class ScreenSpecValidator {
         validateDataSource(item.path("dataSource"), path + ".dataSource", errors);
         validateVisibilityRule(item.path("config"), path + ".config", errors);
         validateInteraction(item.path("interaction"), path + ".interaction", errors);
+        boolean hasExecutableDrillChain = validateDrillDown(item.path("drillDown"), path + ".drillDown", errors);
+        validateDrillActions(item.path("actions"), path + ".actions", hasExecutableDrillChain, errors);
     }
 
     private void validateNumberField(JsonNode node, String path, boolean positiveOnly, List<String> errors) {
@@ -304,6 +306,129 @@ public class ScreenSpecValidator {
             String normalizedTransform = transform == null ? "raw" : transform.toLowerCase();
             if (!INTERACTION_TRANSFORMS.contains(normalizedTransform)) {
                 errors.add(mappingPath + ".transform is invalid: " + normalizedTransform);
+            }
+        }
+    }
+
+    private boolean validateDrillDown(JsonNode drillDownNode, String path, List<String> errors) {
+        if (drillDownNode == null || drillDownNode.isMissingNode() || drillDownNode.isNull()) {
+            return false;
+        }
+        if (!drillDownNode.isObject()) {
+            errors.add(path + " must be object");
+            return false;
+        }
+        JsonNode enabledNode = drillDownNode.path("enabled");
+        if (!enabledNode.isMissingNode() && !enabledNode.isBoolean()) {
+            errors.add(path + ".enabled must be boolean");
+        }
+        JsonNode levelsNode = drillDownNode.path("levels");
+        if (!levelsNode.isArray()) {
+            errors.add(path + ".levels must be array");
+            return false;
+        }
+
+        boolean hasExecutableLevel = false;
+        for (int i = 0; i < levelsNode.size(); i++) {
+            JsonNode level = levelsNode.get(i);
+            String levelPath = path + ".levels[" + i + "]";
+            int errorCount = errors.size();
+            if (level == null || !level.isObject()) {
+                errors.add(levelPath + " must be object");
+                continue;
+            }
+            if (trimToNull(level.path("label").asText(null)) == null) {
+                errors.add(levelPath + ".label is required");
+            }
+            boolean legacy = level.path("cardId").asLong(0L) > 0L
+                    && trimToNull(level.path("paramName").asText(null)) != null;
+            JsonNode dataSource = level.path("dataSource");
+            JsonNode mappings = level.path("mappings");
+            boolean generic = dataSource.isObject() && mappings.isArray() && !mappings.isEmpty();
+            if (!legacy && !generic) {
+                errors.add(levelPath + " requires dataSource and mappings, or legacy cardId and paramName");
+            }
+            if (dataSource.isObject()) {
+                validateDrillTargetDataSource(dataSource, levelPath + ".dataSource", errors);
+            }
+            if (!mappings.isMissingNode() && !mappings.isNull()) {
+                validateInteraction(level, levelPath, errors);
+            }
+            if ((legacy || generic) && errors.size() == errorCount) {
+                hasExecutableLevel = true;
+            }
+        }
+        return drillDownNode.path("enabled").asBoolean(false) && hasExecutableLevel;
+    }
+
+    private void validateDrillTargetDataSource(JsonNode node, String path, List<String> errors) {
+        int errorCount = errors.size();
+        validateDataSource(node, path, errors);
+        if (!node.isObject() || errors.size() > errorCount) {
+            return;
+        }
+        String sourceType = trimToNull(node.path("sourceType").asText(null));
+        if (sourceType == null) {
+            sourceType = trimToNull(node.path("type").asText(null));
+        }
+        if (sourceType == null) {
+            errors.add(path + ".sourceType is required");
+            return;
+        }
+        String normalized = sourceType.toLowerCase();
+        if ("sql".equals(normalized) || "database".equals(normalized)) {
+            JsonNode sql = node.path("sqlConfig").isObject() ? node.path("sqlConfig") : node.path("databaseConfig");
+            JsonNode databaseId = !sql.path("databaseId").isMissingNode()
+                    ? sql.path("databaseId")
+                    : sql.path("connectionId");
+            if (databaseId.asLong(0L) <= 0L) {
+                errors.add(path + ".databaseId must be > 0");
+            }
+        } else if ("api".equals(normalized)) {
+            if (trimToNull(node.path("apiConfig").path("url").asText(null)) == null) {
+                errors.add(path + ".apiConfig.url is required");
+            }
+        } else if ("metric".equals(normalized)) {
+            if (node.path("metricConfig").path("cardId").asLong(0L) <= 0L) {
+                errors.add(path + ".metricConfig.cardId is required for runtime execution");
+            }
+        } else if ("dataset".equals(normalized)) {
+            JsonNode queryBody = node.path("datasetConfig").path("queryBody");
+            if (!queryBody.isObject()) {
+                errors.add(path + ".datasetConfig.queryBody must be object");
+                return;
+            }
+            if (queryBody.path("database").asLong(0L) <= 0L) {
+                errors.add(path + ".datasetConfig.queryBody.database must be > 0");
+            }
+            String queryType = queryBody.path("type").asText("query").trim().toLowerCase();
+            if ("native".equals(queryType)) {
+                if (trimToNull(queryBody.path("native").path("query").asText(null)) == null) {
+                    errors.add(path + ".datasetConfig.queryBody.native.query is required");
+                }
+            } else if (!queryBody.path("query").isObject()) {
+                errors.add(path + ".datasetConfig.queryBody.query must be object");
+            }
+        }
+    }
+
+    private void validateDrillActions(JsonNode actionsNode, String path, boolean hasExecutableDrillChain, List<String> errors) {
+        if (actionsNode == null || actionsNode.isMissingNode() || actionsNode.isNull()) {
+            return;
+        }
+        if (!actionsNode.isArray()) {
+            errors.add(path + " must be array");
+            return;
+        }
+        for (int i = 0; i < actionsNode.size(); i++) {
+            JsonNode action = actionsNode.get(i);
+            if (action == null || !action.isObject()) {
+                errors.add(path + "[" + i + "] must be object");
+                continue;
+            }
+            String actionType = trimToNull(action.path("type").asText(null));
+            if (("drill-down".equals(actionType) || "drill-up".equals(actionType)) && !hasExecutableDrillChain) {
+                errors.add(path + "[" + i + "] requires an enabled drillDown chain");
             }
         }
     }

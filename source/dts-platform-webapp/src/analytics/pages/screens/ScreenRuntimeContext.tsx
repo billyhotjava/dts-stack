@@ -115,7 +115,8 @@ export function ScreenRuntimeProvider({
     const normalizedDefinitions = useMemo(() => normalizeDefinitions(definitions), [definitions]);
     const [values, setValues] = useState<Record<string, string>>({});
     const [events, setEvents] = useState<RuntimeVariableEvent[]>([]);
-    const drillView = useDrillView();
+    const rawDrillView = useDrillView();
+    const drillValueSnapshotsRef = useRef<Record<string, string>[]>([]);
     const onDrillViewChangeRef = useRef(onDrillViewChange);
     const hasEnteredDrillViewRef = useRef(false);
     onDrillViewChangeRef.current = onDrillViewChange;
@@ -137,13 +138,39 @@ export function ScreenRuntimeProvider({
     }, [normalizedDefinitions]);
 
     useEffect(() => {
-        if (drillView.activeViewId !== null) {
+        if (rawDrillView.activeViewId !== null) {
             hasEnteredDrillViewRef.current = true;
         }
         if (hasEnteredDrillViewRef.current) {
-            onDrillViewChangeRef.current?.(drillView.activeViewId);
+            onDrillViewChangeRef.current?.(rawDrillView.activeViewId);
         }
-    }, [drillView.activeViewId]);
+    }, [rawDrillView.activeViewId]);
+
+    const drillView = useMemo<DrillViewState>(() => ({
+        ...rawDrillView,
+        drillToView: (viewId, label, params = {}) => {
+            drillValueSnapshotsRef.current[rawDrillView.depth] = { ...values };
+            drillValueSnapshotsRef.current.length = rawDrillView.depth + 1;
+            setValues((prev) => ({ ...prev, ...params }));
+            rawDrillView.drillToView(viewId, label, params);
+        },
+        navigateToLevel: (index) => {
+            const targetDepth = Math.max(0, Math.min(index, rawDrillView.depth));
+            if (targetDepth >= rawDrillView.depth) return;
+            const snapshot = drillValueSnapshotsRef.current[targetDepth];
+            if (snapshot) setValues({ ...snapshot });
+            drillValueSnapshotsRef.current.length = targetDepth;
+            rawDrillView.navigateToLevel(targetDepth);
+        },
+        navigateToRoot: () => {
+            if (rawDrillView.depth > 0) {
+                const snapshot = drillValueSnapshotsRef.current[0];
+                if (snapshot) setValues({ ...snapshot });
+            }
+            drillValueSnapshotsRef.current = [];
+            rawDrillView.navigateToRoot();
+        },
+    }), [rawDrillView, values]);
 
     const contextValue = useMemo<ScreenRuntimeContextValue>(() => ({
         definitions: normalizedDefinitions,

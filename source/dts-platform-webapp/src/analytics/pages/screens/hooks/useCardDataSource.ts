@@ -109,6 +109,60 @@ function mergeBindingsWithRuntime(
     return Array.from(merged.entries()).map(([name, value]) => ({ name, value }));
 }
 
+function resolveDatasetParameterName(parameter: unknown): string | undefined {
+    if (!parameter || typeof parameter !== 'object' || Array.isArray(parameter)) return undefined;
+    const row = parameter as Record<string, unknown>;
+    const directName = String(row.name ?? row.slug ?? '').trim();
+    if (directName) return directName;
+    const target = row.target;
+    if (!Array.isArray(target)) return undefined;
+    const templateTag = target[1];
+    if (!Array.isArray(templateTag) || templateTag[0] !== 'template-tag') return undefined;
+    const targetName = String(templateTag[1] ?? '').trim();
+    return targetName || undefined;
+}
+
+export function buildDatasetRuntimeRequest(
+    queryBody: Record<string, unknown>,
+    runtimeParams?: Array<{ name: string; value: string }>,
+    queryContext?: Record<string, unknown>,
+): Record<string, unknown> {
+    const body = { ...queryBody };
+    const runtimeValues = new Map<string, string>();
+    for (const item of runtimeParams ?? []) {
+        const name = String(item?.name ?? '').trim();
+        if (name) runtimeValues.set(name, String(item?.value ?? ''));
+    }
+
+    if (runtimeValues.size > 0) {
+        const existing = queryBody.parameters;
+        if (Array.isArray(existing)) {
+            const matched = new Set<string>();
+            const parameters = existing.map((parameter) => {
+                const name = resolveDatasetParameterName(parameter);
+                if (!name || !runtimeValues.has(name) || !parameter || typeof parameter !== 'object' || Array.isArray(parameter)) {
+                    return parameter;
+                }
+                matched.add(name);
+                return { ...(parameter as Record<string, unknown>), value: runtimeValues.get(name) };
+            });
+            for (const [name, value] of runtimeValues) {
+                if (!matched.has(name)) parameters.push({ name, value });
+            }
+            body.parameters = parameters;
+        } else if (existing && typeof existing === 'object') {
+            body.parameters = { ...(existing as Record<string, unknown>), ...Object.fromEntries(runtimeValues) };
+        } else {
+            body.parameters = Array.from(runtimeValues, ([name, value]) => ({ name, value }));
+        }
+    }
+
+    if (queryContext && Object.keys(queryContext).length > 0) {
+        body.queryContext = queryContext;
+    }
+    return body;
+}
+
 function getCacheKey(
     sourceType: 'static' | 'card' | 'api' | 'sql' | 'dataset' | 'metric',
     dataSource: DataSourceConfig | undefined,
@@ -466,10 +520,11 @@ export function useCardDataSource(
                             if (!queryBody || typeof queryBody !== 'object') {
                                 throw new Error('Dataset 数据源未配置 queryBody');
                             }
-                            const body = { ...(queryBody as Record<string, unknown>) };
-                            if (contextKey !== 'null') {
-                                body.queryContext = JSON.parse(contextKey);
-                            }
+                            const body = buildDatasetRuntimeRequest(
+                                queryBody as Record<string, unknown>,
+                                paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined,
+                                contextKey !== 'null' ? JSON.parse(contextKey) : undefined,
+                            );
                             const result = await analyticsApi.runDatasetQuery(body);
                             if (result.error) {
                                 throw new Error(String(result.error));

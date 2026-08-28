@@ -11,8 +11,14 @@ function DrillViewTrigger() {
 	return (
 		<>
 			<output aria-label="当前筛选">{runtime.values.selectedKey}</output>
-			<button type="button" onClick={() => runtime.drillView.drillToView("detail-view", "明细", { selectedKey: "A-01" })}>
+			<button
+				type="button"
+				onClick={() => runtime.drillView.drillToView("detail-view", "明细", { selectedKey: "A-01" })}
+			>
 				进入明细
+			</button>
+			<button type="button" onClick={() => runtime.drillView.drillToView("leaf-view", "叶子", { selectedKey: "B-02" })}>
+				进入叶子
 			</button>
 		</>
 	);
@@ -50,6 +56,21 @@ describe("ScreenRuntimeProvider drill-view navigation", () => {
 		});
 		expect(onDrillViewChange).toHaveBeenLastCalledWith("detail-view");
 		expect(container?.querySelector('[aria-label="内部视图导航"]')).not.toBeNull();
+		expect(container?.querySelector('[aria-label="当前筛选"]')?.textContent).toBe("A-01");
+
+		await act(async () => {
+			(
+				Array.from(container?.querySelectorAll("button") ?? []).find(
+					(button) => button.textContent === "进入叶子",
+				) as HTMLButtonElement
+			).click();
+		});
+		expect(container?.querySelector('[aria-label="当前筛选"]')?.textContent).toBe("B-02");
+
+		const rollUp = Array.from(container?.querySelectorAll("nav button") ?? []).find(
+			(button) => button.textContent === "返回上一层",
+		) as HTMLButtonElement;
+		await act(async () => rollUp.click());
 		expect(container?.querySelector('[aria-label="当前筛选"]')?.textContent).toBe("A-01");
 
 		const reset = Array.from(container?.querySelectorAll("nav button") ?? []).find(
