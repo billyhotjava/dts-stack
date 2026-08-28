@@ -218,4 +218,73 @@ class ScreenSpecValidatorTest {
         assertThat(result.errors()).isEmpty();
         assertThat(result.warnings()).isEmpty();
     }
+
+    @Test
+    void validateForWrite_incompleteDrillTarget_rejected() throws Exception {
+        ScreenSpecValidator validator = new ScreenSpecValidator();
+        var payload = objectMapper.readTree("""
+                {
+                  "schemaVersion": 2,
+                  "width": 1920,
+                  "height": 1080,
+                  "components": [
+                    {
+                      "id": "c1",
+                      "type": "bar-chart",
+                      "x": 0,
+                      "y": 0,
+                      "width": 300,
+                      "height": 200,
+                      "drillDown": {
+                        "enabled": true,
+                        "levels": [
+                          {
+                            "label": "明细",
+                            "dataSource": {
+                              "type": "sql",
+                              "sourceType": "sql",
+                              "sqlConfig": {"databaseId": 0, "query": ""}
+                            },
+                            "mappings": [
+                              {"sourcePath": "data.key", "variableKey": "selectedKey"}
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+                """);
+
+        assertThatThrownBy(() -> validator.validateForWrite(payload))
+                .isInstanceOf(ScreenSpecValidationException.class)
+                .hasMessageContaining("drillDown.levels[0].dataSource");
+    }
+
+    @Test
+    void validateForWrite_drillActionWithoutChain_rejected() throws Exception {
+        ScreenSpecValidator validator = new ScreenSpecValidator();
+        var payload = objectMapper.readTree("""
+                {
+                  "schemaVersion": 2,
+                  "width": 1920,
+                  "height": 1080,
+                  "components": [
+                    {
+                      "id": "c1",
+                      "type": "bar-chart",
+                      "x": 0,
+                      "y": 0,
+                      "width": 300,
+                      "height": 200,
+                      "actions": [{"type": "drill-down"}, {"type": "drill-up"}]
+                    }
+                  ]
+                }
+                """);
+
+        assertThatThrownBy(() -> validator.validateForWrite(payload))
+                .isInstanceOf(ScreenSpecValidationException.class)
+                .hasMessageContaining("requires an enabled drillDown chain");
+    }
 }
