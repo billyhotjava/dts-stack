@@ -7,9 +7,9 @@
 | 层次 | 判定 | 说明 |
 |---|---|---|
 | 功能源码 | PASS | design/topology/revision/schedule/runtime/quality-asset projection 已实现 |
-| 聚焦验证 | PASS | ingestion 38、platform 27、frontend source 4、component 3，类型/格式/legacy build 通过 |
-| 数据库与部署 | PASS | 3 个 changeSet、3 个 nullable UUID 列、2 个唯一索引；三服务新摘要运行 |
-| 本地 Chrome | PASS_WITH_ENV_NOTE | Chrome 150 集中只读旅程通过；harness 定向复跑与现场缺口见 IT-07 |
+| 聚焦验证 | PASS | 既有 ingestion 38、platform 27；本次增量 backend 5、frontend source 5、component 3，类型/格式/legacy build 通过 |
+| 数据库与部署 | PASS | 既有 3 个 changeSet、3 个 nullable UUID 列、2 个唯一索引；本次仅定向替换 ingestion/webapp，健康与路由通过 |
+| 本地 Chrome | PASS_WITH_ENV_NOTE | Chrome 150 新增长期 E2E 1/1 通过；默认列表、task/revision 过滤、桌面/窄屏证据及现场缺口见 IT-07 |
 | Chrome 95 / 三角色 / 业务金丝雀 | ENVIRONMENT_GAP | 不用本地 Chrome 150 或自动化契约冒充现场通过 |
 
 ## 单一集中验收旅程
@@ -48,5 +48,6 @@
 - `IT-06-governance.md`：迁移、legacy DSL、审计、DAG 对账。
 - `IT-07-chrome95.md`：目标浏览器单旅程与制品版本。
 - `IT-08-asset-quality.md`：目标资产、post-commit 质量触发、当前证据切换、消费资格和双向深链。
+- `source/dts-platform-webapp/e2e/sprint103-orchestration-landing-real.spec.ts`：默认任务列表、设计/运行深链、当前版本/全部历史过滤和双视口真实回归。
 
 上述文件只有在产生真实证据时创建；禁止提前放置 TODO 或占位截图。
