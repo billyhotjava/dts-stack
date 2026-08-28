@@ -51,6 +51,9 @@ public class IngestionTask extends AbstractAuditingEntity {
     @Column(name = "destination_config", columnDefinition = "jsonb")
     private JsonNode destinationConfig; // 目标数据库配置
 
+    @Column(name = "target_dataset_id", columnDefinition = "uuid")
+    private java.util.UUID targetDatasetId; // CatalogDataset identity, independent from quality enablement
+
     // 同步配置
     @NotNull
     @Size(min = 1, max = 50)
@@ -186,6 +189,14 @@ public class IngestionTask extends AbstractAuditingEntity {
 
     public void setDestinationConfig(JsonNode destinationConfig) {
         this.destinationConfig = destinationConfig;
+    }
+
+    public java.util.UUID getTargetDatasetId() {
+        return targetDatasetId;
+    }
+
+    public void setTargetDatasetId(java.util.UUID targetDatasetId) {
+        this.targetDatasetId = targetDatasetId;
     }
 
     public String getSyncMode() {

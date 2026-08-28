@@ -47,6 +47,9 @@ public class IngestionExecution {
     @Column(name = "quality_policy_ref", length = 200)
     private String qualityPolicyRef;
 
+    @Column(name = "target_dataset_id", columnDefinition = "uuid")
+    private java.util.UUID targetDatasetId;
+
     @Size(max = 200)
     @Column(name = "quality_run_id", length = 200)
     private String qualityRunId;
@@ -219,6 +222,14 @@ public class IngestionExecution {
 
     public void setQualityPolicyRef(String qualityPolicyRef) {
         this.qualityPolicyRef = qualityPolicyRef;
+    }
+
+    public java.util.UUID getTargetDatasetId() {
+        return targetDatasetId;
+    }
+
+    public void setTargetDatasetId(java.util.UUID targetDatasetId) {
+        this.targetDatasetId = targetDatasetId;
     }
 
     public String getQualityRunId() {

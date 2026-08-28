@@ -51,6 +51,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
@@ -93,6 +94,9 @@ public class IngestionTaskResource {
     private final ApiProperties apiProperties;
     private final ApiAuthProviderRegistry apiAuthProviderRegistry;
     private com.yuzhi.dts.ingestion.service.IngestionAccessContractService accessContractService;
+    private com.yuzhi.dts.ingestion.service.IngestionTaskDesignService taskDesignService;
+    private com.yuzhi.dts.ingestion.service.IngestionExecutionCommandService executionCommandService;
+    private com.yuzhi.dts.ingestion.service.IngestionExecutionSubmissionService executionSubmissionService;
 
     public IngestionTaskResource(
         AddaxJobService addaxJobService,
@@ -133,6 +137,23 @@ public class IngestionTaskResource {
     @Autowired
     void setAccessContractService(com.yuzhi.dts.ingestion.service.IngestionAccessContractService accessContractService) {
         this.accessContractService = accessContractService;
+    }
+
+    @Autowired
+    void setTaskDesignService(com.yuzhi.dts.ingestion.service.IngestionTaskDesignService taskDesignService) {
+        this.taskDesignService = taskDesignService;
+    }
+
+    @Autowired
+    void setExecutionCommandService(com.yuzhi.dts.ingestion.service.IngestionExecutionCommandService executionCommandService) {
+        this.executionCommandService = executionCommandService;
+    }
+
+    @Autowired
+    void setExecutionSubmissionService(
+        com.yuzhi.dts.ingestion.service.IngestionExecutionSubmissionService executionSubmissionService
+    ) {
+        this.executionSubmissionService = executionSubmissionService;
     }
 
     public record IngestionTaskRequest(
@@ -1695,6 +1716,34 @@ public class IngestionTaskResource {
         String summary,
         RuntimeException error
     ) {
+        auditRunAction(
+            action,
+            stage,
+            taskId,
+            executionId,
+            executionRunId,
+            mode,
+            async,
+            operator,
+            summary,
+            null,
+            error
+        );
+    }
+
+    private void auditRunAction(
+        String action,
+        AuditStage stage,
+        Long taskId,
+        Long executionId,
+        String executionRunId,
+        String mode,
+        boolean async,
+        String operator,
+        String summary,
+        com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution,
+        RuntimeException error
+    ) {
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("summary", summary);
         meta.put("taskId", taskId);
@@ -1708,6 +1757,26 @@ public class IngestionTaskResource {
         }
         if (StringUtils.hasText(mode)) {
             meta.put("mode", mode);
+        }
+        if (execution != null) {
+            if (execution.getId() != null) {
+                meta.put("executionId", execution.getId());
+            }
+            if (StringUtils.hasText(execution.getExecutionId())) {
+                meta.put("executionRunId", execution.getExecutionId());
+            }
+            if (execution.getRevisionNumber() != null) {
+                meta.put("revisionNumber", execution.getRevisionNumber());
+            }
+            if (StringUtils.hasText(execution.getEffectiveConfigChecksum())) {
+                meta.put("planChecksum", execution.getEffectiveConfigChecksum());
+            }
+            if (execution.getTargetDatasetId() != null) {
+                meta.put("targetDatasetId", execution.getTargetDatasetId().toString());
+            }
+            if (execution.getParentExecutionId() != null) {
+                meta.put("parentExecutionId", execution.getParentExecutionId());
+            }
         }
         String errorMessage = error == null ? null : trimMessage(error.getMessage());
         if (StringUtils.hasText(errorMessage)) {
@@ -2035,6 +2104,56 @@ public class IngestionTaskResource {
         return parts.length >= 5 && parts.length <= 7;
     }
 
+    private ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO.ScheduleCommand> changeTaskSchedule(
+        Long taskId,
+        boolean paused
+    ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        String summary = paused ? "暂停接入任务调度" : "启用接入任务调度";
+        try {
+            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO.ScheduleCommand result =
+                taskDesignService.setSchedulePaused(taskId, paused);
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("summary", summary);
+            metadata.put("taskId", taskId);
+            metadata.put("operator", operator);
+            metadata.put("scheduleState", result.state());
+            if (StringUtils.hasText(result.airflowDagId())) {
+                metadata.put("airflowDagId", result.airflowDagId());
+            }
+            auditService.auditAction(
+                "INGESTION_TASK_UPDATE",
+                AuditStage.SUCCESS,
+                String.valueOf(taskId),
+                metadata
+            );
+            return ResponseEntity.ok(result);
+        } catch (IllegalArgumentException ex) {
+            auditDesignFailure(taskId, operator, summary + "失败", ex);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        } catch (IllegalStateException ex) {
+            auditDesignFailure(taskId, operator, summary + "失败", ex);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
+        }
+    }
+
+    private void auditDesignFailure(Long taskId, String operator, String summary, Exception ex) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("summary", summary);
+        metadata.put("taskId", taskId);
+        metadata.put("operator", operator);
+        String error = trimMessage(ex == null ? null : ex.getMessage());
+        if (StringUtils.hasText(error)) {
+            metadata.put("error", error);
+        }
+        auditService.auditAction(
+            "INGESTION_TASK_UPDATE",
+            AuditStage.FAIL,
+            String.valueOf(taskId),
+            metadata
+        );
+    }
+
     // ==================== 新增CRUD端点 ====================
 
     /**
@@ -2114,6 +2233,175 @@ public class IngestionTaskResource {
         }
     }
 
+    /** Task-owned design projection used by the integrated flow page. */
+    @GetMapping("/tasks/{id}/design")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO> getTaskDesign(
+        @PathVariable Long id
+    ) {
+        try {
+            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO design = taskDesignService.getDesign(id);
+            ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+            if (StringUtils.hasText(design.planChecksum())) {
+                response.eTag(design.planChecksum());
+            }
+            return response.body(design);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+    }
+
+    @PutMapping("/tasks/{id}/design")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<?> updateTaskDesign(
+        @PathVariable Long id,
+        @RequestHeader(value = "If-Match", required = false) String expectedPlanChecksum,
+        @Valid @RequestBody com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignUpdateRequest request
+    ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        try {
+            com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO design = taskDesignService.saveDesign(
+                id,
+                expectedPlanChecksum,
+                request
+            );
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("summary", "保存接入流程设计");
+            metadata.put("taskId", id);
+            metadata.put("operator", operator);
+            if (design.revisionNumber() != null) {
+                metadata.put("revisionNumber", design.revisionNumber());
+            }
+            if (StringUtils.hasText(design.planChecksum())) {
+                metadata.put("planChecksum", design.planChecksum());
+            }
+            if (design.destination() != null && design.destination().assetRef() != null && design.destination().assetRef().datasetId() != null) {
+                metadata.put("targetDatasetId", design.destination().assetRef().datasetId().toString());
+            }
+            auditService.auditAction(
+                "INGESTION_TASK_UPDATE",
+                AuditStage.SUCCESS,
+                design.taskName(),
+                metadata
+            );
+            ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+            if (StringUtils.hasText(design.planChecksum())) {
+                response.eTag(design.planChecksum());
+            }
+            return response.body(design);
+        } catch (com.yuzhi.dts.ingestion.service.IngestionTaskDesignService.DesignValidationException ex) {
+            auditDesignFailure(id, operator, "接入流程设计校验失败", ex);
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(ex.getValidation());
+        } catch (com.yuzhi.dts.ingestion.service.IngestionTaskDesignService.DesignConflictException ex) {
+            auditDesignFailure(id, operator, "保存接入流程设计冲突", ex);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            auditDesignFailure(id, operator, "保存接入流程设计失败", ex);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        } catch (IllegalStateException ex) {
+            auditDesignFailure(id, operator, "保存接入流程设计失败", ex);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
+        }
+    }
+
+    @PostMapping("/tasks/{id}/design/validate")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO.ValidationResult> validateTaskDesign(
+        @PathVariable Long id,
+        @RequestHeader(value = "X-Expected-Plan-Checksum", required = false) String expectedPlanChecksum,
+        @Valid @RequestBody com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignUpdateRequest request
+    ) {
+        try {
+            return ResponseEntity.ok(taskDesignService.validateDesign(id, expectedPlanChecksum, request));
+        } catch (com.yuzhi.dts.ingestion.service.IngestionTaskDesignService.DesignConflictException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        }
+    }
+
+    @GetMapping("/tasks/{id}/topology")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO.TopologyProjection> getTaskTopology(
+        @PathVariable Long id,
+        @RequestParam(value = "view", required = false, defaultValue = "DRAFT") String view
+    ) {
+        if (!"DRAFT".equalsIgnoreCase(view) && !"ACTIVE".equalsIgnoreCase(view)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "TOPOLOGY_VIEW_INVALID");
+        }
+        try {
+            return ResponseEntity.ok(taskDesignService.getTopology(id, view));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
+        } catch (IllegalStateException ex) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
+        }
+    }
+
+    @PostMapping("/tasks/{id}/schedule/enable")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO.ScheduleCommand> enableTaskSchedule(
+        @PathVariable Long id
+    ) {
+        return changeTaskSchedule(id, false);
+    }
+
+    @PostMapping("/tasks/{id}/schedule/pause")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO.ScheduleCommand> pauseTaskSchedule(
+        @PathVariable Long id
+    ) {
+        return changeTaskSchedule(id, true);
+    }
+
+    @GetMapping("/tasks/{id}/executions/{executionId}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> getTaskExecution(
+        @PathVariable Long id,
+        @PathVariable Long executionId
+    ) {
+        try {
+            return ResponseEntity.ok(executionCommandService.get(id, executionId));
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "执行实例不存在");
+        }
+    }
+
+    @PostMapping("/tasks/{id}/executions/{executionId}/cancel")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> cancelTaskExecution(
+        @PathVariable Long id,
+        @PathVariable Long executionId
+    ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        try {
+            com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = executionCommandService.cancel(
+                id,
+                executionId
+            );
+            auditRunAction(
+                "INGESTION_TASK_EXECUTE",
+                AuditStage.SUCCESS,
+                id,
+                executionId,
+                execution.getExecutionId(),
+                null,
+                false,
+                operator,
+                "取消入湖执行",
+                execution,
+                null
+            );
+            return ResponseEntity.ok(execution);
+        } catch (IllegalArgumentException ex) {
+            auditRunAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, id, executionId, null, null, false, operator, "取消入湖执行失败", ex);
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "执行实例不存在");
+        } catch (IllegalStateException ex) {
+            auditRunAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, id, executionId, null, null, false, operator, "取消入湖执行失败", ex);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, ex.getMessage());
+        }
+    }
+
     /**
      * POST /api/ingestion/tasks/{id}/admit : validate classification evidence and activate a draft.
      */
@@ -2121,19 +2409,23 @@ public class IngestionTaskResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO> admitTask(
         @PathVariable Long id,
+        @RequestHeader(value = "X-Expected-Plan-Checksum", required = false) String expectedPlanChecksum,
         @RequestBody IngestionTaskAdmissionRequest request
     ) {
         JsonNode classificationSeal = request == null ? null : request.classificationSeal();
         JsonNode fieldClassifications = request == null ? null : request.fieldClassifications();
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
+            if (StringUtils.hasText(expectedPlanChecksum)) {
+                taskDesignService.requirePlanChecksum(id, expectedPlanChecksum);
+            }
             com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO admitted =
                 ingestionTaskService.admit(id, classificationSeal, fieldClassifications);
             auditService.auditAction(
                 "INGESTION_TASK_UPDATE",
                 AuditStage.SUCCESS,
                 admitted.getName(),
-                IngestionTaskAdmissionAuditMetadata.success(id, operator)
+                IngestionTaskAdmissionAuditMetadata.success(id, operator, admitted)
             );
             return ResponseEntity.ok(admitted);
         } catch (IllegalArgumentException ex) {
@@ -2533,11 +2825,14 @@ public class IngestionTaskResource {
     @PostMapping("/tasks/{id}/execute")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> executeTask(
-        @PathVariable Long id
+        @PathVariable Long id,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
-            com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = ingestionTaskService.execute(id);
+            com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = StringUtils.hasText(idempotencyKey)
+                ? executionSubmissionService.submit(id, idempotencyKey)
+                : ingestionTaskService.execute(id);
             auditRunAction(
                 "INGESTION_TASK_EXECUTE",
                 AuditStage.SUCCESS,
@@ -2548,6 +2843,7 @@ public class IngestionTaskResource {
                 false,
                 operator,
                 "手动执行入湖任务",
+                execution,
                 null
             );
             return ResponseEntity.ok(execution);
@@ -2569,12 +2865,22 @@ public class IngestionTaskResource {
     @PostMapping("/tasks/{id}/execute/async")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<Map<String, Object>> executeTaskAsync(
-        @PathVariable Long id
+        @PathVariable Long id,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
             com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO task = ingestionTaskService.validateAsyncExecutionRequest(id);
-            ingestionTaskService.executeAsync(id);
+            com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = null;
+            boolean replayed = false;
+            if (StringUtils.hasText(idempotencyKey)) {
+                com.yuzhi.dts.ingestion.service.IngestionExecutionSubmissionService.SubmissionResult submission =
+                    executionSubmissionService.submitCommand(id, idempotencyKey);
+                execution = submission.execution();
+                replayed = submission.replayed();
+            } else {
+                ingestionTaskService.executeAsync(id);
+            }
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("taskId", id);
             payload.put("taskName", task.getName());
@@ -2582,6 +2888,14 @@ public class IngestionTaskResource {
             payload.put("async", true);
             payload.put("pollIntervalMs", resolveExecutionPollIntervalMs());
             payload.put("message", "任务已提交，正在后台触发执行");
+            if (execution != null) {
+                payload.put("executionId", execution.getId());
+                payload.put("executionRunId", execution.getExecutionId());
+                payload.put("revisionNumber", execution.getRevisionNumber());
+                payload.put("planChecksum", execution.getEffectiveConfigChecksum());
+                payload.put("idempotencyProtected", true);
+                payload.put("idempotent", replayed);
+            }
             auditRunAction(
                 "INGESTION_TASK_EXECUTE",
                 AuditStage.SUCCESS,
@@ -2592,6 +2906,7 @@ public class IngestionTaskResource {
                 true,
                 operator,
                 "异步提交入湖任务执行",
+                execution,
                 null
             );
             return ResponseEntity.accepted().body(payload);
@@ -2676,6 +2991,7 @@ public class IngestionTaskResource {
                 false,
                 operator,
                 "重试入湖执行",
+                retry,
                 null
             );
             return ResponseEntity.ok(retry);
@@ -2696,12 +3012,18 @@ public class IngestionTaskResource {
     public ResponseEntity<Map<String, Object>> retryExecutionAsync(
         @PathVariable Long id,
         @PathVariable Long executionId,
-        @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
+        @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
         String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
-            ingestionTaskService.validateAsyncRetryRequest(id, executionId, mode);
-            ingestionTaskService.retryExecutionAsync(id, executionId, mode);
+            com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO retry = null;
+            if (StringUtils.hasText(idempotencyKey)) {
+                retry = ingestionTaskService.retryExecution(id, executionId, mode);
+            } else {
+                ingestionTaskService.validateAsyncRetryRequest(id, executionId, mode);
+                ingestionTaskService.retryExecutionAsync(id, executionId, mode);
+            }
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("taskId", id);
             payload.put("executionId", executionId);
@@ -2709,6 +3031,13 @@ public class IngestionTaskResource {
             payload.put("async", true);
             payload.put("pollIntervalMs", resolveExecutionPollIntervalMs());
             payload.put("message", "重试已提交，正在后台执行");
+            if (retry != null) {
+                payload.put("retryExecutionId", retry.getId());
+                payload.put("executionRunId", retry.getExecutionId());
+                payload.put("revisionNumber", retry.getRevisionNumber());
+                payload.put("planChecksum", retry.getEffectiveConfigChecksum());
+                payload.put("idempotencyProtected", true);
+            }
             auditRunAction(
                 "INGESTION_EXECUTION_RETRY",
                 AuditStage.SUCCESS,
@@ -2719,6 +3048,7 @@ public class IngestionTaskResource {
                 true,
                 operator,
                 "异步提交入湖执行重试",
+                retry,
                 null
             );
             return ResponseEntity.accepted().body(payload);

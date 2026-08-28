@@ -22,6 +22,16 @@ public interface GovRuleBindingRepository extends JpaRepository<GovRuleBinding, 
         @Param("status") String status
     );
 
+    @Query(
+        "SELECT b.datasetId, COUNT(b) FROM GovRuleBinding b " +
+        "WHERE b.datasetId IN :datasetIds AND UPPER(b.ruleVersion.status) = UPPER(:status) " +
+        "GROUP BY b.datasetId"
+    )
+    List<Object[]> countWorkflowBindingsForDatasets(
+        @Param("datasetIds") java.util.Collection<UUID> datasetIds,
+        @Param("status") String status
+    );
+
     @EntityGraph(attributePaths = { "ruleVersion", "ruleVersion.rule" })
     @Query(
         "SELECT b FROM GovRuleBinding b WHERE b.ruleVersion.rule.id = :ruleId " +

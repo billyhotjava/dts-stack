@@ -84,6 +84,27 @@ class IngestionServiceClientTest {
     }
 
     @Test
+    void shouldForwardExecutionIdempotencyKeyWithoutLeakingItIntoPayload() {
+        RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(client, "restTemplate");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server
+            .expect(requestTo("http://ingestion.test/api/ingestion/tasks/7/execute/async"))
+            .andExpect(method(POST))
+            .andExpect(header("Idempotency-Key", "browser-command-1"))
+            .andRespond(
+                withStatus(HttpStatus.ACCEPTED)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"taskId\":7,\"executionId\":91,\"status\":\"submitted\",\"idempotent\":true}")
+            );
+
+        ApiResponse<Map<String, Object>> response = client.executeTaskAsync(7L, "browser-command-1");
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getData()).containsEntry("executionId", 91);
+        server.verify();
+    }
+
+    @Test
     void shouldForwardCurrentUserContextToIngestion() {
         SecurityContextHolder.getContext()
             .setAuthentication(
@@ -245,6 +266,31 @@ class IngestionServiceClientTest {
 
         assertThat(response.getStatus()).isEqualTo(409);
         assertThat(response.getData()).isNull();
+        server.verify();
+    }
+
+    @Test
+    void shouldForwardOnlyTheTaskDesignConcurrencyHeader() {
+        RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(client, "restTemplate");
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+        server
+            .expect(requestTo("http://ingestion.test/api/ingestion/tasks/7/design"))
+            .andExpect(method(org.springframework.http.HttpMethod.PUT))
+            .andExpect(header("If-Match", "\"checksum-r4\""))
+            .andRespond(
+                withStatus(HttpStatus.OK)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"taskId\":7,\"planChecksum\":\"checksum-r5\"}")
+            );
+
+        ApiResponse<Map<String, Object>> response = client.updateTaskDesign(
+            7L,
+            Map.of("taskName", "demo"),
+            "\"checksum-r4\""
+        );
+
+        assertThat(response.getStatus()).isEqualTo(200);
+        assertThat(response.getData()).containsEntry("planChecksum", "checksum-r5");
         server.verify();
     }
 

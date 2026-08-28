@@ -400,6 +400,22 @@ public class IngestionTaskService {
      * 审计信息会自动更新（lastModifiedBy, lastModifiedDate）
      */
     public IngestionTaskDTO update(Long id, IngestionTaskDTO dto) {
+        return updateInternal(id, dto, null);
+    }
+
+    /**
+     * Typed design-page update. The explicit quality switch is kept outside the
+     * shared task DTO so omitting a field cannot accidentally inherit or clear a
+     * post-ingestion quality binding.
+     */
+    public IngestionTaskDTO updateDesign(Long id, IngestionTaskDTO dto, boolean postIngestionQualityEnabled) {
+        if (!postIngestionQualityEnabled) {
+            dto.setQualityPolicyRef(null);
+        }
+        return updateInternal(id, dto, postIngestionQualityEnabled);
+    }
+
+    private IngestionTaskDTO updateInternal(Long id, IngestionTaskDTO dto, Boolean qualityEnabledOverride) {
         assertNoRawTaskSecrets(dto);
         log.info("Updating ingestion task ID: {}", id);
 
@@ -426,6 +442,7 @@ public class IngestionTaskService {
                 }
 
                 boolean planChanged = planConfigChanged(basePlan, candidate)
+                    || qualityEnabledOverride != null
                     || StringUtils.hasText(dto.getQualityPolicyRef());
                 String requestedStatus = StringUtils.hasText(dto.getStatus()) ? dto.getStatus().trim().toLowerCase(java.util.Locale.ROOT) : null;
 
@@ -438,14 +455,14 @@ public class IngestionTaskService {
                     if (accessContractService == null) {
                         throw new IllegalStateException("Versioned ingestion access contract is required for active task edits");
                     }
-                    return saveDraftRevisionForActiveTask(existingTask, dto);
+                    return saveDraftRevisionForActiveTask(existingTask, dto, qualityEnabledOverride);
                 }
 
                 if (activeOrPaused && statusEquals(requestedStatus, "draft")) {
                     if (accessContractService == null) {
                         throw new IllegalStateException("Versioned ingestion access contract is required for active task edits");
                     }
-                    return saveDraftRevisionForActiveTask(existingTask, dto);
+                    return saveDraftRevisionForActiveTask(existingTask, dto, qualityEnabledOverride);
                 }
 
                 if (activeOrPaused && requestedStatus != null && !statusEquals(requestedStatus, existingTask.getStatus())) {
@@ -475,7 +492,12 @@ public class IngestionTaskService {
                 applyPlanSnapshot(existingTask, candidate);
                 existingTask.setStatus("draft");
                 IngestionTask updatedTask = taskRepository.save(existingTask);
-                recordTaskRevision(updatedTask, dto.getQualityPolicyRef(), false, !sourceChanged);
+                recordTaskRevision(
+                    updatedTask,
+                    dto.getQualityPolicyRef(),
+                    false,
+                    qualityEnabledOverride == null && !sourceChanged
+                );
                 log.info("Updated ingestion task ID: {} by user: {}", id, updatedTask.getLastModifiedBy());
 
                 try {
@@ -696,6 +718,10 @@ public class IngestionTaskService {
      */
     public IngestionExecutionDTO execute(Long taskId) {
         return execute(taskId, "MANUAL", null);
+    }
+
+    public IngestionExecutionDTO executeWithBatchId(Long taskId, String batchId) {
+        return execute(taskId, "MANUAL", null, batchId, false, null);
     }
 
     public IngestionExecutionDTO backfill(Long taskId, Instant windowStart, Instant windowEnd, String column) {
@@ -977,6 +1003,14 @@ public class IngestionTaskService {
         GovernancePolicy policy,
         String governanceBlockedReason
     ) {
+        Boolean cancelled = txTemplate.execute(status -> executionRepository.findById(executionId)
+            .map(IngestionExecution::getStatus)
+            .map(value -> statusEquals(value, "cancelled") || statusEquals(value, "cancel_requested"))
+            .orElse(true));
+        if (Boolean.TRUE.equals(cancelled)) {
+            log.info("Execution {} was cancelled before background claim", executionId);
+            return;
+        }
         ApiExecutionWork apiWork = txTemplate.execute(status -> loadApiExecutionWork(taskId, executionId));
         if (apiWork != null) {
             executeApiTriggerPhase(apiWork, policy, governanceBlockedReason);
@@ -1116,6 +1150,10 @@ public class IngestionTaskService {
         IngestionExecution execution = executionRepository.findById(executionId).orElse(null);
         if (execution == null) {
             log.error("[async-trigger] execution {} not found, aborting", executionId);
+            return;
+        }
+        if (statusEquals(execution.getStatus(), "cancelled") || statusEquals(execution.getStatus(), "cancel_requested")) {
+            log.info("[async-trigger] execution {} was cancelled before Airflow trigger", executionId);
             return;
         }
         // Load task directly from repository — not via execution.getTask() lazy proxy,
@@ -1426,6 +1464,9 @@ public class IngestionTaskService {
         if (execution == null) {
             return null;
         }
+        if (statusEquals(execution.getStatus(), "cancelled") || statusEquals(execution.getStatus(), "cancel_requested")) {
+            return copyApiExecution(execution);
+        }
         IngestionTask canonicalTask = taskRepository.findById(taskId).orElse(null);
         if (canonicalTask != null) {
             entityManager.refresh(canonicalTask, LockModeType.PESSIMISTIC_WRITE);
@@ -1460,6 +1501,7 @@ public class IngestionTaskService {
         copy.setRevisionNumber(source.getRevisionNumber());
         copy.setEffectiveConfigChecksum(source.getEffectiveConfigChecksum());
         copy.setQualityPolicyRef(source.getQualityPolicyRef());
+        copy.setTargetDatasetId(source.getTargetDatasetId());
         copy.setQualityRunId(source.getQualityRunId());
         copy.setQualityWorkflowId(source.getQualityWorkflowId());
         copy.setQualityWorkflowStatus(source.getQualityWorkflowStatus());
@@ -1728,8 +1770,18 @@ public class IngestionTaskService {
 
     public IngestionExecutionDTO retryExecution(Long taskId, Long executionId, String retryMode) {
         ValidatedRetryRequest validated = validateRetryRequest(taskId, executionId, retryMode);
+        Optional<IngestionExecution> existingRetry = executionRepository.findFirstByParentExecutionId(executionId);
+        if (existingRetry.isPresent()) {
+            return executionMapper.toDto(existingRetry.orElseThrow());
+        }
         validateRetryEligibility(validated);
         IngestionTask task = loadExecutableTask(taskId);
+        // The task row is now locked. Re-check after acquiring that lock so two
+        // concurrent browser commands cannot both create a child execution.
+        existingRetry = executionRepository.findFirstByParentExecutionId(executionId);
+        if (existingRetry.isPresent()) {
+            return executionMapper.toDto(existingRetry.orElseThrow());
+        }
         IngestionExecution execution = validated.execution();
         String mode = validated.mode();
         String previousStatus = toText(execution.getStatus());
@@ -3818,7 +3870,11 @@ public class IngestionTaskService {
         );
     }
 
-    private IngestionTaskDTO saveDraftRevisionForActiveTask(IngestionTask activeTask, IngestionTaskDTO dto) {
+    private IngestionTaskDTO saveDraftRevisionForActiveTask(
+        IngestionTask activeTask,
+        IngestionTaskDTO dto,
+        Boolean qualityEnabledOverride
+    ) {
         assertNoRawTaskSecrets(dto);
         IngestionTask draft = accessContractService.findLatestDraftRevision(activeTask.getId()).isPresent()
             ? accessContractService.materializeLatestDraft(activeTask)
@@ -3855,7 +3911,7 @@ public class IngestionTaskService {
         accessContractService.recordDraftRevision(
             draft,
             dto.getQualityPolicyRef(),
-            !sourceChanged
+            qualityEnabledOverride == null && !sourceChanged
         );
 
         try {
@@ -3921,6 +3977,7 @@ public class IngestionTaskService {
         target.setSourceConfig(copyJsonNode(source.getSourceConfig()));
         target.setDestinationType(source.getDestinationType());
         target.setDestinationConfig(copyJsonNode(source.getDestinationConfig()));
+        target.setTargetDatasetId(source.getTargetDatasetId());
         target.setSyncMode(source.getSyncMode());
         target.setSyncSchedule(source.getSyncSchedule());
         target.setTableMapping(copyJsonNode(source.getTableMapping()));
@@ -3950,6 +4007,7 @@ public class IngestionTaskService {
         snap.setSourceDataSourceId(task.getSourceDataSourceId());
         snap.setDestinationType(task.getDestinationType());
         snap.setDestinationConfig(copyJsonNode(task.getDestinationConfig()));
+        snap.setTargetDatasetId(task.getTargetDatasetId());
         snap.setSyncMode(task.getSyncMode());
         snap.setSyncSchedule(task.getSyncSchedule());
         snap.setTableMapping(copyJsonNode(task.getTableMapping()));
@@ -3973,6 +4031,7 @@ public class IngestionTaskService {
             || !java.util.Objects.equals(before.getSourceConfig(), current.getSourceConfig())
             || !java.util.Objects.equals(before.getDestinationType(), current.getDestinationType())
             || !java.util.Objects.equals(before.getDestinationConfig(), current.getDestinationConfig())
+            || !java.util.Objects.equals(before.getTargetDatasetId(), current.getTargetDatasetId())
             || !java.util.Objects.equals(before.getSyncMode(), current.getSyncMode())
             || !java.util.Objects.equals(before.getSyncSchedule(), current.getSyncSchedule())
             || !java.util.Objects.equals(before.getTableMapping(), current.getTableMapping())

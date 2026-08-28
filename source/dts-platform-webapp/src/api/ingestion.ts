@@ -35,6 +35,7 @@ export interface IngestionTaskDTO {
 	sourceDataSourceId?: string;
 	destinationType?: string;
 	destinationConfig?: Record<string, any>;
+	targetDatasetId?: string;
 	syncMode: string;
 	syncSchedule?: string;
 	syncPrefix?: string;
@@ -91,9 +92,13 @@ export interface IngestionExecutionDTO {
 	sourceTables?: Record<string, any>[];
 	targetTables?: Record<string, any>[];
 	queueWaitSeconds?: number;
+	parentExecutionId?: number;
+	retryCount?: number;
+	maxRetries?: number;
 	revisionNumber?: number;
 	effectiveConfigChecksum?: string;
 	qualityPolicyRef?: string;
+	targetDatasetId?: string;
 	qualityRunId?: string;
 	qualityWorkflowId?: string;
 	qualityWorkflowStatus?: "TRIGGERING" | "TRIGGERED" | "RETRY_WAIT" | "EXHAUSTED" | string;
@@ -101,7 +106,98 @@ export interface IngestionExecutionDTO {
 	qualityWorkflowNextRetryAt?: string;
 	qualityWorkflowError?: string;
 	createdAt?: string;
+	qualityEvidence?: IngestionQualityEvidence;
 }
+
+export type IngestionValidationIssue = {
+	code: string;
+	field: string;
+	message: string;
+};
+
+export type IngestionValidationResult = {
+	valid: boolean;
+	issues: IngestionValidationIssue[];
+};
+
+export type IngestionTopologyProjection = {
+	readonly: boolean;
+	planChecksum?: string;
+	nodes: Array<{ id: string; kind: string; label: string; state: string }>;
+	edges: Array<{ source: string; target: string }>;
+};
+
+export type IngestionAssetProjection = {
+	resolutionState: "RESOLVED" | "UNRESOLVED" | string;
+	datasetId?: string;
+	assetName?: string;
+	assetKey?: string;
+	enabled?: boolean;
+	lifecycleStatus?: string;
+	qualityBindingCount: number;
+	qualityConfigured: boolean;
+	consumptionEligibility?: string;
+	eligibilityReasons?: string[];
+	assetQualityStatus?: string;
+};
+
+export type IngestionTaskDesign = {
+	taskId: number;
+	taskName: string;
+	description?: string;
+	revisionNumber?: number;
+	revisionState?: IngestionRevisionState;
+	operationalState?: string;
+	source: { dataSourceId?: string; type: string; config: Record<string, unknown> };
+	destination: {
+		type: string;
+		config: Record<string, unknown>;
+		assetRef?: { datasetId?: string; policyRef?: string; resolution?: string };
+	};
+	syncMode: string;
+	syncSchedule?: string;
+	tableMapping: Array<Record<string, unknown>>;
+	syncConfig?: Record<string, unknown>;
+	postIngestionQuality: { enabled: boolean; policyRef?: string };
+	planChecksum?: string;
+	validation: IngestionValidationResult;
+	topology: IngestionTopologyProjection;
+	legacyDsl?: { present: boolean; publishable: boolean; message?: string };
+	assetProjection?: IngestionAssetProjection;
+};
+
+export type IngestionTaskDesignUpdate = {
+	taskName: string;
+	description?: string;
+	sourceDataSourceId?: string;
+	sourceType: string;
+	sourceConfig: Record<string, unknown>;
+	destinationType: string;
+	destinationConfig: Record<string, unknown>;
+	targetDatasetId?: string;
+	syncMode: string;
+	syncSchedule?: string;
+	tableMapping: Array<Record<string, unknown>>;
+	syncConfig: Record<string, unknown>;
+	postIngestionQualityEnabled: boolean;
+	qualityPolicyRef?: string;
+};
+
+export type IngestionQualityEvidence = {
+	datasetId?: string;
+	assetKey?: string;
+	assetName?: string;
+	qualityBindingCount?: number;
+	qualityConfigured?: boolean;
+	workflowId?: string;
+	triggerRef?: string;
+	evidenceState: "MISSING" | "PENDING" | "CURRENT" | "STALE" | "TRIGGER_FAILED" | string;
+	qualityStatus: "UNKNOWN" | "RUNNING" | "PASSED" | "FAILED" | string;
+	consumptionEligibility: string;
+	eligibilityReasons?: string[];
+	assetQualityStatus?: string;
+	trustedUsable: boolean;
+};
 
 export interface IngestionAccessDefaultPolicyDTO {
 	policyKey: string;
@@ -227,6 +323,13 @@ export interface AsyncExecutionSubmitResult {
 	async?: boolean;
 	message?: string;
 	pollIntervalMs?: number;
+	executionId?: number;
+	executionRunId?: string;
+	retryExecutionId?: number;
+	revisionNumber?: number;
+	planChecksum?: string;
+	idempotencyProtected?: boolean;
+	idempotent?: boolean;
 }
 
 export interface BackfillSubmitRequest {
@@ -690,8 +793,8 @@ export const normalizeIngestionEffectiveConfigDTO = (value: unknown): IngestionE
 };
 
 const DEFAULT_EXECUTION_POLL_INTERVAL_MS = (() => {
-	const raw = Number((import.meta as any)?.env?.VITE_INGESTION_EXECUTION_POLL_MS ?? 3000);
-	if (!Number.isFinite(raw)) return 3000;
+	const raw = Number((import.meta as any)?.env?.VITE_INGESTION_EXECUTION_POLL_MS ?? 5000);
+	if (!Number.isFinite(raw)) return 5000;
 	return Math.min(30000, Math.max(1000, Math.floor(raw)));
 })();
 
@@ -784,8 +887,55 @@ class IngestionTaskAPI {
 		return api.put({ url: `/ingestion/tasks/${id}`, data });
 	}
 
-	async admitTask(id: number): Promise<IngestionTaskDTO> {
-		const payload: any = await api.post({ url: `/ingestion/tasks/${id}/admit` });
+	async getTaskDesign(id: number): Promise<IngestionTaskDesign> {
+		const payload: unknown = await api.get({ url: `/ingestion/tasks/${id}/design` });
+		return this.resolveWrappedResponse<IngestionTaskDesign>(payload as IngestionTaskDesign);
+	}
+
+	async updateTaskDesign(
+		id: number,
+		data: IngestionTaskDesignUpdate,
+		planChecksum: string,
+	): Promise<IngestionTaskDesign> {
+		const payload: unknown = await api.put({
+			url: `/ingestion/tasks/${id}/design`,
+			data,
+			headers: { "If-Match": planChecksum },
+		});
+		return this.resolveWrappedResponse<IngestionTaskDesign>(payload as IngestionTaskDesign);
+	}
+
+	async validateTaskDesign(
+		id: number,
+		data: IngestionTaskDesignUpdate,
+		planChecksum?: string,
+	): Promise<IngestionValidationResult> {
+		const payload: unknown = await api.post({
+			url: `/ingestion/tasks/${id}/design/validate`,
+			data,
+			headers: planChecksum ? { "X-Expected-Plan-Checksum": planChecksum } : undefined,
+		});
+		return this.resolveWrappedResponse<IngestionValidationResult>(payload as IngestionValidationResult);
+	}
+
+	async getTaskTopology(id: number, view: "DRAFT" | "ACTIVE" = "DRAFT"): Promise<IngestionTopologyProjection> {
+		const payload: unknown = await api.get({ url: `/ingestion/tasks/${id}/topology`, params: { view } });
+		return this.resolveWrappedResponse<IngestionTopologyProjection>(payload as IngestionTopologyProjection);
+	}
+
+	async setTaskSchedule(
+		id: number,
+		command: "enable" | "pause",
+	): Promise<{ taskId: number; state: string; airflowDagId?: string }> {
+		const payload: unknown = await api.post({ url: `/ingestion/tasks/${id}/schedule/${command}` });
+		return this.resolveWrappedResponse(payload as { taskId: number; state: string; airflowDagId?: string });
+	}
+
+	async admitTask(id: number, planChecksum?: string): Promise<IngestionTaskDTO> {
+		const payload: any = await api.post({
+			url: `/ingestion/tasks/${id}/admit`,
+			headers: planChecksum ? { "X-Expected-Plan-Checksum": planChecksum } : undefined,
+		});
 		return this.resolveWrappedResponse<IngestionTaskDTO>(payload);
 	}
 
@@ -851,8 +1001,12 @@ class IngestionTaskAPI {
 		return api.post({ url: `/ingestion/tasks/${id}/execute` });
 	}
 
-	async executeTaskAsync(id: number): Promise<AsyncExecutionSubmitResult> {
-		return api.post({ url: `/ingestion/tasks/${id}/execute/async`, _skipErrorToast: true } as any);
+	async executeTaskAsync(id: number, idempotencyKey?: string): Promise<AsyncExecutionSubmitResult> {
+		return api.post({
+			url: `/ingestion/tasks/${id}/execute/async`,
+			headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+			_skipErrorToast: true,
+		} as any);
 	}
 
 	async backfillTask(id: number, data: BackfillSubmitRequest): Promise<BackfillSubmitResult> {
@@ -907,6 +1061,18 @@ class IngestionTaskAPI {
 		}
 	}
 
+	async getExecution(taskId: number, executionId: number): Promise<IngestionExecutionDTO> {
+		const payload: unknown = await api.get({ url: `/ingestion/tasks/${taskId}/executions/${executionId}` });
+		return this.resolveWrappedResponse<IngestionExecutionDTO>(payload as IngestionExecutionDTO);
+	}
+
+	async cancelExecution(taskId: number, executionId: number): Promise<IngestionExecutionDTO> {
+		const payload: unknown = await api.post({
+			url: `/ingestion/tasks/${taskId}/executions/${executionId}/cancel`,
+		});
+		return this.resolveWrappedResponse<IngestionExecutionDTO>(payload as IngestionExecutionDTO);
+	}
+
 	/**
 	 * 获取执行日志
 	 */
@@ -946,10 +1112,12 @@ class IngestionTaskAPI {
 		taskId: number,
 		executionId: number,
 		params?: { mode?: "FAILED_ONLY" | "FULL_RERUN" },
+		idempotencyKey?: string,
 	): Promise<any> {
 		return api.post({
 			url: `/ingestion/tasks/${taskId}/executions/${executionId}/retry/async`,
 			params,
+			headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
 			_skipErrorToast: true,
 		} as any);
 	}

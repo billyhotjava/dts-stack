@@ -2170,3 +2170,23 @@
 **统计**: DONE=21，READY=1，IN_PROGRESS=0，DRAFT=0（共 22 Task）。
 **关键决策**: `QualityRunService` 是唯一执行 owner；工作流新增聚合账本并复用 `job_id`；运行策略演进既有 task；失败不自动回滚已发布模型；问题按稳定根因身份去重；所有 Feature 完成后集中执行一次 E2E。
 **编号说明**: Sprint-100/101 已由 Sprint-99 路线图预留给生命周期/文件合规与高可用/性能，本任务使用 Sprint-102。
+
+## Sprint-103: 数据集成流程可视化与运行闭环 (202608)
+
+**目录**: `worklog/v2.2.3/sprint-103-202608-data-integration-flow-closure`
+**状态**: PASS_WITH_ENV_NOTE（功能已实现并部署；Chrome 150 只读旅程通过，Chrome 95、三角色与安全业务金丝雀待现场复验）
+**目标**: 数据开发人员通过业务表单配置真实接入任务及目标数据资产，系统从同一 task draft/revision 自动生成只读拓扑，并闭合校验、发布、调度、运行、资产登记、接入后质量验证、当前证据、重试/取消、日志和审计。
+**依赖**: 复用 `IngestionTask`、`IngestionTaskRevision`、既有 `/admit`、DAG 原子发布、`IngestionExecution`、`CatalogAssetType + CatalogAssetKey`、post-ingestion quality workflow 和严格审计；任务配置是唯一事实源，`graphDsl` 只读兼容，不新增 workflow/资产/质量执行 owner、DSL compiler 或通用 Airflow 业务控制面。
+
+| Feature | 优先级 | Task 数 | 状态 |
+|---|---|---:|---|
+| F0-交付基线与契约冻结 | P0 | 2 | DONE×2 |
+| F1-任务配置与拓扑投影 | P0 | 2 | IMPLEMENTED_AND_DEPLOYED×2 |
+| F2-版本准入与调度发布 | P0 | 2 | IMPLEMENTED_AND_DEPLOYED×2 |
+| F3-任务级运行闭环 | P0 | 3 | IMPLEMENTED_AND_DEPLOYED×3 |
+| F4-治理迁移与集中验收 | P0 | 2 | IMPLEMENTED_AND_DEPLOYED×1 / PASS_WITH_ENV_NOTE×1 |
+
+**统计**: DONE=2，IMPLEMENTED_AND_DEPLOYED=8，PASS_WITH_ENV_NOTE=1（共 11 Task）。
+**执行结果**: F0 → F1 → F2 → F3 → F4 已完成；聚焦测试、三镜像构建、顺序部署和本地 Chrome 150 集中旅程均已有 IT 证据。
+**关键决策**: 不建设通用自由画布；类型化任务配置是唯一事实源，拓扑从 draft/revision 自动生成；`planChecksum` 贯通校验、准入、DAG 和 execution；资产身份复用 `CatalogAssetKey`；接入过程校验与提交后正式质量验证分离；`可信可用`由当前 `PASSED` 证据和 `ELIGIBLE` 资格派生，不新增可信生命周期状态；转换与多作业 DAG 只有真实需求门槛通过后另立 capability。
+**已知风险**: 7 条 active 任务均为线性单任务 EL，但都是迁移前记录且目标资产身份为空；真实双批质量证据切换需安全金丝雀。34 个 ingestion DAG 中 3 个 revision-owned，其余 31 个保持 `KEEP` 且禁止自动删除。Chrome 95、三角色隔离会话仍不可用；平台既有 `machineActor is not trusted` 定时错误独立跟踪。

@@ -75,6 +75,13 @@ public class IngestionTaskQueryService {
         return taskRepository.findById(id).map(taskMapper::toDto).map(this::enrichTaskDto);
     }
 
+    public Optional<IngestionTaskDTO> findOneActive(Long id) {
+        log.debug("Request to get active IngestionTask revision : {}", id);
+        return taskRepository.findById(id)
+            .map(taskMapper::toDto)
+            .map(dto -> accessContractService.enrichTaskDtoForRevisionState(dto, "ACTIVE"));
+    }
+
     public Page<IngestionTaskDTO> findAll(String status, Pageable pageable) {
         return findAll(status, null, null, null, null, pageable);
     }

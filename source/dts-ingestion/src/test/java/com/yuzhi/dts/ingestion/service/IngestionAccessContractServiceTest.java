@@ -100,6 +100,69 @@ class IngestionAccessContractServiceTest {
             .doesNotContain("also-do-not-store");
         assertThat(revision.getRuntimeSnapshotKeyVersion()).isEqualTo("test-v1");
         assertThat(revision.getQualityPolicyRef()).isEqualTo("dataset:00000000-0000-0000-0000-000000000041");
+        assertThat(revision.getTargetDatasetId()).isEqualTo(
+            java.util.UUID.fromString("00000000-0000-0000-0000-000000000041")
+        );
+        assertThat(revision.getEffectiveConfig().path("qualityPolicyRef").asText())
+            .isEqualTo("dataset:00000000-0000-0000-0000-000000000041");
+    }
+
+    @Test
+    void qualityBindingMustParticipateInPlanChecksum() {
+        IngestionTask task = task(51L, "mysqlreader");
+        when(policyRepository.findFirstByPolicyKeyAndStatusOrderByVersionDesc("GLOBAL", "ACTIVE"))
+            .thenReturn(Optional.of(policy()));
+        when(revisionRepository.save(any(IngestionTaskRevision.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(revisionRepository.findAllByTaskIdForUpdate(51L)).thenReturn(List.of());
+        IngestionTaskRevision withoutQuality = service.recordDraftRevision(task, null, false);
+        when(revisionRepository.findAllByTaskIdForUpdate(51L)).thenReturn(List.of(withoutQuality));
+
+        IngestionTaskRevision withQuality = service.recordDraftRevision(
+            task,
+            "dataset:00000000-0000-0000-0000-000000000051",
+            false
+        );
+
+        assertThat(withQuality.getEffectiveConfigChecksum()).isNotEqualTo(withoutQuality.getEffectiveConfigChecksum());
+    }
+
+    @Test
+    void legacyGraphDslMustNotParticipateInExecutablePlanChecksum() {
+        IngestionTask task = task(52L, "mysqlreader");
+        when(policyRepository.findFirstByPolicyKeyAndStatusOrderByVersionDesc("GLOBAL", "ACTIVE"))
+            .thenReturn(Optional.of(policy()));
+        when(revisionRepository.save(any(IngestionTaskRevision.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(revisionRepository.findAllByTaskIdForUpdate(52L)).thenReturn(List.of());
+        task.setGraphDsl(objectMapper.createObjectNode().put("uiNode", "left"));
+        IngestionTaskRevision first = service.recordDraftRevision(task, null, false);
+
+        task.setGraphDsl(objectMapper.createObjectNode().put("uiNode", "right"));
+        IngestionTaskRevision second = service.recordDraftRevision(task, null, false);
+
+        assertThat(first.getTaskSnapshot().path("graphDsl")).isNotEqualTo(second.getTaskSnapshot().path("graphDsl"));
+        assertThat(first.getEffectiveConfigChecksum()).isEqualTo(second.getEffectiveConfigChecksum());
+        assertThat(first.getEffectiveConfig().path("planSchemaVersion").asText()).isEqualTo("ingestion-plan-v1");
+    }
+
+    @Test
+    void explicitActiveProjectionNeverUsesNewerDraftSnapshot() {
+        IngestionTask task = task(53L, "mysqlreader");
+        task.setStatus("active");
+        IngestionTaskRevision active = revision(task, 701L, 4, "ACTIVE");
+        active.setTaskSnapshot(objectMapper.createObjectNode().put("name", "active-r4"));
+        active.setEffectiveConfig(objectMapper.createObjectNode());
+        when(revisionRepository.findFirstByTaskIdAndStateOrderByRevisionNumberDesc(53L, "ACTIVE"))
+            .thenReturn(Optional.of(active));
+        com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO dto = new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
+        dto.setId(53L);
+        dto.setName("persisted");
+        dto.setStatus("active");
+
+        service.enrichTaskDtoForRevisionState(dto, "ACTIVE");
+
+        assertThat(dto.getName()).isEqualTo("active-r4");
+        assertThat(dto.getRevisionState()).isEqualTo("ACTIVE");
+        assertThat(dto.getRevisionNumber()).isEqualTo(4);
     }
 
     @Test
@@ -201,6 +264,8 @@ class IngestionAccessContractServiceTest {
         assertThat(refreshed.getTaskSnapshot().has("fieldClassifications")).isFalse();
         assertThat(refreshed.getEffectiveConfig().path("task").has("classificationSeal")).isFalse();
         assertThat(refreshed.getEffectiveConfig().path("task").has("fieldClassifications")).isFalse();
+        assertThat(refreshed.getEffectiveConfig().path("task").has("graphDsl")).isFalse();
+        assertThat(refreshed.getEffectiveConfig().path("planSchemaVersion").asText()).isEqualTo("ingestion-plan-v1");
         assertThat(refreshed.getEffectiveConfigChecksum()).hasSize(64).isNotEqualTo(legacyChecksum);
     }
 
@@ -221,6 +286,9 @@ class IngestionAccessContractServiceTest {
         assertThat(execution.getRevisionNumber()).isEqualTo(7);
         assertThat(execution.getEffectiveConfigChecksum()).isEqualTo("checksum-7");
         assertThat(execution.getQualityPolicyRef()).isEqualTo("dataset:00000000-0000-0000-0000-000000000043");
+        assertThat(execution.getTargetDatasetId()).isEqualTo(
+            java.util.UUID.fromString("00000000-0000-0000-0000-000000000043")
+        );
     }
 
     @Test

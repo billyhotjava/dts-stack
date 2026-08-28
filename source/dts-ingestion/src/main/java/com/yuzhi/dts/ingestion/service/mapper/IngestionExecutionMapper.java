@@ -27,6 +27,7 @@ public class IngestionExecutionMapper {
         dto.setRevisionNumber(entity.getRevisionNumber());
         dto.setEffectiveConfigChecksum(entity.getEffectiveConfigChecksum());
         dto.setQualityPolicyRef(entity.getQualityPolicyRef());
+        dto.setTargetDatasetId(entity.getTargetDatasetId());
         dto.setQualityRunId(entity.getQualityRunId());
         dto.setQualityWorkflowId(entity.getQualityWorkflowId());
         dto.setQualityWorkflowStatus(entity.getQualityWorkflowStatus());
@@ -63,6 +64,9 @@ public class IngestionExecutionMapper {
         dto.setSourceTables(entity.getSourceTables());
         dto.setTargetTables(entity.getTargetTables());
         dto.setQueueWaitSeconds(resolveQueueWaitSeconds(entity));
+        dto.setParentExecutionId(entity.getParentExecutionId());
+        dto.setRetryCount(entity.getRetryCount());
+        dto.setMaxRetries(entity.getMaxRetries());
         dto.setCreatedAt(entity.getCreatedAt());
 
         return dto;
@@ -79,6 +83,7 @@ public class IngestionExecutionMapper {
         entity.setRevisionNumber(dto.getRevisionNumber());
         entity.setEffectiveConfigChecksum(dto.getEffectiveConfigChecksum());
         entity.setQualityPolicyRef(dto.getQualityPolicyRef());
+        entity.setTargetDatasetId(dto.getTargetDatasetId());
         entity.setQualityRunId(dto.getQualityRunId());
         entity.setQualityWorkflowId(dto.getQualityWorkflowId());
         entity.setQualityWorkflowStatus(dto.getQualityWorkflowStatus());
@@ -104,6 +109,9 @@ public class IngestionExecutionMapper {
         entity.setDroppedTables(dto.getDroppedTables());
         entity.setSourceTables(dto.getSourceTables());
         entity.setTargetTables(dto.getTargetTables());
+        entity.setParentExecutionId(dto.getParentExecutionId());
+        entity.setRetryCount(dto.getRetryCount());
+        entity.setMaxRetries(dto.getMaxRetries());
         entity.setCreatedAt(dto.getCreatedAt());
 
         return entity;

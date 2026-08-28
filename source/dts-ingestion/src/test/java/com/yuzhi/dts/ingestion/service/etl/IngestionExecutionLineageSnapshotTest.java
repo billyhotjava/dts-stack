@@ -16,6 +16,7 @@ class IngestionExecutionLineageSnapshotTest {
     void applyShouldSnapshotSourceAndTargetTablesFromTaskMapping() {
         IngestionTask task = new IngestionTask();
         task.setSourceDataSourceId(UUID.fromString("00000000-0000-0000-0000-000000000001"));
+        task.setTargetDatasetId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
         task.setSourceType("mysqlreader");
         task.setDestinationType("postgreswriter");
 
@@ -38,5 +39,20 @@ class IngestionExecutionLineageSnapshotTest {
         assertThat(execution.getTargetTables()).hasSize(1);
         assertThat(execution.getTargetTables().get(0).get("namespace").asText()).isEqualTo("ods");
         assertThat(execution.getTargetTables().get(0).get("name").asText()).isEqualTo("ods_erp_project");
+        assertThat(execution.getTargetTables().get(0).get("datasetId").asText()).isEqualTo("00000000-0000-0000-0000-000000000002");
+        assertThat(execution.getTargetDatasetId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+    }
+
+    @Test
+    void applyReportsTargetIdentityChangeEvenWhenLegacyMappingHasNoUsableRows() {
+        IngestionTask task = new IngestionTask();
+        task.setTargetDatasetId(UUID.fromString("00000000-0000-0000-0000-000000000002"));
+        task.setTableMapping(JsonNodeFactory.instance.arrayNode().add(JsonNodeFactory.instance.objectNode()));
+        IngestionExecution execution = new IngestionExecution();
+
+        boolean changed = IngestionExecutionLineageSnapshot.apply(execution, task);
+
+        assertThat(changed).isTrue();
+        assertThat(execution.getTargetDatasetId()).isEqualTo(task.getTargetDatasetId());
     }
 }

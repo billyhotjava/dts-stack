@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -23,8 +24,14 @@ import com.yuzhi.dts.ingestion.service.IngestionExecutionQueryService;
 import com.yuzhi.dts.ingestion.service.IngestionTaskQueryService;
 import com.yuzhi.dts.ingestion.service.IngestionTaskService;
 import com.yuzhi.dts.ingestion.service.IngestionAccessContractService;
+import com.yuzhi.dts.ingestion.service.IngestionExecutionCommandService;
+import com.yuzhi.dts.ingestion.service.IngestionExecutionSubmissionService;
+import com.yuzhi.dts.ingestion.service.IngestionTaskDesignService;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignDTO;
+import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDesignUpdateRequest;
 import com.yuzhi.dts.ingestion.service.dto.IngestionTaskRevisionDTO;
 import com.yuzhi.dts.ingestion.service.dto.IngestionAccessDefaultPolicyDTO;
 import com.yuzhi.dts.ingestion.service.etl.AddaxJobService;
@@ -84,6 +91,15 @@ class IngestionTaskResourceTest {
     private IngestionAccessContractService accessContractService;
 
     @MockBean
+    private IngestionTaskDesignService ingestionTaskDesignService;
+
+    @MockBean
+    private IngestionExecutionCommandService ingestionExecutionCommandService;
+
+    @MockBean
+    private IngestionExecutionSubmissionService ingestionExecutionSubmissionService;
+
+    @MockBean
     private IngestionExecutionQueryService ingestionExecutionQueryService;
 
     @MockBean
@@ -109,6 +125,138 @@ class IngestionTaskResourceTest {
 
     @MockBean
     private ApiAuthProviderRegistry apiAuthProviderRegistry;
+
+    @Test
+    void getTaskDesignReturnsTaskOwnedProjectionAndPlanEtag() throws Exception {
+        IngestionTaskDesignDTO design = taskDesign();
+        when(ingestionTaskDesignService.getDesign(13L)).thenReturn(design);
+
+        mockMvc.perform(get("/api/ingestion/tasks/13/design"))
+            .andExpect(status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("ETag", "\"checksum-r4\""))
+            .andExpect(jsonPath("$.taskId").value(13))
+            .andExpect(jsonPath("$.topology.readonly").value(true));
+    }
+
+    @Test
+    void updateTaskDesignRequiresMatchingPlanChecksumAndForwardsTypedRequest() throws Exception {
+        when(
+            ingestionTaskDesignService.saveDesign(
+                eq(13L),
+                eq("\"checksum-r4\""),
+                any(IngestionTaskDesignUpdateRequest.class)
+            )
+        ).thenReturn(taskDesign());
+
+        mockMvc.perform(
+            put("/api/ingestion/tasks/13/design")
+                .header("If-Match", "\"checksum-r4\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "taskName":"API 成本中心接入",
+                      "sourceDataSourceId":"10000000-0000-0000-0000-000000000013",
+                      "sourceType":"httpreader",
+                      "sourceConfig":{"endpoint":"/api/cost-centers"},
+                      "destinationType":"postgresqlwriter",
+                      "destinationConfig":{"table":["ods_api_cost_center"]},
+                      "syncMode":"full_refresh",
+                      "tableMapping":[{"source":"cost_centers","target":"ods_api_cost_center"}],
+                      "syncConfig":{},
+                      "postIngestionQualityEnabled":true,
+                      "qualityPolicyRef":"dataset:00000000-0000-0000-0000-000000000013"
+                    }
+                    """)
+        ).andExpect(status().isOk());
+
+        verify(ingestionTaskDesignService).saveDesign(
+            eq(13L),
+            eq("\"checksum-r4\""),
+            any(IngestionTaskDesignUpdateRequest.class)
+        );
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> auditMeta = ArgumentCaptor.forClass(Map.class);
+        verify(auditService).auditAction(
+            eq("INGESTION_TASK_UPDATE"),
+            eq(AuditStage.SUCCESS),
+            eq("API 成本中心接入"),
+            auditMeta.capture()
+        );
+        assertThat(auditMeta.getValue())
+            .containsEntry("revisionNumber", 4)
+            .containsEntry("planChecksum", "checksum-r4")
+            .containsEntry("targetDatasetId", "00000000-0000-0000-0000-000000000013");
+    }
+
+    @Test
+    void cancelExecutionUsesTaskScopedCommandAndAuditsRun() throws Exception {
+        IngestionExecutionDTO execution = new IngestionExecutionDTO();
+        execution.setId(90L);
+        execution.setTaskId(13L);
+        execution.setExecutionId("run-90");
+        execution.setRevisionNumber(4);
+        execution.setEffectiveConfigChecksum("checksum-r4");
+        execution.setTargetDatasetId(UUID.fromString("00000000-0000-0000-0000-000000000013"));
+        execution.setStatus("cancelled");
+        when(ingestionExecutionCommandService.cancel(13L, 90L)).thenReturn(execution);
+
+        mockMvc.perform(post("/api/ingestion/tasks/13/executions/90/cancel"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("cancelled"));
+
+        verify(ingestionExecutionCommandService).cancel(13L, 90L);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> auditMeta = ArgumentCaptor.forClass(Map.class);
+        verify(auditService).auditAction(
+            eq("INGESTION_TASK_EXECUTE"),
+            eq(AuditStage.SUCCESS),
+            eq("13"),
+            auditMeta.capture()
+        );
+        assertThat(auditMeta.getValue())
+            .containsEntry("executionId", 90L)
+            .containsEntry("executionRunId", "run-90")
+            .containsEntry("revisionNumber", 4)
+            .containsEntry("planChecksum", "checksum-r4")
+            .containsEntry("targetDatasetId", "00000000-0000-0000-0000-000000000013");
+    }
+
+    private IngestionTaskDesignDTO taskDesign() {
+        return new IngestionTaskDesignDTO(
+            13L,
+            "API 成本中心接入",
+            null,
+            4,
+            "ACTIVE",
+            "active",
+            new IngestionTaskDesignDTO.SourceDesign(
+                UUID.fromString("10000000-0000-0000-0000-000000000013"),
+                "httpreader",
+                new ObjectMapper().createObjectNode()
+            ),
+            new IngestionTaskDesignDTO.DestinationDesign(
+                "postgresqlwriter",
+                new ObjectMapper().createObjectNode(),
+                new IngestionTaskDesignDTO.DestinationAssetRef(
+                    UUID.fromString("00000000-0000-0000-0000-000000000013"),
+                    "dataset:00000000-0000-0000-0000-000000000013",
+                    "POLICY_REF"
+                )
+            ),
+            "full_refresh",
+            null,
+            new ObjectMapper().createArrayNode(),
+            new ObjectMapper().createObjectNode(),
+            new IngestionTaskDesignDTO.PostIngestionQuality(
+                true,
+                "dataset:00000000-0000-0000-0000-000000000013"
+            ),
+            "checksum-r4",
+            new IngestionTaskDesignDTO.ValidationResult(true, List.of()),
+            new IngestionTaskDesignDTO.TopologyProjection(true, "checksum-r4", List.of(), List.of()),
+            new IngestionTaskDesignDTO.LegacyDsl(false, false, null)
+        );
+    }
 
     @Test
     void listTasksShouldForwardServerSideAccessFilters() throws Exception {
@@ -428,6 +576,9 @@ class IngestionTaskResourceTest {
         admitted.setId(1L);
         admitted.setName("file-orders");
         admitted.setStatus("active");
+        admitted.setRevisionNumber(4);
+        admitted.setEffectiveConfigChecksum("checksum-r4");
+        admitted.setTargetDatasetId(UUID.fromString("00000000-0000-0000-0000-000000000013"));
         admitted.setClassificationSeal(seal);
         admitted.setFieldClassifications(fields);
         when(ingestionTaskService.admit(eq(1L), any(JsonNode.class), any(JsonNode.class))).thenReturn(admitted);
@@ -468,7 +619,10 @@ class IngestionTaskResourceTest {
         );
         assertThat(auditMeta.getValue())
             .containsEntry("summary", "完成密级封存与生产准入")
-            .containsEntry("taskId", 1L);
+            .containsEntry("taskId", 1L)
+            .containsEntry("revisionNumber", 4)
+            .containsEntry("planChecksum", "checksum-r4")
+            .containsEntry("targetDatasetId", "00000000-0000-0000-0000-000000000013");
     }
 
     @Test
@@ -759,6 +913,49 @@ class IngestionTaskResourceTest {
             .andExpect(jsonPath("$.code").value("HTTP_409"));
 
         verify(ingestionTaskService, never()).executeAsync(1L);
+    }
+
+    @Test
+    void executeTaskAsyncWithIdempotencyKeyReturnsThePersistedLedgerIdentity() throws Exception {
+        IngestionTaskDTO task = new IngestionTaskDTO();
+        task.setId(1L);
+        task.setName("demo-task");
+        IngestionExecutionDTO execution = new IngestionExecutionDTO();
+        execution.setId(91L);
+        execution.setExecutionId("preparing-91");
+        execution.setRevisionNumber(4);
+        execution.setEffectiveConfigChecksum("checksum-r4");
+        execution.setTargetDatasetId(UUID.fromString("00000000-0000-0000-0000-000000000013"));
+        when(ingestionTaskService.validateAsyncExecutionRequest(1L)).thenReturn(task);
+        when(ingestionExecutionSubmissionService.submitCommand(1L, "browser-command-1"))
+            .thenReturn(new com.yuzhi.dts.ingestion.service.IngestionExecutionSubmissionService.SubmissionResult(execution, false));
+
+        mockMvc.perform(
+            post("/api/ingestion/tasks/1/execute/async")
+                .header("Idempotency-Key", "browser-command-1")
+        )
+            .andExpect(status().isAccepted())
+            .andExpect(jsonPath("$.executionId").value(91))
+            .andExpect(jsonPath("$.revisionNumber").value(4))
+            .andExpect(jsonPath("$.planChecksum").value("checksum-r4"))
+            .andExpect(jsonPath("$.idempotencyProtected").value(true))
+            .andExpect(jsonPath("$.idempotent").value(false));
+
+        verify(ingestionExecutionSubmissionService).submitCommand(1L, "browser-command-1");
+        verify(ingestionTaskService, never()).executeAsync(1L);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> auditMeta = ArgumentCaptor.forClass(Map.class);
+        verify(auditService).auditAction(
+            eq("INGESTION_TASK_EXECUTE"),
+            eq(AuditStage.SUCCESS),
+            eq("1"),
+            auditMeta.capture()
+        );
+        assertThat(auditMeta.getValue())
+            .containsEntry("executionId", 91L)
+            .containsEntry("revisionNumber", 4)
+            .containsEntry("planChecksum", "checksum-r4")
+            .containsEntry("targetDatasetId", "00000000-0000-0000-0000-000000000013");
     }
 
     @Test

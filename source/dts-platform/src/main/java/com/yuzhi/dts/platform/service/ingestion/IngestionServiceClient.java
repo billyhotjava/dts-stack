@@ -202,12 +202,73 @@ public class IngestionServiceClient {
         return exchangeObject("/api/ingestion/tasks/" + id + "/effective-config", HttpMethod.GET, null, null, restTemplate);
     }
 
+    public ApiResponse<Map<String, Object>> getTaskDesign(Long id) {
+        return exchangeTask("/api/ingestion/tasks/" + id + "/design", HttpMethod.GET, null, null);
+    }
+
+    public ApiResponse<Map<String, Object>> updateTaskDesign(Long id, Object payload, String expectedPlanChecksum) {
+        Map<String, String> headers = StringUtils.hasText(expectedPlanChecksum)
+            ? Map.of("If-Match", expectedPlanChecksum)
+            : Map.of();
+        return exchangeTaskWithHeaders(
+            "/api/ingestion/tasks/" + id + "/design",
+            HttpMethod.PUT,
+            payload,
+            null,
+            headers
+        );
+    }
+
+    public ApiResponse<Map<String, Object>> validateTaskDesign(Long id, Object payload, String expectedPlanChecksum) {
+        Map<String, String> headers = StringUtils.hasText(expectedPlanChecksum)
+            ? Map.of("X-Expected-Plan-Checksum", expectedPlanChecksum)
+            : Map.of();
+        return exchangeTaskWithHeaders(
+            "/api/ingestion/tasks/" + id + "/design/validate",
+            HttpMethod.POST,
+            payload,
+            null,
+            headers
+        );
+    }
+
+    public ApiResponse<Map<String, Object>> getTaskTopology(Long id) {
+        return getTaskTopology(id, "DRAFT");
+    }
+
+    public ApiResponse<Map<String, Object>> getTaskTopology(Long id, String view) {
+        Map<String, Object> params = StringUtils.hasText(view) ? Map.of("view", view) : Map.of();
+        return exchangeTask("/api/ingestion/tasks/" + id + "/topology", HttpMethod.GET, null, params);
+    }
+
+    public ApiResponse<Map<String, Object>> setTaskSchedulePaused(Long id, boolean paused) {
+        return exchangeTask(
+            "/api/ingestion/tasks/" + id + "/schedule/" + (paused ? "pause" : "enable"),
+            HttpMethod.POST,
+            null,
+            null
+        );
+    }
+
     public ApiResponse<Map<String, Object>> updateTask(Long id, Object payload) {
         return exchangeTask("/api/ingestion/tasks/" + id, HttpMethod.PUT, payload, null);
     }
 
     public ApiResponse<Map<String, Object>> admitTask(Long id, Object payload) {
         return exchangeTask("/api/ingestion/tasks/" + id + "/admit", HttpMethod.POST, payload, null);
+    }
+
+    public ApiResponse<Map<String, Object>> admitTask(Long id, Object payload, String expectedPlanChecksum) {
+        Map<String, String> headers = StringUtils.hasText(expectedPlanChecksum)
+            ? Map.of("X-Expected-Plan-Checksum", expectedPlanChecksum)
+            : Map.of();
+        return exchangeTaskWithHeaders(
+            "/api/ingestion/tasks/" + id + "/admit",
+            HttpMethod.POST,
+            payload,
+            null,
+            headers
+        );
     }
 
     public ApiResponse<Map<String, Object>> deleteTask(Long id) {
@@ -218,8 +279,28 @@ public class IngestionServiceClient {
         return exchangeTaskLong("/api/ingestion/tasks/" + id + "/execute", HttpMethod.POST, null);
     }
 
+    public ApiResponse<Map<String, Object>> executeTask(Long id, String idempotencyKey) {
+        return exchangeTaskWithHeaders(
+            "/api/ingestion/tasks/" + id + "/execute",
+            HttpMethod.POST,
+            null,
+            null,
+            Map.of("Idempotency-Key", idempotencyKey)
+        );
+    }
+
     public ApiResponse<Map<String, Object>> executeTaskAsync(Long id) {
         return exchangeTaskLong("/api/ingestion/tasks/" + id + "/execute/async", HttpMethod.POST, null);
+    }
+
+    public ApiResponse<Map<String, Object>> executeTaskAsync(Long id, String idempotencyKey) {
+        return exchangeTaskWithHeaders(
+            "/api/ingestion/tasks/" + id + "/execute/async",
+            HttpMethod.POST,
+            null,
+            null,
+            Map.of("Idempotency-Key", idempotencyKey)
+        );
     }
 
     public ApiResponse<Map<String, Object>> backfillTask(Long id, Object payload) {
@@ -242,12 +323,45 @@ public class IngestionServiceClient {
         return exchangeTask("/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/logs", HttpMethod.GET, null, params);
     }
 
+    public ApiResponse<Map<String, Object>> getExecution(Long taskId, Long executionId) {
+        return exchangeTask(
+            "/api/ingestion/tasks/" + taskId + "/executions/" + executionId,
+            HttpMethod.GET,
+            null,
+            null
+        );
+    }
+
+    public ApiResponse<Map<String, Object>> cancelExecution(Long taskId, Long executionId) {
+        return exchangeTask(
+            "/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/cancel",
+            HttpMethod.POST,
+            null,
+            null
+        );
+    }
+
     public ApiResponse<Map<String, Object>> retryExecution(Long taskId, Long executionId, Map<String, ?> params) {
         return exchangeTask("/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/retry", HttpMethod.POST, null, params);
     }
 
     public ApiResponse<Map<String, Object>> retryExecutionAsync(Long taskId, Long executionId, Map<String, ?> params) {
         return exchangeTask("/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/retry/async", HttpMethod.POST, null, params);
+    }
+
+    public ApiResponse<Map<String, Object>> retryExecutionAsync(
+        Long taskId,
+        Long executionId,
+        Map<String, ?> params,
+        String idempotencyKey
+    ) {
+        return exchangeTaskWithHeaders(
+            "/api/ingestion/tasks/" + taskId + "/executions/" + executionId + "/retry/async",
+            HttpMethod.POST,
+            null,
+            params,
+            Map.of("Idempotency-Key", idempotencyKey)
+        );
     }
 
     public ApiResponse<Object> discoverTables(Object payload) {
@@ -540,6 +654,31 @@ public class IngestionServiceClient {
         return exchangeTask(path, method, payload, params, restTemplate);
     }
 
+    private ApiResponse<Map<String, Object>> exchangeTaskWithHeaders(
+        String path,
+        HttpMethod method,
+        Object payload,
+        Map<String, ?> params,
+        Map<String, String> forwardHeaders
+    ) {
+        return doExchange(path, method, payload, params, restTemplate, forwardHeaders, (body, statusCode) -> {
+            if (body instanceof Map<?, ?> map) {
+                Map<String, Object> payloadMap = new java.util.LinkedHashMap<>();
+                map.forEach((key, value) -> payloadMap.put(String.valueOf(key), value));
+                ApiResponse<Map<String, Object>> unwrapped = unwrapTaskResponseMap(payloadMap);
+                if (unwrapped != null) {
+                    return unwrapped;
+                }
+                return new ApiResponse<>(
+                    statusCode.is2xxSuccessful() ? ResultStatus.SUCCESS.getCode() : statusCode.value(),
+                    resolveFallbackMessage(payloadMap),
+                    payloadMap
+                );
+            }
+            return new ApiResponse<>(statusCode.value(), "ok", Map.of("value", body));
+        });
+    }
+
     private ApiResponse<Map<String, Object>> exchangeTask(
         String path,
         HttpMethod method,
@@ -606,6 +745,19 @@ public class IngestionServiceClient {
         RestTemplate client,
         BiFunction<Object, org.springframework.http.HttpStatusCode, ApiResponse<T>> bodyHandler
     ) {
+        return doExchange(path, method, payload, params, client, Map.of(), bodyHandler);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> ApiResponse<T> doExchange(
+        String path,
+        HttpMethod method,
+        Object payload,
+        Map<String, ?> params,
+        RestTemplate client,
+        Map<String, String> forwardHeaders,
+        BiFunction<Object, org.springframework.http.HttpStatusCode, ApiResponse<T>> bodyHandler
+    ) {
         if (!isEnabled()) {
             return new ApiResponse<>(503, "ingestion service disabled", null);
         }
@@ -613,6 +765,7 @@ public class IngestionServiceClient {
         String requestId = UUID.randomUUID().toString();
         try {
             HttpHeaders headers = headersWithRequestId(requestId);
+            applyForwardHeaders(headers, forwardHeaders);
             HttpEntity<?> entity = payload == null ? new HttpEntity<>(headers) : new HttpEntity<>(payload, headers);
             Supplier<ResponseEntity<Object>> supplier = () -> client.exchange(uri, method, entity, Object.class);
             Supplier<ResponseEntity<Object>> circuitProtected = CircuitBreaker.decorateSupplier(circuitBreaker, supplier);
@@ -648,6 +801,18 @@ public class IngestionServiceClient {
             }
             logFailure("INGESTION_REQUEST_ERROR", statusCode(cause, 500), responseRequestId(cause, requestId));
             return new ApiResponse<>(500, "ingestion service error", null);
+        }
+    }
+
+    private void applyForwardHeaders(HttpHeaders headers, Map<String, String> forwardHeaders) {
+        if (forwardHeaders == null || forwardHeaders.isEmpty()) {
+            return;
+        }
+        for (String name : List.of("If-Match", "X-Expected-Plan-Checksum", "Idempotency-Key")) {
+            String value = forwardHeaders.get(name);
+            if (StringUtils.hasText(value)) {
+                headers.set(name, value.trim());
+            }
         }
     }
 

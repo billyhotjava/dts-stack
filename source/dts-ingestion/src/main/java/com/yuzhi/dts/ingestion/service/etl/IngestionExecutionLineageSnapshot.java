@@ -16,9 +16,11 @@ public final class IngestionExecutionLineageSnapshot {
         if (execution == null || task == null) {
             return false;
         }
+        boolean targetChanged = !java.util.Objects.equals(execution.getTargetDatasetId(), task.getTargetDatasetId());
+        execution.setTargetDatasetId(task.getTargetDatasetId());
         JsonNode tableMapping = task.getTableMapping();
         if (tableMapping == null || !tableMapping.isArray() || tableMapping.isEmpty()) {
-            return false;
+            return targetChanged;
         }
         ArrayNode sources = JsonNodeFactory.instance.arrayNode();
         ArrayNode targets = JsonNodeFactory.instance.arrayNode();
@@ -43,11 +45,14 @@ public final class IngestionExecutionLineageSnapshot {
                 if (StringUtils.hasText(task.getDestinationType())) {
                     targetNode.put("destinationType", task.getDestinationType());
                 }
+                if (task.getTargetDatasetId() != null) {
+                    targetNode.put("datasetId", task.getTargetDatasetId().toString());
+                }
                 targets.add(targetNode);
             }
         }
         if (sources.isEmpty() && targets.isEmpty()) {
-            return false;
+            return targetChanged;
         }
         execution.setSourceTables(sources);
         execution.setTargetTables(targets);
@@ -60,10 +65,14 @@ public final class IngestionExecutionLineageSnapshot {
         }
         boolean hasSources = execution.getSourceTables() != null && execution.getSourceTables().isArray() && !execution.getSourceTables().isEmpty();
         boolean hasTargets = execution.getTargetTables() != null && execution.getTargetTables().isArray() && !execution.getTargetTables().isEmpty();
-        if (hasSources && hasTargets) {
-            return false;
+        boolean targetChanged = execution.getTargetDatasetId() == null && task != null && task.getTargetDatasetId() != null;
+        if (targetChanged) {
+            execution.setTargetDatasetId(task.getTargetDatasetId());
         }
-        return apply(execution, task);
+        if (hasSources && hasTargets) {
+            return targetChanged;
+        }
+        return apply(execution, task) || targetChanged;
     }
 
     private static ObjectNode tableRef(String value, String role) {

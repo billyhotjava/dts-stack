@@ -22,6 +22,8 @@ public class IngestionExecutionDTO {
 
     private String qualityPolicyRef;
 
+    private java.util.UUID targetDatasetId;
+
     private String qualityRunId;
 
     private String qualityWorkflowId;
@@ -73,6 +75,12 @@ public class IngestionExecutionDTO {
     private JsonNode targetTables;
 
     private Long queueWaitSeconds;
+
+    private Long parentExecutionId;
+
+    private int retryCount;
+
+    private int maxRetries;
 
     private Instant createdAt;
 
@@ -130,6 +138,14 @@ public class IngestionExecutionDTO {
 
     public void setQualityPolicyRef(String qualityPolicyRef) {
         this.qualityPolicyRef = qualityPolicyRef;
+    }
+
+    public java.util.UUID getTargetDatasetId() {
+        return targetDatasetId;
+    }
+
+    public void setTargetDatasetId(java.util.UUID targetDatasetId) {
+        this.targetDatasetId = targetDatasetId;
     }
 
     public String getQualityRunId() {
@@ -338,6 +354,30 @@ public class IngestionExecutionDTO {
 
     public void setQueueWaitSeconds(Long queueWaitSeconds) {
         this.queueWaitSeconds = queueWaitSeconds;
+    }
+
+    public Long getParentExecutionId() {
+        return parentExecutionId;
+    }
+
+    public void setParentExecutionId(Long parentExecutionId) {
+        this.parentExecutionId = parentExecutionId;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public int getMaxRetries() {
+        return maxRetries;
+    }
+
+    public void setMaxRetries(int maxRetries) {
+        this.maxRetries = maxRetries;
     }
 
     public Instant getCreatedAt() {

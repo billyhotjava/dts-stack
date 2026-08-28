@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.web.rest;
 
+import com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.util.StringUtils;
@@ -10,12 +11,21 @@ final class IngestionTaskAdmissionAuditMetadata {
 
     private IngestionTaskAdmissionAuditMetadata() {}
 
-    static Map<String, Object> success(Long taskId, String operator) {
-        return Map.of(
-            "summary", "完成密级封存与生产准入",
-            "taskId", taskId,
-            "operator", operator
-        );
+    static Map<String, Object> success(Long taskId, String operator, IngestionTaskDTO admitted) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("summary", "完成密级封存与生产准入");
+        metadata.put("taskId", taskId);
+        metadata.put("operator", operator);
+        if (admitted != null) {
+            putIfNotNull(metadata, "revisionNumber", admitted.getRevisionNumber());
+            putIfNotNull(metadata, "planChecksum", admitted.getEffectiveConfigChecksum());
+            putIfNotNull(
+                metadata,
+                "targetDatasetId",
+                admitted.getTargetDatasetId() == null ? null : admitted.getTargetDatasetId().toString()
+            );
+        }
+        return metadata;
     }
 
     static Map<String, Object> failure(Long taskId, String operator, Throwable error) {
@@ -36,5 +46,11 @@ final class IngestionTaskAdmissionAuditMetadata {
         }
         String trimmed = message.trim();
         return trimmed.length() > MAX_ERROR_LENGTH ? trimmed.substring(0, MAX_ERROR_LENGTH) : trimmed;
+    }
+
+    private static void putIfNotNull(Map<String, Object> metadata, String key, Object value) {
+        if (value != null) {
+            metadata.put(key, value);
+        }
     }
 }

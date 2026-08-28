@@ -657,6 +657,7 @@
                         <testInclude>**/service/infra/DefaultDestinationSyncServiceTest.java</testInclude>
                         <testInclude>**/service/infra/InfraManagementServiceTest.java</testInclude>
                         <testInclude>**/service/ingestion/IngestionAccessDecisionServiceTest.java</testInclude>
+                        <testInclude>**/service/ingestion/IngestionFlowProjectionServiceTest.java</testInclude>
                         <testInclude>**/service/ingestion/IngestionServiceClientTest.java</testInclude>
                         <testInclude>**/service/ingestion/RollbackConfirmationTokenServiceTest.java</testInclude>
                         <testInclude>**/service/governance/DefaultLakeDatasetGuardTest.java</testInclude>

@@ -73,6 +73,9 @@ public class IngestionTaskRevision {
     @Column(name = "quality_policy_ref", length = 200)
     private String qualityPolicyRef;
 
+    @Column(name = "target_dataset_id", columnDefinition = "uuid")
+    private java.util.UUID targetDatasetId;
+
     @Column(name = "created_by", length = 100, nullable = false)
     private String createdBy;
 
@@ -229,6 +232,14 @@ public class IngestionTaskRevision {
 
     public void setQualityPolicyRef(String qualityPolicyRef) {
         this.qualityPolicyRef = qualityPolicyRef;
+    }
+
+    public java.util.UUID getTargetDatasetId() {
+        return targetDatasetId;
+    }
+
+    public void setTargetDatasetId(java.util.UUID targetDatasetId) {
+        this.targetDatasetId = targetDatasetId;
     }
 
     public String getCreatedBy() {

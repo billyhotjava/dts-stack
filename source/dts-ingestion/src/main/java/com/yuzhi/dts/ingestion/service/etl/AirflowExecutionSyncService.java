@@ -287,6 +287,13 @@ public class AirflowExecutionSyncService {
         String dagId,
         String dagRunId
     ) {
+        if ("cancelled".equalsIgnoreCase(execution.getStatus())) {
+            return;
+        }
+        if ("cancel_requested".equalsIgnoreCase(execution.getStatus()) && "failed".equalsIgnoreCase(status)) {
+            status = "cancelled";
+            errorMessage = null;
+        }
         if (status.equalsIgnoreCase(execution.getStatus())) {
             return;
         }

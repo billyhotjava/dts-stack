@@ -4,6 +4,7 @@ import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.security.IngestionSensitiveConfigSupport;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,6 +26,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
+import org.springframework.web.util.UriUtils;
 
 @Component
 public class AirflowClient {
@@ -208,6 +210,47 @@ public class AirflowClient {
             }
         }
         throw new IllegalStateException("AIRFLOW_DAG_STATE_UPDATE_HTTP_FAILED: status=404");
+    }
+
+    /**
+     * Updates one explicitly task-owned DAG run. Airflow only accepts these
+     * terminal/queue states on this endpoint; callers cannot inject arbitrary
+     * path segments or state values.
+     */
+    public void setDagRunStateStrict(String dagId, String dagRunId, String state) {
+        String normalizedState = state == null ? "" : state.trim().toLowerCase(java.util.Locale.ROOT);
+        if (!List.of("success", "failed", "queued").contains(normalizedState)) {
+            throw new IllegalArgumentException("Unsupported Airflow DAG run state");
+        }
+        AirflowSettings settings = resolveSettings();
+        if (!settings.enabled()
+            || !StringUtils.hasText(settings.baseUrl())
+            || !StringUtils.hasText(dagId)
+            || !StringUtils.hasText(dagRunId)) {
+            throw new IllegalStateException("AIRFLOW_DAG_RUN_STATE_UPDATE_NOT_CONFIGURED");
+        }
+        URI uri = buildUri(
+            settings,
+            "/dags/" + encodePathSegment(dagId) + "/dagRuns/" + encodePathSegment(dagRunId),
+            null
+        );
+        try {
+            HttpHeaders headers = defaultHeaders(settings);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of("state", normalizedState), headers);
+            restTemplate.exchange(uri, HttpMethod.PATCH, entity, Map.class);
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn(
+                "Airflow DAG run state update failed status={} body={}",
+                ex.getStatusCode().value(),
+                sanitized(ex.getResponseBodyAsString())
+            );
+            throw new IllegalStateException(
+                "AIRFLOW_DAG_RUN_STATE_UPDATE_HTTP_FAILED: status=" + ex.getStatusCode().value()
+            );
+        } catch (Exception ex) {
+            LOG.warn("Airflow DAG run state update failed detail={}", sanitized(ex.getMessage()));
+            throw new IllegalStateException("AIRFLOW_DAG_RUN_STATE_UPDATE_FAILED");
+        }
     }
 
     private static void sleepQuietly(long millis) {
@@ -458,6 +501,10 @@ public class AirflowClient {
             params.forEach(builder::queryParam);
         }
         return builder.build(true).toUri();
+    }
+
+    private String encodePathSegment(String value) {
+        return UriUtils.encodePathSegment(value, StandardCharsets.UTF_8);
     }
 
     private AirflowSettings resolveSettings() {

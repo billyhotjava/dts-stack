@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogClassificationService;
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionAccessDecisionService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionClassificationAdmissionService;
+import com.yuzhi.dts.platform.service.ingestion.IngestionFlowProjectionService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
@@ -27,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -65,6 +67,7 @@ public class IngestionTaskProxyResource {
     private final IngestionAccessDecisionService accessDecisionService;
     private final ClassificationUtils classificationUtils;
     private final ObjectMapper objectMapper;
+    private IngestionFlowProjectionService flowProjectionService;
 
     public IngestionTaskProxyResource(
         IngestionServiceClient ingestionClient,
@@ -90,6 +93,11 @@ public class IngestionTaskProxyResource {
         this.accessDecisionService = accessDecisionService;
         this.classificationUtils = classificationUtils;
         this.objectMapper = objectMapper;
+    }
+
+    @Autowired
+    void setFlowProjectionService(IngestionFlowProjectionService flowProjectionService) {
+        this.flowProjectionService = flowProjectionService;
     }
 
     @GetMapping("/templates")
@@ -254,6 +262,111 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getTaskEffectiveConfig(id)));
     }
 
+    @GetMapping("/tasks/{id}/design")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getTaskDesign(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        accessDecisionService.requireTaskAccess(id, false);
+        ApiResponse<Map<String, Object>> response = ingestionClient.getTaskDesign(id);
+        if (isSuccessful(response) && response.getData() != null) {
+            response.setData(flowProjectionService.enrichDesign(response.getData(), activeDept));
+        }
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+    }
+
+    @PutMapping("/tasks/{id}/design")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> updateTaskDesign(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "If-Match", required = false) String expectedPlanChecksum,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
+        @RequestBody Map<String, Object> payload
+    ) {
+        Map<String, Object> canonical = accessDecisionService.canonicalizeTaskPayloadIdentifiers(payload);
+        ApiResponse<Map<String, Object>> response = auditedIngestionCall(
+            "INGESTION_TASK_UPDATE",
+            String.valueOf(id),
+            "开始保存接入流程设计",
+            "接入流程设计保存成功",
+            "接入流程设计保存失败",
+            Map.of("taskId", id),
+            () -> {
+                Map<String, Object> existing = accessDecisionService.requireTaskAuthorizationAccess(id, true);
+                Map<String, Object> accessPayload = new LinkedHashMap<>(existing);
+                accessPayload.putAll(canonical);
+                accessDecisionService.requireCreateOrUpdateAccess(accessPayload, true);
+                flowProjectionService.validateDesignReferences(canonical, activeDept);
+                return ingestionClient.updateTaskDesign(id, canonical, expectedPlanChecksum);
+            }
+        );
+        if (isSuccessful(response) && response.getData() != null) {
+            response.setData(flowProjectionService.enrichDesign(response.getData(), activeDept));
+        }
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+    }
+
+    @PostMapping("/tasks/{id}/design/validate")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> validateTaskDesign(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "X-Expected-Plan-Checksum", required = false) String expectedPlanChecksum,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
+        @RequestBody Map<String, Object> payload
+    ) {
+        Map<String, Object> canonical = accessDecisionService.canonicalizeTaskPayloadIdentifiers(payload);
+        Map<String, Object> existing = accessDecisionService.requireTaskAuthorizationAccess(id, true);
+        Map<String, Object> accessPayload = new LinkedHashMap<>(existing);
+        accessPayload.putAll(canonical);
+        accessDecisionService.requireCreateOrUpdateAccess(accessPayload, true);
+        flowProjectionService.validateDesignReferences(canonical, activeDept);
+        return ResponseEntity.ok(
+            accessDecisionService.sanitizeResponse(
+                ingestionClient.validateTaskDesign(id, canonical, expectedPlanChecksum)
+            )
+        );
+    }
+
+    @GetMapping("/tasks/{id}/topology")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getTaskTopology(
+        @PathVariable("id") Long id,
+        @RequestParam(value = "view", required = false, defaultValue = "DRAFT") String view
+    ) {
+        accessDecisionService.requireTaskAccess(id, false);
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(ingestionClient.getTaskTopology(id, view)));
+    }
+
+    @PostMapping("/tasks/{id}/schedule/enable")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> enableTaskSchedule(@PathVariable("id") Long id) {
+        return changeTaskSchedule(id, false);
+    }
+
+    @PostMapping("/tasks/{id}/schedule/pause")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> pauseTaskSchedule(@PathVariable("id") Long id) {
+        return changeTaskSchedule(id, true);
+    }
+
+    private ResponseEntity<ApiResponse<Map<String, Object>>> changeTaskSchedule(Long id, boolean paused) {
+        String action = paused ? "暂停" : "启用";
+        ApiResponse<Map<String, Object>> response = auditedIngestionCall(
+            "INGESTION_TASK_UPDATE",
+            String.valueOf(id),
+            "开始" + action + "接入任务调度",
+            action + "接入任务调度成功",
+            action + "接入任务调度失败",
+            Map.of("taskId", id, "paused", paused),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, true);
+                return ingestionClient.setTaskSchedulePaused(id, paused);
+            }
+        );
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+    }
+
     @PutMapping("/tasks/{id}")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> updateTask(
@@ -356,7 +469,11 @@ public class IngestionTaskProxyResource {
 
     @PostMapping("/tasks/{id}/admit")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ResponseEntity<ApiResponse<Map<String, Object>>> admitTask(@PathVariable("id") Long id) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> admitTask(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "X-Expected-Plan-Checksum", required = false) String expectedPlanChecksum,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
         String resourceId = String.valueOf(id);
         String auditOperationId = UUID.randomUUID().toString();
         UUID beginAuditReceipt = strictAudit(
@@ -392,6 +509,7 @@ public class IngestionTaskProxyResource {
             Map<String, Object> canonicalTask = accessDecisionService.canonicalizeTaskPayloadIdentifiers(existing.getData());
             existing.setData(canonicalTask);
             accessDecisionService.requireTaskPayloadAccess(canonicalTask, true);
+            flowProjectionService.validateDesignReferences(canonicalTask, activeDept);
 
             Map<String, Object> sealedTask = attachCurrentSourceClassificationSeal(canonicalTask, false);
             Map<String, Object> admission = new LinkedHashMap<>();
@@ -401,7 +519,9 @@ public class IngestionTaskProxyResource {
             if (sealedTask.get("fieldClassifications") != null) {
                 admission.put("fieldClassifications", sealedTask.get("fieldClassifications"));
             }
-            ApiResponse<Map<String, Object>> response = ingestionClient.admitTask(id, admission);
+            ApiResponse<Map<String, Object>> response = StringUtils.hasText(expectedPlanChecksum)
+                ? ingestionClient.admitTask(id, admission, expectedPlanChecksum)
+                : ingestionClient.admitTask(id, admission);
             boolean success = isSuccessful(response);
             Map<String, Object> evidence = classificationAuditEvidence(sealedTask);
             evidence.put("taskId", id);
@@ -508,7 +628,8 @@ public class IngestionTaskProxyResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> executeTask(
         @PathVariable("id") Long id,
-        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
         ApiResponse<Map<String, Object>> response = auditedIngestionCall(
             "INGESTION_TASK_EXECUTE",
@@ -519,7 +640,9 @@ public class IngestionTaskProxyResource {
             Map.of("taskId", id, "mode", "SYNC"),
             () -> {
                 accessDecisionService.requireTaskAccess(id, true);
-                return ingestionClient.executeTask(id);
+                return StringUtils.hasText(idempotencyKey)
+                    ? ingestionClient.executeTask(id, idempotencyKey)
+                    : ingestionClient.executeTask(id);
             }
         );
         if (response != null && response.getStatus() >= 200 && response.getStatus() < 300) {
@@ -546,7 +669,10 @@ public class IngestionTaskProxyResource {
 
     @PostMapping("/tasks/{id}/execute/async")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
-    public ResponseEntity<ApiResponse<Map<String, Object>>> executeTaskAsync(@PathVariable("id") Long id) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> executeTaskAsync(
+        @PathVariable("id") Long id,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
+    ) {
         ApiResponse<Map<String, Object>> response = auditedIngestionCall(
             "INGESTION_TASK_EXECUTE",
             String.valueOf(id),
@@ -556,7 +682,9 @@ public class IngestionTaskProxyResource {
             Map.of("taskId", id, "mode", "ASYNC"),
             () -> {
                 accessDecisionService.requireTaskAccess(id, true);
-                return ingestionClient.executeTaskAsync(id);
+                return StringUtils.hasText(idempotencyKey)
+                    ? ingestionClient.executeTaskAsync(id, idempotencyKey)
+                    : ingestionClient.executeTaskAsync(id);
             }
         );
         return buildAsyncProxyResponse(response);
@@ -618,7 +746,8 @@ public class IngestionTaskProxyResource {
     public ResponseEntity<ApiResponse<Map<String, Object>>> retryExecutionAsync(
         @PathVariable("id") Long id,
         @PathVariable("executionId") Long executionId,
-        @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
+        @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey
     ) {
         ApiResponse<Map<String, Object>> response = auditedIngestionCall(
             "INGESTION_EXECUTION_RETRY",
@@ -629,7 +758,9 @@ public class IngestionTaskProxyResource {
             Map.of("taskId", id, "executionId", executionId, "mode", mode),
             () -> {
                 accessDecisionService.requireTaskAccess(id, true);
-                return ingestionClient.retryExecutionAsync(id, executionId, Map.of("mode", mode));
+                return StringUtils.hasText(idempotencyKey)
+                    ? ingestionClient.retryExecutionAsync(id, executionId, Map.of("mode", mode), idempotencyKey)
+                    : ingestionClient.retryExecutionAsync(id, executionId, Map.of("mode", mode));
             }
         );
         return buildAsyncProxyResponse(response);
@@ -661,6 +792,15 @@ public class IngestionTaskProxyResource {
             } catch (RuntimeException ex) {
                 // best-effort sync
             }
+            if (isSuccessful(response)) {
+                response.setData(
+                    flowProjectionService.enrichExecutionPage(
+                        response.getData(),
+                        activeDept,
+                        latestExecutionDatabaseId(id)
+                    )
+                );
+            }
         }
         return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
     }
@@ -679,8 +819,74 @@ public class IngestionTaskProxyResource {
             } catch (RuntimeException ex) {
                 // best-effort sync
             }
+            if (isSuccessful(response)) {
+                Object latestId = response.getData().get("id");
+                response.setData(
+                    flowProjectionService.enrichExecution(
+                        response.getData(),
+                        activeDept,
+                        latestId == null ? null : String.valueOf(latestId)
+                    )
+                );
+            }
         }
         return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+    }
+
+    @GetMapping("/tasks/{id}/executions/{executionId}")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getExecution(
+        @PathVariable("id") Long id,
+        @PathVariable("executionId") Long executionId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        accessDecisionService.requireTaskAccess(id, false);
+        ApiResponse<Map<String, Object>> response = ingestionClient.getExecution(id, executionId);
+        if (isSuccessful(response) && response.getData() != null) {
+            response.setData(
+                flowProjectionService.enrichExecution(response.getData(), activeDept, latestExecutionDatabaseId(id))
+            );
+        }
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+    }
+
+    @PostMapping("/tasks/{id}/executions/{executionId}/cancel")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> cancelExecution(
+        @PathVariable("id") Long id,
+        @PathVariable("executionId") Long executionId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ApiResponse<Map<String, Object>> response = auditedIngestionCall(
+            "INGESTION_TASK_EXECUTE",
+            String.valueOf(executionId),
+            "开始取消接入执行",
+            "接入执行取消成功",
+            "接入执行取消失败",
+            Map.of("taskId", id, "executionId", executionId),
+            () -> {
+                accessDecisionService.requireTaskAccess(id, true);
+                return ingestionClient.cancelExecution(id, executionId);
+            }
+        );
+        if (isSuccessful(response) && response.getData() != null) {
+            response.setData(
+                flowProjectionService.enrichExecution(response.getData(), activeDept, latestExecutionDatabaseId(id))
+            );
+        }
+        return ResponseEntity.ok(accessDecisionService.sanitizeResponse(response));
+    }
+
+    private String latestExecutionDatabaseId(Long taskId) {
+        try {
+            ApiResponse<Map<String, Object>> latest = ingestionClient.latestExecution(taskId);
+            if (isSuccessful(latest) && latest.getData() != null && latest.getData().get("id") != null) {
+                return String.valueOf(latest.getData().get("id"));
+            }
+        } catch (RuntimeException ignored) {
+            // Current evidence is fail-closed when the latest ledger cannot be proven.
+        }
+        return null;
     }
 
     @GetMapping("/tasks/{id}/executions/{executionId}/logs")

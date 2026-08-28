@@ -32,6 +32,8 @@ public class IngestionTaskDTO {
 
     private JsonNode destinationConfig;
 
+    private java.util.UUID targetDatasetId;
+
     @NotNull
     @Size(min = 1, max = 50)
     private String syncMode;
@@ -156,6 +158,14 @@ public class IngestionTaskDTO {
 
     public void setDestinationConfig(JsonNode destinationConfig) {
         this.destinationConfig = destinationConfig;
+    }
+
+    public java.util.UUID getTargetDatasetId() {
+        return targetDatasetId;
+    }
+
+    public void setTargetDatasetId(java.util.UUID targetDatasetId) {
+        this.targetDatasetId = targetDatasetId;
     }
 
     public String getSyncMode() {

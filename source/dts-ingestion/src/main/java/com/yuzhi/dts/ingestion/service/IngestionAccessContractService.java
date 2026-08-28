@@ -131,7 +131,15 @@ public class IngestionAccessContractService {
         IngestionAccessDefaultPolicy policy = loadActivePolicy();
         String sourceKind = resolveSourceKind(task.getSourceType(), task.getSourceConfig());
         JsonNode snapshot = buildTaskSnapshot(task, sourceKind);
-        JsonNode effectiveConfig = buildEffectiveConfig(policy.getDefaults(), sourceKind, snapshot);
+        String resolvedQualityPolicyRef = resolveQualityPolicyRef(
+            qualityPolicyRef,
+            previous,
+            inheritPreviousQualityPolicyRef
+        );
+        JsonNode effectiveConfig = withQualityPolicyRef(
+            buildEffectiveConfig(policy.getDefaults(), sourceKind, snapshot),
+            resolvedQualityPolicyRef
+        );
 
         IngestionTaskRevision revision = new IngestionTaskRevision();
         // A draft candidate materialized from an encrypted revision is detached by
@@ -157,7 +165,8 @@ public class IngestionAccessContractService {
                 : sanitize(task.getFieldClassifications())
         );
         captureRuntimeSnapshot(revision, task);
-        revision.setQualityPolicyRef(resolveQualityPolicyRef(qualityPolicyRef, previous, inheritPreviousQualityPolicyRef));
+        revision.setQualityPolicyRef(resolvedQualityPolicyRef);
+        revision.setTargetDatasetId(resolveTargetDatasetId(task.getTargetDatasetId(), resolvedQualityPolicyRef));
         revision.setCreatedBy(currentOperator(task));
         revision.setCreatedAt(Instant.now());
         return revisionRepository.save(revision);
@@ -197,6 +206,7 @@ public class IngestionAccessContractService {
         execution.setRevisionNumber(revision.getRevisionNumber());
         execution.setEffectiveConfigChecksum(revision.getEffectiveConfigChecksum());
         execution.setQualityPolicyRef(revision.getQualityPolicyRef());
+        execution.setTargetDatasetId(resolveRevisionTargetDatasetId(revision));
         return revision;
     }
 
@@ -227,6 +237,7 @@ public class IngestionAccessContractService {
         execution.setRevisionNumber(revision.getRevisionNumber());
         execution.setEffectiveConfigChecksum(revision.getEffectiveConfigChecksum());
         execution.setQualityPolicyRef(revision.getQualityPolicyRef());
+        execution.setTargetDatasetId(resolveRevisionTargetDatasetId(revision));
         return revision;
     }
 
@@ -339,12 +350,19 @@ public class IngestionAccessContractService {
         JsonNode existingDefaults = draft.getEffectiveConfig() == null
             ? objectMapper.createObjectNode()
             : draft.getEffectiveConfig().path("defaults");
+        effectiveConfig.put("planSchemaVersion", "ingestion-plan-v1");
         effectiveConfig.set("defaults", sanitize(existingDefaults));
-        effectiveConfig.set("task", sanitize(taskSnapshot));
+        effectiveConfig.set("task", canonicalPlanSnapshot(taskSnapshot));
+        if (StringUtils.hasText(draft.getQualityPolicyRef())) {
+            effectiveConfig.put("qualityPolicyRef", draft.getQualityPolicyRef());
+        } else {
+            effectiveConfig.putNull("qualityPolicyRef");
+        }
         JsonNode canonicalEffectiveConfig = canonicalize(effectiveConfig);
 
         draft.setSourceKind(sourceKind);
         draft.setTaskSnapshot(taskSnapshot);
+        draft.setTargetDatasetId(resolveTargetDatasetId(admittedPlan.getTargetDatasetId(), draft.getQualityPolicyRef()));
         draft.setEffectiveConfig(canonicalEffectiveConfig);
         draft.setEffectiveConfigChecksum(checksum(canonicalEffectiveConfig));
         draft.setClassificationSeal(
@@ -404,6 +422,33 @@ public class IngestionAccessContractService {
             applyTaskSnapshot(dto, revision);
             applyRevision(dto, revision);
         });
+        return dto;
+    }
+
+    /**
+     * Projects one explicit immutable revision state. The orchestration page uses
+     * this for ACTIVE topology so an unpublished draft can never masquerade as
+     * the currently executable plan.
+     */
+    @Transactional(readOnly = true)
+    public IngestionTaskDTO enrichTaskDtoForRevisionState(IngestionTaskDTO dto, String revisionState) {
+        if (dto == null || dto.getId() == null) {
+            return dto;
+        }
+        String state = StringUtils.hasText(revisionState)
+            ? revisionState.trim().toUpperCase(Locale.ROOT)
+            : REVISION_DRAFT;
+        if (!REVISION_DRAFT.equals(state) && !REVISION_ACTIVE.equals(state)) {
+            throw new IllegalArgumentException("Unsupported ingestion revision view: " + revisionState);
+        }
+        java.util.Optional<IngestionTaskRevision> revision = REVISION_ACTIVE.equals(state)
+            ? revisionRepository.findFirstByTaskIdAndStateOrderByRevisionNumberDesc(dto.getId(), REVISION_ACTIVE)
+            : findDetailRevisionOptional(dto.getId(), dto.getStatus());
+        IngestionTaskRevision selected = revision.orElseThrow(
+            () -> new IllegalStateException("Task has no " + state + " revision: " + dto.getId())
+        );
+        applyTaskSnapshot(dto, selected);
+        applyRevision(dto, selected);
         return dto;
     }
 
@@ -534,6 +579,7 @@ public class IngestionAccessContractService {
         set(snapshot, "sourceConfig", task.getSourceConfig());
         put(snapshot, "destinationType", task.getDestinationType());
         set(snapshot, "destinationConfig", task.getDestinationConfig());
+        put(snapshot, "targetDatasetId", task.getTargetDatasetId() == null ? null : task.getTargetDatasetId().toString());
         put(snapshot, "syncMode", task.getSyncMode());
         put(snapshot, "syncSchedule", task.getSyncSchedule());
         set(snapshot, "tableMapping", task.getTableMapping());
@@ -570,6 +616,7 @@ public class IngestionAccessContractService {
         setRaw(snapshot, "sourceConfig", task.getSourceConfig());
         put(snapshot, "destinationType", task.getDestinationType());
         setRaw(snapshot, "destinationConfig", task.getDestinationConfig());
+        put(snapshot, "targetDatasetId", task.getTargetDatasetId() == null ? null : task.getTargetDatasetId().toString());
         put(snapshot, "syncMode", task.getSyncMode());
         put(snapshot, "syncSchedule", task.getSyncSchedule());
         setRaw(snapshot, "tableMapping", task.getTableMapping());
@@ -620,6 +667,9 @@ public class IngestionAccessContractService {
         task.setSourceConfig(json(snapshot, "sourceConfig", persistedTask.getSourceConfig()));
         task.setDestinationType(text(snapshot, "destinationType", persistedTask.getDestinationType()));
         task.setDestinationConfig(json(snapshot, "destinationConfig", persistedTask.getDestinationConfig()));
+        task.setTargetDatasetId(
+            uuid(snapshot, "targetDatasetId", resolveRevisionTargetDatasetId(revision))
+        );
         task.setSyncMode(text(snapshot, "syncMode", persistedTask.getSyncMode()));
         task.setSyncSchedule(text(snapshot, "syncSchedule", persistedTask.getSyncSchedule()));
         task.setTableMapping(json(snapshot, "tableMapping", persistedTask.getTableMapping()));
@@ -647,6 +697,7 @@ public class IngestionAccessContractService {
         revision.setState("draft".equalsIgnoreCase(task.getStatus()) ? REVISION_DRAFT : REVISION_ACTIVE);
         revision.setClassificationSeal(task.getClassificationSeal());
         revision.setFieldClassifications(task.getFieldClassifications());
+        revision.setTargetDatasetId(task.getTargetDatasetId());
         return revision;
     }
 
@@ -657,9 +708,33 @@ public class IngestionAccessContractService {
             merge(selectedDefaults, policyDefaults.path(sourceKind));
         }
         ObjectNode effective = objectMapper.createObjectNode();
+        effective.put("planSchemaVersion", "ingestion-plan-v1");
         effective.set("defaults", sanitize(selectedDefaults));
-        effective.set("task", sanitize(snapshot));
+        effective.set("task", canonicalPlanSnapshot(snapshot));
         return canonicalize(effective);
+    }
+
+    private JsonNode canonicalPlanSnapshot(JsonNode snapshot) {
+        if (snapshot == null || !snapshot.isObject()) {
+            return objectMapper.createObjectNode();
+        }
+        ObjectNode plan = ((ObjectNode) sanitize(snapshot)).deepCopy();
+        // graphDsl is retained only for legacy export. It has no executor or
+        // admission semantics and therefore must not alter plan identity.
+        plan.remove("graphDsl");
+        return canonicalize(plan);
+    }
+
+    private JsonNode withQualityPolicyRef(JsonNode effectiveConfig, String qualityPolicyRef) {
+        ObjectNode result = effectiveConfig != null && effectiveConfig.isObject()
+            ? ((ObjectNode) effectiveConfig).deepCopy()
+            : objectMapper.createObjectNode();
+        if (StringUtils.hasText(qualityPolicyRef)) {
+            result.put("qualityPolicyRef", qualityPolicyRef);
+        } else {
+            result.putNull("qualityPolicyRef");
+        }
+        return canonicalize(result);
     }
 
     private void merge(ObjectNode target, JsonNode overlay) {
@@ -760,6 +835,19 @@ public class IngestionAccessContractService {
         return previous == null || !inheritPreviousQualityPolicyRef ? null : previous.getQualityPolicyRef();
     }
 
+    private UUID resolveRevisionTargetDatasetId(IngestionTaskRevision revision) {
+        return revision == null
+            ? null
+            : resolveTargetDatasetId(revision.getTargetDatasetId(), revision.getQualityPolicyRef());
+    }
+
+    private UUID resolveTargetDatasetId(UUID explicitTargetDatasetId, String qualityPolicyRef) {
+        if (explicitTargetDatasetId != null) {
+            return explicitTargetDatasetId;
+        }
+        return StringUtils.hasText(qualityPolicyRef) ? parseQualityDatasetRef(qualityPolicyRef) : null;
+    }
+
     private String currentOperator(IngestionTask task) {
         return SecurityUtils.getCurrentUserLogin()
             .filter(StringUtils::hasText)
@@ -818,6 +906,7 @@ public class IngestionAccessContractService {
         dto.setDefaultPolicyVersion(revision.getDefaultPolicyVersion());
         dto.setDefaultPolicyChecksum(revision.getDefaultPolicyChecksum());
         dto.setQualityPolicyRef(revision.getQualityPolicyRef());
+        dto.setTargetDatasetId(resolveRevisionTargetDatasetId(revision));
     }
 
     private void applyTaskSnapshot(IngestionTaskDTO dto, IngestionTaskRevision revision) {
@@ -832,6 +921,7 @@ public class IngestionAccessContractService {
         dto.setSourceConfig(json(snapshot, "sourceConfig", dto.getSourceConfig()));
         dto.setDestinationType(text(snapshot, "destinationType", dto.getDestinationType()));
         dto.setDestinationConfig(json(snapshot, "destinationConfig", dto.getDestinationConfig()));
+        dto.setTargetDatasetId(uuid(snapshot, "targetDatasetId", dto.getTargetDatasetId()));
         dto.setSyncMode(text(snapshot, "syncMode", dto.getSyncMode()));
         dto.setSyncSchedule(text(snapshot, "syncSchedule", dto.getSyncSchedule()));
         dto.setTableMapping(json(snapshot, "tableMapping", dto.getTableMapping()));

@@ -30,6 +30,7 @@ import com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService.Defaul
 import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionClassificationAdmissionService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionAccessDecisionService;
+import com.yuzhi.dts.platform.service.ingestion.IngestionFlowProjectionService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
@@ -98,6 +99,9 @@ class IngestionTaskProxyResourceTest {
     private IngestionAccessDecisionService accessDecisionService;
 
     @MockBean
+    private IngestionFlowProjectionService flowProjectionService;
+
+    @MockBean
     private PortalSessionInactivityFilter portalSessionInactivityFilter;
 
     @MockBean
@@ -136,6 +140,141 @@ class IngestionTaskProxyResourceTest {
         );
         when(auditService.auditActionStrict(anyString(), any(AuditStage.class), anyString(), any()))
             .thenReturn(UUID.randomUUID());
+        when(flowProjectionService.enrichDesign(anyMap(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(flowProjectionService.enrichExecution(anyMap(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(flowProjectionService.enrichExecution(anyMap(), any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(flowProjectionService.enrichExecutionPage(anyMap(), any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    void taskDesignUsesTaskAccessAndForwardsConcurrencyHeader() throws Exception {
+        when(ingestionClient.getTaskDesign(13L)).thenReturn(
+            new ApiResponse<>(200, "ok", Map.of("taskId", 13, "planChecksum", "checksum-r4"))
+        );
+        when(ingestionClient.updateTaskDesign(eq(13L), anyMap(), eq("\"checksum-r4\""))).thenReturn(
+            new ApiResponse<>(200, "ok", Map.of("taskId", 13, "planChecksum", "checksum-r5"))
+        );
+
+        mockMvc.perform(get("/api/ingestion/tasks/13/design"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.planChecksum").value("checksum-r4"));
+
+        mockMvc.perform(
+            put("/api/ingestion/tasks/13/design")
+                .header("If-Match", "\"checksum-r4\"")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"taskName\":\"成本中心接入\"}")
+        ).andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.planChecksum").value("checksum-r5"));
+
+        verify(accessDecisionService).requireTaskAccess(13L, false);
+        verify(accessDecisionService).requireTaskAuthorizationAccess(13L, true);
+        verify(ingestionClient).updateTaskDesign(eq(13L), anyMap(), eq("\"checksum-r4\""));
+    }
+
+    @Test
+    void taskDesignValidationUsesTheSameWriteAndReferenceAccessBoundaryAsSave() throws Exception {
+        when(accessDecisionService.requireTaskAuthorizationAccess(13L, true)).thenReturn(
+            Map.of("sourceDataSourceId", "aaaaaaaa-1111-2222-3333-bbbbbbbbbbbb")
+        );
+        when(ingestionClient.validateTaskDesign(eq(13L), anyMap(), eq("checksum-r4"))).thenReturn(
+            new ApiResponse<>(200, "ok", Map.of("valid", true, "issues", List.of()))
+        );
+
+        mockMvc.perform(
+            post("/api/ingestion/tasks/13/design/validate")
+                .header("X-Expected-Plan-Checksum", "checksum-r4")
+                .header("X-Active-Dept", "FIN")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"taskName\":\"成本中心接入\"," +
+                    "\"sourceDataSourceId\":\"cccccccc-1111-2222-3333-dddddddddddd\"," +
+                    "\"targetDatasetId\":\"00000000-0000-0000-0000-000000000013\"}"
+                )
+        ).andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.valid").value(true));
+
+        verify(accessDecisionService).requireTaskAuthorizationAccess(13L, true);
+        verify(accessDecisionService).requireCreateOrUpdateAccess(
+            argThat(payload ->
+                "cccccccc-1111-2222-3333-dddddddddddd".equals(payload.get("sourceDataSourceId"))
+            ),
+            eq(true)
+        );
+        verify(flowProjectionService).validateDesignReferences(
+            argThat(payload ->
+                "00000000-0000-0000-0000-000000000013".equals(payload.get("targetDatasetId"))
+            ),
+            eq("FIN")
+        );
+    }
+
+    @Test
+    void executionDetailAddsCurrentQualityAssetEvidence() throws Exception {
+        Map<String, Object> execution = Map.of("id", 90, "taskId", 13, "status", "success");
+        Map<String, Object> enriched = new LinkedHashMap<>(execution);
+        enriched.put("qualityEvidence", Map.of("evidenceState", "CURRENT", "trustedUsable", true));
+        when(ingestionClient.getExecution(13L, 90L)).thenReturn(new ApiResponse<>(200, "ok", execution));
+        when(ingestionClient.latestExecution(13L)).thenReturn(new ApiResponse<>(200, "ok", Map.of("id", 90)));
+        when(flowProjectionService.enrichExecution(eq(execution), eq("FIN"), eq("90"))).thenReturn(enriched);
+
+        mockMvc.perform(
+            get("/api/ingestion/tasks/13/executions/90")
+                .header("X-Active-Dept", "FIN")
+        ).andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.qualityEvidence.evidenceState").value("CURRENT"))
+            .andExpect(jsonPath("$.data.qualityEvidence.trustedUsable").value(true));
+
+        verify(accessDecisionService).requireTaskAccess(13L, false);
+        verify(flowProjectionService).enrichExecution(execution, "FIN", "90");
+    }
+
+    @Test
+    void executionListAddsQualityAssetEvidenceWithLatestLedgerBoundary() throws Exception {
+        Map<String, Object> page = Map.of(
+            "content",
+            List.of(Map.of("id", 90, "taskId", 13, "status", "success")),
+            "totalElements",
+            1
+        );
+        Map<String, Object> enriched = Map.of(
+            "content",
+            List.of(Map.of(
+                "id", 90,
+                "taskId", 13,
+                "status", "success",
+                "qualityEvidence", Map.of("evidenceState", "CURRENT", "trustedUsable", true)
+            )),
+            "totalElements",
+            1
+        );
+        when(ingestionClient.listExecutions(eq(13L), anyMap())).thenReturn(new ApiResponse<>(200, "ok", page));
+        when(ingestionClient.latestExecution(13L)).thenReturn(new ApiResponse<>(200, "ok", Map.of("id", 90)));
+        when(flowProjectionService.enrichExecutionPage(eq(page), eq("FIN"), eq("90"))).thenReturn(enriched);
+
+        mockMvc.perform(get("/api/ingestion/tasks/13/executions").header("X-Active-Dept", "FIN"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.content[0].qualityEvidence.evidenceState").value("CURRENT"))
+            .andExpect(jsonPath("$.data.content[0].qualityEvidence.trustedUsable").value(true));
+
+        verify(flowProjectionService).enrichExecutionPage(page, "FIN", "90");
+    }
+
+    @Test
+    void latestExecutionAddsQualityAssetEvidenceWithoutASecondLedgerLookup() throws Exception {
+        Map<String, Object> execution = Map.of("id", 90, "taskId", 13, "status", "success");
+        Map<String, Object> enriched = new LinkedHashMap<>(execution);
+        enriched.put("qualityEvidence", Map.of("evidenceState", "CURRENT", "trustedUsable", true));
+        when(ingestionClient.latestExecution(13L)).thenReturn(new ApiResponse<>(200, "ok", execution));
+        when(flowProjectionService.enrichExecution(eq(execution), eq("FIN"), eq("90"))).thenReturn(enriched);
+
+        mockMvc.perform(get("/api/ingestion/tasks/13/executions/latest").header("X-Active-Dept", "FIN"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.qualityEvidence.evidenceState").value("CURRENT"))
+            .andExpect(jsonPath("$.data.qualityEvidence.trustedUsable").value(true));
+
+        verify(flowProjectionService).enrichExecution(execution, "FIN", "90");
+        verify(ingestionClient, times(1)).latestExecution(13L);
     }
 
     @Test

@@ -20,6 +20,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface IngestionExecutionRepository extends JpaRepository<IngestionExecution, Long> {
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select e from IngestionExecution e join fetch e.task where e.id = :executionId")
+    Optional<IngestionExecution> findByIdForUpdate(@Param("executionId") Long executionId);
+
     /**
      * 根据任务ID查询执行历史
      */
@@ -72,6 +76,11 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
     Optional<IngestionExecution> findByIdForQualityWorkflowUpdate(@Param("executionId") Long executionId);
 
     Optional<IngestionExecution> findByBatchId(String batchId);
+
+    @Query("select e from IngestionExecution e join fetch e.task where e.batchId = :batchId")
+    Optional<IngestionExecution> findByBatchIdWithTask(@Param("batchId") String batchId);
+
+    Optional<IngestionExecution> findFirstByParentExecutionId(Long parentExecutionId);
 
     /**
      * 根据任务和执行ID查找
