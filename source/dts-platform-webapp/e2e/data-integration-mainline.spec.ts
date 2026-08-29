@@ -136,7 +136,7 @@ test("数据集成原型主线保留表格概览、连接管理与旧详情重�
 	).toBeVisible();
 	const overviewTable = page.getByRole("table").first();
 	await expect(overviewTable).toBeVisible();
-	await expect(overviewTable.getByRole("link", { name: "订单增量接入", exact: true })).toBeVisible();
+	await expect(overviewTable.getByRole("button", { name: "订单增量接入", exact: true })).toBeVisible();
 	for (const heading of [
 		"接入名称",
 		"接入方式",

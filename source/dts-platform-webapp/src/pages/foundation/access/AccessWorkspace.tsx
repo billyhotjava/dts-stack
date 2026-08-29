@@ -56,9 +56,9 @@ const KIND_ICON: Record<AccessSourceKind, ReactNode> = {
 };
 
 const OVERVIEW_CREATE_ITEMS: MenuProps["items"] = [
-	{ key: "database", icon: <DatabaseOutlined />, label: "数据库接入" },
-	{ key: "api", icon: <LinkOutlined />, label: "API 接入" },
-	{ key: "file", icon: <FileTextOutlined />, label: "离线文件接入" },
+	{ key: "database", icon: <DatabaseOutlined aria-hidden />, label: "数据库接入" },
+	{ key: "api", icon: <LinkOutlined aria-hidden />, label: "API 接入" },
+	{ key: "file", icon: <FileTextOutlined aria-hidden />, label: "离线文件接入" },
 ];
 
 const renderLifecycleTag = (value: AccessLifecycle) => {
@@ -334,7 +334,7 @@ export default function AccessWorkspace() {
 					}}
 				>
 					<Button type="primary">
-						新建接入 <DownOutlined />
+						新建接入 <DownOutlined aria-hidden />
 					</Button>
 				</Dropdown>
 			) : (
