@@ -1,5 +1,6 @@
-import { DatabaseOutlined, FileTextOutlined, LinkOutlined } from "@ant-design/icons";
-import { Alert, Button, Input, Select, Space, Tag, Tooltip, Typography } from "antd";
+import { DatabaseOutlined, DownOutlined, FileTextOutlined, LinkOutlined } from "@ant-design/icons";
+import type { MenuProps } from "antd";
+import { Alert, Button, Dropdown, Input, Select, Space, Tag, Tooltip, Typography } from "antd";
 import type { ColumnsType, TablePaginationConfig } from "antd/es/table";
 import type { FilterValue, SorterResult } from "antd/es/table/interface";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
@@ -9,7 +10,7 @@ import { ingestionTaskAPI } from "@/api/ingestion";
 import dataSourcesService from "@/api/services/dataSourcesService";
 import { JourneyContextBar } from "@/components/journey";
 import { PageHeader } from "@/components/page-header";
-import { actionColumn, toSpringSort, CompactTable } from "@/components/table";
+import { actionColumn, CompactTable, toSpringSort } from "@/components/table";
 import { formatTimestamp } from "@/utils/format";
 import styles from "./AccessWorkspace.module.css";
 import {
@@ -53,6 +54,12 @@ const KIND_ICON: Record<AccessSourceKind, ReactNode> = {
 	api: <LinkOutlined />,
 	file: <FileTextOutlined />,
 };
+
+const OVERVIEW_CREATE_ITEMS: MenuProps["items"] = [
+	{ key: "database", icon: <DatabaseOutlined />, label: "数据库接入" },
+	{ key: "api", icon: <LinkOutlined />, label: "API 接入" },
+	{ key: "file", icon: <FileTextOutlined />, label: "离线文件接入" },
+];
 
 const renderLifecycleTag = (value: AccessLifecycle) => {
 	const meta: Record<AccessLifecycle, { color?: string; label: string }> = {
@@ -198,7 +205,7 @@ export default function AccessWorkspace() {
 			title: "接入名称",
 			dataIndex: "name",
 			key: "name",
-			width: 220,
+			width: 180,
 			sorter: true,
 			render: (_, row) => (
 				<Button
@@ -216,7 +223,7 @@ export default function AccessWorkspace() {
 			title: "接入方式",
 			dataIndex: "kind",
 			key: "kind",
-			width: 125,
+			width: 100,
 			render: (value: AccessSourceKind) => (
 				<span className={`${styles.kindMark} ${styles[value]}`}>
 					<span className={styles.kindDot} />
@@ -228,7 +235,7 @@ export default function AccessWorkspace() {
 		{
 			title: "来源 / 资源",
 			key: "source",
-			width: 220,
+			width: 180,
 			ellipsis: true,
 			render: (_, row) => (
 				<Space size={6}>
@@ -243,7 +250,7 @@ export default function AccessWorkspace() {
 			title: "同步模式",
 			dataIndex: "syncMode",
 			key: "syncMode",
-			width: 110,
+			width: 100,
 			sorter: true,
 			render: syncModeLabel,
 		},
@@ -265,7 +272,7 @@ export default function AccessWorkspace() {
 		{
 			title: "最近运行",
 			key: "lastRun",
-			width: 165,
+			width: 145,
 			sorter: true,
 			defaultSortOrder: "descend",
 			render: (_, row) => (
@@ -279,6 +286,7 @@ export default function AccessWorkspace() {
 			title: "负责人 / 密级",
 			key: "owner",
 			width: 150,
+			responsive: ["xxl"],
 			render: (_, row) => (
 				<Space size={6}>
 					<Text>{row.owner}</Text>
@@ -314,13 +322,26 @@ export default function AccessWorkspace() {
 		});
 	};
 
-	const createKind: AccessSourceKind = kind === "overview" ? "database" : kind;
 	const createAction = (
-		<Space>
+		<Space wrap>
 			<Button onClick={() => navigate("/foundation/connections")}>连接管理</Button>
-			<Button type="primary" onClick={() => openCreate(createKind)}>
-				{`新建${KIND_META[createKind].label}`}
-			</Button>
+			{kind === "overview" ? (
+				<Dropdown
+					trigger={["click"]}
+					menu={{
+						items: OVERVIEW_CREATE_ITEMS,
+						onClick: ({ key }) => openCreate(key as AccessSourceKind),
+					}}
+				>
+					<Button type="primary">
+						新建接入 <DownOutlined />
+					</Button>
+				</Dropdown>
+			) : (
+				<Button type="primary" onClick={() => openCreate(kind)}>
+					{`新建${KIND_META[kind].label}`}
+				</Button>
+			)}
 		</Space>
 	);
 

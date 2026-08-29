@@ -84,8 +84,7 @@ async function installReadOnlyFixture(page: Page) {
 					},
 				],
 			};
-		}
-		else if (pathname.endsWith("/ingestion/tasks/list")) {
+		} else if (pathname.endsWith("/ingestion/tasks/list")) {
 			data = {
 				content: [
 					{
