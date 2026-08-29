@@ -68,7 +68,7 @@ async function installReadOnlyFixture(page: Page) {
 	await page.route("**/runtime-config.js", (route) =>
 		route.fulfill({ status: 200, contentType: "application/javascript", body: "window.__RUNTIME_CONFIG__ = {};" }),
 	);
-	await page.route("**/api/**", (route) => {
+	await page.route(/^https?:\/\/[^/]+\/(?:(?:platform|admin|analytics|bi)\/)?api\//, (route) => {
 		const { pathname } = new URL(route.request().url());
 		let data: unknown = { authenticated: true };
 		if (pathname.endsWith("/infra/data-source-selections")) data = { items: [] };
@@ -85,15 +85,35 @@ async function installReadOnlyFixture(page: Page) {
 }
 
 test("数据集成原型主线保留表格概览、连接管理与旧详情重定向", async ({ page }) => {
+	await page.setViewportSize({ width: 1366, height: 768 });
 	const pageErrors: string[] = [];
+	const consoleErrors: string[] = [];
+	const failedRequests: string[] = [];
 	page.on("pageerror", (error) => pageErrors.push(error.message));
+	page.on("console", (message) => {
+		if (message.type() === "error") consoleErrors.push(message.text());
+	});
+	page.on("requestfailed", (request) => failedRequests.push(`${request.method()} ${request.url()}`));
 	await installReadOnlyFixture(page);
 
 	await page.goto("/#/foundation/data-sources");
-	await expect(page.getByRole("heading", { name: "接入概览", exact: true })).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "接入概览", exact: true }),
+		`页面未加载。page errors: ${pageErrors.join(" | ")}; console errors: ${consoleErrors.join(" | ")}; failed requests: ${failedRequests.join(" | ")}`,
+	).toBeVisible();
 	const overviewTable = page.getByRole("table").first();
 	await expect(overviewTable).toBeVisible();
-	for (const heading of ["接入名称", "接入方式", "来源 / 资源", "有效配置", "生命周期", "健康状态", "最近运行", "负责人 / 密级", "操作"]) {
+	for (const heading of [
+		"接入名称",
+		"接入方式",
+		"来源 / 资源",
+		"同步模式",
+		"生命周期",
+		"健康状态",
+		"最近运行",
+		"负责人 / 密级",
+		"操作",
+	]) {
 		await expect(overviewTable.getByRole("columnheader", { name: heading, exact: true })).toBeVisible();
 	}
 
@@ -108,5 +128,19 @@ test("数据集成原型主线保留表格概览、连接管理与旧详情重�
 	await page.goto("/#/foundation/data-sources/e2e-legacy-redirect");
 	await expect(page).toHaveURL(/\/#\/foundation\/connections\/e2e-legacy-redirect(?:[?#]|$)/);
 
+	await page.goto("/#/explore/etl/orchestration");
+	await expect(page).toHaveURL(/\/#\/foundation\/data-sources(?:[?#]|$)/);
+	await expect(page.getByRole("heading", { name: "接入概览", exact: true })).toBeVisible();
+	await expect(page.getByText("任务编排", { exact: true })).toHaveCount(0);
+	await page.screenshot({ path: "/tmp/sprint103-data-integration-1366x768.png", fullPage: true });
+
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto("/#/foundation/data-sources");
+	await expect(page.getByRole("heading", { name: "接入概览", exact: true })).toBeVisible();
+	await expect(page.getByText("任务编排", { exact: true })).toHaveCount(0);
+	await page.screenshot({ path: "/tmp/sprint103-data-integration-390x844.png", fullPage: true });
+
 	expect(pageErrors, `页面运行时异常：\n${pageErrors.join("\n")}`).toEqual([]);
+	expect(consoleErrors, `控制台异常：\n${consoleErrors.join("\n")}`).toEqual([]);
+	expect(failedRequests, `失败请求：\n${failedRequests.join("\n")}`).toEqual([]);
 });

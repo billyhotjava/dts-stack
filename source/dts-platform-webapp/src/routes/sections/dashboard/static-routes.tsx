@@ -11,6 +11,7 @@ const AccessPlanWizardPage = lazy(() => import("@/pages/foundation/access/Access
 const AccessPlanDetailPage = lazy(() => import("@/pages/foundation/access/AccessPlanDetailPage"));
 const AccessDefaultsPage = lazy(() => import("@/pages/foundation/access/AccessDefaultsPage"));
 const LegacyDataIntegrationRedirect = lazy(() => import("@/pages/foundation/access/LegacyDataIntegrationRedirect"));
+const LegacyOrchestrationRedirect = lazy(() => import("@/pages/foundation/access/LegacyOrchestrationRedirect"));
 const LegacyConnectionProfileRedirect = lazy(() => import("@/pages/foundation/access/LegacyConnectionProfileRedirect"));
 const ConnectionProfilesPage = lazy(() => import("@/pages/foundation/access/ConnectionProfilesPage"));
 const ConnectionProfileDetailPage = lazy(() => import("@/pages/foundation/access/ConnectionProfileDetailPage"));
@@ -138,6 +139,14 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		element: (
 			<S>
 				<LegacyDataIntegrationRedirect />
+			</S>
+		),
+	},
+	{
+		path: "explore/etl/orchestration",
+		element: (
+			<S>
+				<LegacyOrchestrationRedirect />
 			</S>
 		),
 	},

@@ -88,7 +88,7 @@ public class Sprint27ConsoleService {
 
         List<Map<String, Object>> stages = List.of(
             stage("source", "数据接入", number(governanceData.get("running")) > 0 ? "processing" : "success", number(governanceData.get("running")), "/explore/etl/transform"),
-            stage("queue", "队列调度", number(governanceData.get("queueLength")) > 0 ? "warning" : "success", number(governanceData.get("queueLength")), "/explore/etl/orchestration"),
+            stage("queue", "队列调度", number(governanceData.get("queueLength")) > 0 ? "warning" : "success", number(governanceData.get("queueLength")), "/ops/instances?entryKey=AIRFLOW_DAG"),
             stage("transform", "加工转换", number(observabilityData.get("running")) > 0 ? "processing" : "success", number(observabilityData.get("running")), "/explore/etl/transform"),
             stage("quality", "质量校验", number(governanceData.get("blockedByPolicy")) > 0 ? "warning" : "success", number(governanceData.get("blockedByPolicy")), "/governance/quality"),
             stage("lineage", "血缘影响", "default", number(observabilityData.get("terminal")), "/catalog/lineage/impact")

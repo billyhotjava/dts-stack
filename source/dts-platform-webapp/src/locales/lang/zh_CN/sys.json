@@ -111,7 +111,6 @@
 				"exploreEtlAdapters": "多源集成适配器",
 				"exploreEtlFileExchange": "数据交换与文件接入",
 				"exploreEtlTransform": "数据加工与转换",
-				"exploreEtlOrchestration": "流程编排与作业管理",
 				"exploreEtlWarehouseLayers": "数仓分层管理",
 				"exploreEtlReconciliation": "装载对账校验",
 				"workbench": "工作台",

@@ -1,6 +1,6 @@
 # 集成与验收计划
 
-本目录包含实施、构建和部署的真实证据。2026-08-28 已完成代码、聚焦测试、三镜像构建和顺序部署；本地 Chrome 最终单旅程完成后补充 IT-07。Chrome 95、三角色隔离会话和安全业务金丝雀仍是现场验收门禁，因此 Sprint 不标记为客户验收 DONE。
+本目录包含实施、构建和部署的真实证据。2026-08-28 已完成数据集成闭环的代码、聚焦测试、镜像构建和部署；2026-08-29 根据范围裁决退役独立编排入口，源码与本地 Chrome 证据见 IT-09，但该增量尚未部署。Chrome 95、三角色隔离会话和安全业务金丝雀仍是现场验收门禁，因此 Sprint 不标记为客户验收 DONE。
 
 ## 当前判定
 
@@ -10,6 +10,7 @@
 | 聚焦验证 | PASS | 既有 ingestion 38、platform 27；本次增量 backend 5、frontend source 5、component 3，类型/格式/legacy build 通过 |
 | 数据库与部署 | PASS | 既有 3 个 changeSet、3 个 nullable UUID 列、2 个唯一索引；本次仅定向替换 ingestion/webapp，健康与路由通过 |
 | 本地 Chrome | PASS_WITH_ENV_NOTE | Chrome 150 新增长期 E2E 1/1 通过；默认列表、task/revision 过滤、桌面/窄屏证据及现场缺口见 IT-07 |
+| 独立编排入口退役 | SOURCE_VERIFIED_DEPLOY_PENDING | 数据集成唯一业务入口、旧地址兼容跳转、菜单软删除迁移和本地 Chrome 152 双视口已通过；未部署，见 IT-09 |
 | Chrome 95 / 三角色 / 业务金丝雀 | ENVIRONMENT_GAP | 不用本地 Chrome 150 或自动化契约冒充现场通过 |
 
 ## 单一集中验收旅程
@@ -48,6 +49,7 @@
 - `IT-06-governance.md`：迁移、legacy DSL、审计、DAG 对账。
 - `IT-07-chrome95.md`：目标浏览器单旅程与制品版本。
 - `IT-08-asset-quality.md`：目标资产、post-commit 质量触发、当前证据切换、消费资格和双向深链。
-- `source/dts-platform-webapp/e2e/sprint103-orchestration-landing-real.spec.ts`：默认任务列表、设计/运行深链、当前版本/全部历史过滤和双视口真实回归。
+- `IT-09-orchestration-retirement.md`：数据集成唯一入口、菜单迁移、兼容跳转、源码构建和本地 Chrome 双视口证据。
+- `source/dts-platform-webapp/e2e/data-integration-mainline.spec.ts`：接入概览、连接管理、历史地址跳转、无独立编排入口和双视口只读回归。
 
 上述文件只有在产生真实证据时创建；禁止提前放置 TODO 或占位截图。

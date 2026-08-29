@@ -25,7 +25,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class OrchestrationMenuRetirementLiquibaseTest {
 
     private static final String CHANGELOG =
-        "config/liquibase/changelog/20260829-01_retire_task_orchestration_menu.xml";
+        "config/liquibase/changelog/20260829_01_retire_task_orchestration_menu.xml";
     private static final String ACTOR = "20260829-retire-task-orchestration-menu";
 
     @Container

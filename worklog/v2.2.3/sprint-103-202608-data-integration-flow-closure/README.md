@@ -1,15 +1,17 @@
 # Sprint-103：数据集成流程可视化与运行闭环（202608）
 
 **时间**：2026-08-27 ～ 2026-09-30
-**状态**：`PASS_WITH_ENV_NOTE`（功能已实现并部署；Chrome 95、三角色与安全业务金丝雀待现场复验）
+**状态**：`PASS_WITH_ENV_NOTE`（数据集成闭环已部署；2026-08-29 独立编排入口退役变更已完成源码验收、尚未部署；Chrome 95 待现场复验）
 **类型**：Architecture + UI Productization + Vertical Slice
 **目标**：数据开发人员围绕一条真实接入任务，通过业务表单完成数据源、目标数据资产、字段映射、调度和接入后质量验证配置；系统从同一任务版本自动生成拓扑，并闭合校验、发布、运行、资产登记、质量证据、重试/取消、日志和审计。
+
+> 2026-08-29 范围收敛：数据集成成为当前版本唯一业务入口。独立“任务编排”菜单、列表、编辑器、画布和运行页已从源码退役；历史地址只跳转回数据集成。后端任务版本、准入、调度、执行、质量与资产证据契约继续服务数据集成，并作为后续增值版编排的演进基础。当前变更未部署，不得把源码验收写成运行环境已生效。
 
 ## 背景与价值
 
 当前“任务编排”页面提供自由画布，但 `graphDsl` 只持久化、不被执行链消费；真正执行仍由 `IngestionTask → IngestionTaskRevision → admission → Airflow DAG → IngestionExecution` 完成。运行页又绕过任务域，直接操作通用 Airflow DAG，造成“所见、所发、所运行”不能证明一致。
 
-本 Sprint 不继续扩建通用工作流编辑器，而是把已有页面收敛为“数据集成流程”：任务配置是唯一事实源，拓扑是自动生成的只读投影。这样既保留可视化价值，又避免建设第二套工作流引擎、DSL 编译器和节点状态机。
+本 Sprint 不继续扩建通用工作流编辑器。最终产品边界进一步收敛为：所有业务操作回到数据集成概览和任务详情，独立编排页面整体退役；任务配置仍是唯一事实源，拓扑投影和运行证据可在数据集成详情中按需呈现。
 
 ## 产品范围裁决
 
@@ -32,7 +34,7 @@
 | 编辑事实源 | 类型化任务配置草稿 | 当前真实执行正是从任务配置生成 | `graphDsl` 降为历史兼容数据，不驱动执行 |
 | 可视化 | 服务端从 draft/revision 生成只读 `TopologyProjection` | 避免表单与图两份事实漂移 | 首版不支持拖拽改拓扑和持久化坐标 |
 | 一致性身份 | `taskId + revisionNumber + planChecksum` | 绑定保存、校验、发布和运行 | 任一环节 checksum 不一致返回 409 |
-| 页面形态 | 同一路由改为“左侧配置步骤 + 右侧拓扑预览 + 运行 Tab” | 线性任务表单效率高，拓扑用于理解和诊断 | 不新增菜单或平行工作台 |
+| 页面形态 | 数据集成概览 + 任务详情是唯一业务工作台；旧编排路由只兼容跳转 | 消除数据集成与编排的入口、列表和运行视图重复 | 独立编排 UI 退役，后续增值版另行立项 |
 | 发布控制面 | 复用既有 `/admit` 和 DAG 暂存/原子发布 | A4 禁止平行发布实现 | 页面不直接控制任意 dagId |
 | 目标资产身份 | 复用 `CatalogAssetType.DATASET + CatalogAssetKey` 并关联 `CatalogDataset.id` | 质量绑定和资产投影都需要同一稳定身份 | 不以库表字符串或质量引用再造资产 |
 | 质量时序 | 接入过程只做准入/暂存校验；execution 完整提交后触发正式质量工作流 | 部分数据不能形成完整质量结论；现有触发已经是 after-commit | 质量失败不改写接入成功事实 |
@@ -44,11 +46,11 @@
 
 ## 端到端契约链（Vertical Slice）
 
-以下为 Sprint 目标契约；F0/T02 必须用当前 DTO/owner 核对字段后才能将 F1～F4 置为 `READY`。
+以下为 Sprint 目标契约；2026-08-27 的实施链路保留，2026-08-29 起统一由数据集成概览与任务详情承载，不再由独立编排页面承载。
 
 | 层 | 契约/落点 | 签名要点 |
 |---|---|---|
-| UI 入口 | `/explore/etl/orchestration?taskId={id}` | 菜单/页头改为“数据集成流程”；任务选择器、配置步骤、拓扑预览、运行 Tab |
+| UI 入口 | `/foundation/data-sources`、`/foundation/data-sources/access/{taskId}` | 接入概览是唯一列表入口；任务详情承载配置与任务级运行；旧编排地址只兼容跳转 |
 | 读取设计 | `GET /api/ingestion/tasks/{taskId}/design` | 返回 `taskId, taskName, revisionNumber, revisionState, source, destination.assetRef, mappings, schedule, postIngestionQuality, qualityPolicyRef, planChecksum, validation, topology` |
 | 保存设计 | `PUT /api/ingestion/tasks/{taskId}/design` + `If-Match` | 仅更新类型化配置；冲突 409；不得整对象覆盖任务状态或权限字段 |
 | 校验 | `POST /api/ingestion/tasks/{taskId}/design/validate` | 按 `expectedPlanChecksum` 校验连接、对象、映射、Cron、目标资产解析、质量引用同资产、权限与密级 |
@@ -62,29 +64,30 @@
 | 数据 | 既有 task/revision/execution、runtime snapshot、质量 workflow/run 与资产语义投影 | plan checksum 和目标资产引用进入冻结快照；不新建通用 workflow 聚合或可信状态表 |
 | 迁移 | expand/contract | 旧 `graph_dsl` 可空兼容；新增字段先可空、回填、双读，再收敛 |
 
-### 目标页面线框
+### 当前目标页面
 
 ```text
-┌ 数据集成流程 ─ [任务选择] ─ 状态/版本 ───────────────┐
-│ [流程设计] [运行实例]                                  │
-│ ┌ 配置步骤 ─────────┐ ┌ 自动生成拓扑 ──────────────┐ │
-│ │ 1 数据源           │ │ 数据源 → 写入 → 登记资产 │ │
-│ │ 2 目标资产与字段映射│ │          → 接入后质量验证?│ │
-│ │ 3 调度             │ │ 只读；按校验状态高亮      │ │
-│ │ 4 接入后质量验证   │ └───────────────────────────┘ │
-│ └────────────────────┘ [保存草稿] [校验] [提交发布]  │
-└───────────────────────────────────────────────────────┘
+数据集成 / 接入概览
+  ├─ 新建数据库接入
+  ├─ 连接管理
+  └─ 选择接入任务 → 任务详情
+       ├─ 来源、目标、映射与调度配置
+       ├─ 校验、版本发布与启停
+       ├─ 任务级运行记录
+       └─ 质量与资产证据
+
+历史 /explore/etl/orchestration → 上述概览或对应任务详情
 ```
 
 ## 现状勘察账本（Context Ledger）
 
-下游 Task 直接引用本账本，禁止重复全仓扫描。
+下表是 2026-08-27 实施前基线，用于保留决策依据；其中独立编排页面相关条目已被 2026-08-29 补充裁决取代。
 
 | # | 事实 | 证据 |
 |---|---|---|
-| C01 | 菜单与动态路由已存在，不需新增入口 | `portal-menu-seed.json:365-394`；`dynamic-resolver.tsx:88-92` |
-| C02 | 页面只识别 `taskId`，无稳定任务选择器 | `OrchestrationPage.tsx:43-76` |
-| C03 | 当前保存先写全局 localStorage，再完整 DTO PUT | `OrchestrationPage.tsx:20,78-101` |
+| C01 | 退役前菜单与动态路由已存在；2026-08-29 起菜单删除、路由仅兼容跳转 | 退役前 `portal-menu-seed.json:365-394`、`dynamic-resolver.tsx:88-92`；当前见 IT-09 |
+| C02 | 退役页面只识别 `taskId`，无稳定任务选择器 | 已删除的 `OrchestrationPage.tsx:43-76` |
+| C03 | 退役页面保存先写全局 localStorage，再完整 DTO PUT | 已删除的 `OrchestrationPage.tsx:20,78-101` |
 | C04 | `graphDsl` 实体注释明确“仅持久化，执行链路暂不消费” | `IngestionTask.java:72-74` |
 | C05 | 任务配置已进入 revision/runtime snapshot | `IngestionAccessContractService.java:527-638,823-850` |
 | C06 | `/admit` 已有暂存、补偿、DAG 原子发布和 revision 激活 | `IngestionTaskService.java:300-395,3598-3659`；`AirflowDagService.java:94-204` |

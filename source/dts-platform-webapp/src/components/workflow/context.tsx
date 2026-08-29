@@ -5,7 +5,7 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
  *
  * - readonly: 是否禁用编辑（节点/连线添加、拖拽、删除）
  * - projectId: 业务项目 ID，DSL 序列化时附带，用于后端校验归属
- * - onSave: 工具栏「保存」按钮触发；T07 OrchestrationPage 接入时绑定
+ * - onSave: 工具栏「保存」按钮触发，由实际画布页面按需绑定
  */
 
 export interface WorkflowContextValue {

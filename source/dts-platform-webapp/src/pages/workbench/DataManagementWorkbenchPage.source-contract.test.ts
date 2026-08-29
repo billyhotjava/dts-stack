@@ -97,7 +97,7 @@ test("workbench exposes the end-to-end data product journey from integration to 
 	assert.match(journeySource, /维护数据元/);
 	assert.match(journeySource, /进入模型中心/);
 	assert.match(journeySource, /设计指标/);
-	assert.match(journeySource, /编排数据开发/);
+	assert.match(journeySource, /开发数据任务/);
 	assert.match(journeySource, /发布数据 API/);
 	assert.match(journeySource, /查看运行证据/);
 	for (const label of ["负责角色", "当前缺口", "下一步"]) {
@@ -126,7 +126,6 @@ test("workbench exposes the end-to-end data product journey from integration to 
 		"/data-modeling/metrics/atomic",
 		"/data-modeling/home/workspace",
 		"/explore/etl/scripts",
-		"/explore/etl/orchestration",
 		"/services/apis",
 		"/bi/dashboards",
 		"/ops/instances",

@@ -133,7 +133,7 @@ export default function EltConsolePage() {
 				title: "队列调度",
 				status: governance.queueLength ? "warning" : "success",
 				count: governance.queueLength,
-				path: "/explore/etl/orchestration",
+				path: "/ops/instances?entryKey=AIRFLOW_DAG",
 			},
 			{
 				key: "transform",
@@ -371,8 +371,8 @@ export default function EltConsolePage() {
 			<div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
 				<PlatformSectionCard title="治理闭环">
 					<Space direction="vertical" size={12} className="w-full">
-						<Button block onClick={() => navigate("/explore/etl/orchestration")}>
-							编排与调度
+						<Button block onClick={() => navigate("/foundation/data-sources")}>
+							数据集成任务
 						</Button>
 						<Button block onClick={() => navigate("/governance/rules/runs")}>
 							质量门禁

@@ -107,9 +107,11 @@ export default function OpsBackfillPage() {
 			(record) => [
 				{
 					key: "source-task",
-					label: "查看源任务",
+					label: "定位运行实例",
 					onClick: () =>
-						navigate(journeyRoute(`/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || "")}`)),
+						navigate(
+							journeyRoute(`/ops/instances?entryKey=AIRFLOW_DAG&keyword=${encodeURIComponent(record.dagId || "")}`),
+						),
 				},
 				{
 					key: "instance",

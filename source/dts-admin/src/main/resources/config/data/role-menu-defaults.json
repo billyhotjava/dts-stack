@@ -252,12 +252,6 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.studioOrchestration",
-    "title": "任务编排",
-    "route": "/explore/etl/orchestration",
-    "requiredRoles": []
-  },
-  {
     "code": "sys.nav.portal.studioAdhoc",
     "title": "即席查询",
     "route": "/explore/workbench",

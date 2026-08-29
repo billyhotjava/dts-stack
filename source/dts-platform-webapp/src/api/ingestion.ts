@@ -109,80 +109,6 @@ export interface IngestionExecutionDTO {
 	qualityEvidence?: IngestionQualityEvidence;
 }
 
-export type IngestionValidationIssue = {
-	code: string;
-	field: string;
-	message: string;
-};
-
-export type IngestionValidationResult = {
-	valid: boolean;
-	issues: IngestionValidationIssue[];
-};
-
-export type IngestionTopologyProjection = {
-	readonly: boolean;
-	planChecksum?: string;
-	nodes: Array<{ id: string; kind: string; label: string; state: string }>;
-	edges: Array<{ source: string; target: string }>;
-};
-
-export type IngestionAssetProjection = {
-	resolutionState: "RESOLVED" | "UNRESOLVED" | string;
-	datasetId?: string;
-	assetName?: string;
-	assetKey?: string;
-	enabled?: boolean;
-	lifecycleStatus?: string;
-	qualityBindingCount: number;
-	qualityConfigured: boolean;
-	consumptionEligibility?: string;
-	eligibilityReasons?: string[];
-	assetQualityStatus?: string;
-};
-
-export type IngestionTaskDesign = {
-	taskId: number;
-	taskName: string;
-	description?: string;
-	revisionNumber?: number;
-	revisionState?: IngestionRevisionState;
-	operationalState?: string;
-	source: { dataSourceId?: string; type: string; config: Record<string, unknown> };
-	destination: {
-		type: string;
-		config: Record<string, unknown>;
-		assetRef?: { datasetId?: string; policyRef?: string; resolution?: string };
-	};
-	syncMode: string;
-	syncSchedule?: string;
-	tableMapping: Array<Record<string, unknown>>;
-	syncConfig?: Record<string, unknown>;
-	postIngestionQuality: { enabled: boolean; policyRef?: string };
-	planChecksum?: string;
-	validation: IngestionValidationResult;
-	topology: IngestionTopologyProjection;
-	legacyDsl?: { present: boolean; publishable: boolean; message?: string };
-	assetProjection?: IngestionAssetProjection;
-};
-
-export type IngestionTaskDesignUpdate = {
-	taskName: string;
-	description?: string;
-	sourceDataSourceId?: string;
-	sourceType: string;
-	sourceConfig: Record<string, unknown>;
-	destinationType: string;
-	destinationConfig: Record<string, unknown>;
-	targetDatasetId?: string;
-	syncMode: string;
-	syncSchedule?: string;
-	tableMapping: Array<Record<string, unknown>>;
-	syncConfig: Record<string, unknown>;
-	postIngestionQualityEnabled: boolean;
-	qualityPolicyRef?: string;
-};
-
 export type IngestionQualityEvidence = {
 	datasetId?: string;
 	assetKey?: string;
@@ -885,50 +811,6 @@ class IngestionTaskAPI {
 	 */
 	async updateTask(id: number, data: IngestionTaskDTO): Promise<IngestionTaskDTO> {
 		return api.put({ url: `/ingestion/tasks/${id}`, data });
-	}
-
-	async getTaskDesign(id: number): Promise<IngestionTaskDesign> {
-		const payload: unknown = await api.get({ url: `/ingestion/tasks/${id}/design` });
-		return this.resolveWrappedResponse<IngestionTaskDesign>(payload as IngestionTaskDesign);
-	}
-
-	async updateTaskDesign(
-		id: number,
-		data: IngestionTaskDesignUpdate,
-		planChecksum: string,
-	): Promise<IngestionTaskDesign> {
-		const payload: unknown = await api.put({
-			url: `/ingestion/tasks/${id}/design`,
-			data,
-			headers: { "If-Match": planChecksum },
-		});
-		return this.resolveWrappedResponse<IngestionTaskDesign>(payload as IngestionTaskDesign);
-	}
-
-	async validateTaskDesign(
-		id: number,
-		data: IngestionTaskDesignUpdate,
-		planChecksum?: string,
-	): Promise<IngestionValidationResult> {
-		const payload: unknown = await api.post({
-			url: `/ingestion/tasks/${id}/design/validate`,
-			data,
-			headers: planChecksum ? { "X-Expected-Plan-Checksum": planChecksum } : undefined,
-		});
-		return this.resolveWrappedResponse<IngestionValidationResult>(payload as IngestionValidationResult);
-	}
-
-	async getTaskTopology(id: number, view: "DRAFT" | "ACTIVE" = "DRAFT"): Promise<IngestionTopologyProjection> {
-		const payload: unknown = await api.get({ url: `/ingestion/tasks/${id}/topology`, params: { view } });
-		return this.resolveWrappedResponse<IngestionTopologyProjection>(payload as IngestionTopologyProjection);
-	}
-
-	async setTaskSchedule(
-		id: number,
-		command: "enable" | "pause",
-	): Promise<{ taskId: number; state: string; airflowDagId?: string }> {
-		const payload: unknown = await api.post({ url: `/ingestion/tasks/${id}/schedule/${command}` });
-		return this.resolveWrappedResponse(payload as { taskId: number; state: string; airflowDagId?: string });
 	}
 
 	async admitTask(id: number, planChecksum?: string): Promise<IngestionTaskDTO> {

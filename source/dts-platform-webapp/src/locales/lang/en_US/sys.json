@@ -253,7 +253,6 @@
 				"exploreEtlAdapters": "Source adapters",
 				"exploreEtlFileExchange": "File exchange & ingestion",
 				"exploreEtlTransform": "Transformations",
-				"exploreEtlOrchestration": "Workflow orchestration",
 				"exploreEtlWarehouseLayers": "Warehouse layers",
 				"exploreEtlReconciliation": "Load reconciliation",
 				"workbench": "Workbench",

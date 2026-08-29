@@ -88,7 +88,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/explore/etl": "/pages/explore/etl/EltConsolePage",
 	"/explore/etl/console": "/pages/explore/etl/EltConsolePage",
 	"/explore/etl/scripts": "/pages/explore/etl/ScriptStudioPage",
-	"/explore/etl/orchestration": "/pages/explore/etl/OrchestrationPage",
+	"/explore/etl/orchestration": "/pages/foundation/access/LegacyOrchestrationRedirect",
 	"/explore/workbench": workbenchComponentPath,
 	"/studio/low-code-development": "/pages/data-modeling/LegacyDataModelingRedirect",
 	"/studio/projects": "/pages/data-modeling/LegacyDataModelingRedirect",

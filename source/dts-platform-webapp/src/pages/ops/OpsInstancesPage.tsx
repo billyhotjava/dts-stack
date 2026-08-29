@@ -34,7 +34,7 @@ const formatDate = (value?: string) => {
 
 const resolveSourceTaskPath = (record: OpsInstance) => {
 	if (record.entryKey === "AIRFLOW_DAG") {
-		return `/explore/etl/orchestration?dagId=${encodeURIComponent(record.dagId || record.artifactId || "")}`;
+		return `/ops/instances?entryKey=AIRFLOW_DAG&keyword=${encodeURIComponent(record.dagId || record.artifactId || "")}`;
 	}
 	if (record.entryKey === "DBT_RUN") {
 		return "/data-modeling/home/workspace";
@@ -167,7 +167,7 @@ export default function OpsInstancesPage() {
 				return [
 					{
 						key: "source-task",
-						label: "查看源任务",
+						label: record.entryKey === "AIRFLOW_DAG" ? "定位同类实例" : "查看源任务",
 						onClick: () => navigate(journeyRoute(resolveSourceTaskPath(record))),
 					},
 					{

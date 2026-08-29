@@ -385,14 +385,6 @@
               "externalLink": "/explore/etl/scripts"
             },
             {
-              "key": "orchestration",
-              "path": "orchestration",
-              "icon": "solar:diagram-up-bold-duotone",
-              "titleKey": "sys.nav.portal.studioOrchestration",
-              "title": "任务编排",
-              "externalLink": "/explore/etl/orchestration"
-            },
-            {
               "key": "adhoc",
               "path": "adhoc",
               "icon": "solar:magic-stick-3-bold-duotone",

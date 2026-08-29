@@ -91,7 +91,7 @@ public class PortalMenuService {
         Map.entry("studio.projects", "/pages/modeling/ModelTemplatesPage"),
         Map.entry("studio.sql", "/pages/modeling/SqlModelingPage"),
         Map.entry("studio.scripts", "/pages/explore/etl/ScriptStudioPage"),
-        Map.entry("studio.orchestration", "/pages/explore/etl/OrchestrationPage"),
+        Map.entry("studio.orchestration", "/pages/foundation/access/LegacyOrchestrationRedirect"),
         Map.entry("studio.adhoc", "/pages/explore/SqlIdePage"),
         Map.entry("studio.dbt-files", "/pages/modeling/ModelingCompatibilityPage"),
         Map.entry("governance.subjects", "/pages/governance/SubjectAreasPage"),
