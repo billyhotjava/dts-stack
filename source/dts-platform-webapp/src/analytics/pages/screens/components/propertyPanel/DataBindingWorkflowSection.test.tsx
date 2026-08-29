@@ -81,6 +81,47 @@ describe("DataBindingWorkflowSection", () => {
 		expect(container?.textContent).toContain("样例数据仅用于当前编辑会话，不写入大屏配置");
 	});
 
+	it("counts only mappings that exist in the latest source fields", async () => {
+		await render({
+			data: {
+				cols: [{ name: "region", display_name: "区域", base_type: "type/Text" }],
+				rows: [],
+			},
+			loading: false,
+			error: null,
+		});
+
+		expect(container?.textContent).toContain("1 项有效 · 1 失效");
+		expect(container?.textContent).toContain("有 1 个映射字段在当前数据源中不存在");
+		expect(container?.textContent).not.toContain("已映射 2 个展示字段");
+	});
+
+	it("keeps workflow guidance readable at customer-browser text sizes", async () => {
+		await render({
+			data: {
+				cols: [
+					{ name: "region", display_name: "区域", base_type: "type/Text" },
+					{ name: "amount", display_name: "销售额", base_type: "type/Decimal" },
+				],
+				rows: [],
+			},
+			loading: false,
+			error: null,
+		});
+
+		const stepLabel = Array.from(container?.querySelectorAll("div") ?? []).find(
+			(element) => element.textContent === "1 数据来源",
+		) as HTMLDivElement | undefined;
+		const sessionNote = Array.from(container?.querySelectorAll("div") ?? []).find(
+			(element) => element.textContent === "样例数据仅用于当前编辑会话，不写入大屏配置。",
+		) as HTMLDivElement | undefined;
+
+		expect(stepLabel?.className).toContain("text-text-secondary");
+		expect(stepLabel?.style.fontSize).toBe("11px");
+		expect(sessionNote?.className).toContain("text-text-secondary");
+		expect(sessionNote?.style.fontSize).toBe("11px");
+	});
+
 	it("shows the existing canvas query failure instead of starting a separate query", async () => {
 		await render({ data: null, loading: false, error: "查询超时" });
 

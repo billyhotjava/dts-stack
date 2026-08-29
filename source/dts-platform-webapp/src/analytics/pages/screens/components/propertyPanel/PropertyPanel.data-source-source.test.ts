@@ -26,5 +26,7 @@ test("PropertyPanel delegates data source editing to the extracted module", asyn
 		"数据配置流程应出现在数据源编辑之前",
 	);
 	assert.match(dataBindingWorkflowSource, /数据配置流程/);
+	assert.match(dataBindingWorkflowSource, /detectStaleFields/);
+	assert.match(dataBindingWorkflowSource, /staleFieldCount/);
 	assert.equal(dataBindingWorkflowSource.includes("useCardDataSource"), false);
 });

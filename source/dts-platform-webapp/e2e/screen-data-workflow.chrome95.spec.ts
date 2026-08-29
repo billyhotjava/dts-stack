@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { expect, type Page, type Route, test } from "@playwright/test";
+import { expect, type Locator, type Page, type Route, test } from "@playwright/test";
 
 const SCREEN_ID = "data-workflow-e2e";
 const APP_ORIGIN = new URL(process.env.E2E_BASE_URL ?? "http://127.0.0.1:4173").origin;
@@ -54,6 +54,23 @@ const screen = {
 	isOwner: true,
 };
 
+type CardQueryData = {
+	cols: Array<{ name: string; display_name: string; base_type: string }>;
+	rows: unknown[][];
+};
+
+const DEFAULT_CARD_QUERY_DATA: CardQueryData = {
+	cols: [
+		{ name: "region", display_name: "区域", base_type: "type/Text" },
+		{ name: "amount", display_name: "销售额", base_type: "type/Decimal" },
+	],
+	rows: [
+		["华东", 128],
+		["华南", 96],
+		["华北", 74],
+	],
+};
+
 function fulfillJson(route: Route, body: unknown, status = 200) {
 	return route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
@@ -86,7 +103,11 @@ async function installIdentity(page: Page) {
 	});
 }
 
-async function installEditorRoutes(page: Page, onCardQuery: () => void) {
+async function installEditorRoutes(
+	page: Page,
+	onCardQuery: () => void,
+	cardQueryData: CardQueryData = DEFAULT_CARD_QUERY_DATA,
+) {
 	await page.route("**/*", async (route) => {
 		const request = route.request();
 		const url = new URL(request.url());
@@ -103,19 +124,7 @@ async function installEditorRoutes(page: Page, onCardQuery: () => void) {
 		if (requestPath === "/bi/api/screen-plugins") return fulfillJson(route, []);
 		if (requestPath === "/bi/api/card/42/query") {
 			onCardQuery();
-			return fulfillJson(route, {
-				data: {
-					cols: [
-						{ name: "region", display_name: "区域", base_type: "type/Text" },
-						{ name: "amount", display_name: "销售额", base_type: "type/Decimal" },
-					],
-					rows: [
-						["华东", 128],
-						["华南", 96],
-						["华北", 74],
-					],
-				},
-			});
+			return fulfillJson(route, { data: cardQueryData });
 		}
 		if (requestPath === "/bi/api/card") {
 			return fulfillJson(route, [
@@ -157,6 +166,55 @@ async function openDataWorkflow(page: Page) {
 	await page.getByTestId("analytics-screen-component-sales-chart").click();
 	await page.locator(".designer-right-panel-tab").filter({ hasText: "数据" }).click();
 	return page.getByRole("region", { name: "数据配置流程" });
+}
+
+async function readTextContrast(locator: Locator) {
+	return locator.evaluate((element) => {
+		type Rgba = { r: number; g: number; b: number; a: number };
+		const parse = (value: string): Rgba | null => {
+			const match = value.match(/rgba?\(([^)]+)\)/);
+			if (!match) return null;
+			const parts = match[1].split(",").map((part) => Number(part.trim()));
+			if (parts.length < 3 || parts.some((part) => Number.isNaN(part))) return null;
+			return { r: parts[0], g: parts[1], b: parts[2], a: parts[3] ?? 1 };
+		};
+		const blend = (front: Rgba, back: Rgba): Rgba => {
+			const alpha = front.a + back.a * (1 - front.a);
+			if (alpha === 0) return { r: 0, g: 0, b: 0, a: 0 };
+			return {
+				r: (front.r * front.a + back.r * back.a * (1 - front.a)) / alpha,
+				g: (front.g * front.a + back.g * back.a * (1 - front.a)) / alpha,
+				b: (front.b * front.a + back.b * back.a * (1 - front.a)) / alpha,
+				a: alpha,
+			};
+		};
+		const luminance = (color: Rgba) => {
+			const channel = (value: number) => {
+				const normalized = value / 255;
+				return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+			};
+			return 0.2126 * channel(color.r) + 0.7152 * channel(color.g) + 0.0722 * channel(color.b);
+		};
+
+		const ancestors: Element[] = [];
+		for (let current: Element | null = element; current; current = current.parentElement) ancestors.push(current);
+		let background: Rgba = { r: 255, g: 255, b: 255, a: 1 };
+		for (const ancestor of ancestors.reverse()) {
+			const layer = parse(window.getComputedStyle(ancestor).backgroundColor);
+			if (layer && layer.a > 0) background = blend(layer, background);
+		}
+		const style = window.getComputedStyle(element);
+		const foreground = parse(style.color);
+		if (!foreground) return { ratio: 0, fontSize: Number.parseFloat(style.fontSize), color: style.color };
+		const renderedText = blend(foreground, background);
+		const light = Math.max(luminance(renderedText), luminance(background));
+		const dark = Math.min(luminance(renderedText), luminance(background));
+		return {
+			ratio: (light + 0.05) / (dark + 0.05),
+			fontSize: Number.parseFloat(style.fontSize),
+			color: style.color,
+		};
+	});
 }
 
 test("Chrome 95 keeps the data-first editor readable and query-neutral", async ({ browser, page }) => {
@@ -223,6 +281,74 @@ test("Chrome 95 keeps the data-first editor readable and query-neutral", async (
 	expect(consoleErrors.every((message) => message.includes("504"))).toBe(true);
 	await page.screenshot({
 		path: path.join(EVIDENCE_DIR, "editor-data-workflow-error-1366x768.png"),
+		fullPage: true,
+	});
+});
+
+test("Chrome 95 keeps stale mappings honest and the narrow editor operable", async ({ browser, page }) => {
+	expect(browser.version()).toContain("95.0.4638.0");
+	mkdirSync(EVIDENCE_DIR, { recursive: true });
+
+	const pageErrors: string[] = [];
+	const requestFailures: string[] = [];
+	const consoleErrors: string[] = [];
+	page.on("pageerror", (error) => pageErrors.push(error.message));
+	page.on("requestfailed", (request) => requestFailures.push(`${request.method()} ${request.url()}`));
+	page.on("console", (message) => {
+		if (message.type() === "error") consoleErrors.push(message.text());
+	});
+	await installIdentity(page);
+	await installEditorRoutes(page, () => undefined, {
+		cols: [{ name: "region", display_name: "区域", base_type: "type/Text" }],
+		rows: [],
+	});
+
+	await page.goto(`/#/bi/screens/${SCREEN_ID}/edit`, { waitUntil: "domcontentloaded" });
+	const workflow = await openDataWorkflow(page);
+	await expect(workflow.getByText("已读取 1 个字段 · 0 行样例", { exact: false })).toBeVisible();
+	await expect(workflow.getByText("1 项有效 · 1 失效", { exact: false })).toBeVisible();
+	await expect(workflow.getByText("有 1 个映射字段在当前数据源中不存在", { exact: false })).toBeVisible();
+	await expect(workflow.getByText("已映射 2 个展示字段", { exact: false })).toHaveCount(0);
+
+	for (const locator of [
+		workflow.getByText("1 数据来源", { exact: true }),
+		workflow.getByText("样例数据仅用于当前编辑会话，不写入大屏配置。", { exact: true }),
+	]) {
+		const metrics = await readTextContrast(locator);
+		expect(metrics.fontSize).toBeGreaterThanOrEqual(11);
+		expect(metrics.ratio).toBeGreaterThanOrEqual(4.5);
+	}
+
+	await page.setViewportSize({ width: 768, height: 900 });
+	const workspace = page.getByTestId("analytics-screen-workspace");
+	const canvasWorkspace = page.getByTestId("analytics-screen-canvas-workspace");
+	const inspector = page.getByTestId("analytics-screen-inspector-panel");
+	const [workspaceBox, canvasBox, inspectorBox] = await Promise.all([
+		workspace.boundingBox(),
+		canvasWorkspace.boundingBox(),
+		inspector.boundingBox(),
+	]);
+	expect(workspaceBox).not.toBeNull();
+	expect(canvasBox?.width ?? 0).toBeGreaterThanOrEqual(760);
+	expect(inspectorBox?.height ?? 0).toBeGreaterThanOrEqual((workspaceBox?.height ?? 0) - 1);
+
+	const primarySave = page.getByTestId("analytics-screen-primary-action-button");
+	await expect(primarySave).toBeHidden();
+	const operationButton = page.getByRole("button", { name: "操作", exact: true });
+	await expect(operationButton).toBeVisible();
+	await operationButton.click();
+	await expect(page.getByRole("button", { name: "保存", exact: true })).toBeVisible();
+
+	const narrowMetrics = await page.evaluate(() => ({
+		clientWidth: document.documentElement.clientWidth,
+		scrollWidth: document.documentElement.scrollWidth,
+	}));
+	expect(narrowMetrics.scrollWidth).toBe(narrowMetrics.clientWidth);
+	expect(pageErrors).toEqual([]);
+	expect(requestFailures).toEqual([]);
+	expect(consoleErrors).toEqual([]);
+	await page.screenshot({
+		path: path.join(EVIDENCE_DIR, "editor-data-workflow-fixed-768x900.png"),
 		fullPage: true,
 	});
 });

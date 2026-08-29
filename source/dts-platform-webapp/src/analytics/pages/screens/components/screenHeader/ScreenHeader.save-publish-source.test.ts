@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 
 const screenHeaderPath = new URL("./ScreenHeader.tsx", import.meta.url);
 const screenHeaderNoticesPath = new URL("./ScreenHeaderNotices.tsx", import.meta.url);
+const screenHeaderMenusPath = new URL("./ScreenHeaderMenus.tsx", import.meta.url);
 const screenExportActionsPath = new URL("./useScreenExportActions.ts", import.meta.url);
 
 test("ScreenHeader validates and saves the draft before publishing", async () => {
@@ -97,4 +98,18 @@ test("ScreenHeader delegates export preparation, render, fallback, and report fl
 	assert.match(exportActionsSource, /reportScreenExport/);
 	assert.match(exportActionsSource, /openExportWindow/);
 	assert.match(exportActionsSource, /status,\s*format,\s*mode: 'draft'/);
+});
+
+test("ScreenHeader moves primary actions into the existing operation menu on narrow screens", async () => {
+	const [screenHeaderSource, menusSource] = await Promise.all([
+		readFile(screenHeaderPath, "utf8"),
+		readFile(screenHeaderMenusPath, "utf8"),
+	]);
+
+	assert.match(screenHeaderSource, /className="screen-header-primary-actions [^"]*"/);
+	assert.match(menusSource, /className="header-mobile-primary-menu hidden"/);
+	assert.match(menusSource, /label="操作"/);
+	for (const action of ["预览", "发布", "保存"]) {
+		assert.match(menusSource, new RegExp(`>${action}<`));
+	}
 });
