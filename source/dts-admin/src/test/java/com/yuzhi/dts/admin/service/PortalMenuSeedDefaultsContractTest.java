@@ -429,9 +429,9 @@ class PortalMenuSeedDefaultsContractTest {
             .orElse(null);
         assertNotNull(dataStudio, "数据开发与运维 must expose Data Studio");
         assertTrue(containsTitleKey(listOfMaps(dataStudio.get("children")), "sys.nav.portal.studioScripts"), "script development must stay available");
-        assertTrue(
+        assertFalse(
             containsTitleKey(listOfMaps(dataStudio.get("children")), "sys.nav.portal.studioOrchestration"),
-            "orchestration must stay available"
+            "task orchestration must stay retired until the value-added workflow product is ready"
         );
 
         ClassPathResource defaultsResource = new ClassPathResource("config/data/role-menu-defaults.json");
@@ -469,6 +469,10 @@ class PortalMenuSeedDefaultsContractTest {
                         .contains(rule.get("code"))
                 ),
             "role defaults must not keep retired modeling menu entries"
+        );
+        assertFalse(
+            defaults.stream().anyMatch(rule -> "sys.nav.portal.studioOrchestration".equals(rule.get("code"))),
+            "role defaults must not expose the retired task-orchestration entry"
         );
         assertTrue(
             defaults
