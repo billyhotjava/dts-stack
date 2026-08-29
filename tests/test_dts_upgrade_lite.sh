@@ -83,14 +83,17 @@ EOF_DOCKER
 chmod +x "${FAKE_BIN}/docker"
 
 cat > "${SOURCE_ROOT}/imgversion.conf" <<'EOF_IMG'
+DTS_PRODUCT_VERSION=2.2.3
+DTS_BUILD_TIMESTAMP=20260829210503
+DTS_IMAGE_VERSION=2.2.3-20260829210503
 IMAGE_POSTGRES=postgres:17.6
-IMAGE_DTS_ADMIN=dts-admin:from-imgversion
+IMAGE_DTS_ADMIN=dts-admin:2.2.3-20260829210503
 IMAGE_KEYCLOAK=keycloak:26
 EOF_IMG
 
 cat > "${SOURCE_ROOT}/.env" <<'EOF_SOURCE_ENV'
 BASE_DOMAIN=bi.new.local
-IMAGE_DTS_ADMIN=dts-admin:2.0.0
+IMAGE_DTS_ADMIN=dts-admin:2.2.3-20260829210503
 NEW_FEATURE_FLAG=true
 EOF_SOURCE_ENV
 
@@ -148,6 +151,14 @@ chmod +x "${SOURCE_ROOT}/bin/"*.sh "${TARGET_DIR}/bin/existing-tool.sh"
 
 printf 'image-tar' > "${IMAGES_DIR}/dts-admin.tar"
 (cd "${IMAGES_DIR}" && sha256sum dts-admin.tar) > "${EXTRA_DIR}/checksums.txt"
+cat > "${EXTRA_DIR}/release-manifest.json" <<'EOF_MANIFEST'
+{
+  "version": "2.2.3-20260829210503",
+  "productVersion": "2.2.3",
+  "buildTimestamp": "20260829210503",
+  "images": ["dts-admin.tar"]
+}
+EOF_MANIFEST
 
 PATH="${FAKE_BIN}:${PATH}" \
   FAKE_DOCKER_LOG="${DOCKER_LOG}" \
@@ -176,6 +187,11 @@ if ! grep -Fq "UPDATE_IMAGE" "${PLAN_REPORT}/env-plan.tsv"; then
   echo "expected env plan to include image update" >&2
   exit 1
 fi
+if ! grep -Fq "release version: 2.2.3-20260829210503" "${PLAN_REPORT}/summary.md"; then
+  echo "expected plan summary to identify the release image version" >&2
+  cat "${PLAN_REPORT}/summary.md" >&2
+  exit 1
+fi
 if ! grep -Fq "KEEP_SITE_CONFLICT" "${PLAN_REPORT}/env-plan.tsv"; then
   echo "expected env plan to preserve conflicting site value" >&2
   exit 1
@@ -195,7 +211,7 @@ PATH="${FAKE_BIN}:${PATH}" \
   --extra-dir "${EXTRA_DIR}" \
   --yes >/dev/null
 
-if ! grep -Fq "IMAGE_DTS_ADMIN=dts-admin:2.0.0" "${TARGET_DIR}/.env"; then
+if ! grep -Fq "IMAGE_DTS_ADMIN=dts-admin:2.2.3-20260829210503" "${TARGET_DIR}/.env"; then
   echo "expected apply to update IMAGE_DTS_ADMIN" >&2
   exit 1
 fi
