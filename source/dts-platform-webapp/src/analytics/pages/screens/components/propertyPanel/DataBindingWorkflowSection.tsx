@@ -1,3 +1,4 @@
+import { detectStaleFields } from "../../hooks/fieldMappingTransform";
 import type { ComponentDataFeedback } from "../../ScreenDataFeedbackContext";
 import type { DataSourceConfig, FieldMapping, ScreenComponent } from "../../types";
 import { resolveDataSourceType } from "./helpers";
@@ -52,13 +53,24 @@ function resolveStoredColumns(component: ScreenComponent): DisplayColumn[] {
 		.filter((column) => column.name.length > 0);
 }
 
-function countMappedFields(component: ScreenComponent): number {
+function resolveFieldMappingStatus(component: ScreenComponent, columns: DisplayColumn[]) {
 	const mapping = component.config._fieldMapping as FieldMapping | undefined;
-	if (!mapping || component.config._useFieldMapping === false) return 0;
+	if (!mapping || component.config._useFieldMapping === false) {
+		return { mappedFieldCount: 0, staleFieldCount: 0, pendingFieldCount: 0 };
+	}
 	const fields = [mapping.dimension, ...(mapping.measures ?? []), mapping.groupBy, mapping.sizeField].filter(
 		(field): field is string => typeof field === "string" && field.trim().length > 0,
 	);
-	return new Set(fields).size;
+	const configuredFields = new Set(fields);
+	if (columns.length === 0) {
+		return { mappedFieldCount: 0, staleFieldCount: 0, pendingFieldCount: configuredFields.size };
+	}
+	const staleFields = new Set(detectStaleFields(mapping, columns).filter((field) => configuredFields.has(field)));
+	return {
+		mappedFieldCount: configuredFields.size - staleFields.size,
+		staleFieldCount: staleFields.size,
+		pendingFieldCount: 0,
+	};
 }
 
 export function DataBindingWorkflowSection({ component, feedback }: DataBindingWorkflowSectionProps) {
@@ -71,7 +83,15 @@ export function DataBindingWorkflowSection({ component, feedback }: DataBindingW
 	const columns = dataColumns.length > 0 ? dataColumns : resolveStoredColumns(component);
 	const sampleColumns = dataColumns.slice(0, MAX_SAMPLE_COLUMNS);
 	const sampleRows = (feedback?.data?.rows ?? []).slice(0, MAX_SAMPLE_ROWS);
-	const mappedFieldCount = countMappedFields(component);
+	const { mappedFieldCount, staleFieldCount, pendingFieldCount } = resolveFieldMappingStatus(component, columns);
+	const mappingStepStatus =
+		staleFieldCount > 0
+			? `${mappedFieldCount} 项有效 · ${staleFieldCount} 失效`
+			: mappedFieldCount > 0
+				? `${mappedFieldCount} 项`
+				: pendingFieldCount > 0
+					? `${pendingFieldCount} 项待校验`
+					: "待映射";
 	const hasLoadedData = Boolean(feedback?.data);
 	const readStepStatus = feedback?.error
 		? "读取失败"
@@ -103,7 +123,7 @@ export function DataBindingWorkflowSection({ component, feedback }: DataBindingW
 				{[
 					["1 数据来源", sourceLabel],
 					["2 样例校验", readStepStatus],
-					["3 字段映射", mappedFieldCount > 0 ? `${mappedFieldCount} 项` : "待映射"],
+					["3 字段映射", mappingStepStatus],
 				].map(([label, status]) => (
 					<div
 						key={label}
@@ -115,10 +135,21 @@ export function DataBindingWorkflowSection({ component, feedback }: DataBindingW
 							background: "rgba(255,255,255,0.04)",
 						}}
 					>
-						<div className="text-text-muted" style={{ fontSize: 10, whiteSpace: "nowrap" }}>
+						<div className="text-text-secondary" style={{ fontSize: 11, whiteSpace: "nowrap" }}>
 							{label}
 						</div>
-						<div className="text-text-primary truncate" style={{ fontSize: 11, marginTop: 3 }} title={status}>
+						<div
+							className="text-text-primary"
+							style={{
+								fontSize: 11,
+								lineHeight: 1.35,
+								marginTop: 3,
+								minHeight: 30,
+								whiteSpace: "normal",
+								wordBreak: "break-word",
+							}}
+							title={status}
+						>
 							{status}
 						</div>
 					</div>
@@ -196,30 +227,43 @@ export function DataBindingWorkflowSection({ component, feedback }: DataBindingW
 								</tbody>
 							</table>
 							{sampleRows.length === 0 ? (
-								<div className="text-xs text-text-muted" style={{ padding: 8 }}>
+								<div className="text-xs text-text-secondary" style={{ padding: 8 }}>
 									查询成功，暂无样例行。
 								</div>
 							) : null}
 						</div>
 					) : null}
-					<div className="text-text-muted" style={{ fontSize: 10, marginTop: 7 }}>
+					<div className="text-text-secondary" style={{ fontSize: 11, marginTop: 7 }}>
 						样例数据仅用于当前编辑会话，不写入大屏配置。
 					</div>
 				</>
 			) : sourceType === "static" ? (
-				<div className="text-xs text-text-muted">当前使用组件内置数据；需要接入业务数据时，可在下方切换数据来源。</div>
+				<div className="text-xs text-text-secondary">
+					当前使用组件内置数据；需要接入业务数据时，可在下方切换数据来源。
+				</div>
 			) : columns.length > 0 ? (
 				<div className="text-xs text-text-secondary">已识别 {columns.length} 个字段，等待画布返回最新样例数据。</div>
 			) : (
-				<div className="text-xs text-text-muted">完成下方数据源配置后，画布会自动读取样例数据。</div>
+				<div className="text-xs text-text-secondary">完成下方数据源配置后，画布会自动读取样例数据。</div>
 			)}
 
-			{mappedFieldCount > 0 ? (
+			{staleFieldCount > 0 ? (
+				<div
+					className="text-xs rounded"
+					style={{ color: "#fbbf24", background: "rgba(245,158,11,0.12)", marginTop: 8, padding: "7px 9px" }}
+				>
+					有 {staleFieldCount} 个映射字段在当前数据源中不存在，请在下方重新选择。
+				</div>
+			) : mappedFieldCount > 0 ? (
 				<div className="text-xs" style={{ color: "#7dd3fc", marginTop: 8 }}>
 					已映射 {mappedFieldCount} 个展示字段，可在下方继续调整。
 				</div>
+			) : pendingFieldCount > 0 ? (
+				<div className="text-xs text-text-secondary" style={{ marginTop: 8 }}>
+					已配置 {pendingFieldCount} 个展示字段，等待样例数据返回后校验。
+				</div>
 			) : columns.length > 0 ? (
-				<div className="text-xs text-text-muted" style={{ marginTop: 8 }}>
+				<div className="text-xs text-text-secondary" style={{ marginTop: 8 }}>
 					字段已就绪，请在下方设置图表的维度和度量。
 				</div>
 			) : null}

@@ -31,15 +31,18 @@ test("issue center keeps readable colors outside the editor CSS variable scope",
 });
 
 test("narrow designer overlays full-height side panels instead of squeezing the canvas", async () => {
-	const [pageSource, cssSource] = await Promise.all([
-		readFile(pagePath, "utf8"),
-		readFile(designerCssPath, "utf8"),
-	]);
+	const [pageSource, cssSource] = await Promise.all([readFile(pagePath, "utf8"), readFile(designerCssPath, "utf8")]);
 
 	assert.match(pageSource, /data-testid="analytics-screen-workspace"/);
 	assert.match(pageSource, /data-testid="analytics-screen-canvas-workspace"/);
 	assert.match(pageSource, /max-\[900px\]:absolute/);
 	assert.match(pageSource, /max-\[900px\]:left-0/);
 	assert.match(pageSource, /max-\[900px\]:right-0/);
-	assert.match(cssSource, /\.component-library,\s*\n\s*\.designer-right-panel \{\s*\n\s*height: 100%;\s*\n\s*max-height: none;/);
+	assert.match(pageSource, /isNarrowViewport/);
+	assert.match(pageSource, /visibleLibraryPanel/);
+	assert.match(pageSource, /handleToggleLibraryPanel/);
+	assert.match(
+		cssSource,
+		/\.component-library,\s*\n\s*\.designer-right-panel \{\s*\n\s*height: 100%;\s*\n\s*max-height: none;/,
+	);
 });

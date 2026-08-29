@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { readFile } from "node:fs/promises";
+import test from "node:test";
 
 const screenHeaderPath = new URL("./ScreenHeader.tsx", import.meta.url);
 const screenHeaderNoticesPath = new URL("./ScreenHeaderNotices.tsx", import.meta.url);
@@ -36,10 +36,7 @@ test("ScreenHeader explicitly imports every helper symbol it references", async 
 
 	// THEME_OPTIONS 在主题包导入校验中使用，必须列在 from './helpers' 的 import 里
 	assert.match(source, /THEME_OPTIONS/);
-	assert.match(
-		source,
-		/import\s*\{[^}]*\bTHEME_OPTIONS\b[^}]*\}\s*from\s*['"]\.\/helpers['"];?/,
-	);
+	assert.match(source, /import\s*\{[^}]*\bTHEME_OPTIONS\b[^}]*\}\s*from\s*['"]\.\/helpers['"];?/);
 });
 
 // Sprint-24 F3：未设密级的大屏（含历史老大屏）应给出非阻塞提示，引导补登。
@@ -106,10 +103,15 @@ test("ScreenHeader moves primary actions into the existing operation menu on nar
 		readFile(screenHeaderMenusPath, "utf8"),
 	]);
 
-	assert.match(screenHeaderSource, /className="screen-header-primary-actions [^"]*"/);
+	assert.match(
+		screenHeaderSource,
+		/className="screen-header-primary-actions [^"]*max-\[1200px\]:!hidden[^"]*"/,
+	);
 	assert.match(menusSource, /className="header-mobile-primary-menu hidden"/);
 	assert.match(menusSource, /label="操作"/);
-	for (const action of ["预览", "发布", "保存"]) {
-		assert.match(menusSource, new RegExp(`>${action}<`));
-	}
+	assert.match(menusSource, /executeMenuAction\(onPreview\)/);
+	assert.match(menusSource, /executeMenuAction\(onPublish\)/);
+	assert.match(menusSource, /executeMenuAction\(onSave\)/);
+	assert.match(menusSource, /isPublishing \? '发布中\.\.\.' : '发布'/);
+	assert.match(menusSource, /isSaving \? '保存中\.\.\.' : '保存'/);
 });

@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { expect, type Locator, type Page, type Route, test } from "@playwright/test";
+import { expect, type Locator, type Page, type Request, type Route, test } from "@playwright/test";
 
 const SCREEN_ID = "data-workflow-e2e";
 const APP_ORIGIN = new URL(process.env.E2E_BASE_URL ?? "http://127.0.0.1:4173").origin;
@@ -77,6 +77,13 @@ function fulfillJson(route: Route, body: unknown, status = 200) {
 
 function fulfillPlatformJson(route: Route, data: unknown) {
 	return fulfillJson(route, { status: 200, data, message: "OK" });
+}
+
+function recordUnexpectedRequestFailure(request: Request) {
+	const requestPath = new URL(request.url()).pathname;
+	const errorText = request.failure()?.errorText ?? "";
+	if (requestPath.endsWith("/edit-lock/release") && errorText.includes("ERR_ABORTED")) return null;
+	return `${request.method()} ${request.url()}`;
 }
 
 async function installIdentity(page: Page) {
@@ -226,7 +233,10 @@ test("Chrome 95 keeps the data-first editor readable and query-neutral", async (
 	const requestFailures: string[] = [];
 	const consoleErrors: string[] = [];
 	page.on("pageerror", (error) => pageErrors.push(error.message));
-	page.on("requestfailed", (request) => requestFailures.push(`${request.method()} ${request.url()}`));
+	page.on("requestfailed", (request) => {
+		const failure = recordUnexpectedRequestFailure(request);
+		if (failure) requestFailures.push(failure);
+	});
 	page.on("console", (message) => {
 		if (message.type() === "error") consoleErrors.push(message.text());
 	});
@@ -293,7 +303,10 @@ test("Chrome 95 keeps stale mappings honest and the narrow editor operable", asy
 	const requestFailures: string[] = [];
 	const consoleErrors: string[] = [];
 	page.on("pageerror", (error) => pageErrors.push(error.message));
-	page.on("requestfailed", (request) => requestFailures.push(`${request.method()} ${request.url()}`));
+	page.on("requestfailed", (request) => {
+		const failure = recordUnexpectedRequestFailure(request);
+		if (failure) requestFailures.push(failure);
+	});
 	page.on("console", (message) => {
 		if (message.type() === "error") consoleErrors.push(message.text());
 	});
@@ -312,6 +325,7 @@ test("Chrome 95 keeps stale mappings honest and the narrow editor operable", asy
 
 	for (const locator of [
 		workflow.getByText("1 数据来源", { exact: true }),
+		workflow.getByText("查询成功，暂无样例行。", { exact: true }),
 		workflow.getByText("样例数据仅用于当前编辑会话，不写入大屏配置。", { exact: true }),
 	]) {
 		const metrics = await readTextContrast(locator);
@@ -322,6 +336,7 @@ test("Chrome 95 keeps stale mappings honest and the narrow editor operable", asy
 	await page.setViewportSize({ width: 768, height: 900 });
 	const workspace = page.getByTestId("analytics-screen-workspace");
 	const canvasWorkspace = page.getByTestId("analytics-screen-canvas-workspace");
+	const library = page.getByTestId("analytics-screen-library-panel");
 	const inspector = page.getByTestId("analytics-screen-inspector-panel");
 	const [workspaceBox, canvasBox, inspectorBox] = await Promise.all([
 		workspace.boundingBox(),
@@ -331,6 +346,14 @@ test("Chrome 95 keeps stale mappings honest and the narrow editor operable", asy
 	expect(workspaceBox).not.toBeNull();
 	expect(canvasBox?.width ?? 0).toBeGreaterThanOrEqual(760);
 	expect(inspectorBox?.height ?? 0).toBeGreaterThanOrEqual((workspaceBox?.height ?? 0) - 1);
+	await expect(library).toBeHidden();
+	await page.screenshot({
+		path: path.join(EVIDENCE_DIR, "editor-data-workflow-fixed-768x900.png"),
+		fullPage: true,
+	});
+
+	await page.getByRole("button", { name: "视图", exact: true }).click();
+	await expect(page.getByRole("button", { name: "显示左栏", exact: true })).toBeVisible();
 
 	const primarySave = page.getByTestId("analytics-screen-primary-action-button");
 	await expect(primarySave).toBeHidden();
@@ -347,8 +370,4 @@ test("Chrome 95 keeps stale mappings honest and the narrow editor operable", asy
 	expect(pageErrors).toEqual([]);
 	expect(requestFailures).toEqual([]);
 	expect(consoleErrors).toEqual([]);
-	await page.screenshot({
-		path: path.join(EVIDENCE_DIR, "editor-data-workflow-fixed-768x900.png"),
-		fullPage: true,
-	});
 });

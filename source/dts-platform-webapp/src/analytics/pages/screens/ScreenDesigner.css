@@ -2469,8 +2469,8 @@
 
   .component-library,
   .designer-right-panel {
-    height: auto;
-    max-height: 420px;
+    height: 100%;
+    max-height: none;
   }
 }
 

@@ -1088,7 +1088,7 @@ export function ScreenHeader({
                         onExportPng={handleExportPng}
                         onExportPdf={handleExportPdf}
                     />
-                    <div className="flex items-center gap-2 min-w-0 overflow-visible whitespace-nowrap">
+                    <div className="screen-header-primary-actions flex items-center gap-2 min-w-0 overflow-visible whitespace-nowrap max-[1200px]:!hidden">
                         <button
                             type="button"
                             className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import test from "node:test";
 import { readFile } from "node:fs/promises";
+import test from "node:test";
 
 const propertyPanelPath = new URL("./PropertyPanel.tsx", import.meta.url);
 const dataSourceConfigSectionPath = new URL("./DataSourceConfigSection.tsx", import.meta.url);
@@ -21,8 +21,7 @@ test("PropertyPanel delegates data source editing to the extracted module", asyn
 	assert.match(propertyPanelSource, /from '\.\/DataBindingWorkflowSection'/);
 	assert.match(propertyPanelSource, /<DataBindingWorkflowSection/);
 	assert.ok(
-		propertyPanelSource.indexOf("<DataBindingWorkflowSection")
-			< propertyPanelSource.indexOf("renderDataSourceConfig("),
+		propertyPanelSource.indexOf("<DataBindingWorkflowSection") < propertyPanelSource.indexOf("renderDataSourceConfig("),
 		"数据配置流程应出现在数据源编辑之前",
 	);
 	assert.match(dataBindingWorkflowSource, /数据配置流程/);

@@ -67,6 +67,9 @@ function ScreenDesignerContent() {
     );
     const [showLibraryPanel, setShowLibraryPanel] = useState<boolean>(initialSidePanels.showLibraryPanel);
     const [showInspectorPanel, setShowInspectorPanel] = useState<boolean>(initialSidePanels.showInspectorPanel);
+    const [isNarrowViewport, setIsNarrowViewport] = useState<boolean>(() => (
+        typeof window !== 'undefined' && window.innerWidth <= 900
+    ));
     const initialSidePanelWidths = resolveInitialSidePanelWidths(
         typeof window !== 'undefined' ? window.localStorage : undefined,
     );
@@ -100,6 +103,32 @@ function ScreenDesignerContent() {
         window.localStorage.setItem(getSidePanelWidthStorageKey('library'), String(sidePanelWidths.libraryWidth));
         window.localStorage.setItem(getSidePanelWidthStorageKey('inspector'), String(sidePanelWidths.inspectorWidth));
     }, [sidePanelWidths]);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const syncViewportMode = () => setIsNarrowViewport(window.innerWidth <= 900);
+        syncViewportMode();
+        window.addEventListener('resize', syncViewportMode);
+        return () => window.removeEventListener('resize', syncViewportMode);
+    }, []);
+
+    const visibleInspectorPanel = showInspectorPanel;
+    const visibleLibraryPanel = showLibraryPanel && (!isNarrowViewport || !visibleInspectorPanel);
+    const handleToggleLibraryPanel = useCallback(() => {
+        if (isNarrowViewport && !visibleLibraryPanel) {
+            setShowLibraryPanel(true);
+            setShowInspectorPanel(false);
+            return;
+        }
+        setShowLibraryPanel((previous) => !previous);
+    }, [isNarrowViewport, visibleLibraryPanel]);
+    const handleToggleInspectorPanel = useCallback(() => {
+        if (isNarrowViewport && !visibleInspectorPanel) {
+            setShowInspectorPanel(true);
+            setShowLibraryPanel(false);
+            return;
+        }
+        setShowInspectorPanel((previous) => !previous);
+    }, [isNarrowViewport, visibleInspectorPanel]);
 
     const handleSidePanelResizeStart = useCallback((panel: SidePanelKey, event: React.PointerEvent<HTMLDivElement>) => {
         event.preventDefault();
@@ -393,12 +422,12 @@ function ScreenDesignerContent() {
             // Ctrl/Cmd+Alt+1/2 : toggle left/right panel visibility
             if (hotkey && e.altKey && e.key === '1') {
                 e.preventDefault();
-                setShowLibraryPanel((prev) => !prev);
+                handleToggleLibraryPanel();
                 return;
             }
             if (hotkey && e.altKey && e.key === '2') {
                 e.preventDefault();
-                setShowInspectorPanel((prev) => !prev);
+                handleToggleInspectorPanel();
                 return;
             }
             // Ctrl/Cmd+1..5 : switch right panel tab
@@ -438,7 +467,7 @@ function ScreenDesignerContent() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [undo, redo, deleteComponents, copyComponents, pasteComponents, duplicateSelected, selectedIds, clipboard, dispatch, editorReadonly, selectComponents, state.config.components, state.config.height, state.config.width, state.zoom]);
+    }, [undo, redo, deleteComponents, copyComponents, pasteComponents, duplicateSelected, selectedIds, clipboard, dispatch, editorReadonly, selectComponents, state.config.components, state.config.height, state.config.width, state.zoom, handleToggleLibraryPanel, handleToggleInspectorPanel]);
 
     return (
         <>
@@ -453,18 +482,22 @@ function ScreenDesignerContent() {
                     onResetPageIndex={() => setCurrentPageIndex(0)}
                     focusMode={focusMode}
                     onToggleFocusMode={() => setFocusMode((prev) => !prev)}
-                    showLibraryPanel={showLibraryPanel}
-                    onToggleLibraryPanel={() => setShowLibraryPanel((prev) => !prev)}
-                    showInspectorPanel={showInspectorPanel}
-                    onToggleInspectorPanel={() => setShowInspectorPanel((prev) => !prev)}
+                    showLibraryPanel={visibleLibraryPanel}
+                    onToggleLibraryPanel={handleToggleLibraryPanel}
+                    showInspectorPanel={visibleInspectorPanel}
+                    onToggleInspectorPanel={handleToggleInspectorPanel}
                     authoringIssueCount={authoringIssues.length}
                     onOpenIssuePanel={() => setShowIssuePanel(true)}
                 />
 
-                <div className="flex flex-1 min-h-0 overflow-hidden">
-                    {!focusMode && showLibraryPanel ? (
+                <div
+                    data-testid="analytics-screen-workspace"
+                    className="flex flex-1 min-h-0 overflow-hidden max-[900px]:relative"
+                >
+                    {!focusMode && visibleLibraryPanel ? (
                         <div
-                            className="designer-side-rail designer-side-rail--library flex min-h-0 overflow-hidden shrink-0 border-r border-[var(--color-border)] relative"
+                            data-testid="analytics-screen-library-panel"
+                            className="designer-side-rail designer-side-rail--library flex min-h-0 overflow-hidden shrink-0 border-r border-[var(--color-border)] relative max-[900px]:absolute max-[900px]:top-0 max-[900px]:bottom-0 max-[900px]:left-0 max-[900px]:z-[1100] max-[900px]:max-w-[calc(100vw_-_32px)] max-[900px]:shadow-2xl"
                             style={{ width: sidePanelWidths.libraryWidth, flex: `0 0 ${sidePanelWidths.libraryWidth}px` }}
                         >
                             <ComponentLibraryPanel />
@@ -479,7 +512,10 @@ function ScreenDesignerContent() {
                         </div>
                     ) : null}
 
-                    <div className="flex-1 flex flex-col min-w-0 min-h-0 relative">
+                    <div
+                        data-testid="analytics-screen-canvas-workspace"
+                        className="flex-1 flex flex-col min-w-0 min-h-0 relative max-[900px]:w-full"
+                    >
                         <CanvasToolbar />
                         <DesignerCanvas />
                         {(hasMultiPages || pages.length > 0) && (
@@ -496,9 +532,10 @@ function ScreenDesignerContent() {
                         )}
                     </div>
 
-                    {!focusMode && showInspectorPanel ? (
+                    {!focusMode && visibleInspectorPanel ? (
                         <div
-                            className="designer-side-rail designer-side-rail--inspector flex min-h-0 overflow-hidden shrink-0 border-l border-[var(--color-border)] relative"
+                            data-testid="analytics-screen-inspector-panel"
+                            className="designer-side-rail designer-side-rail--inspector flex min-h-0 overflow-hidden shrink-0 border-l border-[var(--color-border)] relative max-[900px]:absolute max-[900px]:top-0 max-[900px]:bottom-0 max-[900px]:right-0 max-[900px]:z-[1100] max-[900px]:max-w-[calc(100vw_-_32px)] max-[900px]:shadow-2xl"
                             style={{ width: sidePanelWidths.inspectorWidth, flex: `0 0 ${sidePanelWidths.inspectorWidth}px` }}
                         >
                             <div

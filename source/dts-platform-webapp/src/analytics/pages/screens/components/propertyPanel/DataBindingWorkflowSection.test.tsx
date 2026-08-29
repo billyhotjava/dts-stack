@@ -115,11 +115,15 @@ describe("DataBindingWorkflowSection", () => {
 		const sessionNote = Array.from(container?.querySelectorAll("div") ?? []).find(
 			(element) => element.textContent === "样例数据仅用于当前编辑会话，不写入大屏配置。",
 		) as HTMLDivElement | undefined;
+		const mappingStatus = Array.from(container?.querySelectorAll("div") ?? []).find(
+			(element) => element.textContent === "2 项",
+		) as HTMLDivElement | undefined;
 
 		expect(stepLabel?.className).toContain("text-text-secondary");
 		expect(stepLabel?.style.fontSize).toBe("11px");
 		expect(sessionNote?.className).toContain("text-text-secondary");
 		expect(sessionNote?.style.fontSize).toBe("11px");
+		expect(mappingStatus?.className).not.toContain("truncate");
 	});
 
 	it("shows the existing canvas query failure instead of starting a separate query", async () => {
@@ -212,6 +216,7 @@ describe("DataBindingWorkflowSection", () => {
 
 		expect(container?.textContent).toContain("已读取 1 个字段 · 0 行样例");
 		expect(container?.textContent).toContain("查询成功，暂无样例行");
+		expect(container?.querySelector("table + div")?.className).toContain("text-text-secondary");
 		expect(container?.textContent).not.toContain("数据读取失败");
 	});
 });
