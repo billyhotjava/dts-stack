@@ -62,7 +62,8 @@ services: {}
 EOF_FILE
 
 cat > "${TEST_REPO}/imgversion.conf" <<'EOF_FILE'
-IMAGE_DTS_ADMIN=dts-admin:test
+DTS_PRODUCT_VERSION=2.2.3
+IMAGE_DTS_ADMIN=dts-admin:2.2.3-local
 EOF_FILE
 
 cat > "${TEST_REPO}/imgversion.dts-source.conf" <<'EOF_FILE'
@@ -185,8 +186,43 @@ EOF_DISK
 EOF_DF
 chmod +x "${FAKE_BIN}/df"
 
-PATH="${FAKE_BIN}:${PATH}" "${TEST_REPO}/builds/dts-build.sh" --pack --no-images --output "${PACKAGE_PATH}" >/dev/null
+PATH="${FAKE_BIN}:${PATH}" DTS_BUILD_TIMESTAMP=20260829210503 \
+  "${TEST_REPO}/builds/dts-build.sh" --pack --no-images --output "${PACKAGE_PATH}" >/dev/null
 ARCHIVE_CONTENTS="$(tar -tzf "${PACKAGE_PATH}")"
+
+PACKAGE_EXTRACT="${TMP_DIR}/package-extract"
+mkdir -p "${PACKAGE_EXTRACT}"
+tar -xzf "${PACKAGE_PATH}" -C "${PACKAGE_EXTRACT}"
+
+if ! grep -Fqx 'DTS_IMAGE_VERSION=2.2.3-20260829210503' "${PACKAGE_EXTRACT}/dts-stack/imgversion.conf"; then
+  echo "expected packaged imgversion.conf to record the immutable release version" >&2
+  cat "${PACKAGE_EXTRACT}/dts-stack/imgversion.conf" >&2
+  exit 1
+fi
+
+if ! grep -Fqx 'IMAGE_DTS_ADMIN=dts-admin:2.2.3-20260829210503' "${PACKAGE_EXTRACT}/dts-stack/imgversion.conf"; then
+  echo "expected packaged DTS image reference to use the immutable release version" >&2
+  cat "${PACKAGE_EXTRACT}/dts-stack/imgversion.conf" >&2
+  exit 1
+fi
+
+if ! grep -Fq '"version": "2.2.3-20260829210503"' "${PACKAGE_EXTRACT}/extra/release-manifest.json"; then
+  echo "expected release manifest to contain the image version" >&2
+  cat "${PACKAGE_EXTRACT}/extra/release-manifest.json" >&2
+  exit 1
+fi
+
+if ! grep -Fq '"productVersion": "2.2.3"' "${PACKAGE_EXTRACT}/extra/release-manifest.json"; then
+  echo "expected release manifest to contain the product version" >&2
+  cat "${PACKAGE_EXTRACT}/extra/release-manifest.json" >&2
+  exit 1
+fi
+
+if ! grep -Fq '"buildTimestamp": "20260829210503"' "${PACKAGE_EXTRACT}/extra/release-manifest.json"; then
+  echo "expected release manifest to contain the build timestamp" >&2
+  cat "${PACKAGE_EXTRACT}/extra/release-manifest.json" >&2
+  exit 1
+fi
 
 if grep -qx 'dts-stack/services/dts-dbt/profiles/profiles.yml' <<<"${ARCHIVE_CONTENTS}"; then
   echo "deployment package leaked the local dbt profiles.yml" >&2
