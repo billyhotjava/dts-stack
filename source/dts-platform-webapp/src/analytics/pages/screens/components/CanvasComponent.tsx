@@ -5,6 +5,7 @@ import type { ScreenComponent, ScreenCustomTheme, ScreenTheme } from '../types';
 import { collectContainerSubtreeIds } from '../componentHierarchy';
 import { resolveComponentAppearanceStyle } from '../componentAppearance';
 import { resolveInteractionScale, resolveScaledPointerDelta } from '../canvasInteraction';
+import { useScreenDataFeedbackDispatch, type ComponentDataFeedback } from '../ScreenDataFeedbackContext';
 
 interface CanvasComponentProps {
     component: ScreenComponent;
@@ -88,6 +89,7 @@ function clampGroupDelta(
 
 export function CanvasComponent({ component, isSelected, theme, customTheme, fontFamily }: CanvasComponentProps) {
     const { state, dispatch, selectComponents, updateComponent, snapshotTransform, setSnapGuides, clearSnapGuides, editorReadonly } = useScreen();
+    const { publishComponentDataFeedback, clearComponentDataFeedback } = useScreenDataFeedbackDispatch();
     const { config, selectedIds } = state;
     const [isDragging, setIsDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
@@ -428,6 +430,14 @@ export function CanvasComponent({ component, isSelected, theme, customTheme, fon
         });
     }, [component.id, updateComponent]);
 
+    const handleDataFeedback = useCallback((componentId: string, feedback: ComponentDataFeedback | null) => {
+        if (feedback) {
+            publishComponentDataFeedback(componentId, feedback);
+        } else {
+            clearComponentDataFeedback(componentId);
+        }
+    }, [clearComponentDataFeedback, publishComponentDataFeedback]);
+
     const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
         if (event.key !== 'Enter' && event.key !== ' ') {
             return;
@@ -470,6 +480,7 @@ export function CanvasComponent({ component, isSelected, theme, customTheme, fon
                 customTheme={customTheme}
                 fontFamily={fontFamily}
                 onConfigMeta={handleConfigMeta}
+                onDataFeedback={handleDataFeedback}
             />
 
             {isSelected && !component.locked && !editorReadonly && (

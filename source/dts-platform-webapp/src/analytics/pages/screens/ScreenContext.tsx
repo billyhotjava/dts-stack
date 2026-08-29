@@ -2,6 +2,7 @@ import { createContext, useContext, useReducer, ReactNode, useCallback, useState
 import type { ScreenState, ScreenAction, ScreenConfig, ScreenComponent } from './types';
 import { SCREEN_SCHEMA_VERSION } from './screenSpec';
 import { sanitizeParentContainerIds, wouldCreateParentCycle } from './componentHierarchy';
+import { ScreenDataFeedbackProvider } from './ScreenDataFeedbackContext';
 
 // ── ID generation (crypto.randomUUID for collision-resistance) ──────────────
 export function generateId(prefix = 'comp'): string {
@@ -725,7 +726,7 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
 
     return (
         <ScreenContext.Provider value={contextValue}>
-            {children}
+            <ScreenDataFeedbackProvider>{children}</ScreenDataFeedbackProvider>
         </ScreenContext.Provider>
     );
 }

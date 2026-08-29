@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link2 } from 'lucide-react';
 import { useScreen } from '../../ScreenContext';
+import { useComponentDataFeedback } from '../../ScreenDataFeedbackContext';
 import type { ScreenCustomTheme } from '../../types';
 import { getRendererPlugin } from '../../plugins/registry';
 import { readComponentPluginMeta, resolveRuntimePluginId } from '../../plugins/runtime';
@@ -24,6 +25,7 @@ import { renderComponentAppearanceConfig } from './ComponentAppearanceSection';
 import { renderPositionSizeConfig } from './PositionSizeSection';
 import { renderComponentConfigSection } from './ComponentConfigSection';
 import { renderFieldMappingConfig } from './FieldMappingSection';
+import { DataBindingWorkflowSection } from './DataBindingWorkflowSection';
 import { renderExplainConfig } from './ExplainConfigSection';
 import { ChartAnnotationConfig } from './ChartAnnotationConfig';
 import { BackgroundImageRow } from './BackgroundImageRow';
@@ -70,6 +72,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     const selectedComponent = selectedIds.length === 1
         ? config.components.find((c) => c.id === selectedIds[0])
         : null;
+    const selectedDataFeedback = useComponentDataFeedback(selectedComponent?.id);
 
     useEffect(() => {
         setExplainState(null);
@@ -509,6 +512,13 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     /* A7: 样式 Tab 隐藏 advanced 分组,这些字段下沉到"高级" Tab */
                     hideGroups: ['advanced'],
                 })}
+
+                {isDataTab && shouldRenderSection('data-workflow', '数据配置流程', '样例', '字段映射') && (
+                    <DataBindingWorkflowSection
+                        component={selectedComponent}
+                        feedback={selectedDataFeedback}
+                    />
+                )}
 
                 {/* Data Source */}
                 {isDataTab && shouldRenderSection('data-source', '数据', 'sql', 'card', 'api', 'dataset', 'metric') && (

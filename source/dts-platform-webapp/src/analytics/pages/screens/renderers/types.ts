@@ -3,6 +3,7 @@
 import type { ComponentType } from 'react';
 import type { CardData, ScreenComponent, ScreenCustomTheme, ScreenTheme } from '../types';
 import type { ScreenThemeTokens } from '../screenThemes';
+import type { ComponentDataFeedback } from '../ScreenDataFeedbackContext';
 
 export type ReactEChartsComponent = ComponentType<{
     style?: React.CSSProperties;
@@ -18,6 +19,8 @@ export interface ComponentRendererProps {
     fontFamily?: string;
     /** Callback to persist card-derived metadata (e.g. _sourceColumns) back to saved config */
     onConfigMeta?: (meta: Record<string, unknown>) => void;
+    /** Designer-only bridge for transient query status and sample rows. */
+    onDataFeedback?: (componentId: string, feedback: ComponentDataFeedback | null) => void;
 }
 
 /**

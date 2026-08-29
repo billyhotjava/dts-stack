@@ -14,7 +14,7 @@ import type { RendererPlugin } from '../plugins/types';
 import type { ReactEChartsComponent, ComponentRendererProps } from '../renderers/types';
 import { renderMarkdownToHtml } from '../renderers/shared/markdownUtils';
 import { ANNOTATABLE_TYPES, injectChartAnnotations } from '../renderers/shared/chartAnnotations';
-import { resolveSourceColumnsMeta, shouldPersistSourceColumns } from '../renderers/shared/sourceColumns';
+import { useDesignerDataBridge } from '../hooks/useDesignerDataBridge';
 import {
     resolveTextColor, estimateVisualTextWidth, truncateTextByVisualWidth,
     resolveFilterOptions, resolveTabOptions,
@@ -59,7 +59,7 @@ import { DelayReasonMatrix } from '../../project-cockpit/components/DelayReasonM
 // - chartUtils.ts, tableUtils.tsx, markdownUtils.ts, geoJsonCache.ts
 // - InteractionLayer.tsx (interaction hook + screen-reference URL resolution)
 
-export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, customTheme, fontFamily, onConfigMeta }: ComponentRendererProps) {
+export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, customTheme, fontFamily, onConfigMeta, onDataFeedback }: ComponentRendererProps) {
     const { type, config, width, height, dataSource, drillDown } = component;
 
     const runtime = useScreenRuntime();
@@ -197,14 +197,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         clearChartDragHandlers();
     }, [clearChartDragHandlers, clearLegendDragHandlers, clearTitleDragHandlers, component.id]);
 
-    useEffect(() => {
-        if (!onConfigMetaRef.current) return;
-        const newCols = resolveSourceColumnsMeta(cardData);
-        // Only update if columns actually changed (avoid infinite loop)
-        if (shouldPersistSourceColumns(config._sourceColumns as Array<{ name?: string }> | undefined, newCols)) {
-            onConfigMetaRef.current({ _sourceColumns: newCols });
-        }
-    }, [cardData, config._sourceColumns]);
+    useDesignerDataBridge({
+        componentId: component.id, mode,
+        data: cardData, loading: cardLoading, error: cardError,
+        previousColumns: config._sourceColumns as Array<{ name?: string }> | undefined,
+        onConfigMeta: persistConfigMeta, onDataFeedback,
+    });
 
     // For datetime component, update every second
     const [currentTime, setCurrentTime] = useState(new Date());
