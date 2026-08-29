@@ -129,3 +129,21 @@ where tablename = 'ingestion_execution'
 - 未修改 Airflow DAG；发布后仍为 57 个总 DAG、34 个接入 DAG、0 个 import error。
 - 本地 Chrome 150 真实只读旅程通过，关键编排 API 全部 200；Chrome 95 仍需现场复验。
 - 未实际切回旧镜像；回滚恢复能力由不可覆盖 tag、精确旧 digest、expand schema 和顺序恢复命令证明，真实切回仍需维护窗口。
+
+## 2026-08-29 独立编排入口退役增量
+
+本次增量只替换 `dts-admin`、`dts-platform`、`dts-platform-webapp`，不重建 `dts-ingestion`，不修改或清理 Airflow DAG。发布 revision 为 `0ec0a9758e071514acce72765dd0922324f99162`，镜像从干净 detached worktree 构建。
+
+| 服务 | 发布前镜像 | 发布后镜像 |
+|---|---|---|
+| `dts-admin` | `sha256:d3a7890a30b…` | `sha256:ac4163d2c8cc…` |
+| `dts-platform` | `sha256:c741b8c1ef23…` | `sha256:8f143aeccb45…` |
+| `dts-platform-webapp` | `sha256:095997b4ccc6…` | `sha256:9071444d918b…` |
+
+- 回滚标签统一为 `rollback-sprint103-retirement-20260829-145249`，分别绑定上述三个发布前精确镜像。
+- 发布顺序为 Admin → Platform → Webapp；Admin 和 Platform 健康放行后才切换前端。
+- Admin changeSet `20260829-01-retire-task-orchestration-menu` 已执行，目标菜单记录为 `deleted=true`，未删除历史行和角色绑定。
+- Admin、Platform 健康为 `UP`；Webapp `nginx -t` 成功，内外部首页为 200；真实 Chrome 登录旅程 1/1 通过。
+- Platform 启动后仍有既有 `machineActor is not trusted` 定时审计错误，不影响健康、菜单迁移或本次路由；该告警不计入本次改动。
+- 回滚时按 Webapp → Platform → Admin 顺序把 `1.0.0` 重标到对应 rollback 镜像并单服务重建；数据库菜单软删除可使用 changeSet rollback 恢复，但仅在确认产品范围需要回退时执行。
+- Chrome 95 本机不可用，仍需客户现场复验；真实运行库当前无接入任务，业务任务行与执行动作未纳入本次只读发布验收。
