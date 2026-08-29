@@ -71,9 +71,43 @@ async function installReadOnlyFixture(page: Page) {
 	await page.route(/^https?:\/\/[^/]+\/(?:(?:platform|admin|analytics|bi)\/)?api\//, (route) => {
 		const { pathname } = new URL(route.request().url());
 		let data: unknown = { authenticated: true };
-		if (pathname.endsWith("/infra/data-source-selections")) data = { items: [] };
+		if (pathname.endsWith("/infra/data-source-selections")) {
+			data = {
+				items: [
+					{
+						id: "e2e-source-1",
+						name: "核心订单库",
+						type: "postgresql",
+						connectorName: "PostgreSQL",
+						status: "ACTIVE",
+						heartbeatStatus: "UP",
+					},
+				],
+			};
+		}
 		else if (pathname.endsWith("/ingestion/tasks/list")) {
-			data = { content: [], totalElements: 0, totalPages: 0, number: 0, size: 10 };
+			data = {
+				content: [
+					{
+						id: 103,
+						name: "订单增量接入",
+						description: "核心订单数据增量入湖",
+						sourceType: "postgresqlreader",
+						sourceDataSourceId: "e2e-source-1",
+						sourceConfig: { selectedTables: ["orders"] },
+						syncMode: "incremental",
+						status: "active",
+						lastExecutionStatus: "SUCCESS",
+						lastExecutedAt: "2026-08-29T08:30:00Z",
+						createdBy: "数据集成管理员",
+						classificationSeal: { effectiveLevel: "INTERNAL" },
+					},
+				],
+				totalElements: 1,
+				totalPages: 1,
+				number: 0,
+				size: 10,
+			};
 		} else if (pathname.endsWith("/infra/data-sources")) data = [];
 		else if (pathname.endsWith("/menu/tree")) data = menuTree;
 		return route.fulfill({
@@ -103,6 +137,7 @@ test("数据集成原型主线保留表格概览、连接管理与旧详情重�
 	).toBeVisible();
 	const overviewTable = page.getByRole("table").first();
 	await expect(overviewTable).toBeVisible();
+	await expect(overviewTable.getByRole("link", { name: "订单增量接入", exact: true })).toBeVisible();
 	for (const heading of [
 		"接入名称",
 		"接入方式",
@@ -111,11 +146,17 @@ test("数据集成原型主线保留表格概览、连接管理与旧详情重�
 		"生命周期",
 		"健康状态",
 		"最近运行",
-		"负责人 / 密级",
 		"操作",
 	]) {
 		await expect(overviewTable.getByRole("columnheader", { name: heading, exact: true })).toBeVisible();
 	}
+	await expect(overviewTable.getByRole("columnheader", { name: "负责人 / 密级", exact: true })).toHaveCount(0);
+
+	await page.getByRole("button", { name: "新建接入", exact: true }).click();
+	for (const item of ["数据库接入", "API 接入", "离线文件接入"]) {
+		await expect(page.getByRole("menuitem", { name: item, exact: true })).toBeVisible();
+	}
+	await page.keyboard.press("Escape");
 
 	await page.goto("/#/foundation/connections");
 	await expect(page.getByRole("heading", { name: "连接管理", exact: true })).toBeVisible();

@@ -21,6 +21,19 @@ test("data access workspace separates database, API and offline-file entry point
 	assert.doesNotMatch(WORKSPACE_SOURCE, /Revision|未版本化|versionLabel|versionHint/);
 });
 
+test("access overview uses one explicit create chooser and keeps recent execution visible at common desktop widths", () => {
+	assert.match(
+		WORKSPACE_SOURCE,
+		/const OVERVIEW_CREATE_ITEMS:[\s\S]*?key: "database"[\s\S]*?key: "api"[\s\S]*?key: "file"/,
+	);
+	assert.match(
+		WORKSPACE_SOURCE,
+		/<Dropdown[\s\S]*?items: OVERVIEW_CREATE_ITEMS[\s\S]*?openCreate\(key as AccessSourceKind\)[\s\S]*?新建接入[\s\S]*?<\/Dropdown>/,
+	);
+	assert.match(WORKSPACE_SOURCE, /title: "最近运行"[\s\S]*?width: 145/);
+	assert.match(WORKSPACE_SOURCE, /title: "负责人 \/ 密级"[\s\S]*?responsive: \["xxl"\]/);
+});
+
 test("access wizard uses one three-step shell for database, API and file plans", () => {
 	for (const component of ["DatabaseAccessStep", "ApiAccessStep", "FileAccessStep", "LandingScheduleStep"]) {
 		assert.match(WIZARD_SOURCE, new RegExp(component));
