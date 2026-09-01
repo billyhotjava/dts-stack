@@ -67,6 +67,7 @@ source/dts-bi-analytics/
 # dts build 
 builds/dist/
 builds/legacy-dist/
+builds/opmanager-dist/
 
 .m2/
 .env.bak
