@@ -140,6 +140,8 @@
     <include file="config/liquibase/changelog/20260810-01_data_architecture_navigation_expand.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260810-02_retire_legacy_modeling_layer_groups.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260810-03_converge_warehouse_planning_menu.xml" relativeToChangelogFile="false"/>
+    <!-- Forward prerequisite for fresh databases; keep the historical 20260810-04 changeSet immutable. -->
+    <include file="config/liquibase/changelog/20260901_01_portal_workbench_root_bootstrap.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260810-04_portal_primary_menu_order.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260811-01_retire_legacy_modeling_strategy_menu.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260817-01_sprint93_modeling_audit_catalog.xml" relativeToChangelogFile="false"/>
@@ -147,6 +149,8 @@
     <include file="config/liquibase/changelog/20260820-01_sprint96_data_portal_menu.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260822_01_quality_workflow_audit_catalog.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260829_01_retire_task_orchestration_menu.xml" relativeToChangelogFile="false"/>
+    <!-- Forward prerequisite for fresh databases; keep the historical 20260830-01 changeSet immutable. -->
+    <include file="config/liquibase/changelog/20260901_02_consumption_bi_hierarchy_bootstrap.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260830-01_separate_screen_management_and_data_portal.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260830-02_data_portal_audit_catalog.xml" relativeToChangelogFile="false"/>
     <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->

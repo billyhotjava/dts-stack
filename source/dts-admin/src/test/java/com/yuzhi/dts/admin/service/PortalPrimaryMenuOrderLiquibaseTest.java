@@ -2,13 +2,12 @@ package com.yuzhi.dts.admin.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.security.MessageDigest;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import liquibase.Contexts;
@@ -29,8 +28,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 class PortalPrimaryMenuOrderLiquibaseTest {
 
-    private static final String CHANGELOG =
+    private static final String BOOTSTRAP_CHANGELOG =
+        "config/liquibase/changelog/20260901_01_portal_workbench_root_bootstrap.xml";
+    private static final String ORDER_CHANGELOG =
         "config/liquibase/changelog/20260810-04_portal_primary_menu_order.xml";
+    private static final String ORDER_SEED_HASH = "5724f69e330b5d6d66f5885eb4efcda0b7e98d17f40aa98d249d865f9aef8e58";
 
     @Container
     private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:17.4")
@@ -48,15 +50,20 @@ class PortalPrimaryMenuOrderLiquibaseTest {
             statement.execute(
                 """
                     create table %s.portal_menu (
-                        id bigint primary key,
+                        id bigserial primary key,
                         name varchar(255) not null,
                         path varchar(500),
+                        component varchar(255),
                         sort_order integer,
                         metadata text,
                         parent_id bigint,
                         deleted boolean not null default false,
+                        created_by varchar(100),
+                        created_date timestamp,
                         last_modified_by varchar(100),
-                        last_modified_date timestamp
+                        last_modified_date timestamp,
+                        icon varchar(128),
+                        security_level varchar(32) not null default 'GENERAL'
                     )
                     """.formatted(schema)
             );
@@ -109,7 +116,7 @@ class PortalPrimaryMenuOrderLiquibaseTest {
         int previousChildParent = parentId(8);
         List<String> previousBindings = visibilityBindings();
 
-        runLiquibase(false);
+        runLiquibase(ORDER_CHANGELOG, false);
 
         assertThat(rootKeys()).containsExactly(
             "workbench",
@@ -122,15 +129,45 @@ class PortalPrimaryMenuOrderLiquibaseTest {
         );
         assertThat(parentId(8)).isEqualTo(previousChildParent);
         assertThat(visibilityBindings()).containsExactlyElementsOf(previousBindings);
-        assertThat(configValue("portal.menu.seed.hash")).isEqualTo(expectedSeedHash());
+        assertThat(configValue("portal.menu.seed.hash")).isEqualTo(ORDER_SEED_HASH);
 
-        runLiquibase(true);
+        runLiquibase(ORDER_CHANGELOG, true);
 
         assertThat(rootKeys()).containsExactlyElementsOf(previousOrder);
         assertThat(parentId(8)).isEqualTo(previousChildParent);
         assertThat(visibilityBindings()).containsExactlyElementsOf(previousBindings);
         assertThat(configValue("portal.menu.seed.hash")).isEqualTo("old-seed-hash");
         assertThat(configValue("portal.menu.primary.order.snapshot.20260810-04")).isNull();
+    }
+
+    @Test
+    void bootstrapsMissingWorkbenchBeforeOrderingFreshInstallBaseline() throws Exception {
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement()) {
+            statement.execute("delete from portal_menu where id = 1");
+        }
+
+        runLiquibase(BOOTSTRAP_CHANGELOG, false);
+        runLiquibase(ORDER_CHANGELOG, false);
+
+        assertThat(rootKeys()).containsExactly(
+            "workbench",
+            "resource",
+            "data-architecture",
+            "modeling",
+            "studio",
+            "governance",
+            "consumption"
+        );
+        assertThat(rootCreatedBy("workbench")).isEqualTo("portal-workbench-root-bootstrap");
+    }
+
+    @Test
+    void masterRunsWorkbenchBootstrapBeforePrimaryMenuOrder() throws Exception {
+        String master = new ClassPathResource("config/liquibase/master.xml").getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(master.indexOf("20260901_01_portal_workbench_root_bootstrap.xml"))
+            .isGreaterThanOrEqualTo(0)
+            .isLessThan(master.indexOf("20260810-04_portal_primary_menu_order.xml"));
     }
 
     private void seedMenus() throws Exception {
@@ -172,10 +209,13 @@ class PortalPrimaryMenuOrderLiquibaseTest {
                     )
                     """
             );
+            statement.execute(
+                "select setval(pg_get_serial_sequence('portal_menu', 'id'), (select max(id) from portal_menu), true)"
+            );
         }
     }
 
-    private void runLiquibase(boolean rollback) throws Exception {
+    private void runLiquibase(String changelog, boolean rollback) throws Exception {
         try (
             Connection connection = connectionInSchema();
             ClassLoaderResourceAccessor resources = new ClassLoaderResourceAccessor()
@@ -185,7 +225,7 @@ class PortalPrimaryMenuOrderLiquibaseTest {
             try {
                 database.setDefaultSchemaName(schema);
                 database.setLiquibaseSchemaName(schema);
-                try (Liquibase liquibase = new Liquibase(CHANGELOG, resources, database)) {
+                try (Liquibase liquibase = new Liquibase(changelog, resources, database)) {
                     if (rollback) {
                         liquibase.rollback(1, new Contexts(), new LabelExpression());
                     } else {
@@ -238,6 +278,19 @@ class PortalPrimaryMenuOrderLiquibaseTest {
         }
     }
 
+    private String rootCreatedBy(String key) throws Exception {
+        try (
+            Connection connection = connectionInSchema();
+            Statement statement = connection.createStatement();
+            ResultSet result = statement.executeQuery(
+                "select created_by from portal_menu where parent_id is null and deleted = false " +
+                "and metadata::jsonb ->> 'key' = '" + key.replace("'", "''") + "'"
+            )
+        ) {
+            return result.next() ? result.getString(1) : null;
+        }
+    }
+
     private String configValue(String key) throws Exception {
         try (
             Connection connection = connectionInSchema();
@@ -248,12 +301,6 @@ class PortalPrimaryMenuOrderLiquibaseTest {
         ) {
             return result.next() ? result.getString(1) : null;
         }
-    }
-
-    private String expectedSeedHash() throws Exception {
-        ClassPathResource resource = new ClassPathResource("config/data/portal-menu-seed.json");
-        byte[] bytes = resource.getContentAsByteArray();
-        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
     }
 
     private Connection openConnection() throws Exception {

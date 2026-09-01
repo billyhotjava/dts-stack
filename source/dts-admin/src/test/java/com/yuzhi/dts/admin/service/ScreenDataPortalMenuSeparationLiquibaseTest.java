@@ -2,6 +2,7 @@ package com.yuzhi.dts.admin.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -18,6 +19,7 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -25,7 +27,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @Testcontainers
 class ScreenDataPortalMenuSeparationLiquibaseTest {
 
-    private static final String CHANGELOG =
+    private static final String BOOTSTRAP_CHANGELOG =
+        "config/liquibase/changelog/20260901_02_consumption_bi_hierarchy_bootstrap.xml";
+    private static final String SEPARATION_CHANGELOG =
         "config/liquibase/changelog/20260830-01_separate_screen_management_and_data_portal.xml";
     private static final String EXPECTED_SEED_HASH = "586df4b4dc526042dcfc4e2e9ba49511e75a92753b5934768f08b9f9bd548f2f";
 
@@ -117,7 +121,7 @@ class ScreenDataPortalMenuSeparationLiquibaseTest {
 
     @Test
     void restoresLeaderScreenManagementAndPlacesAnalystPortalUnderBiAnalysisWithSafeRollback() throws Exception {
-        runLiquibase(false);
+        runLiquibase(SEPARATION_CHANGELOG, false);
 
         assertThat(menuId("sys.nav.portal.biScreens")).isEqualTo(5L);
         assertThat(menuTitle(5)).isEqualTo("大屏管理");
@@ -132,7 +136,7 @@ class ScreenDataPortalMenuSeparationLiquibaseTest {
         assertThat(rolesForMenu(portalId)).containsExactly("ROLE_BI_ANALYST");
         assertThat(configValue("portal.menu.seed.hash")).isEqualTo(EXPECTED_SEED_HASH);
 
-        runLiquibase(true);
+        runLiquibase(SEPARATION_CHANGELOG, true);
 
         assertThat(menuId("sys.nav.portal.biScreens")).isEqualTo(5L);
         assertThat(menuTitle(5)).isEqualTo("数据门户");
@@ -141,6 +145,42 @@ class ScreenDataPortalMenuSeparationLiquibaseTest {
         assertThat(menuCount("sys.nav.portal.biPortal")).isZero();
         assertThat(configValue("portal.menu.seed.hash")).isEqualTo("old-seed-hash");
         assertThat(configCount("portal.menu.screen-portal-separation.snapshot.20260830-01")).isZero();
+    }
+
+    @Test
+    void bootstrapsMissingBiHierarchyBeforeFreshInstallSeparation() throws Exception {
+        try (Connection connection = connectionInSchema(); Statement statement = connection.createStatement()) {
+            statement.execute("delete from portal_menu_visibility where menu_id = 4");
+            statement.execute("delete from portal_menu where id = 4");
+            statement.execute("delete from portal_menu where id = 3");
+            statement.execute("delete from portal_menu where id = 2");
+        }
+
+        runLiquibase(BOOTSTRAP_CHANGELOG, false);
+        runLiquibase(SEPARATION_CHANGELOG, false);
+
+        long biAppsId = menuId("sys.nav.portal.businessIntelligenceApps");
+        long biAnalysisId = menuId("sys.nav.portal.bi");
+        assertThat(parentId(biAppsId)).isEqualTo(1L);
+        assertThat(parentId(biAnalysisId)).isEqualTo(biAppsId);
+        assertThat(menuCreatedBy(biAppsId)).isEqualTo("consumption-bi-hierarchy-bootstrap");
+        assertThat(menuCreatedBy(biAnalysisId)).isEqualTo("consumption-bi-hierarchy-bootstrap");
+        assertThat(parentId(menuId("sys.nav.portal.biPortal"))).isEqualTo(biAnalysisId);
+
+        runLiquibase(SEPARATION_CHANGELOG, true);
+        runLiquibase(BOOTSTRAP_CHANGELOG, true);
+
+        assertThat(menuCount("sys.nav.portal.businessIntelligenceApps")).isZero();
+        assertThat(menuCount("sys.nav.portal.bi")).isZero();
+    }
+
+    @Test
+    void masterRunsBiHierarchyBootstrapBeforeScreenPortalSeparation() throws Exception {
+        String master = new ClassPathResource("config/liquibase/master.xml").getContentAsString(StandardCharsets.UTF_8);
+
+        assertThat(master.indexOf("20260901_02_consumption_bi_hierarchy_bootstrap.xml"))
+            .isGreaterThanOrEqualTo(0)
+            .isLessThan(master.indexOf("20260830-01_separate_screen_management_and_data_portal.xml"));
     }
 
     private void seedMenusAndAudiences() throws Exception {
@@ -194,7 +234,7 @@ class ScreenDataPortalMenuSeparationLiquibaseTest {
         }
     }
 
-    private void runLiquibase(boolean rollback) throws Exception {
+    private void runLiquibase(String changelog, boolean rollback) throws Exception {
         try (
             Connection connection = connectionInSchema();
             ClassLoaderResourceAccessor resources = new ClassLoaderResourceAccessor()
@@ -204,7 +244,7 @@ class ScreenDataPortalMenuSeparationLiquibaseTest {
             try {
                 database.setDefaultSchemaName(schema);
                 database.setLiquibaseSchemaName(schema);
-                try (Liquibase liquibase = new Liquibase(CHANGELOG, resources, database)) {
+                try (Liquibase liquibase = new Liquibase(changelog, resources, database)) {
                     if (rollback) {
                         liquibase.rollback(1, new Contexts(), new LabelExpression());
                     } else {
@@ -239,6 +279,10 @@ class ScreenDataPortalMenuSeparationLiquibaseTest {
 
     private String menuExternalLink(long menuId) throws Exception {
         return stringQuery("select metadata::jsonb ->> 'externalLink' from portal_menu where id = " + menuId);
+    }
+
+    private String menuCreatedBy(long menuId) throws Exception {
+        return stringQuery("select created_by from portal_menu where id = " + menuId);
     }
 
     private String configValue(String key) throws Exception {
