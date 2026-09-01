@@ -696,6 +696,22 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		),
 	},
 	{
+		path: "bi/portal/item/:bindingId",
+		element: (
+			<S>
+				<DataPortalPage />
+			</S>
+		),
+	},
+	{
+		path: "bi/portal/:contentType/:contentId",
+		element: (
+			<S>
+				<DataPortalPage />
+			</S>
+		),
+	},
+	{
 		path: "bi/portal/:screenId",
 		element: (
 			<S>

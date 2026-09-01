@@ -158,6 +158,21 @@ class AnalyticsAuditLoggingFilterTest {
         assertThat(grant.operationType()).isEqualTo("GRANT");
     }
 
+    @Test
+    void shouldClassifyDataPortalEditingAsARegisteredPortalMutation() throws Exception {
+        AnalyticsSessionService sessionService = mock(AnalyticsSessionService.class);
+        AnalyticsAuditForwarderService forwarder = mock(AnalyticsAuditForwarderService.class);
+        AnalyticsAuditLoggingFilter filter = new AnalyticsAuditLoggingFilter(sessionService, forwarder);
+
+        AnalyticsAuditEvent event = perform(filter, sessionService, forwarder, "POST", "/api/data-portal/directories");
+
+        assertThat(event.module()).isEqualTo("analytics.data-portal");
+        assertThat(event.resourceType()).isEqualTo("DATA_PORTAL");
+        assertThat(event.actionCode()).isEqualTo("ANALYTICS_DATA_PORTAL_CREATE");
+        assertThat(event.action()).isEqualTo("新增数据门户");
+        assertThat(event.operationType()).isEqualTo("CREATE");
+    }
+
     private AnalyticsAuditEvent perform(
         AnalyticsAuditLoggingFilter filter,
         AnalyticsSessionService sessionService,

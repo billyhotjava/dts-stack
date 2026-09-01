@@ -1,0 +1,377 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260830-01-separate-screen-management-and-data-portal" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <tableExists tableName="portal_menu_visibility"/>
+            <tableExists tableName="system_config"/>
+            <columnExists tableName="portal_menu" columnName="parent_id"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+            <columnExists tableName="portal_menu_visibility" columnName="menu_id"/>
+            <columnExists tableName="system_config" columnName="cfg_key"/>
+            <columnExists tableName="system_config" columnName="cfg_value"/>
+            <sequenceExists sequenceName="portal_menu_seq"/>
+            <sequenceExists sequenceName="portal_menu_visibility_seq"/>
+        </preConditions>
+        <comment>
+            恢复面向领导的大屏管理入口，并将面向专业分析师的数据门户作为独立节点放入
+            数据分析与服务 / 商业智能应用 / BI 分析。保留大屏管理菜单 ID 及其全部可见性绑定；
+            数据门户仅继承 BI 分析父节点或既有 BI 分析子项的受众，不硬编码现场角色。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT VARCHAR := 'screen-portal-separation-20260830';
+                snapshot_key CONSTANT VARCHAR := 'portal.menu.screen-portal-separation.snapshot.20260830-01';
+                seed_hash CONSTANT VARCHAR := '586df4b4dc526042dcfc4e2e9ba49511e75a92753b5934768f08b9f9bd548f2f';
+                consumption_id BIGINT;
+                bi_apps_id BIGINT;
+                bi_analysis_id BIGINT;
+                screens_id BIGINT;
+                screens_count INTEGER;
+                portal_id BIGINT;
+                portal_count INTEGER;
+                portal_created BOOLEAN := FALSE;
+                portal_sort_order INTEGER;
+                previous_seed_hash TEXT;
+                screens_snapshot JSONB;
+                portal_snapshot JSONB;
+                updated_count INTEGER;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:screen-portal-separation:20260830-01', 0));
+
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = snapshot_key) THEN
+                    RAISE EXCEPTION 'Screen/data-portal separation rollback snapshot already exists: %', snapshot_key;
+                END IF;
+
+                SELECT id
+                  INTO consumption_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND parent_id IS NULL
+                   AND (
+                       name = 'sys.nav.portal.dataConsumption'
+                       OR metadata LIKE '%"key":"consumption"%'
+                   )
+                 ORDER BY id
+                 LIMIT 1;
+
+                SELECT id
+                  INTO bi_apps_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND parent_id = consumption_id
+                   AND (
+                       name = 'sys.nav.portal.businessIntelligenceApps'
+                       OR metadata LIKE '%"key":"bi-apps"%'
+                   )
+                 ORDER BY id
+                 LIMIT 1;
+
+                SELECT id
+                  INTO bi_analysis_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND parent_id = bi_apps_id
+                   AND (
+                       name = 'sys.nav.portal.bi'
+                       OR metadata LIKE '%"titleKey":"sys.nav.portal.bi"%'
+                       OR metadata LIKE '%"key":"bi"%'
+                   )
+                 ORDER BY id
+                 LIMIT 1;
+
+                IF consumption_id IS NULL OR bi_apps_id IS NULL OR bi_analysis_id IS NULL THEN
+                    RAISE EXCEPTION 'Screen/data-portal separation requires 数据分析与服务 / 商业智能应用 / BI 分析';
+                END IF;
+
+                SELECT COUNT(*), MIN(id)
+                  INTO screens_count, screens_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.biScreens'
+                       OR metadata LIKE '%"titleKey":"sys.nav.portal.biScreens"%'
+                   );
+
+                IF screens_count <> 1 THEN
+                    RAISE EXCEPTION 'Screen/data-portal separation requires exactly one active biScreens row; found %', screens_count;
+                END IF;
+
+                SELECT COUNT(*), MIN(id)
+                  INTO portal_count, portal_id
+                  FROM portal_menu
+                 WHERE name = 'sys.nav.portal.biPortal'
+                    OR metadata LIKE '%"titleKey":"sys.nav.portal.biPortal"%';
+
+                IF portal_count > 1 THEN
+                    RAISE EXCEPTION 'Screen/data-portal separation found duplicate biPortal rows: %', portal_count;
+                END IF;
+
+                SELECT to_jsonb(menu_row)
+                  INTO screens_snapshot
+                  FROM portal_menu menu_row
+                 WHERE id = screens_id
+                 FOR UPDATE;
+
+                IF portal_count = 1 THEN
+                    SELECT to_jsonb(menu_row)
+                      INTO portal_snapshot
+                      FROM portal_menu menu_row
+                     WHERE id = portal_id
+                     FOR UPDATE;
+                ELSE
+                    portal_id := nextval('portal_menu_seq');
+                    portal_created := TRUE;
+                END IF;
+
+                SELECT cfg_value
+                  INTO previous_seed_hash
+                  FROM system_config
+                 WHERE cfg_key = 'portal.menu.seed.hash';
+
+                INSERT INTO system_config (
+                    cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                    display_name, config_scope, restart_required, owner, created_by, created_date,
+                    last_modified_by, last_modified_date
+                ) VALUES (
+                    snapshot_key,
+                    jsonb_build_object(
+                        'screens', screens_snapshot,
+                        'portalId', portal_id,
+                        'portalCreated', portal_created,
+                        'portal', portal_snapshot,
+                        'seedHash', previous_seed_hash
+                    )::TEXT,
+                    'Rollback snapshot for screen management and data portal separation',
+                    'SYSTEM', FALSE, 'JSON', FALSE, 0,
+                    'Screen management and data portal separation rollback snapshot', 'RUNTIME', FALSE, 'platform',
+                    actor, now(), actor, now()
+                );
+
+                UPDATE portal_menu
+                   SET name = 'sys.nav.portal.biScreens',
+                       parent_id = consumption_id,
+                       path = 'consumption/screens',
+                       component = NULL,
+                       sort_order = 2,
+                       metadata = '{"key":"screens","sectionKey":"consumption","entryKey":"screens","titleKey":"sys.nav.portal.biScreens","title":"大屏管理","icon":"solar:monitor-bold-duotone","externalLink":"/bi/screens"}',
+                       icon = 'solar:monitor-bold-duotone',
+                       deleted = FALSE,
+                       last_modified_by = actor,
+                       last_modified_date = now()
+                 WHERE id = screens_id;
+
+                GET DIAGNOSTICS updated_count = ROW_COUNT;
+                IF updated_count <> 1 THEN
+                    RAISE EXCEPTION 'Screen/data-portal separation expected one biScreens update, updated %', updated_count;
+                END IF;
+
+                SELECT COALESCE(MAX(sort_order), 0) + 1
+                  INTO portal_sort_order
+                  FROM portal_menu
+                 WHERE parent_id = bi_analysis_id
+                   AND deleted = FALSE
+                   AND id <> portal_id;
+
+                IF portal_created THEN
+                    INSERT INTO portal_menu (
+                        id, name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        portal_id,
+                        'sys.nav.portal.biPortal',
+                        'consumption/bi-apps/bi/portal',
+                        NULL,
+                        portal_sort_order,
+                        '{"key":"portal","sectionKey":"consumption","entryKey":"portal","titleKey":"sys.nav.portal.biPortal","title":"数据门户","icon":"solar:folder-with-files-bold-duotone","externalLink":"/bi/portal"}',
+                        bi_analysis_id,
+                        'solar:folder-with-files-bold-duotone',
+                        'GENERAL',
+                        FALSE,
+                        actor,
+                        now(),
+                        actor,
+                        now()
+                    );
+                ELSE
+                    UPDATE portal_menu
+                       SET name = 'sys.nav.portal.biPortal',
+                           parent_id = bi_analysis_id,
+                           path = 'consumption/bi-apps/bi/portal',
+                           component = NULL,
+                           sort_order = portal_sort_order,
+                           metadata = '{"key":"portal","sectionKey":"consumption","entryKey":"portal","titleKey":"sys.nav.portal.biPortal","title":"数据门户","icon":"solar:folder-with-files-bold-duotone","externalLink":"/bi/portal"}',
+                           icon = 'solar:folder-with-files-bold-duotone',
+                           deleted = FALSE,
+                           last_modified_by = actor,
+                           last_modified_date = now()
+                     WHERE id = portal_id;
+                END IF;
+
+                INSERT INTO portal_menu_visibility (
+                    id, menu_id, role_code, permission_code, data_level,
+                    created_by, created_date, last_modified_by, last_modified_date
+                )
+                SELECT
+                    nextval('portal_menu_visibility_seq'),
+                    portal_id,
+                    source.role_code,
+                    source.permission_code,
+                    source.data_level,
+                    actor,
+                    now(),
+                    actor,
+                    now()
+                FROM (
+                    SELECT DISTINCT role_code, permission_code, data_level
+                      FROM portal_menu_visibility
+                     WHERE menu_id = bi_analysis_id
+                    UNION
+                    SELECT DISTINCT visibility.role_code, visibility.permission_code, visibility.data_level
+                      FROM portal_menu_visibility visibility
+                      JOIN portal_menu sibling ON sibling.id = visibility.menu_id
+                     WHERE sibling.parent_id = bi_analysis_id
+                       AND sibling.id <> portal_id
+                       AND sibling.deleted = FALSE
+                       AND NOT EXISTS (
+                           SELECT 1
+                             FROM portal_menu_visibility parent_visibility
+                            WHERE parent_visibility.menu_id = bi_analysis_id
+                       )
+                ) source
+                WHERE NOT EXISTS (
+                    SELECT 1
+                      FROM portal_menu_visibility existing
+                     WHERE existing.menu_id = portal_id
+                       AND existing.role_code = source.role_code
+                       AND existing.permission_code IS NOT DISTINCT FROM source.permission_code
+                       AND existing.data_level = source.data_level
+                );
+
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = 'portal.menu.seed.hash') THEN
+                    UPDATE system_config
+                       SET cfg_value = seed_hash,
+                           description = COALESCE(NULLIF(description, ''), 'Portal menu seed hash'),
+                           last_modified_by = actor,
+                           last_modified_date = now()
+                     WHERE cfg_key = 'portal.menu.seed.hash';
+                ELSE
+                    INSERT INTO system_config (
+                        cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                        display_name, config_scope, restart_required, owner, created_by, created_date,
+                        last_modified_by, last_modified_date
+                    ) VALUES (
+                        'portal.menu.seed.hash', seed_hash, 'Portal menu seed hash', 'SYSTEM', FALSE, 'STRING', FALSE, 0,
+                        'Portal menu seed hash', 'RUNTIME', FALSE, 'platform', actor, now(), actor, now()
+                    );
+                END IF;
+            END $do$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    actor CONSTANT VARCHAR := 'screen-portal-separation-20260830';
+                    snapshot_key CONSTANT VARCHAR := 'portal.menu.screen-portal-separation.snapshot.20260830-01';
+                    snapshot JSONB;
+                    screens JSONB;
+                    portal JSONB;
+                    previous_seed_hash TEXT;
+                    restored_count INTEGER;
+                BEGIN
+                    PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:screen-portal-separation:20260830-01', 0));
+
+                    SELECT cfg_value::jsonb
+                      INTO snapshot
+                      FROM system_config
+                     WHERE cfg_key = snapshot_key;
+
+                    IF snapshot IS NULL OR snapshot -> 'screens' IS NULL OR snapshot ->> 'portalId' IS NULL THEN
+                        RAISE EXCEPTION 'Screen/data-portal separation rollback snapshot is missing: %', snapshot_key;
+                    END IF;
+
+                    screens := snapshot -> 'screens';
+                    portal := snapshot -> 'portal';
+
+                    DELETE FROM portal_menu_visibility
+                     WHERE menu_id = (snapshot ->> 'portalId')::BIGINT
+                       AND created_by = actor
+                       AND last_modified_by = actor;
+
+                    IF (snapshot ->> 'portalCreated')::BOOLEAN THEN
+                        DELETE FROM portal_menu
+                         WHERE id = (snapshot ->> 'portalId')::BIGINT
+                           AND created_by = actor
+                           AND last_modified_by = actor;
+
+                        GET DIAGNOSTICS restored_count = ROW_COUNT;
+                        IF restored_count <> 1 THEN
+                            RAISE EXCEPTION 'Screen/data-portal rollback refused because the created portal row changed';
+                        END IF;
+                    ELSE
+                        UPDATE portal_menu
+                           SET name = portal ->> 'name',
+                               parent_id = (portal ->> 'parent_id')::BIGINT,
+                               path = portal ->> 'path',
+                               component = portal ->> 'component',
+                               sort_order = (portal ->> 'sort_order')::INTEGER,
+                               metadata = portal ->> 'metadata',
+                               icon = portal ->> 'icon',
+                               security_level = portal ->> 'security_level',
+                               deleted = (portal ->> 'deleted')::BOOLEAN,
+                               last_modified_by = actor || '-rollback',
+                               last_modified_date = now()
+                         WHERE id = (snapshot ->> 'portalId')::BIGINT
+                           AND last_modified_by = actor;
+
+                        GET DIAGNOSTICS restored_count = ROW_COUNT;
+                        IF restored_count <> 1 THEN
+                            RAISE EXCEPTION 'Screen/data-portal rollback refused because the portal row changed';
+                        END IF;
+                    END IF;
+
+                    UPDATE portal_menu
+                       SET name = screens ->> 'name',
+                           parent_id = (screens ->> 'parent_id')::BIGINT,
+                           path = screens ->> 'path',
+                           component = screens ->> 'component',
+                           sort_order = (screens ->> 'sort_order')::INTEGER,
+                           metadata = screens ->> 'metadata',
+                           icon = screens ->> 'icon',
+                           security_level = screens ->> 'security_level',
+                           deleted = (screens ->> 'deleted')::BOOLEAN,
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                     WHERE id = (screens ->> 'id')::BIGINT
+                       AND last_modified_by = actor;
+
+                    GET DIAGNOSTICS restored_count = ROW_COUNT;
+                    IF restored_count <> 1 THEN
+                        RAISE EXCEPTION 'Screen/data-portal rollback refused because the screen row changed';
+                    END IF;
+
+                    previous_seed_hash := snapshot ->> 'seedHash';
+                    IF previous_seed_hash IS NULL THEN
+                        DELETE FROM system_config
+                         WHERE cfg_key = 'portal.menu.seed.hash'
+                           AND last_modified_by = actor;
+                    ELSE
+                        UPDATE system_config
+                           SET cfg_value = previous_seed_hash,
+                               last_modified_by = actor || '-rollback',
+                               last_modified_date = now()
+                         WHERE cfg_key = 'portal.menu.seed.hash';
+                    END IF;
+
+                    DELETE FROM system_config WHERE cfg_key = snapshot_key;
+                END $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

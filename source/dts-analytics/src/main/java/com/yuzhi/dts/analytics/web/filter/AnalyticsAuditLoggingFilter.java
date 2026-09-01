@@ -156,6 +156,9 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
         if ("screen".equals(segment)) {
             return "SCREEN";
         }
+        if ("data-portal".equals(segment)) {
+            return "DATA_PORTAL";
+        }
         return "analytics." + segment;
     }
 
@@ -369,6 +372,7 @@ public class AnalyticsAuditLoggingFilter extends OncePerRequestFilter {
                 Map.entry("dataset", "数据集"),
                 Map.entry("database", "数据源"),
                 Map.entry("collection", "集合"),
+                Map.entry("data-portal", "数据门户"),
                 Map.entry("screen-templates", "大屏模板"),
                 Map.entry("screen-packs", "大屏项目包"),
                 Map.entry("screen-plugins", "大屏插件"),

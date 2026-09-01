@@ -80,10 +80,11 @@ class PortalMenuSeedDefaultsContractTest {
             .filter(node -> "screens".equals(node.get("key")))
             .findFirst()
             .orElse(null);
-        assertNotNull(screens, "数据门户 must live under 数据分析与服务");
+        assertNotNull(screens, "大屏管理 must live directly under 数据分析与服务");
         assertEquals("screens", screens.get("path"));
-        assertEquals("数据门户", screens.get("title"));
-        assertEquals("/bi/portal", screens.get("externalLink"));
+        assertEquals("sys.nav.portal.biScreens", screens.get("titleKey"));
+        assertEquals("大屏管理", screens.get("title"));
+        assertEquals("/bi/screens", screens.get("externalLink"));
 
         Map<String, Object> biAppsRoot = listOfMaps(consumptionRoot.get("children"))
             .stream()
@@ -91,10 +92,23 @@ class PortalMenuSeedDefaultsContractTest {
             .findFirst()
             .orElse(null);
         assertNotNull(biAppsRoot, "商业智能应用 menu must still exist under 数据分析与服务");
-        assertFalse(
-            containsTitleKey(listOfMaps(biAppsRoot.get("children")), "sys.nav.portal.biScreens"),
-            "商业智能应用 subtree must not own 数据门户"
-        );
+        Map<String, Object> biAnalysis = listOfMaps(biAppsRoot.get("children"))
+            .stream()
+            .filter(node -> "bi".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(biAnalysis, "商业智能应用 must expose BI 分析");
+
+        Map<String, Object> dataPortal = listOfMaps(biAnalysis.get("children"))
+            .stream()
+            .filter(node -> "portal".equals(node.get("key")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(dataPortal, "数据门户 must live under 商业智能应用 / BI 分析");
+        assertEquals("portal", dataPortal.get("path"));
+        assertEquals("sys.nav.portal.biPortal", dataPortal.get("titleKey"));
+        assertEquals("数据门户", dataPortal.get("title"));
+        assertEquals("/bi/portal", dataPortal.get("externalLink"));
 
         ClassPathResource defaultsResource = new ClassPathResource("config/data/role-menu-defaults.json");
         List<Map<String, Object>> defaults = objectMapper.readValue(
@@ -106,10 +120,20 @@ class PortalMenuSeedDefaultsContractTest {
             .filter(rule -> "sys.nav.portal.biScreens".equals(rule.get("code")))
             .findFirst()
             .orElse(null);
-        assertNotNull(screensDefault, "数据门户 role default entry must stay documented");
-        assertEquals("数据门户", screensDefault.get("title"));
-        assertEquals("/bi/portal", screensDefault.get("route"));
-        assertTrue(((List<?>) screensDefault.get("requiredRoles")).isEmpty(), "数据门户 seed must not add default role bindings");
+        assertNotNull(screensDefault, "大屏管理 role default entry must stay documented");
+        assertEquals("大屏管理", screensDefault.get("title"));
+        assertEquals("/bi/screens", screensDefault.get("route"));
+        assertTrue(((List<?>) screensDefault.get("requiredRoles")).isEmpty(), "大屏管理 seed must not add default role bindings");
+
+        Map<String, Object> portalDefault = defaults
+            .stream()
+            .filter(rule -> "sys.nav.portal.biPortal".equals(rule.get("code")))
+            .findFirst()
+            .orElse(null);
+        assertNotNull(portalDefault, "数据门户 role default entry must stay documented separately");
+        assertEquals("数据门户", portalDefault.get("title"));
+        assertEquals("/bi/portal", portalDefault.get("route"));
+        assertTrue(((List<?>) portalDefault.get("requiredRoles")).isEmpty(), "数据门户 seed must not guess onsite role bindings");
     }
 
     @Test
@@ -129,6 +153,28 @@ class PortalMenuSeedDefaultsContractTest {
         String lowerXml = xml.toLowerCase(Locale.ROOT);
         assertFalse(lowerXml.contains("delete from portal_menu_visibility"));
         assertFalse(lowerXml.contains("delete from portal_menu "));
+    }
+
+    @Test
+    void dataPortalSeparationMigrationRestoresScreenManagementAndAddsBiPortalWithoutDeletingBindings() throws Exception {
+        String changelogFile = "20260830-01_separate_screen_management_and_data_portal.xml";
+        ClassPathResource master = new ClassPathResource("config/liquibase/master.xml");
+        assertTrue(master.getContentAsString(StandardCharsets.UTF_8).contains(changelogFile));
+
+        ClassPathResource changelog = new ClassPathResource("config/liquibase/changelog/" + changelogFile);
+        assertTrue(changelog.exists(), "screen management and data portal separation changelog must exist");
+        String xml = changelog.getContentAsString(StandardCharsets.UTF_8);
+        assertTrue(xml.contains("sys.nav.portal.biScreens"));
+        assertTrue(xml.contains("sys.nav.portal.biPortal"));
+        assertTrue(xml.contains("/bi/screens"));
+        assertTrue(xml.contains("/bi/portal"));
+        assertTrue(xml.contains("portal_menu_visibility"));
+        assertTrue(xml.contains("portal.menu.seed.hash"));
+
+        String upMigration = xml.substring(0, xml.indexOf("<rollback>")).toLowerCase(Locale.ROOT);
+        assertFalse(upMigration.contains("delete from portal_menu_visibility"));
+        assertFalse(upMigration.contains("delete from portal_menu "));
+        assertTrue(xml.contains("created_by = actor"), "rollback may only remove rows created by this migration");
     }
 
     @Test

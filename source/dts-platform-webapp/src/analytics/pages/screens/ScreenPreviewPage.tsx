@@ -131,6 +131,32 @@ function fabDividerBg(isDark: boolean): string {
 	return isDark ? 'rgba(255, 255, 255, 0.08)' : 'var(--runtime-border)';
 }
 
+function previewStateCardStyle(isDark: boolean): React.CSSProperties {
+	return isDark
+		? {
+			width: 'min(480px, 100%)',
+			padding: 28,
+			border: '1px solid rgba(255, 255, 255, 0.12)',
+			borderRadius: 30,
+			background: 'rgba(15, 22, 36, 0.96)',
+			color: 'rgba(255, 255, 255, 0.92)',
+			boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
+		}
+		: {
+			width: 'min(480px, 100%)',
+			padding: 28,
+			border: '1px solid rgba(148, 163, 184, 0.22)',
+			borderRadius: 30,
+			background: 'rgba(255, 255, 255, 0.96)',
+			color: 'rgba(15, 23, 42, 0.92)',
+			boxShadow: '0 20px 40px rgba(15, 23, 42, 0.16)',
+		};
+}
+
+function previewStateMessageColor(isDark: boolean): string {
+	return isDark ? 'rgba(255, 255, 255, 0.72)' : 'rgba(71, 85, 105, 0.9)';
+}
+
 export default function ScreenPreviewPage() {
 	const { id } = useParams<{ id: string }>();
 	const [runtimeParams] = useSearchParams();
@@ -152,12 +178,6 @@ export default function ScreenPreviewPage() {
 	const [scale, setScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
 	const [manualScale, setManualScale] = useState<number | null>(null);
-	// Stretch-mode axis scales: distinct sx/sy so the canvas fills the viewport
-	// with zero letterbox regardless of screen aspect ratio. Only active when
-	// manualScale === null (auto fit-to-screen). Manual zoom still uses uniform scale.
-	const [autoScaleX, setAutoScaleX] = useState(1);
-	const [autoScaleY, setAutoScaleY] = useState(1);
-	const [viewportSize, setViewportSize] = useState({ w: 0, h: 0 });
 	const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_BATCH_SIZE);
 	// ScaleAdapter mode: activated via ?scaleMode=fit|fill|stretch
@@ -245,7 +265,6 @@ export default function ScreenPreviewPage() {
 		const viewport = window.visualViewport;
 		const vw = viewport?.width ?? window.innerWidth;
 		const vh = viewport?.height ?? window.innerHeight;
-		setViewportSize({ w: vw, h: vh });
 		const nextMode: DeviceMode = resolveDeviceModeByViewport(vw);
 		setDeviceMode(nextMode);
 		const nextAutoScale = resolveRuntimeScale({
@@ -257,12 +276,6 @@ export default function ScreenPreviewPage() {
 			allowUpscale: true,
 		}).scale;
 		setAutoScale(nextAutoScale);
-		// Stretch axes: each axis fills the viewport independently, eliminating
-		// letterbox when the viewport aspect ratio differs from the design canvas.
-		const sx = vw / Math.max(1, contentBounds.width);
-		const sy = vh / Math.max(1, contentBounds.height);
-		setAutoScaleX(sx);
-		setAutoScaleY(sy);
 		if (manualScale === null) {
 			setScale(nextAutoScale);
 		}
@@ -394,18 +407,12 @@ export default function ScreenPreviewPage() {
 		return () => document.removeEventListener('mousedown', handleClick);
 	}, [fabOpen]);
 
-	// Auto mode = stretch (fill viewport, no letterbox); manual zoom = uniform.
-	// Uniform path preserves legacy behaviour including zoom-fallback for interactive filters.
-	const useStretchFill = manualScale === null;
-	const runtimeCanvasScaleStyle = useMemo(() => {
-		if (useStretchFill) {
-			return {
-				transform: `scale(${autoScaleX}, ${autoScaleY})`,
-				transformOrigin: 'top left',
-			} as const;
-		}
-		return resolveRuntimeCanvasScaleStyle(scale, components);
-	}, [useStretchFill, autoScaleX, autoScaleY, scale, components]);
+	// Automatic and manual preview zoom both preserve the authored aspect ratio.
+	// Non-uniform stretch remains available only through the explicit scaleMode query parameter.
+	const runtimeCanvasScaleStyle = useMemo(
+		() => resolveRuntimeCanvasScaleStyle(scale, components),
+		[scale, components],
+	);
 
 	const canvasRef = useRef<HTMLDivElement>(null);
 	const rawTheme = (!loading && !error && screen) ? (screen as { theme?: string }).theme as ScreenTheme | undefined : undefined;
@@ -428,22 +435,18 @@ export default function ScreenPreviewPage() {
 		return (
 			<div
 				className="fixed inset-0 overflow-hidden p-0 box-border"
-				style={{ ...themeVars(true), background: themeBg(true), color: themeColor(true) }}
+				style={{ ...themeVars(isDark), background: themeBg(isDark), color: themeColor(isDark) }}
 			>
 				<div className="fixed inset-0 flex items-center justify-center p-6">
 					<div
+						data-testid="screen-preview-state-card"
+						aria-live="polite"
+						aria-busy="true"
 						className="text-center"
-						style={{
-							width: 'min(480px, 100%)',
-							padding: 28,
-							border: '1px solid rgba(255, 255, 255, 0.12)',
-							borderRadius: 30,
-							background: 'rgba(255, 255, 255, 0.9)',
-							boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
-						}}
+						style={previewStateCardStyle(isDark)}
 					>
 						<h1 className="mb-2.5 text-[26px] font-bold tracking-tight" style={{ letterSpacing: '-0.04em' }}>正在加载预览</h1>
-						<p className="m-0" style={{ color: 'rgba(255, 255, 255, 0.5)', lineHeight: 1.7 }}>正在准备已发布运行态画布和设备适配信息。</p>
+						<p className="m-0" style={{ color: previewStateMessageColor(isDark), lineHeight: 1.7 }}>正在准备大屏画布和设备适配信息。</p>
 					</div>
 				</div>
 			</div>
@@ -454,22 +457,17 @@ export default function ScreenPreviewPage() {
 		return (
 			<div
 				className="fixed inset-0 overflow-hidden p-0 box-border"
-				style={{ ...themeVars(true), background: themeBg(true), color: themeColor(true) }}
+				style={{ ...themeVars(isDark), background: themeBg(isDark), color: themeColor(isDark) }}
 			>
 				<div className="fixed inset-0 flex items-center justify-center p-6">
 					<div
+						data-testid="screen-preview-state-card"
+						role="alert"
 						className="text-center"
-						style={{
-							width: 'min(480px, 100%)',
-							padding: 28,
-							border: '1px solid rgba(255, 255, 255, 0.12)',
-							borderRadius: 30,
-							background: 'rgba(255, 255, 255, 0.9)',
-							boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
-						}}
+						style={previewStateCardStyle(isDark)}
 					>
 						<h1 className="mb-2.5 text-[26px] font-bold tracking-tight" style={{ letterSpacing: '-0.04em' }}>预览不可用</h1>
-						<p className="m-0" style={{ color: 'rgba(255, 255, 255, 0.5)', lineHeight: 1.7 }}>{error || '未找到大屏'}</p>
+						<p className="m-0" style={{ color: previewStateMessageColor(isDark), lineHeight: 1.7 }}>{error || '未找到大屏'}</p>
 					</div>
 				</div>
 			</div>
@@ -478,14 +476,8 @@ export default function ScreenPreviewPage() {
 
 	const screenWidth = contentBounds.width;
 	const screenHeight = contentBounds.height;
-	// In stretch-fill mode the stage matches the viewport exactly (no letterbox);
-	// in manual-zoom mode the stage is sized from the uniform scale (legacy behaviour).
-	const stageWidth = useStretchFill
-		? Math.max(1, viewportSize.w || screenWidth * scale)
-		: Math.max(1, screenWidth * scale);
-	const stageHeight = useStretchFill
-		? Math.max(1, viewportSize.h || screenHeight * scale)
-		: Math.max(1, screenHeight * scale);
+	const stageWidth = Math.max(1, screenWidth * scale);
+	const stageHeight = Math.max(1, screenHeight * scale);
 	const scalePercent = Math.round(scale * 100);
 
 	return (
@@ -596,12 +588,16 @@ export default function ScreenPreviewPage() {
 				{/* Carousel page indicator */}
 				{carousel.pageCount > 1 && (
 					<div
+						data-testid="screen-preview-pager"
+						role="navigation"
+						aria-label="大屏页面切换"
 						className="fixed bottom-[18px] left-1/2 z-[10990] flex items-center gap-2.5 rounded-full backdrop-blur-[16px]"
 						style={{
 							minHeight: 50,
 							padding: '8px 12px',
 							border: '1px solid var(--runtime-border)',
-							background: 'rgba(255, 255, 255, 0.9)',
+							background: 'var(--runtime-control-bg)',
+							color: 'var(--runtime-control-text)',
 							boxShadow: 'var(--runtime-control-shadow)',
 							transform: 'translateX(-50%)',
 						}}

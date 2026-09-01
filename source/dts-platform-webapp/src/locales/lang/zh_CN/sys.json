@@ -182,6 +182,8 @@
 				"opsCenter": "运维与监控",
 				"serviceCenter": "数据服务中心",
 				"businessIntelligenceApps": "商业智能应用",
+				"biScreens": "大屏管理",
+				"biPortal": "数据门户",
 				"exploreSharing": "结果集分享",
 				"exploreSharingCaption": "受控分享，支持有效期与可见范围",
 				"exploreExport": "导出中心",

@@ -27,6 +27,33 @@ export type CollectionItem = {
 	updated_at?: string;
 };
 
+export type DataPortalContentType = "SCREEN" | "DASHBOARD";
+
+export type DataPortalDirectoryItem = {
+	id: number;
+	name: string;
+	parent_id: number | null;
+	sort_order: number;
+	version_no?: number;
+	created_at?: string;
+	updated_at?: string;
+};
+
+export type DataPortalBindingItem = {
+	id: number;
+	directory_id: number;
+	content_type: DataPortalContentType;
+	content_id: number;
+	sort_order: number;
+	created_at?: string;
+};
+
+export type DataPortalSnapshot = {
+	can_write: boolean;
+	directories: DataPortalDirectoryItem[];
+	items: DataPortalBindingItem[];
+};
+
 export type DashboardListItem = {
 	id: number;
 	name?: string;
@@ -1965,6 +1992,24 @@ export const analyticsApi = {
 	updateCollection: (id: number, body: { name?: string; parent_id?: number | null; description?: string | null }) =>
 		requestJson<CollectionListItem>(`/bi/api/collection/${encodeURIComponent(String(id))}`, "PUT", body),
 	deleteCollection: (id: number) => requestJson<void>(`/bi/api/collection/${encodeURIComponent(String(id))}`, "DELETE"),
+	getDataPortal: () => fetchJson<DataPortalSnapshot>("/bi/api/data-portal"),
+	createDataPortalDirectory: (body: { name: string; parent_id: number | null }) =>
+		sendJson<DataPortalDirectoryItem>("/bi/api/data-portal/directories", body),
+	updateDataPortalDirectory: (id: number, body: { name: string; parent_id: number | null }) =>
+		requestJson<DataPortalDirectoryItem>(
+			`/bi/api/data-portal/directories/${encodeURIComponent(String(id))}`,
+			"PUT",
+			body,
+		),
+	deleteDataPortalDirectory: (id: number) =>
+		requestJson<void>(`/bi/api/data-portal/directories/${encodeURIComponent(String(id))}`, "DELETE"),
+	createDataPortalBinding: (body: {
+		directory_id: number;
+		content_type: DataPortalContentType;
+		content_id: number;
+	}) => sendJson<DataPortalBindingItem>("/bi/api/data-portal/items", body),
+	deleteDataPortalBinding: (id: number) =>
+		requestJson<void>(`/bi/api/data-portal/items/${encodeURIComponent(String(id))}`, "DELETE"),
 	listDashboards: () => fetchJson<DashboardListItem[]>("/bi/api/dashboard"),
 	getDashboard: (id: string | number) =>
 		fetchJson<DashboardDetail>(`/bi/api/dashboard/${encodeURIComponent(String(id))}`),

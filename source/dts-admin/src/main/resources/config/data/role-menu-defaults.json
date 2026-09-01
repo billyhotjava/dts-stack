@@ -378,9 +378,15 @@
     "requiredRoles": []
   },
   {
-    "code": "sys.nav.portal.biScreens",
+    "code": "sys.nav.portal.biPortal",
     "title": "数据门户",
     "route": "/bi/portal",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.biScreens",
+    "title": "大屏管理",
+    "route": "/bi/screens",
     "requiredRoles": []
   },
   {

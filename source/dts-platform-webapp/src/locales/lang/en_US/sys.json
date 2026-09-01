@@ -177,6 +177,8 @@
 				"opsCenter": "Operations & monitoring",
 				"serviceCenter": "Data service center",
 				"businessIntelligenceApps": "Business intelligence",
+				"biScreens": "Screen management",
+				"biPortal": "Data portal",
 				"services": "Data services",
 				"servicesConsumption": "Business consumption",
 				"servicesConsumptionCaption": "Publish governed assets to reports, metrics, APIs, and acceptance packages",

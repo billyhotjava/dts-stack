@@ -4,7 +4,7 @@ import { expect, type Locator, type Page, type Route, test } from "@playwright/t
 const SCREEN_ID = "sprint66-generic-drilldown";
 const EVIDENCE_DIR = path.resolve(
 	import.meta.dirname,
-	"../../../workflow/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/chrome95",
+	"../../../worklog/v2.2.3/sprint-66-202607-bi-board-drilldown-refactoring/it/evidence/chrome95",
 );
 
 type Component = {
@@ -251,7 +251,11 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
 	await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
 
-async function clickChartDataItemNear(canvas: Locator, center: { x: number; y: number }, radius = 24) {
+async function fulfillPlatformJson(route: Route, data: unknown) {
+	await fulfillJson(route, { status: 200, data, message: "OK" });
+}
+
+async function clickChartDataItemNear(page: Page, canvas: Locator, center: { x: number; y: number }, radius = 24) {
 	const point = await canvas.evaluate(
 		(element, args) => {
 			const rect = element.getBoundingClientRect();
@@ -264,7 +268,9 @@ async function clickChartDataItemNear(canvas: Locator, center: { x: number; y: n
 							bubbles: true,
 						}),
 					);
-					if (getComputedStyle(element).cursor === "pointer") return { x, y };
+					if (getComputedStyle(element).cursor === "pointer") {
+						return { clientX: rect.left + x, clientY: rect.top + y };
+					}
 				}
 			}
 			return null;
@@ -272,10 +278,86 @@ async function clickChartDataItemNear(canvas: Locator, center: { x: number; y: n
 		{ center, radius },
 	);
 	if (!point) throw new Error(`未在 (${center.x}, ${center.y}) 周边找到可点击图表数据项`);
-	await canvas.click({ position: point, force: true });
+	await page.mouse.click(point.clientX, point.clientY);
 }
 
-async function installRuntimeFixture(page: Page, drillRequests: string[]) {
+async function clickEChartsSeriesPoint(page: Page, canvas: Locator, dataIndex: number) {
+	const point = await canvas.evaluate((element, index) => {
+		const chartHost = element.closest(".echarts-for-react") as HTMLElement | null;
+		const fiberKey = chartHost && Object.keys(chartHost).find((key) => key.startsWith("__reactFiber$"));
+		let fiber = fiberKey ? (chartHost as any)[fiberKey] : null;
+		while (fiber) {
+			const stateNode = fiber.stateNode;
+			if (stateNode && typeof stateNode.getEchartsInstance === "function") {
+				const chart = stateNode.getEchartsInstance();
+				const option = chart.getOption();
+				const series = option.series?.[0];
+				const rawValue = series?.data?.[index];
+				const value = rawValue && typeof rawValue === "object" ? rawValue.value : rawValue;
+				const category = option.xAxis?.[0]?.data?.[index] ?? index;
+				const localPoint = chart.convertToPixel({ seriesIndex: 0 }, [category, value]);
+				const rect = element.getBoundingClientRect();
+				const scaleX = rect.width / Math.max(1, (element as HTMLCanvasElement).clientWidth);
+				const scaleY = rect.height / Math.max(1, (element as HTMLCanvasElement).clientHeight);
+				return {
+					clientX: rect.left + localPoint[0] * scaleX,
+					clientY: rect.top + localPoint[1] * scaleY,
+				};
+			}
+			fiber = fiber.return;
+		}
+		return null;
+	}, dataIndex);
+	if (!point) throw new Error(`未找到第 ${dataIndex + 1} 个 ECharts 数据点`);
+	await page.mouse.click(point.clientX, point.clientY);
+}
+
+async function readRuntimeCanvasScale(page: Page) {
+	const transform = await page
+		.locator('[data-component-id="root-metric"]')
+		.locator("..")
+		.evaluate((element) => window.getComputedStyle(element).transform);
+	const values = transform
+		.match(/^matrix\(([^)]+)\)$/)?.[1]
+		.split(",")
+		.map((value) => Number(value.trim()));
+	if (!values || values.length < 4) throw new Error(`无法解析运行态画布缩放矩阵: ${transform}`);
+	return { scaleX: Math.abs(values[0]), scaleY: Math.abs(values[3]) };
+}
+
+async function readTextContrast(container: Locator, textSelector: string) {
+	return container.evaluate((element, selector) => {
+		const textElement = element.querySelector(selector);
+		if (!textElement) return 0;
+		const parseRgb = (value: string) => {
+			const channels = value
+				.match(/[\d.]+/g)
+				?.slice(0, 3)
+				.map(Number);
+			return channels?.length === 3 ? channels : null;
+		};
+		const luminance = (channels: number[]) => {
+			const convert = (value: number) => {
+				const normalized = value / 255;
+				return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+			};
+			return 0.2126 * convert(channels[0]) + 0.7152 * convert(channels[1]) + 0.0722 * convert(channels[2]);
+		};
+		const foreground = parseRgb(window.getComputedStyle(textElement).color);
+		const background = parseRgb(window.getComputedStyle(element).backgroundColor);
+		if (!foreground || !background) return 0;
+		const light = Math.max(luminance(foreground), luminance(background));
+		const dark = Math.min(luminance(foreground), luminance(background));
+		return (light + 0.05) / (dark + 0.05);
+	}, textSelector);
+}
+
+type RuntimeFixtureOptions = {
+	screenStatus?: number;
+	screenBody?: unknown;
+};
+
+async function installRuntimeFixture(page: Page, drillRequests: string[], options: RuntimeFixtureOptions = {}) {
 	await page.addInitScript(() => {
 		const userStore = {
 			state: {
@@ -301,8 +383,12 @@ async function installRuntimeFixture(page: Page, drillRequests: string[]) {
 	await page.route("**/infra/screen-fonts", (route) => fulfillJson(route, []));
 	await page.route("**/api/**", async (route) => {
 		const url = new URL(route.request().url());
+		if (url.pathname === "/api/session/status") {
+			return fulfillPlatformJson(route, { authenticated: true, remainingSeconds: 3600 });
+		}
+		if (url.pathname === "/api/menu/tree") return fulfillPlatformJson(route, []);
 		if (url.pathname === `/bi/api/screens/${SCREEN_ID}`) {
-			return fulfillJson(route, screen);
+			return fulfillJson(route, options.screenBody ?? screen, options.screenStatus ?? 200);
 		}
 		if (url.pathname === "/bi/api/sprint-66/drill-next") {
 			drillRequests.push(url.toString());
@@ -311,6 +397,7 @@ async function installRuntimeFixture(page: Page, drillRequests: string[]) {
 		if (url.pathname === "/bi/api/sprint-66/drill-fail") {
 			return fulfillJson(route, { message: "fixture failure" }, 500);
 		}
+		if (url.pathname.startsWith("/api/")) return fulfillPlatformJson(route, []);
 		return fulfillJson(route, { data: [], authenticated: true });
 	});
 }
@@ -329,6 +416,11 @@ test("Chrome 95 runs generic drill, reset, and internal view navigation without 
 	const metric = page.getByRole("button", { name: /根层指标/ });
 	await expect(metric).toBeVisible();
 	await expect(page.locator("canvas")).toHaveCount(3);
+	const canvasScale = await readRuntimeCanvasScale(page);
+	expect.soft(Math.abs(canvasScale.scaleX - canvasScale.scaleY)).toBeLessThanOrEqual(0.001);
+	const pager = page.getByTestId("screen-preview-pager");
+	await expect(pager).toBeVisible();
+	expect(await readTextContrast(pager, ".screen-runtime__pager-nav")).toBeGreaterThanOrEqual(4.5);
 
 	const assertSingleDrill = async (trigger: () => Promise<void>, expectedValue: string) => {
 		const before = drillRequests.length;
@@ -350,6 +442,7 @@ test("Chrome 95 runs generic drill, reset, and internal view navigation without 
 	await expect.poll(() => drillRequests.length).toBe(1);
 	expect(new URL(drillRequests[0]).searchParams.get("selectedKey")).toBe("101");
 	await expect(page.getByRole("button", { name: "重置下钻" })).toBeVisible();
+	await expect(page.getByText("正在恢复服务连接...")).toHaveCount(0);
 	await page.screenshot({ path: path.join(EVIDENCE_DIR, "desktop-1366x768-drill.png") });
 
 	await page.getByRole("button", { name: "重置下钻" }).click();
@@ -358,8 +451,8 @@ test("Chrome 95 runs generic drill, reset, and internal view navigation without 
 
 	const canvases = page.locator("canvas");
 	await assertSingleDrill(() => canvases.nth(0).click({ position: { x: 170, y: 140 } }), "BAR-A");
-	await assertSingleDrill(() => canvases.nth(1).click({ position: { x: 260, y: 120 } }), "PIE-A");
-	await assertSingleDrill(() => clickChartDataItemNear(canvases.nth(2), { x: 170, y: 60 }), "LINE-A");
+	await assertSingleDrill(() => clickChartDataItemNear(page, canvases.nth(1), { x: 170, y: 120 }, 100), "PIE-A");
+	await assertSingleDrill(() => clickEChartsSeriesPoint(page, canvases.nth(2), 0), "LINE-A");
 	await assertSingleDrill(() => page.getByText("MAP-A", { exact: true }).click(), "MAP-A");
 	await assertSingleDrill(() => page.getByText("TABLE-A").click(), "TABLE-A");
 
@@ -385,4 +478,21 @@ test("Chrome 95 runs generic drill, reset, and internal view navigation without 
 
 	expect(pageErrors).toEqual([]);
 	expect(failedRequests).toEqual([]);
+});
+
+test("Chrome 95 keeps the preview failure state readable", async ({ browser, page }) => {
+	expect(browser.version()).toMatch(/^95\./);
+	await installRuntimeFixture(page, [], {
+		screenStatus: 500,
+		screenBody: { message: "大屏暂时无法读取" },
+	});
+
+	await page.goto(`/#/bi/screens/${SCREEN_ID}/preview`);
+	const alert = page.getByRole("alert");
+	await expect(alert).toContainText("预览不可用", { timeout: 20_000 });
+	await expect(alert).toContainText("加载大屏失败");
+	const stateCard = page.getByTestId("screen-preview-state-card");
+	await expect(stateCard).toBeVisible();
+	expect(await readTextContrast(stateCard, "h1")).toBeGreaterThanOrEqual(4.5);
+	await page.screenshot({ path: path.join(EVIDENCE_DIR, "preview-error-1366x768.png") });
 });

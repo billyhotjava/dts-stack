@@ -1,5 +1,5 @@
 {
-  "version": "2026-08-19",
+  "version": "2026-08-30",
   "description": "System-wide audit action catalog mapped to portal and admin menus. Each action describes human-readable display text, aggregation phases, and flow aggregation hints.",
   "sections": [
     {
@@ -3126,6 +3126,50 @@
             {
               "code": "SCREEN_MIGRATE",
               "display": "大屏 v1→v2 迁移",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            }
+          ]
+        },
+        {
+          "key": "visualization.portal",
+          "title": "数据门户",
+          "actions": [
+            {
+              "code": "ANALYTICS_DATA_PORTAL_READ",
+              "display": "查看数据门户",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "ANALYTICS_DATA_PORTAL_CREATE",
+              "display": "新增门户目录或内容",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "ANALYTICS_DATA_PORTAL_UPDATE",
+              "display": "修改门户目录",
+              "phases": [
+                "BEGIN",
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": true
+            },
+            {
+              "code": "ANALYTICS_DATA_PORTAL_DELETE",
+              "display": "移除门户目录或内容",
               "phases": [
                 "BEGIN",
                 "SUCCESS",

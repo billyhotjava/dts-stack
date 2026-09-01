@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQueryResponse } from "../api/analyticsApi";
 import { PageHeader } from "@/components/page-header";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Input, Spin, Button, Card, Collapse, Tag, Select } from "antd";
+import { Input, Spin, Button, Card, Collapse, Empty, Tag, Select } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
 import { resolveRouteHref } from "../helpers/resolveAnalyticsUrl";
@@ -19,8 +19,14 @@ type LoadState<T> =
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
 
-export default function DashboardDetailPage() {
-	const { id } = useParams();
+type DashboardDetailPageProps = {
+	dashboardId?: string;
+	embedded?: boolean;
+};
+
+export default function DashboardDetailPage({ dashboardId, embedded = false }: DashboardDetailPageProps = {}) {
+	const { id: routeId } = useParams();
+	const id = dashboardId ?? routeId;
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const [state, setState] = useState<LoadState<DashboardDetail>>({ state: "loading" });
 	const [paramOptions, setParamOptions] = useState<Record<string, string[]>>({});
@@ -202,7 +208,7 @@ export default function DashboardDetailPage() {
 	);
 
 	return (
-		<div className="space-y-4">
+		<div className={embedded ? "" : "space-y-4"}>
 			<div data-testid="analytics-dashboard-detail">
 			{state.state === "loading" && (
 				<div className="loading-container">
@@ -212,7 +218,7 @@ export default function DashboardDetailPage() {
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 			{state.state === "loaded" && (
 				<>
-					<PageHeader
+					{!embedded && <PageHeader
 						title={state.value.name ?? "-"}
 						actions={
 							<>
@@ -241,9 +247,9 @@ export default function DashboardDetailPage() {
 								</Link>
 							</>
 						}
-					/>
+					/>}
 
-					{shareUuid && (
+					{!embedded && shareUuid && (
 						<Card style={{ marginBottom: "var(--spacing-lg)" }}
 							title={t(locale, "share.title")}
 							extra={
@@ -315,7 +321,14 @@ export default function DashboardDetailPage() {
 						/>
 					)}
 
-					<Collapse
+					{dashcards.length === 0 && (
+						<Empty
+							image={Empty.PRESENTED_IMAGE_SIMPLE}
+							description="该看板暂未配置图表"
+						/>
+					)}
+
+					{!embedded && <Collapse
 						items={[{
 							key: "detail",
 							label: <>{t(locale, "dashboards.detailNote")} <span style={{ color: "var(--color-text-secondary)", fontSize: "var(--font-size-sm)", fontWeight: "normal" }}>JSON</span></>,
@@ -325,7 +338,7 @@ export default function DashboardDetailPage() {
 								</pre>
 							),
 						}]}
-					/>
+					/>}
 				</>
 			)}
 			</div>

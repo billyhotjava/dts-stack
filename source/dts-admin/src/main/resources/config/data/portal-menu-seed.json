@@ -605,6 +605,14 @@
                   "titleKey": "sys.nav.portal.biData",
                   "title": "BI 数据集",
                   "externalLink": "/bi/data"
+                },
+                {
+                  "key": "portal",
+                  "path": "portal",
+                  "icon": "solar:folder-with-files-bold-duotone",
+                  "titleKey": "sys.nav.portal.biPortal",
+                  "title": "数据门户",
+                  "externalLink": "/bi/portal"
                 }
               ]
             }
@@ -615,8 +623,8 @@
           "path": "screens",
           "icon": "solar:monitor-bold-duotone",
           "titleKey": "sys.nav.portal.biScreens",
-          "title": "数据门户",
-          "externalLink": "/bi/portal"
+          "title": "大屏管理",
+          "externalLink": "/bi/screens"
         },
         {
           "key": "services",
