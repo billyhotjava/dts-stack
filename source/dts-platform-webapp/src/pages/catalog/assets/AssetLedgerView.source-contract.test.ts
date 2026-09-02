@@ -36,6 +36,11 @@ test("asset rows navigate to the canonical detail page and expose no inline acti
 	assert.doesNotMatch(SOURCE, /title: "操作"|row-request-access|治理资产|申请权限/);
 });
 
+test("screen assets enter screen management instead of a preview-only source route", () => {
+	assert.match(SOURCE, /const sourceRoute = family === "SCREEN" \? "\/bi\/screens" : asset\?\.detailRoute/);
+	assert.match(SOURCE, /family === "SCREEN" \? "进入大屏管理" : "进入来源功能"/);
+});
+
 test("asset directory removes projections, metric tiles and inline workbench drawers", () => {
 	assert.doesNotMatch(SOURCE, /getCatalogAssetStatsProjection|getCatalogClassificationFacts/);
 	assert.doesNotMatch(SOURCE, /AssetGovernanceWorkbenchDrawer|AssetLifecycleWorkbenchDrawer/);

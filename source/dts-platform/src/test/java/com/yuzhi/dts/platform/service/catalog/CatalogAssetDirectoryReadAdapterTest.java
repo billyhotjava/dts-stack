@@ -26,6 +26,20 @@ class CatalogAssetDirectoryReadAdapterTest {
 
     @SuppressWarnings({ "rawtypes", "unchecked" })
     @Test
+    void excludesDisabledScreensFromTheAssetDirectory() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        when(jdbcTemplate.query(anyString(), any(RowMapper.class), any(Object[].class))).thenReturn(List.of());
+        CatalogAssetDirectoryReadAdapter adapter = new CatalogAssetDirectoryReadAdapter(jdbcTemplate);
+
+        adapter.load(Set.of(CatalogAssetType.SCREEN));
+
+        ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+        verify(jdbcTemplate).query(sql.capture(), any(RowMapper.class), any(Object[].class));
+        assertThat(sql.getValue()).contains("and enabled = true");
+    }
+
+    @SuppressWarnings({ "rawtypes", "unchecked" })
+    @Test
     void boundsOwnerQueriesWithOneOverflowSentinelAcrossTheRequestedFamilies() {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(jdbcTemplate.query(anyString(), any(RowMapper.class))).thenReturn(List.of());
