@@ -450,6 +450,7 @@ export function AssetLedgerView({
 function UnifiedAssetDetailDrawer({ asset, onClose }: { asset: AssetDirectoryRow | null; onClose: () => void }) {
 	const family = String(asset?.assetFamily || asset?.assetType || "");
 	const relationships = asset?.relationships || [];
+	const sourceRoute = family === "SCREEN" ? "/bi/screens" : asset?.detailRoute;
 	return (
 		<Drawer
 			open={Boolean(asset)}
@@ -521,9 +522,9 @@ function UnifiedAssetDetailDrawer({ asset, onClose }: { asset: AssetDirectoryRow
 						)}
 					</div>
 
-					{asset.detailRoute ? (
+					{sourceRoute ? (
 						<div className="flex justify-end">
-							<Link to={asset.detailRoute}>进入来源功能</Link>
+							<Link to={sourceRoute}>{family === "SCREEN" ? "进入大屏管理" : "进入来源功能"}</Link>
 						</div>
 					) : null}
 				</div>

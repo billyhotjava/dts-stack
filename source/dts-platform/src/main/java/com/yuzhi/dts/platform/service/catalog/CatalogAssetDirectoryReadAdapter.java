@@ -191,6 +191,7 @@ public class CatalogAssetDirectoryReadAdapter {
               from bi_report_link
              where upper(coalesce(report_type, '')) = 'SCREEN'
                and lower(code) like 'screen-%'
+               and enabled = true
              order by last_modified_date desc nulls last, title, id
              limit ?
             """,
