@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AccessPlanReviewStep } from "./AccessPlanReviewStep";
 import { ApiAccessStep } from "./ApiAccessStep";
 import { DatabaseAccessStep } from "./DatabaseAccessStep";
-import { FileAccessStep } from "./FileAccessStep";
+import { FileAccessStep, validateOfflineFile } from "./FileAccessStep";
 import { LandingScheduleStep } from "./LandingScheduleStep";
 
 const source = {
@@ -40,6 +40,18 @@ function renderInForm(node: (form: ReturnType<typeof Form.useForm>[0]) => React.
 }
 
 describe("access plan steps", () => {
+	it("accepts an xlsx file reported with the local WPS MIME type", () => {
+		const file = new File(["xlsx"], "orders.xlsx", { type: "application/wps-office.xlsx" });
+
+		expect(validateOfflineFile(file)).toBeNull();
+	});
+
+	it("still rejects an xlsx file reported as an unrelated MIME type", () => {
+		const file = new File(["not-an-image"], "orders.xlsx", { type: "image/png" });
+
+		expect(validateOfflineFile(file)).toBe("文件 MIME 类型与允许格式不匹配");
+	});
+
 	it("keeps database credentials out of the resource step", () => {
 		const html = renderInForm((form) => (
 			<DatabaseAccessStep

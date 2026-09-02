@@ -45,11 +45,12 @@ const ALLOWED_FILE_TYPES = new Set([
 	"text/plain",
 	"application/vnd.ms-excel",
 	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	"application/wps-office.xlsx",
 	"application/zip",
 	"application/octet-stream",
 ]);
 
-const validateOfflineFile = (file: File) => {
+export const validateOfflineFile = (file: File) => {
 	const extension = file.name.toLowerCase().match(/\.[^.]+$/)?.[0];
 	if (extension !== ".csv" && extension !== ".xlsx") return "仅支持 .csv 和 .xlsx 文件";
 	if (file.size <= 0) return "不能上传空文件";

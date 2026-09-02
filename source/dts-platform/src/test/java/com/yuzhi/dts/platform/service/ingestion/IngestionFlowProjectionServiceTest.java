@@ -189,6 +189,61 @@ class IngestionFlowProjectionServiceTest {
             .hasMessageContaining("QUALITY_ASSET_MISMATCH");
     }
 
+    @Test
+    void designReferenceValidationAllowsNewManagedFileTargetBeforeCatalogObservation() {
+        Map<String, Object> design = Map.of(
+            "sourceType", "txtfilereader",
+            "sourceConfig", Map.of(
+                "_fileLanding", Map.of(
+                    "landingMode", "create_new",
+                    "targetTable", "ods_project_subject_domain_v2"
+                )
+            ),
+            "destinationConfig", Map.of(
+                "targetDataSourceId", "a0000000-0000-0000-0000-000000000001"
+            )
+        );
+
+        IngestionFlowProjectionService.AssetProjection asset = service.validateDesignReferences(design, null);
+
+        assertThat(asset.resolutionState()).isEqualTo("UNRESOLVED");
+        assertThat(asset.datasetId()).isNull();
+        assertThat(asset.qualityConfigured()).isFalse();
+        verify(datasetRepository, never()).findById(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void designReferenceValidationRejectsNewManagedFileTargetWhenPostIngestionQualityIsEnabled() {
+        Map<String, Object> design = Map.of(
+            "sourceType", "txtfilereader",
+            "sourceConfig", Map.of(
+                "_fileLanding", Map.of(
+                    "landingMode", "create_new",
+                    "targetTable", "ods_project_subject_domain_v2"
+                )
+            ),
+            "postIngestionQualityEnabled", true
+        );
+
+        assertThatThrownBy(() -> service.validateDesignReferences(design, null))
+            .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+            .hasMessageContaining("TARGET_ASSET_UNRESOLVED");
+    }
+
+    @Test
+    void designReferenceValidationStillRejectsUnresolvedNonFileTarget() {
+        Map<String, Object> design = Map.of(
+            "sourceType", "mysqlreader",
+            "destinationConfig", Map.of(
+                "targetDataSourceId", "a0000000-0000-0000-0000-000000000001"
+            )
+        );
+
+        assertThatThrownBy(() -> service.validateDesignReferences(design, null))
+            .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
+            .hasMessageContaining("TARGET_ASSET_UNRESOLVED");
+    }
+
     private Map<String, Object> execution() {
         return Map.of(
             "id", 90,

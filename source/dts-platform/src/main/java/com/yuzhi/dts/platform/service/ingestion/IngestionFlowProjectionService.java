@@ -34,6 +34,13 @@ import org.springframework.web.server.ResponseStatusException;
 public class IngestionFlowProjectionService {
 
     private static final String DATASET_PREFIX = "dataset:";
+    private static final Set<String> FILE_SOURCE_TYPES = Set.of(
+        "txtfilereader",
+        "excelreader",
+        "csv",
+        "excel",
+        "file"
+    );
 
     private final CatalogDatasetRepository datasetRepository;
     private final GovRuleBindingRepository bindingRepository;
@@ -227,6 +234,11 @@ public class IngestionFlowProjectionService {
         UUID policyDatasetId = parseDatasetId(policyRef);
         UUID destinationDatasetId = destinationDatasetId(payload);
         if (destinationDatasetId == null) {
+            // A create-new file landing has no physical catalog asset until its first
+            // successful execution is observed. Quality remains unavailable meanwhile.
+            if (!qualityEnabled && isNewManagedFileTarget(payload)) {
+                return unresolvedAssetProjection();
+            }
             throw unprocessable("TARGET_ASSET_UNRESOLVED");
         }
         if (qualityEnabled && policyDatasetId == null) {
@@ -245,6 +257,48 @@ public class IngestionFlowProjectionService {
             throw unprocessable("QUALITY_BINDING_UNAVAILABLE");
         }
         return asset;
+    }
+
+    private boolean isNewManagedFileTarget(Map<String, Object> design) {
+        String sourceType = text(design.get("sourceType"));
+        Map<String, Object> source = map(design.get("source"));
+        if (!StringUtils.hasText(sourceType)) {
+            sourceType = text(source.get("type"));
+        }
+        if (!StringUtils.hasText(sourceType) || !FILE_SOURCE_TYPES.contains(sourceType.toLowerCase(Locale.ROOT))) {
+            return false;
+        }
+
+        Map<String, Object> sourceConfig = map(design.get("sourceConfig"));
+        if (sourceConfig.isEmpty()) {
+            sourceConfig = map(source.get("config"));
+        }
+        Map<String, Object> landing = map(sourceConfig.get("_fileLanding"));
+        if (!"create_new".equalsIgnoreCase(text(landing.get("landingMode"))) || !StringUtils.hasText(text(landing.get("targetTable")))) {
+            return false;
+        }
+
+        Map<String, Object> destinationConfig = map(design.get("destinationConfig"));
+        if (destinationConfig.isEmpty()) {
+            destinationConfig = map(map(design.get("destination")).get("config"));
+        }
+        return StringUtils.hasText(text(destinationConfig.get("targetDataSourceId")));
+    }
+
+    private AssetProjection unresolvedAssetProjection() {
+        return new AssetProjection(
+            "UNRESOLVED",
+            null,
+            null,
+            null,
+            false,
+            null,
+            0,
+            false,
+            "CONDITIONAL",
+            List.of("TARGET_ASSET_PENDING_OBSERVATION"),
+            "UNKNOWN"
+        );
     }
 
     private CatalogDataset requireReadableDataset(UUID datasetId, String activeDeptHeader) {
