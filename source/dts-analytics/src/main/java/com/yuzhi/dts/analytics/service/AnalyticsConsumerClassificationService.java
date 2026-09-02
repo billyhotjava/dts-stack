@@ -18,9 +18,11 @@ import com.yuzhi.dts.analytics.repository.AnalyticsSemanticModelRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
@@ -190,10 +192,37 @@ public class AnalyticsConsumerClassificationService {
         }
         ScreenSources sources = screenSources(screen);
         if (sources.unresolved().isEmpty()) {
-            deriveScreen(screen);
-            return;
+            try {
+                deriveScreen(screen);
+                return;
+            } catch (AnalyticsClassificationClient.ClassificationContractException ex) {
+                if (!ex.isSourceClassificationMissing()) {
+                    throw ex;
+                }
+                saveBlockedScreenDraft(
+                    screen,
+                    "BLOCKED_UPSTREAM",
+                    Map.of(
+                        "blockers",
+                        List.of(AnalyticsClassificationClient.SOURCE_CLASSIFICATION_MISSING)
+                    )
+                );
+                return;
+            }
         }
 
+        saveBlockedScreenDraft(
+            screen,
+            "BLOCKED_UNRESOLVED",
+            Map.of("unresolvedSources", sources.unresolved())
+        );
+    }
+
+    private void saveBlockedScreenDraft(
+        AnalyticsScreen screen,
+        String status,
+        Map<String, Object> blockerEvidence
+    ) {
         String manualFloor = firstText(
             screen.getManualClassificationFloor(),
             screen.getClassification()
@@ -205,17 +234,12 @@ public class AnalyticsConsumerClassificationService {
         screen.setClassificationSnapshotVersion(null);
         screen.setClassificationDerivedAt(null);
         try {
+            Map<String, Object> evidence = new LinkedHashMap<>();
+            evidence.put("status", status);
+            evidence.put("manualFloor", manualFloor == null ? "" : manualFloor);
+            evidence.putAll(blockerEvidence);
             screen.setClassificationEvidenceJson(
-                objectMapper.writeValueAsString(
-                    java.util.Map.of(
-                        "status",
-                        "BLOCKED_UNRESOLVED",
-                        "manualFloor",
-                        manualFloor == null ? "" : manualFloor,
-                        "unresolvedSources",
-                        sources.unresolved()
-                    )
-                )
+                objectMapper.writeValueAsString(evidence)
             );
         } catch (Exception ex) {
             throw new IllegalStateException("Screen draft classification evidence cannot be serialized", ex);
@@ -227,7 +251,19 @@ public class AnalyticsConsumerClassificationService {
         if (screen == null || screen.getId() == null) {
             throw new IllegalArgumentException("Saved screen is required for classification inspection");
         }
-        return !screenSources(screen).unresolved().isEmpty();
+        if (!screenSources(screen).unresolved().isEmpty()) {
+            return true;
+        }
+        if (!StringUtils.hasText(screen.getClassificationEvidenceJson())) {
+            return false;
+        }
+        try {
+            return "BLOCKED_UPSTREAM".equals(
+                objectMapper.readTree(screen.getClassificationEvidenceJson()).path("status").asText()
+            );
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Screen classification evidence cannot be parsed", ex);
+        }
     }
 
     public AnalyticsClassificationClient.ClassificationResult deriveScreen(long screenId) {
@@ -242,6 +278,11 @@ public class AnalyticsConsumerClassificationService {
         AnalyticsScreen screen = screenRepository
             .findById(screenId)
             .orElseThrow(() -> new IllegalArgumentException("Screen not found: " + screenId));
+        if (hasUnresolvedScreenSources(screen)) {
+            throw new IllegalStateException(
+                "Screen classification is governance-blocked by unresolved upstream sources"
+            );
+        }
         AnalyticsClassificationClient.ClassificationResult current =
             client.requireCurrent(SCREEN, screenKey(screenId));
         if (

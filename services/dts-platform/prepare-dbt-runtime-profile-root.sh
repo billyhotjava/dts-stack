@@ -4,6 +4,7 @@ set -eu
 runtime_root="${DTS_DBT_RUNTIME_PROFILE_ROOT:-/dev/shm/dts-dbt-runtime}"
 expected_uid="${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:-$(id -u)}"
 repair_docker_created_root="${DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT:-false}"
+trusted_stale_uids="${DTS_DBT_RUNTIME_PROFILE_TRUSTED_STALE_UIDS:-0,1000}"
 
 fail() {
   echo "[dbt-runtime-preflight] ERROR: $*" >&2
@@ -15,6 +16,26 @@ case "${expected_uid}" in
     fail "DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID must be numeric"
     ;;
 esac
+
+case "${trusted_stale_uids}" in
+  ''|,*|*,|*,,*|*[!0-9,]*)
+    fail "DTS_DBT_RUNTIME_PROFILE_TRUSTED_STALE_UIDS must be a comma-separated numeric list"
+    ;;
+esac
+
+is_trusted_stale_uid() {
+  candidate_uid="$1"
+  previous_ifs="${IFS}"
+  IFS=','
+  for trusted_uid in ${trusted_stale_uids}; do
+    if [ "${trusted_uid}" = "${candidate_uid}" ]; then
+      IFS="${previous_ifs}"
+      return 0
+    fi
+  done
+  IFS="${previous_ifs}"
+  return 1
+}
 
 case "${runtime_root}" in
   /*/dts-dbt-runtime)
@@ -69,11 +90,12 @@ if [ "${actual_uid}" != "${expected_uid}" ] || [ "${actual_mode}" != "700" ]; th
   repair_allowed="false"
   if [ "${created_by_preflight}" = "true" ]; then
     repair_allowed="true"
-  # Docker bind creation commonly leaves 0755; an earlier root preflight can
-  # legitimately leave an empty 0700 directory after the expected UID changes.
+  # Docker bind creation commonly leaves 0755. A previous DTS run can also
+  # leave an empty 0700 directory owned by a trusted runtime UID after the
+  # operator changes between root and the standard uid 1000 account.
   elif [ "${repair_docker_created_root}" = "true" ] &&
     { [ "${actual_mode}" = "700" ] || [ "${actual_mode}" = "755" ]; } &&
-    { [ "${actual_uid}" = "0" ] || [ "${actual_uid}" = "${expected_uid}" ]; }; then
+    { [ "${actual_uid}" = "${expected_uid}" ] || is_trusted_stale_uid "${actual_uid}"; }; then
     repair_allowed="true"
   fi
   if [ "${repair_allowed}" != "true" ]; then

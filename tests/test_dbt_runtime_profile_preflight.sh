@@ -76,6 +76,55 @@ if command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
   [[ "$(stat -c '%u' "${root_owned_runtime_root}")" == "$(id -u)" ]]
   [[ "$(stat -c '%a' "${root_owned_runtime_root}")" == "700" ]]
 
+  stale_uid_parent="${test_root}/stale-uid-case"
+  mkdir -m 0755 -- "${stale_uid_parent}"
+  stale_uid_runtime_root="${stale_uid_parent}/dts-dbt-runtime"
+  sudo -n mkdir -m 0700 -- "${stale_uid_runtime_root}"
+  sudo -n chown 1000:0 -- "${stale_uid_runtime_root}"
+
+  sudo -n env \
+    DTS_DBT_RUNTIME_PROFILE_ROOT="${stale_uid_runtime_root}" \
+    DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID="0" \
+    DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT="true" \
+    sh "${HELPER}"
+
+  [[ "$(stat -c '%u' "${stale_uid_runtime_root}")" == "0" ]]
+  [[ "$(stat -c '%a' "${stale_uid_runtime_root}")" == "700" ]]
+
+  unknown_uid_parent="${test_root}/unknown-uid-case"
+  mkdir -m 0755 -- "${unknown_uid_parent}"
+  unknown_uid_runtime_root="${unknown_uid_parent}/dts-dbt-runtime"
+  sudo -n mkdir -m 0700 -- "${unknown_uid_runtime_root}"
+  sudo -n chown 2000:0 -- "${unknown_uid_runtime_root}"
+  if sudo -n env \
+    DTS_DBT_RUNTIME_PROFILE_ROOT="${unknown_uid_runtime_root}" \
+    DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID="0" \
+    DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT="true" \
+    DTS_DBT_RUNTIME_PROFILE_TRUSTED_STALE_UIDS="0,1000" \
+    sh "${HELPER}" >/dev/null 2>&1; then
+    echo "preflight repaired a runtime root owned by an untrusted UID" >&2
+    exit 1
+  fi
+  [[ "$(stat -c '%u' "${unknown_uid_runtime_root}")" == "2000" ]]
+
+  nonempty_stale_uid_parent="${test_root}/nonempty-stale-uid-case"
+  mkdir -m 0755 -- "${nonempty_stale_uid_parent}"
+  nonempty_stale_uid_runtime_root="${nonempty_stale_uid_parent}/dts-dbt-runtime"
+  sudo -n mkdir -m 0700 -- "${nonempty_stale_uid_runtime_root}"
+  sudo -n touch "${nonempty_stale_uid_runtime_root}/active-lease"
+  sudo -n chown -R 1000:0 -- "${nonempty_stale_uid_runtime_root}"
+  if sudo -n env \
+    DTS_DBT_RUNTIME_PROFILE_ROOT="${nonempty_stale_uid_runtime_root}" \
+    DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID="0" \
+    DTS_DBT_RUNTIME_PROFILE_REPAIR_DOCKER_CREATED_ROOT="true" \
+    DTS_DBT_RUNTIME_PROFILE_TRUSTED_STALE_UIDS="0,1000" \
+    sh "${HELPER}" >/dev/null 2>&1; then
+    echo "preflight repaired a non-empty runtime root owned by a trusted stale UID" >&2
+    exit 1
+  fi
+  [[ "$(stat -c '%u' "${nonempty_stale_uid_runtime_root}")" == "1000" ]]
+  sudo -n test -f "${nonempty_stale_uid_runtime_root}/active-lease"
+
   nonempty_parent="${test_root}/nonempty-root-owned-case"
   mkdir -m 0755 -- "${nonempty_parent}"
   nonempty_runtime_root="${nonempty_parent}/dts-dbt-runtime"

@@ -1,0 +1,26 @@
+{
+  "code": "PRJDEMO_PROGRESS_RANGE",
+  "name": "项目任务进度范围校验",
+  "type": "VALIDITY",
+  "category": "PROJECT_PROGRESS",
+  "description": "项目任务完成进度必须非空且位于 0 到 100",
+  "owner": "__REPLACE_WITH_REAL_OWNER__",
+  "ownerDept": "__REPLACE_WITH_REAL_OWNER_DEPT__",
+  "severity": "HIGH",
+  "dataLevel": "DWD",
+  "executor": "SQL",
+  "frequencyCron": null,
+  "template": false,
+  "enabled": true,
+  "publishNow": true,
+  "datasetId": "00000000-0000-0000-0000-000000000000",
+  "definition": {
+    "sql": "SELECT *\nFROM public.prjdemo_dwd_project_task_snapshot\nWHERE progress_pct IS NULL\n   OR progress_pct < 0\n   OR progress_pct > 100;"
+  },
+  "bindings": [
+    {
+      "datasetId": "00000000-0000-0000-0000-000000000000",
+      "scopeType": "DATASET"
+    }
+  ]
+}

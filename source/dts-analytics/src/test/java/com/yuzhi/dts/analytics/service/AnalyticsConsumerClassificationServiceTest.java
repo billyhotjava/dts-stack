@@ -23,12 +23,16 @@ import com.yuzhi.dts.analytics.repository.AnalyticsMetricRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsSemanticModelRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpServerErrorException;
 
 class AnalyticsConsumerClassificationServiceTest {
 
@@ -207,6 +211,62 @@ class AnalyticsConsumerClassificationServiceTest {
     }
 
     @Test
+    void pending_upstream_classification_can_be_saved_as_governance_blocked_draft() throws Exception {
+        AnalyticsScreen screen = databaseScreen(17L);
+        AnalyticsClassificationClient.ClassificationContractException pending =
+            pendingSourceClassification();
+        when(client.derive(
+            eq("SCREEN"),
+            eq("screen:17"),
+            eq("SECRET"),
+            eq(List.of(new AnalyticsClassificationClient.SubjectRef(
+                "ASSET",
+                "data-source:a0000000-0000-0000-0000-000000000001"
+            ))),
+            eq("dts-analytics:screen:17")
+        )).thenThrow(pending);
+
+        service.prepareScreenDraft(screen);
+
+        assertThat(screen.getClassification()).isEqualTo("SECRET");
+        assertThat(screen.getClassificationSnapshotId()).isNull();
+        assertThat(screen.getClassificationSnapshotVersion()).isNull();
+        JsonNode evidence = objectMapper.readTree(screen.getClassificationEvidenceJson());
+        assertThat(evidence.path("status").asText()).isEqualTo("BLOCKED_UPSTREAM");
+        assertThat(evidence.path("blockers").get(0).asText())
+            .isEqualTo("CONSUMER_CLASSIFICATION_SOURCE_MISSING");
+        assertThat(service.hasUnresolvedScreenSources(screen)).isTrue();
+        verify(screenRepository).save(screen);
+
+        when(screenRepository.findById(17L)).thenReturn(Optional.of(screen));
+        assertThatThrownBy(() -> service.requireCurrentScreen(17L))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("governance-blocked");
+        verify(client, never()).requireCurrent("SCREEN", "screen:17");
+
+        assertThatThrownBy(() -> service.deriveScreen(screen)).isSameAs(pending);
+    }
+
+    @Test
+    void unrelated_platform_failure_still_blocks_draft_save() {
+        AnalyticsScreen screen = databaseScreen(18L);
+        AnalyticsClassificationClient.ClassificationContractException failure =
+            new AnalyticsClassificationClient.ClassificationContractException(
+                "Platform classification contract call failed"
+            );
+        when(client.derive(
+            eq("SCREEN"),
+            eq("screen:18"),
+            eq("SECRET"),
+            any(),
+            eq("dts-analytics:screen:18")
+        )).thenThrow(failure);
+
+        assertThatThrownBy(() -> service.prepareScreenDraft(screen)).isSameAs(failure);
+        verify(screenRepository, never()).save(screen);
+    }
+
+    @Test
     void low_personnel_clearance_cannot_read_confidential_card() {
         when(client.requireCurrent("CARD", "analytics-card:7"))
             .thenReturn(current("CONFIDENTIAL"));
@@ -277,6 +337,55 @@ class AnalyticsConsumerClassificationServiceTest {
             List.of(),
             null,
             List.of()
+        );
+    }
+
+    private AnalyticsScreen databaseScreen(long id) {
+        AnalyticsScreen screen = new AnalyticsScreen();
+        screen.setId(id);
+        screen.setClassification("SECRET");
+        screen.setManualClassificationFloor("SECRET");
+        screen.setComponentsJson("""
+            [
+              {
+                "id": "project-total",
+                "dataSource": {
+                  "type": "sql",
+                  "sqlConfig": {"databaseId": 1}
+                }
+              }
+            ]
+            """);
+        screen.setPagesJson("[]");
+
+        AnalyticsDatabase database = new AnalyticsDatabase();
+        database.setId(1L);
+        database.setDetailsJson(
+            "{\"platformDataSourceId\":\"a0000000-0000-0000-0000-000000000001\"}"
+        );
+        when(databaseRepository.findById(1L)).thenReturn(Optional.of(database));
+        return screen;
+    }
+
+    private AnalyticsClassificationClient.ClassificationContractException pendingSourceClassification() {
+        String body = """
+            {
+              "title": "Internal Server Error",
+              "status": 500,
+              "detail": "Consumer source classification is missing or pending: ASSET/data-source:a0000000-0000-0000-0000-000000000001",
+              "message": "error.http.500"
+            }
+            """;
+        HttpServerErrorException remote = HttpServerErrorException.create(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "Internal Server Error",
+            HttpHeaders.EMPTY,
+            body.getBytes(StandardCharsets.UTF_8),
+            StandardCharsets.UTF_8
+        );
+        return new AnalyticsClassificationClient.ClassificationContractException(
+            "Platform classification contract call failed",
+            remote
         );
     }
 }

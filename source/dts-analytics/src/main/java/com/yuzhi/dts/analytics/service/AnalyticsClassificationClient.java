@@ -15,14 +15,20 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 @Component
 public class AnalyticsClassificationClient {
 
+    public static final String SOURCE_CLASSIFICATION_MISSING =
+        "CONSUMER_CLASSIFICATION_SOURCE_MISSING";
+
     private static final String SERVICE_HEADER = "X-DTS-Service";
     private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
+    private static final String LEGACY_SOURCE_CLASSIFICATION_MISSING_DETAIL =
+        "Consumer source classification is missing or pending:";
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -212,12 +218,40 @@ public class AnalyticsClassificationClient {
 
     public static class ClassificationContractException extends RuntimeException {
 
+        private final boolean sourceClassificationMissing;
+
         public ClassificationContractException(String message) {
             super(message);
+            this.sourceClassificationMissing = false;
         }
 
         public ClassificationContractException(String message, Throwable cause) {
             super(message, cause);
+            this.sourceClassificationMissing = containsSourceClassificationMissing(cause);
+        }
+
+        public boolean isSourceClassificationMissing() {
+            return sourceClassificationMissing;
+        }
+
+        private static boolean containsSourceClassificationMissing(Throwable cause) {
+            Throwable current = cause;
+            while (current != null) {
+                if (current instanceof RestClientResponseException response) {
+                    String body = response.getResponseBodyAsString();
+                    if (
+                        StringUtils.hasText(body) &&
+                        (
+                            body.contains(SOURCE_CLASSIFICATION_MISSING) ||
+                            body.contains(LEGACY_SOURCE_CLASSIFICATION_MISSING_DETAIL)
+                        )
+                    ) {
+                        return true;
+                    }
+                }
+                current = current.getCause();
+            }
+            return false;
         }
     }
 }
