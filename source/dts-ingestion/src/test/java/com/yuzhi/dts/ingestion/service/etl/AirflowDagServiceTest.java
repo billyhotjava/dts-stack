@@ -342,6 +342,27 @@ class AirflowDagServiceTest {
         assertThat(dag).doesNotContain("CASCADE");
     }
 
+    @Test
+    void shouldUseManagedFileLandingTargetInsteadOfWriterPlaceholder() throws Exception {
+        IngestionTask task = new IngestionTask();
+        task.setName("managed-file-target");
+        task.setSourceType("txtfilereader");
+        task.setSyncSchedule("manual");
+        task.setAirflowDagId("managed_file_target");
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        task.setSourceConfig(mapper.readTree(
+            "{\"_fileColumns\":[{\"name\":\"order_id\",\"type\":\"string\"}],"
+            + "\"_fileLanding\":{\"landingMode\":\"create_new\",\"targetTable\":\"ods_orders\"}}"
+        ));
+        task.setDestinationConfig(mapper.readTree("{\"table\":[\"${table}\"]}"));
+
+        dagService.rebuildDagForTask(task);
+
+        String dag = readDag("managed_file_target");
+        assertThat(dag).contains("CREATE TABLE IF NOT EXISTS \\\"ods_orders\\\"");
+        assertThat(dag).doesNotContain("${table}");
+    }
+
     private IngestionTask task(String syncSchedule, String dagId) {
         IngestionTask task = new IngestionTask();
         task.setName("dm8test");

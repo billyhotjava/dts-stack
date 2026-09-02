@@ -217,6 +217,9 @@ MAVEN_UNRESTRICTED="${MAVEN_UNRESTRICTED:-${LEGACY_UNRESTRICTED:-}}"
 MAVEN_MEMORY_LIMIT="${MAVEN_MEMORY_LIMIT:-4g}"
 MAVEN_MIRROR_URL="${MAVEN_MIRROR_URL:-https://maven.aliyun.com/repository/public}"
 NPM_REGISTRY="${NPM_REGISTRY:-https://registry.npmmirror.com}"
+# npm runs inside Docker containers. Do not inherit host HTTP(S)_PROXY here:
+# loopback addresses such as 127.0.0.1 point back to the container itself.
+# Set NPM_HTTP_PROXY/NPM_HTTPS_PROXY explicitly when a container-reachable proxy is required.
 MAVEN_SETTINGS_FILE="${MAVEN_SETTINGS_FILE:-${HOME:-/root}/.m2/settings.xml}"
 MAVEN_SETTINGS_DIR="${MAVEN_SETTINGS_DIR:-$(dirname "${MAVEN_SETTINGS_FILE}")}"
 MAVEN_REPO_LOCAL="${MAVEN_REPO_LOCAL:-${MAVEN_SETTINGS_DIR}/repository}"
@@ -610,11 +613,11 @@ build_metrics_webapp() {
   if [[ -n "${NPM_REGISTRY:-}" ]]; then
     npm_env+=(-e "NPM_REGISTRY=${NPM_REGISTRY}")
   fi
-  if [[ -n "${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" ]]; then
-    npm_env+=(-e "NPM_HTTP_PROXY=${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}")
+  if [[ -n "${NPM_HTTP_PROXY:-}" ]]; then
+    npm_env+=(-e "NPM_HTTP_PROXY=${NPM_HTTP_PROXY}")
   fi
-  if [[ -n "${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}" ]]; then
-    npm_env+=(-e "NPM_HTTPS_PROXY=${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
+  if [[ -n "${NPM_HTTPS_PROXY:-}" ]]; then
+    npm_env+=(-e "NPM_HTTPS_PROXY=${NPM_HTTPS_PROXY}")
   fi
 
   if ! docker run --rm \
@@ -921,14 +924,14 @@ build_all_normal() {
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
-    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
-    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-}"
   build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$NORMAL_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
-    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
-    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-}"
   # build_analytics_modern_image removed — analytics UI embedded in platform-webapp.
   build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$NORMAL_DIST" \
     --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
@@ -976,14 +979,14 @@ build_all_legacy() {
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
-    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
-    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-}"
   build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
-    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
-    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
+    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-}" \
+    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-}"
   build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$LEGACY_DIST" \
     --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
     --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
@@ -1088,8 +1091,8 @@ build_single_image() {
     dts-admin-webapp|dts-platform-webapp)
       build_args+=(--build-arg PNPM_VERSION="${PNPM_VERSION}" --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}"
         --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}"
-        --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}"
-        --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
+        --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-}"
+        --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-}")
       ;;
     dts-airflow-om)
       build_args+=(

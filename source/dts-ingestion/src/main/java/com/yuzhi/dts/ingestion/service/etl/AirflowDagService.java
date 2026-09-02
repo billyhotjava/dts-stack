@@ -36,6 +36,7 @@ public class AirflowDagService {
     private static final Logger LOG = LoggerFactory.getLogger(AirflowDagService.class);
     private static final Pattern NON_SAFE = Pattern.compile("[^a-z0-9_]+");
     private static final Pattern SAFE_DAG_ID = Pattern.compile("[A-Za-z0-9_][A-Za-z0-9_.-]{0,199}");
+    private static final String TABLE_PLACEHOLDER = "${table}";
     private static final ObjectMapper JSON = new ObjectMapper();
 
     private final AirflowProperties properties;
@@ -1345,8 +1346,19 @@ public class AirflowDagService {
      */
     private String buildCreateTableDdl(IngestionTask task) {
         if (task == null) return null;
-        // Get target table name from table mapping
-        String targetTable = resolveFirstTargetTable(task);
+        JsonNode sourceConfig = task.getSourceConfig();
+        if (sourceConfig == null || sourceConfig.isNull()) return null;
+
+        // Managed file landing is authoritative. The persisted writer template may
+        // still contain ${table}; Addax resolves its runtime copy, but the Airflow
+        // pre-task is rendered directly from the task and must use the concrete target.
+        JsonNode fileLanding = sourceConfig.get("_fileLanding");
+        String targetTable = fileLanding != null && fileLanding.isObject()
+            ? firstText(fileLanding, "targetTable")
+            : null;
+        if (!StringUtils.hasText(targetTable)) {
+            targetTable = resolveFirstTargetTable(task);
+        }
         if (!StringUtils.hasText(targetTable)) {
             // Fallback: try to get from destination config connection.table
             JsonNode destConfig = task.getDestinationConfig();
@@ -1363,6 +1375,9 @@ public class AirflowDagService {
             }
         }
         if (!StringUtils.hasText(targetTable)) return null;
+        if (targetTable.contains(TABLE_PLACEHOLDER)) {
+            throw new IllegalStateException("文件落地目标表尚未解析，拒绝生成 Airflow 建表任务");
+        }
 
         // Parse schema.table if present
         String schema = null;
@@ -1374,8 +1389,6 @@ public class AirflowDagService {
         }
 
         // Get file columns from source config
-        JsonNode sourceConfig = task.getSourceConfig();
-        if (sourceConfig == null || sourceConfig.isNull()) return null;
         JsonNode fileColumnsNode = sourceConfig.get("_fileColumns");
         if (fileColumnsNode == null || !fileColumnsNode.isArray() || fileColumnsNode.size() == 0) return null;
         boolean autoId = sourceConfig.has("_autoId") && sourceConfig.get("_autoId").asBoolean(false);
