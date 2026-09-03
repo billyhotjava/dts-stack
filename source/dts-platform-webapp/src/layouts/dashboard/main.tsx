@@ -137,19 +137,25 @@ const INTERNAL_ROUTE_HOSTS: Record<string, string[]> = {
 export const isPathInMenuTree = (menuPaths: Set<string>, pathname: string): boolean => {
 	if (menuPaths.size === 0) return true; // menus not loaded → graceful degradation
 	const normalized = pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+	const reachablePaths = new Set(
+		Array.from(menuPaths, (path) => {
+			const routePath = path.split(/[?#]/, 1)[0] || "/";
+			return routePath.length > 1 && routePath.endsWith("/") ? routePath.slice(0, -1) : routePath;
+		}),
+	);
 	// Platform core paths are always allowed
 	if (ALWAYS_ALLOWED_PREFIXES.some((p) => normalized === p || normalized.startsWith(`${p}/`))) return true;
-	if (menuPaths.has(normalized)) return true;
+	if (reachablePaths.has(normalized)) return true;
 	for (const [internalPath, hosts] of Object.entries(INTERNAL_ROUTE_HOSTS)) {
 		if (
 			(normalized === internalPath || normalized.startsWith(`${internalPath}/`)) &&
-			hosts.some((host) => menuPaths.has(host))
+			hosts.some((host) => reachablePaths.has(host))
 		) {
 			return true;
 		}
 	}
 	// Prefix match: /bi/dashboards/123 is reachable via /bi/dashboards
-	for (const menuPath of menuPaths) {
+	for (const menuPath of reachablePaths) {
 		if (normalized.startsWith(`${menuPath}/`)) return true;
 	}
 	return false;

@@ -5,6 +5,7 @@ import { type CompactColumns, CompactTable } from "@/components/table";
 import { statusLabel } from "@/utils/customerDisplayLabels";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
+import { resolveModelingOverviewTarget } from "./overviewNavigation";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
 import {
 	loadModelingOverviewProjection,
@@ -102,7 +103,7 @@ function OverviewContent({
 				{projection.stats.map((item, index) => {
 					const Icon = summaryIcons[index] || Boxes;
 					return (
-						<button key={item.label} onClick={() => navigate(`/data-modeling/${item.target}`)} type="button">
+						<button key={item.label} onClick={() => navigate(resolveModelingOverviewTarget(item.target))} type="button">
 							<span className="dmx-summary-icon">
 								<Icon size={19} />
 							</span>
