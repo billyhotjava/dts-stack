@@ -4,13 +4,27 @@ import {
 	createWarehousePlan,
 	getWarehousePlanSources,
 	saveWarehousePlanSources,
+	type WarehousePlanConfirmationStatus,
 	type WarehousePlanSourceBindingInput,
 	type WarehousePlanSourceBindingView,
+	type WarehousePlanSourceFreshness,
 	type WarehousePlanSourceInventoryView,
 } from "@/api/warehousePlanApi";
 import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
 
 type Option = { value: string; label: string };
+
+const CONFIRMATION_STATUS_LABELS: Record<WarehousePlanConfirmationStatus, string> = {
+	CANDIDATE: "待确认",
+	CONFIRMED: "已确认",
+	EXCLUDED: "已排除",
+};
+
+const SOURCE_FRESHNESS_LABELS: Record<WarehousePlanSourceFreshness, string> = {
+	CURRENT: "结构一致",
+	STALE: "结构已变化",
+	UNKNOWN: "结构待核验",
+};
 
 type Props = {
 	planId: string;
@@ -45,6 +59,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 	const [tables, setTables] = useState<Option[]>([]);
 	const [datasetId, setDatasetId] = useState("");
 	const [assetId, setAssetId] = useState("");
+	const [tableHint, setTableHint] = useState("");
 	const [loading, setLoading] = useState(true);
 	const [tableLoading, setTableLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -96,6 +111,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 		setDatasetId(nextDatasetId);
 		setAssetId("");
 		setTables([]);
+		setTableHint("");
 		if (!nextDatasetId) return;
 		setTableLoading(true);
 		setFailure("");
@@ -106,14 +122,19 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 				: Array.isArray(result?.data?.content)
 					? result.data.content
 					: [];
-			setTables(
-				rows
-					.map((item: any) => ({
-						value: String(item?.id || ""),
-						label: String(item?.name || item?.displayName || item?.id || ""),
-					}))
-					.filter((option: Option) => option.value && !registeredAssetIds.has(option.value)),
-			);
+			const options = rows
+				.map((item: any) => ({
+					value: String(item?.id || ""),
+					label: String(item?.name || item?.displayName || item?.id || ""),
+				}))
+				.filter((option: Option) => option.value);
+			const availableTables = options.filter((option: Option) => !registeredAssetIds.has(option.value));
+			setTables(availableTables);
+			if (options.length === 0) {
+				setTableHint("该来源数据集下暂无可读取的物理表，请先完成元数据采集或检查访问权限。");
+			} else if (availableTables.length === 0) {
+				setTableHint(`该来源数据集下的 ${options.length} 张物理表均已登记，可在下方“已登记来源”查看。`);
+			}
 		} catch (error) {
 			setFailure(failureMessage(error, "数据表目录读取失败，请重试。"));
 		} finally {
@@ -268,13 +289,13 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 					) : null}
 					<div className="dmx-workbench-editor__basic-grid">
 						<label>
-							<span>来源数据集</span>
+							<span>来源数据集（筛选范围）</span>
 							<select
 								aria-label="来源数据集"
 								onChange={(event) => void chooseDataset(event.target.value)}
 								value={datasetId}
 							>
-								<option value="">请选择数据集</option>
+								<option value="">请选择来源数据集</option>
 								{datasets.map((option) => (
 									<option key={option.value} value={option.value}>
 										{option.label}
@@ -283,20 +304,21 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 							</select>
 						</label>
 						<label>
-							<span>目录资产</span>
+							<span>可登记物理表</span>
 							<select
-								aria-label="目录资产"
+								aria-label="可登记物理表"
 								disabled={!datasetId || tableLoading}
 								onChange={(event) => setAssetId(event.target.value)}
 								value={assetId}
 							>
-								<option value="">{tableLoading ? "正在读取数据表…" : "请选择数据表"}</option>
+								<option value="">{tableLoading ? "正在读取物理表…" : "请选择物理表"}</option>
 								{tables.map((option) => (
 									<option key={option.value} value={option.value}>
 										{option.label}
 									</option>
 								))}
 							</select>
+							{tableHint ? <small>{tableHint}</small> : null}
 						</label>
 					</div>
 					<div className="dmx-dialog-actions">
@@ -326,7 +348,8 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 												: "warning"
 										}
 									>
-										{binding.confirmationStatus} · {binding.freshness}
+										{CONFIRMATION_STATUS_LABELS[binding.confirmationStatus]} ·{" "}
+										{SOURCE_FRESHNESS_LABELS[binding.freshness]}
 									</Status>
 									{binding.allowedActions?.includes("CONFIRM") ? (
 										<Button disabled={saving} onClick={() => confirm(binding.bindingId)}>

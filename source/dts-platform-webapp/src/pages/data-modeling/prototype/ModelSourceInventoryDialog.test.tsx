@@ -135,9 +135,7 @@ describe("ModelSourceInventoryDialog", () => {
 		});
 		await act(async () => undefined);
 
-		expect(container.textContent).toContain(
-			"该来源数据集下的 1 张物理表均已登记，可在下方“已登记来源”查看。",
-		);
+		expect(container.textContent).toContain("该来源数据集下的 1 张物理表均已登记，可在下方“已登记来源”查看。");
 	});
 
 	it("explains when the selected dataset has no readable physical tables", async () => {
@@ -154,9 +152,7 @@ describe("ModelSourceInventoryDialog", () => {
 		});
 		await act(async () => undefined);
 
-		expect(container.textContent).toContain(
-			"该来源数据集下暂无可读取的物理表，请先完成元数据采集或检查访问权限。",
-		);
+		expect(container.textContent).toContain("该来源数据集下暂无可读取的物理表，请先完成元数据采集或检查访问权限。");
 	});
 
 	it("registers and confirms a catalog table through the warehouse source command boundary", async () => {
@@ -175,7 +171,7 @@ describe("ModelSourceInventoryDialog", () => {
 			datasetSelect.dispatchEvent(new Event("change", { bubbles: true }));
 		});
 		await act(async () => undefined);
-		const assetSelect = container.querySelector<HTMLSelectElement>('select[aria-label="目录资产"]');
+		const assetSelect = container.querySelector<HTMLSelectElement>('select[aria-label="可登记物理表"]');
 		expect(assetSelect).not.toBeNull();
 		await act(async () => {
 			if (!assetSelect) return;
@@ -231,7 +227,7 @@ describe("ModelSourceInventoryDialog", () => {
 			datasetSelect.dispatchEvent(new Event("change", { bubbles: true }));
 		});
 		await act(async () => undefined);
-		const assetSelect = container.querySelector<HTMLSelectElement>('select[aria-label="目录资产"]');
+		const assetSelect = container.querySelector<HTMLSelectElement>('select[aria-label="可登记物理表"]');
 		await act(async () => {
 			if (!assetSelect) return;
 			assetSelect.value = "asset-1";
