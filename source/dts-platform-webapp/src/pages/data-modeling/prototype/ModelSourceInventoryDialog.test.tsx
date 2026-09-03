@@ -94,6 +94,71 @@ afterEach(async () => {
 });
 
 describe("ModelSourceInventoryDialog", () => {
+	it("renders source confirmation and freshness in customer-facing Chinese", async () => {
+		mocks.getWarehousePlanSources.mockResolvedValueOnce({
+			bindings: [confirmedSource],
+			readiness: "READY",
+			issues: [],
+			version: 2,
+			etag: "sources:2",
+			checkedAt: "2026-09-03T00:01:00Z",
+		});
+		await act(async () => {
+			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={vi.fn()} planId="plan-1" />);
+		});
+		await act(async () => undefined);
+
+		expect(container.textContent).toContain("已确认 · 结构一致");
+		expect(container.textContent).not.toMatch(/CONFIRMED|CURRENT/);
+	});
+
+	it("explains when every physical table in the selected dataset is already registered", async () => {
+		mocks.getWarehousePlanSources.mockResolvedValueOnce({
+			bindings: [confirmedSource],
+			readiness: "READY",
+			issues: [],
+			version: 2,
+			etag: "sources:2",
+			checkedAt: "2026-09-03T00:01:00Z",
+		});
+		await act(async () => {
+			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={vi.fn()} planId="plan-1" />);
+		});
+		await act(async () => undefined);
+
+		expect(container.textContent).toContain("来源数据集（筛选范围）");
+		expect(container.textContent).toContain("可登记物理表");
+		const datasetSelect = container.querySelectorAll("select")[0];
+		await act(async () => {
+			datasetSelect.value = "dataset-1";
+			datasetSelect.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		await act(async () => undefined);
+
+		expect(container.textContent).toContain(
+			"该来源数据集下的 1 张物理表均已登记，可在下方“已登记来源”查看。",
+		);
+	});
+
+	it("explains when the selected dataset has no readable physical tables", async () => {
+		mocks.listTablesByDataset.mockResolvedValueOnce({ content: [] });
+		await act(async () => {
+			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={vi.fn()} planId="plan-1" />);
+		});
+		await act(async () => undefined);
+
+		const datasetSelect = container.querySelectorAll("select")[0];
+		await act(async () => {
+			datasetSelect.value = "dataset-1";
+			datasetSelect.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		await act(async () => undefined);
+
+		expect(container.textContent).toContain(
+			"该来源数据集下暂无可读取的物理表，请先完成元数据采集或检查访问权限。",
+		);
+	});
+
 	it("registers and confirms a catalog table through the warehouse source command boundary", async () => {
 		const onSourcesChanged = vi.fn();
 		await act(async () => {
