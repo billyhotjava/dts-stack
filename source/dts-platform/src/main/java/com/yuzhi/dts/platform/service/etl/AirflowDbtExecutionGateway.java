@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.etl;
 
 import com.yuzhi.dts.platform.config.AirflowProperties;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
@@ -123,6 +124,15 @@ public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
         ) {
             return SubmissionResult.blocked(
                 "MODEL_AIRFLOW_RUN_IDENTITY_CONFLICT"
+            );
+        }
+        String state = String.valueOf(existing.get("state"))
+            .trim()
+            .toLowerCase(Locale.ROOT);
+        if ("failed".equals(state)) {
+            return SubmissionResult.terminalFailed(
+                actualRunId,
+                "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED"
             );
         }
         return SubmissionResult.submitted(actualRunId, true);

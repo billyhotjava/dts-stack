@@ -37,6 +37,9 @@ builds/legacy-dist
 # Airflow / dbt runtime dirs
 services/dts-airflow/logs
 services/dts-airflow/dags
+services/dts-dbt/.dts-scoped-runs
+services/dts-dbt/.dts-runtime
 services/dts-dbt/target
 services/dts-dbt/logs
 services/dts-dbt/profiles/profiles.yml
+services/dts-dbt/profiles/.user.yml

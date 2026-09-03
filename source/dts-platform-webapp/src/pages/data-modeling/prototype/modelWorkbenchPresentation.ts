@@ -1,3 +1,4 @@
+import type { ModelAuthoringContext } from "@/api/modelAuthoringApi";
 import type { CatalogDomain } from "@/api/services/catalogDomainService";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import {
@@ -10,14 +11,20 @@ import {
 
 export { isConceptDimensionDraft, isDimensionTableDraft };
 
-const UNCONFIGURED = "未配置";
+export const authoringOriginLabel = (context: ModelAuthoringContext | null) => {
+	switch (context?.provenance.origin) {
+		case "SYSTEM_GENERATED":
+			return "平台生成";
+		case "MANUAL_CODE":
+			return "手工代码";
+		case "DBT_ZIP_IMPORT":
+			return "dbt ZIP 导入";
+		default:
+			return "历史模型";
+	}
+};
 
-export const DIMENSION_STORAGE_OPTIONS = [
-	{ value: "table", label: "表存储" },
-	{ value: "incremental", label: "增量表" },
-	{ value: "view", label: "视图" },
-	{ value: "ephemeral", label: "临时模型" },
-] as const;
+const UNCONFIGURED = "未配置";
 
 export type DimensionFormPresentation = {
 	warehouseLayer: string;
@@ -105,14 +112,25 @@ export function modelDraftFingerprint(draft: ModelDraft): string {
 		fields: draft.fields,
 		partitionFields: draft.partitionFields,
 		loadStrategy: draft.loadStrategy,
+		warehouseLayerCode: draft.warehouseLayerCode,
+		businessProcessId: draft.businessProcessId,
 		scdType: draft.scdType,
 		reuseScope: draft.reuseScope,
 		dimensionDefinitionId: draft.dimensionDefinitionId,
 		standardBindings: draft.standardBindings,
+		implementationMode: draft.implementationMode,
 		implementationInputMode: draft.implementationInputMode,
 		generationStrategyType: draft.generationStrategyType,
+		fieldMappings: draft.fieldMappings,
+		casts: draft.casts,
+		filters: draft.filters,
+		deduplicateBy: draft.deduplicateBy,
+		joins: draft.joins,
+		groupBy: draft.groupBy,
+		aggregations: draft.aggregations,
 		sourceRefs: draft.sourceRefs,
 		dependsOn: draft.dependsOn,
+		dimensionRefs: draft.dimensionRefs,
 		factShape: draft.factShape,
 		timeSemanticsType: draft.timeSemanticsType,
 		timeSemanticsFields: draft.timeSemanticsFields,

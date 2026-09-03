@@ -1231,10 +1231,12 @@ pack_deployment() {
     fi
   done
 
-  # profiles.yml is a site-local development fixture and may contain warehouse
-  # credentials. Canonical materialization uses a short-lived tmpfs lease, so
-  # the shared profile must never cross the deployment-package boundary.
-  rm -f -- "${pack_dir}/services/dts-dbt/profiles/profiles.yml"
+  # Local dbt profiles may contain warehouse credentials. Canonical
+  # materialization uses a short-lived tmpfs lease, so local profiles must never
+  # cross the deployment-package boundary.
+  rm -f -- \
+    "${pack_dir}/services/dts-dbt/profiles/profiles.yml" \
+    "${pack_dir}/services/dts-dbt/profiles/.user.yml"
 
   # Copy dbt project files (but not target/logs)
   mkdir -p "${pack_dir}/services/dts-dbt"

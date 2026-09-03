@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260904_01_model_release_candidate_stable_model_scope" author="codex">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_release_candidate_entry"/>
+            <foreignKeyConstraintExists
+                foreignKeyName="fk_model_release_candidate_entry_model_scope"
+                foreignKeyTableName="modeling_model_release_candidate_entry"/>
+        </preConditions>
+
+        <addUniqueConstraint
+            tableName="modeling_model_spec"
+            columnNames="tenant_id, plan_id, id"
+            constraintName="uk_model_spec_release_identity_scope"/>
+        <dropForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_entry"
+            constraintName="fk_model_release_candidate_entry_model_scope"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_entry"
+            baseColumnNames="tenant_id, plan_id, model_spec_id"
+            constraintName="fk_model_release_candidate_entry_model_scope"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="tenant_id, plan_id, id"
+            onDelete="RESTRICT"/>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_model_release_candidate_entry entry
+                          JOIN modeling_model_spec model
+                            ON model.tenant_id = entry.tenant_id
+                           AND model.plan_id = entry.plan_id
+                           AND model.id = entry.model_spec_id
+                         WHERE model.implementation_mode <> entry.implementation_mode
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_RELEASE_CANDIDATE_IMPLEMENTATION_MODE_HISTORY_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropForeignKeyConstraint
+                baseTableName="modeling_model_release_candidate_entry"
+                constraintName="fk_model_release_candidate_entry_model_scope"/>
+            <addForeignKeyConstraint
+                baseTableName="modeling_model_release_candidate_entry"
+                baseColumnNames="tenant_id, plan_id, model_spec_id, implementation_mode"
+                constraintName="fk_model_release_candidate_entry_model_scope"
+                referencedTableName="modeling_model_spec"
+                referencedColumnNames="tenant_id, plan_id, id, implementation_mode"
+                onDelete="RESTRICT"/>
+            <dropUniqueConstraint
+                tableName="modeling_model_spec"
+                constraintName="uk_model_spec_release_identity_scope"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

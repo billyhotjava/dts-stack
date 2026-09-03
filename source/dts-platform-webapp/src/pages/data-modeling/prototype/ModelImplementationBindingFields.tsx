@@ -1,6 +1,9 @@
 import { useState } from "react";
 import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
-import type { ModelImplementationInputMode } from "@/features/modeling/contracts/modelImplementationContract";
+import type {
+	ModelImplementationCapabilities,
+	ModelImplementationInputMode,
+} from "@/features/modeling/contracts/modelImplementationContract";
 import {
 	isModelSpecUpstreamAllowed,
 	type ModelSpecFactShape,
@@ -13,6 +16,7 @@ import { ModelVisualTransformationFields } from "./ModelVisualTransformationFiel
 import { Button } from "./PrototypePrimitives";
 import {
 	MODEL_KIND_CONFIG,
+	applyModelDraftFieldPatch,
 	type ModelDraftValidationErrors,
 	type ModelSpecDraft,
 	type ModelWorkbenchContext,
@@ -47,21 +51,20 @@ const MODEL_TYPE_LABELS: Record<ModelSpecType, string> = {
 	APPLICATION: "应用表",
 };
 
-const modeOptions = (draft: ModelSpecDraft): Array<{ value: ModelImplementationInputMode; label: string }> => {
-	if (draft.createKind === "dimension-table") {
-		return [
-			{ value: "PHYSICAL_ASSET", label: "直接选择输入源表" },
-			{ value: "GENERATED", label: "系统生成标准日期维度" },
-		];
-	}
-	if (draft.createKind === "fact") {
-		return [
-			{ value: "PHYSICAL_ASSET", label: "直接选择输入源表" },
-			{ value: "UPSTREAM_MODEL", label: "引用已有上游模型" },
-		];
-	}
-	return [{ value: "UPSTREAM_MODEL", label: "引用已有上游模型" }];
+const INPUT_MODE_LABELS: Record<ModelImplementationInputMode, string> = {
+	PHYSICAL_ASSET: "直接选择输入源表",
+	UPSTREAM_MODEL: "引用已有上游模型",
+	GENERATED: "系统生成标准日期维度",
 };
+
+const modeOptions = (
+	draft: ModelSpecDraft,
+	capabilities: ModelImplementationCapabilities,
+): Array<{ value: ModelImplementationInputMode; label: string }> =>
+	(capabilities.inputModesByModelType[MODEL_KIND_CONFIG[draft.createKind].modelType] || []).map((value) => ({
+		value,
+		label: INPUT_MODE_LABELS[value],
+	}));
 
 const sourceModeDescription = (draft: ModelSpecDraft): string => {
 	if (draft.createKind === "dimension-table") {
@@ -83,6 +86,22 @@ const normalizeSourceOrder = (sources: ModelSpecSourceRef[]): ModelSpecSourceRef
 		sortOrder: index,
 	}));
 
+export const applyFactTimeFieldSelection = (
+	draft: ModelSpecDraft,
+	fieldIndex: number,
+	checked: boolean,
+): ModelSpecDraft => {
+	const field = draft.fields[fieldIndex];
+	if (!field?.name.trim()) return draft;
+	const nextDraft = checked ? applyModelDraftFieldPatch(draft, fieldIndex, { role: "TIME" }) : draft;
+	return {
+		...nextDraft,
+		timeSemanticsFields: checked
+			? Array.from(new Set([...nextDraft.timeSemanticsFields, field.name]))
+			: nextDraft.timeSemanticsFields.filter((item) => item !== field.name),
+	};
+};
+
 function ValidationMessage({ message }: { message?: string }) {
 	return message ? (
 		<small className="dmx-workbench-editor__validation" role="alert">
@@ -100,8 +119,8 @@ export function ModelImplementationBindingFields({
 }: Props) {
 	const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
-	const modes = modeOptions(draft);
 	const targetType = MODEL_KIND_CONFIG[draft.createKind].modelType;
+	const modes = modeOptions(draft, context.implementationCapabilities);
 	const upstreamCandidates = context.models.filter(
 		(model) =>
 			model.id !== draft.base?.id &&
@@ -136,12 +155,9 @@ export function ModelImplementationBindingFields({
 				(candidate) => candidate.id === dimension.modelSpecId && candidate.revision === dimension.revision,
 			),
 	);
-	const timeFieldNames = Array.from(
-		new Set([
-			...draft.fields.filter((field) => field.role === "TIME").map((field) => field.name),
-			...draft.timeSemanticsFields,
-		]),
-	).filter(Boolean);
+	const timeFieldCandidates = draft.fields
+		.map((field, fieldIndex) => ({ field, fieldIndex }))
+		.filter(({ field }) => Boolean(field.name.trim()));
 
 	const changeMode = (mode: ModelImplementationInputMode | "") => {
 		patch({
@@ -200,12 +216,8 @@ export function ModelImplementationBindingFields({
 		});
 	};
 
-	const toggleTimeField = (fieldName: string, checked: boolean) =>
-		patch({
-			timeSemanticsFields: checked
-				? [...draft.timeSemanticsFields, fieldName]
-				: draft.timeSemanticsFields.filter((item) => item !== fieldName),
-		});
+	const toggleTimeField = (fieldIndex: number, checked: boolean) =>
+		onChange(applyFactTimeFieldSelection(draft, fieldIndex, checked));
 
 	return (
 		<section className="dmx-editor-panel">
@@ -401,18 +413,26 @@ export function ModelImplementationBindingFields({
 						</label>
 						<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
 							<strong>时间字段</strong>
-							{timeFieldNames.map((fieldName) => (
-								<label key={fieldName}>
+							{timeFieldCandidates.map(({ field, fieldIndex }) => (
+								<label key={`${field.name}:${fieldIndex}`}>
 									<input
-										aria-label={`选择时间字段 ${fieldName}`}
-										checked={draft.timeSemanticsFields.includes(fieldName)}
-										onChange={(event) => toggleTimeField(fieldName, event.target.checked)}
+										aria-label={`选择时间字段 ${field.name}`}
+										checked={draft.timeSemanticsFields.includes(field.name)}
+										onChange={(event) => toggleTimeField(fieldIndex, event.target.checked)}
 										type="checkbox"
 									/>
-									<span>{fieldName}</span>
+									<span>
+										{field.displayName?.trim()
+											? `${field.displayName}（${field.name} · ${field.dataType}）`
+											: `${field.name} · ${field.dataType}`}
+									</span>
 								</label>
 							))}
-							{!timeFieldNames.length ? <small>请先在字段管理中新增字段，并将字段作用设置为“时间”。</small> : null}
+							{timeFieldCandidates.length ? (
+								<small>请从当前模型字段中选择；勾选后字段作用会同步设置为“时间”。</small>
+							) : (
+								<small>请先在字段管理中新增字段。</small>
+							)}
 							<ValidationMessage message={validationErrors.timeSemantics} />
 						</div>
 					</>

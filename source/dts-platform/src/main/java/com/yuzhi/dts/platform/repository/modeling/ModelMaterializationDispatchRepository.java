@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.repository.modeling;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -89,6 +90,30 @@ public class ModelMaterializationDispatchRepository {
             )
             .stream()
             .findFirst();
+    }
+
+    @Transactional(readOnly = true)
+    public List<DispatchRecord> findSubmittedBefore(
+        Instant cutoff,
+        int limit
+    ) {
+        if (cutoff == null || limit < 1 || limit > 100) {
+            throw new IllegalArgumentException(
+                "cutoff and a limit between 1 and 100 are required"
+            );
+        }
+        return jdbcTemplate.query(
+            SELECTION +
+            """
+             where status = 'SUBMITTED'
+               and last_modified_at <= ?
+             order by last_modified_at, created_at, id
+             limit ?
+            """,
+            (row, rowNumber) -> map(row),
+            Timestamp.from(cutoff),
+            limit
+        );
     }
 
     @Transactional

@@ -58,6 +58,36 @@ class AirflowDbtExecutionGatewayTest {
     }
 
     @Test
+    void reportsExistingFailedRunAsTerminalFailure() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(
+            Optional.of(
+                Map.of(
+                    "dag_run_id",
+                    DAG_RUN_ID,
+                    "state",
+                    "failed",
+                    "conf",
+                    expectedConf()
+                )
+            )
+        );
+        AirflowDbtExecutionGateway gateway = gateway(airflow);
+
+        DbtExecutionGateway.SubmissionResult result = gateway
+            .reconcileReleaseBuild(request())
+            .orElseThrow();
+
+        assertThat(result.status()).isEqualTo(
+            DbtExecutionGateway.SubmissionStatus.TERMINAL_FAILED
+        );
+        assertThat(result.dagRunId()).isEqualTo(DAG_RUN_ID);
+        assertThat(result.errorCode()).isEqualTo(
+            "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED"
+        );
+    }
+
+    @Test
     void timeoutAfterAcceptanceRecoversByExactRunId() {
         AirflowClient airflow = mock(AirflowClient.class);
         when(airflow.getDag(DAG_ID)).thenReturn(

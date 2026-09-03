@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.web.rest.platform;
 
 import com.yuzhi.dts.admin.security.AdminInboundServiceAuthenticator;
+import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
@@ -32,23 +33,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReleaseDutyInternalResource {
 
     private static final String PLATFORM_SERVICE = "dts-platform";
-    // Mirrors the platform's interim data-admin release projection; it does not create new realm roles.
+    // Mirrors the platform's temporary menu-level projection; it does not create new realm roles.
     private static final Map<String, Set<String>> DUTY_ROLES = Map.of(
         "MODEL_MAINTAINER",
-        Set.of(
-            "ROLE_INST_DATA_OWNER",
-            "ROLE_DEPT_DATA_OWNER",
-            "ROLE_INST_LEADER",
-            "ROLE_OP_ADMIN"
-        ),
+        Set.of(AuthoritiesConstants.MODEL_MAINTAINERS),
         "RELEASE_REVIEWER",
-        Set.of("ROLE_INST_LEADER", "ROLE_OP_ADMIN"),
+        Set.of(AuthoritiesConstants.MODEL_RELEASE_REVIEWERS),
         "RELEASE_OPERATOR",
-        Set.of(
-            "ROLE_INST_DATA_OWNER",
-            "ROLE_DEPT_DATA_OWNER",
-            "ROLE_OP_ADMIN"
-        )
+        Set.of(AuthoritiesConstants.MODEL_RELEASE_OPERATORS)
     );
 
     private final AdminInboundServiceAuthenticator authenticator;

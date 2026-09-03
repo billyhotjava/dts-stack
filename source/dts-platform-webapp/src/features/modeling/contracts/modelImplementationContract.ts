@@ -1,4 +1,4 @@
-import type { ModelSpecImplementationMode } from "./modelSpecV2Contract";
+import type { ModelSpecImplementationMode, ModelSpecType } from "./modelSpecV2Contract";
 
 export type ModelImplementationInputMode = "PHYSICAL_ASSET" | "UPSTREAM_MODEL" | "GENERATED";
 
@@ -220,6 +220,16 @@ export type ModelImplementationValidation = {
 	executionPlan?: ModelImplementationExecutionPlan | null;
 };
 
+export type ModelImplementationCapabilities = {
+	adapter: string;
+	inputModesByModelType: Record<ModelSpecType, ModelImplementationInputMode[]>;
+	loadStrategies: Array<"FULL" | "INCREMENTAL" | "SNAPSHOT">;
+	materializationsByLoadStrategy: Partial<Record<"FULL" | "INCREMENTAL" | "SNAPSHOT", string[]>>;
+	settingKeys: string[];
+	partitionFieldsSupported: boolean;
+	incrementalKeyRequired: boolean;
+};
+
 export type ModelImplementationBlocker = {
 	code: string;
 	field: string;
@@ -241,6 +251,10 @@ export type ModelImplementationExecutionPlan = {
 
 export const modelImplementationValidationMessage = (result: ModelImplementationValidation): string => {
 	const guidance: Record<string, string> = {
+		MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED: "当前模型类型不支持所选数据来源方式，请重新选择来源。",
+		PHYSICAL_ASSET_NOT_CONFIRMED: "所选输入源表尚未确认、已失效或结构版本已变化，请重新登记后选择。",
+		MODEL_IMPLEMENTATION_INPUT_STALE: "所选上游模型版本已变化，请重新选择当前版本。",
+		MODEL_IMPLEMENTATION_SELF_REFERENCE: "模型不能引用自身或形成循环依赖，请调整上游模型。",
 		IMPLEMENTATION_SETTING_NOT_ALLOWED: "当前实现包含不支持的高级设置，请移除后重试。",
 		IMPLEMENTATION_ADAPTER_UNSUPPORTED: "当前执行目标尚未通过物化能力验证，请选择已支持的执行目标。",
 		IMPLEMENTATION_TARGET_REQUIRED: "请填写目标物理表名。",

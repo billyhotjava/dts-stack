@@ -8,6 +8,9 @@ public interface SourceReferenceResolver {
 
     ResolvedSource resolve(SourceType sourceType, SourceLocator locator, AccessContext accessContext);
 
+    /** Resolves an already-authorized binding from a trusted background execution context. */
+    ResolvedSource resolveForExecution(SourceType sourceType, SourceLocator locator, AccessContext accessContext);
+
     enum ResolutionStatus {
         AVAILABLE,
         MISSING,

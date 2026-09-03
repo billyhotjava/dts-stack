@@ -104,8 +104,7 @@ public class ModelAuthoringDraftService {
             ? drafts.findOpenAuthoring(tenantId, actorId, modelSpecId)
             : Optional.empty();
         AuthoringProjection projection = open
-            .map(DraftView::sourceBundle)
-            .map(projections::project)
+            .map(this::project)
             .orElseGet(() -> AuthoringProjection.unknown("MODEL_AUTHORING_PROJECTION_NOT_PREPARED"));
         boolean maintainer = writeAccess.canMaintain(tenantId, model.planId(), actorId);
         var allowed = capabilities
@@ -230,7 +229,7 @@ public class ModelAuthoringDraftService {
             .filter(candidate -> candidate.draftId().equals(draftId))
             .orElseThrow(() -> error("MODEL_AUTHORING_DRAFT_NOT_FOUND", "The authoring draft was not found", ModelAuthoringException.Kind.NOT_FOUND));
         SourceBundleView submittedBundle = withFiles(open.sourceBundle(), request.files());
-        AuthoringProjection projection = projections.project(submittedBundle);
+        AuthoringProjection projection = project(submittedBundle, request.modelSpecSnapshot());
         var saved = drafts.saveAuthoring(
             tenantId,
             actorId,
@@ -243,11 +242,12 @@ public class ModelAuthoringDraftService {
             request.activeView() == ModelAuthoringContract.ActiveView.VISUAL
         );
         List<FileInput> files = drafts.authoringFiles(tenantId, actorId, modelSpecId, draftId);
+        AuthoringProjection savedProjection = project(withFiles(open.sourceBundle(), files), request.modelSpecSnapshot());
         return new SaveAuthoringDraftView(
             saved.draftId(),
             saved.etag(),
             request.modelSpecSnapshot(),
-            projection,
+            savedProjection,
             saved.fileCount(),
             saved.totalBytes(),
             files
@@ -269,7 +269,7 @@ public class ModelAuthoringDraftService {
         var decoded = snapshotDecoder.decode(open.modelSpecSnapshot());
         if (!decoded.valid()) return new ValidateAuthoringDraftView(null, decoded.issues(), List.of());
         List<Diagnostic> projectionIssues = projections
-            .project(open.sourceBundle())
+            .project(open.sourceBundle(), decoded.modelSpec().fields())
             .reasons()
             .stream()
             .map(reason -> new Diagnostic(reason, "WARNING", null, null, "The implementation remains editable in the code view"))
@@ -313,11 +313,20 @@ public class ModelAuthoringDraftService {
     }
 
     private AuthoringDraftView authoringView(ModelSpecView model, DraftView draft, boolean technicalAuthorized) {
-        AuthoringProjection projection = projections.project(draft.sourceBundle());
+        AuthoringProjection projection = project(draft);
         var allowed = capabilities
             .authoringActions(model.status(), technicalAuthorized, true, draftState(draft), projection.coverage())
             .allowedActions();
         return new AuthoringDraftView(model, draft, provenance(model, draft), projection, allowed);
+    }
+
+    private AuthoringProjection project(DraftView draft) {
+        return project(draft.sourceBundle(), draft.modelSpecSnapshot());
+    }
+
+    private AuthoringProjection project(SourceBundleView source, JsonNode snapshot) {
+        var decoded = snapshotDecoder.decode(snapshot);
+        return projections.project(source, decoded.valid() ? decoded.modelSpec().fields() : null);
     }
 
     private String requestHash(String tenantId, String actorId, UUID modelSpecId, CreateAuthoringDraftRequest request) {

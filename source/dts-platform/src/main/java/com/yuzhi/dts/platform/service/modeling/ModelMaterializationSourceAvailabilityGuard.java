@@ -13,14 +13,18 @@ import com.yuzhi.dts.platform.service.catalog.CatalogMaterializationSourceAvaila
 import com.yuzhi.dts.platform.service.catalog.CatalogMaterializationSourceAvailabilityPort.ExpectedSource;
 import com.yuzhi.dts.platform.service.catalog.CatalogMaterializationSourceAvailabilityPort.SourceDescriptor;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import java.time.Instant;
 import java.util.ArrayDeque;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +35,7 @@ public class ModelMaterializationSourceAvailabilityGuard {
     public static final String SOURCE_UNAVAILABLE = "MODEL_SOURCE_AVAILABILITY_FENCE_ACTIVE";
     public static final String SOURCE_GENERATION_STALE = "MODEL_MATERIALIZATION_SOURCE_GENERATION_STALE";
     public static final String SOURCE_PIN_MISSING = "MODEL_MATERIALIZATION_SOURCE_PIN_MISSING";
+    private static final Pattern DBT_IDENTIFIER = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
 
     private final ModelMaterializationSourceSnapshotRepository snapshots;
     private final ModelSpecSourceValidationPort sourceValidation;
@@ -60,6 +65,58 @@ public class ModelMaterializationSourceAvailabilityGuard {
     @Transactional(readOnly = true)
     public void requireDispatchCurrent(UUID dispatchId) {
         requireCurrent(snapshots.findDispatchInputs(dispatchId), dispatchId);
+    }
+
+    /** Resolves the exact dbt source tuples from the same version-bound inputs used by the fence. */
+    @Transactional(readOnly = true)
+    public List<PinnedSourceDefinition> pinnedDispatchSources(UUID dispatchId) {
+        List<PhysicalSourceRequest> requests = requireCurrent(
+            snapshots.findDispatchInputs(dispatchId),
+            dispatchId
+        );
+        return requests
+            .stream()
+            .map(request -> pinnedSource(request, dispatchId))
+            .filter(java.util.Objects::nonNull)
+            .sorted(
+                Comparator.comparing(PinnedSourceDefinition::sourceName)
+                    .thenComparing(PinnedSourceDefinition::tableName)
+                    .thenComparing(definition -> definition.sourceBindingId().toString())
+            )
+            .toList();
+    }
+
+    private PinnedSourceDefinition pinnedSource(PhysicalSourceRequest request, UUID dispatchId) {
+        SourceRef source = sourceValidation
+            .resolveCurrentBindingForCompiler(
+                request.tenantId(),
+                request.planId(),
+                request.sourceBindingId(),
+                request.resolvedVersion()
+            )
+            .orElseThrow(() -> unavailable(
+                dispatchId,
+                request.modelSpecId(),
+                "The pinned source relation is unavailable"
+            ));
+        if (source.kind() == SourceKind.DBT_MODEL) return null;
+        if (source.kind() != SourceKind.TABLE || source.ref() == null) {
+            throw unavailable(dispatchId, request.modelSpecId(), "The pinned source relation is invalid");
+        }
+        String ref = source.ref().trim();
+        int separator = ref.indexOf('.');
+        String sourceName = separator > 0 ? ref.substring(0, separator) : "ods";
+        String tableName = separator > 0 ? ref.substring(separator + 1) : ref;
+        if (!DBT_IDENTIFIER.matcher(sourceName).matches() || !DBT_IDENTIFIER.matcher(tableName).matches()) {
+            throw unavailable(dispatchId, request.modelSpecId(), "The pinned dbt source identity is invalid");
+        }
+        return new PinnedSourceDefinition(
+            request.sourceBindingId(),
+            request.resolvedVersion(),
+            sourceName,
+            sourceName,
+            tableName
+        );
     }
 
     /**
@@ -224,7 +281,7 @@ public class ModelMaterializationSourceAvailabilityGuard {
                 sourceBindingId == null ||
                 resolvedVersion == null ||
                 resolvedVersion.isBlank() ||
-                !sourceValidation.isCurrentBindingForGate(
+                !sourceValidation.isCurrentBindingForExecution(
                     snapshot.tenantId(),
                     snapshot.planId(),
                     sourceBindingId,
@@ -415,6 +472,28 @@ public class ModelMaterializationSourceAvailabilityGuard {
         UUID sourceBindingId,
         String resolvedVersion
     ) {}
+
+    public record PinnedSourceDefinition(
+        UUID sourceBindingId,
+        String resolvedVersion,
+        String sourceName,
+        String schemaName,
+        String tableName
+    ) {
+        public PinnedSourceDefinition {
+            if (
+                sourceBindingId == null ||
+                resolvedVersion == null ||
+                resolvedVersion.isBlank() ||
+                !DBT_IDENTIFIER.matcher(sourceName == null ? "" : sourceName).matches() ||
+                !DBT_IDENTIFIER.matcher(schemaName == null ? "" : schemaName).matches() ||
+                !DBT_IDENTIFIER.matcher(tableName == null ? "" : tableName).matches()
+            ) {
+                throw new IllegalArgumentException("Pinned dbt source definition is invalid");
+            }
+            resolvedVersion = resolvedVersion.trim();
+        }
+    }
 
     public record GenerationCheck(boolean current, String reasonCode, List<GenerationDrift> drift) {
         public GenerationCheck {

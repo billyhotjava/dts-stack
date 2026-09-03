@@ -8,15 +8,15 @@ import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sp
 import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
-import { materializationLabel } from "@/utils/customerDisplayLabels";
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
 import { ModelImplementationBindingFields } from "./ModelImplementationBindingFields";
+import { ModelImplementationExecutionFields } from "./ModelImplementationExecutionFields";
 import { ModelMaterializationStatusCard } from "./ModelMaterializationStatus";
-import { ModelPartitionFieldSelector } from "./ModelPartitionFieldSelector";
 import { ModelServingSyncStatus } from "./ModelServingSyncStatus";
 import type { WorkbenchDialog } from "./ModelWorkbenchDialog";
+import { ModelWorkflowToolbar } from "./ModelWorkflowToolbar";
 import {
-	DIMENSION_STORAGE_OPTIONS,
+	authoringOriginLabel,
 	isConceptDimensionDraft,
 	isDimensionTableDraft,
 	resolveConceptDimensionPresentation,
@@ -271,25 +271,12 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							<small>当前规划暂无数据域，请先在数仓规划中创建数据域。</small>
 						) : null}
 					</label>
-					<label>
-						<span>存储策略</span>
-						<select
-							aria-label="存储策略"
-							onChange={(event) =>
-								patch({
-									materialization: event.target.value,
-									loadStrategy: event.target.value === "incremental" ? "INCREMENTAL" : "FULL",
-								})
-							}
-							value={draft.materialization}
-						>
-							{DIMENSION_STORAGE_OPTIONS.map((item) => (
-								<option key={item.value} value={item.value}>
-									{item.label}
-								</option>
-							))}
-						</select>
-					</label>
+					<ModelImplementationExecutionFields
+						capabilities={context.implementationCapabilities}
+						dimensionMode
+						draft={draft}
+						onChange={patch}
+					/>
 					<label>
 						<span className="required">维度</span>
 						<select
@@ -362,6 +349,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 					</label>
 				</div>
 			</section>
+			<FieldsPanel {...props} dimensionMode />
 			<ModelImplementationBindingFields
 				context={context}
 				draft={draft}
@@ -369,7 +357,6 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 				onSourcesChanged={props.onSourcesChanged}
 				validationErrors={validationErrors}
 			/>
-			<FieldsPanel {...props} dimensionMode />
 		</>
 	);
 }
@@ -577,7 +564,7 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						<input onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
 					</label>
 					<label>
-						<span>产出表英文名</span>
+						<span className="required">产出表英文名</span>
 						<input
 							aria-label="产出表英文名"
 							onChange={(event) => patch({ physicalName: event.target.value })}
@@ -594,34 +581,15 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						<input onChange={(event) => patch({ grainStatement: event.target.value })} value={draft.grainStatement} />
 						<ValidationMessage message={validationErrors.grainStatement} />
 					</label>
-					<label>
-						<span>物化方式</span>
-						<select onChange={(event) => patch({ materialization: event.target.value })} value={draft.materialization}>
-							<option value="table">{materializationLabel("table")}</option>
-							<option value="incremental">{materializationLabel("incremental")}</option>
-							<option value="view">{materializationLabel("view")}</option>
-							<option value="ephemeral">{materializationLabel("ephemeral")}</option>
-						</select>
-					</label>
-					<label>
-						<span>加载策略</span>
-						<select
-							onChange={(event) => patch({ loadStrategy: event.target.value as ModelSpecDraft["loadStrategy"] })}
-							value={draft.loadStrategy}
-						>
-							<option value="FULL">全量</option>
-							<option value="INCREMENTAL">增量</option>
-							<option value="SNAPSHOT">快照</option>
-						</select>
-					</label>
-					<ModelPartitionFieldSelector
-						error={validationErrors.partitionFields}
-						fields={draft.fields}
-						onChange={(partitionFields) => patch({ partitionFields })}
-						value={draft.partitionFields}
+					<ModelImplementationExecutionFields
+						capabilities={context.implementationCapabilities}
+						draft={draft}
+						onChange={patch}
+						partitionError={validationErrors.partitionFields}
 					/>
 				</div>
 			</section>
+			<FieldsPanel {...props} dimensionMode={false} />
 			<ModelImplementationBindingFields
 				context={context}
 				draft={draft}
@@ -629,23 +597,9 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 				onSourcesChanged={props.onSourcesChanged}
 				validationErrors={validationErrors}
 			/>
-			<FieldsPanel {...props} dimensionMode={false} />
 		</>
 	);
 }
-
-const authoringOriginLabel = (context: ModelAuthoringContext | null) => {
-	switch (context?.provenance.origin) {
-		case "SYSTEM_GENERATED":
-			return "平台生成";
-		case "MANUAL_CODE":
-			return "手工代码";
-		case "DBT_ZIP_IMPORT":
-			return "dbt ZIP 导入";
-		default:
-			return "历史模型";
-	}
-};
 
 export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 	const {
@@ -682,7 +636,9 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 	const effectiveReadOnly = readOnly;
 	const busy = saving || Boolean(authoringBusy);
 	const projection = authoringContext?.projection;
-	const validationBlocked = Boolean(authoringValidation?.modelIssues.length);
+	const displayedFailure =
+		authoringFailure ||
+		(authoringConflict ? "草稿版本已变化，请刷新后继续，平台不会自动覆盖他人修改。" : failureMessage);
 
 	return (
 		<div className="dmx-workbench-editor">
@@ -705,12 +661,6 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					<span>投影 {projection?.coverage || (authoringBusy === "load" ? "读取中" : "UNKNOWN")}</span>
 					<span>原始代码节点 {projection?.rawNodes.length || 0}</span>
 					<ModelServingSyncStatus canMaintain={canMaintain} modelSpecId={selectedModel.id} />
-				</div>
-			) : null}
-			{authoringFailure ? <div className="dmx-capability-note">{authoringFailure}</div> : null}
-			{authoringConflict ? (
-				<div className="dmx-inline-error" role="alert">
-					草稿版本已变化，请刷新后继续，平台不会自动覆盖他人修改。
 				</div>
 			) : null}
 			{selectedModel ? (
@@ -737,74 +687,50 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			{projection?.reasons.length ? (
 				<div className="dmx-capability-note">{modelingCapabilityReasonsText(projection.reasons)}</div>
 			) : null}
-			<div className="dmx-editor-toolbar" role="toolbar">
-				{published ? (
-					<Button disabled={!canMaintain || busy} onClick={onForkPublished} primary>
-						{authoringBusy === "create" ? "创建中…" : "创建新草稿版本"}
-					</Button>
-				) : (
+			{conceptDimension ? (
+				<div className="dmx-editor-toolbar" role="toolbar">
 					<Button
 						disabled={!canMaintain || effectiveReadOnly || busy || !dirty}
 						onClick={onSave}
 						primary
-						title={!dirty ? "当前没有待保存变更" : conceptDimension ? "保存维度草稿" : "保存模型创作草稿"}
+						title={!dirty ? "当前没有待保存变更" : "保存维度草稿"}
 					>
-						{saving || authoringBusy === "save" ? "保存中…" : conceptDimension || !persisted ? "保存" : "保存草稿"}
+						{saving ? "保存中…" : "保存"}
 					</Button>
-				)}
-				{conceptDimension && draft.definitionBase?.status === "DRAFT" ? (
-					<Button
-						disabled={!canMaintain || effectiveReadOnly || busy}
-						onClick={onConfirmDimension}
-						title="确认后，该定义将成为维度表可绑定的当前定义"
-					>
-						确认定义
-					</Button>
-				) : null}
-				{!conceptDimension && persisted && !published ? (
-					<>
-						<Button disabled={!canMaintain || busy} onClick={onValidateAuthoring}>
-							{authoringBusy === "validate" ? "校验中…" : "校验"}
-						</Button>
+					{draft.definitionBase?.status === "DRAFT" ? (
 						<Button
-							disabled={
-								!canMaintain || busy || dirty || validationBlocked || !authoringValidation?.implementationValidation
-							}
-							onClick={onCommitAuthoring}
+							disabled={!canMaintain || effectiveReadOnly || busy}
+							onClick={onConfirmDimension}
+							title="确认后，该定义将成为维度表可绑定的当前定义"
 						>
-							{authoringBusy === "commit" ? "提交中…" : "提交实现"}
+							确认定义
 						</Button>
-					</>
-				) : null}
-				{conceptDimension ? null : (
-					<>
-						<Button disabled={busy || !persisted} onClick={() => onDialog("gates")}>
-							交付检查
-						</Button>
-						<Button disabled={busy} onClick={onRefresh}>
-							刷新
-						</Button>
-						<Button disabled={busy || !persisted} onClick={() => onDialog("association")}>
-							关联关系
-						</Button>
-						<Button disabled={busy || !persisted || !canMaintain} onClick={() => onDialog("publish")}>
-							发布
-						</Button>
-						<Button disabled={busy || !persisted} onClick={() => onDialog("logs")}>
-							日志
-						</Button>
-						<Button disabled={busy || !persisted} onClick={() => onDialog("quality")}>
-							质量约束
-						</Button>
-						<Button disabled title="尚无模型导出服务端契约">
-							导出
-						</Button>
-					</>
-				)}
-			</div>
-			{failureMessage ? (
+					) : null}
+				</div>
+			) : (
+				<ModelWorkflowToolbar
+					authoringBusy={authoringBusy}
+					authoringValidation={authoringValidation}
+					busy={busy}
+					canMaintain={canMaintain}
+					dirty={dirty}
+					draftState={authoringContext?.openDraft?.state}
+					hasImplementation={Boolean(authoringContext?.implementation)}
+					onCommit={onCommitAuthoring}
+					onDialog={onDialog}
+					onForkPublished={onForkPublished}
+					onRefresh={onRefresh}
+					onSave={onSave}
+					onValidate={onValidateAuthoring}
+					persisted={persisted}
+					published={published}
+					readOnly={effectiveReadOnly}
+					saving={saving}
+				/>
+			)}
+			{displayedFailure ? (
 				<div className="dmx-inline-error" role="alert">
-					{failureMessage}
+					{displayedFailure}
 				</div>
 			) : null}
 			{authoringValidation?.modelIssues.length ? (

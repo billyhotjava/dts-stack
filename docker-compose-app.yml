@@ -304,6 +304,9 @@ services:
       dts-airflow-init:
         condition: service_completed_successfully
         required: true
+      dts-dbt:
+        condition: service_started
+        required: true
     environment:
       ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
       ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
@@ -320,8 +323,9 @@ services:
       DTS_TARGET_DB_PASSWORD: ${PG_PWD_BIADMIN}
       DTS_AIRFLOW_TO_PLATFORM_TOKEN: ${DTS_AIRFLOW_TO_PLATFORM:-}
       DTS_AIRFLOW_TO_INGESTION_TOKEN: ${DTS_AIRFLOW_TO_INGESTION_TOKEN:-}
-      DTS_DBT_PROJECT_HOST_ROOT: ${DTS_DBT_HOST_PROJECT_DIR}
-      DTS_DBT_RUNTIME_PROFILE_HOST_ROOT: /dev/shm/dts-dbt-runtime
+      DTS_DBT_RUNTIME_CONTAINER_NAME: dts-dbt
+      DTS_DBT_PROJECT_CONTAINER_ROOT: /opt/dbt
+      DTS_DBT_RUNTIME_PROFILE_CONTAINER_ROOT: /run/dts-dbt-runtime
       DTS_PLATFORM_INTERNAL_BASE_URL: http://dts-platform:8081
       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
       AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: regexp
@@ -692,6 +696,13 @@ services:
           create_host_path: true
         source: ./services/dts-dbt/profiles
         target: /root/.dbt
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: /dev/shm/dts-dbt-runtime
+        target: /run/dts-dbt-runtime
         type: bind
       - bind:
           create_host_path: true

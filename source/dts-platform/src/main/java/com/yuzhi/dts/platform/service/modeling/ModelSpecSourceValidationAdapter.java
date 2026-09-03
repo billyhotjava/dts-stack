@@ -61,7 +61,7 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
             .lockSourceBinding(tenantId, planId, sourceRef.sourceBindingId())
             .orElse(null);
 
-        return isCurrentResolvedBinding(tenantId, actorId, actor.ownerDepartmentId(), sourceRef, binding);
+        return isCurrentResolvedBinding(tenantId, actorId, actor.ownerDepartmentId(), sourceRef, binding, false);
     }
 
     @Override
@@ -77,7 +77,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
                 binding.planOwnerId(),
                 binding.planOwnerDepartmentId(),
                 sourceRef,
-                binding
+                binding,
+                false
             );
         } catch (RuntimeException exception) {
             LOG.warn("ModelSpec gate source validation failed ({})", exception.getClass().getSimpleName());
@@ -110,10 +111,50 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
                 binding.planOwnerId(),
                 binding.planOwnerDepartmentId(),
                 reference,
-                binding
+                binding,
+                false
             );
         } catch (RuntimeException exception) {
             LOG.warn("Model implementation source validation failed ({})", exception.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    @Override
+    public boolean isCurrentBindingForExecution(
+        String tenantId,
+        UUID planId,
+        UUID sourceBindingId,
+        String resolvedVersion
+    ) {
+        if (isBlank(tenantId) || planId == null || sourceBindingId == null || isBlank(resolvedVersion)) return false;
+        try {
+            SourceBindingState binding = repository.findSourceBinding(tenantId, planId, sourceBindingId).orElse(null);
+            if (binding == null || isBlank(binding.planOwnerId())) return false;
+            SourceKind kind = sourceKind(binding.sourceType());
+            if (kind == null) return false;
+            SourceRef reference = new SourceRef(
+                kind,
+                binding.sourceId(),
+                null,
+                SourceRole.PRIMARY,
+                null,
+                null,
+                null,
+                null,
+                sourceBindingId,
+                resolvedVersion
+            );
+            return isCurrentResolvedBinding(
+                tenantId,
+                binding.planOwnerId(),
+                binding.planOwnerDepartmentId(),
+                reference,
+                binding,
+                true
+            );
+        } catch (RuntimeException exception) {
+            LOG.warn("Model materialization source validation failed ({})", exception.getClass().getSimpleName());
             return false;
         }
     }
@@ -156,7 +197,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
         String ownerId,
         String ownerDepartmentId,
         SourceRef sourceRef,
-        SourceBindingState binding
+        SourceBindingState binding,
+        boolean backgroundExecution
     ) {
         if (
             binding == null ||
@@ -179,11 +221,10 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
             return false;
         }
 
-        ResolvedSource resolved = resolve(
-            sourceType,
-            locator,
-            new AccessContext(tenantId, ownerId, ownerDepartmentId)
-        );
+        AccessContext context = new AccessContext(tenantId, ownerId, ownerDepartmentId);
+        ResolvedSource resolved = backgroundExecution
+            ? resolveForExecution(sourceType, locator, context)
+            : resolve(sourceType, locator, context);
         return resolved != null &&
         resolved.status() == ResolutionStatus.AVAILABLE &&
         !isBlank(resolved.resolvedVersion()) &&
@@ -206,6 +247,23 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
         } catch (RuntimeException exception) {
             LOG.warn(
                 "ModelSpec live source resolution failed for type {} ({})",
+                sourceType,
+                exception.getClass().getSimpleName()
+            );
+            return null;
+        }
+    }
+
+    private ResolvedSource resolveForExecution(
+        SourceType sourceType,
+        SourceLocator locator,
+        AccessContext context
+    ) {
+        try {
+            return resolver.resolveForExecution(sourceType, locator, context);
+        } catch (RuntimeException exception) {
+            LOG.warn(
+                "Model materialization live source resolution failed for type {} ({})",
                 sourceType,
                 exception.getClass().getSimpleName()
             );

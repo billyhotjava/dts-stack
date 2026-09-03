@@ -22,6 +22,7 @@ import com.yuzhi.dts.platform.service.etl.DbtExecutionGateway;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.PinnedSourceDefinition;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import java.time.Clock;
 import java.time.Duration;
@@ -54,74 +55,6 @@ class ModelMaterializationDispatchServiceTest {
         "dts_rc_20000000000000000000000000000002_v3_a1";
     private static final String ARTIFACT_CHECKSUM = "a".repeat(64);
     private static final String SCOPED_CHECKSUM = "b".repeat(64);
-
-    @Test
-    void uncertifiedRuntimeBlocksBeforeAnyAirflowBoundary() {
-        Fixture fixture = fixture();
-        when(
-            fixture.dispatches.claimNext(
-                eq(NOW),
-                eq(Duration.ofMinutes(2))
-            )
-        ).thenReturn(Optional.of(dispatch()));
-        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
-            .thenReturn(scope());
-        when(fixture.runtimeCertification.requireCertified())
-            .thenThrow(
-                new ModelReleaseCandidateException(
-                    "DBT_RUNTIME_NOT_CERTIFIED",
-                    "Certified dbt runtime is unavailable",
-                    ModelReleaseCandidateException.Kind.PRECONDITION_REQUIRED
-                )
-            );
-
-        var result = fixture.service.dispatchNext().orElseThrow();
-
-        assertThat(result.status()).isEqualTo("BLOCKED");
-        assertThat(result.errorCode())
-            .isEqualTo("DBT_RUNTIME_NOT_CERTIFIED");
-        verify(fixture.gateway, never()).reconcileReleaseBuild(any());
-        verify(fixture.gateway, never()).submitReleaseBuild(any());
-        verify(fixture.scoped, never()).prepareCandidate(any());
-        assertThat(fixture.audit.singleCall().payload().toString())
-            .contains("DBT_RUNTIME_NOT_CERTIFIED")
-            .doesNotContain("sha256:")
-            .doesNotContain("registry");
-    }
-
-    @Test
-    void uncertifiedRuntimeFailsClosedWhenStrictAuditForwarderIsUnavailable() {
-        Fixture fixture = fixture();
-        when(
-            fixture.dispatches.claimNext(
-                eq(NOW),
-                eq(Duration.ofMinutes(2))
-            )
-        ).thenReturn(Optional.of(dispatch()));
-        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
-            .thenReturn(scope());
-        when(fixture.runtimeCertification.requireCertified())
-            .thenThrow(
-                new ModelReleaseCandidateException(
-                    "DBT_RUNTIME_NOT_CERTIFIED",
-                    "Certified dbt runtime is unavailable",
-                    ModelReleaseCandidateException.Kind.PRECONDITION_REQUIRED
-                )
-            );
-        fixture.audit.failNext(
-            new IllegalStateException("strict audit forwarder unavailable")
-        );
-
-        assertThatThrownBy(fixture.service::dispatchNext)
-            .isInstanceOf(RuntimeException.class)
-            .hasRootCauseMessage("strict audit forwarder unavailable");
-        verify(fixture.gateway, never()).reconcileReleaseBuild(any());
-        verify(fixture.gateway, never()).submitReleaseBuild(any());
-        verify(fixture.scoped, never()).prepareCandidate(any());
-        assertThat(fixture.transactions.rollbacks()).isOne();
-        assertThat(fixture.audit.singleCall().actionCode())
-            .isEqualTo("MODEL_MATERIALIZATION_DISPATCH_BLOCKED");
-    }
 
     @Test
     void oneMultiEntryCandidateProducesOneAirflowSubmission() {
@@ -274,6 +207,60 @@ class ModelMaterializationDispatchServiceTest {
             .flatExtracting(DbtScopedProjectService.CandidateArtifactEntry::artifacts)
             .extracting(DbtScopedProjectService.CandidateArtifact::path)
             .contains(pinnedDependency.path());
+    }
+
+    @Test
+    void addsVersionBoundPhysicalSourcesToTheImmutableCandidateOverlay() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.claimNext(eq(NOW), eq(Duration.ofMinutes(2))))
+            .thenReturn(Optional.of(dispatch()));
+        CandidateBuildScope scope = scope();
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope);
+        when(fixture.sourceAvailability.pinnedDispatchSources(GROUP_ID))
+            .thenReturn(List.of(new PinnedSourceDefinition(
+                UUID.fromString("40000000-0000-0000-0000-000000000004"),
+                "source-version-1",
+                "public",
+                "public",
+                "prjdemo_ods_project_task_clean"
+            )));
+        when(fixture.scoped.prepareCandidate(any())).thenReturn(
+            new DbtScopedProjectService.ScopedCandidateProject(
+                "/must-not-leave-platform",
+                "+dim_customer +fct_invoice",
+                SCOPED_CHECKSUM,
+                List.of()
+            )
+        );
+        when(fixture.tokens.issue(GROUP_ID, NOW)).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken(
+                "runtime-token",
+                "sha256:" + "c".repeat(64),
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        );
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.submitted(DAG_RUN_ID, false)
+        );
+
+        fixture.service.dispatchNext().orElseThrow();
+
+        ArgumentCaptor<List<DbtScopedProjectService.CandidateArtifactEntry>> entries =
+            ArgumentCaptor.forClass(List.class);
+        verify(fixture.scoped).prepareCandidate(entries.capture());
+        DbtScopedProjectService.CandidateArtifact sourceYaml = entries.getValue()
+            .stream()
+            .flatMap(entry -> entry.artifacts().stream())
+            .filter(artifact -> artifact.path().equals("models/.dts-pinned-sources.yml"))
+            .findFirst()
+            .orElseThrow();
+        assertThat(sourceYaml.content())
+            .contains("name: public")
+            .contains("schema: public")
+            .contains("name: prjdemo_ods_project_task_clean")
+            .contains("40000000-0000-0000-0000-000000000004")
+            .contains("source-version-1");
     }
 
     @Test
@@ -566,6 +553,82 @@ class ModelMaterializationDispatchServiceTest {
     }
 
     @Test
+    void reconcilesSubmittedAirflowFailureIntoDurableFailedTruth() {
+        Fixture fixture = fixture();
+        DispatchRecord submitted = submittedDispatch();
+        when(
+            fixture.dispatches.findSubmittedBefore(
+                NOW.minus(Duration.ofMinutes(2)),
+                20
+            )
+        ).thenReturn(List.of(submitted));
+        when(
+            fixture.tokens.restore(
+                GROUP_ID,
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        ).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken(
+                "runtime-token",
+                "sha256:" + "c".repeat(64),
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        );
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(
+            Optional.of(
+                DbtExecutionGateway.SubmissionResult.terminalFailed(
+                    DAG_RUN_ID,
+                    "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED"
+                )
+            )
+        );
+
+        fixture.service.reconcileSubmitted();
+
+        verify(fixture.runArtifacts).finalizeRun(
+            GROUP_ID,
+            new ModelMaterializationRunArtifactService.FinalizeCommand(
+                "FAILED"
+            )
+        );
+    }
+
+    @Test
+    void leavesSubmittedRunUntouchedWhileAirflowIsStillRunning() {
+        Fixture fixture = fixture();
+        when(
+            fixture.dispatches.findSubmittedBefore(
+                NOW.minus(Duration.ofMinutes(2)),
+                20
+            )
+        ).thenReturn(List.of(submittedDispatch()));
+        when(
+            fixture.tokens.restore(
+                GROUP_ID,
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        ).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken(
+                "runtime-token",
+                "sha256:" + "c".repeat(64),
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        );
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(
+            Optional.of(
+                DbtExecutionGateway.SubmissionResult.submitted(
+                    DAG_RUN_ID,
+                    true
+                )
+            )
+        );
+
+        fixture.service.reconcileSubmitted();
+
+        verify(fixture.runArtifacts, never()).finalizeRun(any(), any());
+    }
+
+    @Test
     void auditFailureRollsBackAndPropagatesBeforeDeterministicReconcile() {
         Fixture fixture = fixture();
         DispatchRecord prepared = new DispatchRecord(
@@ -674,10 +737,10 @@ class ModelMaterializationDispatchServiceTest {
         var scoped = mock(DbtScopedProjectService.class);
         var dags = mock(DbtDagService.class);
         var gateway = mock(DbtExecutionGateway.class);
-        var tokens = mock(ModelRuntimeSpecTokenCodec.class);
-        var runtimeCertification = mock(
-            DbtRuntimeCertificationService.class
+        var runArtifacts = mock(
+            ModelMaterializationRunArtifactService.class
         );
+        var tokens = mock(ModelRuntimeSpecTokenCodec.class);
         var sourceAvailability = mock(ModelMaterializationSourceAvailabilityGuard.class);
         var audit = new RecordingAuditService();
         var transactions = new RecordingTransactionManager();
@@ -689,9 +752,6 @@ class ModelMaterializationDispatchServiceTest {
                 java.nio.file.Path.of("/tmp", DAG_ID + ".py")
             )
         );
-        when(runtimeCertification.requireCertified()).thenReturn(
-            DbtRuntimeCertificationServiceTest.runtime()
-        );
         var service = new ModelMaterializationDispatchService(
             dispatches,
             builds,
@@ -699,8 +759,8 @@ class ModelMaterializationDispatchServiceTest {
             scoped,
             dags,
             gateway,
+            runArtifacts,
             tokens,
-            runtimeCertification,
             sourceAvailability,
             audit,
             Clock.fixed(NOW, ZoneOffset.UTC),
@@ -713,8 +773,8 @@ class ModelMaterializationDispatchServiceTest {
             candidates,
             scoped,
             gateway,
+            runArtifacts,
             tokens,
-            runtimeCertification,
             sourceAvailability,
             audit,
             transactions
@@ -745,6 +805,24 @@ class ModelMaterializationDispatchServiceTest {
             null,
             null,
             null
+        );
+    }
+
+    private static DispatchRecord submittedDispatch() {
+        return new DispatchRecord(
+            GROUP_ID,
+            "tenant-a",
+            CANDIDATE_ID,
+            3,
+            1,
+            "postgres-primary",
+            DAG_ID,
+            DAG_RUN_ID,
+            ARTIFACT_CHECKSUM,
+            "SUBMITTED",
+            SCOPED_CHECKSUM,
+            "sha256:" + "c".repeat(64),
+            NOW.plus(Duration.ofMinutes(15))
         );
     }
 
@@ -809,8 +887,8 @@ class ModelMaterializationDispatchServiceTest {
         ModelReleaseCandidateService candidates,
         DbtScopedProjectService scoped,
         DbtExecutionGateway gateway,
+        ModelMaterializationRunArtifactService runArtifacts,
         ModelRuntimeSpecTokenCodec tokens,
-        DbtRuntimeCertificationService runtimeCertification,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         RecordingAuditService audit,
         RecordingTransactionManager transactions

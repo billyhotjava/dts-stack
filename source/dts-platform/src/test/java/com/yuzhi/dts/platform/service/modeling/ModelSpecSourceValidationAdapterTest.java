@@ -88,6 +88,25 @@ class ModelSpecSourceValidationAdapterTest {
     }
 
     @Test
+    void resolvesMaterializationEvidenceThroughTheBackgroundExecutionPath() {
+        SourceBindingState binding = confirmedBinding("v1", LOCATOR_JSON);
+        SourceLocator locator = new SourceLocator(ASSET_ID, null, null, null, null, null, null);
+        AccessContext context = new AccessContext(TENANT, ACTOR, DEPARTMENT);
+        when(repository.findSourceBinding(TENANT, PLAN_ID, BINDING_ID)).thenReturn(Optional.of(binding));
+        when(resolver.resolveForExecution(SourceType.CATALOG_TABLE, locator, context))
+            .thenReturn(ResolvedSource.available("客户表", "v1"));
+
+        assertThat(validation.isCurrentBindingForExecution(TENANT, PLAN_ID, BINDING_ID, "v1")).isTrue();
+
+        verify(resolver).resolveForExecution(SourceType.CATALOG_TABLE, locator, context);
+        verify(resolver, never()).resolve(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        );
+    }
+
+    @Test
     void gateEvidenceFailsClosedForMissingForbiddenProviderErrorsAndVersionDrift() {
         when(repository.findSourceBinding(TENANT, PLAN_ID, BINDING_ID)).thenReturn(Optional.of(confirmedBinding("v1", LOCATOR_JSON)));
         SourceLocator locator = new SourceLocator(ASSET_ID, null, null, null, null, null, null);

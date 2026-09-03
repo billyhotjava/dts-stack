@@ -3,7 +3,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ReleaseCandidate, ReleaseCandidateGovernanceQuality } from "@/api/modelSpecApi";
+import type {
+	ReleaseCandidate,
+	ReleaseCandidateEvidenceSummary,
+	ReleaseCandidateGovernanceQuality,
+} from "@/api/modelSpecApi";
 import DIALOG_SOURCE from "./ModelPublishDialog.tsx?raw";
 import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 
@@ -132,5 +136,31 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 
 		expect(container.querySelector<HTMLAnchorElement>('a[href="#/governance/rules/catalog"]')).not.toBeNull();
 		expect(container.querySelector('a[href*="datasetId="]')).toBeNull();
+	});
+
+	it("shows the authoritative build error code without leaking a generic backend message", async () => {
+		const evidence: ReleaseCandidateEvidenceSummary[] = [
+			{
+				type: "BUILD_RUN",
+				state: "FAILED",
+				code: "DBT_RUNTIME_NOT_CERTIFIED",
+				message: "Current build or physical relation verification failed",
+			},
+		];
+
+		await act(async () => {
+			root.render(
+				<ModelReleaseWorkflowPanel
+					binding={null}
+					candidate={{ ...candidate, status: "BUILD_FAILED" }}
+					evidence={evidence}
+					governanceQuality={null}
+					releaseActions={[]}
+				/>,
+			);
+		});
+
+		expect(container.textContent).toContain("物化构建未通过（错误码 DBT_RUNTIME_NOT_CERTIFIED）");
+		expect(container.textContent).not.toContain("Current build or physical relation verification failed");
 	});
 });

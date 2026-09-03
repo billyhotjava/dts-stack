@@ -1,5 +1,6 @@
 import api from "@/api/apiClient";
 import type {
+	ModelImplementationCapabilities,
 	ModelImplementationCasToken,
 	ModelImplementationValidation,
 	ModelImplementationView,
@@ -16,6 +17,12 @@ const writeHeaders = (expected: ModelSpecCasToken, implementation: ModelImplemen
 	...versionHeaders(expected),
 	"If-Match-Implementation": implementation ? toModelImplementationEtag(implementation) : "*",
 });
+
+export const getModelImplementationCapabilities = () =>
+	api.get<ModelImplementationCapabilities>({
+		url: "/modeling/model-specs/implementation/capabilities",
+		_skipErrorToast: true,
+	} as any);
 
 export const saveModelImplementation = (
 	expected: ModelSpecCasToken,

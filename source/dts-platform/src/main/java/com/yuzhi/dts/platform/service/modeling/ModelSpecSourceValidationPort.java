@@ -14,6 +14,18 @@ public interface ModelSpecSourceValidationPort {
     /** Validates a revision-pinned implementation input without requiring a duplicate legacy ModelSpec sourceRef. */
     boolean isCurrentBindingForGate(String tenantId, UUID planId, UUID sourceBindingId, String resolvedVersion);
 
+    /**
+     * Revalidates a previously confirmed binding for a trusted background materialization.
+     * This check must not depend on a request-bound SecurityContext, but still fails closed for
+     * missing, disabled, stale, fenced, or version-drifted sources.
+     */
+    boolean isCurrentBindingForExecution(
+        String tenantId,
+        UUID planId,
+        UUID sourceBindingId,
+        String resolvedVersion
+    );
+
     /** Returns the server-derived executable relation only while the exact plan binding remains current. */
     Optional<SourceRef> resolveCurrentBindingForCompiler(
         String tenantId,

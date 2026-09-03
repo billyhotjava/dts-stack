@@ -7,6 +7,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
@@ -14,6 +16,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationAdmissionService;
+import com.yuzhi.dts.platform.service.catalog.dto.CatalogClassificationDtos.SealReference;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.lineage.IngestionLineageWriter;
 import jakarta.persistence.EntityManager;
@@ -59,6 +63,9 @@ class OdsTableMappingSyncServiceTest {
     private AuditService auditService;
 
     @Mock
+    private CatalogClassificationAdmissionService classificationAdmissionService;
+
+    @Mock
     private EntityManager entityManager;
 
     @Captor
@@ -83,6 +90,7 @@ class OdsTableMappingSyncServiceTest {
             dbtSourceService,
             ingestionLineageWriter,
             auditService,
+            classificationAdmissionService,
             new ObjectMapper(),
             entityManager
         );
@@ -137,6 +145,33 @@ class OdsTableMappingSyncServiceTest {
         assertThat(mappingCaptor.getValue().getOdsTable()).isEqualTo("ods_prj_prjtest2000");
         verify(ingestionLineageWriter).writeAddaxLineage(any(), observationCaptor.capture());
         assertThat(observationCaptor.getValue().schemaFingerprint()).isEqualTo("schema-fingerprint-project-domain");
+    }
+
+    @Test
+    void syncFromIngestionPayload_shouldProjectSealedFileClassificationToOdsAssetWithoutColumns() {
+        UUID syntheticConnectionId = UUID.nameUUIDFromBytes("ingestion-task:file-task-1".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        CatalogDataset dataset = catalogDataset(syntheticConnectionId, null);
+        prepareFileMappingSync(syntheticConnectionId, dataset, "CONFIDENTIAL");
+        when(datasetRepository.save(datasetCaptor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        OdsTableMappingSyncService.SyncResult result = service.syncFromIngestionPayload(
+            filePayload("file-task-1", "INTERNAL")
+        );
+
+        assertThat(result.tables()).isEqualTo(1);
+        assertThat(datasetCaptor.getValue().getClassification()).isEqualTo("CONFIDENTIAL");
+    }
+
+    @Test
+    void syncFromIngestionPayload_shouldNeverDowngradeExistingOdsAssetClassification() {
+        UUID syntheticConnectionId = UUID.nameUUIDFromBytes("ingestion-task:file-task-2".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        CatalogDataset dataset = catalogDataset(syntheticConnectionId, "SECRET");
+        prepareFileMappingSync(syntheticConnectionId, dataset, "INTERNAL");
+
+        service.syncFromIngestionPayload(filePayload("file-task-2", "INTERNAL"));
+
+        assertThat(dataset.getClassification()).isEqualTo("SECRET");
+        verify(datasetRepository, never()).save(any());
     }
 
     @Test
@@ -299,6 +334,68 @@ class OdsTableMappingSyncServiceTest {
     private static UUID apiDatasetId(UUID connectionId, String taskId, String resourceId) {
         return UUID.nameUUIDFromBytes(
             ("api-landing-dataset:" + connectionId + ":api:" + taskId + ":" + resourceId).getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+    }
+
+    private void prepareFileMappingSync(UUID connectionId, CatalogDataset dataset, String admittedClassification) {
+        when(classificationAdmissionService.requireValid(any(SealReference.class))).thenAnswer(invocation -> {
+            CatalogClassificationSnapshot snapshot = new CatalogClassificationSnapshot();
+            snapshot.setEffectiveLevel(admittedClassification);
+            return snapshot;
+        });
+        when(mappingRepository.findFirstByConnectionIdAndStreamNameIgnoreCaseAndStreamNamespaceIgnoreCase(connectionId, "uploaded_file", ""))
+            .thenReturn(Optional.empty());
+        when(mappingRepository.findByConnectionIdOrderByCreatedDateDesc(connectionId)).thenReturn(List.of());
+        when(mappingRepository.save(mappingCaptor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(
+            ingestionLineageWriter.writeAddaxLineage(
+                any(InfraOdsTableMapping.class),
+                any(IngestionLineageWriter.LineageObservation.class)
+            )
+        ).thenReturn(new IngestionLineageWriter.LineageWriteResult(1, 0, 0, 0, 1, "created"));
+        when(
+            datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(
+                connectionId,
+                "public",
+                "ods_file_orders"
+            )
+        ).thenReturn(Optional.of(dataset));
+        when(dbtSourceService.refreshOdsSources()).thenReturn(DbtSourceService.DbtSourceRefreshResult.success("/tmp/ods_sources.yml", 1));
+    }
+
+    private static CatalogDataset catalogDataset(UUID connectionId, String classification) {
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(UUID.randomUUID());
+        dataset.setName("ods_file_orders");
+        dataset.setSourceId(connectionId);
+        dataset.setHiveDatabase("public");
+        dataset.setHiveTable("ods_file_orders");
+        dataset.setClassification(classification);
+        return dataset;
+    }
+
+    private static Map<String, Object> filePayload(String taskId, String effectiveLevel) {
+        return Map.of(
+            "task",
+            Map.of(
+                "id", taskId,
+                "name", "file-orders",
+                "sourceType", "txtfilereader",
+                "classificationSeal",
+                Map.of(
+                    "sealId", UUID.randomUUID().toString(),
+                    "subjectType", "ASSET",
+                    "subjectKey", "ingestion-file:sealed-file",
+                    "assetType", "DATASET",
+                    "effectiveLevel", effectiveLevel,
+                    "snapshotVersion", 1L,
+                    "checksum", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+                    "sealedAt", "2026-09-02T10:39:28Z",
+                    "propagationStatus", "PROPAGATED"
+                ),
+                "tableMapping", List.of(Map.of("source", "uploaded_file", "target", "public.ods_file_orders")),
+                "destinationConfig", Map.of("writerType", "postgres")
+            )
         );
     }
 

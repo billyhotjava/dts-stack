@@ -55,6 +55,18 @@ public class JpaCatalogSourceReferenceReadAdapter implements CatalogSourceRefere
     }
 
     @Override
+    public SourceSnapshot resolveTableForExecution(UUID tableId) {
+        if (tableId == null) {
+            return SourceSnapshot.providerError();
+        }
+        CatalogTableSchema table = tables.findById(tableId).orElse(null);
+        if (table == null) {
+            return SourceSnapshot.missing();
+        }
+        return resolveExecutionTable(table);
+    }
+
+    @Override
     public SourceSnapshot resolveConnectionTable(
         UUID sourceId,
         String namespace,
@@ -72,6 +84,36 @@ public class JpaCatalogSourceReferenceReadAdapter implements CatalogSourceRefere
         }
         if (!canRead(dataset, actorDepartmentId)) {
             return SourceSnapshot.forbidden();
+        }
+        List<CatalogTableSchema> catalogTables = tables.findByDataset(dataset);
+        CatalogTableSchema table = catalogTables
+            .stream()
+            .filter(candidate -> objectName.equalsIgnoreCase(candidate.getName()))
+            .findFirst()
+            .orElseGet(() -> catalogTables.size() == 1 ? catalogTables.getFirst() : null);
+        if (table == null) {
+            return SourceSnapshot.providerError();
+        }
+        return available(dataset, table);
+    }
+
+    @Override
+    public SourceSnapshot resolveConnectionTableForExecution(
+        UUID sourceId,
+        String namespace,
+        String objectName
+    ) {
+        if (sourceId == null || isBlank(namespace) || isBlank(objectName)) {
+            return SourceSnapshot.providerError();
+        }
+        CatalogDataset dataset = datasets
+            .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(sourceId, namespace, objectName)
+            .orElse(null);
+        if (dataset == null) {
+            return SourceSnapshot.providerError();
+        }
+        if (!isExecutionAvailable(dataset)) {
+            return SourceSnapshot.missing();
         }
         List<CatalogTableSchema> catalogTables = tables.findByDataset(dataset);
         CatalogTableSchema table = catalogTables
@@ -117,6 +159,18 @@ public class JpaCatalogSourceReferenceReadAdapter implements CatalogSourceRefere
             return SourceSnapshot.forbidden();
         }
         return available(dataset, table);
+    }
+
+    private SourceSnapshot resolveExecutionTable(CatalogTableSchema table) {
+        CatalogDataset dataset = table.getDataset();
+        if (!isExecutionAvailable(dataset)) {
+            return SourceSnapshot.missing();
+        }
+        return available(dataset, table);
+    }
+
+    private boolean isExecutionAvailable(CatalogDataset dataset) {
+        return dataset != null && !Boolean.FALSE.equals(dataset.getEnabled());
     }
 
     private SourceSnapshot available(CatalogDataset dataset, CatalogTableSchema table) {

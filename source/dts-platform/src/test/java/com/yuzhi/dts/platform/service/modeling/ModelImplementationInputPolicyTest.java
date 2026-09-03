@@ -46,6 +46,8 @@ class ModelImplementationInputPolicyTest {
             .isEqualTo("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED");
         assertThat(adapter.validate(TENANT, owner(ModelType.DIMENSION), generated("UNREGISTERED")).code())
             .isEqualTo("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED");
+        assertThat(adapter.validate(TENANT, owner(ModelType.DIMENSION), upstream(UUID.randomUUID(), 1)).code())
+            .isEqualTo("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED");
     }
 
     @Test

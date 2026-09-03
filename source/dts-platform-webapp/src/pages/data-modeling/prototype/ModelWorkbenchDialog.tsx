@@ -96,7 +96,7 @@ export function ModelWorkbenchDialog({
 		versions: "版本证据",
 		releases: "发布记录",
 		logs: "生命周期日志",
-		quality: "质量约束",
+		quality: "质量门禁",
 		gates: "设计提交检查",
 	}[dialog];
 	return (

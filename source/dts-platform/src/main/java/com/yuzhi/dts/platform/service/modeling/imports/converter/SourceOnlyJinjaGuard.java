@@ -12,6 +12,7 @@ final class SourceOnlyJinjaGuard {
     private static final Set<String> MATERIALIZATIONS = Set.of("table", "view", "incremental", "ephemeral");
     private static final int MAX_LITERAL_LENGTH = 256;
     private static final int MAX_TAGS = 64;
+    private static final int MAX_METADATA_ENTRIES = 32;
 
     private SourceOnlyJinjaGuard() {}
 
@@ -186,6 +187,9 @@ final class SourceOnlyJinjaGuard {
                         }
                     }
                     case "tags" -> tags.addAll(tagValue());
+                    case "alias" -> literal(128);
+                    case "unique_key" -> tagValue();
+                    case "meta" -> metadataMap();
                     default -> throw unsafe();
                 }
                 skipWhitespace();
@@ -230,6 +234,40 @@ final class SourceOnlyJinjaGuard {
             }
             require(']');
             return List.copyOf(result);
+        }
+
+        private void metadataMap() {
+            require('{');
+            skipWhitespace();
+            Set<String> keys = new LinkedHashSet<>();
+            int count = 0;
+            while (!peek('}')) {
+                String key = literal(128);
+                if (!keys.add(key)) throw unsafe();
+                skipWhitespace();
+                require(':');
+                metadataScalar();
+                if (++count > MAX_METADATA_ENTRIES) throw unsafe();
+                skipWhitespace();
+                if (peek('}')) break;
+                require(',');
+                skipWhitespace();
+                if (peek('}')) throw unsafe();
+            }
+            require('}');
+        }
+
+        private void metadataScalar() {
+            skipWhitespace();
+            if (peek('\'') || peek('"')) {
+                literal(MAX_LITERAL_LENGTH);
+                return;
+            }
+            int start = cursor;
+            while (cursor < value.length() && value.charAt(cursor) >= '0' && value.charAt(cursor) <= '9') {
+                cursor++;
+            }
+            if (cursor == start || cursor - start > 19) throw unsafe();
         }
 
         private String literal(int maximumLength) {

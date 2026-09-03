@@ -27,12 +27,14 @@ import {
 	loadModelWorkbenchContext,
 	loadModelWorkbenchDraft,
 	MODEL_KIND_CONFIG,
+	ModelDraftPartialSaveError,
 	type ModelCreateKind,
 	type ModelDraft,
 	type ModelDraftValidationErrors,
 	type ModelWorkbenchContext,
 	modelDraftFromView,
 	modelDraftNeedsImplementationRecovery,
+	normalizeModelDraftImplementation,
 	prepareModelDraftForSave,
 	reconcileModelDraftSources,
 	saveDimensionDefinitionDraft,
@@ -121,7 +123,8 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const draftDomainId = draft?.domainId || "";
 	const editorAccess = useMemo(() => resolveWorkbenchEditorAccess(canMaintain, draft), [canMaintain, draft]);
 	const dirty = draft !== null && cleanFingerprint !== null && modelDraftFingerprint(draft) !== cleanFingerprint;
-	const saveNeeded = dirty || modelDraftNeedsImplementationRecovery(draft);
+	const saveNeeded =
+		dirty || modelDraftNeedsImplementationRecovery(draft, context?.implementationCapabilities);
 	const replaceDraft = useCallback((nextDraft: ModelDraft | null) => {
 		setDraft(nextDraft);
 		setCleanFingerprint(nextDraft ? modelDraftFingerprint(nextDraft) : null);
@@ -153,7 +156,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			setFailure(null);
 			try {
 				const next = await loadModelWorkbenchContext();
-				if (requestEpoch.current !== epoch) return;
+				if (requestEpoch.current !== epoch) return null;
 				setContext(next);
 				if (!preferredModelId && requestedDimensionIdRef.current) {
 					const dimension = next.dimensions.find((item) => item.id === requestedDimensionIdRef.current);
@@ -167,7 +170,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							params.set("dimensionDefinitionId", dimension.id);
 							params.delete("modelSpecId");
 						});
-						return;
+						return null;
 					}
 					requestedDimensionIdRef.current = "";
 					syncWorkbenchUrl((params) => params.delete("dimensionDefinitionId"));
@@ -177,7 +180,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					setSelectedModelId("");
 					setSelectedDimensionId("");
 					replaceDraft(null);
-					return;
+					return null;
 				}
 				const { selectedModel, normalizedModelId } = resolveRequestedModelSelection(next.models, targetId);
 				setSelectedModelId(selectedModel?.id || "");
@@ -185,10 +188,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				if (selectedModel) {
 					try {
 						const nextDraft = await loadModelWorkbenchDraft(selectedModel);
-						if (requestEpoch.current !== epoch) return;
+						if (requestEpoch.current !== epoch) return null;
 						replaceDraft(nextDraft);
 					} catch (error) {
-						if (requestEpoch.current !== epoch) return;
+						if (requestEpoch.current !== epoch) return null;
 						replaceDraft(modelDraftFromView(selectedModel));
 						setFailure(normalizeModelingRequestFailure(error, "模型实现信息读取失败。"));
 					}
@@ -202,13 +205,15 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 						params.delete("dimensionDefinitionId");
 					});
 				}
+				return selectedModel || null;
 			} catch (error) {
-				if (requestEpoch.current !== epoch) return;
+				if (requestEpoch.current !== epoch) return null;
 				setContext(null);
 				setSelectedModelId("");
 				setSelectedDimensionId("");
 				replaceDraft(null);
 				setFailure(normalizeModelingRequestFailure(error, "模型列表读取失败。"));
+				return null;
 			} finally {
 				if (requestEpoch.current === epoch) setLoading(false);
 			}
@@ -221,13 +226,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		dimensionDefinitions,
 		dirty,
 		draft,
-		loadWorkbench: load,
+		loadWorkbench: async (preferredModelId) => {
+			await load(preferredModelId);
+		},
 		ownerId: ownerIdOf(userInfo),
 		replaceDraft,
 		selectedModel,
 		selectedModelId,
 		setContext,
-		setFailure,
 		setValidationErrors,
 		show,
 	});
@@ -244,6 +250,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		files: authoringFiles,
 		focusNode: authoringFocusNode,
 		invalidateValidation,
+		reload: reloadAuthoring,
 		save: saveAuthoring,
 		setFocusNode: setAuthoringFocusNode,
 		validate: validateAuthoring,
@@ -393,11 +400,17 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			}
 			return;
 		}
-		const preparedDraft = prepareModelDraftForSave(draft, dimensionDefinitions);
-		const nextValidationErrors = validateModelDraftInput(preparedDraft);
+		const preparedDraft = normalizeModelDraftImplementation(
+			prepareModelDraftForSave(draft, dimensionDefinitions),
+			context.implementationCapabilities,
+		);
+		const nextValidationErrors = validateModelDraftInput(preparedDraft, context.implementationCapabilities);
 		setValidationErrors(nextValidationErrors);
 		if (Object.keys(nextValidationErrors).length) return;
-		if (preparedDraft.base) {
+		if (
+			preparedDraft.base &&
+			!modelDraftNeedsImplementationRecovery(preparedDraft, context.implementationCapabilities)
+		) {
 			await authoring.save("VISUAL");
 			return;
 		}
@@ -408,6 +421,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				ownerId: ownerIdOf(userInfo),
 				dimensionDefinitions,
 				models: context.models,
+				implementationCapabilities: context.implementationCapabilities,
 			});
 			const projectedDraft = modelDraftFromView(saved.model, saved.implementation);
 			const savedDraft =
@@ -430,7 +444,28 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			});
 			show(`模型草稿已保存：r${saved.model.revision}`);
 		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "模型保存失败。"));
+			if (error instanceof ModelDraftPartialSaveError) {
+				const recovered = {
+					...preparedDraft,
+					base: error.savedModel,
+					implementationIdempotencyKey: crypto.randomUUID(),
+				};
+				replaceDraft(recovered);
+				setContext((current) =>
+					current
+						? {
+								...current,
+								models: [...current.models.filter((item) => item.id !== error.savedModel.id), error.savedModel],
+							}
+						: current,
+				);
+			}
+			setFailure(
+				normalizeModelingRequestFailure(
+					error instanceof ModelDraftPartialSaveError ? error.failure : error,
+					"模型保存失败。",
+				),
+			);
 		} finally {
 			savingRef.current = false;
 			setSaving(false);
@@ -516,8 +551,17 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			params.delete("open");
 		});
 	};
-	const refresh = () => {
-		if (!savingRef.current && confirmDiscard()) void load(selectedModelId || undefined);
+	const refresh = async () => {
+		if (savingRef.current || !confirmDiscard()) return;
+		const refreshedModel = await load(selectedModelId || undefined);
+		if (
+			refreshedModel &&
+			selectedModelId &&
+			refreshedModel.revision === selectedModel?.revision &&
+			refreshedModel.checksum === selectedModel?.checksum
+		) {
+			await reloadAuthoring(selectedModelId);
+		}
 	};
 	const navigateToReverseModeling = () => {
 		if (!savingRef.current) navigate(dataModelingPath("dimensions", "reverse"));
@@ -545,7 +589,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		confirmDiscard,
 		navigate,
 		ownerId: ownerIdOf(userInfo),
-		reload: () => load(),
+		reload: async () => {
+			await load();
+		},
 		replaceDraft,
 		requestedDimensionIdRef,
 		requestedModelIdRef,

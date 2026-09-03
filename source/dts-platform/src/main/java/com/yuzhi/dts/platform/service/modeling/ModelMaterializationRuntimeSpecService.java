@@ -4,7 +4,6 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRepository.RuntimeSpecRecord;
 import com.yuzhi.dts.platform.service.audit.AuditService;
-import com.yuzhi.dts.platform.service.modeling.DbtRuntimeCertificationService.CertifiedRuntime;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService.LeaseRequest;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService.LeaseView;
@@ -25,7 +24,6 @@ public class ModelMaterializationRuntimeSpecService {
     private final ModelRuntimeSpecTokenCodec tokens;
     private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
     private final ModelMaterializationAvailabilityAuditService availabilityAudit;
-    private final DbtRuntimeCertificationService runtimeCertification;
     private final DbtRuntimeProfileLeaseService leases;
     private final AuditService auditService;
     private final Clock clock;
@@ -36,7 +34,6 @@ public class ModelMaterializationRuntimeSpecService {
         ModelRuntimeSpecTokenCodec tokens,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         ModelMaterializationAvailabilityAuditService availabilityAudit,
-        DbtRuntimeCertificationService runtimeCertification,
         DbtRuntimeProfileLeaseService leases,
         AuditService auditService
     ) {
@@ -45,7 +42,6 @@ public class ModelMaterializationRuntimeSpecService {
             tokens,
             sourceAvailability,
             availabilityAudit,
-            runtimeCertification,
             leases,
             auditService,
             Clock.systemUTC()
@@ -57,7 +53,6 @@ public class ModelMaterializationRuntimeSpecService {
         ModelRuntimeSpecTokenCodec tokens,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         ModelMaterializationAvailabilityAuditService availabilityAudit,
-        DbtRuntimeCertificationService runtimeCertification,
         DbtRuntimeProfileLeaseService leases,
         AuditService auditService,
         Clock clock
@@ -72,10 +67,6 @@ public class ModelMaterializationRuntimeSpecService {
         );
         this.sourceAvailability = Objects.requireNonNull(sourceAvailability, "sourceAvailability is required");
         this.availabilityAudit = Objects.requireNonNull(availabilityAudit, "availabilityAudit is required");
-        this.runtimeCertification = Objects.requireNonNull(
-            runtimeCertification,
-            "runtimeCertification is required"
-        );
         this.leases = Objects.requireNonNull(
             leases,
             "leases is required"
@@ -134,13 +125,6 @@ public class ModelMaterializationRuntimeSpecService {
             availabilityAudit.recordRuntimeDenied(runtime, unavailable.code(), now);
             throw failure(unavailable.code(), unavailable.getMessage());
         }
-        CertifiedRuntime certifiedRuntime;
-        try {
-            certifiedRuntime = runtimeCertification.requireCertified();
-        } catch (ModelReleaseCandidateException unavailable) {
-            availabilityAudit.recordRuntimeDenied(runtime, unavailable.code(), now);
-            throw failure(unavailable.code(), unavailable.getMessage());
-        }
         requireRuntime(runtime);
         LeaseView lease;
         boolean issuedNow = false;
@@ -192,17 +176,7 @@ public class ModelMaterializationRuntimeSpecService {
             lease.targetName(),
             lease.profileLeaseId(),
             lease.expiresAt(),
-            lease.credentialVersionRef(),
-            certifiedRuntime.profileId(),
-            certifiedRuntime.candidateProfileId(),
-            certifiedRuntime.dbtCoreVersion(),
-            certifiedRuntime.dbtPostgresVersion(),
-            certifiedRuntime.adapter(),
-            certifiedRuntime.databaseType(),
-            certifiedRuntime.requirementsLockSha256(),
-            certifiedRuntime.candidateImageDigest(),
-            certifiedRuntime.imageRef(),
-            certifiedRuntime.evidenceManifestSha256()
+            lease.credentialVersionRef()
         );
         try {
             auditRuntimeSpecConsumed(

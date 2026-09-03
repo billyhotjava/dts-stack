@@ -19,8 +19,13 @@ import com.yuzhi.dts.platform.service.catalog.CatalogMaterializationSourceAvaila
 import com.yuzhi.dts.platform.service.catalog.CatalogMaterializationSourceAvailabilityPort.ExpectedSource;
 import com.yuzhi.dts.platform.service.catalog.CatalogMaterializationSourceAvailabilityPort.SourceDescriptor;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRole;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,12 +66,42 @@ class ModelMaterializationSourceAvailabilityGuardTest {
     void currentPhysicalSourcePassesAtTheExecutionBoundary() {
         InputSnapshot physical = physical(MODEL);
         when(snapshots.findCandidateInputs("tenant-a", CANDIDATE, 4)).thenReturn(List.of(physical));
-        when(sourceValidation.isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1"))
+        when(sourceValidation.isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1"))
             .thenReturn(true);
 
         assertThatCode(() -> guard.requireCandidateCurrent("tenant-a", CANDIDATE, 4)).doesNotThrowAnyException();
 
-        verify(sourceValidation).isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1");
+        verify(sourceValidation).isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1");
+    }
+
+    @Test
+    void resolvesExactSourceAndTableFromTheVersionBoundDispatchInput() {
+        when(snapshots.findDispatchInputs(DISPATCH)).thenReturn(List.of(physical(MODEL)));
+        when(sourceValidation.isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1"))
+            .thenReturn(true);
+        when(sourceValidation.resolveCurrentBindingForCompiler("tenant-a", PLAN, SOURCE, "source-version-1"))
+            .thenReturn(Optional.of(new SourceRef(
+                SourceKind.TABLE,
+                "public.prjdemo_ods_project_task_clean",
+                Layer.ODS,
+                SourceRole.PRIMARY,
+                null,
+                null,
+                null,
+                0,
+                SOURCE,
+                "source-version-1"
+            )));
+
+        assertThat(guard.pinnedDispatchSources(DISPATCH)).containsExactly(
+            new ModelMaterializationSourceAvailabilityGuard.PinnedSourceDefinition(
+                SOURCE,
+                "source-version-1",
+                "public",
+                "public",
+                "prjdemo_ods_project_task_clean"
+            )
+        );
     }
 
     @Test
@@ -95,13 +130,13 @@ class ModelMaterializationSourceAvailabilityGuardTest {
         when(snapshots.findDispatchInputs(CANDIDATE)).thenReturn(List.of(root));
         when(snapshots.findPublishedInput("tenant-a", upstream, 3, "b".repeat(64)))
             .thenReturn(List.of(physical(upstream)));
-        when(sourceValidation.isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1"))
+        when(sourceValidation.isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1"))
             .thenReturn(true);
 
         assertThatCode(() -> guard.requireDispatchCurrent(CANDIDATE)).doesNotThrowAnyException();
 
         verify(snapshots).findPublishedInput("tenant-a", upstream, 3, "b".repeat(64));
-        verify(sourceValidation).isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1");
+        verify(sourceValidation).isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1");
     }
 
     @Test
@@ -117,12 +152,12 @@ class ModelMaterializationSourceAvailabilityGuardTest {
             "[{\"sourceBindingId\":\"" + SOURCE + "\",\"resolvedVersion\":\"source-version-1\"}]"
         );
         when(snapshots.findCandidateInputs("tenant-a", CANDIDATE, 4)).thenReturn(List.of(generated));
-        when(sourceValidation.isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1"))
+        when(sourceValidation.isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1"))
             .thenReturn(true);
 
         assertThatCode(() -> guard.requireCandidateCurrent("tenant-a", CANDIDATE, 4)).doesNotThrowAnyException();
 
-        verify(sourceValidation).isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1");
+        verify(sourceValidation).isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1");
     }
 
     @Test
@@ -130,7 +165,7 @@ class ModelMaterializationSourceAvailabilityGuardTest {
         UUID secondModel = UUID.fromString("30000000-0000-0000-0000-000000000004");
         when(snapshots.findCandidateInputs("tenant-a", CANDIDATE, 4))
             .thenReturn(List.of(physical(MODEL), physical(secondModel)));
-        when(sourceValidation.isCurrentBindingForGate("tenant-a", PLAN, SOURCE, "source-version-1"))
+        when(sourceValidation.isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1"))
             .thenReturn(true);
 
         assertThatCode(() -> guard.requireCandidateCurrent("tenant-a", CANDIDATE, 4)).doesNotThrowAnyException();
@@ -152,7 +187,7 @@ class ModelMaterializationSourceAvailabilityGuardTest {
             List.of(physical)
         );
         when(
-            sourceValidation.isCurrentBindingForGate(
+            sourceValidation.isCurrentBindingForExecution(
                 "tenant-a",
                 PLAN,
                 SOURCE,

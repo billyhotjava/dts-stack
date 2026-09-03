@@ -1,8 +1,10 @@
 package com.yuzhi.dts.platform.service.modeling;
 
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,8 +26,28 @@ public final class ModelImplementationExecutionPlanner {
     private static final Pattern TARGET_IDENTIFIER = Pattern.compile("^[a-z][a-z0-9_]{0,62}$");
     private static final Pattern DBT_RESOURCE_IDENTIFIER = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
     private static final Set<String> SUPPORTED_ADAPTERS = Set.of(DEFAULT_ADAPTER);
+    private static final List<String> SUPPORTED_LOAD_STRATEGIES = List.of("FULL", "INCREMENTAL");
+    private static final boolean PARTITION_FIELDS_SUPPORTED = false;
+    private static final boolean INCREMENTAL_KEY_REQUIRED = true;
+    private static final Map<String, List<String>> SUPPORTED_MATERIALIZATIONS = Map.of(
+        "FULL", List.of("table", "view"),
+        "INCREMENTAL", List.of("incremental")
+    );
 
     private ModelImplementationExecutionPlanner() {}
+
+    /** Public UI capability contract derived from the same rules used by {@link #plan}. */
+    public static ImplementationCapabilities capabilities() {
+        return new ImplementationCapabilities(
+            DEFAULT_ADAPTER,
+            ModelImplementationInputPolicy.supportedInputModesByModelType(),
+            SUPPORTED_LOAD_STRATEGIES,
+            SUPPORTED_MATERIALIZATIONS,
+            ModelLifecycleContract.IMPLEMENTATION_SETTING_KEYS.stream().sorted().toList(),
+            PARTITION_FIELDS_SUPPORTED,
+            INCREMENTAL_KEY_REQUIRED
+        );
+    }
 
     public static ValidationResult plan(
         ModelSpecView owner,
@@ -129,7 +151,7 @@ public final class ModelImplementationExecutionPlanner {
                 "USE_FULL_OR_INCREMENTAL"
             );
         }
-        if (!"FULL".equals(loadStrategy) && !"INCREMENTAL".equals(loadStrategy)) {
+        if (!SUPPORTED_LOAD_STRATEGIES.contains(loadStrategy)) {
             return invalid(
                 "IMPLEMENTATION_LOAD_STRATEGY_UNSUPPORTED",
                 "settings.loadStrategy",
@@ -138,7 +160,7 @@ public final class ModelImplementationExecutionPlanner {
             );
         }
         List<String> partitionFields = stringList(safeSettings.get("partitionFields"));
-        if (!partitionFields.isEmpty()) {
+        if (!PARTITION_FIELDS_SUPPORTED && !partitionFields.isEmpty()) {
             return invalid(
                 "IMPLEMENTATION_PARTITION_UNSUPPORTED",
                 "settings.partitionFields",
@@ -148,10 +170,7 @@ public final class ModelImplementationExecutionPlanner {
         }
         String requestedMaterialization = text(materialization).toLowerCase();
         boolean incremental = "INCREMENTAL".equals(loadStrategy);
-        if (
-            (incremental && !"incremental".equals(requestedMaterialization)) ||
-            (!incremental && !Set.of("table", "view").contains(requestedMaterialization))
-        ) {
+        if (!SUPPORTED_MATERIALIZATIONS.getOrDefault(loadStrategy, List.of()).contains(requestedMaterialization)) {
             return invalid(
                 "IMPLEMENTATION_MATERIALIZATION_CONFLICT",
                 "materialization",
@@ -162,7 +181,7 @@ public final class ModelImplementationExecutionPlanner {
         List<String> uniqueKey = keyFields == null
             ? List.of()
             : keyFields.stream().filter(ModelImplementationExecutionPlanner::notBlank).distinct().toList();
-        if (incremental && uniqueKey.isEmpty()) {
+        if (INCREMENTAL_KEY_REQUIRED && incremental && uniqueKey.isEmpty()) {
             return invalid(
                 "IMPLEMENTATION_INCREMENTAL_KEY_REQUIRED",
                 "fields",
@@ -271,6 +290,23 @@ public final class ModelImplementationExecutionPlanner {
     ) {
         public ValidationResult {
             blockers = blockers == null ? List.of() : List.copyOf(blockers);
+        }
+    }
+
+    public record ImplementationCapabilities(
+        String adapter,
+        Map<ModelType, List<InputMode>> inputModesByModelType,
+        List<String> loadStrategies,
+        Map<String, List<String>> materializationsByLoadStrategy,
+        List<String> settingKeys,
+        boolean partitionFieldsSupported,
+        boolean incrementalKeyRequired
+    ) {
+        public ImplementationCapabilities {
+            inputModesByModelType = Map.copyOf(inputModesByModelType);
+            loadStrategies = List.copyOf(loadStrategies);
+            materializationsByLoadStrategy = Map.copyOf(materializationsByLoadStrategy);
+            settingKeys = List.copyOf(settingKeys);
         }
     }
 }

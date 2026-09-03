@@ -17,11 +17,17 @@ import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.CandidateArtif
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.ScopedCandidateProject;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.PinnedSourceDefinition;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +49,9 @@ public class ModelMaterializationDispatchService {
 
     private static final Duration STALE_CLAIM_TTL =
         Duration.ofMinutes(2);
+    private static final Duration SUBMITTED_RECONCILE_GRACE =
+        Duration.ofMinutes(2);
+    private static final int RECONCILE_BATCH_SIZE = 20;
     private static final Duration RETRY_DELAY =
         Duration.ofSeconds(30);
 
@@ -52,8 +61,8 @@ public class ModelMaterializationDispatchService {
     private final DbtScopedProjectService scopedProjects;
     private final DbtDagService dags;
     private final DbtExecutionGateway gateway;
+    private final ModelMaterializationRunArtifactService runArtifacts;
     private final ModelRuntimeSpecTokenCodec tokens;
-    private final DbtRuntimeCertificationService runtimeCertification;
     private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
     private final AuditService auditService;
     private final Clock clock;
@@ -67,8 +76,8 @@ public class ModelMaterializationDispatchService {
         DbtScopedProjectService scopedProjects,
         DbtDagService dags,
         DbtExecutionGateway gateway,
+        ModelMaterializationRunArtifactService runArtifacts,
         ModelRuntimeSpecTokenCodec tokens,
-        DbtRuntimeCertificationService runtimeCertification,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         AuditService auditService,
         PlatformTransactionManager transactionManager
@@ -80,8 +89,8 @@ public class ModelMaterializationDispatchService {
             scopedProjects,
             dags,
             gateway,
+            runArtifacts,
             tokens,
-            runtimeCertification,
             sourceAvailability,
             auditService,
             Clock.systemUTC(),
@@ -96,8 +105,8 @@ public class ModelMaterializationDispatchService {
         DbtScopedProjectService scopedProjects,
         DbtDagService dags,
         DbtExecutionGateway gateway,
+        ModelMaterializationRunArtifactService runArtifacts,
         ModelRuntimeSpecTokenCodec tokens,
-        DbtRuntimeCertificationService runtimeCertification,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         AuditService auditService,
         Clock clock,
@@ -124,13 +133,13 @@ public class ModelMaterializationDispatchService {
             gateway,
             "gateway is required"
         );
+        this.runArtifacts = Objects.requireNonNull(
+            runArtifacts,
+            "runArtifacts is required"
+        );
         this.tokens = Objects.requireNonNull(
             tokens,
             "tokens is required"
-        );
-        this.runtimeCertification = Objects.requireNonNull(
-            runtimeCertification,
-            "runtimeCertification is required"
         );
         this.sourceAvailability = Objects.requireNonNull(sourceAvailability, "sourceAvailability is required");
         this.auditService = Objects.requireNonNull(
@@ -153,6 +162,36 @@ public class ModelMaterializationDispatchService {
         }
     }
 
+    @Scheduled(
+        fixedDelayString = "${dts.modeling.materialization.reconcile-delay-ms:30000}",
+        initialDelayString = "${dts.modeling.materialization.reconcile-delay-ms:30000}"
+    )
+    public void reconcileSubmitted() {
+        Instant now = clock.instant();
+        List<DispatchRecord> submitted = dispatches.findSubmittedBefore(
+            now.minus(SUBMITTED_RECONCILE_GRACE),
+            RECONCILE_BATCH_SIZE
+        );
+        for (DispatchRecord dispatch : submitted) {
+            Optional<ReleaseBuildRequest> request = recoveryRequest(
+                dispatch
+            );
+            if (request.isEmpty()) continue;
+            Optional<SubmissionResult> reconciled =
+                gateway.reconcileReleaseBuild(request.orElseThrow());
+            if (
+                reconciled.isPresent() &&
+                reconciled.orElseThrow().status() ==
+                SubmissionStatus.TERMINAL_FAILED
+            ) {
+                finalizeAirflowFailure(
+                    dispatch,
+                    reconciled.orElseThrow()
+                );
+            }
+        }
+    }
+
     public Optional<DispatchResult> dispatchNext() {
         Instant now = clock.instant();
         Optional<DispatchRecord> claimed = dispatches.claimNext(
@@ -169,7 +208,6 @@ public class ModelMaterializationDispatchService {
                     dispatch.id()
             );
             validateIdentity(dispatch, scope);
-            runtimeCertification.requireCertified();
 
             Optional<ReleaseBuildRequest> recoveryRequest =
                 recoveryRequest(dispatch);
@@ -205,11 +243,12 @@ public class ModelMaterializationDispatchService {
             }
 
             sourceAvailability.requireDispatchCurrent(dispatch.id());
+            List<PinnedSourceDefinition> pinnedSources = sourceAvailability.pinnedDispatchSources(dispatch.id());
 
             List<ModelMaterializationBuildRepository.BuildArtifact> pinnedDependencies =
                 builds.loadPinnedDependencyArtifacts(scope);
             ScopedCandidateProject project = scopedProjects.prepareCandidate(
-                toArtifacts(scope, pinnedDependencies)
+                toArtifacts(scope, pinnedDependencies, pinnedSources)
             );
             ModelRuntimeSpecTokenCodec.IssuedToken runtimeToken =
                 runtimeToken(dispatch, now);
@@ -347,6 +386,11 @@ public class ModelMaterializationDispatchService {
         SubmissionResult submitted,
         Instant now
     ) {
+        if (
+            submitted.status() == SubmissionStatus.TERMINAL_FAILED
+        ) {
+            return finalizeAirflowFailure(dispatch, submitted);
+        }
         if (submitted.status() == SubmissionStatus.SUBMITTED) {
             transactions.executeWithoutResult(status -> {
                 dispatches.markSubmitted(
@@ -384,6 +428,25 @@ public class ModelMaterializationDispatchService {
             );
         }
         return block(dispatch, submitted.errorCode(), now);
+    }
+
+    private DispatchResult finalizeAirflowFailure(
+        DispatchRecord dispatch,
+        SubmissionResult result
+    ) {
+        runArtifacts.finalizeRun(
+            dispatch.id(),
+            new ModelMaterializationRunArtifactService.FinalizeCommand(
+                "FAILED"
+            )
+        );
+        return new DispatchResult(
+            dispatch.id(),
+            "FAILED",
+            result.dagRunId(),
+            true,
+            result.errorCode()
+        );
     }
 
     private ModelRuntimeSpecTokenCodec.IssuedToken runtimeToken(
@@ -556,10 +619,12 @@ public class ModelMaterializationDispatchService {
 
     private static List<CandidateArtifactEntry> toArtifacts(
         CandidateBuildScope scope,
-        List<ModelMaterializationBuildRepository.BuildArtifact> pinnedDependencies
+        List<ModelMaterializationBuildRepository.BuildArtifact> pinnedDependencies,
+        List<PinnedSourceDefinition> pinnedSources
     ) {
         List<ModelMaterializationBuildRepository.BuildArtifact> dependencies =
             pinnedDependencies == null ? List.of() : List.copyOf(pinnedDependencies);
+        String sourceYaml = renderPinnedSources(pinnedSources);
         List<CandidateArtifactEntry> entries = new ArrayList<>();
         for (int index = 0; index < scope.entries().size(); index++) {
             CandidateBuildEntry entry = scope.entries().get(index);
@@ -579,6 +644,13 @@ public class ModelMaterializationDispatchService {
                         artifact.content()
                     )
                 ));
+                if (sourceYaml != null) {
+                    artifacts.add(new CandidateArtifact(
+                        "models/.dts-pinned-sources.yml",
+                        sha256(sourceYaml),
+                        sourceYaml
+                    ));
+                }
             }
             entries.add(
                 new CandidateArtifactEntry(
@@ -594,6 +666,62 @@ public class ModelMaterializationDispatchService {
         }
         return List.copyOf(entries);
     }
+
+    private static String renderPinnedSources(List<PinnedSourceDefinition> requestedSources) {
+        if (requestedSources == null || requestedSources.isEmpty()) return null;
+        List<PinnedSourceDefinition> sources = requestedSources
+            .stream()
+            .sorted(
+                Comparator.comparing(PinnedSourceDefinition::sourceName)
+                    .thenComparing(PinnedSourceDefinition::schemaName)
+                    .thenComparing(PinnedSourceDefinition::tableName)
+                    .thenComparing(definition -> definition.sourceBindingId().toString())
+            )
+            .toList();
+        Map<SourceGroup, Map<String, List<PinnedSourceDefinition>>> grouped = new LinkedHashMap<>();
+        for (PinnedSourceDefinition source : sources) {
+            grouped
+                .computeIfAbsent(
+                    new SourceGroup(source.sourceName(), source.schemaName()),
+                    ignored -> new LinkedHashMap<>()
+                )
+                .computeIfAbsent(source.tableName(), ignored -> new ArrayList<>())
+                .add(source);
+        }
+        StringBuilder yaml = new StringBuilder("version: 2\nsources:\n");
+        grouped.forEach((group, tables) -> {
+            yaml.append("  - name: ").append(group.sourceName()).append('\n');
+            yaml.append("    schema: ").append(group.schemaName()).append('\n');
+            yaml.append("    tables:\n");
+            tables.forEach((table, pins) -> {
+                for (PinnedSourceDefinition pin : pins) {
+                    yaml.append("      # dts-pin: ")
+                        .append(pin.sourceBindingId())
+                        .append('/')
+                        .append(safeYamlComment(pin.resolvedVersion()))
+                        .append('\n');
+                }
+                yaml.append("      - name: ").append(table).append('\n');
+            });
+        });
+        return yaml.toString();
+    }
+
+    private static String safeYamlComment(String value) {
+        return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
+    }
+
+    private static String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(
+                MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))
+            );
+        } catch (NoSuchAlgorithmException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+    }
+
+    private record SourceGroup(String sourceName, String schemaName) {}
 
     public record DispatchResult(
         java.util.UUID pipelineRunGroupId,

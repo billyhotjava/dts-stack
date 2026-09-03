@@ -10,6 +10,161 @@
 	flex-wrap: wrap;
 }
 
+.dmx-model-workflow {
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--dmx-border);
+	background: #fafbfc;
+}
+
+.dmx-model-workflow__header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.dmx-model-workflow__header > div {
+	display: grid;
+	gap: 2px;
+}
+
+.dmx-model-workflow__header strong {
+	font-size: 14px;
+}
+
+.dmx-model-workflow__header span,
+.dmx-model-workflow__header p {
+	margin: 0;
+	color: var(--dmx-muted);
+	font-size: 12px;
+}
+
+.dmx-model-workflow__header p {
+	max-width: 520px;
+	color: #31578a;
+	text-align: right;
+}
+
+.dmx-model-workflow__steps {
+	display: grid;
+	grid-template-columns: repeat(4, minmax(0, 1fr));
+	gap: 8px;
+	margin: 12px 0;
+	padding: 0;
+	list-style: none;
+}
+
+.dmx-model-workflow__steps li {
+	display: flex;
+	min-width: 0;
+	align-items: center;
+	gap: 9px;
+	padding: 9px 10px;
+	border: 1px solid var(--dmx-border);
+	border-radius: 4px;
+	background: var(--dmx-surface);
+	color: var(--dmx-muted);
+}
+
+.dmx-model-workflow__steps li[data-state="active"] {
+	border-color: #5b8def;
+	background: #f1f6ff;
+	color: #174ea6;
+}
+
+.dmx-model-workflow__steps li[data-state="complete"] {
+	border-color: #a8d5bb;
+	background: #f4fbf6;
+	color: #256b3f;
+}
+
+.dmx-model-workflow__index {
+	display: inline-flex;
+	width: 24px;
+	height: 24px;
+	flex: 0 0 24px;
+	align-items: center;
+	justify-content: center;
+	border-radius: 50%;
+	background: #e8edf4;
+	color: inherit;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.dmx-model-workflow__steps li[data-state="active"] .dmx-model-workflow__index,
+.dmx-model-workflow__steps li[data-state="complete"] .dmx-model-workflow__index {
+	background: currentColor;
+	color: #fff;
+}
+
+.dmx-model-workflow__steps li > span:last-child {
+	display: grid;
+	min-width: 0;
+	gap: 1px;
+}
+
+.dmx-model-workflow__steps b,
+.dmx-model-workflow__steps small {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.dmx-model-workflow__steps b {
+	font-size: 13px;
+}
+
+.dmx-model-workflow__steps small {
+	font-size: 11px;
+}
+
+.dmx-model-workflow__primary-actions,
+.dmx-model-workflow__secondary > div {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.dmx-model-workflow__secondary {
+	margin-top: 10px;
+	font-size: 12px;
+}
+
+.dmx-model-workflow__secondary summary {
+	width: max-content;
+	cursor: pointer;
+	color: #53647b;
+	user-select: none;
+}
+
+.dmx-model-workflow__secondary > div {
+	margin-top: 8px;
+	padding-top: 8px;
+	border-top: 1px dashed var(--dmx-border);
+}
+
+@media (max-width: 900px) {
+	.dmx-model-workflow__header {
+		display: grid;
+	}
+
+	.dmx-model-workflow__header p {
+		max-width: none;
+		text-align: left;
+	}
+
+	.dmx-model-workflow__steps {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
+
+@media (max-width: 560px) {
+	.dmx-model-workflow__steps {
+		grid-template-columns: 1fr;
+	}
+}
+
 .dmx-workbench-editor__basic-grid {
 	display: grid;
 	grid-template-columns: repeat(2, minmax(0, 1fr));

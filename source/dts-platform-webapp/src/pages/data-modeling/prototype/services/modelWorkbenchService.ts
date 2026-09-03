@@ -6,14 +6,17 @@ import {
 	listDimensionDefinitions,
 	updateDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
-import { saveModelImplementation } from "@/api/modelImplementationApi";
+import {
+	getModelImplementationCapabilities,
+	saveModelImplementation,
+	validateModelImplementation,
+} from "@/api/modelImplementationApi";
 import { listModelFieldStandardOptions, type ModelFieldStandardOption } from "@/api/modelingStandardsApi";
 import {
-	type CreateDimensionModelCommand,
-	createDimensionModel,
-	createModelSpec,
+	type ModelDraftOperationCommand,
 	getModelLifecycle,
 	listModelSpecs,
+	saveModelDraftOperation,
 	updateModelSpec,
 } from "@/api/modelSpecApi";
 import catalogDomainService, { type CatalogDomain } from "@/api/services/catalogDomainService";
@@ -30,17 +33,19 @@ import type {
 	DimensionDefinitionReuseScope,
 	DimensionDefinitionView,
 } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import type {
-	GeneratedImplementationInput,
-	ModelImplementationAggregation,
-	ModelImplementationCastType,
-	ModelImplementationFieldMapping,
-	ModelImplementationFilter,
-	ModelImplementationInput,
-	ModelImplementationInputMode,
-	ModelImplementationJoin,
-	ModelImplementationView,
-	ModelImplementationWriteCommand,
+import {
+	modelImplementationValidationMessage,
+	type ModelImplementationCapabilities,
+	type GeneratedImplementationInput,
+	type ModelImplementationAggregation,
+	type ModelImplementationCastType,
+	type ModelImplementationFieldMapping,
+	type ModelImplementationFilter,
+	type ModelImplementationInput,
+	type ModelImplementationInputMode,
+	type ModelImplementationJoin,
+	type ModelImplementationView,
+	type ModelImplementationWriteCommand,
 } from "@/features/modeling/contracts/modelImplementationContract";
 import {
 	type CanonicalModelSpecView,
@@ -85,6 +90,7 @@ export type ModelWorkbenchContext = {
 	subjectDomains: SubjectDomainView[];
 	warehouseLayers: WarehouseLayerView[];
 	sources: WarehousePlanSourceBindingView[];
+	implementationCapabilities: ModelImplementationCapabilities;
 };
 
 export type ConceptDimensionDraft = {
@@ -123,6 +129,7 @@ export type ModelSpecDraft = {
 	implementationInputMode: ModelImplementationInputMode | "";
 	generationStrategyType: "" | "DATE_DIMENSION";
 	implementationIdempotencyKey: string;
+	creationOperationId: string;
 	fieldMappings: ModelImplementationFieldMapping[];
 	casts: Record<string, ModelImplementationCastType>;
 	filters: ModelImplementationFilter[];
@@ -155,12 +162,25 @@ export type ModelSaveContext = {
 	ownerId: string;
 	dimensionDefinitions: DimensionDefinitionView[];
 	models?: ModelSpecView[];
+	implementationCapabilities?: ModelImplementationCapabilities;
 };
 
 export type ModelDraftSaveResult = {
 	model: CanonicalModelSpecView;
 	implementation: ModelImplementationView | null;
 };
+
+export class ModelDraftPartialSaveError extends Error {
+	readonly savedModel: CanonicalModelSpecView;
+	readonly failure: unknown;
+
+	constructor(savedModel: CanonicalModelSpecView, failure: unknown) {
+		super(failure instanceof Error && failure.message.trim() ? failure.message : "模型实现保存失败");
+		this.name = "ModelDraftPartialSaveError";
+		this.savedModel = savedModel;
+		this.failure = failure;
+	}
+}
 
 export type ModelDraftErrorKey =
 	| "domainId"
@@ -207,6 +227,14 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 	}
 	const config = MODEL_KIND_CONFIG[kind];
 	const defaultDomainId = context.domains.find((item) => Boolean(item.parentCode))?.id || "";
+	const implementationInputMode = context.implementationCapabilities.inputModesByModelType[config.modelType]?.[0];
+	const loadStrategy = context.implementationCapabilities.loadStrategies[0];
+	const materialization = loadStrategy
+		? context.implementationCapabilities.materializationsByLoadStrategy[loadStrategy]?.[0]
+		: undefined;
+	if (!implementationInputMode || !loadStrategy || !materialization) {
+		throw new Error("服务端未提供可用的数据实现能力，请联系管理员检查建模配置");
+	}
 	return {
 		createKind: kind,
 		base: null,
@@ -215,12 +243,12 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		name: "",
 		description: "",
 		physicalName: "",
-		materialization: "table",
+		materialization,
 		grainStatement: "",
 		businessProcessId: "",
 		fields: [],
 		partitionFields: "",
-		loadStrategy: "FULL",
+		loadStrategy,
 		scdType: config.modelType === "DIMENSION" ? "TYPE1" : "NONE",
 		reuseScope: "DOMAIN",
 		dimensionDefinitionId: "",
@@ -228,9 +256,10 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		warehouseLayerCode: config.layer,
 		implementationMode: "DESIGNER_GENERATED",
 		implementationBase: null,
-		implementationInputMode: kind === "summary" || kind === "application" ? "UPSTREAM_MODEL" : "PHYSICAL_ASSET",
+		implementationInputMode,
 		generationStrategyType: "",
 		implementationIdempotencyKey: crypto.randomUUID(),
+		creationOperationId: crypto.randomUUID(),
 		fieldMappings: [],
 		casts: {},
 		filters: [],
@@ -241,8 +270,8 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		sourceRefs: [],
 		dependsOn: [],
 		dimensionRefs: [],
-		factShape: kind === "fact" ? "TRANSACTION" : "",
-		timeSemanticsType: kind === "fact" ? "EVENT_TIME" : "",
+		factShape: "",
+		timeSemanticsType: "",
 		timeSemanticsFields: [],
 		consumptionScenario: "",
 		dataMartId: "",
@@ -447,8 +476,8 @@ export function modelDraftFromView(
 		implementationInputMode:
 			implementation?.ownership === "DBT_MANAGED" && !structuredImplementation
 				? ""
-				: logicalInputMode ||
-					structuredImplementation?.inputMode ||
+				: structuredImplementation?.inputMode ||
+					logicalInputMode ||
 					(generationStrategyType === "DATE_DIMENSION"
 						? "GENERATED"
 						: model.modelType === "SUMMARY" || model.modelType === "APPLICATION"
@@ -456,6 +485,7 @@ export function modelDraftFromView(
 							: ""),
 		generationStrategyType: generationStrategyType === "DATE_DIMENSION" ? "DATE_DIMENSION" : "",
 		implementationIdempotencyKey: crypto.randomUUID(),
+		creationOperationId: crypto.randomUUID(),
 		fieldMappings: (structuredImplementation?.fieldMappings || []).map((mapping) => ({ ...mapping })),
 		casts: implementationCasts(structuredImplementation),
 		filters: implementationFilters(structuredImplementation),
@@ -529,7 +559,17 @@ export async function loadModelWorkbenchDraft(model: ModelSpecView): Promise<Mod
 
 export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext> {
 	const planId = await resolveDefaultModelingContextId();
-	const [domains, models, dimensions, standards, dataMarts, subjectDomains, warehouseLayers, sources] =
+	const [
+		domains,
+		models,
+		dimensions,
+		standards,
+		dataMarts,
+		subjectDomains,
+		warehouseLayers,
+		sources,
+		implementationCapabilities,
+	] =
 		await Promise.all([
 			catalogDomainService.list(),
 			listModelSpecs(),
@@ -539,6 +579,7 @@ export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext
 			listSubjectDomains({ status: "CURRENT", offset: 0, limit: 100 }),
 			listWarehouseLayers(),
 			planId ? collectCurrentWarehousePlanSources(planId) : Promise.resolve([]),
+			getModelImplementationCapabilities(),
 		]);
 	return {
 		planId,
@@ -550,6 +591,7 @@ export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext
 		subjectDomains,
 		warehouseLayers,
 		sources,
+		implementationCapabilities,
 	};
 }
 
@@ -663,6 +705,30 @@ export function prepareModelDraftForSave(
 	return grainName ? { ...draft, grainStatement: `一个${grainName}一行` } : draft;
 }
 
+export function normalizeModelDraftImplementation(
+	draft: ModelSpecDraft,
+	capabilities: ModelImplementationCapabilities,
+): ModelSpecDraft {
+	const loadStrategy = capabilities.loadStrategies.includes(draft.loadStrategy)
+		? draft.loadStrategy
+		: capabilities.loadStrategies[0];
+	const allowedMaterializations = loadStrategy
+		? capabilities.materializationsByLoadStrategy[loadStrategy] || []
+		: [];
+	const materialization = allowedMaterializations.includes(draft.materialization)
+		? draft.materialization
+		: allowedMaterializations[0];
+	if (!loadStrategy || !materialization) {
+		throw new Error("服务端没有为当前执行目标配置可用的加载与物化组合");
+	}
+	return {
+		...draft,
+		loadStrategy,
+		materialization,
+		partitionFields: capabilities.partitionFieldsSupported ? draft.partitionFields : "",
+	};
+}
+
 export function validateConceptDimensionDraftInput(draft: ConceptDimensionDraft): ModelDraftValidationErrors {
 	const errors: ModelDraftValidationErrors = {};
 	if (!draft.domainId.trim()) errors.domainId = "请选择数据域";
@@ -728,7 +794,10 @@ export async function confirmDimensionDefinitionDraft(draft: ConceptDimensionDra
 	return conceptDimensionDraftFromView(await confirmDimensionDefinition(definition));
 }
 
-export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValidationErrors {
+export function validateModelDraftInput(
+	draft: ModelSpecDraft,
+	capabilities?: ModelImplementationCapabilities,
+): ModelDraftValidationErrors {
 	const errors: ModelDraftValidationErrors = {};
 	if (!draft.domainId.trim()) errors.domainId = "请选择数据域";
 	if (draft.createKind === "dimension-table" && !draft.dimensionDefinitionId.trim()) {
@@ -755,7 +824,14 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 	if (draft.createKind === "application" && !draft.subjectDomainId?.trim()) {
 		errors.subjectDomainId = "请选择主题域";
 	}
-	if (!draft.implementationInputMode && !draft.base) {
+	const allowedInputModes = capabilities?.inputModesByModelType[MODEL_KIND_CONFIG[draft.createKind].modelType];
+	if (
+		draft.implementationInputMode &&
+		allowedInputModes &&
+		!allowedInputModes.includes(draft.implementationInputMode)
+	) {
+		errors.implementationInputMode = "当前模型类型不支持所选数据来源方式，请重新选择";
+	} else if (!draft.implementationInputMode && !draft.base) {
 		errors.implementationInputMode = "请选择数据来源方式";
 	} else if (draft.implementationInputMode === "PHYSICAL_ASSET" && !draft.sourceRefs.length) {
 		errors.implementationInputMode = "请至少选择一张已确认且当前有效的输入源表";
@@ -976,11 +1052,15 @@ export const modelDraftToUpdateCommand = (draft: ModelSpecDraft): UpdateModelSpe
 	};
 };
 
-const validateDraft = (draft: ModelSpecDraft, update: UpdateModelSpecCommand) => {
+const validateDraft = (
+	draft: ModelSpecDraft,
+	update: UpdateModelSpecCommand,
+	capabilities?: ModelImplementationCapabilities,
+) => {
 	const missing: string[] = [];
 	if (!draft.planId) missing.push("可写建模上下文");
 	if (!draft.warehouseLayerCode) missing.push("请选择数仓分层");
-	const validationErrors = validateModelDraftInput(draft);
+	const validationErrors = validateModelDraftInput(draft, capabilities);
 	missing.push(...Object.values(validationErrors));
 	if (missing.length) throw new Error(`请补齐：${Array.from(new Set(missing)).join("、")}`);
 	const issues = validateModelSpecUpdate(update);
@@ -993,6 +1073,15 @@ type ResolvedImplementationInputs = {
 	inputs: ModelImplementationInput[];
 };
 
+type ImplementationIdentity = Pick<ModelImplementationWriteCommand, "projectKey" | "dbtUniqueId">;
+
+const implementationIdentityOf = (
+	candidate?: { projectKey?: string | null; dbtUniqueId?: string | null } | null,
+): ImplementationIdentity | null => {
+	if (!candidate?.projectKey?.trim() || !candidate.dbtUniqueId?.trim()) return null;
+	return { projectKey: candidate.projectKey, dbtUniqueId: candidate.dbtUniqueId };
+};
+
 const implementationInputs = (
 	draft: ModelSpecDraft,
 	context: ModelSaveContext,
@@ -1003,23 +1092,25 @@ const implementationInputs = (
 			inputs: [{ generatorType: "DATE_DIMENSION", config: {} }],
 		};
 	}
-	const sourceRefs = draft.sourceRefs;
-	const resolvedSourceRefs = sourceRefs.flatMap((source) =>
-		typeof source.sourceBindingId === "string" &&
-		source.sourceBindingId.trim() &&
-		typeof source.resolvedVersion === "string" &&
-		source.resolvedVersion.trim()
-			? [{ sourceBindingId: source.sourceBindingId, resolvedVersion: source.resolvedVersion }]
-			: [],
-	);
-	if (sourceRefs.length && resolvedSourceRefs.length === sourceRefs.length) {
+	if (draft.implementationInputMode === "PHYSICAL_ASSET") {
+		const sourceRefs = draft.sourceRefs;
+		const resolvedSourceRefs = sourceRefs.flatMap((source) =>
+			typeof source.sourceBindingId === "string" &&
+			source.sourceBindingId.trim() &&
+			typeof source.resolvedVersion === "string" &&
+			source.resolvedVersion.trim()
+				? [{ sourceBindingId: source.sourceBindingId, resolvedVersion: source.resolvedVersion }]
+				: [],
+		);
+		if (!sourceRefs.length || resolvedSourceRefs.length !== sourceRefs.length) return null;
 		return {
 			inputMode: "PHYSICAL_ASSET",
 			inputs: resolvedSourceRefs,
 		};
 	}
-	const dependencies = draft.dependsOn;
-	if (dependencies.length) {
+	if (draft.implementationInputMode === "UPSTREAM_MODEL") {
+		const dependencies = draft.dependsOn;
+		if (!dependencies.length) return null;
 		const models = context.models || [];
 		const inputs = dependencies.map((dependency) => {
 			const persisted = draft.implementationBase?.inputs.find(
@@ -1061,25 +1152,50 @@ const implementationNeedsSave = (draft: ModelSpecDraft): boolean => {
 	);
 };
 
-export const modelDraftNeedsImplementationRecovery = (draft: ModelDraft | null): boolean =>
+const implementationNeedsCapabilityRepair = (
+	draft: ModelSpecDraft,
+	capabilities: ModelImplementationCapabilities,
+): boolean => {
+	const implementation = draft.implementationBase;
+	if (!implementation) return false;
+	const modelType = MODEL_KIND_CONFIG[draft.createKind].modelType;
+	const loadStrategy = implementationText(implementation, "loadStrategy") as ModelSpecLoadStrategy;
+	return (
+		!(capabilities.inputModesByModelType[modelType] || []).includes(implementation.inputMode) ||
+		!capabilities.loadStrategies.includes(loadStrategy) ||
+		!(capabilities.materializationsByLoadStrategy[loadStrategy] || []).includes(implementation.materialization) ||
+		Object.keys(implementation.settings || {}).some((key) => !capabilities.settingKeys.includes(key)) ||
+		(!capabilities.partitionFieldsSupported &&
+			implementationStringList(implementation, "partitionFields").length > 0)
+	);
+};
+
+export const modelDraftNeedsImplementationRecovery = (
+	draft: ModelDraft | null,
+	capabilities?: ModelImplementationCapabilities,
+): boolean =>
 	Boolean(
 		draft &&
 			isModelSpecDraft(draft) &&
 			draft.base &&
 			(!draft.implementationBase ||
 				draft.implementationBase.revision !== draft.base.revision ||
-				draft.implementationBase.modelChecksum !== draft.base.checksum) &&
+				draft.implementationBase.modelChecksum !== draft.base.checksum ||
+				(capabilities && implementationNeedsCapabilityRepair(draft, capabilities))) &&
 			implementationNeedsSave(draft),
 	);
 
 const buildImplementationCommand = (
 	draft: ModelSpecDraft,
-	model: CanonicalModelSpecView,
+	model: Pick<CanonicalModelSpecView, "id" | "implementationMode">,
 	resolved: ResolvedImplementationInputs,
+	initialIdentity?: ImplementationIdentity | null,
+	capabilities?: ModelImplementationCapabilities,
 ): ModelImplementationWriteCommand => {
-	const materialization = draft.loadStrategy === "INCREMENTAL" ? "incremental" : draft.materialization;
-	if (!new Set(["table", "view", "incremental"]).has(materialization)) {
-		throw new Error("当前数据实现仅支持表、视图或增量物化方式");
+	const materialization = draft.materialization.trim();
+	const allowedMaterializations = capabilities?.materializationsByLoadStrategy[draft.loadStrategy];
+	if (!materialization || (allowedMaterializations && !allowedMaterializations.includes(materialization))) {
+		throw new Error("当前加载策略不支持所选物化方式，请重新选择");
 	}
 	const controlledSettingKeys = new Set([
 		"casts",
@@ -1091,11 +1207,16 @@ const buildImplementationCommand = (
 		"aggregations",
 	]);
 	const retainedVisual = retainedVisualImplementation(draft.implementationBase);
+	const supportedSettingKeys = capabilities ? new Set(capabilities.settingKeys) : null;
 	const retainedSettings = Object.fromEntries(
 		Object.entries(retainedVisual?.settings || draft.implementationBase?.settings || {}).filter(
-			([key]) => !controlledSettingKeys.has(key),
+			([key]) => !controlledSettingKeys.has(key) && (!supportedSettingKeys || supportedSettingKeys.has(key)),
 		),
 	);
+	const identity =
+		implementationIdentityOf(retainedVisual) ||
+		implementationIdentityOf(draft.implementationBase) ||
+		implementationIdentityOf(initialIdentity);
 	return {
 		inputMode: resolved.inputMode,
 		inputs: resolved.inputs as never,
@@ -1118,10 +1239,27 @@ const buildImplementationCommand = (
 		},
 		ownership: model.implementationMode,
 		materialization,
-		projectKey: retainedVisual?.projectKey || draft.implementationBase?.projectKey || "system-managed",
-		dbtUniqueId: retainedVisual?.dbtUniqueId || draft.implementationBase?.dbtUniqueId || `model.${model.id}`,
+		projectKey: identity?.projectKey || "system-managed",
+		dbtUniqueId: identity?.dbtUniqueId || `model.${model.id}`,
 		idempotencyKey: draft.implementationIdempotencyKey,
 	};
+};
+
+const initialAuthoringImplementationIdentity = (
+	draft: ModelSpecDraft,
+	sourceBundleProjectKey?: string | null,
+): ImplementationIdentity | null => {
+	const retainedVisual = retainedVisualImplementation(draft.implementationBase);
+	if (implementationIdentityOf(retainedVisual) || implementationIdentityOf(draft.implementationBase)) {
+		return null;
+	}
+	const projectKey = sourceBundleProjectKey?.trim();
+	if (!projectKey) {
+		throw new Error("模型创作草稿缺少服务端分配的 dbt 项目标识，请关闭后重新打开模型再试");
+	}
+	const resourceName = draft.physicalName.trim();
+	if (!resourceName) throw new Error("请先填写产出表英文名");
+	return { projectKey, dbtUniqueId: `model.${projectKey}.${resourceName}` };
 };
 
 const supportsStructuredVisualAuthoring = (draft: ModelSpecDraft): boolean =>
@@ -1134,19 +1272,29 @@ export const modelDraftToAuthoringSnapshot = (
 	draft: ModelSpecDraft,
 	context: ModelSaveContext,
 	includeStructuredVisual = true,
+	sourceBundleProjectKey?: string | null,
 ): ModelAuthoringSnapshot => {
-	const modelSpec = modelDraftToUpdateCommand(draft);
+	const normalizedDraft = context.implementationCapabilities
+		? normalizeModelDraftImplementation(draft, context.implementationCapabilities)
+		: draft;
+	const modelSpec = modelDraftToUpdateCommand(normalizedDraft);
 	const snapshot: ModelAuthoringSnapshot = { schemaVersion: 1, modelSpec };
 	if (
 		!includeStructuredVisual ||
-		!supportsStructuredVisualAuthoring(draft) ||
-		draft.base?.compatibilityMode !== "CANONICAL"
+		!supportsStructuredVisualAuthoring(normalizedDraft) ||
+		normalizedDraft.base?.compatibilityMode !== "CANONICAL"
 	) {
 		return snapshot;
 	}
-	const resolved = implementationInputs(draft, context);
+	const resolved = implementationInputs(normalizedDraft, context);
 	if (!resolved) return snapshot;
-	const visualImplementation = buildImplementationCommand(draft, draft.base, resolved);
+	const visualImplementation = buildImplementationCommand(
+		normalizedDraft,
+		normalizedDraft.base,
+		resolved,
+		initialAuthoringImplementationIdentity(normalizedDraft, sourceBundleProjectKey),
+		context.implementationCapabilities,
+	);
 	return {
 		...snapshot,
 		visualImplementation: {
@@ -1156,82 +1304,89 @@ export const modelDraftToAuthoringSnapshot = (
 	};
 };
 
+const createCommandForDraft = (
+	draft: ModelSpecDraft,
+	update: UpdateModelSpecCommand,
+	context: ModelSaveContext,
+): ModelDraftOperationCommand["create"] => {
+	const createBase = {
+		planId: draft.planId,
+		domainId: draft.domainId,
+		name: draft.name.trim(),
+		description: draft.description.trim() || null,
+		warehouseLayerCode: update.warehouseLayerCode,
+		businessProcessId: update.modelType === "FACT" ? update.businessProcessId : null,
+		dataMartId: update.modelType === "APPLICATION" ? update.dataMartId : null,
+		subjectDomainId: update.modelType === "APPLICATION" ? update.subjectDomainId : null,
+		idempotencyKey: draft.creationOperationId || draft.implementationIdempotencyKey,
+	};
+	if (update.modelType !== "DIMENSION") return { ...createBase, modelType: update.modelType };
+	const definition = context.dimensionDefinitions.find((item) => item.id === draft.dimensionDefinitionId);
+	if (!definition) throw new Error("请选择一个当前有效的维度");
+	return {
+		...createBase,
+		modelType: "DIMENSION",
+		dimensionDefinitionRef: { dimensionDefinitionId: definition.id, revision: definition.revision },
+	};
+};
+
+const validatedImplementationSave = async (
+	draft: ModelSpecDraft,
+	model: CanonicalModelSpecView,
+	resolved: ResolvedImplementationInputs,
+	capabilities?: ModelImplementationCapabilities,
+): Promise<ModelImplementationView> => {
+	const command = buildImplementationCommand(draft, model, resolved, null, capabilities);
+	const validation = await validateModelImplementation(model, command);
+	if (!validation.valid) throw new Error(modelImplementationValidationMessage(validation));
+	return saveModelImplementation(model, draft.implementationBase, command);
+};
+
 export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveContext): Promise<ModelDraftSaveResult> {
 	if (draft.base && draft.base.compatibilityMode !== "CANONICAL") throw new Error("历史只读模型不能在工作台中修改");
 	const backendContextId = draft.planId || (await resolveDefaultModelingContextId());
 	if (!backendContextId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
 	const writableDraft = draft.planId ? draft : { ...draft, planId: backendContextId };
-	const preparedDraft = prepareModelDraftForSave(writableDraft, context.dimensionDefinitions);
+	const prepared = prepareModelDraftForSave(writableDraft, context.dimensionDefinitions);
+	const preparedDraft = context.implementationCapabilities
+		? normalizeModelDraftImplementation(prepared, context.implementationCapabilities)
+		: prepared;
 	const update = modelDraftToUpdateCommand(preparedDraft);
-	validateDraft(preparedDraft, update);
+	validateDraft(preparedDraft, update, context.implementationCapabilities);
 	const needsImplementationSave = implementationNeedsSave(preparedDraft);
 	const resolvedImplementationInputs = needsImplementationSave ? implementationInputs(preparedDraft, context) : null;
 	if (needsImplementationSave && !resolvedImplementationInputs) {
 		throw new Error("请先选择数据来源方式；日期维度可由系统生成，其他模型请选择输入源表或上游模型");
 	}
-	let savedModel: CanonicalModelSpecView;
-	if (draft.base) savedModel = await updateModelSpec(draft.base, update);
-	else if (update.modelType === "DIMENSION" && update.implementationMode === "DESIGNER_GENERATED") {
-		const definition = context.dimensionDefinitions.find((item) => item.id === preparedDraft.dimensionDefinitionId);
-		if (!definition) throw new Error("请选择一个维度");
-		const command: CreateDimensionModelCommand = {
-			operationId: crypto.randomUUID(),
-			definitionBinding: {
-				mode: "EXISTING",
-				dimensionDefinitionRef: { dimensionDefinitionId: definition.id, revision: definition.revision },
-			},
-			modelSpec: {
-				...update,
-				modelType: "DIMENSION",
-				layer: "DWD",
-				implementationMode: "DESIGNER_GENERATED",
-				dimensionProfile: {
-					hierarchies: update.dimensionProfile?.hierarchies || [],
-					scdPolicy: update.dimensionProfile?.scdPolicy || { type: "NONE" },
-				},
-				fields: update.fields || [],
-				sourceRefs: update.sourceRefs || [],
-				dependsOn: update.dependsOn || [],
-				dimensionRefs: update.dimensionRefs || [],
-				metricRefs: update.metricRefs || [],
-				standardBindings: update.standardBindings || [],
-			},
+	if (!draft.base) {
+		const operation: ModelDraftOperationCommand = {
+			create: createCommandForDraft(preparedDraft, update, context),
+			modelSpec: update,
+			implementation: resolvedImplementationInputs
+				? buildImplementationCommand(
+					preparedDraft,
+					{ id: "pending", implementationMode: update.implementationMode },
+					resolvedImplementationInputs,
+					null,
+					context.implementationCapabilities,
+				)
+				: null,
 		};
-		savedModel = (await createDimensionModel(command)).currentModelSpec;
-	} else {
-		const createBase = {
-			planId: preparedDraft.planId,
-			domainId: preparedDraft.domainId,
-			name: preparedDraft.name.trim(),
-			description: preparedDraft.description.trim() || null,
-			warehouseLayerCode: update.warehouseLayerCode,
-			businessProcessId: update.modelType === "FACT" ? update.businessProcessId : null,
-			dataMartId: update.modelType === "APPLICATION" ? update.dataMartId : null,
-			subjectDomainId: update.modelType === "APPLICATION" ? update.subjectDomainId : null,
-			idempotencyKey: crypto.randomUUID(),
-		};
-		const created = await createModelSpec(
-			update.modelType === "DIMENSION"
-				? {
-						...createBase,
-						modelType: "DIMENSION",
-						dimensionDefinitionRef: {
-							dimensionDefinitionId: preparedDraft.dimensionDefinitionId,
-							revision:
-								context.dimensionDefinitions.find((item) => item.id === preparedDraft.dimensionDefinitionId)
-									?.revision || 1,
-						},
-					}
-				: { ...createBase, modelType: update.modelType },
-		);
-		savedModel = await updateModelSpec(created, update);
+		const saved = await saveModelDraftOperation(operation);
+		return { model: saved.model, implementation: saved.implementation };
 	}
-	const implementation = resolvedImplementationInputs
-		? await saveModelImplementation(
-				savedModel,
-				preparedDraft.implementationBase,
-				buildImplementationCommand(preparedDraft, savedModel, resolvedImplementationInputs),
-			)
-		: preparedDraft.implementationBase;
-	return { model: savedModel, implementation };
+
+	const savedModel = await updateModelSpec(draft.base, update);
+	if (!resolvedImplementationInputs) return { model: savedModel, implementation: preparedDraft.implementationBase };
+	try {
+		const implementation = await validatedImplementationSave(
+			preparedDraft,
+			savedModel,
+			resolvedImplementationInputs,
+			context.implementationCapabilities,
+		);
+		return { model: savedModel, implementation };
+	} catch (failure) {
+		throw new ModelDraftPartialSaveError(savedModel, failure);
+	}
 }

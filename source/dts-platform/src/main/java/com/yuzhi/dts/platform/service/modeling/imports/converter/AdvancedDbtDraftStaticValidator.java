@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChec
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ImportIssue;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ModelPackage;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.PackageModel;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.TechnicalNode;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -24,6 +25,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.springframework.stereotype.Component;
 import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -492,6 +495,7 @@ public class AdvancedDbtDraftStaticValidator {
     }
 
     private List<ValidatedNode> nodes(ModelPackage modelPackage) {
+        Map<String, List<String>> technicalDependencies = technicalDependencies(modelPackage);
         List<ValidatedNode> result = new ArrayList<>();
         for (PackageModel model : modelPackage.models()) {
             if (model.sql() == null || model.sql().effectiveSql() == null || model.sql().effectiveSql().isBlank()) continue;
@@ -510,13 +514,62 @@ public class AdvancedDbtDraftStaticValidator {
                     model.sql().effectiveSqlChecksum(),
                     schema,
                     ModelPackageChecksum.sha256Text(schema),
-                    model.dependencies(),
+                    flattenedDependencies(model.dependencies(), technicalDependencies),
                     model.conversion() == null ? List.of() : model.conversion().reasonCodes()
                 )
             );
         }
         result.sort(Comparator.comparing(ValidatedNode::dbtUniqueId));
         return List.copyOf(result);
+    }
+
+    private static Map<String, List<String>> technicalDependencies(ModelPackage modelPackage) {
+        Map<String, List<String>> result = new TreeMap<>();
+        List<TechnicalNode> nodes = modelPackage.technicalNodes() == null
+            ? List.of()
+            : modelPackage.technicalNodes();
+        for (TechnicalNode node : nodes) {
+            if (node == null || node.dbtUniqueId() == null || node.dbtUniqueId().isBlank()) continue;
+            result.put(node.dbtUniqueId(), node.dependencies() == null ? List.of() : node.dependencies());
+        }
+        return Map.copyOf(result);
+    }
+
+    /**
+     * Keeps compiler-only nodes out of the public model structure while preserving the physical
+     * and model leaves that dependency reconciliation must compare with the frozen snapshot.
+     */
+    private static List<String> flattenedDependencies(
+        List<String> dependencies,
+        Map<String, List<String>> technicalDependencies
+    ) {
+        Set<String> leaves = new TreeSet<>();
+        for (String dependency : dependencies == null ? List.<String>of() : dependencies) {
+            collectDependencyLeaves(dependency, technicalDependencies, new HashSet<>(), leaves);
+        }
+        return List.copyOf(leaves);
+    }
+
+    private static void collectDependencyLeaves(
+        String dependency,
+        Map<String, List<String>> technicalDependencies,
+        Set<String> visiting,
+        Set<String> leaves
+    ) {
+        if (dependency == null || dependency.isBlank()) return;
+        List<String> nested = technicalDependencies.get(dependency);
+        if (nested == null) {
+            leaves.add(dependency);
+            return;
+        }
+        if (!visiting.add(dependency)) {
+            throw new StaticValidationException(
+                "DBT_DRAFT_DEPENDENCY_CYCLE",
+                "The compiler-owned dbt dependency graph contains a cycle"
+            );
+        }
+        for (String child : nested) collectDependencyLeaves(child, technicalDependencies, visiting, leaves);
+        visiting.remove(dependency);
     }
 
     private String schema(PackageModel model) {

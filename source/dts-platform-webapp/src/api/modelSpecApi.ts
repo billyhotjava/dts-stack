@@ -6,6 +6,7 @@ import type {
 import type {
 	ModelImplementationCasToken,
 	ModelImplementationView,
+	ModelImplementationWriteCommand,
 } from "@/features/modeling/contracts/modelImplementationContract";
 import { toModelImplementationEtag } from "@/features/modeling/contracts/modelImplementationContract";
 import type {
@@ -100,6 +101,18 @@ export type CreateDimensionModelResult = {
 };
 
 export type DimensionModelOperationView = CreateDimensionModelResult;
+
+export type ModelDraftOperationCommand = {
+	create: CreateModelSpecCommand;
+	modelSpec: UpdateModelSpecCommand;
+	implementation: ModelImplementationWriteCommand | null;
+};
+
+export type ModelDraftOperationResult = {
+	model: CanonicalModelSpecView;
+	implementation: ModelImplementationView | null;
+	replayed: boolean;
+};
 
 export type ModelSpecRevisionConflict = {
 	code: "MODEL_SPEC_REVISION_CONFLICT";
@@ -342,6 +355,13 @@ export const getModelSpecDependencies = (id: string) =>
 
 export const createModelSpec = (data: CreateModelSpecCommand) =>
 	api.post<CanonicalModelSpecView>({ url: MODEL_SPEC_RESOURCE, data, _skipErrorToast: true } as any);
+
+export const saveModelDraftOperation = (data: ModelDraftOperationCommand) =>
+	api.post<ModelDraftOperationResult>({
+		url: `${MODEL_SPEC_RESOURCE}/draft-operations`,
+		data,
+		_skipErrorToast: true,
+	} as any);
 
 export const createDimensionModel = (data: CreateDimensionModelCommand, signal?: AbortSignal) =>
 	api.post<CreateDimensionModelResult>({

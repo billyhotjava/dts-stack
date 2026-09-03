@@ -274,4 +274,5 @@
     <include file="config/liquibase/changelog/20260820_01_model_authoring_migration_ledger.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260822_01_quality_workflow_run.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260822_02_modeling_word_root.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260904_01_model_release_candidate_stable_model_scope.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

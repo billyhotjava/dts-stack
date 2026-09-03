@@ -6,17 +6,19 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.CompileView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationExecutionPlanner;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationOwnershipTransitionService;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftRejectionAudit;
-import com.yuzhi.dts.platform.service.audit.AuditService;
-import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
@@ -70,6 +72,21 @@ class ModelLifecycleResourceTest {
 
     @MockBean
     private AuditLoggingFilter auditLoggingFilter;
+
+    @Test
+    void exposesTheCanonicalImplementationCapabilities() throws Exception {
+        when(service.implementationCapabilities()).thenReturn(ModelImplementationExecutionPlanner.capabilities());
+
+        mockMvc.perform(get("/api/modeling/model-specs/implementation/capabilities"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.adapter").value("postgres"))
+            .andExpect(jsonPath("$.data.inputModesByModelType.FACT[0]").value("PHYSICAL_ASSET"))
+            .andExpect(jsonPath("$.data.inputModesByModelType.SUMMARY[0]").value("UPSTREAM_MODEL"))
+            .andExpect(jsonPath("$.data.loadStrategies[0]").value("FULL"))
+            .andExpect(jsonPath("$.data.loadStrategies[1]").value("INCREMENTAL"))
+            .andExpect(jsonPath("$.data.settingKeys").isArray())
+            .andExpect(jsonPath("$.data.partitionFieldsSupported").value(false));
+    }
 
     @Test
     void compileUsesServerTenantActorAndStrongRevisionPrecondition() throws Exception {

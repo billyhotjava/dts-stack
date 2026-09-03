@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
+import type { ModelImplementationCapabilities } from "@/features/modeling/contracts/modelImplementationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 
 beforeAll(() => {
@@ -85,6 +86,7 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	implementationInputMode: "",
 	generationStrategyType: "",
 	implementationIdempotencyKey: "implementation-draft-1",
+	creationOperationId: "create-draft-1",
 	fieldMappings: [],
 	casts: {},
 	filters: [],
@@ -123,6 +125,22 @@ const definition = {
 	ownerId: "owner-1",
 	revision: 2,
 } as DimensionDefinitionView;
+
+const implementationCapabilities: ModelImplementationCapabilities = {
+	adapter: "postgres",
+	inputModesByModelType: {
+		DIMENSION: ["PHYSICAL_ASSET", "GENERATED"],
+		FACT: ["PHYSICAL_ASSET", "UPSTREAM_MODEL"],
+		SUMMARY: ["UPSTREAM_MODEL"],
+		APPLICATION: ["UPSTREAM_MODEL"],
+	},
+	loadStrategies: ["FULL", "INCREMENTAL"],
+	materializationsByLoadStrategy: { FULL: ["table", "view"], INCREMENTAL: ["incremental"] },
+	settingKeys: ["casts", "loadStrategy", "partitionFields", "targetPhysicalName"],
+	partitionFieldsSupported: false,
+	incrementalKeyRequired: true,
+};
+const partitionCapabilities = { ...implementationCapabilities, partitionFieldsSupported: true };
 
 const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingWorkbenchEditorProps => ({
 	draft: makeDraft(),
@@ -216,6 +234,7 @@ const makeProps = (patch: Partial<ModelingWorkbenchEditorProps> = {}): ModelingW
 				disabledReason: null,
 			},
 		],
+		implementationCapabilities,
 	},
 	dimensionDefinitions: [definition],
 	dimensionDefinitionFailure: "",
@@ -442,6 +461,7 @@ describe("ModelingWorkbenchEditor", () => {
 		];
 		const props = await render(
 			makeProps({
+				context: { ...makeProps().context, implementationCapabilities: partitionCapabilities },
 				draft: makeDraft({
 					createKind: "fact",
 					grainStatement: "一条预算执行明细一行",
@@ -466,6 +486,7 @@ describe("ModelingWorkbenchEditor", () => {
 
 		const selectedProps = await render(
 			makeProps({
+				context: { ...makeProps().context, implementationCapabilities: partitionCapabilities },
 				draft: makeDraft({
 					createKind: "fact",
 					grainStatement: "一条预算执行明细一行",
@@ -564,7 +585,7 @@ describe("ModelingWorkbenchEditor", () => {
 			"关联关系",
 			"发布",
 			"日志",
-			"质量约束",
+			"质量门禁",
 			"高级 dbt 工作区",
 			"导出",
 		])
@@ -659,8 +680,21 @@ describe("ModelingWorkbenchEditor", () => {
 		])
 			expect(container.textContent).not.toContain(label);
 
-		for (const label of ["保存", "交付检查", "刷新", "关联关系", "发布", "日志", "质量约束", "导出"])
+		for (const label of [
+			"保存",
+			"校验",
+			"提交实现",
+			"发布与物化",
+			"准入详情",
+			"刷新状态",
+			"关联关系",
+			"运行日志",
+			"质量门禁",
+		])
 			expect(button(label)).toBeDefined();
+		expect(container.querySelector('[aria-current="step"]')?.textContent).toContain("保存草稿");
+		expect(container.textContent).toContain("下一步：保存草稿");
+		expect(container.textContent).not.toContain("导出");
 		// Sprint-91：工具栏的「高级 dbt 工作区」入口已下线，可视化/代码切换只在选中模型时出现。
 		expect(container.textContent).not.toContain("高级 dbt 工作区");
 		expect(container.textContent).not.toContain("物理预览");
@@ -730,7 +764,17 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(makeProps({ saving: true, selectedModel }));
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		for (const label of ["保存中…", "交付检查", "刷新", "关联关系", "发布", "日志", "质量约束", "导出"])
+		for (const label of [
+			"保存中…",
+			"校验",
+			"提交实现",
+			"发布与物化",
+			"准入详情",
+			"刷新状态",
+			"关联关系",
+			"运行日志",
+			"质量门禁",
+		])
 			expect(button(label)).toHaveProperty("disabled", true);
 	});
 
@@ -775,6 +819,7 @@ describe("ModelingWorkbenchEditor", () => {
 					standards: [],
 					warehouseLayers: [],
 					sources: [],
+					implementationCapabilities,
 				},
 				dimensionDefinitions: [],
 			}),
@@ -793,10 +838,11 @@ describe("ModelingWorkbenchEditor", () => {
 
 	it("disables unpublished actions and maps every supported toolbar dialog", async () => {
 		const unpublished = await render();
-		for (const label of ["交付检查", "关联关系", "发布", "日志", "质量约束", "导出"]) {
+		for (const label of ["准入详情", "关联关系", "发布与物化", "运行日志", "质量门禁"]) {
 			expect(button(label)).toHaveProperty("disabled", true);
 			act(() => button(label).click());
 		}
+		expect(container.textContent).not.toContain("导出");
 		expect(unpublished.onDialog).not.toHaveBeenCalled();
 
 		const selectedModel = { id: "model-1", compatibilityMode: "CANONICAL" } as ModelSpecView;
@@ -806,16 +852,16 @@ describe("ModelingWorkbenchEditor", () => {
 		});
 		await render(published);
 		for (const [label, dialog] of [
-			["交付检查", "gates"],
+			["准入详情", "gates"],
 			["关联关系", "association"],
-			["发布", "publish"],
-			["日志", "logs"],
-			["质量约束", "quality"],
+			["发布与物化", "publish"],
+			["运行日志", "logs"],
+			["质量门禁", "quality"],
 		] as const) {
 			act(() => button(label).click());
 			expect(published.onDialog).toHaveBeenLastCalledWith(dialog);
 		}
-		expect(button("导出").title).toBe("尚无模型导出服务端契约");
+		expect(container.textContent).not.toContain("导出");
 		// 选中模型时才出现的可视化/代码双模切换
 		expect(button("可视化模式")).toBeDefined();
 		expect(button("代码模式")).toBeDefined();
@@ -831,9 +877,24 @@ describe("ModelingWorkbenchEditor", () => {
 		});
 		await render(codeManaged);
 		expect(button("保存草稿")).toHaveProperty("disabled", false);
-		expect(button("发布")).toHaveProperty("disabled", false);
-		act(() => button("发布").click());
+		expect(button("发布与物化")).toHaveProperty("disabled", false);
+		act(() => button("发布与物化").click());
 		expect(codeManaged.onDialog).toHaveBeenLastCalledWith("publish");
+	});
+
+	it("renders an authoring request failure only once", async () => {
+		await render(
+			makeProps({
+				authoringFailure: "模型创作草稿校验失败。",
+				failureMessage: "模型创作草稿校验失败。",
+			}),
+		);
+
+		expect(
+			Array.from(container.querySelectorAll('[role="alert"]')).filter((item) =>
+				item.textContent?.includes("模型创作草稿校验失败。"),
+			),
+		).toHaveLength(1);
 	});
 
 	it("uses provenance only as evidence and opens raw nodes in the shared code view", async () => {
@@ -946,6 +1007,9 @@ describe("ModelingWorkbenchEditor", () => {
 
 		expect(container.textContent).toContain("模型粒度");
 		expect(container.textContent).toContain("加载策略");
+		expect(container.textContent).toContain("postgres 执行目标不支持分区配置");
+		expect(Array.from(container.querySelectorAll("option")).some((option) => option.value === "SNAPSHOT")).toBe(false);
+		expect(Array.from(container.querySelectorAll("option")).some((option) => option.value === "ephemeral")).toBe(false);
 	});
 
 	it("lists only DWD-compatible layers for FACT drafts and excludes DWS custom layers", async () => {
@@ -1001,6 +1065,7 @@ describe("ModelingWorkbenchEditor", () => {
 					standards: [],
 					warehouseLayers: [],
 					sources: [],
+					implementationCapabilities,
 				},
 			}),
 		);

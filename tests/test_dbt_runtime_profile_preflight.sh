@@ -339,8 +339,16 @@ if (
     )
 
 dockerignore = (repo / ".dockerignore").read_text(encoding="utf-8").splitlines()
-if "services/dts-dbt/profiles/profiles.yml" not in dockerignore:
-    raise SystemExit("local profiles.yml must be excluded from Docker contexts")
+for runtime_path in (
+    "services/dts-dbt/.dts-scoped-runs",
+    "services/dts-dbt/.dts-runtime",
+    "services/dts-dbt/profiles/profiles.yml",
+    "services/dts-dbt/profiles/.user.yml",
+):
+    if runtime_path not in dockerignore:
+        raise SystemExit(
+            f"local dbt runtime path must be excluded from Docker contexts: {runtime_path}"
+        )
 
 example = (
     repo / "services/dts-dbt/profiles/profiles.example.yml"

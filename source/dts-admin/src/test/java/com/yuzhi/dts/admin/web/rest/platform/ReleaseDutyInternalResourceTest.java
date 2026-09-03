@@ -114,6 +114,59 @@ class ReleaseDutyInternalResourceTest {
         assertThat(releaseOperator.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(releaseOperator.getBody()).isNotNull();
         assertThat(releaseOperator.getBody().getData().hasDuty()).isTrue();
+
+        var releaseReviewer = resource.check(
+            "kc-alice",
+            "RELEASE_REVIEWER",
+            request
+        );
+        assertThat(releaseReviewer.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(releaseReviewer.getBody()).isNotNull();
+        assertThat(releaseReviewer.getBody().getData().hasDuty()).isTrue();
+    }
+
+    @Test
+    void instituteLeaderHasEveryModelReleaseDuty() {
+        when(authenticator.authenticate(request, "dts-platform"))
+            .thenReturn(new Decision(true, "dts-platform", "accepted"));
+        when(
+            keycloakAuthService.obtainClientCredentialsToken(
+                "admin-cli",
+                "secret"
+            )
+        )
+            .thenReturn(
+                new TokenResponse(
+                    "management-token",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null
+                )
+            );
+        KeycloakUserDTO user = new KeycloakUserDTO();
+        user.setId("kc-leader");
+        user.setUsername("leader");
+        user.setEnabled(true);
+        when(keycloakAdminClient.findById("kc-leader", "management-token"))
+            .thenReturn(Optional.of(user));
+        when(
+            keycloakAdminClient.listUserRealmRoles(
+                "kc-leader",
+                "management-token"
+            )
+        )
+            .thenReturn(List.of("ROLE_INST_LEADER"));
+
+        for (String duty : List.of("MODEL_MAINTAINER", "RELEASE_REVIEWER", "RELEASE_OPERATOR")) {
+            var response = resource.check("kc-leader", duty, request);
+            assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+            assertThat(response.getBody()).isNotNull();
+            assertThat(response.getBody().getData().hasDuty()).isTrue();
+        }
     }
 
     @Test

@@ -2,7 +2,8 @@
 
 The factory deliberately accepts only deployment metadata. Runtime project, selector and target
 are resolved by dts-platform from a one-time token. Warehouse credentials remain in a short-lived
-host tmpfs profile lease and never enter DagRun conf, XCom or task environment variables.
+host tmpfs profile lease and never enter DagRun conf, XCom or task environment variables. Manual
+models and imported dbt packages both execute through the already-running managed dts-dbt service.
 """
 
 from __future__ import annotations
@@ -28,10 +29,6 @@ LOG = logging.getLogger(__name__)
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _DAG_ID = re.compile(r"^[a-z][a-z0-9_]{2,199}$")
 _SAFE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,127}$")
-_SAFE_IMAGE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,255}$")
-_DIGEST_IMAGE = re.compile(
-    r"^[A-Za-z0-9][A-Za-z0-9._/:@-]{0,255}@sha256:[0-9a-f]{64}$"
-)
 _DOCKER_CONTAINER_ID = re.compile(r"^[0-9a-f]{64}$")
 _RELEASE_BUILD_CONF_KEYS = frozenset(
     {
@@ -67,7 +64,10 @@ _BASE_RUNTIME_SPEC_KEYS = frozenset(
         "credentialVersionRef",
     }
 )
-_RUNTIME_CERTIFICATION_KEYS = frozenset(
+# Kept as accepted wire fields while older platform instances roll forward.
+# They are deliberately ignored: the running dts-dbt service is the sole
+# execution base and verifies its installed dependency lock at execution time.
+_LEGACY_RUNTIME_CERTIFICATION_KEYS = frozenset(
     {
         "runtimeProfileId",
         "candidateProfileId",
@@ -81,27 +81,7 @@ _RUNTIME_CERTIFICATION_KEYS = frozenset(
         "evidenceManifestSha256",
     }
 )
-_RUNTIME_SPEC_KEYS = _BASE_RUNTIME_SPEC_KEYS | _RUNTIME_CERTIFICATION_KEYS
-_EXPECTED_CANDIDATE_PROFILE_ID = (
-    "H83-RT01-LINUX-AMD64-DBT11022-PG1100-LOCK-"
-    "01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02"
-)
-_EXPECTED_REQUIREMENTS_LOCK_SHA256 = (
-    "01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02"
-)
-_EXPECTED_CERTIFICATION_PROFILE_ID = (
-    "H83-CERT-RT01-LINUX-AMD64-EVIDENCE-"
-    "bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68"
-)
-_EXPECTED_CANDIDATE_IMAGE_DIGEST = (
-    "sha256:fe1d15f1b4215e693dadfc1d99be2ae07c7e50e8df144504005feb41cc7686b7"
-)
-_EXPECTED_CERTIFIED_IMAGE_DIGEST = (
-    "sha256:2f6dddb7237fdb7141f452b6d09da0379ef7569f2f82560473f304b265cbbd85"
-)
-_EXPECTED_EVIDENCE_MANIFEST_SHA256 = (
-    "bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68"
-)
+_RUNTIME_SPEC_KEYS = _BASE_RUNTIME_SPEC_KEYS | _LEGACY_RUNTIME_CERTIFICATION_KEYS
 _PREPARE_TASK_ID = "prepare_runtime"
 _BUILD_TASK_ID = "dbt_build"
 _SYNC_TASK_ID = "sync_manifest_and_probe"
@@ -113,10 +93,11 @@ _DOCKER_SOCKET_PATH = "/var/run/docker.sock"
 _DOCKER_ENGINE_HOST = f"unix://{_DOCKER_SOCKET_PATH}"
 _DOCKER_ENGINE_TIMEOUT_SECONDS = 12.0
 _DOCKER_ENGINE_MAX_RESPONSE_BYTES = 64 * 1024
-_PROFILE_LEASE_OWNER_LABEL = "com.yuzhi.dts.dbt.profile-lease-id"
-_PIPELINE_RUN_GROUP_OWNER_LABEL = (
-    "com.yuzhi.dts.dbt.pipeline-run-group-id"
-)
+_DBT_COMPOSE_SERVICE_LABEL = "dts-dbt"
+_DBT_RUNTIME_CONTAINER_DEFAULT = "dts-dbt"
+_DBT_PROJECT_CONTAINER_ROOT_DEFAULT = "/opt/dbt"
+_DBT_PROFILE_CONTAINER_ROOT_DEFAULT = "/run/dts-dbt-runtime"
+_DBT_RUNTIME_WRAPPER = "run-model-build.sh"
 
 
 class DbtBuildProcessError(RuntimeError):
@@ -272,139 +253,85 @@ def _validate_runtime_spec(runtime_spec: Any) -> dict[str, str]:
             runtime_spec["credentialVersionRef"], "credentialVersionRef"
         ),
     }
-    if purpose == "RELEASE_BUILD":
-        missing_certification = sorted(
-            key
-            for key in _RUNTIME_CERTIFICATION_KEYS
-            if key not in runtime_spec
-        )
-        if missing_certification:
-            raise ValueError(
-                "runtime certification is missing required keys: "
-                + ", ".join(missing_certification)
-            )
-        image_ref = _required_text(runtime_spec["imageRef"], "imageRef")
-        if (
-            not _DIGEST_IMAGE.fullmatch(image_ref)
-            or not image_ref.endswith("@" + _EXPECTED_CERTIFIED_IMAGE_DIGEST)
-        ):
-            raise ValueError("runtime imageRef is not certified")
-        certification = {
-            "runtimeProfileId": _safe_name(
-                runtime_spec["runtimeProfileId"], "runtimeProfileId"
-            ),
-            "candidateProfileId": _required_text(
-                runtime_spec["candidateProfileId"], "candidateProfileId"
-            ),
-            "dbtCoreVersion": _required_text(
-                runtime_spec["dbtCoreVersion"], "dbtCoreVersion"
-            ),
-            "dbtPostgresVersion": _required_text(
-                runtime_spec["dbtPostgresVersion"], "dbtPostgresVersion"
-            ),
-            "adapter": _required_text(runtime_spec["adapter"], "adapter"),
-            "databaseType": _required_text(
-                runtime_spec["databaseType"], "databaseType"
-            ),
-            "requirementsLockSha256": _checksum(
-                runtime_spec["requirementsLockSha256"],
-                "requirementsLockSha256",
-            ),
-            "candidateImageDigest": _required_text(
-                runtime_spec["candidateImageDigest"],
-                "candidateImageDigest",
-            ),
-            "imageRef": image_ref,
-            "evidenceManifestSha256": _checksum(
-                runtime_spec["evidenceManifestSha256"],
-                "evidenceManifestSha256",
-            ),
-        }
-        if (
-            certification["runtimeProfileId"]
-            != _EXPECTED_CERTIFICATION_PROFILE_ID
-            or certification["candidateProfileId"]
-            != _EXPECTED_CANDIDATE_PROFILE_ID
-            or certification["dbtCoreVersion"] != "1.10.22"
-            or certification["dbtPostgresVersion"] != "1.10.0"
-            or certification["adapter"] != "postgres"
-            or certification["databaseType"] != "PostgreSQL"
-            or certification["requirementsLockSha256"]
-            != _EXPECTED_REQUIREMENTS_LOCK_SHA256
-            or certification["candidateImageDigest"]
-            != _EXPECTED_CANDIDATE_IMAGE_DIGEST
-            or certification["evidenceManifestSha256"]
-            != _EXPECTED_EVIDENCE_MANIFEST_SHA256
-        ):
-            raise ValueError("runtime certification does not match executor")
-        normalized.update(certification)
     return normalized
 
 
-def _operational_image_ref() -> str:
-    image_ref = _required_text(
-        os.getenv("DTS_DBT_RUNTIME_CERTIFICATION_IMAGE_REF", ""),
-        "operational dbt image",
+def _dbt_runtime_container_name() -> str:
+    container_name = _safe_name(
+        os.getenv(
+            "DTS_DBT_RUNTIME_CONTAINER_NAME",
+            _DBT_RUNTIME_CONTAINER_DEFAULT,
+        ),
+        "dbt runtime container name",
     )
-    if (
-        not _DIGEST_IMAGE.fullmatch(image_ref)
-        or not image_ref.endswith("@" + _EXPECTED_CERTIFIED_IMAGE_DIGEST)
-    ):
-        raise ValueError("operational dbt image is not certified")
-    return image_ref
+    if container_name != _DBT_RUNTIME_CONTAINER_DEFAULT:
+        raise ValueError("dbt runtime container is not the managed service")
+    return container_name
 
 
 def _build_docker_command(
     runtime_spec: dict[str, Any],
-    image: str,
-    project_host_root: str,
-    profile_host_root: str,
-    docker_network: str,
+    container_name: str,
+    project_container_root: str,
+    profile_container_root: str,
 ) -> list[str]:
     runtime = _validate_runtime_spec(runtime_spec)
-    safe_image = _required_text(image, "dbt image")
-    if not _SAFE_IMAGE.fullmatch(safe_image):
-        raise ValueError("dbt image is invalid")
-    if (
-        runtime["runPurpose"] == "RELEASE_BUILD"
-        and safe_image != runtime["imageRef"]
-    ):
-        raise ValueError("release build image does not match runtime spec")
-    safe_network = _safe_name(docker_network, "docker network")
-    project_root = _fixed_root(project_host_root, "project host root")
-    profile_root = _fixed_root(profile_host_root, "profile host root")
+    safe_container = _safe_name(container_name, "dbt runtime container name")
+    if safe_container != _DBT_RUNTIME_CONTAINER_DEFAULT:
+        raise ValueError("dbt runtime container is not the managed service")
+    project_root = _fixed_root(
+        project_container_root,
+        "project container root",
+    )
+    profile_root = _fixed_root(
+        profile_container_root,
+        "profile container root",
+    )
+    if project_root != Path(_DBT_PROJECT_CONTAINER_ROOT_DEFAULT):
+        raise ValueError("project container root is not supported")
+    if profile_root != Path(_DBT_PROFILE_CONTAINER_ROOT_DEFAULT):
+        raise ValueError("profile container root is not supported")
     project_directory = (
         project_root
         / ".dts-scoped-runs"
         / f"candidate-{runtime['projectBundleChecksum']}"
     )
-    profile_directory = profile_root / runtime["profileLeaseId"]
-    container_name = _dbt_container_name(runtime["profileLeaseId"])
+    wrapper = project_root / _DBT_RUNTIME_WRAPPER
     command = [
-        "docker", "--host", _DOCKER_ENGINE_HOST, "run", "--rm",
-        "--name", container_name,
-        "--label",
-        f"{_PROFILE_LEASE_OWNER_LABEL}={runtime['profileLeaseId']}",
-        "--label",
-        (
-            f"{_PIPELINE_RUN_GROUP_OWNER_LABEL}="
-            f"{runtime['pipelineRunGroupId']}"
-        ),
-        "--network", safe_network,
-        "-v", f"{project_directory}:/opt/dbt",
-        "-v", f"{profile_directory}:/root/.dbt:ro",
-        safe_image,
+        "docker", "--host", _DOCKER_ENGINE_HOST, "exec",
+        "--workdir", str(project_directory),
+        safe_container,
+        "/bin/sh", str(wrapper),
         "build",
-        "--project-dir", "/opt/dbt",
-        "--profiles-dir", "/root/.dbt",
-        "--target", runtime["targetName"],
-        "--select", runtime["selector"],
+        runtime["profileLeaseId"],
+        runtime["projectBundleChecksum"],
+        runtime["targetName"],
+        runtime["selector"],
+        str(profile_root),
     ]
     return command
 
 
-def _dbt_container_name(lease_id: str) -> str:
-    return "dts-dbt-" + _uuid_text(lease_id, "profileLeaseId")
+def _build_runtime_stop_command(
+    container_name: str,
+    lease_id: str,
+    project_container_root: str,
+) -> list[str]:
+    safe_container = _safe_name(container_name, "dbt runtime container name")
+    if safe_container != _DBT_RUNTIME_CONTAINER_DEFAULT:
+        raise ValueError("dbt runtime container is not the managed service")
+    project_root = _fixed_root(
+        project_container_root,
+        "project container root",
+    )
+    if project_root != Path(_DBT_PROJECT_CONTAINER_ROOT_DEFAULT):
+        raise ValueError("project container root is not supported")
+    return [
+        "docker", "--host", _DOCKER_ENGINE_HOST, "exec",
+        safe_container,
+        "/bin/sh", str(project_root / _DBT_RUNTIME_WRAPPER),
+        "stop", _uuid_text(lease_id, "profileLeaseId"),
+    ]
 
 
 class _DockerSocketConnection(http.client.HTTPConnection):
@@ -418,7 +345,7 @@ class _DockerSocketConnection(http.client.HTTPConnection):
 
 
 def _docker_engine_request(method: str, path: str) -> tuple[int, bytes]:
-    if method not in {"GET", "POST"} or not path.startswith("/containers/"):
+    if method != "GET" or not path.startswith("/containers/"):
         raise ValueError("Docker Engine request is invalid")
     connection = _DockerSocketConnection()
     try:
@@ -432,29 +359,14 @@ def _docker_engine_request(method: str, path: str) -> tuple[int, bytes]:
         connection.close()
 
 
-def _inspect_dbt_container(
+def _inspect_dbt_runtime_container(
     container_reference: str,
-    lease_id: str,
-    pipeline_run_group_id: str,
-    *,
-    expected_container_id: str | None = None,
 ) -> tuple[str, bool] | None:
-    expected_lease_id = _uuid_text(lease_id, "profileLeaseId")
-    expected_run_group_id = _uuid_text(
-        pipeline_run_group_id,
-        "pipelineRunGroupId",
+    safe_container = _safe_name(
+        container_reference,
+        "dbt runtime container name",
     )
-    if (
-        container_reference != _dbt_container_name(expected_lease_id)
-        and not _DOCKER_CONTAINER_ID.fullmatch(container_reference)
-    ):
-        raise ValueError("dbt container reference is invalid")
-    if (
-        expected_container_id is not None
-        and not _DOCKER_CONTAINER_ID.fullmatch(expected_container_id)
-    ):
-        raise ValueError("expected dbt container id is invalid")
-    encoded_reference = quote(container_reference, safe="")
+    encoded_reference = quote(safe_container, safe="")
     status, payload = _docker_engine_request(
         "GET",
         f"/containers/{encoded_reference}/json",
@@ -468,11 +380,13 @@ def _inspect_dbt_container(
         container_id = decoded["Id"]
         labels = decoded["Config"]["Labels"]
         running = decoded["State"]["Running"]
+        mounts = decoded["Mounts"]
         if (
             not isinstance(container_id, str)
             or not _DOCKER_CONTAINER_ID.fullmatch(container_id)
             or not isinstance(labels, dict)
             or not isinstance(running, bool)
+            or not isinstance(mounts, list)
         ):
             raise TypeError
     except (AttributeError, UnicodeDecodeError, json.JSONDecodeError) as failure:
@@ -483,84 +397,54 @@ def _inspect_dbt_container(
         raise RuntimeError(
             "Docker Engine container inspection response is invalid"
         ) from failure
-    if (
-        expected_container_id is not None
-        and container_id != expected_container_id
-    ):
-        raise RuntimeError(
-            "dbt container identity does not match inspected container"
-        )
-    if (
-        labels.get(_PROFILE_LEASE_OWNER_LABEL) != expected_lease_id
-        or labels.get(_PIPELINE_RUN_GROUP_OWNER_LABEL)
-        != expected_run_group_id
-    ):
-        raise RuntimeError("dbt container ownership does not match runtime")
+    if labels.get("com.docker.compose.service") != _DBT_COMPOSE_SERVICE_LABEL:
+        raise RuntimeError("dbt runtime container is not the managed service")
+    mount_modes = {
+        mount.get("Destination"): mount.get("RW")
+        for mount in mounts
+        if isinstance(mount, dict)
+    }
+    if mount_modes.get(_DBT_PROJECT_CONTAINER_ROOT_DEFAULT) is not True:
+        raise RuntimeError("dbt runtime project mount is unavailable")
+    if mount_modes.get(_DBT_PROFILE_CONTAINER_ROOT_DEFAULT) is not False:
+        raise RuntimeError("dbt runtime profile mount is not read-only")
     return container_id, running
 
 
-def _stop_dbt_container(
-    container_name: str,
-    lease_id: str,
-    pipeline_run_group_id: str,
-) -> None:
-    expected_lease_id = _uuid_text(lease_id, "profileLeaseId")
-    if container_name != _dbt_container_name(expected_lease_id):
-        raise ValueError("dbt container name does not match profile lease")
-    inspected = _inspect_dbt_container(
-        container_name,
-        expected_lease_id,
-        pipeline_run_group_id,
-    )
+def _require_dbt_runtime_container(container_name: str) -> str:
+    inspected = _inspect_dbt_runtime_container(container_name)
     if inspected is None:
-        return
+        raise RuntimeError("dbt runtime container is unavailable")
     container_id, running = inspected
     if running is not True:
-        return
-    encoded_container_id = quote(container_id, safe="")
-    try:
-        _docker_engine_request(
-            "POST",
-            f"/containers/{encoded_container_id}/stop?t="
-            f"{int(_PROCESS_TERMINATE_TIMEOUT_SECONDS)}",
-        )
-    except (OSError, TimeoutError, http.client.HTTPException):
-        pass
-    inspected = _inspect_dbt_container(
-        container_id,
-        expected_lease_id,
-        pipeline_run_group_id,
-        expected_container_id=container_id,
-    )
+        raise RuntimeError("dbt runtime container is not running")
+    return container_id
+
+
+def _stop_dbt_execution(
+    container_name: str,
+    lease_id: str,
+    project_container_root: str,
+) -> None:
+    inspected = _inspect_dbt_runtime_container(container_name)
     if inspected is None:
         return
     _, running = inspected
     if running is not True:
         return
-    try:
-        _docker_engine_request(
-            "POST",
-            f"/containers/{encoded_container_id}/kill",
-        )
-    except (OSError, TimeoutError, http.client.HTTPException):
-        pass
-    try:
-        inspected = _inspect_dbt_container(
-            container_id,
-            expected_lease_id,
-            pipeline_run_group_id,
-            expected_container_id=container_id,
-        )
-        if inspected is None:
-            return
-        _, running = inspected
-        if running is not True:
-            return
-    except (OSError, TimeoutError, http.client.HTTPException) as failure:
-        raise RuntimeError(
-            "dbt container stop could not be confirmed"
-        ) from failure
-    raise RuntimeError("dbt container stop could not be confirmed stopped")
+    subprocess.run(
+        _build_runtime_stop_command(
+            container_name,
+            lease_id,
+            project_container_root,
+        ),
+        check=True,
+        timeout=(
+            _PROCESS_TERMINATE_TIMEOUT_SECONDS
+            + _PROCESS_KILL_TIMEOUT_SECONDS
+            + 5
+        ),
+    )
 
 
 def _platform_request(
@@ -786,7 +670,16 @@ def _terminate_and_wait(process: Any) -> None:
 def _dbt_build_task(**context: Any) -> None:
     runtime = _runtime_from_xcom(context["ti"])
     lease_id = runtime["profileLeaseId"]
-    container_name = _dbt_container_name(lease_id)
+    container_name = _dbt_runtime_container_name()
+    project_container_root = os.getenv(
+        "DTS_DBT_PROJECT_CONTAINER_ROOT",
+        _DBT_PROJECT_CONTAINER_ROOT_DEFAULT,
+    )
+    profile_container_root = os.getenv(
+        "DTS_DBT_RUNTIME_PROFILE_CONTAINER_ROOT",
+        _DBT_PROFILE_CONTAINER_ROOT_DEFAULT,
+    )
+    container_id = _require_dbt_runtime_container(container_name)
     consumed = _platform_request(
         "/api/internal/modeling/materialization/profile-leases/"
         f"{lease_id}/consume",
@@ -796,29 +689,22 @@ def _dbt_build_task(**context: Any) -> None:
         lease_id,
         "consume",
     )
-    image = (
-        runtime["imageRef"]
-        if runtime["runPurpose"] == "RELEASE_BUILD"
-        else _operational_image_ref()
-    )
     command = _build_docker_command(
         runtime,
-        image=image,
-        project_host_root=os.getenv("DTS_DBT_PROJECT_HOST_ROOT", ""),
-        profile_host_root=os.getenv(
-            "DTS_DBT_RUNTIME_PROFILE_HOST_ROOT", ""
-        ),
-        docker_network=os.getenv("DBT_DOCKER_NETWORK", "dts-core"),
+        container_name=container_name,
+        project_container_root=project_container_root,
+        profile_container_root=profile_container_root,
     )
     selector_checksum = hashlib.sha256(
         runtime["selector"].encode("utf-8")
     ).hexdigest()
     LOG.info(
         "event=dbt_materialization_start purpose=%s run_group=%s "
-        "image=%s selector_checksum=%s",
+        "container=%s container_id=%s selector_checksum=%s",
         runtime["runPurpose"],
         runtime["pipelineRunGroupId"],
-        command[command.index("build") - 1],
+        container_name,
+        container_id[:12],
         selector_checksum,
     )
     process = None
@@ -844,14 +730,14 @@ def _dbt_build_task(**context: Any) -> None:
     except BaseException as failure:
         cleanup_failures: list[str] = []
         try:
-            _stop_dbt_container(
+            _stop_dbt_execution(
                 container_name,
                 lease_id,
-                runtime["pipelineRunGroupId"],
+                project_container_root,
             )
         except BaseException as cleanup_failure:
             cleanup_failures.append(
-                "container:"
+                "managed-execution:"
                 + type(cleanup_failure).__name__
             )
         if process is not None:
@@ -870,7 +756,7 @@ def _dbt_build_task(**context: Any) -> None:
             add_note = getattr(failure, "add_note", None)
             if callable(add_note):
                 add_note(
-                    "dbt container cleanup could not be fully confirmed"
+                    "managed dbt execution cleanup could not be fully confirmed"
                 )
         raise
 
@@ -942,10 +828,13 @@ def _finalize_task(**context: Any) -> None:
         )
     finally:
         if runtime is not None:
-            _stop_dbt_container(
-                _dbt_container_name(runtime["profileLeaseId"]),
+            _stop_dbt_execution(
+                _dbt_runtime_container_name(),
                 runtime["profileLeaseId"],
-                runtime["pipelineRunGroupId"],
+                os.getenv(
+                    "DTS_DBT_PROJECT_CONTAINER_ROOT",
+                    _DBT_PROJECT_CONTAINER_ROOT_DEFAULT,
+                ),
             )
             _platform_request(
                 "/api/internal/modeling/materialization/profile-leases/"

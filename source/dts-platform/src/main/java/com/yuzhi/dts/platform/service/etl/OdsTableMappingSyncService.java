@@ -3,7 +3,9 @@ package com.yuzhi.dts.platform.service.etl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogClassificationSnapshot;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
@@ -12,9 +14,11 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationAdmissionService;
 import com.yuzhi.dts.platform.service.catalog.lineage.IngestionLineageWriter;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
+import com.yuzhi.dts.platform.service.catalog.dto.CatalogClassificationDtos.SealReference;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import java.nio.charset.StandardCharsets;
@@ -49,6 +53,7 @@ public class OdsTableMappingSyncService {
     private final DbtSourceService dbtSourceService;
     private final IngestionLineageWriter ingestionLineageWriter;
     private final AuditService auditService;
+    private final CatalogClassificationAdmissionService classificationAdmissionService;
     private final ObjectMapper objectMapper;
     private final EntityManager entityManager;
 
@@ -61,6 +66,7 @@ public class OdsTableMappingSyncService {
         DbtSourceService dbtSourceService,
         IngestionLineageWriter ingestionLineageWriter,
         AuditService auditService,
+        CatalogClassificationAdmissionService classificationAdmissionService,
         ObjectMapper objectMapper,
         EntityManager entityManager
     ) {
@@ -72,6 +78,7 @@ public class OdsTableMappingSyncService {
         this.dbtSourceService = dbtSourceService;
         this.ingestionLineageWriter = ingestionLineageWriter;
         this.auditService = auditService;
+        this.classificationAdmissionService = classificationAdmissionService;
         this.objectMapper = objectMapper;
         this.entityManager = entityManager;
     }
@@ -101,6 +108,7 @@ public class OdsTableMappingSyncService {
         Set<String> incomingSourceKeys = collectSourceKeys(mappings);
         int removed = pruneStaleTaskMappings(connectionId, incomingSourceKeys, taskName, taskId);
         Instant snapshotTime = Instant.now();
+        String sealedFileClassification = resolveSealedFileClassification(task);
         int updated = 0;
         int lineageCreated = 0;
         int lineageUpdated = 0;
@@ -148,6 +156,7 @@ public class OdsTableMappingSyncService {
             lineageCreated += lineage.created();
             lineageUpdated += lineage.updated();
             lineageSkipped += lineage.skipped();
+            projectSealedFileClassification(connectionId, targetRef, sealedFileClassification);
             if (!columnSpecs.isEmpty()) {
                 syncColumns(entity, targetRef, columnSpecs, connectionId, snapshotTime);
             }
@@ -181,6 +190,55 @@ public class OdsTableMappingSyncService {
         );
         String message = refresh.message() + "；ADDAX 血缘 +" + lineageCreated + " / 更新 " + lineageUpdated + " / 跳过 " + lineageSkipped;
         return SyncResult.success(updated + removed, message);
+    }
+
+    private String resolveSealedFileClassification(Map<String, Object> task) {
+        Map<String, Object> seal = readMap(task == null ? null : task.get("classificationSeal"));
+        String subjectType = normalize(seal.get("subjectType"));
+        String subjectKey = normalize(seal.get("subjectKey"));
+        String assetType = normalize(seal.get("assetType"));
+        if (
+            !"ASSET".equalsIgnoreCase(subjectType) ||
+            !"DATASET".equalsIgnoreCase(assetType) ||
+            !StringUtils.hasText(subjectKey) ||
+            !subjectKey.startsWith("ingestion-file:")
+        ) {
+            return null;
+        }
+        Long snapshotVersion = parseNonNegativeLong(seal.get("snapshotVersion"));
+        SealReference reference = new SealReference(
+            parseUuid(seal.get("sealId")),
+            subjectType,
+            subjectKey,
+            assetType,
+            normalize(seal.get("effectiveLevel")),
+            snapshotVersion == null ? -1L : snapshotVersion,
+            normalize(seal.get("checksum")),
+            parseInstant(seal.get("sealedAt")),
+            normalize(seal.get("propagationStatus"))
+        );
+        CatalogClassificationSnapshot admitted = classificationAdmissionService.requireValid(reference);
+        return SecurityLevelCatalog.requireDataLevel(admitted.getEffectiveLevel()).code();
+    }
+
+    private void projectSealedFileClassification(UUID connectionId, TableRef targetRef, String sealedClassification) {
+        if (connectionId == null || targetRef == null || !StringUtils.hasText(sealedClassification)) {
+            return;
+        }
+        String schema = StringUtils.hasText(targetRef.schema()) ? targetRef.schema() : DEFAULT_SCHEMA;
+        CatalogDataset dataset = datasetRepository
+            .findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(connectionId, schema, targetRef.table())
+            .orElseGet(() ->
+                datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema, targetRef.table()).orElse(null)
+            );
+        if (dataset == null) {
+            return;
+        }
+        String effective = SecurityLevelCatalog.maxDataCode(dataset.getClassification(), sealedClassification);
+        if (!java.util.Objects.equals(dataset.getClassification(), effective)) {
+            dataset.setClassification(effective);
+            datasetRepository.save(dataset);
+        }
     }
 
     private SyncResult syncApiLandingTargets(

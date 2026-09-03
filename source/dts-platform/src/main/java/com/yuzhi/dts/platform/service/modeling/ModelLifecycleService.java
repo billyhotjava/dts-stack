@@ -17,6 +17,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.LifecycleE
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TestEvidenceCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.TimelineView;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationExecutionPlanner.ImplementationCapabilities;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
@@ -159,6 +160,10 @@ public class ModelLifecycleService {
         this.commandReceipts = commandReceipts;
         this.auditService = auditService;
         this.clock = clock;
+    }
+
+    public ImplementationCapabilities implementationCapabilities() {
+        return ModelImplementationExecutionPlanner.capabilities();
     }
 
     @Transactional

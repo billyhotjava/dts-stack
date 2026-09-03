@@ -427,7 +427,7 @@ public class DbtScopedProjectService {
             workspaceDir.resolve("snapshots"),
             Set.of(".sql")
         );
-        Set<String> requiredSources = new LinkedHashSet<>();
+        Set<SourceReference> requiredSources = new LinkedHashSet<>();
         Set<String> visitedWorkspaceNodes = new LinkedHashSet<>();
         ArrayDeque<String> pendingRefs = new ArrayDeque<>();
         for (CandidateArtifact artifact : overlay.artifactsByPath().values()) {
@@ -458,6 +458,14 @@ public class DbtScopedProjectService {
             pendingRefs.addAll(extractRefs(dependencyText));
             copyResourceWithCompanions(workspaceDir, scopedProjectDir, workspaceNode);
         }
+        Set<SourceReference> candidateSources = overlay
+            .artifactsByPath()
+            .values()
+            .stream()
+            .filter(artifact -> artifact.path().endsWith(".yml") || artifact.path().endsWith(".yaml"))
+            .flatMap(artifact -> extractSourceDefinitions(artifact.content()).stream())
+            .collect(LinkedHashSet::new, Set::add, Set::addAll);
+        requiredSources.removeAll(candidateSources);
         copyRelevantSourceFiles(workspaceDir, scopedProjectDir, requiredSources);
     }
 
@@ -818,16 +826,17 @@ public class DbtScopedProjectService {
         return false;
     }
 
-    private Set<String> extractSources(String text) {
+    private Set<SourceReference> extractSources(String text) {
         if (!StringUtils.hasText(text)) {
             return Set.of();
         }
-        Set<String> sources = new LinkedHashSet<>();
+        Set<SourceReference> sources = new LinkedHashSet<>();
         Matcher matcher = SOURCE_PATTERN.matcher(text);
         while (matcher.find()) {
             String sourceName = normalizeName(matcher.group(1));
-            if (StringUtils.hasText(sourceName)) {
-                sources.add(sourceName);
+            String tableName = normalizeName(matcher.group(2));
+            if (StringUtils.hasText(sourceName) && StringUtils.hasText(tableName)) {
+                sources.add(new SourceReference(sourceName, tableName));
             }
         }
         return sources;
@@ -907,16 +916,15 @@ public class DbtScopedProjectService {
         return source.resolveSibling(stem + extension);
     }
 
-    private void copyRelevantSourceFiles(Path workspaceDir, Path scopedProjectDir, Set<String> requiredSources) throws IOException {
+    private void copyRelevantSourceFiles(
+        Path workspaceDir,
+        Path scopedProjectDir,
+        Set<SourceReference> requiredSources
+    ) throws IOException {
         if (requiredSources == null || requiredSources.isEmpty()) {
             return;
         }
-        Set<String> normalizedSources = requiredSources.stream().map(this::normalizeName).filter(StringUtils::hasText).collect(
-            LinkedHashSet::new,
-            Set::add,
-            Set::addAll
-        );
-        Set<String> remainingSources = new LinkedHashSet<>(normalizedSources);
+        Set<SourceReference> remainingSources = new LinkedHashSet<>(requiredSources);
         for (Path modelsDir : modelRoots(workspaceDir)) {
             try (var walk = Files.walk(modelsDir)) {
                 for (Path file : walk.filter(Files::isRegularFile).toList()) {
@@ -925,10 +933,8 @@ public class DbtScopedProjectService {
                         continue;
                     }
                     String content = Files.readString(file, StandardCharsets.UTF_8);
-                    Set<String> definitions = remainingSources.stream()
-                        .filter(source -> containsRelevantSourceDefinition(content, Set.of(source)))
-                        .collect(LinkedHashSet::new, Set::add, Set::addAll);
-                    if (definitions.isEmpty()) {
+                    Set<SourceReference> definitions = extractSourceDefinitions(content);
+                    if (definitions.stream().noneMatch(remainingSources::contains)) {
                         continue;
                     }
                     copyRelativeFile(workspaceDir, scopedProjectDir, file);
@@ -937,25 +943,58 @@ public class DbtScopedProjectService {
                 }
             }
         }
+        if (!remainingSources.isEmpty()) {
+            String missing = remainingSources
+                .stream()
+                .sorted(Comparator.comparing(SourceReference::sourceName).thenComparing(SourceReference::tableName))
+                .map(source -> source.sourceName() + "." + source.tableName())
+                .collect(java.util.stream.Collectors.joining(", "));
+            throw new ScopedProjectException(
+                "MATERIALIZATION_SOURCE_MISSING",
+                "Candidate dbt source definitions are unavailable: " + missing
+            );
+        }
     }
 
-    private boolean containsRelevantSourceDefinition(String content, Set<String> requiredSources) {
-        if (!StringUtils.hasText(content) || requiredSources == null || requiredSources.isEmpty()) {
-            return false;
+    private Set<SourceReference> extractSourceDefinitions(String content) {
+        if (!StringUtils.hasText(content) || !content.toLowerCase(Locale.ROOT).contains("sources:")) {
+            return Set.of();
         }
-        String lower = content.toLowerCase(Locale.ROOT);
-        if (!lower.contains("sources:")) {
-            return false;
-        }
-        for (String sourceName : requiredSources) {
-            Pattern pattern = Pattern.compile(
-                "(?im)^\\s*-\\s*name\\s*:\\s*['\"]?" + Pattern.quote(sourceName) + "['\"]?\\s*(?:#.*)?$"
-            );
-            if (pattern.matcher(content).find()) {
-                return true;
+        LoaderOptions options = new LoaderOptions();
+        options.setAllowDuplicateKeys(false);
+        options.setAllowRecursiveKeys(false);
+        options.setMaxAliasesForCollections(0);
+        options.setNestingDepthLimit(16);
+        options.setCodePointLimit(256 * 1024);
+        try {
+            Object loaded = new Yaml(new SafeConstructor(options)).load(content);
+            if (!(loaded instanceof Map<?, ?> root) || !(root.get("sources") instanceof List<?> sources)) {
+                return Set.of();
             }
+            Set<SourceReference> definitions = new LinkedHashSet<>();
+            for (Object sourceValue : sources) {
+                if (!(sourceValue instanceof Map<?, ?> source)) continue;
+                Object rawSourceName = source.get("name");
+                String sourceName = rawSourceName == null
+                    ? null
+                    : normalizeName(String.valueOf(rawSourceName));
+                if (!StringUtils.hasText(sourceName) || !(source.get("tables") instanceof List<?> tables)) continue;
+                for (Object tableValue : tables) {
+                    Object rawName = tableValue instanceof Map<?, ?> table ? table.get("name") : tableValue;
+                    String tableName = rawName == null ? null : normalizeName(String.valueOf(rawName));
+                    if (StringUtils.hasText(tableName)) {
+                        definitions.add(new SourceReference(sourceName, tableName));
+                    }
+                }
+            }
+            return Set.copyOf(definitions);
+        } catch (RuntimeException failure) {
+            throw new ScopedProjectException(
+                "MATERIALIZATION_SOURCE_DEFINITION_INVALID",
+                "Unable to parse a dbt source definition",
+                failure
+            );
         }
-        return false;
     }
 
     private void ensureInside(Path root, Path candidate) {
@@ -1072,6 +1111,8 @@ public class DbtScopedProjectService {
         Map<String, CandidateArtifact> artifactsByPath,
         Set<String> overlayNodes
     ) {}
+
+    private record SourceReference(String sourceName, String tableName) {}
 
     private record BundleDigest(String checksum, long bytes) {}
 }

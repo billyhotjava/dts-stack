@@ -173,7 +173,11 @@ class DbtSourceOnlyContractTest {
         files.put("models/unconsumed.sql", "select * from {{ ref('independent') + ref('missing') }}");
         files.put("models/parenthesized.sql", "select * from {{ (ref)('independent') }}");
         files.put("models/dynamic_source.sql", "select * from {{ source('erp', var('table_name')) }}");
-        files.put("models/unknown_config.sql", "{{ config(alias='renamed') }} select 1 as id");
+        files.put(
+            "models/literal_config.sql",
+            "{{ config(materialized='incremental', alias='renamed', unique_key=['id'], meta={'revision':1,'owner':'dts'}) }} select 1 as id"
+        );
+        files.put("models/unknown_config.sql", "{{ config(database='runtime') }} select 1 as id");
         files.put("models/hook_config.sql", "{{ config(pre_hook='delete from audit') }} select 1 as id");
         files.put(
             "models/schema.yml",
@@ -186,6 +190,7 @@ class DbtSourceOnlyContractTest {
                 "unconsumed",
                 "parenthesized",
                 "dynamic_source",
+                "literal_config",
                 "unknown_config",
                 "hook_config"
             )
@@ -194,6 +199,8 @@ class DbtSourceOnlyContractTest {
         ModelPackage result = inspect(files);
 
         assertThat(model(result, "model.jinja_whitelist.safe").conversion().reasonCodes())
+            .containsExactly("SOURCE_SEMANTICS_INCOMPLETE");
+        assertThat(model(result, "model.jinja_whitelist.literal_config").conversion().reasonCodes())
             .containsExactly("SOURCE_SEMANTICS_INCOMPLETE");
         for (
             String name : List.of(
@@ -209,6 +216,32 @@ class DbtSourceOnlyContractTest {
         ) {
             assertBlocked(result, "model.jinja_whitelist." + name, "SOURCE_DEPENDENCY_DYNAMIC");
         }
+    }
+
+    @Test
+    void doesNotPropagateMissingFieldContractsFromTechnicalEphemeralNodes() throws Exception {
+        LinkedHashMap<String, String> files = baseFiles("compiler_bundle");
+        files.put(
+            "models/stg_orders.sql",
+            "{{ config(materialized='ephemeral') }} select raw_id as id from {{ source('public', 'orders') }}"
+        );
+        files.put(
+            "models/orders.sql",
+            "{{ config(materialized='table', alias='dwd_orders', meta={'revision':1,'owner':'dts'}) }} select id from {{ ref('stg_orders') }}"
+        );
+        files.put(
+            "models/orders.yml",
+            schemaModel("orders", true, List.of(column("id", "bigint")))
+        );
+
+        ModelPackage result = inspect(files);
+
+        assertThat(result.technicalNodes())
+            .filteredOn(node -> "model.compiler_bundle.stg_orders".equals(node.dbtUniqueId()))
+            .singleElement()
+            .satisfies(node -> assertThat(node.conversion().mode()).isEqualTo(ConversionMode.TECHNICAL_ONLY));
+        assertThat(model(result, "model.compiler_bundle.orders").conversion().reasonCodes())
+            .containsExactly("SOURCE_SEMANTICS_INCOMPLETE");
     }
 
     @Test

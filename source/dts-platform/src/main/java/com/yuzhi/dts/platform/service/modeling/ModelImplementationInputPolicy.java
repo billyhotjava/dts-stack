@@ -12,8 +12,11 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRe
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
+import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -200,16 +203,24 @@ public class ModelImplementationInputPolicy {
     private static boolean allows(ModelType type, InputMode mode) {
         if (type == null || mode == null) return false;
         return switch (type) {
-            case DIMENSION -> true;
+            case DIMENSION -> mode == InputMode.PHYSICAL_ASSET || mode == InputMode.GENERATED;
             case FACT -> mode == InputMode.PHYSICAL_ASSET || mode == InputMode.UPSTREAM_MODEL;
             case SUMMARY, APPLICATION -> mode == InputMode.UPSTREAM_MODEL;
         };
     }
 
+    static Map<ModelType, List<InputMode>> supportedInputModesByModelType() {
+        EnumMap<ModelType, List<InputMode>> modes = new EnumMap<>(ModelType.class);
+        for (ModelType type : ModelType.values()) {
+            modes.put(type, Arrays.stream(InputMode.values()).filter(mode -> allows(type, mode)).toList());
+        }
+        return Map.copyOf(modes);
+    }
+
     private static boolean allowsImplementationUpstream(ModelType ownerType, ModelSpecView upstream) {
         if (ownerType == null || !ModelSpecContract.isCanonicalModel(upstream)) return false;
         return switch (ownerType) {
-            case DIMENSION -> upstream.modelType() == ModelType.DIMENSION || upstream.modelType() == ModelType.FACT;
+            case DIMENSION -> false;
             case FACT -> upstream.modelType() == ModelType.FACT;
             case SUMMARY -> upstream.modelType() != ModelType.APPLICATION;
             case APPLICATION -> true;

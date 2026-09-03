@@ -8,12 +8,18 @@ public interface CatalogSourceReferenceReadPort {
 
     SourceSnapshot resolveTable(UUID tableId, String actorDepartmentId);
 
+    /** Reads current physical evidence for an already-confirmed background execution binding. */
+    SourceSnapshot resolveTableForExecution(UUID tableId);
+
     SourceSnapshot resolveConnectionTable(
         UUID sourceId,
         String namespace,
         String objectName,
         String actorDepartmentId
     );
+
+    /** Reads current physical evidence for an already-confirmed background execution binding. */
+    SourceSnapshot resolveConnectionTableForExecution(UUID sourceId, String namespace, String objectName);
 
     Optional<String> findDatasetAssetKey(UUID datasetId);
 

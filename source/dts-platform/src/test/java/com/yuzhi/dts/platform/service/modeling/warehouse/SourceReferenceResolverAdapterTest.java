@@ -6,6 +6,7 @@ import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceR
 import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.PROVIDER_ERROR;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
@@ -99,6 +100,50 @@ class SourceReferenceResolverAdapterTest {
         assertThat(result.displayName()).isEqualTo("orders");
         assertThat(result.resolvedVersion())
             .isEqualTo(sha256("orders\u0000order_id\u0000uuid\u0000false\u0000ACTIVE"));
+    }
+
+    @Test
+    void resolvesConfirmedCatalogSourceForBackgroundExecutionWithoutARequestSecurityContext() {
+        CatalogDataset dataset = dataset("orders");
+        dataset.setClassification("CONFIDENTIAL");
+        dataset.setLifecycleStatus("PENDING_GOVERNANCE");
+        CatalogTableSchema table = table(dataset, TABLE_ID, "orders");
+        when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(table));
+        when(columnRepository.findByTable(table)).thenReturn(List.of(column(table, "order_id", "uuid", false)));
+
+        ResolvedSource result = resolver.resolveForExecution(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        );
+
+        assertThat(result.status()).isEqualTo(AVAILABLE);
+        assertThat(result.resolvedVersion())
+            .isEqualTo(sha256("orders\u0000order_id\u0000uuid\u0000false\u0000ACTIVE"));
+        verifyNoInteractions(accessChecker);
+    }
+
+    @Test
+    void backgroundExecutionStillRejectsDisabledOrStaleCatalogSources() {
+        CatalogDataset dataset = dataset("orders");
+        CatalogTableSchema table = table(dataset, TABLE_ID, "orders");
+        SourceLocator locator = new SourceLocator(TABLE_ID, null, null, null, null, null, null);
+        when(tableRepository.findById(TABLE_ID)).thenReturn(Optional.of(table));
+
+        dataset.setEnabled(false);
+        assertThat(resolver.resolveForExecution(SourceType.CATALOG_TABLE, locator, ACCESS).status())
+            .isEqualTo(MISSING);
+
+        dataset.setEnabled(true);
+        dataset.setSourceId(CONNECTION_ID);
+        dataset.setHarvestStatus("STALE");
+        assertThat(resolver.resolveForExecution(SourceType.CATALOG_TABLE, locator, ACCESS).status())
+            .isEqualTo(MISSING);
+
+        dataset.setHarvestStatus(null);
+        assertThat(resolver.resolveForExecution(SourceType.CATALOG_TABLE, locator, ACCESS).status())
+            .isEqualTo(PROVIDER_ERROR);
+        verifyNoInteractions(accessChecker);
     }
 
     @Test
@@ -305,10 +350,16 @@ class SourceReferenceResolverAdapterTest {
             ACCESS
         );
         assertThat(unavailable.status()).isEqualTo(SourceReferenceResolver.ResolutionStatus.MISSING);
+        ResolvedSource executionUnavailable = resolver.resolveForExecution(
+            SourceType.CATALOG_TABLE,
+            new SourceLocator(TABLE_ID, null, null, null, null, null, null),
+            ACCESS
+        );
+        assertThat(executionUnavailable.status()).isEqualTo(SourceReferenceResolver.ResolutionStatus.MISSING);
 
         when(availability.read(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString()))
             .thenThrow(new IllegalStateException("availability read failed"));
-        ResolvedSource providerError = resolver.resolve(
+        ResolvedSource providerError = resolver.resolveForExecution(
             SourceType.CATALOG_TABLE,
             new SourceLocator(TABLE_ID, null, null, null, null, null, null),
             ACCESS

@@ -119,7 +119,7 @@ class ModelAuthoringDraftServiceTest {
             .thenReturn(Optional.empty());
         when(modelSpecs.forkPublishedForAuthoring(eq(TENANT), eq(ACTOR), eq(MODEL_ID), any())).thenReturn(forked);
         when(drafts.createAuthoring(eq(TENANT), eq(ACTOR), eq(MODEL_ID), any(), any())).thenReturn(created);
-        when(projections.project(source)).thenReturn(projection);
+        when(projections.project(source, null)).thenReturn(projection);
 
         var result = service.create(
             TENANT,
@@ -213,7 +213,14 @@ class ModelAuthoringDraftServiceTest {
             Instant.parse("2026-08-20T00:30:00Z"),
             source
         );
-        AuthoringProjection projection = new AuthoringProjection(
+        AuthoringProjection submittedProjection = new AuthoringProjection(
+            ProjectionCoverage.NONE,
+            false,
+            List.of(),
+            List.of(),
+            List.of("SOURCE_FIELDS_UNVERIFIED")
+        );
+        AuthoringProjection canonicalProjection = new AuthoringProjection(
             ProjectionCoverage.FULL,
             true,
             List.of("models/orders.sql"),
@@ -222,7 +229,8 @@ class ModelAuthoringDraftServiceTest {
         );
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(editable);
         when(drafts.findOpenAuthoring(TENANT, ACTOR, MODEL_ID)).thenReturn(Optional.of(open));
-        when(projections.project(any(SourceBundleView.class))).thenReturn(projection);
+        when(projections.project(any(SourceBundleView.class), org.mockito.ArgumentMatchers.isNull()))
+            .thenReturn(submittedProjection, canonicalProjection);
         when(
             drafts.saveAuthoring(
                 eq(TENANT),
@@ -253,6 +261,7 @@ class ModelAuthoringDraftServiceTest {
         );
 
         assertThat(result.files()).containsExactlyElementsOf(canonical);
+        assertThat(result.projection()).isSameAs(canonicalProjection);
     }
 
     @Test
@@ -296,7 +305,7 @@ class ModelAuthoringDraftServiceTest {
             List.of()
         );
         when(drafts.findOpenAuthoring(TENANT, ACTOR, MODEL_ID)).thenReturn(Optional.of(open));
-        when(projections.project(source)).thenReturn(
+        when(projections.project(source, command.fields())).thenReturn(
             new AuthoringProjection(
                 ProjectionCoverage.NONE,
                 false,

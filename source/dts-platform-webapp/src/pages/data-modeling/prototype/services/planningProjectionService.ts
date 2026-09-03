@@ -47,9 +47,39 @@ export type PlanningProjection = {
 
 const SAFE_ERROR_CODE = /^[A-Z][A-Z0-9_]{2,79}$/;
 const SAFE_CORRELATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+const UNSAFE_MESSAGE_CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/;
+const SAFE_DEPENDENCY_ID = /^[a-z0-9_]{1,127}(?:\.[a-z0-9_]{1,127})+$/;
 
 const safeString = (value: unknown, pattern: RegExp): string | null =>
 	typeof value === "string" && pattern.test(value.trim()) ? value.trim() : null;
+
+const safeServerMessage = (value: unknown): string | null => {
+	if (typeof value !== "string") return null;
+	const message = value.trim();
+	return message && message.length <= 500 && !UNSAFE_MESSAGE_CONTROL.test(message) ? message : null;
+};
+
+const safeDependencyIds = (value: unknown): string[] => {
+	if (!Array.isArray(value)) return [];
+	const ids: string[] = [];
+	for (const item of value) {
+		if (typeof item !== "string") continue;
+		const trimmed = item.trim();
+		if (!SAFE_DEPENDENCY_ID.test(trimmed)) continue;
+		ids.push(trimmed);
+		if (ids.length >= 10) break;
+	}
+	return ids;
+};
+
+const dependencyGuidance = (code: string | null, payload: unknown): string | null => {
+	if (code !== "DBT_DRAFT_DEPENDENCY_UNDECLARED" && code !== "DBT_DRAFT_DEPENDENCY_MISSING") return null;
+	const ids = safeDependencyIds(recordValue(recordValue(payload, "data"), "dependencies"));
+	if (ids.length === 0) return null;
+	return code === "DBT_DRAFT_DEPENDENCY_UNDECLARED"
+		? `SQL 引用了未在模型依赖中声明的对象：${ids.join("、")}`
+		: `模型依赖中已声明但 SQL 未使用的对象：${ids.join("、")}`;
+};
 
 const recordValue = (value: unknown, key: string): unknown =>
 	value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
@@ -92,10 +122,20 @@ export function normalizeModelingRequestFailure(error: unknown, fallback: string
 			safeString(recordValue(response.data, "requestId"), SAFE_CORRELATION_ID) ??
 			safeString(headerValue(response.headers, "x-correlation-id"), SAFE_CORRELATION_ID) ??
 			safeString(headerValue(response.headers, "x-request-id"), SAFE_CORRELATION_ID);
+		const serverMessage =
+			code && (code.startsWith("MODEL_") || code.startsWith("IMPLEMENTATION_"))
+				? safeServerMessage(recordValue(response.data, "message"))
+				: null;
+		const dependencyDetail = dependencyGuidance(code, response.data);
 		const evidence = [code ? `错误码 ${code}` : null, correlationId ? `关联 ID ${correlationId}` : null].filter(
 			Boolean,
 		);
-		return { kind: "request", message: evidence.length ? `${fallback}（${evidence.join("；")}）` : fallback, code };
+		const summary = serverMessage
+			? `${fallback} ${serverMessage}`
+			: dependencyDetail
+				? `${fallback} ${dependencyDetail}`
+				: fallback;
+		return { kind: "request", message: evidence.length ? `${summary}（${evidence.join("；")}）` : summary, code };
 	}
 	const detail = error instanceof Error ? error.message.trim() : "";
 	return { kind: "request", message: detail || fallback };

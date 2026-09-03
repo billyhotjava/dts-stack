@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import type { CatalogDomain } from "@/api/services/catalogDomainService";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import {
-	DIMENSION_STORAGE_OPTIONS,
 	isConceptDimensionDraft,
 	isDimensionTableDraft,
 	modelDraftFingerprint,
@@ -31,12 +30,22 @@ const makeDraft = (patch: Partial<ModelSpecDraft> = {}): ModelSpecDraft => ({
 	dimensionDefinitionId: "dimension-1",
 	standardBindings: [],
 	warehouseLayerCode: "DWD",
+	implementationMode: "DESIGNER_GENERATED",
 	implementationBase: null,
 	implementationInputMode: "",
 	generationStrategyType: "",
 	implementationIdempotencyKey: "implementation-draft-1",
+	creationOperationId: "create-draft-1",
+	fieldMappings: [],
+	casts: {},
+	filters: [],
+	deduplicateBy: [],
+	joins: [],
+	groupBy: [],
+	aggregations: [],
 	sourceRefs: [],
 	dependsOn: [],
+	dimensionRefs: [],
 	factShape: "",
 	timeSemanticsType: "",
 	timeSemanticsFields: [],
@@ -142,13 +151,13 @@ describe("dimension workbench presentation", () => {
 		expect(isConceptDimensionDraft(makeDraft())).toBe(false);
 		expect(isDimensionTableDraft(makeDraft())).toBe(true);
 		expect(isDimensionTableDraft(makeDraft({ createKind: "fact" }))).toBe(false);
-		expect(DIMENSION_STORAGE_OPTIONS).toEqual([
-			{ value: "table", label: "表存储" },
-			{ value: "incremental", label: "增量表" },
-			{ value: "view", label: "视图" },
-			{ value: "ephemeral", label: "临时模型" },
-		]);
 		expect(modelDraftFingerprint(makeDraft({ name: "A" }))).not.toBe(modelDraftFingerprint(makeDraft({ name: "B" })));
+		expect(modelDraftFingerprint(makeDraft({ businessProcessId: "process-a" }))).not.toBe(
+			modelDraftFingerprint(makeDraft({ businessProcessId: "process-b" })),
+		);
+		expect(
+			modelDraftFingerprint(makeDraft({ fieldMappings: [{ sourceField: "src_0.id", targetField: "id" }] })),
+		).not.toBe(modelDraftFingerprint(makeDraft()));
 		expect(
 			modelDraftFingerprint(
 				makeDraft({

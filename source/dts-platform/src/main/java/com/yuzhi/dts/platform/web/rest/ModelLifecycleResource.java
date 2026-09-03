@@ -17,6 +17,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationOwnershipTransitionService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ImplementationValidationView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationExecutionPlanner.ImplementationCapabilities;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
@@ -69,6 +70,11 @@ public class ModelLifecycleResource {
         this.ownershipTransitions = ownershipTransitions;
         this.actorProvider = actorProvider;
         this.tenantId = tenantId;
+    }
+
+    @GetMapping("/implementation/capabilities")
+    public ApiResponse<ImplementationCapabilities> implementationCapabilities() {
+        return ApiResponses.ok(service.implementationCapabilities());
     }
 
     @GetMapping("/{id}/implementation/dbt-preview")
@@ -254,7 +260,7 @@ public class ModelLifecycleResource {
         }
     }
 
-    private static SaveImplementationCommand decode(ImplementationWriteRequest request) {
+    static SaveImplementationCommand decode(ImplementationWriteRequest request) {
         if (request == null || request.inputMode() == null || request.inputMode().isBlank() || request.inputs() == null || request.inputs().isEmpty()) {
             throw invalidInput("MODEL_IMPLEMENTATION_INPUT_REQUIRED");
         }

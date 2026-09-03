@@ -34,6 +34,20 @@ const context = (): ModelWorkbenchContext =>
 		dataMarts: [],
 		subjectDomains: [],
 		warehouseLayers: [],
+		implementationCapabilities: {
+			adapter: "postgres",
+			inputModesByModelType: {
+				DIMENSION: ["PHYSICAL_ASSET", "GENERATED"],
+				FACT: ["PHYSICAL_ASSET", "UPSTREAM_MODEL"],
+				SUMMARY: ["UPSTREAM_MODEL"],
+				APPLICATION: ["UPSTREAM_MODEL"],
+			},
+			loadStrategies: ["FULL", "INCREMENTAL"],
+			materializationsByLoadStrategy: { FULL: ["table", "view"], INCREMENTAL: ["incremental"] },
+			settingKeys: ["casts", "loadStrategy", "partitionFields", "targetPhysicalName"],
+			partitionFieldsSupported: false,
+			incrementalKeyRequired: true,
+		},
 		sources: [
 			{
 				bindingId: "50000000-0000-0000-0000-000000000002",

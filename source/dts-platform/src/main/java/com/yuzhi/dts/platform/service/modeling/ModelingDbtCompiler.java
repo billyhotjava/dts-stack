@@ -828,6 +828,7 @@ public final class ModelingDbtCompiler {
         if (includeModelTests) {
             String key = model.grain().keys().stream().filter(ModelingDbtCompiler::notBlank).findFirst().orElseThrow();
             yaml
+                .append("    config:\n      contract:\n        enforced: true\n")
                 .append("    tests:\n      - unique:\n          column_name: ")
                 .append(key)
                 .append("\n");

@@ -27,6 +27,7 @@ public interface DbtExecutionGateway {
 
     enum SubmissionStatus {
         SUBMITTED,
+        TERMINAL_FAILED,
         BLOCKED,
         RETRYABLE_UNKNOWN,
     }
@@ -102,11 +103,12 @@ public interface DbtExecutionGateway {
         public SubmissionResult {
             Objects.requireNonNull(status, "status is required");
             if (
-                status == SubmissionStatus.SUBMITTED &&
+                (status == SubmissionStatus.SUBMITTED ||
+                    status == SubmissionStatus.TERMINAL_FAILED) &&
                 (dagRunId == null || dagRunId.isBlank())
             ) {
                 throw new IllegalArgumentException(
-                    "submitted result requires dagRunId"
+                    "Airflow run result requires dagRunId"
                 );
             }
             if (
@@ -136,6 +138,18 @@ public interface DbtExecutionGateway {
                 SubmissionStatus.BLOCKED,
                 null,
                 false,
+                code
+            );
+        }
+
+        public static SubmissionResult terminalFailed(
+            String dagRunId,
+            String code
+        ) {
+            return new SubmissionResult(
+                SubmissionStatus.TERMINAL_FAILED,
+                dagRunId,
+                true,
                 code
             );
         }

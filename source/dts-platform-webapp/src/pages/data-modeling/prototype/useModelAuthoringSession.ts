@@ -1,4 +1,4 @@
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from "react";
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import type { DbtDraftFile, DbtImplementationDraft } from "@/api/dbtImplementationDraftApi";
 import {
 	commitModelAuthoringDraft,
@@ -13,6 +13,7 @@ import {
 } from "@/api/modelAuthoringApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { shouldPersistBeforeAuthoringValidation } from "./modelAuthoringDraftLifecycle";
 import { newModelingIdempotencyKey } from "./modelingIdempotency";
 import {
 	isModelSpecDraft,
@@ -22,10 +23,11 @@ import {
 	modelDraftFromAuthoringSnapshot,
 	modelDraftToAuthoringSnapshot,
 	modelDraftToUpdateCommand,
+	normalizeModelDraftImplementation,
 	prepareModelDraftForSave,
 	validateModelDraftInput,
 } from "./services/modelWorkbenchService";
-import { type ModelingRequestFailure, normalizeModelingRequestFailure } from "./services/planningProjectionService";
+import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 
 type AuthoringBusy = "load" | "create" | "save" | "validate" | "commit" | "";
 type AuthoringView = "VISUAL" | "CODE";
@@ -48,7 +50,6 @@ type UseModelAuthoringSessionOptions = {
 	selectedModel: ModelSpecView | null;
 	selectedModelId: string;
 	setContext: Dispatch<SetStateAction<ModelWorkbenchContext | null>>;
-	setFailure: Dispatch<SetStateAction<ModelingRequestFailure | null>>;
 	setValidationErrors: Dispatch<SetStateAction<ModelDraftValidationErrors>>;
 	show: (message: string) => void;
 };
@@ -73,7 +74,6 @@ export function useModelAuthoringSession({
 	selectedModel,
 	selectedModelId,
 	setContext,
-	setFailure,
 	setValidationErrors,
 	show,
 }: UseModelAuthoringSessionOptions) {
@@ -86,8 +86,13 @@ export function useModelAuthoringSession({
 	const [conflict, setConflict] = useState(false);
 	const [failure, setAuthoringFailure] = useState("");
 	const [focusNode, setFocusNode] = useState<ModelAuthoringProjectionNode | null>(null);
+	const loadEpoch = useRef(0);
+	const selectedModelIdValue = selectedModel?.id || "";
+	const selectedModelRevision = selectedModel?.revision;
+	const selectedModelChecksum = selectedModel?.checksum;
 
 	const reset = useCallback(() => {
+		loadEpoch.current += 1;
 		setAuthoringContext(null);
 		setFiles([]);
 		setCodeDirty(false);
@@ -105,10 +110,13 @@ export function useModelAuthoringSession({
 			setConflict(status === 409 || status === 412);
 			const normalized = normalizeModelingRequestFailure(error, fallback);
 			setAuthoringFailure(normalized.message);
-			setFailure(normalized);
 		},
-		[setFailure],
+		[],
 	);
+	const clearFailure = useCallback(() => {
+		setConflict(false);
+		setAuthoringFailure("");
+	}, []);
 
 	const createSession = async (targetPhysicalName = ""): Promise<AuthoringSession> => {
 		if (!draft || !isModelSpecDraft(draft) || !draft.base || !authoringContext) {
@@ -174,8 +182,11 @@ export function useModelAuthoringSession({
 		preparedInput?: ReturnType<typeof prepareModelDraftForSave>,
 	): Promise<DbtImplementationDraft> => {
 		if (!draft || !isModelSpecDraft(draft) || !draft.base) throw new Error("请先保存模型定义");
-		const prepared = preparedInput || prepareModelDraftForSave(draft, dimensionDefinitions);
-		const nextValidationErrors = validateModelDraftInput(prepared);
+		const preparedBase = preparedInput || prepareModelDraftForSave(draft, dimensionDefinitions);
+		const prepared = context?.implementationCapabilities
+			? normalizeModelDraftImplementation(preparedBase, context.implementationCapabilities)
+			: preparedBase;
+		const nextValidationErrors = validateModelDraftInput(prepared, context?.implementationCapabilities);
 		setValidationErrors(nextValidationErrors);
 		if (Object.keys(nextValidationErrors).length) throw new Error("请先修正模型定义中的必填项");
 		const session = await ensureSession(prepared.physicalName);
@@ -184,11 +195,17 @@ export function useModelAuthoringSession({
 			expectedEtag: session.draft.etag,
 			modelSpecSnapshot: modelDraftToAuthoringSnapshot(
 				prepared,
-				{ ownerId, dimensionDefinitions, models: context?.models || [] },
+				{
+					ownerId,
+					dimensionDefinitions,
+					models: context?.models || [],
+					implementationCapabilities: context?.implementationCapabilities,
+				},
 				!codeDirty &&
 					(hasStructuredVisualSnapshot(session.draft) ||
 						!session.context.implementation ||
 						Boolean(prepared.implementationInputMode)),
+				session.draft.sourceBundle?.projectKey,
 			),
 			files: nextFiles,
 			activeView: codeDirty ? "CODE" : activeView,
@@ -205,8 +222,7 @@ export function useModelAuthoringSession({
 		setCodeDirty(false);
 		setValidation(null);
 		setCommit(null);
-		setConflict(false);
-		setAuthoringFailure("");
+		clearFailure();
 		replaceDraft(
 			modelDraftFromAuthoringSnapshot(
 				session.context.model,
@@ -220,7 +236,7 @@ export function useModelAuthoringSession({
 	const create = async (targetPhysicalName = "") => {
 		if (busy || !canMaintain) return;
 		setBusy("create");
-		setAuthoringFailure("");
+		clearFailure();
 		try {
 			await createSession(targetPhysicalName);
 		} catch (error) {
@@ -233,7 +249,7 @@ export function useModelAuthoringSession({
 	const save = async (activeView: AuthoringView) => {
 		if (busy || !canMaintain) return false;
 		setBusy("save");
-		setAuthoringFailure("");
+		clearFailure();
 		try {
 			await persist(activeView);
 			show("模型创作草稿已保存");
@@ -249,10 +265,12 @@ export function useModelAuthoringSession({
 	const validate = async (activeView: AuthoringView) => {
 		if (busy || !canMaintain) return;
 		setBusy("validate");
-		setAuthoringFailure("");
+		clearFailure();
 		try {
 			let open = authoringContext?.openDraft || null;
-			if (!open || dirty || codeDirty) open = await persist(activeView);
+			if (!open || shouldPersistBeforeAuthoringValidation(open.state, dirty, codeDirty)) {
+				open = await persist(activeView);
+			}
 			const checked = await validateModelAuthoringDraft(
 				authoringContext?.model.id || selectedModelId,
 				open.draftId,
@@ -281,7 +299,7 @@ export function useModelAuthoringSession({
 		const checked = validation?.implementationValidation;
 		if (busy || !canMaintain || !authoringContext || !open || !checked) return;
 		setBusy("commit");
-		setAuthoringFailure("");
+		clearFailure();
 		try {
 			const committed = await commitModelAuthoringDraft(authoringContext.model.id, open.draftId, {
 				expectedEtag: checked.etag,
@@ -305,34 +323,33 @@ export function useModelAuthoringSession({
 		setCodeDirty(true);
 		setValidation(null);
 		setCommit(null);
+		clearFailure();
 	};
 
 	const invalidateValidation = () => {
 		setValidation(null);
 		setCommit(null);
+		clearFailure();
 	};
 
-	const selectedModelIdValue = selectedModel?.id || "";
-	const selectedModelRevision = selectedModel?.revision;
-	const selectedModelChecksum = selectedModel?.checksum;
-	// biome-ignore lint/correctness/useExhaustiveDependencies: the same model id can advance to a new revision or checksum after fork and commit.
-	useEffect(() => {
-		if (!selectedModelIdValue) {
-			reset();
-			return;
-		}
-		let active = true;
-		setAuthoringContext(null);
-		setFiles([]);
-		setValidation(null);
-		setCommit(null);
-		setCodeDirty(false);
-		setConflict(false);
-		setAuthoringFailure("");
-		setBusy("load");
-		void getModelAuthoringContext(selectedModelIdValue)
-			.then((value) => {
-				if (!active) return;
+	const reload = useCallback(
+		async (requestedModelId = selectedModelIdValue) => {
+			const modelId = requestedModelId.trim();
+			if (!modelId) {
+				reset();
+				return false;
+			}
+			const epoch = ++loadEpoch.current;
+			setAuthoringContext(null);
+			setFiles([]);
+			setValidation(null);
+			setCommit(null);
+			setCodeDirty(false);
+			clearFailure();
+			setBusy("load");
+			try {
+				const value = await getModelAuthoringContext(modelId);
+				if (loadEpoch.current !== epoch) return false;
 				setAuthoringContext(value);
 				setFiles(authoringFilesOf(value.openDraft));
 				if (value.openDraft?.modelSpecSnapshot) {
@@ -344,17 +361,25 @@ export function useModelAuthoringSession({
 						),
 					);
 				}
-			})
-			.catch((error) => {
-				if (active) setAuthoringFailure(normalizeModelingRequestFailure(error, "模型创作上下文读取失败。").message);
-			})
-			.finally(() => {
-				if (active) setBusy("");
-			});
+				return true;
+			} catch (error) {
+				if (loadEpoch.current !== epoch) return false;
+				recordFailure(error, "模型创作上下文读取失败。");
+				return false;
+			} finally {
+				if (loadEpoch.current === epoch) setBusy("");
+			}
+		},
+		[clearFailure, recordFailure, replaceDraft, reset, selectedModelIdValue],
+	);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: a stable model id must reload when its pinned revision or checksum changes.
+	useEffect(() => {
+		void reload(selectedModelIdValue);
 		return () => {
-			active = false;
+			loadEpoch.current += 1;
 		};
-	}, [replaceDraft, reset, selectedModelChecksum, selectedModelIdValue, selectedModelRevision]);
+	}, [reload, selectedModelChecksum, selectedModelIdValue, selectedModelRevision]);
 
 	return {
 		busy,
@@ -369,6 +394,7 @@ export function useModelAuthoringSession({
 		files,
 		focusNode,
 		invalidateValidation,
+		reload,
 		save,
 		setFocusNode,
 		validate,

@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.modeling;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.EnumSet;
 import java.util.Set;
@@ -19,23 +20,19 @@ public class ReleaseDutyResolver {
     static Set<DeliveryActorRole> resolveAuthorities(Collection<String> authorities) {
         EnumSet<DeliveryActorRole> duties = EnumSet.noneOf(DeliveryActorRole.class);
         if (authorities == null) return Set.of();
-        if (authorities.contains(AuthoritiesConstants.OP_ADMIN)) {
+        if (hasAny(authorities, AuthoritiesConstants.MODEL_MAINTAINERS)) {
             duties.add(DeliveryActorRole.MODEL_MAINTAINER);
+        }
+        if (hasAny(authorities, AuthoritiesConstants.MODEL_RELEASE_REVIEWERS)) {
             duties.add(DeliveryActorRole.RELEASE_REVIEWER);
-            duties.add(DeliveryActorRole.RELEASE_OPERATOR);
         }
-        if (authorities.contains(AuthoritiesConstants.INST_DATA_OWNER)) {
-            duties.add(DeliveryActorRole.MODEL_MAINTAINER);
+        if (hasAny(authorities, AuthoritiesConstants.MODEL_RELEASE_OPERATORS)) {
             duties.add(DeliveryActorRole.RELEASE_OPERATOR);
-        }
-        if (authorities.contains(AuthoritiesConstants.DEPT_DATA_OWNER)) {
-            duties.add(DeliveryActorRole.MODEL_MAINTAINER);
-            duties.add(DeliveryActorRole.RELEASE_OPERATOR);
-        }
-        if (authorities.contains(AuthoritiesConstants.INST_LEADER)) {
-            duties.add(DeliveryActorRole.MODEL_MAINTAINER);
-            duties.add(DeliveryActorRole.RELEASE_REVIEWER);
         }
         return Set.copyOf(duties);
+    }
+
+    private static boolean hasAny(Collection<String> authorities, String[] allowed) {
+        return Arrays.stream(allowed).anyMatch(authorities::contains);
     }
 }

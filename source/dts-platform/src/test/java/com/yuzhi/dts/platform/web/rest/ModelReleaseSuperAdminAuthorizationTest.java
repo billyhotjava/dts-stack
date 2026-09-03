@@ -13,7 +13,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 class ModelReleaseSuperAdminAuthorizationTest {
 
     @Test
-    void dataAdministratorsBelongToScopedSelfServiceReleaseDuties() {
+    void instituteRolesHaveEveryModelReleaseDuty() {
         assertThat(Arrays.asList(AuthoritiesConstants.MODEL_RELEASE_DUTIES))
             .contains(
                 AuthoritiesConstants.INST_DATA_OWNER,
@@ -27,10 +27,17 @@ class ModelReleaseSuperAdminAuthorizationTest {
                 AuthoritiesConstants.INST_LEADER,
                 AuthoritiesConstants.OP_ADMIN
             );
+        assertThat(Arrays.asList(AuthoritiesConstants.MODEL_RELEASE_REVIEWERS))
+            .contains(
+                AuthoritiesConstants.INST_DATA_OWNER,
+                AuthoritiesConstants.INST_LEADER,
+                AuthoritiesConstants.OP_ADMIN
+            );
         assertThat(Arrays.asList(AuthoritiesConstants.MODEL_RELEASE_OPERATORS))
             .contains(
                 AuthoritiesConstants.INST_DATA_OWNER,
                 AuthoritiesConstants.DEPT_DATA_OWNER,
+                AuthoritiesConstants.INST_LEADER,
                 AuthoritiesConstants.OP_ADMIN
             );
     }

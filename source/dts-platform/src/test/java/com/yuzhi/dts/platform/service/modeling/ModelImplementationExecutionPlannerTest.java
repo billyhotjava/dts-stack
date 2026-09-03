@@ -11,6 +11,30 @@ class ModelImplementationExecutionPlannerTest {
     private static final String NODE_ID = "model.dts.model_finance_detail";
 
     @Test
+    void publishesTheSameExecutionBoundaryUsedByThePlanner() {
+        var capabilities = ModelImplementationExecutionPlanner.capabilities();
+
+        assertThat(capabilities.adapter()).isEqualTo("postgres");
+        assertThat(capabilities.inputModesByModelType())
+            .containsEntry(ModelSpecContract.ModelType.DIMENSION, List.of(
+                ModelLifecycleContract.InputMode.PHYSICAL_ASSET,
+                ModelLifecycleContract.InputMode.GENERATED
+            ))
+            .containsEntry(ModelSpecContract.ModelType.FACT, List.of(
+                ModelLifecycleContract.InputMode.PHYSICAL_ASSET,
+                ModelLifecycleContract.InputMode.UPSTREAM_MODEL
+            ))
+            .containsEntry(ModelSpecContract.ModelType.SUMMARY, List.of(ModelLifecycleContract.InputMode.UPSTREAM_MODEL))
+            .containsEntry(ModelSpecContract.ModelType.APPLICATION, List.of(ModelLifecycleContract.InputMode.UPSTREAM_MODEL));
+        assertThat(capabilities.loadStrategies()).containsExactly("FULL", "INCREMENTAL");
+        assertThat(capabilities.materializationsByLoadStrategy()).containsEntry("FULL", List.of("table", "view"));
+        assertThat(capabilities.materializationsByLoadStrategy()).containsEntry("INCREMENTAL", List.of("incremental"));
+        assertThat(capabilities.settingKeys()).contains("targetPhysicalName", "loadStrategy", "partitionFields");
+        assertThat(capabilities.partitionFieldsSupported()).isFalse();
+        assertThat(capabilities.incrementalKeyRequired()).isTrue();
+    }
+
+    @Test
     void plansFullTableAndViewFromTheRealUiSettings() {
         var table = plan(
             List.of("finance_id"),

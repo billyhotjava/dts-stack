@@ -96,6 +96,10 @@ dts:
       password: local-secret-must-not-be-packaged
 EOF_FILE
 
+cat > "${TEST_REPO}/services/dts-dbt/profiles/.user.yml" <<'EOF_FILE'
+password: local-user-secret-must-not-be-packaged
+EOF_FILE
+
 cat > "${TEST_REPO}/bin/test-helper.sh" <<'EOF_FILE'
 #!/usr/bin/env bash
 echo helper
@@ -226,6 +230,11 @@ fi
 
 if grep -qx 'dts-stack/services/dts-dbt/profiles/profiles.yml' <<<"${ARCHIVE_CONTENTS}"; then
   echo "deployment package leaked the local dbt profiles.yml" >&2
+  exit 1
+fi
+
+if grep -qx 'dts-stack/services/dts-dbt/profiles/.user.yml' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "deployment package leaked the local dbt profiles/.user.yml" >&2
   exit 1
 fi
 

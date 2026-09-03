@@ -140,12 +140,25 @@ const onlineText = (candidate: ReleaseCandidate | null, binding: PlanExecutionBi
 	return "已发布，运行状态待平台核验。";
 };
 
+const EVIDENCE_TYPE_LABEL: Record<ReleaseCandidateEvidenceSummary["type"], string> = {
+	ARTIFACT: "发布产物",
+	BUILD_RUN: "物化构建",
+	QUALITY_RUN: "工程验证",
+	REVIEW: "发布审核",
+	PUBLICATION: "发布登记",
+	REGISTRATION: "上线登记",
+	ROLLBACK: "发布回退",
+};
+
+const failedEvidenceText = (item: ReleaseCandidateEvidenceSummary) => {
+	const state = item.state === "STALE" ? "状态待确认" : "未通过";
+	if (item.code) return `${EVIDENCE_TYPE_LABEL[item.type]}${state}（错误码 ${item.code}）`;
+	return `${EVIDENCE_TYPE_LABEL[item.type]}${state}${item.message ? `：${item.message}` : ""}`;
+};
+
 const evidenceText = (evidence: ReleaseCandidateEvidenceSummary[]) => {
 	const failed = evidence.filter((item) => item.state === "FAILED" || item.state === "STALE");
-	if (failed.length)
-		return failed
-			.map((item) => `${item.type === "QUALITY_RUN" ? "工程验证" : item.type}：${item.message || item.code || item.state}`)
-			.join("；");
+	if (failed.length) return failed.map(failedEvidenceText).join("；");
 	const passed = evidence.filter((item) => item.state === "PASSED").length;
 	return evidence.length ? `${passed}/${evidence.length} 项证据已通过` : "尚无发布证据";
 };

@@ -832,9 +832,10 @@ final class DbtSourceProjectModelPackageAdapter {
         TreeMap<String, Set<String>> result = new TreeMap<>();
         for (Map.Entry<String, ModelSeed> entry : models.entrySet()) {
             TreeSet<String> reasons = new TreeSet<>();
-            reasons.addAll(entry.getValue().configurationBlockers());
-            ModelContract contract = schemaCatalog.contracts().get(entry.getValue().name());
-            if (contract == null || !contract.verified()) {
+            ModelSeed seed = entry.getValue();
+            reasons.addAll(seed.configurationBlockers());
+            ModelContract contract = schemaCatalog.contracts().get(seed.name());
+            if (!isExplicitTechnical(seed) && (contract == null || !contract.verified())) {
                 reasons.add("SOURCE_FIELDS_UNVERIFIED");
             }
             if (!unresolvedRefs.getOrDefault(entry.getKey(), List.of()).isEmpty()) {

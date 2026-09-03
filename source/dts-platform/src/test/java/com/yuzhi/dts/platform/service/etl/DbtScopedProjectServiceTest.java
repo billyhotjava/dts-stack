@@ -174,6 +174,42 @@ class DbtScopedProjectServiceTest {
     }
 
     @Test
+    void rejectsWorkspaceSourceWithTheRightNameButMissingTable() throws Exception {
+        Files.writeString(
+            workspace.resolve("models/ods/sources.yml"),
+            "version: 2\nsources:\n  - name: ods\n    schema: ods\n    tables:\n      - name: another_table\n",
+            StandardCharsets.UTF_8
+        );
+
+        assertFailureCode(
+            () -> service.prepareCandidate(List.of(candidateEntry())),
+            "MATERIALIZATION_SOURCE_MISSING"
+        );
+    }
+
+    @Test
+    void candidatePinnedSourceYamlOverridesSameNamedWorkspaceSource() throws Exception {
+        Files.writeString(
+            workspace.resolve("models/ods/sources.yml"),
+            "version: 2\nsources:\n  - name: ods\n    schema: ods\n    tables:\n      - name: another_table\n",
+            StandardCharsets.UTF_8
+        );
+        DbtScopedProjectService.CandidateArtifactEntry entry = candidateEntry();
+        DbtScopedProjectService.CandidateArtifact pinnedSource = artifact(
+            "models/.dts-pinned-sources.yml",
+            "version: 2\nsources:\n  - name: ods\n    schema: ods\n    tables:\n      - name: finance_event\n"
+        );
+
+        DbtScopedProjectService.ScopedCandidateProject prepared = service.prepareCandidate(
+            List.of(withArtifacts(entry, java.util.stream.Stream.concat(entry.artifacts().stream(), java.util.stream.Stream.of(pinnedSource)).toList()))
+        );
+
+        Path projectDir = Path.of(prepared.projectDir());
+        assertThat(projectDir.resolve("models/.dts-pinned-sources.yml")).isRegularFile();
+        assertThat(projectDir.resolve("models/ods/sources.yml")).doesNotExist();
+    }
+
+    @Test
     void verifiesImmutableCandidateInputsAfterDbtWritesRuntimeOutputs() throws Exception {
         DbtScopedProjectService.ScopedCandidateProject prepared = service.prepareCandidate(
             List.of(candidateEntry())

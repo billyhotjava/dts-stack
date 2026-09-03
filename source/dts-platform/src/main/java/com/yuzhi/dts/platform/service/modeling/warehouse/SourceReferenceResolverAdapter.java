@@ -48,14 +48,32 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
 
     @Override
     public ResolvedSource resolve(SourceType sourceType, SourceLocator locator, AccessContext accessContext) {
+        return resolve(sourceType, locator, accessContext, false);
+    }
+
+    @Override
+    public ResolvedSource resolveForExecution(
+        SourceType sourceType,
+        SourceLocator locator,
+        AccessContext accessContext
+    ) {
+        return resolve(sourceType, locator, accessContext, true);
+    }
+
+    private ResolvedSource resolve(
+        SourceType sourceType,
+        SourceLocator locator,
+        AccessContext accessContext,
+        boolean backgroundExecution
+    ) {
         if (sourceType == null || locator == null) {
             return ResolvedSource.providerError();
         }
         try {
             return switch (sourceType) {
-                case CATALOG_TABLE -> resolveCatalogTable(locator, accessContext);
+                case CATALOG_TABLE -> resolveCatalogTable(locator, accessContext, backgroundExecution);
                 case EXCEL_FILE -> resolveExcelFile(locator, accessContext);
-                case CONNECTION_TABLE -> resolveConnectionTable(locator, accessContext);
+                case CONNECTION_TABLE -> resolveConnectionTable(locator, accessContext, backgroundExecution);
                 case DBT_NODE -> resolveDbtNode(locator);
             };
         } catch (RuntimeException exception) {
@@ -63,12 +81,18 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
         }
     }
 
-    private ResolvedSource resolveCatalogTable(SourceLocator locator, AccessContext accessContext) {
+    private ResolvedSource resolveCatalogTable(
+        SourceLocator locator,
+        AccessContext accessContext,
+        boolean backgroundExecution
+    ) {
         if (locator.assetId() == null) {
             return ResolvedSource.providerError();
         }
         return fromCatalog(
-            catalogSources.resolveTable(locator.assetId(), actorDepartment(accessContext)),
+            backgroundExecution
+                ? catalogSources.resolveTableForExecution(locator.assetId())
+                : catalogSources.resolveTable(locator.assetId(), actorDepartment(accessContext)),
             null
         );
     }
@@ -90,7 +114,11 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
         return ResolvedSource.available(file.getFileName(), file.getChecksum().trim());
     }
 
-    private ResolvedSource resolveConnectionTable(SourceLocator locator, AccessContext accessContext) {
+    private ResolvedSource resolveConnectionTable(
+        SourceLocator locator,
+        AccessContext accessContext,
+        boolean backgroundExecution
+    ) {
         if (locator.connectionId() == null || isBlank(locator.namespace()) || isBlank(locator.objectName())) {
             return ResolvedSource.providerError();
         }
@@ -104,7 +132,13 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
         if (!"ACTIVE".equalsIgnoreCase(connection.getStatus()) || connection.getLastVerifiedAt() == null) {
             return ResolvedSource.providerError();
         }
-        SourceSnapshot catalogSource = catalogSources.resolveConnectionTable(
+        SourceSnapshot catalogSource = backgroundExecution
+            ? catalogSources.resolveConnectionTableForExecution(
+                locator.connectionId(),
+                locator.namespace(),
+                locator.objectName()
+            )
+            : catalogSources.resolveConnectionTable(
                 locator.connectionId(),
                 locator.namespace(),
                 locator.objectName(),

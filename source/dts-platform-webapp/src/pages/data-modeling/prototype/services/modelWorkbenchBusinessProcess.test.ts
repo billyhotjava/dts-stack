@@ -1,7 +1,23 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
+import type { ModelImplementationCapabilities } from "@/features/modeling/contracts/modelImplementationContract";
 import { emptyModelDraft, type ModelSpecDraft, validateModelDraftInput } from "./modelWorkbenchService";
+
+const implementationCapabilities: ModelImplementationCapabilities = {
+	adapter: "postgres",
+	inputModesByModelType: {
+		DIMENSION: ["PHYSICAL_ASSET", "GENERATED"],
+		FACT: ["PHYSICAL_ASSET", "UPSTREAM_MODEL"],
+		SUMMARY: ["UPSTREAM_MODEL"],
+		APPLICATION: ["UPSTREAM_MODEL"],
+	},
+	loadStrategies: ["FULL", "INCREMENTAL"],
+	materializationsByLoadStrategy: { FULL: ["table", "view"], INCREMENTAL: ["incremental"] },
+	settingKeys: ["casts", "loadStrategy", "partitionFields", "targetPhysicalName"],
+	partitionFieldsSupported: false,
+	incrementalKeyRequired: true,
+};
 
 describe("FACT business-process context", () => {
 	it("starts empty and blocks a FACT draft until a stable process is resolved", () => {
@@ -13,6 +29,7 @@ describe("FACT business-process context", () => {
 			standards: [],
 			warehouseLayers: [{ code: "DWD", name: "明细层", systemLayerCode: "DWD", builtin: true }],
 			sources: [],
+			implementationCapabilities,
 		}) as ModelSpecDraft;
 
 		expect(draft.businessProcessId).toBe("");
@@ -32,6 +49,7 @@ describe("FACT business-process context", () => {
 				standards: [],
 				warehouseLayers: [],
 				sources: [],
+				implementationCapabilities,
 			}) as ModelSpecDraft;
 			expect(validateModelDraftInput(draft).businessProcessId).toBeUndefined();
 		}

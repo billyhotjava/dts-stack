@@ -10,6 +10,8 @@ import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftReposito
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository.NewDraft;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService.Resolution;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSource;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSourceFact;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Reconciliation;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ArtifactWrite;
@@ -30,6 +32,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecPlanWriteAccessPort;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelingDbtCompiler.CompileException;
 import com.yuzhi.dts.platform.service.modeling.authoring.ModelAuthoringSnapshotDecoder;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ArtifactType;
@@ -70,11 +73,13 @@ import com.yuzhi.dts.platform.service.modeling.representation.ModelRepresentatio
 import com.yuzhi.dts.platform.service.modeling.representation.ModelRepresentationEvidencePort.ArtifactEvidence;
 import com.yuzhi.dts.platform.service.modeling.representation.ModelRepresentationEvidencePort.ImplementationSnapshot;
 import com.yuzhi.dts.platform.service.modeling.representation.ModelRepresentationEvidencePort.RepresentationEvidence;
+import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -592,7 +597,7 @@ public class DbtImplementationDraftService {
             if (visualView) {
                 var decoded = snapshotDecoder.decode(modelSpecSnapshot);
                 boolean structuredVisual = decoded.valid() && decoded.visualImplementation() != null;
-                requireUnmanagedFilesUnchanged(current, files, structuredVisual, projectionSummary);
+                requireUnmanagedFilesUnchanged(current, files, projectionSummary);
                 if (structuredVisual) {
                     files = recompileVisualAuthoring(
                         tenantId,
@@ -680,20 +685,17 @@ public class DbtImplementationDraftService {
     private void requireUnmanagedFilesUnchanged(
         DraftRow current,
         List<FileInput> files,
-        boolean structuredVisual,
         JsonNode projectionSummary
     ) {
         java.util.Set<String> managedPaths = managedPaths(current, projectionSummary);
         Map<String, FileInput> submitted = new LinkedHashMap<>();
         files.forEach(file -> submitted.put(file.path(), file));
         Map<String, FileInput> persisted = currentWorkingFiles(current);
-        String compilerPrefix = structuredVisual ? compilerOutputPrefix(managedPaths) : null;
         for (FileInput original : persisted.values()) {
             if (
                 managedPaths.contains(original.path()) ||
                 original.path().startsWith("models/.dts_dependencies/") ||
-                "dbt_project.yml".equals(original.path()) ||
-                (compilerPrefix != null && original.path().startsWith(compilerPrefix))
+                "dbt_project.yml".equals(original.path())
             ) {
                 continue;
             }
@@ -709,8 +711,7 @@ public class DbtImplementationDraftService {
             if (
                 persisted.containsKey(actual.path()) ||
                 managedPaths.contains(actual.path()) ||
-                "dbt_project.yml".equals(actual.path()) ||
-                (compilerPrefix != null && actual.path().startsWith(compilerPrefix))
+                "dbt_project.yml".equals(actual.path())
             ) {
                 continue;
             }
@@ -741,6 +742,13 @@ public class DbtImplementationDraftService {
             draft.baseImplementationChecksum(),
             true
         );
+        java.util.Set<String> compilerOwnedPaths = compilerOwnedPaths(
+            tenantId,
+            modelSpecId,
+            draft,
+            currentModel,
+            currentImplementation
+        );
         UpdateModelSpecCommand visualModelCommand = withImplementationMode(
             decoded.modelSpec(),
             ImplementationMode.DESIGNER_GENERATED
@@ -765,14 +773,11 @@ public class DbtImplementationDraftService {
         );
 
         java.util.Set<String> managedPaths = managedPaths(draft, projectionSummary);
-        String oldCompilerPrefix = compilerOutputPrefix(managedPaths);
         LinkedHashMap<String, String> merged = new LinkedHashMap<>();
         submittedFiles.forEach(file -> merged.put(file.path(), file.content()));
         merged.remove("dbt_project.yml");
         managedPaths.forEach(merged::remove);
-        if (oldCompilerPrefix != null) {
-            merged.keySet().removeIf(path -> path.startsWith(oldCompilerPrefix));
-        }
+        compilerOwnedPaths.forEach(merged::remove);
         for (Map.Entry<String, String> generatedFile : assembled.entrySet()) {
             String path = generatedFile.getKey();
             if (
@@ -790,6 +795,124 @@ public class DbtImplementationDraftService {
         return DbtImplementationDraftContract.normalizeFiles(
             merged.entrySet().stream().map(entry -> new FileInput(entry.getKey(), entry.getValue())).toList()
         );
+    }
+
+    /**
+     * Reconstructs compiler ownership from generated-content or immutable frozen-snapshot
+     * evidence instead of treating an entire output directory as managed. The current
+     * implementation covers a newly opened draft; the saved authoring snapshot covers subsequent
+     * visual saves before implementation commit.
+     */
+    private java.util.Set<String> compilerOwnedPaths(
+        String tenantId,
+        UUID modelSpecId,
+        DraftRow draft,
+        ModelSpecView currentModel,
+        ImplementationView currentImplementation
+    ) {
+        Map<String, FileInput> persisted = currentWorkingFiles(draft);
+        java.util.Set<String> paths = new java.util.LinkedHashSet<>();
+        Map<String, String> currentCompilerFiles = compilerBundleEvidence(tenantId, currentModel, currentImplementation);
+        addMatchingCompilerFiles(
+            paths,
+            persisted,
+            currentCompilerFiles
+        );
+        addMatchingFrozenCompilerFiles(paths, persisted, draft, currentCompilerFiles.keySet());
+
+        JsonNode savedSnapshot = jsonNode(draft.modelSpecSnapshot());
+        var decoded = snapshotDecoder.decode(savedSnapshot);
+        if (decoded.valid() && decoded.visualImplementation() != null) {
+            try {
+                ModelSpecView savedModel = snapshotCodec.toUpdatedView(
+                    currentModel,
+                    withImplementationMode(decoded.modelSpec(), ImplementationMode.DESIGNER_GENERATED),
+                    currentModel.revision(),
+                    clock.instant()
+                );
+                ImplementationView savedImplementation = visualImplementation(
+                    modelSpecId,
+                    savedModel,
+                    currentImplementation,
+                    decoded.visualImplementation()
+                );
+                Map<String, String> savedCompilerFiles = compilerBundleEvidence(
+                    tenantId,
+                    savedModel,
+                    savedImplementation
+                );
+                addMatchingCompilerFiles(
+                    paths,
+                    persisted,
+                    savedCompilerFiles
+                );
+                addMatchingFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
+            } catch (RuntimeException ignored) {
+                // Missing reconstruction evidence must keep the file unmanaged and protected.
+            }
+        }
+        return java.util.Set.copyOf(paths);
+    }
+
+    private Map<String, String> compilerBundleEvidence(
+        String tenantId,
+        ModelSpecView model,
+        ImplementationView implementation
+    ) {
+        if (
+            model == null ||
+            implementation == null ||
+            implementation.ownership() != ImplementationMode.DESIGNER_GENERATED
+        ) {
+            return Map.of();
+        }
+        try {
+            String materialization = implementation.materialization() == null
+                ? model.materialization()
+                : implementation.materialization();
+            return CanonicalDbtProjectBundleAssembler.assemble(
+                implementation.projectKey(),
+                materialization,
+                compiledFiles(tenantId, model, implementation)
+            );
+        } catch (RuntimeException ignored) {
+            return Map.of();
+        }
+    }
+
+    private static void addMatchingCompilerFiles(
+        java.util.Set<String> ownedPaths,
+        Map<String, FileInput> persisted,
+        Map<String, String> expected
+    ) {
+        expected.forEach((path, content) -> {
+            if ("dbt_project.yml".equals(path) || path.startsWith("models/.dts_dependencies/")) return;
+            FileInput actual = persisted.get(path);
+            if (actual != null && Objects.equals(actual.content(), content)) ownedPaths.add(path);
+        });
+    }
+
+    /**
+     * A compiler upgrade can legitimately change generated content between opening and saving an
+     * older draft. In that case the immutable source snapshot proves ownership, but only for exact
+     * compiler-reserved paths whose working content has not been edited since the draft opened.
+     */
+    private void addMatchingFrozenCompilerFiles(
+        java.util.Set<String> ownedPaths,
+        Map<String, FileInput> persisted,
+        DraftRow draft,
+        java.util.Set<String> expectedPaths
+    ) {
+        if (draft.sourceBundleSnapshot() == null || expectedPaths.isEmpty()) return;
+        SourceBundleView frozen = sourceBundleSnapshot(draft.sourceBundleSnapshot());
+        if (frozen.sourceKind() == SourceBundleKind.FROZEN_SOURCE_BUNDLE) return;
+        Map<String, String> frozenFiles = new LinkedHashMap<>();
+        frozen.files().forEach(file -> frozenFiles.put(file.path(), file.content()));
+        expectedPaths.forEach(path -> {
+            if ("dbt_project.yml".equals(path) || path.startsWith("models/.dts_dependencies/")) return;
+            FileInput actual = persisted.get(path);
+            if (actual != null && Objects.equals(actual.content(), frozenFiles.get(path))) ownedPaths.add(path);
+        });
     }
 
     private LinkedHashMap<String, String> compiledFiles(
@@ -811,6 +934,13 @@ public class DbtImplementationDraftService {
             return files;
         } catch (DraftException failure) {
             throw failure;
+        } catch (ModelSpecException failure) {
+            throw failure;
+        } catch (CompileException failure) {
+            throw DbtImplementationDraftContract.unprocessable(
+                failure.getMessage(),
+                "The visual implementation cannot be compiled under the current model contract"
+            );
         } catch (RuntimeException failure) {
             throw sourceBundleUnavailable();
         }
@@ -877,16 +1007,6 @@ public class DbtImplementationDraftService {
             });
         }
         return paths;
-    }
-
-    private static String compilerOutputPrefix(java.util.Set<String> managedPaths) {
-        if (managedPaths == null) return null;
-        return managedPaths
-            .stream()
-            .filter(path -> path != null && path.matches("^models/.+/v[1-9][0-9]*/i[1-9][0-9]*/[^/]+$"))
-            .map(path -> path.substring(0, path.lastIndexOf('/') + 1))
-            .findFirst()
-            .orElse(null);
     }
 
     @Transactional
@@ -1028,7 +1148,7 @@ public class DbtImplementationDraftService {
         List<String> parsed = externalDependencies(
             validated,
             ownedTarget,
-            source.managedDependencyAliases()
+            dependencyAliases(validated.projectKey(), current, source.managedDependencyAliases())
         );
         Reconciliation reconciliation;
         try {
@@ -1042,6 +1162,67 @@ public class DbtImplementationDraftService {
             reconciliation.missing(),
             reconciliation.undeclared()
         );
+    }
+
+    /**
+     * Reconciles the compiler's executable source name with the stable source identity pinned in
+     * the dependency snapshot. The alias is derived only from the current confirmed binding fact;
+     * arbitrary source calls therefore remain undeclared.
+     */
+    static Map<String, String> dependencyAliases(
+        String projectKey,
+        Resolution dependencies,
+        Map<String, String> managedAliases
+    ) {
+        LinkedHashMap<String, String> aliases = new LinkedHashMap<>();
+        (managedAliases == null ? Map.<String, String>of() : managedAliases)
+            .entrySet()
+            .stream()
+            .sorted(Map.Entry.comparingByKey())
+            .forEach(entry -> addDependencyAlias(aliases, entry.getKey(), entry.getValue()));
+        if (dependencies == null || dependencies.snapshot() == null) return Map.copyOf(aliases);
+
+        String normalizedProject = dbtSegment(projectKey);
+        for (PhysicalSource source : dependencies.snapshot().physicalSources()) {
+            PhysicalSourceFact fact = dependencies.physicalSourceFacts().get(source.sourceBindingId());
+            if (
+                fact == null ||
+                !fact.current() ||
+                !Objects.equals(source.resolvedVersion(), fact.resolvedVersion()) ||
+                fact.executableRef() == null ||
+                fact.executableRef().isBlank() ||
+                "DBT_NODE".equalsIgnoreCase(fact.sourceType())
+            ) {
+                continue;
+            }
+            String executableRef = fact.executableRef().trim();
+            int separator = executableRef.indexOf('.');
+            String namespace = separator > 0 ? executableRef.substring(0, separator) : "ods";
+            String name = separator > 0 ? executableRef.substring(separator + 1) : executableRef;
+            String compilerIdentity =
+                "source." + normalizedProject + "." + dbtSegment(namespace) + "." + dbtSegment(name);
+            addDependencyAlias(aliases, compilerIdentity, source.dbtSourceUniqueId());
+        }
+        return Map.copyOf(aliases);
+    }
+
+    private static void addDependencyAlias(Map<String, String> aliases, String alias, String dependency) {
+        if (alias == null || alias.isBlank() || dependency == null || dependency.isBlank()) {
+            throw sourceBundleUnavailable();
+        }
+        String previous = aliases.putIfAbsent(alias, dependency);
+        if (previous != null && !Objects.equals(previous, dependency)) throw sourceBundleUnavailable();
+    }
+
+    /** Mirrors the canonical identifier normalization used by the shared static dbt adapter. */
+    private static String dbtSegment(String value) {
+        String normalized = Normalizer
+            .normalize(Objects.toString(value, ""), Normalizer.Form.NFKC)
+            .toLowerCase(Locale.ROOT)
+            .replaceAll("[^a-z0-9_]+", "_")
+            .replaceAll("^_+|_+$", "");
+        if (normalized.isBlank()) throw sourceBundleUnavailable();
+        return normalized;
     }
 
     static List<String> externalDependencies(
@@ -1808,6 +1989,13 @@ public class DbtImplementationDraftService {
             );
         } catch (DraftException failure) {
             throw failure;
+        } catch (ModelSpecException failure) {
+            throw failure;
+        } catch (CompileException failure) {
+            throw DbtImplementationDraftContract.unprocessable(
+                failure.getMessage(),
+                "The visual implementation cannot be compiled under the current model contract"
+            );
         } catch (RuntimeException failure) {
             throw sourceBundleUnavailable();
         }
@@ -1958,6 +2146,12 @@ public class DbtImplementationDraftService {
             case "MODEL_IMPLEMENTATION_DEPENDENCY_CYCLE" -> "DBT_DRAFT_DEPENDENCY_CYCLE";
             default -> "DBT_DRAFT_DEPENDENCY_INVALID";
         };
+        ErrorKind kind = switch (code) {
+            case "DBT_DRAFT_DEPENDENCY_UNDECLARED",
+                "DBT_DRAFT_DEPENDENCY_MISSING",
+                "DBT_DRAFT_DEPENDENCY_CYCLE" -> ErrorKind.UNPROCESSABLE;
+            default -> ErrorKind.PRECONDITION_FAILED;
+        };
         Map<String, Object> projectedDetails;
         if (details instanceof Map<?, ?> values) {
             LinkedHashMap<String, Object> projected = new LinkedHashMap<>();
@@ -1966,7 +2160,7 @@ public class DbtImplementationDraftService {
         } else {
             projectedDetails = details == null ? Map.of() : Map.of("dependency", details);
         }
-        return new DraftException(code, message, ErrorKind.PRECONDITION_FAILED, projectedDetails);
+        return new DraftException(code, message, kind, projectedDetails);
     }
 
     private static void requireSourcePins(

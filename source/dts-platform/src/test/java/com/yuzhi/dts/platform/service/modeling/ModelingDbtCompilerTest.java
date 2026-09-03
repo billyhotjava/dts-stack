@@ -107,6 +107,8 @@ class ModelingDbtCompilerTest {
             .contains("tests:")
             .contains("unique:")
             .contains("column_name: project_no")
+            .contains("contract:")
+            .contains("enforced: true")
             .contains("data_type: text")
             .contains("dts_logical_data_type: \"string\"");
     }

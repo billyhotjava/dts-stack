@@ -6,6 +6,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.BundleFileView;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.SourceBundleKind;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.SourceBundleView;
@@ -37,6 +39,105 @@ class ModelAuthoringProjectionServiceTest {
         assertThat(projection.coverage()).isEqualTo(ProjectionCoverage.FULL);
         assertThat(projection.managedPaths()).containsExactly("models/orders.sql");
         assertThat(projection.rawNodes()).isEmpty();
+    }
+
+    @Test
+    void usesTheModelSnapshotForBusinessSemanticsInsteadOfBlockingStructuralProjection() {
+        String sql = "select order_id, amount as total_amount from raw_orders";
+        when(validator.validate(any())).thenReturn(
+            project(node("orders", sql, List.of("SOURCE_SEMANTICS_INCOMPLETE")))
+        );
+
+        var projection = service.project(
+            bundle(SourceBundleKind.CANONICAL_ARTIFACT_RECONSTRUCTION, sql),
+            List.of(field("order_id"), field("total_amount"))
+        );
+
+        assertThat(projection.coverage()).isEqualTo(ProjectionCoverage.FULL);
+        assertThat(projection.managedPaths()).containsExactly("models/orders.sql");
+        assertThat(projection.rawNodes()).isEmpty();
+        assertThat(projection.reasons()).isEmpty();
+    }
+
+    @Test
+    void doesNotTreatAnEmptyModelSnapshotAsSemanticEvidence() {
+        String sql = "select order_id from raw_orders";
+        when(validator.validate(any())).thenReturn(
+            project(node("orders", sql, List.of("SOURCE_SEMANTICS_INCOMPLETE")))
+        );
+
+        var projection = service.project(
+            bundle(SourceBundleKind.CANONICAL_ARTIFACT_RECONSTRUCTION, sql),
+            List.of()
+        );
+
+        assertThat(projection.coverage()).isEqualTo(ProjectionCoverage.NONE);
+        assertThat(projection.reasons()).contains("SOURCE_SEMANTICS_INCOMPLETE");
+    }
+
+    @Test
+    void usesExplicitSnapshotFieldsForOlderCompilerBundlesWithoutAnEnforcedSchema() {
+        String sql = "select order_id, amount as total_amount from raw_orders";
+        when(validator.validate(any())).thenReturn(
+            project(node("orders", sql, List.of("SOURCE_FIELDS_UNVERIFIED", "SOURCE_SEMANTICS_INCOMPLETE")))
+        );
+
+        var projection = service.project(
+            bundle(SourceBundleKind.CANONICAL_ARTIFACT_RECONSTRUCTION, sql),
+            List.of(field("order_id"), field("total_amount"))
+        );
+
+        assertThat(projection.coverage()).isEqualTo(ProjectionCoverage.FULL);
+        assertThat(projection.managedPaths()).containsExactly("models/orders.sql");
+        assertThat(projection.reasons()).isEmpty();
+    }
+
+    @Test
+    void keepsAnUnverifiedBundleRawWhenItDoesNotCoverTheSnapshotFields() {
+        String sql = "select order_id from raw_orders";
+        when(validator.validate(any())).thenReturn(
+            project(node("orders", sql, List.of("SOURCE_FIELDS_UNVERIFIED", "SOURCE_SEMANTICS_INCOMPLETE")))
+        );
+
+        var projection = service.project(
+            bundle(SourceBundleKind.CANONICAL_ARTIFACT_RECONSTRUCTION, sql),
+            List.of(field("order_id"), field("total_amount"))
+        );
+
+        assertThat(projection.coverage()).isEqualTo(ProjectionCoverage.NONE);
+        assertThat(projection.managedPaths()).isEmpty();
+        assertThat(projection.reasons())
+            .contains("SOURCE_FIELDS_UNVERIFIED", "MODEL_AUTHORING_PROJECTION_SCHEMA_INCOMPLETE");
+    }
+
+    @Test
+    void doesNotApplyOneModelSnapshotToAnAmbiguousMultiModelBundle() {
+        String orders = "select order_id from raw_orders";
+        String customers = "select customer_id from raw_customers";
+        when(validator.validate(any())).thenReturn(
+            new ValidatedProject(
+                "a".repeat(64),
+                "b".repeat(64),
+                "project",
+                List.of(
+                    node("orders", orders, List.of("SOURCE_SEMANTICS_INCOMPLETE")),
+                    node("customers", customers, List.of("SOURCE_SEMANTICS_INCOMPLETE"))
+                ),
+                List.of()
+            )
+        );
+
+        var projection = service.project(
+            bundle(
+                SourceBundleKind.FROZEN_SOURCE_BUNDLE,
+                Map.of("models/orders.sql", orders, "models/customers.sql", customers)
+            ),
+            List.of(field("order_id"))
+        );
+
+        assertThat(projection.coverage()).isEqualTo(ProjectionCoverage.NONE);
+        assertThat(projection.rawNodes()).hasSize(2);
+        assertThat(projection.reasons()).contains("SOURCE_SEMANTICS_INCOMPLETE");
     }
 
     @Test
@@ -123,6 +224,10 @@ class ModelAuthoringProjectionServiceTest {
 
     private static SourceBundleView bundle(SourceBundleKind kind, String sql) {
         return bundle(kind, Map.of("models/orders.sql", sql));
+    }
+
+    private static ModelField field(String name) {
+        return new ModelField(name, "STRING", false, null, FieldRole.ATTRIBUTE, null);
     }
 
     private static SourceBundleView bundle(SourceBundleKind kind, Map<String, String> sqlFiles) {

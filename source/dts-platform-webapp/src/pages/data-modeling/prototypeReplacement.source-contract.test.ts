@@ -137,11 +137,12 @@ describe("prototype-owned data modeling frontend", () => {
 		const fieldTable = read("./prototype/ModelFieldEditorTable.tsx");
 		const workbenchService = read("./prototype/services/modelWorkbenchService.ts");
 		const implementationBinding = read("./prototype/ModelImplementationBindingFields.tsx");
+		const implementationExecution = read("./prototype/ModelImplementationExecutionFields.tsx");
 		const partitionFieldSelector = read("./prototype/ModelPartitionFieldSelector.tsx");
 		const sourceInventory = read("./prototype/ModelSourceInventoryDialog.tsx");
 		const modelingLineCount = modeling.trimEnd().split("\n").length;
 
-		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量约束"])
+		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量门禁"])
 			expect(editor).toContain(label);
 		// Sprint-92：可视化与代码是同一创作草稿的两个视图，不再暴露第二套“高级工作区”心智。
 		expect(read("./prototype/AdvancedDbtWorkspace.tsx")).toContain("可视化与代码使用同一个模型草稿");
@@ -165,8 +166,10 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).not.toContain("await load(saved.id)");
 		expect(workbenchService).toMatch(/saveModelImplementation|targetPhysicalName/);
 		expect(editor).toMatch(/import \{ ModelImplementationBindingFields \} from "\.\/ModelImplementationBindingFields"/);
-		expect(editor).toMatch(/import \{ ModelPartitionFieldSelector \} from "\.\/ModelPartitionFieldSelector"/);
-		expect(editor).toContain("<ModelPartitionFieldSelector");
+		expect(editor).toMatch(/import \{ ModelImplementationExecutionFields \} from "\.\/ModelImplementationExecutionFields"/);
+		expect(editor).toContain("<ModelImplementationExecutionFields");
+		expect(implementationExecution).toMatch(/import \{ ModelPartitionFieldSelector \} from "\.\/ModelPartitionFieldSelector"/);
+		expect(implementationExecution).toContain("<ModelPartitionFieldSelector");
 		expect(partitionFieldSelector).toContain('aria-label="分区字段"');
 		expect(partitionFieldSelector).toContain("已选分区字段");
 		expect(editor).toContain("validationErrors.partitionFields");
