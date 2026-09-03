@@ -98,12 +98,7 @@ describe("ModelSourceInventoryDialog", () => {
 		const onSourcesChanged = vi.fn();
 		await act(async () => {
 			root.render(
-				<ModelSourceInventoryDialog
-					onClose={vi.fn()}
-					onPlanCreated={vi.fn()}
-					onSourcesChanged={onSourcesChanged}
-					planId="plan-1"
-				/>,
+				<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />,
 			);
 		});
 		await act(async () => undefined);
@@ -141,10 +136,10 @@ describe("ModelSourceInventoryDialog", () => {
 				exclusionReason: null,
 			},
 		]);
-		expect(onSourcesChanged).toHaveBeenCalledWith([confirmedSource]);
+		expect(onSourcesChanged).toHaveBeenCalledWith([confirmedSource], "plan-1");
 	});
 
-	it("creates the default modeling context when the first physical source is registered", async () => {
+	it("creates a source-driven modeling context when the first physical source is registered", async () => {
 		const candidateSource = {
 			...confirmedSource,
 			confirmationStatus: "CANDIDATE" as const,
@@ -160,16 +155,10 @@ describe("ModelSourceInventoryDialog", () => {
 			etag: "sources:1",
 			checkedAt: "2026-09-03T00:00:00Z",
 		});
-		const onPlanCreated = vi.fn();
 		const onSourcesChanged = vi.fn();
 		await act(async () => {
 			root.render(
-				<ModelSourceInventoryDialog
-					onClose={vi.fn()}
-					onPlanCreated={onPlanCreated}
-					onSourcesChanged={onSourcesChanged}
-					planId=""
-				/>,
+				<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="" />,
 			);
 		});
 		await act(async () => undefined);
@@ -197,12 +186,11 @@ describe("ModelSourceInventoryDialog", () => {
 
 		expect(mocks.createWarehousePlan).toHaveBeenCalledWith(
 			expect.objectContaining({
-				name: "默认建模上下文",
+				name: "ODS 项目计划",
 				onboardingMode: "ASSET_FIRST",
 				initialSourceRefs: [{ sourceType: "CATALOG_TABLE", sourceId: "asset-1" }],
 			}),
 		);
-		expect(onPlanCreated).toHaveBeenCalledWith("plan-created");
 		expect(mocks.saveWarehousePlanSources).toHaveBeenCalledWith("plan-created", 1, [
 			{
 				bindingId: "binding-1",
@@ -211,7 +199,7 @@ describe("ModelSourceInventoryDialog", () => {
 				action: "CONFIRM",
 			},
 		]);
-		expect(onSourcesChanged).toHaveBeenCalledWith([confirmedSource]);
+		expect(onSourcesChanged).toHaveBeenLastCalledWith([confirmedSource], "plan-created");
 	});
 
 	it("reconfirms a stale source with the observed versions advertised by the server", async () => {
@@ -247,12 +235,7 @@ describe("ModelSourceInventoryDialog", () => {
 		const onSourcesChanged = vi.fn();
 		await act(async () => {
 			root.render(
-				<ModelSourceInventoryDialog
-					onClose={vi.fn()}
-					onPlanCreated={vi.fn()}
-					onSourcesChanged={onSourcesChanged}
-					planId="plan-1"
-				/>,
+				<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />,
 			);
 		});
 		await act(async () => undefined);
@@ -278,6 +261,6 @@ describe("ModelSourceInventoryDialog", () => {
 				expectedCurrentVersion: "schema-v2",
 			},
 		]);
-		expect(onSourcesChanged).toHaveBeenCalledWith([confirmedSource]);
+		expect(onSourcesChanged).toHaveBeenCalledWith([confirmedSource], "plan-1");
 	});
 });

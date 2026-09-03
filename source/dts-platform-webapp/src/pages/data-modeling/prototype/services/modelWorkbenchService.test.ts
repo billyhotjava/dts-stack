@@ -24,6 +24,7 @@ import type { ModelImplementationView } from "@/features/modeling/contracts/mode
 import type { CanonicalModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { ConceptDimensionDraft, ModelDraft, ModelSpecDraft } from "./modelWorkbenchService";
 import {
+	applyModelDraftFieldPatch,
 	confirmDimensionDefinitionDraft,
 	emptyModelDraft,
 	loadModelWorkbenchContext,
@@ -33,6 +34,7 @@ import {
 	modelDraftNeedsImplementationRecovery,
 	modelDraftToAuthoringSnapshot,
 	prepareModelDraftForSave,
+	reconcileModelDraftSources,
 	saveDimensionDefinitionDraft,
 	saveModelDraft,
 	validateConceptDimensionDraftInput,
@@ -404,6 +406,36 @@ describe("model workbench draft preparation", () => {
 });
 
 describe("model workbench draft validation", () => {
+	it("uses a field explicitly marked as TIME as the fact time field", () => {
+		const draft = validDimensionDraft() as ModelSpecDraft;
+		draft.createKind = "fact";
+		draft.fields = [{ ...draft.fields[0], name: "event_time", role: "ATTRIBUTE" }];
+		draft.timeSemanticsFields = [];
+
+		const selected = applyModelDraftFieldPatch(draft, 0, { role: "TIME" });
+		expect(selected.fields[0].role).toBe("TIME");
+		expect(selected.timeSemanticsFields).toEqual(["event_time"]);
+
+		const cleared = applyModelDraftFieldPatch(selected, 0, { role: "ATTRIBUTE" });
+		expect(cleared.timeSemanticsFields).toEqual([]);
+	});
+
+	it("adopts the only confirmed source returned by first-use context creation", () => {
+		const draft = validDimensionDraft() as ModelSpecDraft;
+		draft.implementationInputMode = "PHYSICAL_ASSET";
+		draft.sourceRefs = [];
+
+		const next = reconcileModelDraftSources(draft, "plan-created", [physicalSource]);
+
+		expect(next.planId).toBe("plan-created");
+		expect(next.sourceRefs).toEqual([
+			expect.objectContaining({
+				sourceBindingId: physicalSource.bindingId,
+				resolvedVersion: physicalSource.resolvedVersion,
+			}),
+		]);
+	});
+
 	it("reports invalid physical names and duplicate trimmed field names", () => {
 		const invalid = validDimensionDraft();
 		invalid.physicalName = "Bad-Name";
