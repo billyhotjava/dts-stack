@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260903-01-model-spec-lifecycle-audit-catalog" author="codex">
+        <comment>登记模型归档动作，确保删除与归档在审计目录中分别展示</comment>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            INSERT INTO audit_module_catalog (
+                source_system, module_key, module_name, parent_module_key, owner,
+                enabled, order_value, version, updated_at
+            ) VALUES (
+                'platform',
+                'modeling.model-spec',
+                '模型定义',
+                'modeling',
+                'platform',
+                TRUE,
+                5000,
+                'model-spec-lifecycle-v1',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            ) VALUES (
+                'platform',
+                'MODELING_MODEL_SPEC_ARCHIVE',
+                'modeling.model-spec',
+                '模型定义',
+                'MODELING_MODEL_SPEC_ARCHIVE',
+                '归档模型定义',
+                'UPDATE',
+                'modeling.model-spec',
+                FALSE,
+                TRUE,
+                'model-spec-lifecycle-v1',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" stripComments="false"><![CDATA[
+                -- Forward-only convergence: preserve classification already referenced by audit evidence.
+                SELECT 1;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

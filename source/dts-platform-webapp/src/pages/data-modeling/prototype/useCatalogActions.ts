@@ -4,7 +4,7 @@ import {
 	deleteDimensionDefinition,
 	retireDimensionDefinition,
 } from "@/api/dimensionDefinitionApi";
-import { deleteModelSpec } from "@/api/modelSpecApi";
+import { archiveModelSpec, deleteModelSpec } from "@/api/modelSpecApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { dataModelingPath } from "../navigation";
@@ -60,8 +60,19 @@ export function useCatalogActions(options: CatalogActionOptions) {
 
 	const removeModel = useCallback(
 		async (model: ModelSpecView) => {
-			if (savingRef.current || !canMaintain || model.compatibilityMode !== "CANONICAL") return;
-			if (!window.confirm(`确认删除模型「${model.name}」？删除模型不会影响已发布的物理表。`)) return;
+			if (
+				savingRef.current ||
+				!canMaintain ||
+				model.status !== "DRAFT" ||
+				model.compatibilityMode !== "CANONICAL"
+			)
+				return;
+			if (
+				!window.confirm(
+					`确认永久删除草稿模型「${model.name}」？该操作不可恢复，但不会删除数据源或已存在的物理表。`,
+				)
+			)
+				return;
 			setFailure(null);
 			savingRef.current = true;
 			setSaving(true);
@@ -75,6 +86,53 @@ export function useCatalogActions(options: CatalogActionOptions) {
 				await reload();
 			} catch (error) {
 				setFailure(normalizeModelingRequestFailure(error, "模型删除失败。"));
+			} finally {
+				savingRef.current = false;
+				setSaving(false);
+			}
+		},
+		[
+			canMaintain,
+			reload,
+			requestedModelIdRef,
+			savingRef,
+			selectedModelId,
+			setFailure,
+			setSaving,
+			show,
+			syncWorkbenchUrl,
+		],
+	);
+
+	const archiveModel = useCallback(
+		async (model: ModelSpecView) => {
+			if (
+				savingRef.current ||
+				!canMaintain ||
+				model.status === "DRAFT" ||
+				model.status === "ARCHIVED" ||
+				model.compatibilityMode !== "CANONICAL"
+			)
+				return;
+			if (
+				!window.confirm(
+					`确认归档模型「${model.name}」？归档后将从默认列表隐藏，不影响已存在的物理表，可通过“已归档”筛选查看。`,
+				)
+			)
+				return;
+			setFailure(null);
+			savingRef.current = true;
+			setSaving(true);
+			try {
+				await archiveModelSpec({ id: model.id, revision: model.revision, checksum: model.checksum });
+				if (selectedModelId === model.id) {
+					requestedModelIdRef.current = "";
+					syncWorkbenchUrl((params) => params.delete("modelSpecId"));
+				}
+				show(`模型已归档：${model.name}`);
+				await reload();
+			} catch (error) {
+				setFailure(normalizeModelingRequestFailure(error, "模型归档失败。"));
 			} finally {
 				savingRef.current = false;
 				setSaving(false);
@@ -192,5 +250,5 @@ export function useCatalogActions(options: CatalogActionOptions) {
 		],
 	);
 
-	return { goToGraph, removeModel, goToDimensionGraph, cloneDimension, removeDimension };
+	return { goToGraph, removeModel, archiveModel, goToDimensionGraph, cloneDimension, removeDimension };
 }

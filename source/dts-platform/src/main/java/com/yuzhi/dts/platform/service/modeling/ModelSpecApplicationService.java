@@ -1234,13 +1234,76 @@ public class ModelSpecApplicationService {
             );
         }
 
+        boolean deleted;
+        try {
+            deleted = repository.deleteDraft(serverTenantId, modelSpecId, current.revision(), current.checksum());
+        } catch (DataIntegrityViolationException exception) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_DELETE_IN_USE",
+                "The draft has committed implementation or delivery evidence and cannot be permanently deleted; archive it instead",
+                ModelSpecException.Kind.CONFLICT,
+                Map.of("modelSpecId", modelSpecId)
+            );
+        }
+        if (!deleted) {
+            StoredModelSpec latest = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+            throw revisionConflict(compatibilityReader.read(latest));
+        }
+        audit("MODELING_MODEL_SPEC_DELETE_DRAFT", serverTenantId, actorId, current);
+    }
+
+    @Transactional
+    public ModelSpecView archive(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected
+    ) {
+        requireServerContext(serverTenantId, actorId);
+        requireCanonicalWriteEnabled();
+        if (modelSpecId == null) throw notFound(null);
+        if (expected == null) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_REQUIRED",
+                "A strong If-Match precondition is required",
+                ModelSpecException.Kind.PRECONDITION_REQUIRED
+            );
+        }
+        if (!modelSpecId.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "If-Match identifies a different ModelSpec",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+
+        StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
+        ModelSpecView current = compatibilityReader.read(stored);
+        validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
+        requireExpected(current, expected);
+        if (current.status() == ModelStatus.DRAFT || current.status() == ModelStatus.ARCHIVED) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_ARCHIVE_STATUS_INVALID",
+                "DRAFT ModelSpecs must be deleted; ARCHIVED ModelSpecs require no further archive action",
+                ModelSpecException.Kind.CONFLICT,
+                Map.of("status", current.status())
+            );
+        }
+        if (repository.hasActiveModelReferences(serverTenantId, modelSpecId)) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_ARCHIVE_REFERENCED",
+                "The ModelSpec is referenced by another active ModelSpec",
+                ModelSpecException.Kind.CONFLICT
+            );
+        }
+
         ModelSpecView archived = codec.toLifecycleView(current, ModelStatus.ARCHIVED, current.revision(), clock.instant());
         int head = repository.compareAndSetLifecycle(
             serverTenantId,
             actorId,
             current.revision(),
             current.checksum(),
-            ModelStatus.DRAFT,
+            current.status(),
             archived
         );
         if (head == 0) {
@@ -1250,18 +1313,19 @@ public class ModelSpecApplicationService {
         int revision = repository.updateV2RevisionLifecycle(
             serverTenantId,
             actorId,
-            ModelStatus.DRAFT,
+            current.status(),
             archived,
             codec.write(archived)
         );
         if (revision == 0) {
             throw new ModelSpecException(
-                "MODEL_SPEC_DELETE_CONFLICT",
-                "ModelSpec changed before the draft deletion was committed",
+                "MODEL_SPEC_ARCHIVE_CONFLICT",
+                "ModelSpec changed before the archive was committed",
                 ModelSpecException.Kind.CONFLICT
             );
         }
-        audit("MODELING_MODEL_SPEC_DELETE_DRAFT", serverTenantId, actorId, archived);
+        audit("MODELING_MODEL_SPEC_ARCHIVE", serverTenantId, actorId, archived);
+        return archived;
     }
 
     private void audit(String actionCode, String tenantId, String actorId, ModelSpecView view) {

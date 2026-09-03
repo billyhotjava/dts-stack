@@ -236,6 +236,24 @@ public class ModelSpecResource {
         return ResponseEntity.ok(ApiResponses.ok((Void) null));
     }
 
+    @PostMapping("/{id}/archive")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<ModelSpecView>> archive(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch
+    ) {
+        ExpectedVersion expected = parseExpected(ifMatch);
+        if (!id.equals(expected.modelSpecId())) {
+            throw new ModelSpecException(
+                "MODEL_SPEC_IF_MATCH_INVALID",
+                "If-Match identifies a different ModelSpec",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        ModelSpecView view = service.archive(serverTenantId, actorId(), id, expected);
+        return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
+    }
+
     @ExceptionHandler(ModelSpecException.class)
     public ResponseEntity<ApiResponse<Object>> handleModelSpecError(ModelSpecException exception) {
         HttpStatus status = switch (exception.kind()) {

@@ -540,7 +540,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			params.delete("view");
 		});
 	};
-	const { goToGraph, removeModel, goToDimensionGraph, cloneDimension, removeDimension } = useCatalogActions({
+	const { goToGraph, removeModel, archiveModel, goToDimensionGraph, cloneDimension, removeDimension } = useCatalogActions({
 		canMaintain,
 		confirmDiscard,
 		navigate,
@@ -573,6 +573,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					failureMessage={failure?.message || ""}
 					key={`model-list:${materializationRefreshKey}`}
 					models={context.models}
+					onArchiveModel={(item) => void archiveModel(item)}
 					onCloneDimension={(item) => void cloneDimension(item)}
 					onChooseDimension={chooseDimension}
 					onChooseModel={(item) => void chooseModel(item)}

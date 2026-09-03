@@ -57,6 +57,7 @@ export type ModelWorkbenchCatalogListProps = {
 	domains: CatalogDomain[];
 	failureMessage: string;
 	models: ModelSpecView[];
+	onArchiveModel: (model: ModelSpecView) => void;
 	onCloneDimension: (dimension: DimensionDefinitionView) => void;
 	onChooseDimension: (dimension: DimensionDefinitionView) => void;
 	onChooseModel: (model: ModelSpecView) => void;
@@ -77,6 +78,7 @@ export function ModelWorkbenchCatalogList({
 	domains,
 	failureMessage,
 	models,
+	onArchiveModel,
 	onCloneDimension,
 	onChooseDimension,
 	onChooseModel,
@@ -119,7 +121,8 @@ export function ModelWorkbenchCatalogList({
 		[models],
 	);
 	const statusOptions = useMemo(
-		() => Array.from(new Set([...dimensions.map((item) => item.status), ...models.map((item) => item.status)])).sort(),
+		() =>
+			Array.from(new Set([...dimensions.map((item) => item.status), ...models.map((item) => item.status), "ARCHIVED"])).sort(),
 		[dimensions, models],
 	);
 	const normalized = query.trim().toLowerCase();
@@ -196,6 +199,7 @@ export function ModelWorkbenchCatalogList({
 	const filteredLocalRows = useMemo(
 		() =>
 			allLocalRows.filter((row) => {
+				if (!statusFilter && row.status === "ARCHIVED") return false;
 				if (planFilter && row.planId !== planFilter) return false;
 				if (domainFilter && row.domainId !== domainFilter) return false;
 				if (typeFilter && row.objectType !== typeFilter) return false;
@@ -318,6 +322,7 @@ export function ModelWorkbenchCatalogList({
 			Boolean(
 				model &&
 					canMaintain &&
+					model.status !== "ARCHIVED" &&
 					model.compatibilityMode === "CANONICAL" &&
 					(!selectedPlanId || selectedPlanId === model.planId),
 			),
@@ -458,15 +463,22 @@ export function ModelWorkbenchCatalogList({
 						key: "materialize",
 						label: row.model && materializationByModel.has(row.model.id) ? "物化历史 / 再次物化" : "物化详情",
 						hidden: !row.model,
-						disabled: busy || !canMaintain,
+						disabled: busy || !canMaintain || row.model?.status === "ARCHIVED",
 						onClick: () => onMaterialize([row.model as ModelSpecView]),
 					},
 					{
 						key: "model-remove",
 						label: "删除",
-						hidden: !row.model,
+						hidden: !row.model || row.model.status !== "DRAFT",
 						disabled: busy || !canMaintain || row.model?.compatibilityMode !== "CANONICAL",
 						onClick: () => onRemoveModel(row.model as ModelSpecView),
+					},
+					{
+						key: "model-archive",
+						label: "归档",
+						hidden: !row.model || row.model.status === "DRAFT" || row.model.status === "ARCHIVED",
+						disabled: busy || !canMaintain || row.model?.compatibilityMode !== "CANONICAL",
+						onClick: () => onArchiveModel(row.model as ModelSpecView),
 					},
 					{
 						key: "dimension-graph",
@@ -502,6 +514,7 @@ export function ModelWorkbenchCatalogList({
 			onGoToGraphDimension,
 			onGoToGraphModel,
 			onMaterialize,
+			onArchiveModel,
 			onRemoveDimension,
 			onRemoveModel,
 			router,
@@ -620,10 +633,10 @@ export function ModelWorkbenchCatalogList({
 					))}
 				</select>
 				<select aria-label="按状态筛选" onChange={(event) => setStatusFilter(event.target.value)} value={statusFilter}>
-					<option value="">全部状态</option>
+					<option value="">在用状态（不含已归档）</option>
 					{statusOptions.map((status) => (
 						<option key={status} value={status}>
-							{status}
+							{statusLabel(status)}
 						</option>
 					))}
 				</select>

@@ -866,6 +866,50 @@ public class ModelSpecRepository {
         );
     }
 
+    /**
+     * Permanently removes one unpublished draft and its disposable authoring state.
+     *
+     * <p>Committed implementations, lifecycle evidence, materialization records and serving
+     * projections are intentionally not deleted. Their foreign keys fail this statement so the
+     * caller can direct the user to archive the model instead.
+     */
+    public boolean deleteDraft(String tenantId, UUID modelSpecId, int expectedRevision, String expectedChecksum) {
+        Integer deleted = jdbcTemplate.queryForObject(
+            """
+            with candidate as (
+                select id
+                  from modeling_model_spec
+                 where tenant_id = ? and id = ? and contract_version = 2
+                   and status = 'DRAFT' and revision = ? and current_checksum = ?
+                 for update
+            ), deleted_authoring_drafts as (
+                delete from modeling_dbt_implementation_draft draft
+                 using candidate
+                 where draft.tenant_id = ? and draft.model_spec_id = candidate.id
+                   and draft.status in ('DRAFT', 'VALIDATED')
+            ), deleted_revisions as (
+                delete from modeling_model_spec_revision revision
+                 using candidate
+                 where revision.tenant_id = ? and revision.model_spec_id = candidate.id
+            ), deleted_head as (
+                delete from modeling_model_spec model
+                 using candidate
+                 where model.id = candidate.id
+                 returning 1
+            )
+            select count(*) from deleted_head
+            """,
+            Integer.class,
+            tenantId,
+            modelSpecId,
+            expectedRevision,
+            expectedChecksum,
+            tenantId,
+            tenantId
+        );
+        return deleted != null && deleted == 1;
+    }
+
     public boolean hasCompiledArtifact(String tenantId, UUID modelSpecId, int revision, String artifactType) {
         return hasCompiledArtifact(tenantId, modelSpecId, revision, null, artifactType);
     }

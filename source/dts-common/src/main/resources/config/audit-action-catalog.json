@@ -1259,6 +1259,14 @@
                 "SUCCESS"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "MODELING_MODEL_SPEC_ARCHIVE",
+              "display": "归档模型定义",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
             }
           ]
         },

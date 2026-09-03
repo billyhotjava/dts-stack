@@ -126,6 +126,8 @@ public class ModelWorkbenchCatalogRepository {
         if (query.status() != null) {
             where.append(" and status = ?");
             arguments.add(query.status());
+        } else {
+            where.append(" and status <> 'ARCHIVED'");
         }
         return new SqlQuery(sql, where.toString(), List.copyOf(arguments));
     }

@@ -441,6 +441,13 @@ export const deleteModelSpec = (expected: ModelSpecCasToken) =>
 		_skipErrorToast: true,
 	} as any);
 
+export const archiveModelSpec = (expected: ModelSpecCasToken) =>
+	api.post<CanonicalModelSpecView>({
+		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}/archive`,
+		headers: { "If-Match": toModelSpecEtag(expected) },
+		_skipErrorToast: true,
+	} as any);
+
 export const bindModelSpecMetricRef = (expected: ModelSpecCasToken, data: { metricId: string; version: number }) =>
 	api.put<CanonicalModelSpecView>({
 		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}/metric-refs`,
