@@ -328,9 +328,9 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 									>
 										{binding.confirmationStatus} · {binding.freshness}
 									</Status>
-									{binding.confirmationStatus === "CANDIDATE" ? (
+									{binding.allowedActions?.includes("CONFIRM") ? (
 										<Button disabled={saving} onClick={() => confirm(binding.bindingId)}>
-											确认纳入
+											{binding.confirmationStatus === "CANDIDATE" ? "确认纳入" : "建立版本基线"}
 										</Button>
 									) : null}
 									{binding.allowedActions?.includes("RECONFIRM") ? (

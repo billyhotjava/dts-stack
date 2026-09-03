@@ -811,6 +811,7 @@ public class WarehousePlanApplicationService {
                 );
             }
             validateExplicitSourceAction(binding.action(), existing, resolution);
+            boolean confirmation = binding.action() == SourceAction.CONFIRM;
             boolean reconfirmation = binding.action() == SourceAction.RECONFIRM;
             boolean replayed = false;
             String confirmedVersion;
@@ -835,6 +836,8 @@ public class WarehousePlanApplicationService {
                     );
                 }
                 confirmedVersion = binding.expectedCurrentVersion();
+            } else if (confirmation) {
+                confirmedVersion = resolution.resolvedVersion();
             } else {
                 confirmedVersion = existing == null ? resolution.resolvedVersion() : existing.sourceVersion();
             }
@@ -885,14 +888,19 @@ public class WarehousePlanApplicationService {
         }
         switch (action) {
             case CONFIRM -> {
+                boolean candidate = existing != null && existing.confirmationStatus() == ConfirmationStatus.CANDIDATE;
+                boolean missingConfirmedVersion =
+                    existing != null &&
+                    existing.confirmationStatus() == ConfirmationStatus.CONFIRMED &&
+                    isBlank(existing.sourceVersion());
                 if (
                     existing == null ||
-                    existing.confirmationStatus() != ConfirmationStatus.CANDIDATE ||
+                    (!candidate && !missingConfirmedVersion) ||
                     resolution.status() != SourceReferenceResolver.ResolutionStatus.AVAILABLE
                 ) {
                     throw invalidSourceInventory(
                         "SOURCE_CONFIRM_NOT_ALLOWED",
-                        "Only an available candidate source can be confirmed"
+                        "Only an available candidate or a confirmed source without a version baseline can be confirmed"
                     );
                 }
             }
@@ -1931,7 +1939,13 @@ public class WarehousePlanApplicationService {
         SourceDriftEvidence drift = identityVisible
             ? sourceDriftEvidence(sourceType, locator, sourceFreshness)
             : SourceDriftEvidence.none();
-        String reasonCode = sourceReasonCode(confirmationStatus, resolution.status(), sourceFreshness, drift.impact());
+        String reasonCode = sourceReasonCode(
+            confirmationStatus,
+            confirmedVersion,
+            resolution.status(),
+            sourceFreshness,
+            drift.impact()
+        );
         return new SourceBindingView(
             bindingId,
             sourceType,
@@ -1949,7 +1963,14 @@ public class WarehousePlanApplicationService {
             drift.impact(),
             drift.summary(),
             drift.changes(),
-            allowedSourceActions(allowActions, confirmationStatus, resolution.status(), sourceFreshness, drift.impact()),
+            allowedSourceActions(
+                allowActions,
+                confirmationStatus,
+                confirmedVersion,
+                resolution.status(),
+                sourceFreshness,
+                drift.impact()
+            ),
             reasonCode,
             sourceStatusSummary(reasonCode)
         );
@@ -2154,6 +2175,7 @@ public class WarehousePlanApplicationService {
     private static List<SourceAction> allowedSourceActions(
         boolean allowActions,
         ConfirmationStatus confirmationStatus,
+        String confirmedVersion,
         SourceReferenceResolver.ResolutionStatus resolutionStatus,
         SourceFreshness sourceFreshness,
         SourceChangeImpact changeImpact
@@ -2167,6 +2189,9 @@ public class WarehousePlanApplicationService {
         if (confirmationStatus == ConfirmationStatus.CANDIDATE) {
             return List.of(SourceAction.CONFIRM, SourceAction.EXCLUDE);
         }
+        if (confirmationStatus == ConfirmationStatus.CONFIRMED && isBlank(confirmedVersion)) {
+            return List.of(SourceAction.CONFIRM, SourceAction.EXCLUDE);
+        }
         if (sourceFreshness == SourceFreshness.STALE && changeImpact == SourceChangeImpact.COMPATIBLE) {
             return List.of(SourceAction.RECONFIRM, SourceAction.EXCLUDE);
         }
@@ -2175,6 +2200,7 @@ public class WarehousePlanApplicationService {
 
     private static String sourceReasonCode(
         ConfirmationStatus confirmationStatus,
+        String confirmedVersion,
         SourceReferenceResolver.ResolutionStatus resolutionStatus,
         SourceFreshness sourceFreshness,
         SourceChangeImpact changeImpact
@@ -2187,6 +2213,9 @@ public class WarehousePlanApplicationService {
             case FORBIDDEN -> "SOURCE_FORBIDDEN";
             case PROVIDER_ERROR -> "SOURCE_PROVIDER_ERROR";
             case AVAILABLE -> {
+                if (confirmationStatus == ConfirmationStatus.CONFIRMED && isBlank(confirmedVersion)) {
+                    yield "SOURCE_CONFIRMATION_VERSION_MISSING";
+                }
                 if (sourceFreshness == SourceFreshness.CURRENT) {
                     yield "SOURCE_CURRENT";
                 }
@@ -2202,6 +2231,7 @@ public class WarehousePlanApplicationService {
     private static String sourceStatusSummary(String reasonCode) {
         return switch (reasonCode) {
             case "SOURCE_CURRENT" -> "来源结构与已确认版本一致";
+            case "SOURCE_CONFIRMATION_VERSION_MISSING" -> "来源尚未建立版本基线，请确认当前结构";
             case "SOURCE_DRIFT_COMPATIBLE" -> "来源结构已更新，现有模型可继续使用；确认后可采用新版本";
             case "SOURCE_DRIFT_BREAKING" -> "来源结构变更影响现有模型，请先修复字段映射";
             case "SOURCE_DRIFT_REVIEW_REQUIRED" -> "来源结构已更新，需要确认变化影响";

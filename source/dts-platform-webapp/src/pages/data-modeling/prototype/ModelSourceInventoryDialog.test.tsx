@@ -198,6 +198,52 @@ describe("ModelSourceInventoryDialog", () => {
 		expect(onSourcesChanged).toHaveBeenLastCalledWith([confirmedSource], "plan-created");
 	});
 
+	it("repairs a confirmed source whose version baseline is missing", async () => {
+		const missingBaselineSource = {
+			...confirmedSource,
+			confirmedVersion: null,
+			resolvedVersion: "schema-v1",
+			currentVersion: "schema-v1",
+			freshness: "STALE" as const,
+			changeImpact: "COMPATIBLE" as const,
+			diffSummary: { added: 23, removed: 0, changed: 0 },
+			allowedActions: ["CONFIRM" as const, "EXCLUDE" as const],
+			reasonCode: "SOURCE_CONFIRMATION_VERSION_MISSING",
+			statusSummary: "来源尚未建立版本基线，请确认当前结构",
+		};
+		mocks.getWarehousePlanSources.mockResolvedValueOnce({
+			bindings: [missingBaselineSource],
+			readiness: "BLOCKED",
+			issues: [],
+			version: 2,
+			etag: "sources:2",
+			checkedAt: "2026-09-03T00:00:00Z",
+		});
+		const onSourcesChanged = vi.fn();
+		await act(async () => {
+			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />);
+		});
+		await act(async () => undefined);
+
+		const establishBaseline = Array.from(container.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("建立版本基线"),
+		);
+		expect(establishBaseline).toBeDefined();
+		await act(async () => {
+			(establishBaseline as HTMLButtonElement).click();
+		});
+		await act(async () => undefined);
+
+		expect(mocks.saveWarehousePlanSources).toHaveBeenCalledWith("plan-1", 2, [
+			{
+				bindingId: "binding-1",
+				confirmationStatus: "CONFIRMED",
+				exclusionReason: null,
+				action: "CONFIRM",
+			},
+		]);
+	});
+
 	it("reconfirms a stale source with the observed versions advertised by the server", async () => {
 		const staleSource = {
 			...confirmedSource,

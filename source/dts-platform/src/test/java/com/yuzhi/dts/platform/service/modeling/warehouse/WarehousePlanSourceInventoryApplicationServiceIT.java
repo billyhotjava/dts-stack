@@ -6,7 +6,10 @@ import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceR
 import static com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolutionStatus.PROVIDER_ERROR;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ConfirmationStatus.CONFIRMED;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.ConfirmationStatus.EXCLUDED;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.ASSET_FIRST;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.BUSINESS_FIRST;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceAction.CONFIRM;
+import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceFreshness.CURRENT;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceFreshness.STALE;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryReadiness.NOT_REQUIRED_YET;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryReadiness.READY;
@@ -27,6 +30,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicatio
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CategoryScopeCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.CreateWarehousePlanCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.DomainBinding;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.InitialSourceRef;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.PlanningPolicyCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceBindingCommand;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceInventoryCommand;
@@ -87,6 +91,103 @@ class WarehousePlanSourceInventoryApplicationServiceIT {
                 "description"
             )
         );
+    }
+
+    @Test
+    void confirmsAnAssetFirstCandidateAgainstTheResolvedStructureVersion() {
+        String tenant = tenant("asset-first-confirm");
+        try {
+            var created = service.create(
+                tenant,
+                new CreateWarehousePlanCommand(
+                    "Asset-first source plan",
+                    null,
+                    null,
+                    "owner-1",
+                    "department-1",
+                    ASSET_FIRST,
+                    List.of(new InitialSourceRef(CATALOG_TABLE, ASSET_ID.toString(), null)),
+                    "asset-first-confirm-" + UUID.randomUUID()
+                )
+            );
+            UUID bindingId = created.initialSourceBindings().getFirst().id();
+
+            SourceInventoryView confirmed = service.saveSources(
+                tenant,
+                created.planId(),
+                1,
+                new SourceInventoryCommand(
+                    List.of(new SourceBindingCommand(bindingId, null, null, CONFIRMED, null, CONFIRM, null, null))
+                ),
+                ACCESS
+            );
+
+            assertThat(confirmed.bindings().getFirst().confirmedVersion()).isEqualTo("schema-v1");
+            assertThat(confirmed.bindings().getFirst().resolvedVersion()).isEqualTo("schema-v1");
+            assertThat(confirmed.bindings().getFirst().freshness()).isEqualTo(CURRENT);
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    "select source_version from modeling_warehouse_plan_source where tenant_id = ? and plan_id = ?",
+                    String.class,
+                    tenant,
+                    created.planId()
+                )
+            ).isEqualTo("schema-v1");
+        } finally {
+            deleteTenant(tenant);
+        }
+    }
+
+    @Test
+    void repairsAConfirmedSourceWhoseVersionBaselineWasNotStored() {
+        String tenant = tenant("repair-confirmed-baseline");
+        try {
+            WarehousePlanHeader plan = service.create(tenant, createCommand()).plan();
+            SourceInventoryView saved = service.saveSources(
+                tenant,
+                plan.id(),
+                1,
+                new SourceInventoryCommand(
+                    List.of(
+                        new SourceBindingCommand(
+                            null,
+                            CATALOG_TABLE,
+                            new SourceLocator(ASSET_ID, null, null, null, null, null, null),
+                            CONFIRMED,
+                            null
+                        )
+                    )
+                ),
+                ACCESS
+            );
+            UUID bindingId = saved.bindings().getFirst().bindingId();
+            jdbcTemplate.update(
+                "update modeling_warehouse_plan_source set source_version = null where tenant_id = ? and plan_id = ? and id = ?",
+                tenant,
+                plan.id(),
+                bindingId
+            );
+
+            SourceInventoryView missingBaseline = service.getSources(tenant, plan.id(), ACCESS, 0, 200, true);
+
+            assertThat(missingBaseline.bindings().getFirst().allowedActions()).contains(CONFIRM);
+            assertThat(missingBaseline.bindings().getFirst().reasonCode()).isEqualTo("SOURCE_CONFIRMATION_VERSION_MISSING");
+
+            SourceInventoryView repaired = service.saveSources(
+                tenant,
+                plan.id(),
+                2,
+                new SourceInventoryCommand(
+                    List.of(new SourceBindingCommand(bindingId, null, null, CONFIRMED, null, CONFIRM, null, null))
+                ),
+                ACCESS
+            );
+
+            assertThat(repaired.bindings().getFirst().confirmedVersion()).isEqualTo("schema-v1");
+            assertThat(repaired.bindings().getFirst().freshness()).isEqualTo(CURRENT);
+        } finally {
+            deleteTenant(tenant);
+        }
     }
 
     @Test
