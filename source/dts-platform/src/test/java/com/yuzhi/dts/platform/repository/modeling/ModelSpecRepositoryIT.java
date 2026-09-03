@@ -267,6 +267,76 @@ class ModelSpecRepositoryIT {
     }
 
     @Test
+    void permanentlyDeletesOnlyTheMatchingDraftAndItsUncommittedAuthoringData() {
+        String tenant = "model-spec-delete-it-" + UUID.randomUUID();
+        String actor = "owner-1";
+        UUID planId = UUID.randomUUID();
+        UUID domainId = UUID.randomUUID();
+        UUID sourceBindingId = UUID.randomUUID();
+        seedContext(tenant, actor, planId, domainId, sourceBindingId);
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(objectMapper);
+        CreateModelSpecCommand create = command(planId, domainId, sourceBindingId);
+        ModelSpecView draft = codec.toCreatedView(UUID.randomUUID(), create, Instant.parse("2026-09-03T00:00:00Z"));
+        String snapshot = codec.write(draft);
+        assertThat(repository.insertV2(tenant, actor, create, draft, codec.requestHash(create), snapshot)).isEqualTo(1);
+        repository.insertV2Revision(tenant, actor, draft, snapshot);
+
+        UUID authoringDraftId = UUID.randomUUID();
+        jdbcTemplate.update(
+            """
+            insert into modeling_dbt_implementation_draft (
+                id, tenant_id, plan_id, model_spec_id, actor_id,
+                base_model_revision, base_model_checksum, idempotency_key, request_hash,
+                source_bundle_snapshot, status, etag, expires_at
+            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, cast(? as jsonb), 'DRAFT', ?, current_timestamp + interval '1 day')
+            """,
+            authoringDraftId,
+            tenant,
+            planId,
+            draft.id(),
+            actor,
+            draft.revision(),
+            draft.checksum(),
+            "delete-draft",
+            "b".repeat(64),
+            "{}",
+            "c".repeat(64)
+        );
+        jdbcTemplate.update(
+            """
+            insert into modeling_dbt_implementation_draft_file (
+                draft_id, path, content_checksum, content, byte_size
+            ) values (?, 'models/customer_detail.sql', ?, '', 0)
+            """,
+            authoringDraftId,
+            "d".repeat(64)
+        );
+
+        assertThat(repository.deleteDraft(tenant, draft.id(), draft.revision(), draft.checksum())).isTrue();
+        assertThat(repository.findCurrent(tenant, draft.id())).isEmpty();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_model_spec_revision where tenant_id = ? and model_spec_id = ?",
+                Integer.class,
+                tenant,
+                draft.id()
+            ))
+            .isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_dbt_implementation_draft where tenant_id = ? and model_spec_id = ?",
+                Integer.class,
+                tenant,
+                draft.id()
+            ))
+            .isZero();
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from modeling_dbt_implementation_draft_file where draft_id = ?",
+                Integer.class,
+                authoringDraftId
+            ))
+            .isZero();
+    }
+
+    @Test
     void persistsPinnedDimensionDefinitionAcrossHeadAndRevisionsWhileHistoricalNullRowsRemainReadable() {
         String tenant = "model-spec-pin-it-" + UUID.randomUUID();
         String actor = "owner-1";

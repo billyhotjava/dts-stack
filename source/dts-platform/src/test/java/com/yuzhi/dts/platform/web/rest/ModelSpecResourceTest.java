@@ -171,6 +171,25 @@ class ModelSpecResourceTest {
     }
 
     @Test
+    void archivesActiveModelsWithAStrongCurrentEtag() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.archive(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any())).thenReturn(view());
+
+        mockMvc
+            .perform(post("/api/modeling/model-specs/{id}/archive", MODEL_ID))
+            .andExpect(status().isPreconditionRequired())
+            .andExpect(jsonPath("$.code").value("MODEL_SPEC_IF_MATCH_REQUIRED"));
+
+        mockMvc
+            .perform(post("/api/modeling/model-specs/{id}/archive", MODEL_ID).header("If-Match", ETAG))
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", ETAG))
+            .andExpect(jsonPath("$.status").value(200));
+
+        verify(service).archive(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any());
+    }
+
+    @Test
     void appliesRevisionPinnedStandardBindingsWithAStrongCurrentEtag() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
         when(service.applyStandardElementBindings(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any()))

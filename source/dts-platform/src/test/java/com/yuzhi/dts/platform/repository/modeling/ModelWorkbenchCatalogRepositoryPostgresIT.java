@@ -35,6 +35,8 @@ class ModelWorkbenchCatalogRepositoryPostgresIT {
             UUID planId = UUID.randomUUID();
             UUID modelId = insertModel(jdbc, tenant, planId, visibleDomain, "Visible date", "it_%_date");
             insertModel(jdbc, tenant, planId, hiddenDomain, "Hidden date", "hidden_%_date");
+            UUID archivedModelId = insertModel(jdbc, tenant, planId, visibleDomain, "Archived date", "archived_date");
+            jdbc.update("update modeling_model_spec set status = 'ARCHIVED' where id = ?", archivedModelId);
             insertDimension(jdbc, tenant, visibleDomain);
 
             ModelWorkbenchCatalogRepository repository = new ModelWorkbenchCatalogRepository(jdbc);
@@ -48,6 +50,11 @@ class ModelWorkbenchCatalogRepositoryPostgresIT {
                 Set.of(visibleDomain),
                 new CatalogQuery(0, 1, null, null, null, null, null, null)
             );
+            CatalogPage archived = repository.page(
+                tenant,
+                Set.of(visibleDomain),
+                new CatalogQuery(0, 10, null, null, null, null, null, "ARCHIVED")
+            );
 
             assertThat(searched.totalElements()).isEqualTo(1);
             assertThat(searched.content()).singleElement().satisfies(entry -> {
@@ -57,6 +64,8 @@ class ModelWorkbenchCatalogRepositoryPostgresIT {
             assertThat(firstPage.totalElements()).isEqualTo(2);
             assertThat(firstPage.totalPages()).isEqualTo(2);
             assertThat(firstPage.content()).hasSize(1);
+            assertThat(archived.totalElements()).isEqualTo(1);
+            assertThat(archived.content()).singleElement().extracting(entry -> entry.id()).isEqualTo(archivedModelId);
         }
     }
 

@@ -66,6 +66,29 @@ class AuditActionCatalogResourceTest {
     }
 
     @Test
+    void registersModelArchiveInEveryRuntimeCatalogAndTheAdminUpgradeMigration() throws Exception {
+        java.nio.file.Path repo = java.nio.file.Paths.get(System.getProperty("user.dir")).getParent().getParent();
+        for (String relativePath : java.util.List.of(
+            "source/dts-common/src/main/resources/config/audit-action-catalog.json",
+            "source/dts-platform/src/main/docker/dts-common-fallback/src/main/resources/config/audit-action-catalog.json",
+            "source/dts-admin/src/main/docker/dts-common-fallback/src/main/resources/config/audit-action-catalog.json"
+        )) {
+            assertThat(java.nio.file.Files.readString(repo.resolve(relativePath)))
+                .contains("\"code\": \"MODELING_MODEL_SPEC_ARCHIVE\"")
+                .contains("归档模型定义");
+        }
+
+        String migration = java.nio.file.Files.readString(repo.resolve(
+            "source/dts-admin/src/main/resources/config/liquibase/changelog/20260903_01_model_spec_lifecycle_audit_catalog.xml"
+        ));
+        String master = java.nio.file.Files.readString(repo.resolve(
+            "source/dts-admin/src/main/resources/config/liquibase/master.xml"
+        ));
+        assertThat(migration).contains("MODELING_MODEL_SPEC_ARCHIVE").contains("归档模型定义");
+        assertThat(master).contains("20260903_01_model_spec_lifecycle_audit_catalog.xml");
+    }
+
+    @Test
     void registersWarehouseLayerGovernanceActionsInAllThreeRuntimeCopies() throws Exception {
         java.nio.file.Path repo = java.nio.file.Paths.get(System.getProperty("user.dir")).getParent().getParent();
         String canonical = new String(java.nio.file.Files.readAllBytes(

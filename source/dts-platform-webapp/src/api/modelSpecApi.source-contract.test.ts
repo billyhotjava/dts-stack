@@ -28,6 +28,8 @@ test("canonical ModelSpec client owns one non-vnext CRUD surface and strong CAS 
 	assert.match(source, /export const updateModelSpec/);
 	assert.match(source, /export const applyModelSpecStandardElementBindings/);
 	assert.match(source, /standard-element-bindings/);
+	assert.match(source, /export const archiveModelSpec/);
+	assert.match(source, /encodeURIComponent\(expected\.id\)\}\/archive/);
 	assert.match(source, /headers: \{ "If-Match": toModelSpecEtag\(expected\) \}/);
 });
 

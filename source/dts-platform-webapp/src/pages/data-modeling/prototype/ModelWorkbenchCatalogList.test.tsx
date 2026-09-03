@@ -140,6 +140,8 @@ describe("ModelWorkbenchCatalogList", () => {
 		const onChooseModel = vi.fn();
 		const onChooseDimension = vi.fn();
 		const onCreate = vi.fn();
+		const onArchiveModel = vi.fn();
+		const onRemoveModel = vi.fn();
 		await act(async () =>
 			root.render(
 				<ModelWorkbenchCatalogList
@@ -149,6 +151,7 @@ describe("ModelWorkbenchCatalogList", () => {
 					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
 					failureMessage=""
 					models={[draftModel, publishedModel]}
+					onArchiveModel={onArchiveModel}
 					onCloneDimension={vi.fn()}
 					onChooseDimension={onChooseDimension}
 					onChooseModel={onChooseModel}
@@ -159,7 +162,7 @@ describe("ModelWorkbenchCatalogList", () => {
 					onMaterialize={vi.fn()}
 					onRefresh={vi.fn()}
 					onRemoveDimension={vi.fn()}
-					onRemoveModel={vi.fn()}
+					onRemoveModel={onRemoveModel}
 				/>,
 			),
 		);
@@ -197,6 +200,21 @@ describe("ModelWorkbenchCatalogList", () => {
 		);
 		await act(async () => modelEdit?.click());
 		expect(onChooseModel).toHaveBeenCalledWith(draftModel);
+		const publishedModelRow = Array.from(container.querySelectorAll("tr")).find((row) =>
+			row.textContent?.includes("订单明细表"),
+		);
+		expect(Array.from(draftModelRow?.querySelectorAll("button") || []).map(label)).toContain("删除");
+		expect(Array.from(draftModelRow?.querySelectorAll("button") || []).map(label)).not.toContain("归档");
+		expect(Array.from(publishedModelRow?.querySelectorAll("button") || []).map(label)).toContain("归档");
+		expect(Array.from(publishedModelRow?.querySelectorAll("button") || []).map(label)).not.toContain("删除");
+		const archive = Array.from(publishedModelRow?.querySelectorAll("button") || []).find(
+			(button) => label(button) === "归档",
+		);
+		await act(async () => archive?.click());
+		expect(onArchiveModel).toHaveBeenCalledWith(publishedModel);
+		const statusFilter = container.querySelector<HTMLSelectElement>('select[aria-label="按状态筛选"]');
+		expect(statusFilter?.options[0]?.textContent).toBe("在用状态（不含已归档）");
+		expect(Array.from(statusFilter?.options || []).map((option) => option.textContent)).toContain("已归档");
 
 		const search = container.querySelector<HTMLInputElement>('input[aria-label="搜索模型列表"]');
 		await act(async () => {
@@ -243,6 +261,7 @@ describe("ModelWorkbenchCatalogList", () => {
 					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
 					failureMessage=""
 					models={[draftModel, publishedModel]}
+					onArchiveModel={vi.fn()}
 					onCloneDimension={vi.fn()}
 					onChooseDimension={vi.fn()}
 					onChooseModel={vi.fn()}
@@ -294,6 +313,7 @@ describe("ModelWorkbenchCatalogList", () => {
 					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
 					failureMessage=""
 					models={[draftModel, publishedModel]}
+					onArchiveModel={vi.fn()}
 					onCloneDimension={vi.fn()}
 					onChooseDimension={vi.fn()}
 					onChooseModel={vi.fn()}
@@ -363,6 +383,7 @@ describe("ModelWorkbenchCatalogList", () => {
 					domains={[{ id: "domain-1", code: "finance", name: "财务域" }] as never}
 					failureMessage=""
 					models={models}
+					onArchiveModel={vi.fn()}
 					onCloneDimension={vi.fn()}
 					onChooseDimension={vi.fn()}
 					onChooseModel={vi.fn()}

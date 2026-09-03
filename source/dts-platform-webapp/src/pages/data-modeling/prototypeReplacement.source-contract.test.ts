@@ -252,6 +252,11 @@ describe("prototype-owned data modeling frontend", () => {
 		const publishSectionRule = planningStyles.match(/\.dmx-publish-grid > section\s*\{([^}]*)\}/)?.[1] || "";
 		expect(publishSectionRule).toContain("min-width: 0");
 		expect(modeling).toMatch(/saveModelDraft|ModelWorkbenchDialog/);
+		expect(catalogActions).toMatch(/archiveModelSpec/);
+		expect(catalogActions).toContain("确认永久删除草稿模型");
+		expect(catalogActions).toContain("确认归档模型");
+		expect(catalogList).toContain("在用状态（不含已归档）");
+		expect(catalogList).toContain('statusLabel(status)');
 		expect(modeling).not.toMatch(/ModelWorkbenchCatalogPanel|WorkbenchCatalogTree|buildWorkbenchCatalogGroups/);
 		expect(catalogList).toMatch(/ModelWorkbenchCreateMenu|新建模型/);
 		expect(catalogList).not.toContain("进入目录编辑器");

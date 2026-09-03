@@ -1767,21 +1767,11 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
-    void deletesAnUnreferencedDraftByArchivingItsCanonicalLedgerHead() {
+    void permanentlyDeletesAnUnreferencedDraftAndItsAuthoringData() {
         ModelSpecView current = codec.toCreatedView(MODEL_ID, command("delete-draft", "customer_detail"), NOW);
         when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
         when(compatibilityReader.read(any())).thenReturn(current);
-        when(repository.compareAndSetLifecycle(
-                eq(TENANT),
-                eq(ACTOR),
-                eq(current.revision()),
-                eq(current.checksum()),
-                eq(ModelStatus.DRAFT),
-                any()
-            ))
-            .thenReturn(1);
-        when(repository.updateV2RevisionLifecycle(eq(TENANT), eq(ACTOR), eq(ModelStatus.DRAFT), any(), anyString()))
-            .thenReturn(1);
+        when(repository.deleteDraft(TENANT, MODEL_ID, current.revision(), current.checksum())).thenReturn(true);
 
         service.deleteDraft(
             TENANT,
@@ -1791,22 +1781,8 @@ class ModelSpecApplicationServiceTest {
         );
 
         verify(repository).hasActiveModelReferences(TENANT, MODEL_ID);
-        verify(repository).compareAndSetLifecycle(
-            eq(TENANT),
-            eq(ACTOR),
-            eq(current.revision()),
-            eq(current.checksum()),
-            eq(ModelStatus.DRAFT),
-            argThat(archived -> archived.status() == ModelStatus.ARCHIVED && archived.id().equals(MODEL_ID))
-        );
         InOrder order = inOrder(repository, auditService);
-        order.verify(repository).updateV2RevisionLifecycle(
-            eq(TENANT),
-            eq(ACTOR),
-            eq(ModelStatus.DRAFT),
-            argThat(archived -> archived.status() == ModelStatus.ARCHIVED),
-            anyString()
-        );
+        order.verify(repository).deleteDraft(TENANT, MODEL_ID, current.revision(), current.checksum());
         order.verify(auditService).auditAction(
             eq("MODELING_MODEL_SPEC_DELETE_DRAFT"),
             eq(AuditStage.SUCCESS),
@@ -1838,6 +1814,63 @@ class ModelSpecApplicationServiceTest {
         verify(repository, never()).compareAndSetLifecycle(any(), any(), anyInt(), anyString(), any(), any());
         verify(repository, never()).updateV2RevisionLifecycle(any(), any(), any(), any(), anyString());
         verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
+    }
+
+    @Test
+    void archivesAnActiveModelWithoutDeletingItsLedger() {
+        ModelSpecView draft = codec.toCreatedView(MODEL_ID, command("archive-model", "customer_detail"), NOW);
+        ModelSpecView current = codec.toLifecycleView(draft, ModelStatus.PUBLISHED, draft.revision(), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.compareAndSetLifecycle(
+                eq(TENANT),
+                eq(ACTOR),
+                eq(current.revision()),
+                eq(current.checksum()),
+                eq(ModelStatus.PUBLISHED),
+                any()
+            ))
+            .thenReturn(1);
+        when(repository.updateV2RevisionLifecycle(eq(TENANT), eq(ACTOR), eq(ModelStatus.PUBLISHED), any(), anyString()))
+            .thenReturn(1);
+
+        ModelSpecView archived = service.archive(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, current.revision(), current.checksum())
+        );
+
+        assertThat(archived.status()).isEqualTo(ModelStatus.ARCHIVED);
+        verify(repository, never()).deleteDraft(anyString(), any(), anyInt(), anyString());
+        verify(auditService).auditAction(
+            eq("MODELING_MODEL_SPEC_ARCHIVE"),
+            eq(AuditStage.SUCCESS),
+            eq(MODEL_ID.toString()),
+            any()
+        );
+    }
+
+    @Test
+    void refusesToArchiveADraftThatShouldBeDeleted() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("archive-draft", "customer_detail"), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+
+        assertThatThrownBy(
+            () ->
+                service.archive(
+                    TENANT,
+                    ACTOR,
+                    MODEL_ID,
+                    new ExpectedVersion(MODEL_ID, current.revision(), current.checksum())
+                )
+        )
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_ARCHIVE_STATUS_INVALID");
+
+        verify(repository, never()).compareAndSetLifecycle(any(), any(), anyInt(), anyString(), any(), any());
     }
 
     @Test
