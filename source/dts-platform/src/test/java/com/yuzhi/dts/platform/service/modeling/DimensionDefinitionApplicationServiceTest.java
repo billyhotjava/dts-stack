@@ -119,6 +119,50 @@ class DimensionDefinitionApplicationServiceTest {
     }
 
     @Test
+    void importsPortableDefinitionWithStableIdentityAndConfirmsRevisionTwo() {
+        UUID importedId = UUID.fromString("70000000-0000-0000-0000-000000000070");
+        String systemCode = "dim_70000000000000000000000000000070";
+        CreateCommand command = new CreateCommand(
+            DOMAIN_ID,
+            "测试状态维度",
+            "测试状态",
+            "用于验证可移植导入契约的中性状态维度。",
+            ACTOR,
+            ReuseScope.DOMAIN,
+            List.of(),
+            "model-import:dimension:" + systemCode,
+            DimensionDefinitionContract.ScopeType.DOMAIN,
+            null,
+            List.of(
+                new DimensionDefinitionContract.AttributeSemantic(
+                    "STATUS_CODE",
+                    "状态编码",
+                    "跨系统稳定的状态编码。",
+                    true,
+                    null,
+                    null,
+                    1
+                )
+            )
+        );
+        when(repository.findCurrent(TENANT, importedId)).thenReturn(Optional.empty());
+        when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());
+        when(repository.insert(eq(TENANT), eq(ACTOR), eq(command), any(), anyString())).thenReturn(1);
+        when(repository.compareAndSet(eq(TENANT), eq(ACTOR), any(), any())).thenReturn(1);
+
+        View imported = service.importCurrent(TENANT, ACTOR, importedId, systemCode, command);
+
+        assertThat(imported.id()).isEqualTo(importedId);
+        assertThat(imported.systemCode()).isEqualTo(systemCode);
+        assertThat(imported.status()).isEqualTo(Status.CURRENT);
+        assertThat(imported.revision()).isEqualTo(2);
+        ArgumentCaptor<View> created = ArgumentCaptor.forClass(View.class);
+        verify(repository).insert(eq(TENANT), eq(ACTOR), eq(command), created.capture(), anyString());
+        assertThat(created.getValue().id()).isEqualTo(importedId);
+        assertThat(created.getValue().systemCode()).isEqualTo(systemCode);
+    }
+
+    @Test
     void recordsCanonicalWriteAuditsOnlyAfterCreateUpdateConfirmAndRetirePersistence() {
         CreateCommand command = createCommand("audit-lifecycle", "Customer");
         when(repository.findByIdempotencyKey(TENANT, command.idempotencyKey())).thenReturn(Optional.empty());

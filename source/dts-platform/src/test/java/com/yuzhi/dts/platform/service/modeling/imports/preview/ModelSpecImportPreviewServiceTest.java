@@ -802,6 +802,24 @@ class ModelSpecImportPreviewServiceTest {
     }
 
     @Test
+    void plansPortableDimensionDefinitionWhenTargetEnvironmentHasNoCurrentDefinition() {
+        stubCurrentContext("source-v1");
+        when(
+            dimensionDefinitionResolver.resolveCurrent(TENANT, PLAN_ID, DOMAIN_ID, DIMENSION_CODE)
+        ).thenReturn(Optional.empty());
+
+        var response = service.preview(request(dimensionPackageWithBlueprint()));
+
+        assertThat(response.items()).singleElement().satisfies(item -> {
+            assertThat(item.action()).isEqualTo(Action.CREATE);
+            assertThat(item.issues()).extracting("code").doesNotContain("MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED");
+            assertThat(item.proposedModelSpec().path("dimensionDefinitionRef").path("dimensionDefinitionId").asText())
+                .isEqualTo("70000000-0000-0000-0000-000000000070");
+            assertThat(item.proposedModelSpec().path("dimensionDefinitionRef").path("revision").asInt()).isEqualTo(2);
+        });
+    }
+
+    @Test
     void keepsMixedReadyAndBlockedCandidatesApplicable() {
         stubCurrentContext("source-v1");
 
@@ -1377,6 +1395,72 @@ class ModelSpecImportPreviewServiceTest {
                 base.sources(),
                 base.technicalNodes(),
                 List.of(dimension),
+                base.issues()
+            )
+        );
+    }
+
+    private static ModelPackage dimensionPackageWithBlueprint() {
+        ModelPackage base = dimensionPackage();
+        PackageModel source = base.models().getFirst();
+        SemanticMetadata semantics = source.semantics();
+        var blueprint = new ModelPackageContract.DimensionDefinitionBlueprint(
+            "测试状态维度",
+            "测试状态",
+            "用于验证可移植导入契约的中性状态维度。",
+            List.of(
+                new ModelPackageContract.DimensionAttributeBlueprint(
+                    "STATUS_CODE",
+                    "状态编码",
+                    "跨系统稳定的状态编码。",
+                    true,
+                    null,
+                    null,
+                    1
+                )
+            )
+        );
+        SemanticMetadata portableSemantics = new SemanticMetadata(
+            semantics.modelType(),
+            semantics.layer(),
+            semantics.grain(),
+            semantics.factShape(),
+            semantics.timeSemantics(),
+            semantics.domainCode(),
+            semantics.sourceRefs(),
+            semantics.consumptionScenarios(),
+            semantics.fieldRoles(),
+            semantics.dimensionStrategy(),
+            semantics.dimensionDefinitionCode(),
+            blueprint,
+            semantics.overrideSource(),
+            semantics.technicalOnly()
+        );
+        PackageModel portable = new PackageModel(
+            source.dbtUniqueId(),
+            source.name(),
+            source.description(),
+            source.resourcePath(),
+            source.sql(),
+            source.materialization(),
+            source.config(),
+            source.tags(),
+            source.columns(),
+            source.tests(),
+            source.dependencies(),
+            portableSemantics,
+            source.conversion()
+        );
+        return ModelPackageChecksum.withChecksum(
+            new ModelPackage(
+                base.schemaVersion(),
+                base.packageId(),
+                null,
+                base.dbt(),
+                base.defaults(),
+                base.sources(),
+                base.technicalNodes(),
+                List.of(portable),
                 base.issues()
             )
         );

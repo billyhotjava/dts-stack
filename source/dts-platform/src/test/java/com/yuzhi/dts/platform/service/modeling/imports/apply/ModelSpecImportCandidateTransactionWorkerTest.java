@@ -12,10 +12,13 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.Implementa
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.InputMode;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionApplicationService;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.View;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.CreateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.CreateModelSpecCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionDefinitionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
@@ -29,6 +32,8 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.Candidate;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DimensionAttributeBlueprint;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DimensionDefinitionBlueprint;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,12 +50,14 @@ class ModelSpecImportCandidateTransactionWorkerTest {
         ModelingDbtArtifactImportService artifactImports = mock(ModelingDbtArtifactImportService.class);
         ModelSpecImportApplyCommandCodec commandCodec = mock(ModelSpecImportApplyCommandCodec.class);
         ModelSpecImportApplyRepository repository = mock(ModelSpecImportApplyRepository.class);
+        DimensionDefinitionApplicationService dimensionDefinitions = mock(DimensionDefinitionApplicationService.class);
         ModelSpecImportCandidateTransactionWorker worker = new ModelSpecImportCandidateTransactionWorker(
             modelSpecs,
             lifecycle,
             artifactImports,
             commandCodec,
-            repository
+            repository,
+            dimensionDefinitions
         );
         UUID modelId = UUID.randomUUID();
         String modelChecksum = "a".repeat(64);
@@ -132,12 +139,14 @@ class ModelSpecImportCandidateTransactionWorkerTest {
         ModelingDbtArtifactImportService artifactImports = mock(ModelingDbtArtifactImportService.class);
         ModelSpecImportApplyCommandCodec commandCodec = mock(ModelSpecImportApplyCommandCodec.class);
         ModelSpecImportApplyRepository repository = mock(ModelSpecImportApplyRepository.class);
+        DimensionDefinitionApplicationService dimensionDefinitions = mock(DimensionDefinitionApplicationService.class);
         ModelSpecImportCandidateTransactionWorker worker = new ModelSpecImportCandidateTransactionWorker(
             modelSpecs,
             lifecycle,
             artifactImports,
             commandCodec,
-            repository
+            repository,
+            dimensionDefinitions
         );
         UUID modelId = UUID.randomUUID();
         UUID planId = UUID.randomUUID();
@@ -147,6 +156,27 @@ class ModelSpecImportCandidateTransactionWorkerTest {
         Candidate candidate = candidate(modelId, modelChecksum, implementationChecksum);
         CreateModelSpecCommand create = mock(CreateModelSpecCommand.class);
         UpdateModelSpecCommand update = mock(UpdateModelSpecCommand.class);
+        UUID definitionId = UUID.fromString("70000000-0000-0000-0000-000000000070");
+        UUID domainId = UUID.randomUUID();
+        DimensionDefinitionRef definitionRef = new DimensionDefinitionRef(definitionId, 2);
+        DimensionDefinitionBlueprint definitionBlueprint = new DimensionDefinitionBlueprint(
+            "测试状态维度",
+            "测试状态",
+            "用于验证可移植导入契约的中性状态维度。",
+            List.of(
+                new DimensionAttributeBlueprint(
+                    "STATUS_CODE",
+                    "状态编码",
+                    "跨系统稳定的状态编码。",
+                    true,
+                    null,
+                    null,
+                    1
+                )
+            )
+        );
+        when(create.domainId()).thenReturn(domainId);
+        when(create.dimensionDefinitionRef()).thenReturn(definitionRef);
         SaveImplementationCommand implementationCommand = new SaveImplementationCommand(
             InputMode.GENERATED,
             List.of(new GeneratedInput("DBT", Map.of("dbtUniqueId", candidate.dbtUniqueId()))),
@@ -167,8 +197,20 @@ class ModelSpecImportCandidateTransactionWorkerTest {
             "view"
         );
         when(commandCodec.decode(eq(candidate), eq("{}"), eq(Set.of()))).thenReturn(
-            new DecodedCandidate(create, update, implementationCommand, "pjm", List.of(artifact))
+            new DecodedCandidate(create, update, implementationCommand, "pjm", List.of(artifact), definitionBlueprint)
         );
+        View importedDefinition = mock(View.class);
+        when(importedDefinition.id()).thenReturn(definitionId);
+        when(importedDefinition.revision()).thenReturn(2);
+        when(
+            dimensionDefinitions.importCurrent(
+                eq("tenant"),
+                eq("actor"),
+                eq(definitionId),
+                eq("dim_70000000000000000000000000000070"),
+                any()
+            )
+        ).thenReturn(importedDefinition);
         ModelSpecView model = mock(ModelSpecView.class);
         when(model.id()).thenReturn(modelId);
         when(model.planId()).thenReturn(planId);
@@ -244,6 +286,13 @@ class ModelSpecImportCandidateTransactionWorkerTest {
             .ignoringFields("idempotencyKey")
             .isEqualTo(implementationCommand);
         assertThat(implementationCaptor.getValue().idempotencyKey()).isEqualTo("candidate-key:implementation");
+        verify(dimensionDefinitions).importCurrent(
+            eq("tenant"),
+            eq("actor"),
+            eq(definitionId),
+            eq("dim_70000000000000000000000000000070"),
+            any()
+        );
         verify(artifactImports).importArtifacts(any());
     }
 

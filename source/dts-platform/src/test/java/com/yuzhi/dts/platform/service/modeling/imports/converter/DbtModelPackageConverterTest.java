@@ -150,6 +150,45 @@ class DbtModelPackageConverterTest {
     }
 
     @Test
+    void readsPortableDimensionDefinitionBlueprintFromManifestMetadata() throws Exception {
+        JsonNode dts = objectMapper.readTree(
+            """
+            {
+              "modelType": "DIMENSION",
+              "layer": "DWD",
+              "dimensionDefinitionCode": "dim_70000000000000000000000000000070",
+              "dimensionDefinition": {
+                "name": "测试状态维度",
+                "abbreviation": "测试状态",
+                "definition": "用于验证可移植导入契约的中性状态维度。",
+                "attributes": [
+                  {
+                    "code": "STATUS_CODE",
+                    "name": "状态编码",
+                    "definition": "跨系统稳定的状态编码。",
+                    "primaryKey": true,
+                    "order": 1
+                  }
+                ]
+              }
+            }
+            """
+        );
+
+        var semantics = DbtModelPackageConverter.semanticFrom(dts, "manifest.meta.dts");
+
+        assertThat(semantics.dimensionDefinition()).isNotNull();
+        assertThat(semantics.dimensionDefinition().name()).isEqualTo("测试状态维度");
+        assertThat(semantics.dimensionDefinition().attributes())
+            .singleElement()
+            .satisfies(attribute -> {
+                assertThat(attribute.code()).isEqualTo("STATUS_CODE");
+                assertThat(attribute.primaryKey()).isTrue();
+                assertThat(attribute.order()).isEqualTo(1);
+            });
+    }
+
+    @Test
     void catalogManifestColumnMismatchProducesIssuesWithoutSilentOverwrite() throws Exception {
         ObjectNode catalog = (ObjectNode) objectMapper.readTree(
             """
