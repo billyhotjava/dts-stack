@@ -4,6 +4,12 @@ import { describe, expect, it } from "vitest";
 import { isPathInMenuTree } from "./main";
 
 describe("dashboard route reachability", () => {
+	it("matches query-backed menu entries by their routed pathname", () => {
+		const menuPaths = new Set(["/data-architecture?view=business-domains"]);
+
+		expect(isPathInMenuTree(menuPaths, "/data-architecture")).toBe(true);
+	});
+
 	it("lets a granted modeling-space menu host its internal data-architecture views", () => {
 		const menuPaths = new Set(["/data-modeling/planning/spaces"]);
 
