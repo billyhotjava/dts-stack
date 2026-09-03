@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+	createWarehousePlan: vi.fn(),
 	getWarehousePlanSources: vi.fn(),
 	saveWarehousePlanSources: vi.fn(),
 	listCatalogAssetsV2: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@/api/warehousePlanApi", () => ({
+	createWarehousePlan: mocks.createWarehousePlan,
 	getWarehousePlanSources: mocks.getWarehousePlanSources,
 	saveWarehousePlanSources: mocks.saveWarehousePlanSources,
 }));
@@ -52,6 +54,15 @@ beforeEach(() => {
 		etag: "sources:1",
 		checkedAt: "2026-08-12T00:00:00Z",
 	});
+	mocks.createWarehousePlan.mockResolvedValue({
+		planId: "plan-created",
+		plan: { id: "plan-created" },
+		version: 1,
+		etag: "plan-head:1",
+		initialSourceBindings: [],
+		nextAction: "CONFIRM_SOURCE",
+		replayed: false,
+	});
 	mocks.listCatalogAssetsV2.mockResolvedValue({
 		content: [
 			{
@@ -86,7 +97,14 @@ describe("ModelSourceInventoryDialog", () => {
 	it("registers and confirms a catalog table through the warehouse source command boundary", async () => {
 		const onSourcesChanged = vi.fn();
 		await act(async () => {
-			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />);
+			root.render(
+				<ModelSourceInventoryDialog
+					onClose={vi.fn()}
+					onPlanCreated={vi.fn()}
+					onSourcesChanged={onSourcesChanged}
+					planId="plan-1"
+				/>,
+			);
 		});
 		await act(async () => undefined);
 
@@ -126,6 +144,76 @@ describe("ModelSourceInventoryDialog", () => {
 		expect(onSourcesChanged).toHaveBeenCalledWith([confirmedSource]);
 	});
 
+	it("creates the default modeling context when the first physical source is registered", async () => {
+		const candidateSource = {
+			...confirmedSource,
+			confirmationStatus: "CANDIDATE" as const,
+			confirmedVersion: null,
+			resolvedVersion: "schema-v1",
+			freshness: "UNKNOWN" as const,
+		};
+		mocks.getWarehousePlanSources.mockResolvedValueOnce({
+			bindings: [candidateSource],
+			readiness: "DRAFT",
+			issues: [],
+			version: 1,
+			etag: "sources:1",
+			checkedAt: "2026-09-03T00:00:00Z",
+		});
+		const onPlanCreated = vi.fn();
+		const onSourcesChanged = vi.fn();
+		await act(async () => {
+			root.render(
+				<ModelSourceInventoryDialog
+					onClose={vi.fn()}
+					onPlanCreated={onPlanCreated}
+					onSourcesChanged={onSourcesChanged}
+					planId=""
+				/>,
+			);
+		});
+		await act(async () => undefined);
+
+		const datasetSelect = container.querySelector<HTMLSelectElement>('select[aria-label="来源数据集"]');
+		await act(async () => {
+			if (!datasetSelect) return;
+			datasetSelect.value = "dataset-1";
+			datasetSelect.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		await act(async () => undefined);
+		const assetSelect = container.querySelector<HTMLSelectElement>('select[aria-label="目录资产"]');
+		await act(async () => {
+			if (!assetSelect) return;
+			assetSelect.value = "asset-1";
+			assetSelect.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		const register = Array.from(container.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("登记并确认"),
+		);
+		await act(async () => {
+			(register as HTMLButtonElement).click();
+		});
+		await act(async () => undefined);
+
+		expect(mocks.createWarehousePlan).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: "默认建模上下文",
+				onboardingMode: "ASSET_FIRST",
+				initialSourceRefs: [{ sourceType: "CATALOG_TABLE", sourceId: "asset-1" }],
+			}),
+		);
+		expect(onPlanCreated).toHaveBeenCalledWith("plan-created");
+		expect(mocks.saveWarehousePlanSources).toHaveBeenCalledWith("plan-created", 1, [
+			{
+				bindingId: "binding-1",
+				confirmationStatus: "CONFIRMED",
+				exclusionReason: null,
+				action: "CONFIRM",
+			},
+		]);
+		expect(onSourcesChanged).toHaveBeenCalledWith([confirmedSource]);
+	});
+
 	it("reconfirms a stale source with the observed versions advertised by the server", async () => {
 		const staleSource = {
 			...confirmedSource,
@@ -158,7 +246,14 @@ describe("ModelSourceInventoryDialog", () => {
 		});
 		const onSourcesChanged = vi.fn();
 		await act(async () => {
-			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />);
+			root.render(
+				<ModelSourceInventoryDialog
+					onClose={vi.fn()}
+					onPlanCreated={vi.fn()}
+					onSourcesChanged={onSourcesChanged}
+					planId="plan-1"
+				/>,
+			);
 		});
 		await act(async () => undefined);
 
