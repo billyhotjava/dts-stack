@@ -1004,21 +1004,27 @@ public class ModelSpecImportPreviewService {
             );
             return null;
         }
-        return dimensionDefinitionResolver
-            .resolveCurrent(serverTenantId, plan.id(), domain.domainId(), systemCode)
-            .map(definition -> new DimensionDefinitionRef(definition.id(), definition.revision()))
-            .orElseGet(() -> {
-                issues.add(
-                    issue(
-                        "MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED",
-                        "$.package.models[" + model.dbtUniqueId() + "].semantics.dimensionDefinitionCode",
-                        model.dbtUniqueId(),
-                        "The dimension definition is missing, invisible, or not CURRENT",
-                        "Publish the definition in the mapped tenant/domain and retry preview"
-                    )
-                );
-                return null;
-            });
+        var current = dimensionDefinitionResolver.resolveCurrent(serverTenantId, plan.id(), domain.domainId(), systemCode);
+        if (current.isPresent()) {
+            var definition = current.orElseThrow();
+            return new DimensionDefinitionRef(definition.id(), definition.revision());
+        }
+        if (model.semantics().dimensionDefinition() != null) {
+            return ModelPackageContract
+                .dimensionDefinitionId(systemCode)
+                .map(id -> new DimensionDefinitionRef(id, ModelPackageContract.IMPORTED_DIMENSION_DEFINITION_CURRENT_REVISION))
+                .orElse(null);
+        }
+        issues.add(
+            issue(
+                "MODEL_SPEC_DIMENSION_DEFINITION_REQUIRED",
+                "$.package.models[" + model.dbtUniqueId() + "].semantics.dimensionDefinitionCode",
+                model.dbtUniqueId(),
+                "The dimension definition is missing, invisible, or not CURRENT",
+                "Publish the definition in the mapped tenant/domain and retry preview"
+            )
+        );
+        return null;
     }
 
     private List<SourceTarget> canonicalSources(

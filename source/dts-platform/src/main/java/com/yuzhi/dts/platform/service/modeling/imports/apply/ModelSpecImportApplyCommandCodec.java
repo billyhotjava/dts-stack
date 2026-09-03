@@ -20,6 +20,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ImportedArtifact;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.NodeKind;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.Candidate;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DimensionDefinitionBlueprint;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -59,7 +60,15 @@ public class ModelSpecImportApplyCommandCodec {
         List<ImportedArtifact> artifacts = implementation.ownership() == ImplementationMode.DBT_MANAGED
             ? artifacts(candidate, payload, ownedTechnicalNodeIds)
             : List.of();
-        return new DecodedCandidate(model, update(model), implementation, projectKey, artifacts);
+        JsonNode packageModel = find(payload.path("models"), candidate.dbtUniqueId());
+        DimensionDefinitionBlueprint dimensionDefinition = packageModel == null ||
+            !packageModel.path("semantics").path("dimensionDefinition").isObject()
+            ? null
+            : objectMapper.convertValue(
+                packageModel.path("semantics").path("dimensionDefinition"),
+                DimensionDefinitionBlueprint.class
+            );
+        return new DecodedCandidate(model, update(model), implementation, projectKey, artifacts, dimensionDefinition);
     }
 
     public List<String> technicalPathNodeIds(Candidate candidate) {
@@ -347,8 +356,19 @@ public class ModelSpecImportApplyCommandCodec {
         UpdateModelSpecCommand updateCommand,
         SaveImplementationCommand implementationCommand,
         String projectKey,
-        List<ImportedArtifact> artifacts
+        List<ImportedArtifact> artifacts,
+        DimensionDefinitionBlueprint dimensionDefinition
     ) {
+        public DecodedCandidate(
+            CreateModelSpecCommand createCommand,
+            UpdateModelSpecCommand updateCommand,
+            SaveImplementationCommand implementationCommand,
+            String projectKey,
+            List<ImportedArtifact> artifacts
+        ) {
+            this(createCommand, updateCommand, implementationCommand, projectKey, artifacts, null);
+        }
+
         public DecodedCandidate {
             artifacts = List.copyOf(artifacts);
         }

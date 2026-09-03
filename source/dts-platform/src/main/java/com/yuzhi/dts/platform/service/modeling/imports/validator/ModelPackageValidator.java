@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChecksum;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.Column;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DimensionAttributeBlueprint;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DimensionDefinitionBlueprint;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ModelPackage;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.PackageModel;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.SourceNode;
@@ -28,6 +30,7 @@ public final class ModelPackageValidator {
 
     private static final Pattern PACKAGE_ID = Pattern.compile("[a-z0-9]+(?:[._-][a-z0-9]+)*");
     private static final Pattern SHA_256 = Pattern.compile("[0-9a-f]{64}");
+    private static final Pattern SEMANTIC_CODE = Pattern.compile("^[A-Z][A-Z0-9_]{0,63}$");
     private static final Set<String> ROOT_FIELDS = Set.of(
         "schemaVersion",
         "packageId",
@@ -99,8 +102,24 @@ public final class ModelPackageValidator {
         "fieldRoles",
         "dimensionStrategy",
         "dimensionDefinitionCode",
+        "dimensionDefinition",
         "overrideSource",
         "technicalOnly"
+    );
+    private static final Set<String> DIMENSION_DEFINITION_FIELDS = Set.of(
+        "name",
+        "abbreviation",
+        "definition",
+        "attributes"
+    );
+    private static final Set<String> DIMENSION_ATTRIBUTE_FIELDS = Set.of(
+        "code",
+        "name",
+        "definition",
+        "primaryKey",
+        "standardRef",
+        "standardVersion",
+        "order"
     );
     private static final Set<String> GRAIN_FIELDS = Set.of("statement", "keys");
     private static final Set<String> TIME_FIELDS = Set.of("type", "fields");
@@ -315,6 +334,7 @@ public final class ModelPackageValidator {
         validateStringMap(node.get("fieldRoles"), path + ".fieldRoles", issues);
         requireText(node, "dimensionStrategy", path + ".dimensionStrategy", true, issues);
         validateDimensionDefinitionCode(node, path, issues);
+        validateDimensionDefinition(node.get("dimensionDefinition"), path + ".dimensionDefinition", issues);
         requireText(node, "overrideSource", path + ".overrideSource", true, issues);
         requireBoolean(node, "technicalOnly", path + ".technicalOnly", issues);
     }
@@ -348,6 +368,39 @@ public final class ModelPackageValidator {
         requireText(node, "kind", path + ".kind", false, issues);
         requireText(node, "ref", path + ".ref", false, issues);
         requireText(node, "layer", path + ".layer", true, issues);
+    }
+
+    private static void validateDimensionDefinition(JsonNode node, String path, List<ValidationIssue> issues) {
+        if (node == null || node.isNull()) {
+            return;
+        }
+        if (!requireObject(node, path, DIMENSION_DEFINITION_FIELDS, DIMENSION_DEFINITION_FIELDS, issues)) {
+            return;
+        }
+        requireText(node, "name", path + ".name", false, issues);
+        requireText(node, "abbreviation", path + ".abbreviation", true, issues);
+        requireText(node, "definition", path + ".definition", false, issues);
+        validateObjectArray(
+            node.get("attributes"),
+            path + ".attributes",
+            ModelPackageValidator::validateDimensionAttribute,
+            issues
+        );
+    }
+
+    private static void validateDimensionAttribute(JsonNode node, String path, List<ValidationIssue> issues) {
+        if (!requireObject(node, path, DIMENSION_ATTRIBUTE_FIELDS, DIMENSION_ATTRIBUTE_FIELDS, issues)) {
+            return;
+        }
+        requireText(node, "code", path + ".code", false, issues);
+        requireText(node, "name", path + ".name", false, issues);
+        requireText(node, "definition", path + ".definition", false, issues);
+        requireBoolean(node, "primaryKey", path + ".primaryKey", issues);
+        requireText(node, "standardRef", path + ".standardRef", true, issues);
+        requireText(node, "standardVersion", path + ".standardVersion", true, issues);
+        if (!node.has("order") || !node.path("order").isIntegralNumber() || node.path("order").asInt() < 1) {
+            issues.add(schemaIssue(path + ".order", "必须是正整数"));
+        }
     }
 
     private static void validateIssue(JsonNode node, String path, List<ValidationIssue> issues) {
@@ -615,6 +668,7 @@ public final class ModelPackageValidator {
             validateColumns(model.columns(), "$.models[" + model.dbtUniqueId() + "].columns", issues);
             validateDependencies(model.dependencies(), model.dbtUniqueId(), allIds, issues);
             validateDimensionDefinitionCode(model.semantics(), model.dbtUniqueId(), issues);
+            validateDimensionDefinitionBlueprint(model, issues);
             if (model.conversion() == null || model.conversion().mode() == null) {
                 issues.add(
                     issue(
@@ -728,6 +782,72 @@ public final class ModelPackageValidator {
                 )
             );
         }
+    }
+
+    private static void validateDimensionDefinitionBlueprint(PackageModel model, List<ValidationIssue> issues) {
+        if (model.semantics() == null || model.semantics().dimensionDefinition() == null) {
+            return;
+        }
+        String path = "$.models[" + model.dbtUniqueId() + "].semantics.dimensionDefinition";
+        if (!"DIMENSION".equalsIgnoreCase(model.semantics().modelType()) || model.semantics().technicalOnly()) {
+            issues.add(dimensionDefinitionIssue(path, "内嵌维度定义只能用于业务维度模型"));
+            return;
+        }
+        DimensionDefinitionBlueprint definition = model.semantics().dimensionDefinition();
+        if (blank(definition.name()) || blank(definition.definition()) || definition.attributes().size() > 200) {
+            issues.add(dimensionDefinitionIssue(path, "内嵌维度定义的名称、定义或属性数量无效"));
+            return;
+        }
+        Set<String> codes = new HashSet<>();
+        Set<Integer> orders = new HashSet<>();
+        int primaryKeys = 0;
+        for (DimensionAttributeBlueprint attribute : definition.attributes()) {
+            if (
+                attribute == null ||
+                blank(attribute.code()) ||
+                !SEMANTIC_CODE.matcher(attribute.code()).matches() ||
+                blank(attribute.name()) ||
+                blank(attribute.definition()) ||
+                attribute.order() < 1 ||
+                !codes.add(attribute.code()) ||
+                !orders.add(attribute.order()) ||
+                blank(attribute.standardRef()) != blank(attribute.standardVersion())
+            ) {
+                issues.add(dimensionDefinitionIssue(path + ".attributes", "维度属性编码、定义、标准绑定或顺序无效"));
+                return;
+            }
+            if (attribute.primaryKey()) {
+                primaryKeys++;
+            }
+        }
+        for (int order = 1; order <= definition.attributes().size(); order++) {
+            if (!orders.contains(order)) {
+                issues.add(dimensionDefinitionIssue(path + ".attributes", "维度属性顺序必须从 1 连续递增"));
+                return;
+            }
+        }
+        if (primaryKeys > 1) {
+            issues.add(dimensionDefinitionIssue(path + ".attributes", "维度属性最多只能有一个主键"));
+            return;
+        }
+        Set<String> mappedCodes = new HashSet<>();
+        for (Column column : safe(model.columns())) {
+            if (column != null && !blank(column.dimensionAttributeCode())) {
+                mappedCodes.add(column.dimensionAttributeCode());
+            }
+        }
+        if (!mappedCodes.equals(codes)) {
+            issues.add(dimensionDefinitionIssue(path + ".attributes", "模型字段映射必须与内嵌维度属性一一对应"));
+        }
+    }
+
+    private static ValidationIssue dimensionDefinitionIssue(String path, String message) {
+        return issue(
+            "MODEL_PACKAGE_DIMENSION_DEFINITION_INVALID",
+            path,
+            message,
+            "修正内嵌 dimensionDefinition 蓝图后重新生成模型包"
+        );
     }
 
     private static void validateSql(SqlArtifact sql, String fieldPath, boolean required, List<ValidationIssue> issues) {

@@ -91,7 +91,14 @@ final class ModelSpecImportSemanticOverrideResolver {
             .stream()
             .map(column ->
                 roles.containsKey(column.name())
-                    ? new Column(column.name(), column.description(), column.dataType(), roles.get(column.name()), column.tests())
+                    ? new Column(
+                        column.name(),
+                        column.description(),
+                        column.dataType(),
+                        roles.get(column.name()),
+                        column.dimensionAttributeCode(),
+                        column.tests()
+                    )
                     : column
             )
             .toList();
@@ -119,6 +126,7 @@ final class ModelSpecImportSemanticOverrideResolver {
             Map.copyOf(roles),
             current == null ? null : current.dimensionStrategy(),
             current == null ? null : current.dimensionDefinitionCode(),
+            current == null ? null : current.dimensionDefinition(),
             "preview.semanticOverrides",
             current != null && current.technicalOnly()
         );

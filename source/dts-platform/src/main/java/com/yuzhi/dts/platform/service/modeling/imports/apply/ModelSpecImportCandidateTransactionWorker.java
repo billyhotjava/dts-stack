@@ -4,6 +4,11 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.Implementa
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.SaveImplementationCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionApplicationService;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.AttributeSemantic;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.CreateCommand;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.ReuseScope;
+import com.yuzhi.dts.platform.service.modeling.DimensionDefinitionContract.ScopeType;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
@@ -15,6 +20,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportAppl
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.CandidateResult;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyContract.ResultStatus;
 import com.yuzhi.dts.platform.service.modeling.imports.apply.ModelSpecImportApplyPlanContract.Candidate;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract;
 import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.MergeCheckpoint;
 import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.RevisionPins;
 import java.time.Instant;
@@ -35,19 +41,22 @@ public class ModelSpecImportCandidateTransactionWorker {
     private final ModelingDbtArtifactImportService artifactImports;
     private final ModelSpecImportApplyCommandCodec commandCodec;
     private final ModelSpecImportApplyRepository applyRepository;
+    private final DimensionDefinitionApplicationService dimensionDefinitions;
 
     public ModelSpecImportCandidateTransactionWorker(
         ModelSpecApplicationService modelSpecs,
         ModelLifecycleService lifecycle,
         ModelingDbtArtifactImportService artifactImports,
         ModelSpecImportApplyCommandCodec commandCodec,
-        ModelSpecImportApplyRepository applyRepository
+        ModelSpecImportApplyRepository applyRepository,
+        DimensionDefinitionApplicationService dimensionDefinitions
     ) {
         this.modelSpecs = modelSpecs;
         this.lifecycle = lifecycle;
         this.artifactImports = artifactImports;
         this.commandCodec = commandCodec;
         this.applyRepository = applyRepository;
+        this.dimensionDefinitions = dimensionDefinitions;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -64,6 +73,7 @@ public class ModelSpecImportCandidateTransactionWorker {
             model = modelSpecs.get(command.tenantId(), candidate.targetModelSpecId());
             resultStatus = ResultStatus.SKIPPED;
         } else if ("CREATE".equals(candidate.action())) {
+            importPortableDimensionDefinition(command, decoded);
             ModelSpecApplicationService.CreateResult created = modelSpecs.createImported(
                 command.tenantId(),
                 command.actorId(),
@@ -73,6 +83,7 @@ public class ModelSpecImportCandidateTransactionWorker {
             model = created.modelSpec();
             resultStatus = created.replayed() ? ResultStatus.SKIPPED : ResultStatus.CREATED;
         } else if ("UPDATE".equals(candidate.action())) {
+            importPortableDimensionDefinition(command, decoded);
             model = modelSpecs.update(
                 command.tenantId(),
                 command.actorId(),
@@ -206,6 +217,58 @@ public class ModelSpecImportCandidateTransactionWorker {
             command.ownerToken(),
             result
         );
+    }
+
+    private void importPortableDimensionDefinition(Execution execution, DecodedCandidate decoded) {
+        if (decoded.dimensionDefinition() == null) {
+            return;
+        }
+        var reference = decoded.createCommand().dimensionDefinitionRef();
+        if (reference == null || reference.dimensionDefinitionId() == null) {
+            throw new IllegalStateException("Portable dimension definition is missing its frozen reference");
+        }
+        String systemCode = ModelPackageContract.dimensionDefinitionCode(reference.dimensionDefinitionId());
+        List<AttributeSemantic> attributes = decoded
+            .dimensionDefinition()
+            .attributes()
+            .stream()
+            .map(attribute ->
+                new AttributeSemantic(
+                    attribute.code(),
+                    attribute.name(),
+                    attribute.definition(),
+                    attribute.primaryKey(),
+                    attribute.standardRef(),
+                    attribute.standardVersion(),
+                    attribute.order()
+                )
+            )
+            .toList();
+        var imported = dimensionDefinitions.importCurrent(
+            execution.tenantId(),
+            execution.actorId(),
+            reference.dimensionDefinitionId(),
+            systemCode,
+            new CreateCommand(
+                decoded.createCommand().domainId(),
+                decoded.dimensionDefinition().name(),
+                decoded.dimensionDefinition().abbreviation(),
+                decoded.dimensionDefinition().definition(),
+                execution.actorId(),
+                ReuseScope.DOMAIN,
+                List.of(),
+                "model-import:dimension:" + systemCode,
+                ScopeType.DOMAIN,
+                null,
+                attributes
+            )
+        );
+        if (
+            !Objects.equals(imported.id(), reference.dimensionDefinitionId()) ||
+            imported.revision() != reference.revision()
+        ) {
+            throw new IllegalStateException("Imported dimension definition does not match the frozen preview pins");
+        }
     }
 
     private static SaveImplementationCommand implementationForCandidate(

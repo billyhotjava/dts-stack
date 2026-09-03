@@ -1404,6 +1404,17 @@ class ModelSpecImportPreviewServiceTest {
         ModelPackage base = dimensionPackage();
         PackageModel source = base.models().getFirst();
         SemanticMetadata semantics = source.semantics();
+        ModelPackageContract.Column sourceColumn = source.columns().getFirst();
+        var portableColumns = List.of(
+            new ModelPackageContract.Column(
+                sourceColumn.name(),
+                sourceColumn.description(),
+                sourceColumn.dataType(),
+                sourceColumn.role(),
+                "STATUS_CODE",
+                sourceColumn.tests()
+            )
+        );
         var blueprint = new ModelPackageContract.DimensionDefinitionBlueprint(
             "测试状态维度",
             "测试状态",
@@ -1445,7 +1456,7 @@ class ModelSpecImportPreviewServiceTest {
             source.materialization(),
             source.config(),
             source.tags(),
-            source.columns(),
+            portableColumns,
             source.tests(),
             source.dependencies(),
             portableSemantics,

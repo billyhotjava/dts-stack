@@ -110,16 +110,96 @@ public class DimensionDefinitionApplicationService {
             return replay(existing, requestHash);
         }
 
+        UUID id = idGenerator.get();
+        return persistDraft(tenantId, actorId, command, requestHash, id, systemCode(id));
+    }
+
+    @Transactional
+    public View importCurrent(
+        String tenantId,
+        String actorId,
+        UUID definitionId,
+        String definitionSystemCode,
+        CreateCommand command
+    ) {
+        requireServerContext(tenantId, actorId);
+        rejectIssues(DimensionDefinitionContract.validateCreate(command));
+        if (definitionId == null || !Objects.equals(systemCode(definitionId), definitionSystemCode)) {
+            throw new ModelSpecException(
+                "DIMENSION_DEFINITION_IMPORT_IDENTITY_INVALID",
+                "Imported dimension definition id and system code do not match",
+                ModelSpecException.Kind.BAD_REQUEST
+            );
+        }
+        StoredDimensionDefinition stored = repository.findCurrent(tenantId, definitionId).orElse(null);
+        View draftOrCurrent;
+        if (stored != null) {
+            requireWriteAccess(stored.domainId());
+            draftOrCurrent = currentView(tenantId, stored);
+        } else {
+            String requestHash = hash(command);
+            StoredDimensionDefinition replay = repository
+                .findByIdempotencyKey(tenantId, command.idempotencyKey())
+                .orElse(null);
+            draftOrCurrent = replay == null
+                ? persistDraft(tenantId, actorId, command, requestHash, definitionId, definitionSystemCode).dimensionDefinition()
+                : replay(replay, requestHash).dimensionDefinition();
+        }
+        requireCompatibleImport(draftOrCurrent, definitionId, definitionSystemCode, command);
+        if (draftOrCurrent.status() == Status.CURRENT) {
+            if (draftOrCurrent.revision() != 2) {
+                throw importConflict();
+            }
+            return draftOrCurrent;
+        }
+        if (draftOrCurrent.status() != Status.DRAFT || draftOrCurrent.revision() != 1) {
+            throw importConflict();
+        }
+        View confirmed = checksum(
+            new View(
+                draftOrCurrent.id(),
+                draftOrCurrent.systemCode(),
+                draftOrCurrent.domainId(),
+                draftOrCurrent.name(),
+                draftOrCurrent.abbreviation(),
+                draftOrCurrent.definition(),
+                draftOrCurrent.ownerId(),
+                draftOrCurrent.reuseScope(),
+                draftOrCurrent.hierarchies(),
+                Status.CURRENT,
+                2,
+                "",
+                draftOrCurrent.usageCount(),
+                draftOrCurrent.createdAt(),
+                databaseInstant(),
+                draftOrCurrent.scopeType(),
+                draftOrCurrent.dataMartId(),
+                draftOrCurrent.attributes()
+            )
+        );
+        View persisted = compareAndSet(tenantId, actorId, draftOrCurrent, confirmed);
+        audit("MODELING_DIMENSION_DEFINITION_CONFIRM", tenantId, actorId, persisted);
+        return persisted;
+    }
+
+    private CreateResult persistDraft(
+        String tenantId,
+        String actorId,
+        CreateCommand command,
+        String requestHash,
+        UUID id,
+        String definitionSystemCode
+    ) {
+
         requireWriteAccess(command.domainId());
         ScopeType scopeType = effectiveScope(command.scopeType());
         validateDataMartScope(tenantId, command.domainId(), scopeType, command.dataMartId());
         requireUniqueName(tenantId, command.domainId(), command.name(), null);
-        UUID id = idGenerator.get();
         Instant now = databaseInstant();
         View created = checksum(
             new View(
                 id,
-                systemCode(id),
+                definitionSystemCode,
                 command.domainId(),
                 command.name(),
                 command.abbreviation(),
@@ -158,6 +238,37 @@ public class DimensionDefinitionApplicationService {
         }
         audit("MODELING_DIMENSION_DEFINITION_CREATE", tenantId, actorId, created);
         return new CreateResult(created, false);
+    }
+
+    private void requireCompatibleImport(
+        View view,
+        UUID definitionId,
+        String definitionSystemCode,
+        CreateCommand command
+    ) {
+        if (
+            !Objects.equals(view.id(), definitionId) ||
+            !Objects.equals(view.systemCode(), definitionSystemCode) ||
+            !Objects.equals(view.domainId(), command.domainId()) ||
+            !Objects.equals(view.name(), command.name()) ||
+            !Objects.equals(view.abbreviation(), command.abbreviation()) ||
+            !Objects.equals(view.definition(), command.definition()) ||
+            view.reuseScope() != command.reuseScope() ||
+            !Objects.equals(view.hierarchies(), copy(command.hierarchies())) ||
+            view.scopeType() != effectiveScope(command.scopeType()) ||
+            !Objects.equals(view.dataMartId(), command.dataMartId()) ||
+            !Objects.equals(view.attributes(), copyAttributes(command.attributes()))
+        ) {
+            throw importConflict();
+        }
+    }
+
+    private static ModelSpecException importConflict() {
+        return new ModelSpecException(
+            "DIMENSION_DEFINITION_IMPORT_CONFLICT",
+            "The target dimension definition already exists with different content or lifecycle pins",
+            ModelSpecException.Kind.CONFLICT
+        );
     }
 
     @Transactional(readOnly = true)

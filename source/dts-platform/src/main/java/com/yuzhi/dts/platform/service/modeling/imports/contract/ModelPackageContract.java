@@ -2,6 +2,8 @@ package com.yuzhi.dts.platform.service.modeling.imports.contract;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -14,6 +16,7 @@ public final class ModelPackageContract {
 
     public static final String SCHEMA_VERSION = "dts.model-package/v1";
     public static final Pattern DIMENSION_DEFINITION_CODE = Pattern.compile("^dim_[0-9a-f]{32}$");
+    public static final int IMPORTED_DIMENSION_DEFINITION_CURRENT_REVISION = 2;
 
     private ModelPackageContract() {}
 
@@ -110,9 +113,44 @@ public final class ModelPackageContract {
         Map<String, String> fieldRoles,
         String dimensionStrategy,
         String dimensionDefinitionCode,
+        DimensionDefinitionBlueprint dimensionDefinition,
         String overrideSource,
         boolean technicalOnly
     ) {
+        /** Compatibility constructor for packages produced before embedded dimension definitions. */
+        public SemanticMetadata(
+            String modelType,
+            String layer,
+            Grain grain,
+            String factShape,
+            TimeSemantics timeSemantics,
+            String domainCode,
+            List<SourceRef> sourceRefs,
+            List<String> consumptionScenarios,
+            Map<String, String> fieldRoles,
+            String dimensionStrategy,
+            String dimensionDefinitionCode,
+            String overrideSource,
+            boolean technicalOnly
+        ) {
+            this(
+                modelType,
+                layer,
+                grain,
+                factShape,
+                timeSemantics,
+                domainCode,
+                sourceRefs,
+                consumptionScenarios,
+                fieldRoles,
+                dimensionStrategy,
+                dimensionDefinitionCode,
+                null,
+                overrideSource,
+                technicalOnly
+            );
+        }
+
         /** Compatibility constructor for packages produced before stable dimension references. */
         public SemanticMetadata(
             String modelType,
@@ -140,11 +178,33 @@ public final class ModelPackageContract {
                 fieldRoles,
                 dimensionStrategy,
                 null,
+                null,
                 overrideSource,
                 technicalOnly
             );
         }
     }
+
+    public record DimensionDefinitionBlueprint(
+        String name,
+        String abbreviation,
+        String definition,
+        List<DimensionAttributeBlueprint> attributes
+    ) {
+        public DimensionDefinitionBlueprint {
+            attributes = attributes == null ? List.of() : List.copyOf(attributes);
+        }
+    }
+
+    public record DimensionAttributeBlueprint(
+        String code,
+        String name,
+        String definition,
+        boolean primaryKey,
+        String standardRef,
+        String standardVersion,
+        int order
+    ) {}
 
     public record Grain(String statement, List<String> keys) {}
 
@@ -165,5 +225,32 @@ public final class ModelPackageContract {
 
     public static boolean isDimensionDefinitionCode(String value) {
         return value != null && DIMENSION_DEFINITION_CODE.matcher(value).matches();
+    }
+
+    public static Optional<UUID> dimensionDefinitionId(String value) {
+        if (!isDimensionDefinitionCode(value)) {
+            return Optional.empty();
+        }
+        String hexadecimal = value.substring("dim_".length());
+        return Optional.of(
+            UUID.fromString(
+                hexadecimal.substring(0, 8) +
+                "-" +
+                hexadecimal.substring(8, 12) +
+                "-" +
+                hexadecimal.substring(12, 16) +
+                "-" +
+                hexadecimal.substring(16, 20) +
+                "-" +
+                hexadecimal.substring(20)
+            )
+        );
+    }
+
+    public static String dimensionDefinitionCode(UUID id) {
+        if (id == null) {
+            throw new IllegalArgumentException("dimensionDefinitionId is required");
+        }
+        return "dim_" + id.toString().replace("-", "").toLowerCase(java.util.Locale.ROOT);
     }
 }

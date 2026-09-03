@@ -12,6 +12,8 @@ import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageCont
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ConversionResult;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DbtMetadata;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.Defaults;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DimensionAttributeBlueprint;
+import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.DimensionDefinitionBlueprint;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.Grain;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ImportIssue;
 import com.yuzhi.dts.platform.service.modeling.imports.contract.ModelPackageContract.ModelPackage;
@@ -636,8 +638,40 @@ public final class DbtModelPackageConverter {
             stringMap(field(dts, "fieldRoles", "field_roles")),
             text(dts, "dimensionStrategy", "dimension_strategy"),
             text(dts, "dimensionDefinitionCode", "dimension_definition_code"),
+            dimensionDefinition(field(dts, "dimensionDefinition", "dimension_definition")),
             firstNonBlank(text(dts, "overrideSource", "override_source"), overrideSource),
             booleanValue(dts, "technicalOnly", "technical_only")
+        );
+    }
+
+    private static DimensionDefinitionBlueprint dimensionDefinition(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            return null;
+        }
+        List<DimensionAttributeBlueprint> attributes = new ArrayList<>();
+        JsonNode attributeNodes = field(node, "attributes");
+        if (attributeNodes != null && attributeNodes.isArray()) {
+            attributeNodes.forEach(attribute -> {
+                if (attribute != null && attribute.isObject()) {
+                    attributes.add(
+                        new DimensionAttributeBlueprint(
+                            text(attribute, "code"),
+                            text(attribute, "name"),
+                            text(attribute, "definition"),
+                            booleanValue(attribute, "primaryKey", "primary_key"),
+                            text(attribute, "standardRef", "standard_ref"),
+                            text(attribute, "standardVersion", "standard_version"),
+                            attribute.path("order").asInt(0)
+                        )
+                    );
+                }
+            });
+        }
+        return new DimensionDefinitionBlueprint(
+            text(node, "name"),
+            text(node, "abbreviation"),
+            text(node, "definition"),
+            List.copyOf(attributes)
         );
     }
 
@@ -709,6 +743,7 @@ public final class DbtModelPackageConverter {
             semantics.fieldRoles(),
             semantics.dimensionStrategy(),
             semantics.dimensionDefinitionCode(),
+            semantics.dimensionDefinition(),
             semantics.overrideSource(),
             semantics.technicalOnly()
         );
