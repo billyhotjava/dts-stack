@@ -172,6 +172,27 @@ class ModelLifecycleResourceTest {
     }
 
     @Test
+    void rejectsInvalidImplementationSettingsWithoutMisreportingTheInputKind() throws Exception {
+        mockMvc.perform(
+            post("/api/modeling/model-specs/{id}/implementation/inputs/validate", MODEL_ID)
+                .header("If-Match", ETAG)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    """
+                    {"projectKey":"warehouse","dbtUniqueId":"model.warehouse.customer","inputMode":"PHYSICAL_ASSET",
+                     "inputs":[{"sourceBindingId":"10000000-0000-0000-0000-000000000010","resolvedVersion":"v1"}],
+                     "settings":{"partitionFields":["not a field"]},
+                     "ownership":"DESIGNER_GENERATED","materialization":"table","idempotencyKey":"validate-1"}
+                    """
+                )
+        )
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.code").value("MODEL_IMPLEMENTATION_PAYLOAD_INVALID"));
+
+        verify(service, never()).validateImplementation(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void implementationMigrationCompatibilityRoutesAreRemoved() throws Exception {
         for (String action : List.of("dry-run", "apply", "rollback")) {
             mockMvc.perform(

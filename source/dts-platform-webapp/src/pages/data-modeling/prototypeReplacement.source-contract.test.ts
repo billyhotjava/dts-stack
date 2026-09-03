@@ -164,6 +164,8 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).not.toContain("await load(saved.id)");
 		expect(workbenchService).toMatch(/saveModelImplementation|targetPhysicalName/);
 		expect(editor).toMatch(/import \{ ModelImplementationBindingFields \} from "\.\/ModelImplementationBindingFields"/);
+		expect(editor).toContain('placeholder="可留空；多个字段用逗号分隔"');
+		expect(editor).toContain("validationErrors.partitionFields");
 		expect(implementationBinding).toMatch(/实现输入方式|物理来源|上游模型|事实类型|时间语义|应用场景/);
 		expect(workbenchService).toMatch(
 			/collectCurrentWarehousePlanSources|sourceRefs: draft\.sourceRefs|dependsOn: draft\.dependsOn/,

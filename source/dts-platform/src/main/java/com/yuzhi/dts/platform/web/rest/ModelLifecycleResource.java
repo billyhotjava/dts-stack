@@ -258,12 +258,27 @@ public class ModelLifecycleResource {
         if (request == null || request.inputMode() == null || request.inputMode().isBlank() || request.inputs() == null || request.inputs().isEmpty()) {
             throw invalidInput("MODEL_IMPLEMENTATION_INPUT_REQUIRED");
         }
+        InputMode mode;
         try {
-            InputMode mode = InputMode.valueOf(request.inputMode().trim().toUpperCase());
-            ImplementationMode ownership = request.ownership() == null
+            mode = InputMode.valueOf(request.inputMode().trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw invalidInput("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED");
+        }
+        List<ImplementationInput> inputs;
+        try {
+            inputs = request.inputs().stream().map(input -> decodeInput(mode, input)).toList();
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw invalidInput("MODEL_IMPLEMENTATION_INPUT_INVALID");
+        }
+        ImplementationMode ownership;
+        try {
+            ownership = request.ownership() == null
                 ? null
                 : ImplementationMode.valueOf(request.ownership().trim().toUpperCase());
-            List<ImplementationInput> inputs = request.inputs().stream().map(input -> decodeInput(mode, input)).toList();
+        } catch (IllegalArgumentException exception) {
+            throw invalidInput("MODEL_IMPLEMENTATION_OWNERSHIP_INVALID");
+        }
+        try {
             return new SaveImplementationCommand(
                 mode,
                 inputs,
@@ -274,7 +289,7 @@ public class ModelLifecycleResource {
                 request.idempotencyKey()
             );
         } catch (IllegalArgumentException | NullPointerException exception) {
-            throw invalidInput("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED");
+            throw invalidInput("MODEL_IMPLEMENTATION_PAYLOAD_INVALID");
         }
     }
 

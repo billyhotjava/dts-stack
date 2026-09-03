@@ -479,6 +479,25 @@ describe("model workbench draft validation", () => {
 		});
 	});
 
+	it("validates partition fields against the current model instead of accepting instructional text", () => {
+		const draft = modelDraftFromView(canonicalFactView());
+		draft.physicalName = "dwd_budget_execution";
+		draft.implementationInputMode = "PHYSICAL_ASSET";
+
+		draft.partitionFields = "首次最小 Demo 留空";
+		expect(validateModelDraftInput(draft)).toMatchObject({
+			partitionFields: "分区字段必须使用字段英文名，多个字段用逗号分隔",
+		});
+
+		draft.partitionFields = "missing_field";
+		expect(validateModelDraftInput(draft)).toMatchObject({
+			partitionFields: "分区字段必须来自当前模型字段",
+		});
+
+		draft.partitionFields = "record_id，event_time";
+		expect(validateModelDraftInput(draft)).not.toHaveProperty("partitionFields");
+	});
+
 	it("accepts an existing code-authored dimension without inventing a visual input mode", () => {
 		const draft = validDimensionDraft();
 		const base = {
@@ -846,6 +865,7 @@ describe("model workbench draft validation", () => {
 		const draft = {
 			...modelDraftFromView(base, currentImplementation),
 			physicalName: "dwd_budget_execution",
+			partitionFields: "record_id， event_time",
 		};
 
 		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [], models: [base] });
@@ -853,7 +873,11 @@ describe("model workbench draft validation", () => {
 		expect(saveModelImplementation).toHaveBeenCalledWith(
 			savedModel,
 			currentImplementation,
-			expect.objectContaining({ inputMode: "PHYSICAL_ASSET", inputs: currentImplementation.inputs }),
+			expect.objectContaining({
+				inputMode: "PHYSICAL_ASSET",
+				inputs: currentImplementation.inputs,
+				settings: expect.objectContaining({ partitionFields: ["record_id", "event_time"] }),
+			}),
 		);
 	});
 

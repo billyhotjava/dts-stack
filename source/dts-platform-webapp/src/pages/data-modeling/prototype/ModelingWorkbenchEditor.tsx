@@ -613,7 +613,13 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 					</label>
 					<label className="dmx-workbench-editor__wide-field">
 						<span>分区字段</span>
-						<input onChange={(event) => patch({ partitionFields: event.target.value })} value={draft.partitionFields} />
+						<input
+							aria-label="分区字段"
+							onChange={(event) => patch({ partitionFields: event.target.value })}
+							placeholder="可留空；多个字段用逗号分隔"
+							value={draft.partitionFields}
+						/>
+						<ValidationMessage message={validationErrors.partitionFields} />
 					</label>
 				</div>
 			</section>

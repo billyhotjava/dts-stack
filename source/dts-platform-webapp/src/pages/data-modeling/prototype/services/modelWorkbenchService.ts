@@ -166,6 +166,7 @@ export type ModelDraftErrorKey =
 	| "domainId"
 	| "dimensionDefinitionId"
 	| "physicalName"
+	| "partitionFields"
 	| "name"
 	| "description"
 	| "businessProcessId"
@@ -766,6 +767,18 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 	) {
 		errors.implementationInputMode = "当前模型不支持所选生成器";
 	}
+	const partitionFields = parsePartitionFields(draft.partitionFields);
+	const modelFields = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
+	if (
+		draft.implementationInputMode &&
+		partitionFields.some((field) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(field))
+	) {
+		errors.partitionFields = "分区字段必须使用字段英文名，多个字段用逗号分隔";
+	} else if (draft.implementationInputMode && new Set(partitionFields).size !== partitionFields.length) {
+		errors.partitionFields = "分区字段不能重复";
+	} else if (draft.implementationInputMode && partitionFields.some((field) => !modelFields.has(field))) {
+		errors.partitionFields = "分区字段必须来自当前模型字段";
+	}
 	if (draft.createKind === "fact") {
 		if (!draft.factShape) errors.factShape = "请选择事实类型";
 		const hasTimeSemanticsInput = Boolean(draft.timeSemanticsType) || draft.timeSemanticsFields.length > 0;
@@ -809,6 +822,12 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 }
 
 const SOURCE_FIELD_PATTERN = /^(?:src_([0-9]+)\.)?[A-Za-z_][A-Za-z0-9_]*$/;
+
+const parsePartitionFields = (value: string): string[] =>
+	value
+		.split(/[,，]/)
+		.map((field) => field.trim())
+		.filter(Boolean);
 
 const sourceFieldIndex = (value: string): number | null => {
 	const match = SOURCE_FIELD_PATTERN.exec(value.trim());
@@ -1091,10 +1110,7 @@ const buildImplementationCommand = (
 			...retainedSettings,
 			targetPhysicalName: draft.physicalName.trim(),
 			loadStrategy: draft.loadStrategy,
-			partitionFields: draft.partitionFields
-				.split(",")
-				.map((field) => field.trim())
-				.filter(Boolean),
+			partitionFields: parsePartitionFields(draft.partitionFields),
 			...(Object.keys(draft.casts).length ? { casts: draft.casts } : {}),
 			...(draft.filters.length ? { filters: draft.filters } : {}),
 			...(draft.deduplicateBy.length ? { deduplicateBy: draft.deduplicateBy } : {}),
