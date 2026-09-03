@@ -170,7 +170,9 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(partitionFieldSelector).toContain('aria-label="分区字段"');
 		expect(partitionFieldSelector).toContain("已选分区字段");
 		expect(editor).toContain("validationErrors.partitionFields");
-		expect(implementationBinding).toMatch(/实现输入方式|物理来源|上游模型|事实类型|时间语义|应用场景/);
+		for (const label of ["数据来源方式", "输入源表", "上游模型", "事实类型", "时间语义", "应用场景"])
+			expect(implementationBinding).toContain(label);
+		expect(editor).toContain("产出表英文名");
 		expect(workbenchService).toMatch(
 			/collectCurrentWarehousePlanSources|sourceRefs: draft\.sourceRefs|dependsOn: draft\.dependsOn/,
 		);

@@ -442,8 +442,20 @@ describe("model workbench draft validation", () => {
 		invalid.fields.push({ ...invalid.fields[0], name: " account_code ", displayName: "重复字段" });
 
 		expect(validateModelDraftInput(invalid)).toMatchObject({
-			physicalName: "表名只能使用小写字母、数字和下划线，且必须以字母开头",
+			physicalName: "产出表英文名只能使用小写字母、数字和下划线，且必须以字母开头",
 			fields: "字段名称不能重复",
+		});
+	});
+
+	it("uses customer-facing source terms in model validation", () => {
+		const draft = validDimensionDraft();
+		draft.implementationInputMode = "";
+		expect(validateModelDraftInput(draft)).toMatchObject({ implementationInputMode: "请选择数据来源方式" });
+
+		draft.implementationInputMode = "PHYSICAL_ASSET";
+		draft.sourceRefs = [];
+		expect(validateModelDraftInput(draft)).toMatchObject({
+			implementationInputMode: "请至少选择一张已确认且当前有效的输入源表",
 		});
 	});
 

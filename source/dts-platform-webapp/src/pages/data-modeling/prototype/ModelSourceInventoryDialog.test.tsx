@@ -135,7 +135,7 @@ describe("ModelSourceInventoryDialog", () => {
 		});
 		await act(async () => undefined);
 
-		expect(container.textContent).toContain("该来源数据集下的 1 张物理表均已登记，可在下方“已登记来源”查看。");
+		expect(container.textContent).toContain("该来源数据集下的 1 张物理表均已登记，可在下方“已登记输入源表”查看。");
 	});
 
 	it("explains when the selected dataset has no readable physical tables", async () => {
@@ -162,7 +162,8 @@ describe("ModelSourceInventoryDialog", () => {
 		});
 		await act(async () => undefined);
 
-		expect(container.textContent).toContain("维护物理来源");
+		expect(container.textContent).toContain("登记输入源表");
+		expect(container.textContent).toContain("已登记输入源表");
 		const datasetSelect = container.querySelector<HTMLSelectElement>('select[aria-label="来源数据集"]');
 		expect(datasetSelect).not.toBeNull();
 		await act(async () => {

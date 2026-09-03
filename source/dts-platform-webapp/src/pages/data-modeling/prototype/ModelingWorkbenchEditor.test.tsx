@@ -282,7 +282,7 @@ afterEach(async () => {
 describe("ModelingWorkbenchEditor", () => {
 	it("binds a manually created dimension table to a confirmed warehouse source", async () => {
 		const initial = await render();
-		const mode = container.querySelector<HTMLSelectElement>('select[aria-label="实现输入方式"]');
+		const mode = container.querySelector<HTMLSelectElement>('select[aria-label="数据来源方式"]');
 		expect(mode).not.toBeNull();
 		await act(async () => {
 			if (!mode) return;
@@ -316,6 +316,50 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 	});
 
+	it("explains model inputs with terms familiar to traditional warehouse users", async () => {
+		await render(
+			makeProps({
+				draft: makeDraft({
+					createKind: "fact",
+					implementationInputMode: "PHYSICAL_ASSET",
+					businessProcessId: "process-row-1",
+					grainStatement: "一条预算执行明细一行",
+				}),
+			}),
+		);
+
+		const factSourceMode = container.querySelector<HTMLSelectElement>('select[aria-label="数据来源方式"]');
+		expect(Array.from(factSourceMode?.options || []).map((option) => option.textContent)).toEqual([
+			"请选择数据来源方式",
+			"直接选择输入源表",
+			"引用已有上游模型",
+		]);
+		expect(container.textContent).toContain(
+			"明细表可以直接读取 ODS 或源系统表，也可以基于已有明细模型继续加工。",
+		);
+		expect(container.textContent).toContain("输入源表");
+		expect(container.textContent).toContain("从资产目录登记源表");
+		expect(container.textContent).toContain("已确认输入源表 · 版本 source-v1");
+		expect(container.textContent).not.toContain("CONNECTION_TABLE");
+		expect(container.querySelector<HTMLInputElement>('input[aria-label="产出表英文名"]')).not.toBeNull();
+
+		await render(
+			makeProps({
+				draft: makeDraft({
+					createKind: "summary",
+					implementationInputMode: "UPSTREAM_MODEL",
+					warehouseLayerCode: "FIN_SUMMARY",
+					grainStatement: "一个预算科目一行",
+				}),
+			}),
+		);
+		expect(container.textContent).toContain("汇总表基于已治理的上游模型进行汇总，无需登记物理源表。");
+		expect(container.textContent).not.toContain("从资产目录登记源表");
+
+		await render(makeProps({ draft: makeConceptDraft() }));
+		expect(container.textContent).not.toContain("数据来源与加工方式");
+	});
+
 	it("hides implementation ownership while keeping source relationships editable", async () => {
 		await render(
 			makeProps({
@@ -339,9 +383,10 @@ describe("ModelingWorkbenchEditor", () => {
 				}),
 			}),
 		);
-		const source = container.querySelector<HTMLSelectElement>('select[aria-label="实现输入方式"]');
+		const source = container.querySelector<HTMLSelectElement>('select[aria-label="数据来源方式"]');
 		expect(source).not.toBeNull();
-		expect(Array.from(source?.options || []).map((option) => option.textContent)).toContain("受控日期维度生成器");
+		expect(Array.from(source?.options || []).map((option) => option.textContent)).toContain("系统生成标准日期维度");
+		expect(container.textContent).toContain("维度表可以从输入源表加工，日期维度也可以由系统生成。");
 
 		await act(async () => {
 			if (!source) return;
@@ -368,7 +413,7 @@ describe("ModelingWorkbenchEditor", () => {
 			}),
 		);
 
-		for (const label of ["实现输入方式", "事实类型", "时间语义", "时间字段"])
+		for (const label of ["数据来源方式", "事实类型", "时间语义", "时间字段"])
 			expect(container.textContent).toContain(label);
 
 		await render(
@@ -382,6 +427,7 @@ describe("ModelingWorkbenchEditor", () => {
 			}),
 		);
 		expect(container.textContent).toContain("应用场景");
+		expect(container.textContent).toContain("应用表基于已治理的上游模型加工，无需登记物理源表。");
 	});
 
 	it("selects partition fields from the current model fields instead of accepting arbitrary text", async () => {
@@ -625,13 +671,13 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(
 			makeProps({
 				readOnly: true,
-				validationErrors: { physicalName: "表名只能使用小写字母、数字和下划线" },
+				validationErrors: { physicalName: "产出表英文名只能使用小写字母、数字和下划线" },
 			}),
 		);
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		const tableName = container.querySelector<HTMLInputElement>('input[aria-label="表名"]');
-		expect(tableName?.closest("label")?.textContent).toContain("表名只能使用小写字母、数字和下划线");
+		const tableName = container.querySelector<HTMLInputElement>('input[aria-label="产出表英文名"]');
+		expect(tableName?.closest("label")?.textContent).toContain("产出表英文名只能使用小写字母、数字和下划线");
 	});
 
 	it("keeps a missing persisted table name editable and explains the required backfill", async () => {
@@ -641,9 +687,9 @@ describe("ModelingWorkbenchEditor", () => {
 			}),
 		);
 
-		const tableName = container.querySelector<HTMLInputElement>('input[aria-label="表名"]');
+		const tableName = container.querySelector<HTMLInputElement>('input[aria-label="产出表英文名"]');
 		expect(tableName).toHaveProperty("disabled", false);
-		expect(tableName?.closest("label")?.textContent).toContain("历史草稿尚未保存物理表名，请补录后保存");
+		expect(tableName?.closest("label")?.textContent).toContain("历史草稿尚未保存产出表英文名，请补录后保存");
 	});
 
 	it("shows the reason for a read-only editor instead of a silent disabled form", async () => {
@@ -664,7 +710,7 @@ describe("ModelingWorkbenchEditor", () => {
 		});
 		await render(props);
 
-		const source = container.querySelector<HTMLSelectElement>('select[aria-label="实现输入方式"]');
+		const source = container.querySelector<HTMLSelectElement>('select[aria-label="数据来源方式"]');
 		expect(source).toBeDefined();
 		expect(source?.value).toBe("");
 		await act(async () => {
