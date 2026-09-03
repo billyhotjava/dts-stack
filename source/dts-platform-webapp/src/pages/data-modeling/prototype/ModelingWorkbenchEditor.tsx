@@ -71,7 +71,7 @@ export type ModelingWorkbenchEditorProps = {
 	onUpdateField: (index: number, patch: Partial<ModelSpecField>) => void;
 	onDeleteField: (index: number) => void;
 	onStandardChange: (index: number, value: string) => void;
-	onSourcesChanged: (sources: WarehousePlanSourceBindingView[]) => void;
+	onSourcesChanged: (sources: WarehousePlanSourceBindingView[], planId: string) => void;
 };
 
 type DraftFormProps = Pick<
@@ -828,10 +828,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					))}
 				</section>
 			) : null}
-			<fieldset
-				className="dmx-editor-fieldset dmx-editor-scroll"
-				disabled={effectiveReadOnly || busy}
-			>
+			<fieldset className="dmx-editor-fieldset dmx-editor-scroll" disabled={effectiveReadOnly || busy}>
 				{conceptDimension ? (
 					<ConceptDimensionForm {...props} draft={draft} />
 				) : isDimensionTableDraft(draft) ? (

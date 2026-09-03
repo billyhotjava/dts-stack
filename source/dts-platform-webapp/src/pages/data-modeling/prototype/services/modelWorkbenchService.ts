@@ -580,6 +580,65 @@ export function modelSourceRefFromBinding(
 	};
 }
 
+export function reconcileModelDraftSources(
+	draft: ModelSpecDraft,
+	planId: string,
+	sources: WarehousePlanSourceBindingView[],
+): ModelSpecDraft {
+	const currentSources = sources.filter(
+		(source) =>
+			source.confirmationStatus === "CONFIRMED" &&
+			source.resolutionStatus === "AVAILABLE" &&
+			source.freshness === "CURRENT",
+	);
+	const source =
+		draft.implementationInputMode === "PHYSICAL_ASSET" && !draft.sourceRefs.length && currentSources.length === 1
+			? modelSourceRefFromBinding(currentSources[0], 0)
+			: null;
+	return {
+		...draft,
+		planId: planId.trim() || draft.planId,
+		sourceRefs: source ? [source] : draft.sourceRefs,
+	};
+}
+
+export function applyModelDraftFieldPatch(
+	draft: ModelSpecDraft,
+	index: number,
+	patch: Partial<ModelSpecField>,
+): ModelSpecDraft {
+	const currentField = draft.fields[index];
+	if (!currentField) return draft;
+	const oldName = currentField.name;
+	const nextField = { ...currentField, ...patch };
+	const nextName = nextField.name;
+	let timeSemanticsFields =
+		oldName === nextName
+			? draft.timeSemanticsFields
+			: draft.timeSemanticsFields.map((fieldName) => (fieldName === oldName ? nextName : fieldName));
+	if (currentField.role === "TIME" && nextField.role !== "TIME") {
+		timeSemanticsFields = timeSemanticsFields.filter((fieldName) => fieldName !== nextName);
+	} else if (
+		nextField.role === "TIME" &&
+		nextName.trim() &&
+		(currentField.role !== "TIME" || !oldName.trim()) &&
+		!timeSemanticsFields.includes(nextName)
+	) {
+		timeSemanticsFields = [...timeSemanticsFields, nextName];
+	}
+	return {
+		...draft,
+		fields: draft.fields.map((field, row) => (row === index ? nextField : field)),
+		standardBindings:
+			oldName === nextName
+				? draft.standardBindings
+				: draft.standardBindings.map((binding) =>
+						binding.fieldName === oldName ? { ...binding, fieldName: nextName } : binding,
+					),
+		timeSemanticsFields,
+	};
+}
+
 /**
  * 维度表可绑定的维度选项：返回数据域下全部未退役定义（DRAFT/CURRENT），
  * 由编辑器区分“现行（可绑定）”与“草稿（需先确认定义）”。

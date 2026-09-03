@@ -18,6 +18,7 @@ import { type ModelingWorkbenchView, normalizeWorkbenchView } from "./modelingWo
 import { modelDraftFingerprint } from "./modelWorkbenchPresentation";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
+	applyModelDraftFieldPatch,
 	conceptDimensionDraftFromView,
 	emptyModelDraft,
 	isConceptDimensionDraft,
@@ -33,6 +34,7 @@ import {
 	modelDraftFromView,
 	modelDraftNeedsImplementationRecovery,
 	prepareModelDraftForSave,
+	reconcileModelDraftSources,
 	saveDimensionDefinitionDraft,
 	saveModelDraft,
 	validateConceptDimensionDraftInput,
@@ -436,25 +438,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	};
 	const updateField = (index: number, patch: Partial<ModelSpecField>) => {
 		if (savingRef.current) return;
-		setDraft((current) => {
-			if (!current || !isModelSpecDraft(current)) return current;
-			const oldName = current.fields[index]?.name || "";
-			const nextName = patch.name == null ? oldName : patch.name;
-			return {
-				...current,
-				fields: current.fields.map((field, row) => (row === index ? { ...field, ...patch } : field)),
-				standardBindings:
-					oldName === nextName
-						? current.standardBindings
-						: current.standardBindings.map((binding) =>
-								binding.fieldName === oldName ? { ...binding, fieldName: nextName } : binding,
-							),
-				timeSemanticsFields:
-					oldName === nextName
-						? current.timeSemanticsFields
-						: current.timeSemanticsFields.map((fieldName) => (fieldName === oldName ? nextName : fieldName)),
-			};
-		});
+		setDraft((current) =>
+			current && isModelSpecDraft(current) ? applyModelDraftFieldPatch(current, index, patch) : current,
+		);
 	};
 	const addFields = (count: number) => {
 		if (savingRef.current || !draft || !isModelSpecDraft(draft)) return;
@@ -686,7 +672,20 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								onRemoveBlankFields={removeBlankFields}
 								onSave={() => void save()}
 								onStandardChange={updateStandardBinding}
-								onSourcesChanged={(sources) => setContext((current) => (current ? { ...current, sources } : current))}
+								onSourcesChanged={(sources, sourcePlanId) => {
+									if (savingRef.current) return;
+									setContext((current) =>
+										current ? { ...current, planId: sourcePlanId || current.planId, sources } : current,
+									);
+									setDraft((current) => {
+										if (!current || !isModelSpecDraft(current)) return current;
+										const next = reconcileModelDraftSources(current, sourcePlanId, sources);
+										if (next.planId === current.planId && next.sourceRefs === current.sourceRefs) return current;
+										return { ...next, implementationIdempotencyKey: crypto.randomUUID() };
+									});
+									setValidationErrors({});
+									invalidateValidation();
+								}}
 								onUpdateField={updateField}
 								onValidateAuthoring={() => void validateAuthoring("VISUAL")}
 								readOnly={editorAccess.readOnly}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { listCatalogAssetsV2, listTablesByDataset } from "@/api/platformApi";
 import {
+	createWarehousePlan,
 	getWarehousePlanSources,
 	saveWarehousePlanSources,
 	type WarehousePlanSourceBindingInput,
@@ -14,7 +15,7 @@ type Option = { value: string; label: string };
 type Props = {
 	planId: string;
 	onClose: () => void;
-	onSourcesChanged: (sources: WarehousePlanSourceBindingView[]) => void;
+	onSourcesChanged: (sources: WarehousePlanSourceBindingView[], planId: string) => void;
 };
 
 const retainedBinding = (binding: WarehousePlanSourceBindingView): WarehousePlanSourceBindingInput => ({
@@ -39,6 +40,7 @@ const failureMessage = (error: unknown, fallback: string) => {
 
 export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }: Props) {
 	const [inventory, setInventory] = useState<WarehousePlanSourceInventoryView | null>(null);
+	const [createdPlanId, setCreatedPlanId] = useState("");
 	const [datasets, setDatasets] = useState<Option[]>([]);
 	const [tables, setTables] = useState<Option[]>([]);
 	const [datasetId, setDatasetId] = useState("");
@@ -47,13 +49,16 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 	const [tableLoading, setTableLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [failure, setFailure] = useState("");
+	const effectivePlanId = planId || createdPlanId;
 
 	const load = useCallback(async () => {
 		setLoading(true);
 		setFailure("");
 		try {
 			const [nextInventory, assets] = await Promise.all([
-				getWarehousePlanSources(planId, 0, 200),
+				effectivePlanId
+					? getWarehousePlanSources(effectivePlanId, 0, 200)
+					: Promise.resolve<WarehousePlanSourceInventoryView | null>(null),
 				listCatalogAssetsV2({ page: 0, size: 200 }),
 			]);
 			setInventory(nextInventory);
@@ -70,7 +75,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 		} finally {
 			setLoading(false);
 		}
-	}, [planId]);
+	}, [effectivePlanId]);
 
 	useEffect(() => {
 		void load();
@@ -81,7 +86,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 			new Set(
 				(inventory?.bindings || [])
 					.filter((binding) => binding.sourceType === "CATALOG_TABLE")
-					.map((binding) => binding.locator?.assetId)
+					.map((binding) => binding.locator?.assetId || binding.sourceId)
 					.filter((value): value is string => Boolean(value)),
 			),
 		[inventory],
@@ -116,16 +121,24 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 		}
 	};
 
+	const acceptSavedInventory = (
+		saved: WarehousePlanSourceInventoryView,
+		activePlanId: string,
+		registeredAssetId?: string,
+	) => {
+		setInventory(saved);
+		onSourcesChanged(currentConfirmedSources(saved.bindings), activePlanId);
+		setAssetId("");
+		if (registeredAssetId) setTables((current) => current.filter((item) => item.value !== registeredAssetId));
+	};
+
 	const save = async (bindings: WarehousePlanSourceBindingInput[]) => {
-		if (!inventory) return;
+		if (!inventory || !effectivePlanId) return;
 		setSaving(true);
 		setFailure("");
 		try {
-			const saved = await saveWarehousePlanSources(planId, inventory.version, bindings);
-			setInventory(saved);
-			onSourcesChanged(currentConfirmedSources(saved.bindings));
-			setAssetId("");
-			if (datasetId) await chooseDataset(datasetId);
+			const saved = await saveWarehousePlanSources(effectivePlanId, inventory.version, bindings);
+			acceptSavedInventory(saved, effectivePlanId);
 		} catch (error) {
 			setFailure(failureMessage(error, "来源保存失败，请重新加载后再试。"));
 		} finally {
@@ -133,17 +146,59 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 		}
 	};
 
-	const register = () => {
-		if (!inventory || !assetId) return;
-		void save([
-			...inventory.bindings.map(retainedBinding),
-			{
-				sourceType: "CATALOG_TABLE",
-				locator: { assetId },
-				confirmationStatus: "CONFIRMED",
-				exclusionReason: null,
-			},
-		]);
+	const register = async () => {
+		if (!assetId) return;
+		if (inventory && effectivePlanId) {
+			await save([
+				...inventory.bindings.map(retainedBinding),
+				{
+					sourceType: "CATALOG_TABLE",
+					locator: { assetId },
+					confirmationStatus: "CONFIRMED",
+					exclusionReason: null,
+				},
+			]);
+			return;
+		}
+
+		setSaving(true);
+		setFailure("");
+		let bootstrapPlanId = "";
+		try {
+			const selectedAssetName = tables.find((item) => item.value === assetId)?.label || assetId;
+			const created = await createWarehousePlan({
+				name: selectedAssetName,
+				onboardingMode: "ASSET_FIRST",
+				initialSourceRefs: [{ sourceType: "CATALOG_TABLE", sourceId: assetId }],
+				idempotencyKey: crypto.randomUUID(),
+			});
+			bootstrapPlanId = created.planId;
+			const nextInventory = await getWarehousePlanSources(bootstrapPlanId, 0, 200);
+			const selectedBinding = nextInventory.bindings.find(
+				(binding) => binding.locator?.assetId === assetId || binding.sourceId === assetId,
+			);
+			if (!selectedBinding) throw new Error("所选目录资产未进入建模来源清单，请重新加载后再试。");
+			const saved = await saveWarehousePlanSources(
+				bootstrapPlanId,
+				nextInventory.version,
+				nextInventory.bindings.map((binding) =>
+					binding.bindingId === selectedBinding.bindingId
+						? {
+								bindingId: binding.bindingId,
+								confirmationStatus: "CONFIRMED",
+								exclusionReason: null,
+								action: "CONFIRM",
+							}
+						: retainedBinding(binding),
+				),
+			);
+			acceptSavedInventory(saved, bootstrapPlanId, assetId);
+		} catch (error) {
+			if (bootstrapPlanId) setCreatedPlanId(bootstrapPlanId);
+			setFailure(failureMessage(error, "建模上下文或来源保存失败，请重新加载后再试。"));
+		} finally {
+			setSaving(false);
+		}
 	};
 
 	const confirm = (bindingId: string) => {
@@ -204,7 +259,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 			) : (
 				<div className="dmx-source-inventory">
 					<p className="dmx-capability-note">
-						从资产目录登记真实物理表；登记结果写入平台唯一来源清单，模型只保存稳定绑定与解析版本。
+						从资产目录登记真实物理表；首次登记时以所选资产建立建模上下文，不预置业务域或来源。
 					</p>
 					{failure ? (
 						<div className="dmx-inline-error" role="alert">
@@ -245,7 +300,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 						</label>
 					</div>
 					<div className="dmx-dialog-actions">
-						<Button disabled={!assetId || saving} onClick={register} primary>
+						<Button disabled={!assetId || saving} onClick={() => void register()} primary>
 							{saving ? "保存中…" : "登记并确认"}
 						</Button>
 					</div>

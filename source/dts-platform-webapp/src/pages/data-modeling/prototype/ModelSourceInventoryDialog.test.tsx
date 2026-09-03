@@ -97,9 +97,7 @@ describe("ModelSourceInventoryDialog", () => {
 	it("registers and confirms a catalog table through the warehouse source command boundary", async () => {
 		const onSourcesChanged = vi.fn();
 		await act(async () => {
-			root.render(
-				<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />,
-			);
+			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />);
 		});
 		await act(async () => undefined);
 
@@ -157,9 +155,7 @@ describe("ModelSourceInventoryDialog", () => {
 		});
 		const onSourcesChanged = vi.fn();
 		await act(async () => {
-			root.render(
-				<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="" />,
-			);
+			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="" />);
 		});
 		await act(async () => undefined);
 
@@ -234,9 +230,7 @@ describe("ModelSourceInventoryDialog", () => {
 		});
 		const onSourcesChanged = vi.fn();
 		await act(async () => {
-			root.render(
-				<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />,
-			);
+			root.render(<ModelSourceInventoryDialog onClose={vi.fn()} onSourcesChanged={onSourcesChanged} planId="plan-1" />);
 		});
 		await act(async () => undefined);
 

@@ -137,6 +137,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const fieldTable = read("./prototype/ModelFieldEditorTable.tsx");
 		const workbenchService = read("./prototype/services/modelWorkbenchService.ts");
 		const implementationBinding = read("./prototype/ModelImplementationBindingFields.tsx");
+		const sourceInventory = read("./prototype/ModelSourceInventoryDialog.tsx");
 		const modelingLineCount = modeling.trimEnd().split("\n").length;
 
 		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量约束"])
@@ -167,6 +168,12 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(workbenchService).toMatch(
 			/collectCurrentWarehousePlanSources|sourceRefs: draft\.sourceRefs|dependsOn: draft\.dependsOn/,
 		);
+		expect(modeling).toMatch(/applyModelDraftFieldPatch/);
+		expect(modeling).toMatch(/reconcileModelDraftSources/);
+		expect(implementationBinding).not.toMatch(/disabled=\{!context\.planId\}/);
+		expect(sourceInventory).toMatch(/createWarehousePlan/);
+		expect(sourceInventory).toMatch(/name: selectedAssetName/);
+		expect(sourceInventory).toMatch(/initialSourceRefs: \[\{ sourceType: "CATALOG_TABLE", sourceId: assetId \}\]/);
 		expect(modeling).toMatch(/isConceptDimensionDraft/);
 		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
 		// Sprint-91：右侧记录栏的隐藏条件由 dialog 状态改为 URL 的 view 模式。
@@ -256,7 +263,9 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(catalogList).toContain("克隆");
 		expect(modeling).toMatch(/useCatalogActions/);
 		expect(catalogActions).toMatch(/deleteModelSpec|deleteDimensionDefinition|retireDimensionDefinition/);
-		expect(modeling).toMatch(/getModelAuthoringContext|authoringContext|implementationRevision|useDataModelingMenuGrant/);
+		expect(modeling).toMatch(
+			/getModelAuthoringContext|authoringContext|implementationRevision|useDataModelingMenuGrant/,
+		);
 		expect(advancedDbtWorkspace).toMatch(/EDIT_IMPLEMENTATION|canMaintain|来源只用于追溯/);
 		expect(`${modeling}\n${advancedDbtWorkspace}`).not.toMatch(/接管代码实现|当前由代码维护|转为可视化维护/);
 		expect(`${modelDialogs}\n${advancedDbtWorkspace}`).not.toMatch(/\/api\/etl\/dbt\/files|\/etl\/dbt\/files/);

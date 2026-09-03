@@ -23,7 +23,7 @@ type Props = {
 	context: ModelWorkbenchContext;
 	validationErrors: ModelDraftValidationErrors;
 	onChange: (draft: ModelSpecDraft) => void;
-	onSourcesChanged: (sources: WarehousePlanSourceBindingView[]) => void;
+	onSourcesChanged: (sources: WarehousePlanSourceBindingView[], planId: string) => void;
 };
 
 const FACT_SHAPES: Array<{ value: ModelSpecFactShape; label: string }> = [
@@ -228,9 +228,7 @@ export function ModelImplementationBindingFields({
 					<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
 						<div className="dmx-source-inventory__heading">
 							<strong>物理来源</strong>
-							<Button disabled={!context.planId} onClick={() => setSourceDialogOpen(true)}>
-								维护来源
-							</Button>
+							<Button onClick={() => setSourceDialogOpen(true)}>维护来源</Button>
 						</div>
 						{context.sources.map((source) => {
 							const label =
@@ -267,7 +265,11 @@ export function ModelImplementationBindingFields({
 							</label>
 						))}
 						{!context.sources.length && !staleSources.length ? (
-							<small>当前规划暂无已确认且当前有效的来源，请先在数仓规划中确认来源。</small>
+							<small>
+								{context.planId
+									? "当前建模上下文暂无已确认且当前有效的来源，请点击“维护来源”登记。"
+									: "当前尚未建立建模上下文，请点击“维护来源”并从资产目录选择实际来源。"}
+							</small>
 						) : null}
 					</div>
 				) : null}
