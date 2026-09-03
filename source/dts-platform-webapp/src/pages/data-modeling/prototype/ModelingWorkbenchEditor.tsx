@@ -12,6 +12,7 @@ import { materializationLabel } from "@/utils/customerDisplayLabels";
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
 import { ModelImplementationBindingFields } from "./ModelImplementationBindingFields";
 import { ModelMaterializationStatusCard } from "./ModelMaterializationStatus";
+import { ModelPartitionFieldSelector } from "./ModelPartitionFieldSelector";
 import { ModelServingSyncStatus } from "./ModelServingSyncStatus";
 import type { WorkbenchDialog } from "./ModelWorkbenchDialog";
 import {
@@ -611,16 +612,12 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 							<option value="SNAPSHOT">快照</option>
 						</select>
 					</label>
-					<label className="dmx-workbench-editor__wide-field">
-						<span>分区字段</span>
-						<input
-							aria-label="分区字段"
-							onChange={(event) => patch({ partitionFields: event.target.value })}
-							placeholder="可留空；多个字段用逗号分隔"
-							value={draft.partitionFields}
-						/>
-						<ValidationMessage message={validationErrors.partitionFields} />
-					</label>
+					<ModelPartitionFieldSelector
+						error={validationErrors.partitionFields}
+						fields={draft.fields}
+						onChange={(partitionFields) => patch({ partitionFields })}
+						value={draft.partitionFields}
+					/>
 				</div>
 			</section>
 			<ModelImplementationBindingFields

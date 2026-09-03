@@ -384,6 +384,60 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(container.textContent).toContain("应用场景");
 	});
 
+	it("selects partition fields from the current model fields instead of accepting arbitrary text", async () => {
+		const fields = [
+			...makeDraft().fields,
+			{
+				name: "event_time",
+				displayName: "业务时间",
+				dataType: "TIMESTAMP",
+				nullable: false,
+				role: "TIME" as const,
+			},
+		];
+		const props = await render(
+			makeProps({
+				draft: makeDraft({
+					createKind: "fact",
+					grainStatement: "一条预算执行明细一行",
+					businessProcessId: "process-row-1",
+					fields,
+				}),
+			}),
+		);
+		const selector = container.querySelector<HTMLSelectElement>('select[aria-label="分区字段"]');
+		expect(selector).not.toBeNull();
+		expect(container.querySelector<HTMLInputElement>('input[aria-label="分区字段"]')).toBeNull();
+		expect(Array.from(selector?.options || []).map((option) => option.textContent)).toContain(
+			"业务时间（event_time · TIMESTAMP）",
+		);
+
+		await act(async () => {
+			if (!selector) return;
+			selector.value = "event_time";
+			selector.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(props.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ partitionFields: "event_time" }));
+
+		const selectedProps = await render(
+			makeProps({
+				draft: makeDraft({
+					createKind: "fact",
+					grainStatement: "一条预算执行明细一行",
+					businessProcessId: "process-row-1",
+					fields,
+					partitionFields: "event_time",
+				}),
+			}),
+		);
+		expect(container.querySelector('[aria-label="已选分区字段"]')?.textContent).toContain("业务时间");
+
+		await act(async () => {
+			container.querySelector<HTMLButtonElement>('button[aria-label="移除分区字段 event_time"]')?.click();
+		});
+		expect(selectedProps.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ partitionFields: "" }));
+	});
+
 	it("lets an APPLICATION bind a current data mart and subject domain", async () => {
 		await render(
 			makeProps({

@@ -137,6 +137,7 @@ describe("prototype-owned data modeling frontend", () => {
 		const fieldTable = read("./prototype/ModelFieldEditorTable.tsx");
 		const workbenchService = read("./prototype/services/modelWorkbenchService.ts");
 		const implementationBinding = read("./prototype/ModelImplementationBindingFields.tsx");
+		const partitionFieldSelector = read("./prototype/ModelPartitionFieldSelector.tsx");
 		const sourceInventory = read("./prototype/ModelSourceInventoryDialog.tsx");
 		const modelingLineCount = modeling.trimEnd().split("\n").length;
 
@@ -164,7 +165,10 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).not.toContain("await load(saved.id)");
 		expect(workbenchService).toMatch(/saveModelImplementation|targetPhysicalName/);
 		expect(editor).toMatch(/import \{ ModelImplementationBindingFields \} from "\.\/ModelImplementationBindingFields"/);
-		expect(editor).toContain('placeholder="可留空；多个字段用逗号分隔"');
+		expect(editor).toMatch(/import \{ ModelPartitionFieldSelector \} from "\.\/ModelPartitionFieldSelector"/);
+		expect(editor).toContain("<ModelPartitionFieldSelector");
+		expect(partitionFieldSelector).toContain('aria-label="分区字段"');
+		expect(partitionFieldSelector).toContain("已选分区字段");
 		expect(editor).toContain("validationErrors.partitionFields");
 		expect(implementationBinding).toMatch(/实现输入方式|物理来源|上游模型|事实类型|时间语义|应用场景/);
 		expect(workbenchService).toMatch(

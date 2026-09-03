@@ -53,6 +53,58 @@
 	grid-column: 1 / -1;
 }
 
+.dmx-partition-field-selector,
+.dmx-partition-field-selector__control {
+	min-width: 0;
+	display: grid;
+	gap: 6px;
+	font-size: 13px;
+}
+
+.dmx-partition-field-selector__hint,
+.dmx-partition-field-selector__empty {
+	color: var(--dmx-muted);
+}
+
+.dmx-partition-field-selector__selected {
+	display: flex;
+	min-width: 0;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.dmx-partition-field-selector__tag {
+	display: inline-flex;
+	max-width: 100%;
+	align-items: center;
+	gap: 6px;
+	padding: 3px 5px 3px 8px;
+	border: 1px solid var(--dmx-border);
+	border-radius: 3px;
+	background: var(--dmx-canvas);
+}
+
+.dmx-partition-field-selector__tag > span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.dmx-partition-field-selector__tag > button {
+	padding: 0 3px;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	font: inherit;
+}
+
+.dmx-partition-field-selector__tag--stale {
+	border-color: var(--dmx-danger);
+	color: var(--dmx-danger);
+}
+
 .dmx-implementation-binding-list {
 	display: grid;
 	gap: 8px;

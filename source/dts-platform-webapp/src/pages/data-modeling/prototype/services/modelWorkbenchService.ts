@@ -823,7 +823,7 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 
 const SOURCE_FIELD_PATTERN = /^(?:src_([0-9]+)\.)?[A-Za-z_][A-Za-z0-9_]*$/;
 
-const parsePartitionFields = (value: string): string[] =>
+export const parsePartitionFields = (value: string): string[] =>
 	value
 		.split(/[,，]/)
 		.map((field) => field.trim())
