@@ -198,7 +198,7 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 				<small>
 					{draft.implementationInputMode === "GENERATED"
 						? "受控生成器不接受字段映射、过滤、关联或聚合配置。"
-						: "当前实现保留原始代码；如需结构化调整，请先选择实现输入方式，或切换到代码模式。"}
+						: "当前实现保留原始代码；如需结构化调整，请先选择数据来源方式，或切换到代码模式。"}
 				</small>
 			</div>
 		);

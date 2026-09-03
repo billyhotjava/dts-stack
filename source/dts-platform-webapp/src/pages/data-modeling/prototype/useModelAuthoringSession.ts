@@ -116,7 +116,7 @@ export function useModelAuthoringSession({
 		}
 		const normalizedTarget = (targetPhysicalName || draft.physicalName).trim();
 		if (!authoringContext.implementation && !/^[a-z][a-z0-9_]{0,62}$/.test(normalizedTarget)) {
-			throw new Error("请填写有效的目标物理表名：仅支持小写字母、数字和下划线，且必须以字母开头");
+			throw new Error("请填写有效的产出表英文名：仅支持小写字母、数字和下划线，且必须以字母开头");
 		}
 		const created = await createModelAuthoringDraft(draft.base.id, {
 			intent: authoringContext.publishedForkRequired ? "FORK_PUBLISHED" : "EDIT_DRAFT",

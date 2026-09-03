@@ -327,14 +327,16 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 						<input aria-label="表名规则" disabled value={presentation.tableNamingRule} />
 					</label>
 					<label>
-						<span className="required">表名</span>
+						<span className="required">产出表英文名</span>
 						<input
-							aria-label="表名"
+							aria-label="产出表英文名"
 							onChange={(event) => patch({ physicalName: event.target.value })}
 							value={draft.physicalName}
 						/>
 						<ValidationMessage message={validationErrors.physicalName} />
-						{draft.base && !draft.physicalName.trim() ? <small>历史草稿尚未保存物理表名，请补录后保存。</small> : null}
+						{draft.base && !draft.physicalName.trim() ? (
+							<small>历史草稿尚未保存产出表英文名，请补录后保存。</small>
+						) : null}
 					</label>
 					<label>
 						<span className="required">表中文名</span>
@@ -575,9 +577,9 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						<input onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
 					</label>
 					<label>
-						<span>物理表名</span>
+						<span>产出表英文名</span>
 						<input
-							aria-label="物理表名"
+							aria-label="产出表英文名"
 							onChange={(event) => patch({ physicalName: event.target.value })}
 							value={draft.physicalName}
 						/>

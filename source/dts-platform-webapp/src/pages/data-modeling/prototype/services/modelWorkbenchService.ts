@@ -737,13 +737,13 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 	if (isDimensionDraft(draft)) {
 		if (!/[\u4e00-\u9fff]/.test(draft.name.trim())) errors.name = "请填写中文表名";
 		if (!/^[a-z][a-z0-9_]*$/.test(draft.physicalName.trim())) {
-			errors.physicalName = "表名只能使用小写字母、数字和下划线，且必须以字母开头";
+			errors.physicalName = "产出表英文名只能使用小写字母、数字和下划线，且必须以字母开头";
 		}
 		if (!draft.description.trim()) errors.description = "请填写维度定义（描述）";
 	} else {
 		if (!draft.grainStatement.trim()) errors.grainStatement = "请填写模型粒度";
 		if (draft.implementationInputMode && !/^[a-z][a-z0-9_]*$/.test(draft.physicalName.trim())) {
-			errors.physicalName = "物理表名只能使用小写字母、数字和下划线，且必须以字母开头";
+			errors.physicalName = "产出表英文名只能使用小写字母、数字和下划线，且必须以字母开头";
 		}
 	}
 	if (draft.createKind === "fact" && !draft.businessProcessId?.trim()) {
@@ -756,9 +756,9 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 		errors.subjectDomainId = "请选择主题域";
 	}
 	if (!draft.implementationInputMode && !draft.base) {
-		errors.implementationInputMode = "请选择实现输入方式";
+		errors.implementationInputMode = "请选择数据来源方式";
 	} else if (draft.implementationInputMode === "PHYSICAL_ASSET" && !draft.sourceRefs.length) {
-		errors.implementationInputMode = "请至少选择一个已确认且当前有效的物理来源";
+		errors.implementationInputMode = "请至少选择一张已确认且当前有效的输入源表";
 	} else if (draft.implementationInputMode === "UPSTREAM_MODEL" && !draft.dependsOn.length) {
 		errors.implementationInputMode = "请至少选择一个当前修订的上游模型";
 	} else if (
@@ -769,10 +769,7 @@ export function validateModelDraftInput(draft: ModelSpecDraft): ModelDraftValida
 	}
 	const partitionFields = parsePartitionFields(draft.partitionFields);
 	const modelFields = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
-	if (
-		draft.implementationInputMode &&
-		partitionFields.some((field) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(field))
-	) {
+	if (draft.implementationInputMode && partitionFields.some((field) => !/^[A-Za-z_][A-Za-z0-9_]*$/.test(field))) {
 		errors.partitionFields = "分区字段必须使用字段英文名，多个字段用逗号分隔";
 	} else if (draft.implementationInputMode && new Set(partitionFields).size !== partitionFields.length) {
 		errors.partitionFields = "分区字段不能重复";
@@ -1170,7 +1167,7 @@ export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveCo
 	const needsImplementationSave = implementationNeedsSave(preparedDraft);
 	const resolvedImplementationInputs = needsImplementationSave ? implementationInputs(preparedDraft, context) : null;
 	if (needsImplementationSave && !resolvedImplementationInputs) {
-		throw new Error("请先配置数据实现来源；日期维度可选择受控日期维度生成器，普通模型需关联物理来源或上游模型");
+		throw new Error("请先选择数据来源方式；日期维度可由系统生成，其他模型请选择输入源表或上游模型");
 	}
 	let savedModel: CanonicalModelSpecView;
 	if (draft.base) savedModel = await updateModelSpec(draft.base, update);

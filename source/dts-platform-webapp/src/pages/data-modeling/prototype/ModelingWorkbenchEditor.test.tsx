@@ -334,9 +334,7 @@ describe("ModelingWorkbenchEditor", () => {
 			"直接选择输入源表",
 			"引用已有上游模型",
 		]);
-		expect(container.textContent).toContain(
-			"明细表可以直接读取 ODS 或源系统表，也可以基于已有明细模型继续加工。",
-		);
+		expect(container.textContent).toContain("明细表可以直接读取 ODS 或源系统表，也可以基于已有明细模型继续加工。");
 		expect(container.textContent).toContain("输入源表");
 		expect(container.textContent).toContain("从资产目录登记源表");
 		expect(container.textContent).toContain("已确认输入源表 · 版本 source-v1");
@@ -415,6 +413,7 @@ describe("ModelingWorkbenchEditor", () => {
 
 		for (const label of ["数据来源方式", "事实类型", "时间语义", "时间字段"])
 			expect(container.textContent).toContain(label);
+		expect(container.textContent).not.toContain("实现输入方式");
 
 		await render(
 			makeProps({
@@ -700,7 +699,7 @@ describe("ModelingWorkbenchEditor", () => {
 			}),
 		);
 
-			expect(container.querySelector("output.dmx-editor-access-note")?.textContent).toContain("PUBLISHED");
+		expect(container.querySelector("output.dmx-editor-access-note")?.textContent).toContain("PUBLISHED");
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
 	});
 
@@ -748,7 +747,7 @@ describe("ModelingWorkbenchEditor", () => {
 				"disabled",
 				true,
 			);
-		for (const label of ["表名", "表中文名"])
+		for (const label of ["产出表英文名", "表中文名"])
 			expect(container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)).toHaveProperty(
 				"disabled",
 				false,

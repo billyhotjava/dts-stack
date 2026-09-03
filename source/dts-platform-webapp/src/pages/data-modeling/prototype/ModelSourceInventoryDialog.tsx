@@ -133,7 +133,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 			if (options.length === 0) {
 				setTableHint("该来源数据集下暂无可读取的物理表，请先完成元数据采集或检查访问权限。");
 			} else if (availableTables.length === 0) {
-				setTableHint(`该来源数据集下的 ${options.length} 张物理表均已登记，可在下方“已登记来源”查看。`);
+				setTableHint(`该来源数据集下的 ${options.length} 张物理表均已登记，可在下方“已登记输入源表”查看。`);
 			}
 		} catch (error) {
 			setFailure(failureMessage(error, "数据表目录读取失败，请重试。"));
@@ -270,7 +270,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 				</div>
 			}
 			onClose={onClose}
-			title="维护物理来源"
+			title="登记输入源表"
 			wide
 		>
 			{loading ? (
@@ -280,7 +280,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 			) : (
 				<div className="dmx-source-inventory">
 					<p className="dmx-capability-note">
-						从资产目录登记真实物理表；首次登记时以所选资产建立建模上下文，不预置业务域或来源。
+						从资产目录登记模型直接读取的输入源表；已登记源表可在当前建模规划内复用，并按已确认结构版本校验。
 					</p>
 					{failure ? (
 						<div className="dmx-inline-error" role="alert">
@@ -327,7 +327,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 						</Button>
 					</div>
 					<div className="dmx-implementation-binding-list">
-						<strong>已登记来源</strong>
+						<strong>已登记输入源表</strong>
 						{inventory?.bindings.length ? (
 							inventory.bindings.map((binding) => (
 								<div className="dmx-source-inventory__row" key={binding.bindingId}>
@@ -364,7 +364,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 								</div>
 							))
 						) : (
-							<small>当前尚未登记来源。</small>
+							<small>当前尚未登记输入源表。</small>
 						)}
 					</div>
 				</div>

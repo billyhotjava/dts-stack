@@ -6,6 +6,7 @@ import {
 	type ModelSpecFactShape,
 	type ModelSpecSourceRef,
 	type ModelSpecTimeSemanticsType,
+	type ModelSpecType,
 } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelSourceInventoryDialog } from "./ModelSourceInventoryDialog";
 import { ModelVisualTransformationFields } from "./ModelVisualTransformationFields";
@@ -39,20 +40,40 @@ const TIME_SEMANTICS: Array<{ value: ModelSpecTimeSemanticsType; label: string }
 	{ value: "MILESTONE_DATES", label: "里程碑日期" },
 ];
 
+const MODEL_TYPE_LABELS: Record<ModelSpecType, string> = {
+	DIMENSION: "维度表",
+	FACT: "明细表",
+	SUMMARY: "汇总表",
+	APPLICATION: "应用表",
+};
+
 const modeOptions = (draft: ModelSpecDraft): Array<{ value: ModelImplementationInputMode; label: string }> => {
 	if (draft.createKind === "dimension-table") {
 		return [
-			{ value: "PHYSICAL_ASSET", label: "关联数仓来源" },
-			{ value: "GENERATED", label: "受控日期维度生成器" },
+			{ value: "PHYSICAL_ASSET", label: "直接选择输入源表" },
+			{ value: "GENERATED", label: "系统生成标准日期维度" },
 		];
 	}
 	if (draft.createKind === "fact") {
 		return [
-			{ value: "PHYSICAL_ASSET", label: "关联数仓来源" },
-			{ value: "UPSTREAM_MODEL", label: "关联上游模型" },
+			{ value: "PHYSICAL_ASSET", label: "直接选择输入源表" },
+			{ value: "UPSTREAM_MODEL", label: "引用已有上游模型" },
 		];
 	}
-	return [{ value: "UPSTREAM_MODEL", label: "关联上游模型" }];
+	return [{ value: "UPSTREAM_MODEL", label: "引用已有上游模型" }];
+};
+
+const sourceModeDescription = (draft: ModelSpecDraft): string => {
+	if (draft.createKind === "dimension-table") {
+		return "维度表可以从输入源表加工，日期维度也可以由系统生成。";
+	}
+	if (draft.createKind === "fact") {
+		return "明细表可以直接读取 ODS 或源系统表，也可以基于已有明细模型继续加工。";
+	}
+	if (draft.createKind === "summary") {
+		return "汇总表基于已治理的上游模型进行汇总，无需登记物理源表。";
+	}
+	return "应用表基于已治理的上游模型加工，无需登记物理源表。";
 };
 
 const normalizeSourceOrder = (sources: ModelSpecSourceRef[]): ModelSpecSourceRef[] =>
@@ -188,17 +209,17 @@ export function ModelImplementationBindingFields({
 
 	return (
 		<section className="dmx-editor-panel">
-			<h3>实现绑定</h3>
+			<h3>数据来源与加工方式</h3>
 			<div className="dmx-workbench-editor__basic-grid">
 				<label>
-					<span className="required">实现输入方式</span>
+					<span className="required">数据来源方式</span>
 					<select
-						aria-label="实现输入方式"
+						aria-label="数据来源方式"
 						disabled={modes.length === 1}
 						onChange={(event) => changeMode(event.target.value as ModelImplementationInputMode | "")}
 						value={draft.implementationInputMode}
 					>
-						<option value="">请选择实现输入方式</option>
+						<option value="">请选择数据来源方式</option>
 						{modes.map((mode) => (
 							<option key={mode.value} value={mode.value}>
 								{mode.label}
@@ -206,7 +227,7 @@ export function ModelImplementationBindingFields({
 						))}
 					</select>
 					<ValidationMessage message={validationErrors.implementationInputMode} />
-					<small>来源、上游关系与生成策略在模型定义中统一登记；具体实现可在可视化或代码视图继续编辑。</small>
+					<small>{sourceModeDescription(draft)}</small>
 				</label>
 
 				{draft.implementationInputMode === "GENERATED" ? (
@@ -214,12 +235,12 @@ export function ModelImplementationBindingFields({
 						<span>生成策略</span>
 						<input
 							disabled
-							value={draft.generationStrategyType === "DATE_DIMENSION" ? "受控日期维度生成器" : "生成策略未配置"}
+							value={draft.generationStrategyType === "DATE_DIMENSION" ? "系统生成标准日期维度" : "生成策略未配置"}
 						/>
 						<small>
 							{draft.generationStrategyType === "DATE_DIMENSION"
-								? "保存模型时创建统一日期维度实现，可在后续版本继续物化。"
-								: "请选择受控日期维度生成器，或切换到代码模式维护原始实现。"}
+								? "保存模型时由系统创建标准日期维度，后续可以继续调整并生成目标表。"
+								: "请选择系统生成标准日期维度，或切换到代码模式维护原始实现。"}
 						</small>
 					</label>
 				) : null}
@@ -227,8 +248,8 @@ export function ModelImplementationBindingFields({
 				{draft.implementationInputMode === "PHYSICAL_ASSET" ? (
 					<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
 						<div className="dmx-source-inventory__heading">
-							<strong>物理来源</strong>
-							<Button onClick={() => setSourceDialogOpen(true)}>维护来源</Button>
+							<strong>输入源表</strong>
+							<Button onClick={() => setSourceDialogOpen(true)}>从资产目录登记源表</Button>
 						</div>
 						{context.sources.map((source) => {
 							const label =
@@ -246,9 +267,7 @@ export function ModelImplementationBindingFields({
 										type="checkbox"
 									/>
 									<span>{label}</span>
-									<small>
-										{source.sourceType} · {source.resolvedVersion || source.confirmedVersion}
-									</small>
+									<small>已确认输入源表 · 版本 {source.resolvedVersion || source.confirmedVersion}</small>
 								</label>
 							);
 						})}
@@ -261,14 +280,14 @@ export function ModelImplementationBindingFields({
 									type="checkbox"
 								/>
 								<span>{source.ref}</span>
-								<small>已保存来源，当前规划中不可用；请取消后重新选择。</small>
+								<small>已绑定输入源表，当前规划中不可用；请取消后重新选择。</small>
 							</label>
 						))}
 						{!context.sources.length && !staleSources.length ? (
 							<small>
 								{context.planId
-									? "当前建模上下文暂无已确认且当前有效的来源，请点击“维护来源”登记。"
-									: "当前尚未建立建模上下文，请点击“维护来源”并从资产目录选择实际来源。"}
+									? "当前暂无已确认且有效的输入源表，请从资产目录登记。"
+									: "当前尚未建立建模上下文，请从资产目录登记第一张输入源表。"}
 							</small>
 						) : null}
 					</div>
@@ -289,7 +308,7 @@ export function ModelImplementationBindingFields({
 								/>
 								<span>{model.name}</span>
 								<small>
-									{model.modelType} · {model.layer} · r{model.revision}
+									{MODEL_TYPE_LABELS[model.modelType]} · {model.layer} · 第 {model.revision} 版
 								</small>
 							</label>
 						))}
@@ -302,7 +321,7 @@ export function ModelImplementationBindingFields({
 									type="checkbox"
 								/>
 								<span>{dependency.modelSpecId}</span>
-								<small>已绑定 r{dependency.revision}，当前不可作为上游；请重新选择。</small>
+								<small>已绑定第 {dependency.revision} 版，当前不可作为上游；请重新选择。</small>
 							</label>
 						))}
 						{!upstreamCandidates.length && !staleDependencies.length ? (
@@ -326,7 +345,7 @@ export function ModelImplementationBindingFields({
 									type="checkbox"
 								/>
 								<span>{model.name}</span>
-								<small>DWD · r{model.revision}</small>
+								<small>DWD · 第 {model.revision} 版</small>
 							</label>
 						))}
 						{staleDimensionRefs.map((dimension) => (
@@ -338,7 +357,7 @@ export function ModelImplementationBindingFields({
 									type="checkbox"
 								/>
 								<span>{dimension.modelSpecId}</span>
-								<small>已绑定 r{dimension.revision}，当前不可用；请取消后重新选择。</small>
+								<small>已绑定第 {dimension.revision} 版，当前不可用；请取消后重新选择。</small>
 							</label>
 						))}
 						{!dimensionCandidates.length && !staleDimensionRefs.length ? (
