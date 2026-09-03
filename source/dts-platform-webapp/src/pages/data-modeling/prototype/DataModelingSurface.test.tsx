@@ -21,8 +21,18 @@ let container: HTMLDivElement;
 let root: Root;
 
 async function renderAt(path: string) {
-	const router = createMemoryRouter([{ path: "*", element: <DataModelingPage /> }], { initialEntries: [path] });
+	const router = createMemoryRouter(
+		[
+			{
+				path: "/governance/standards/elements",
+				element: <div data-surface="elements">数据元</div>,
+			},
+			{ path: "*", element: <DataModelingPage /> },
+		],
+		{ initialEntries: [path] },
+	);
 	await act(async () => root.render(<RouterProvider router={router} />));
+	return router;
 }
 
 beforeEach(() => {
@@ -40,7 +50,6 @@ afterEach(async () => {
 describe("prototype-owned data-modeling surface routing", () => {
 	it.each([
 		["/data-modeling/home/workspace", "overview"],
-		["/data-modeling/standards/fields", "standards"],
 		["/data-modeling/dimensions/workbench", "workbench"],
 		["/data-modeling/dimensions/reverse", "reverse"],
 		["/data-modeling/metrics/atomic", "metrics"],
@@ -49,6 +58,16 @@ describe("prototype-owned data-modeling surface routing", () => {
 	])("routes %s to the reviewed %s prototype workspace", async (path, expectedSurface) => {
 		await renderAt(path);
 		expect(container.querySelector(`[data-surface="${expectedSurface}"]`)).not.toBeNull();
+	});
+
+	it("redirects the legacy field-standard route to the canonical data-element owner", async () => {
+		const router = await renderAt("/data-modeling/standards/fields?keyword=amount#catalog");
+
+		expect(router.state.location.pathname).toBe("/governance/standards/elements");
+		expect(router.state.location.search).toBe("?keyword=amount");
+		expect(router.state.location.hash).toBe("#catalog");
+		expect(container.querySelector('[data-surface="elements"]')).not.toBeNull();
+		expect(container.querySelector('[data-surface="standards"]')).toBeNull();
 	});
 
 	// 数仓规划已迁出建模模块：/data-modeling/planning/* 统一重定向到 /data-architecture，
