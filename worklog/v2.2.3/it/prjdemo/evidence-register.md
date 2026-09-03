@@ -39,17 +39,18 @@
 | 业务分类 | PRJDEMO_PROJECT_MGMT | | | | |
 | 数据域 | PRJDEMO_PROJECT | | | | |
 | 业务过程 | PRJDEMO_PROJECT_PROGRESS | | | | |
+| 规划来源绑定 | ods_prjdemo_project_task_snapshot | | `CONFIRMED · CURRENT` | | 记录绑定 ID、确认版本和验证时间 |
 | 标准 | PRJDEMO_TASK_SNAPSHOT_ID/实际复用编码 | | | | |
 | 标准 | PRJDEMO_PROJECT_SNAPSHOT_ID/实际复用编码 | | | | |
 | 标准 | PRJDEMO_PROGRESS_PCT/实际复用编码 | | | | |
 | 标准 | PRJDEMO_ACTUAL_COST/实际复用编码 | | | | |
 | 标准 | PRJDEMO_TASK_COUNT/实际复用编码 | | | | |
 | 码表 | PRJDEMO_TASK_STATUS/实际复用编码 | | | | |
-| DWD ModelSpec | 项目任务快照明细 | | | | |
+| DWD ModelSpec | 模型名称：项目任务快照明细 | | | | 物理表名：prjdemo_dwd_project_task_snapshot |
 | DWD 实现修订 | prjdemo_dwd_project_task_snapshot | | | | |
 | 质量规则 | PRJDEMO_PROGRESS_RANGE | | | | |
 | 质量任务 | 项目任务进度范围校验执行任务 | | | | |
-| DWS ModelSpec | 项目进度汇总 | | | | |
+| DWS ModelSpec | 模型名称：项目进度汇总 | | | | 物理表名：prjdemo_dws_project_progress |
 | DWS 实现修订 | prjdemo_dws_project_progress | | | | |
 | 原子指标 | PRJDEMO_AVG_PROGRESS | | | | |
 | BI 看板 | 项目进度总览 | | | | |
@@ -58,16 +59,16 @@
 
 | 顺序 | 运行类型 | 运行 ID | 输入版本 | 输出/候选版本 | 开始时间 | 结束时间 | 状态 | 关键统计 | 证据 |
 | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Excel → ODS | | clean.xlsx | | | | | 8 行 | |
+| 1 | CSV → ODS | | prjdemo_project_task_clean.csv | | | | | 8 行 | |
 | 2 | DWD 物化 | | ODS 当前版本 | | | | | 8 行 | |
 | 3 | 干净数据质量检查 | | DWD 当前版本 | 规则版本 | | | | 失败 0 行 | |
 | 4 | DWS 物化 | | DWD 当前版本 | | | | | 2 行 | |
 | 5 | 指标发布/验证 | | DWS 当前版本 | | | | | 72.50/53.75 | |
 | 6 | BI 发布/验证 | | 指标或 DWS 当前版本 | | | | | 2 项目/8 任务 | |
-| 7 | 脏数据 Excel → ODS（可选） | | bad.xlsx | | | | | 8 行 | |
+| 7 | 脏数据 CSV → ODS（可选） | | prjdemo_project_task_bad.csv | | | | | 8 行 | |
 | 8 | 脏数据 DWD 物化（可选） | | ODS 脏版本 | | | | | 8 行 | |
 | 9 | 脏数据质量检查（可选） | | DWD 脏版本 | 规则版本 | | | | 失败 1 行 | |
-| 10 | 恢复 Excel → ODS（可选） | | clean.xlsx | | | | | 8 行 | |
+| 10 | 恢复 CSV → ODS（可选） | | prjdemo_project_task_clean.csv | | | | | 8 行 | |
 | 11 | 恢复 DWD 物化（可选） | | ODS 恢复版本 | | | | | 8 行 | |
 | 12 | 恢复质量检查（可选） | | DWD 恢复版本 | 规则版本 | | | | 失败 0 行 | |
 | 13 | 恢复 DWS/指标/BI（可选） | | 恢复版本 | | | | | 预期值恢复 | |

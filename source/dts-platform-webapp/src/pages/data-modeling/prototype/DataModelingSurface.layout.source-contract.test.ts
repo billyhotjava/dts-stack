@@ -47,4 +47,27 @@ describe("data-modeling natural-height layout contract", () => {
 		expect(cells).toMatch(/vertical-align:\s*top/);
 		expect(blocker).toMatch(/overflow-wrap:\s*anywhere/);
 	});
+
+	it("keeps warehouse-planning drawer forms inside the viewport", () => {
+		const drawer = ruleBody(".dmx-drawer");
+		const drawerBody = ruleBody(".dmx-drawer__body");
+		const planningEditor = ruleBody(".dmx-planning-editor");
+		const planningGrid = ruleBody(".dmx-planning-editor .dmx-form-grid");
+		const planningField = ruleBody(".dmx-planning-editor .dmx-form-grid > label");
+		const planningInput = ruleBody(".dmx-planning-editor .dmx-form-grid input");
+
+		expect(drawer).toMatch(/width:\s*clamp\(520px,\s*52vw,\s*760px\)/);
+		expect(drawer).toMatch(/max-width:\s*100%/);
+		expect(planningEditor).toMatch(/max-width:\s*100%/);
+		expect(planningGrid).toMatch(/grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+		expect(planningField).toMatch(/min-width:\s*0/);
+		expect(planningInput).toMatch(/width:\s*100%/);
+		expect(planningInput).toMatch(/max-width:\s*100%/);
+		expect(drawerBody).toMatch(/min-height:\s*0/);
+		expect(drawerBody).toMatch(/overflow-x:\s*hidden/);
+		expect(drawerBody).toMatch(/overflow-y:\s*auto/);
+		expect(styles).toMatch(
+			/@media \(max-width: 820px\) \{[\s\S]*?\.dmx-planning-editor \.dmx-form-grid,[\s\S]*?grid-template-columns:\s*1fr;/,
+		);
+	});
 });

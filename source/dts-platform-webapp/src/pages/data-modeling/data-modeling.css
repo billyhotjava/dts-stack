@@ -550,6 +550,8 @@
 }
 
 .dmx-planning-editor {
+	min-width: 0;
+	max-width: 100%;
 	margin: 16px 0;
 	padding: 16px;
 	border: 1px solid var(--dmx-border);
@@ -643,12 +645,27 @@
 	gap: 17px 30px;
 }
 
+.dmx-planning-editor .dmx-form-grid {
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .dmx-form-grid > label,
 .dmx-form-grid > div {
 	display: grid;
 	gap: 7px;
 	color: #465164;
 	font-size: 13px;
+}
+.dmx-planning-editor .dmx-form-grid > label,
+.dmx-planning-editor .dmx-form-grid > div {
+	min-width: 0;
+}
+.dmx-planning-editor .dmx-form-grid input,
+.dmx-planning-editor .dmx-form-grid select,
+.dmx-planning-editor .dmx-form-grid textarea {
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
 }
 :where(.dmx-page, .dmx-workbench-page, .dmx-metrics-page) .required::after {
 	content: " *";
@@ -2202,6 +2219,7 @@
 	.dmx-tool-grid,
 	.dmx-catalog-form,
 	.dmx-form-grid,
+	.dmx-planning-editor .dmx-form-grid,
 	.dmx-strategy-cards {
 		grid-template-columns: 1fr;
 	}
@@ -2329,7 +2347,9 @@
 }
 
 .dmx-drawer {
-	width: min(520px, 92vw);
+	width: clamp(520px, 52vw, 760px);
+	max-width: 100%;
+	min-width: 0;
 	height: 100%;
 	background: #fff;
 	box-shadow: -12px 0 32px rgba(15, 23, 42, 0.18);
@@ -2338,6 +2358,8 @@
 }
 
 .dmx-drawer__header {
+	flex: 0 0 auto;
+	min-width: 0;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -2346,8 +2368,10 @@
 }
 
 .dmx-drawer__header h2 {
+	min-width: 0;
 	margin: 0;
 	font-size: 16px;
+	overflow-wrap: anywhere;
 }
 
 .dmx-drawer__header button {
@@ -2359,12 +2383,18 @@
 
 .dmx-drawer__body {
 	flex: 1 1 auto;
-	overflow: auto;
+	min-width: 0;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
 	padding: 18px 20px;
 }
 
 .dmx-drawer__footer {
+	flex: 0 0 auto;
+	min-width: 0;
 	display: flex;
+	flex-wrap: wrap;
 	justify-content: flex-end;
 	gap: 8px;
 	padding: 14px 20px;
