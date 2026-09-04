@@ -536,6 +536,90 @@ class ModelMaterializationStartServiceIT {
     }
 
     @Test
+    void recoversLegacyNodeNameTargetFromImmutableVisualAuthoringInput() {
+        Scope scope = scope("legacy-visual-target");
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+
+        transaction.executeWithoutResult(status -> {
+            seed(scope, true);
+            String inputs =
+                "[{\"generatorType\":\"RELEASE_IT\",\"config\":{\"visualImplementation\":{\"settings\":{\"targetPhysicalName\":\"" +
+                scope.targetIdentifier() +
+                "\"}}}}]";
+            String settings =
+                "{\"targetPhysicalName\":\"" +
+                scope.selector() +
+                "\",\"loadStrategy\":\"FULL\",\"partitionFields\":[]}";
+            assertThat(
+                jdbcTemplate.update(
+                    """
+                    update modeling_model_implementation
+                       set inputs_json = cast(? as jsonb), settings_json = cast(? as jsonb)
+                     where tenant_id = ? and id = ?
+                    """,
+                    inputs,
+                    settings,
+                    scope.tenant(),
+                    scope.implementationId()
+                )
+            )
+                .isEqualTo(1);
+            assertThat(
+                jdbcTemplate.update(
+                    """
+                    update modeling_model_implementation_revision
+                       set inputs_json = cast(? as jsonb), settings_json = cast(? as jsonb)
+                     where tenant_id = ? and implementation_id = ? and revision = 1
+                    """,
+                    inputs,
+                    settings,
+                    scope.tenant(),
+                    scope.implementationId()
+                )
+            )
+                .isEqualTo(1);
+
+            starts.start(
+                scope.tenant(),
+                "builder-a",
+                scope.candidateId(),
+                1,
+                "legacy-visual-target-start",
+                "recover the immutable visual target"
+            );
+
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select target_identifier
+                      from modeling_model_release_candidate_entry
+                     where tenant_id = ? and candidate_id = ?
+                    """,
+                    String.class,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .isEqualTo(scope.targetIdentifier());
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    """
+                    select target
+                      from modeling_pipeline_run
+                     where tenant_id = ? and release_candidate_id = ?
+                       and run_purpose = 'RELEASE_BUILD'
+                    """,
+                    String.class,
+                    scope.tenant(),
+                    scope.candidateId()
+                )
+            )
+                .isEqualTo(scope.targetIdentifier());
+            status.setRollbackOnly();
+        });
+    }
+
+    @Test
     void postBuildCommandUsesTheLockedMaterializationSnapshotForDriftDetection() {
         Scope scope = scope("post-build-drift");
         TransactionTemplate transaction = new TransactionTemplate(

@@ -539,6 +539,7 @@
                         <testInclude>**/service/catalog/CatalogGrantClassificationProjectionPostgresIT.java</testInclude>
                         <testInclude>**/repository/audit/PlatformAuditOutboxRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
+                        <testInclude>**/repository/modeling/FrozenDbtBundleArtifactRecoveryTest.java</testInclude>
                         <testInclude>**/service/modeling/DataMartContractTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingWordRootLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/WordRootServiceTest.java</testInclude>

@@ -525,6 +525,17 @@ build_image() {
   shift 4
   local args=("$@")
 
+  # The default flow already produced a verified JAR. Avoid sending the entire
+  # repository (including mutable runtime mounts) to BuildKit just to assemble
+  # the normal dts-platform runtime image.
+  if [[
+    "$name" == "dts-platform" &&
+    "${PREBUILD_JARS}" == "1" &&
+    "$dockerfile" == "${REPO_ROOT}/builds/dts-platform/Dockerfile"
+  ]]; then
+    dockerfile="${REPO_ROOT}/builds/dts-platform/Dockerfile.prebuilt"
+  fi
+
   build_image_ctx "$name" "$tag" "$dockerfile" "$REPO_ROOT" "$output_dir" "${args[@]}"
 }
 

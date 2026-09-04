@@ -128,6 +128,39 @@ class DbtScopedProjectServiceTest {
     }
 
     @Test
+    void writesCandidateIdentityAfterFrozenSqlConfigSoDbtCannotRestoreStalePins() throws Exception {
+        DbtScopedProjectService.CandidateArtifactEntry entry = candidateEntry();
+        String targetPath = entry.artifacts().stream()
+            .map(DbtScopedProjectService.CandidateArtifact::path)
+            .filter(path -> Path.of(path).getFileName().toString()
+                .equals("model_30000000_0000_0000_0000_000000000001.sql"))
+            .findFirst()
+            .orElseThrow();
+        String staleConfig = "{{ config(meta={'modelRevision': 1, 'modelChecksum': '" + "c".repeat(64) +
+            "', 'implementationRevision': 4, 'implementationChecksum': '" + "d".repeat(64) + "'}) }}\n";
+        DbtScopedProjectService.CandidateArtifact target = artifact(
+            targetPath,
+            staleConfig + "select * from {{ ref('stg_model_30000000_0000_0000_0000_000000000001') }}\n"
+        );
+        List<DbtScopedProjectService.CandidateArtifact> artifacts = entry.artifacts().stream()
+            .map(artifact -> artifact.path().equals(targetPath) ? target : artifact)
+            .toList();
+
+        DbtScopedProjectService.ScopedCandidateProject prepared = service.prepareCandidate(
+            List.of(withArtifacts(entry, artifacts))
+        );
+        String releaseSql = Files.readString(
+            Path.of(prepared.projectDir()).resolve(targetPath),
+            StandardCharsets.UTF_8
+        );
+
+        assertThat(releaseSql.lastIndexOf("'modelRevision': " + entry.modelRevision()))
+            .isGreaterThan(releaseSql.indexOf("'modelRevision': 1"));
+        assertThat(releaseSql.lastIndexOf("'implementationRevision': " + entry.implementationRevision()))
+            .isGreaterThan(releaseSql.indexOf("'implementationRevision': 4"));
+    }
+
+    @Test
     void resolvesTechnicalDependenciesFromEveryConfiguredModelPath() throws Exception {
         Files.writeString(
             workspace.resolve("dbt_project.yml"),
@@ -196,7 +229,7 @@ class DbtScopedProjectServiceTest {
         );
         DbtScopedProjectService.CandidateArtifactEntry entry = candidateEntry();
         DbtScopedProjectService.CandidateArtifact pinnedSource = artifact(
-            "models/.dts-pinned-sources.yml",
+            "models/_dts_pinned_sources.yml",
             "version: 2\nsources:\n  - name: ods\n    schema: ods\n    tables:\n      - name: finance_event\n"
         );
 
@@ -205,7 +238,7 @@ class DbtScopedProjectServiceTest {
         );
 
         Path projectDir = Path.of(prepared.projectDir());
-        assertThat(projectDir.resolve("models/.dts-pinned-sources.yml")).isRegularFile();
+        assertThat(projectDir.resolve("models/_dts_pinned_sources.yml")).isRegularFile();
         assertThat(projectDir.resolve("models/ods/sources.yml")).doesNotExist();
     }
 

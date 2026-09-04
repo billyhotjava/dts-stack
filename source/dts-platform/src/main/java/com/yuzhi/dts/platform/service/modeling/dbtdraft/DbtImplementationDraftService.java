@@ -77,6 +77,7 @@ import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -84,6 +85,10 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,7 +97,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class DbtImplementationDraftService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DbtImplementationDraftService.class);
     private static final Duration DRAFT_TTL = Duration.ofHours(24);
+    private static final Pattern VERSIONED_COMPILER_ARTIFACT = Pattern.compile(
+        "^(models/[A-Za-z_][A-Za-z0-9_]*/[A-Za-z_][A-Za-z0-9_]*)/v[1-9][0-9]*/i[1-9][0-9]*/([A-Za-z_][A-Za-z0-9_]*\\.(?:sql|yml))$"
+    );
     private static final String AUDIT_CREATE = "MODELING_DBT_DRAFT_CREATE";
     private static final String AUDIT_SAVE = "MODELING_DBT_DRAFT_SAVE";
     private static final String AUDIT_VALIDATE = "MODELING_DBT_DRAFT_VALIDATE";
@@ -819,39 +828,49 @@ public class DbtImplementationDraftService {
             currentCompilerFiles
         );
         addMatchingFrozenCompilerFiles(paths, persisted, draft, currentCompilerFiles.keySet());
+        addMatchingHistoricalFrozenCompilerFiles(paths, persisted, draft, currentCompilerFiles.keySet());
 
+        Map<String, String> savedCompilerFiles = authoringCompilerEvidence(
+            tenantId,
+            modelSpecId,
+            draft,
+            currentModel,
+            currentImplementation
+        );
+        addMatchingCompilerFiles(paths, persisted, savedCompilerFiles);
+        addMatchingFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
+        addMatchingHistoricalFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
+        return java.util.Set.copyOf(paths);
+    }
+
+    private Map<String, String> authoringCompilerEvidence(
+        String tenantId,
+        UUID modelSpecId,
+        DraftRow draft,
+        ModelSpecView currentModel,
+        ImplementationView currentImplementation
+    ) {
         JsonNode savedSnapshot = jsonNode(draft.modelSpecSnapshot());
         var decoded = snapshotDecoder.decode(savedSnapshot);
-        if (decoded.valid() && decoded.visualImplementation() != null) {
-            try {
-                ModelSpecView savedModel = snapshotCodec.toUpdatedView(
-                    currentModel,
-                    withImplementationMode(decoded.modelSpec(), ImplementationMode.DESIGNER_GENERATED),
-                    currentModel.revision(),
-                    clock.instant()
-                );
-                ImplementationView savedImplementation = visualImplementation(
-                    modelSpecId,
-                    savedModel,
-                    currentImplementation,
-                    decoded.visualImplementation()
-                );
-                Map<String, String> savedCompilerFiles = compilerBundleEvidence(
-                    tenantId,
-                    savedModel,
-                    savedImplementation
-                );
-                addMatchingCompilerFiles(
-                    paths,
-                    persisted,
-                    savedCompilerFiles
-                );
-                addMatchingFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
-            } catch (RuntimeException ignored) {
-                // Missing reconstruction evidence must keep the file unmanaged and protected.
-            }
+        if (!decoded.valid() || decoded.visualImplementation() == null) return Map.of();
+        try {
+            ModelSpecView savedModel = snapshotCodec.toUpdatedView(
+                currentModel,
+                withImplementationMode(decoded.modelSpec(), ImplementationMode.DESIGNER_GENERATED),
+                currentModel.revision(),
+                clock.instant()
+            );
+            ImplementationView savedImplementation = visualImplementation(
+                modelSpecId,
+                savedModel,
+                currentImplementation,
+                decoded.visualImplementation()
+            );
+            return compilerBundleEvidence(tenantId, savedModel, savedImplementation);
+        } catch (RuntimeException ignored) {
+            // Missing reconstruction evidence must keep the file unmanaged and protected.
+            return Map.of();
         }
-        return java.util.Set.copyOf(paths);
     }
 
     private Map<String, String> compilerBundleEvidence(
@@ -913,6 +932,41 @@ public class DbtImplementationDraftService {
             FileInput actual = persisted.get(path);
             if (actual != null && Objects.equals(actual.content(), frozenFiles.get(path))) ownedPaths.add(path);
         });
+    }
+
+    private void addMatchingHistoricalFrozenCompilerFiles(
+        java.util.Set<String> ownedPaths,
+        Map<String, FileInput> persisted,
+        DraftRow draft,
+        java.util.Set<String> expectedPaths
+    ) {
+        if (draft.sourceBundleSnapshot() == null || expectedPaths.isEmpty()) return;
+        SourceBundleView frozen = sourceBundleSnapshot(draft.sourceBundleSnapshot());
+        Map<String, String> frozenFiles = new LinkedHashMap<>();
+        frozen.files().forEach(file -> frozenFiles.put(file.path(), file.content()));
+        Map<String, String> expectedBySignature = new LinkedHashMap<>();
+        expectedPaths.forEach(path -> {
+            String signature = compilerArtifactSignature(path);
+            if (signature != null && persisted.containsKey(path)) expectedBySignature.put(signature, path);
+        });
+        frozenFiles.forEach((path, content) -> {
+            String signature = compilerArtifactSignature(path);
+            String currentPath = signature == null ? null : expectedBySignature.get(signature);
+            FileInput actual = persisted.get(path);
+            if (
+                currentPath != null &&
+                !Objects.equals(path, currentPath) &&
+                actual != null &&
+                Objects.equals(actual.content(), content)
+            ) {
+                ownedPaths.add(path);
+            }
+        });
+    }
+
+    private static String compilerArtifactSignature(String path) {
+        Matcher matcher = path == null ? null : VERSIONED_COMPILER_ARTIFACT.matcher(path);
+        return matcher != null && matcher.matches() ? matcher.group(1) + "/" + matcher.group(2) : null;
     }
 
     private LinkedHashMap<String, String> compiledFiles(
@@ -1049,6 +1103,18 @@ public class DbtImplementationDraftService {
                 "Save the isolated dbt project before validation"
             );
         }
+        ValidationDraftContent repaired = repairHistoricalCompilerFiles(
+            tenantId,
+            actorId,
+            modelSpecId,
+            current,
+            files,
+            now
+        );
+        current = repaired.draft();
+        files = repaired.files();
+        String validationEtag = current.etag();
+        DraftRow validationDraft = current;
         ValidatedProject validated = staticValidate(files);
         BundleSnapshot bundle = freezeBundle(files, validated);
         List<Diagnostic> diagnostics = diagnostics(validated);
@@ -1066,7 +1132,7 @@ public class DbtImplementationDraftService {
                 modelSpecId,
                 draftId,
                 actorId,
-                expectedEtag,
+                validationEtag,
                 nextEtag(),
                 validated.validatedChecksum(),
                 bundle.projectChecksum(),
@@ -1075,7 +1141,7 @@ public class DbtImplementationDraftService {
                 validationSummary(diagnostics, structure, dependencyValidation),
                 now
             )
-            .orElseThrow(() -> etagConflict(current, expectedEtag));
+            .orElseThrow(() -> etagConflict(validationDraft, validationEtag));
         audit(
             AUDIT_VALIDATE,
             saved,
@@ -1097,6 +1163,69 @@ public class DbtImplementationDraftService {
             dependencyValidation
         );
     }
+
+    private ValidationDraftContent repairHistoricalCompilerFiles(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        DraftRow draft,
+        List<FileRow> files,
+        Instant now
+    ) {
+        if (visualCompiler == null || draft.modelSpecSnapshot() == null || draft.sourceBundleSnapshot() == null) {
+            return new ValidationDraftContent(draft, files);
+        }
+        try {
+            ModelSpecView currentModel = requireEditableModel(tenantId, actorId, modelSpecId, draft.planId(), true);
+            requireModelPins(draft, currentModel);
+            ImplementationView currentImplementation = lifecycle.timeline(tenantId, modelSpecId).implementation();
+            requireImplementationPin(
+                modelSpecId,
+                currentImplementation,
+                draft.baseImplementationRevision(),
+                draft.baseImplementationChecksum(),
+                true
+            );
+            Map<String, FileInput> persisted = new LinkedHashMap<>();
+            files.forEach(file -> persisted.put(file.path(), new FileInput(file.path(), file.content())));
+            Map<String, String> expected = authoringCompilerEvidence(
+                tenantId,
+                modelSpecId,
+                draft,
+                currentModel,
+                currentImplementation
+            );
+            java.util.Set<String> historical = new java.util.LinkedHashSet<>();
+            addMatchingHistoricalFrozenCompilerFiles(historical, persisted, draft, expected.keySet());
+            if (historical.isEmpty()) return new ValidationDraftContent(draft, files);
+            List<FileInput> retained = DbtImplementationDraftContract.normalizeFiles(
+                files
+                    .stream()
+                    .filter(file -> !historical.contains(file.path()))
+                    .map(file -> new FileInput(file.path(), file.content()))
+                    .toList()
+            );
+            DraftRow repaired = repository
+                .replaceFiles(
+                    tenantId,
+                    modelSpecId,
+                    draft.id(),
+                    actorId,
+                    draft.etag(),
+                    nextEtag(),
+                    retained,
+                    now
+                )
+                .orElseThrow(() -> etagConflict(draft, draft.etag()));
+            return new ValidationDraftContent(repaired, repository.listFiles(draft.id()));
+        } catch (DraftException failure) {
+            throw failure;
+        } catch (RuntimeException ignored) {
+            return new ValidationDraftContent(draft, files);
+        }
+    }
+
+    private record ValidationDraftContent(DraftRow draft, List<FileRow> files) {}
 
     private DependencyValidationView validateDependencies(
         String tenantId,
@@ -1471,13 +1600,19 @@ public class DbtImplementationDraftService {
         generatedConfig.put("dbtUniqueId", target.dbtUniqueId());
         generatedConfig.put("projectChecksum", bundle.projectChecksum());
         generatedConfig.put("bundleChecksum", bundle.bundleChecksum());
-        if (unifiedAuthoring) {
-            Map<String, Object> visualImplementation = visualImplementationConfig(current);
-            if (visualImplementation != null) generatedConfig.put("visualImplementation", visualImplementation);
-        }
+        Map<String, Object> visualImplementation = unifiedAuthoring
+            ? visualImplementationConfig(current)
+            : null;
+        if (visualImplementation != null) generatedConfig.put("visualImplementation", visualImplementation);
         if (committedDependencies != null) {
             generatedConfig.put("dependencyChecksum", committedDependencies.snapshot().dependencyChecksum());
-            generatedConfig.put("dependencySnapshot", committedDependencies.snapshot());
+            generatedConfig.put(
+                "dependencySnapshot",
+                objectMapper.convertValue(
+                    committedDependencies.snapshot(),
+                    new TypeReference<Map<String, Object>>() {}
+                )
+            );
             generatedConfig.put(
                 "managedDependencyAliases",
                 frozenSource == null ? Map.of() : frozenSource.managedDependencyAliases()
@@ -1489,7 +1624,7 @@ public class DbtImplementationDraftService {
             List.of(),
             Map.of(
                 "targetPhysicalName",
-                target.name(),
+                committedTargetPhysicalName(visualImplementation, target.name()),
                 "loadStrategy",
                 "incremental".equalsIgnoreCase(model.materialization()) ? "INCREMENTAL" : "FULL",
                 "partitionFields",
@@ -1510,7 +1645,13 @@ public class DbtImplementationDraftService {
             target.dbtUniqueId(),
             command
         );
-        List<ImportedArtifact> artifacts = artifacts(target, model.materialization(), bundle);
+        List<ImportedArtifact> artifacts = artifacts(
+            validated,
+            target,
+            model.materialization(),
+            bundle,
+            files
+        );
         ImportResult imported = artifactImports.importArtifacts(
             new ImportCommand(
                 tenantId,
@@ -1571,6 +1712,22 @@ public class DbtImplementationDraftService {
         JsonNode visual = snapshot == null ? null : snapshot.path("visualImplementation");
         if (visual == null || !visual.isObject()) return null;
         return objectMapper.convertValue(visual, new TypeReference<Map<String, Object>>() {});
+    }
+
+    private static String committedTargetPhysicalName(
+        Map<String, Object> visualImplementation,
+        String fallback
+    ) {
+        Object rawSettings = visualImplementation == null
+            ? null
+            : visualImplementation.get("settings");
+        if (!(rawSettings instanceof Map<?, ?> settings)) {
+            return fallback;
+        }
+        String configured = settings.get("targetPhysicalName") instanceof String value
+            ? normalizedTargetPhysicalName(value)
+            : null;
+        return configured == null ? fallback : configured;
     }
 
     private static UpdateModelSpecCommand withProjectedFields(
@@ -1772,31 +1929,38 @@ public class DbtImplementationDraftService {
     }
 
     private static List<ImportedArtifact> artifacts(
-        ValidatedNode node,
+        ValidatedProject validated,
+        ValidatedNode target,
         String materialization,
-        BundleSnapshot bundle
+        BundleSnapshot bundle,
+        List<FileRow> files
     ) {
-        return List.of(
+        List<ImportedArtifact> artifacts = new java.util.ArrayList<>();
+        artifacts.add(
             new ImportedArtifact(
-                node.dbtUniqueId(),
+                target.dbtUniqueId(),
                 NodeKind.MODEL,
                 ArtifactType.SQL,
-                node.resourcePath(),
-                node.sqlChecksum(),
-                node.sql(),
+                target.resourcePath(),
+                target.sqlChecksum(),
+                target.sql(),
                 materialization
-            ),
+            )
+        );
+        artifacts.add(
             new ImportedArtifact(
-                node.dbtUniqueId(),
+                target.dbtUniqueId(),
                 NodeKind.MODEL,
                 ArtifactType.SCHEMA,
-                node.resourcePath() + "#schema",
-                node.schemaChecksum(),
-                node.schema(),
+                target.resourcePath() + "#schema",
+                target.schemaChecksum(),
+                target.schema(),
                 materialization
-            ),
+            )
+        );
+        artifacts.add(
             new ImportedArtifact(
-                node.dbtUniqueId(),
+                target.dbtUniqueId(),
                 NodeKind.MODEL,
                 ArtifactType.CONFIG,
                 ".dts/dbt-project-bundle.json",
@@ -1805,14 +1969,87 @@ public class DbtImplementationDraftService {
                 materialization
             )
         );
+        dependencyNodes(validated, target).forEach(node -> {
+            String nodeMaterialization = node.materialization().toLowerCase(Locale.ROOT);
+            NodeKind nodeKind = "ephemeral".equals(nodeMaterialization) ? NodeKind.EPHEMERAL : NodeKind.STG;
+            artifacts.add(
+                new ImportedArtifact(
+                    node.dbtUniqueId(),
+                    nodeKind,
+                    ArtifactType.SQL,
+                    node.resourcePath(),
+                    node.sqlChecksum(),
+                    node.sql(),
+                    nodeMaterialization
+                )
+            );
+        });
+        java.util.Set<String> importedPaths = artifacts
+            .stream()
+            .map(ImportedArtifact::path)
+            .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        java.util.Set<String> availableModelNames = importedPaths
+            .stream()
+            .filter(path -> path.startsWith("models/") && path.endsWith(".sql"))
+            .map(DbtImplementationDraftService::modelName)
+            .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        DbtProjectBundleManifest.resolveLocalModelDependencies(
+            bundleFiles(files),
+            List.of(target.sql()),
+            availableModelNames
+        ).forEach(file -> {
+            if (!importedPaths.add(file.path())) return;
+            boolean ephemeral = file.content().toLowerCase(Locale.ROOT).matches(
+                "(?s).*materialized\\s*=\\s*['\"]ephemeral['\"].*"
+            );
+            String nodeMaterialization = ephemeral ? "ephemeral" : "view";
+            artifacts.add(
+                new ImportedArtifact(
+                    "model." + validated.projectKey() + "." + modelName(file.path()),
+                    ephemeral ? NodeKind.EPHEMERAL : NodeKind.STG,
+                    ArtifactType.SQL,
+                    file.path(),
+                    file.checksum(),
+                    file.content(),
+                    nodeMaterialization
+                )
+            );
+        });
+        return List.copyOf(artifacts);
+    }
+
+    private static String modelName(String path) {
+        String fileName = path.substring(path.lastIndexOf('/') + 1);
+        return fileName.substring(0, fileName.length() - ".sql".length());
+    }
+
+    private static List<ValidatedNode> dependencyNodes(ValidatedProject validated, ValidatedNode target) {
+        Map<String, ValidatedNode> byUniqueId = new LinkedHashMap<>();
+        validated.nodes().forEach(node -> byUniqueId.put(node.dbtUniqueId(), node));
+        ArrayDeque<String> pending = new ArrayDeque<>(target.dependencies());
+        java.util.Set<String> visited = new java.util.LinkedHashSet<>();
+        List<ValidatedNode> dependencies = new java.util.ArrayList<>();
+        while (!pending.isEmpty()) {
+            String uniqueId = pending.removeFirst();
+            if (!visited.add(uniqueId)) continue;
+            ValidatedNode dependency = byUniqueId.get(uniqueId);
+            if (dependency == null || Objects.equals(dependency.dbtUniqueId(), target.dbtUniqueId())) continue;
+            dependencies.add(dependency);
+            pending.addAll(dependency.dependencies());
+        }
+        dependencies.sort(java.util.Comparator.comparing(ValidatedNode::dbtUniqueId));
+        return List.copyOf(dependencies);
     }
 
     private BundleSnapshot freezeBundle(List<FileRow> files, ValidatedProject validated) {
-        List<BundleFile> bundleFiles = files
+        return DbtProjectBundleManifest.freeze(objectMapper, bundleFiles(files), validated);
+    }
+
+    private static List<BundleFile> bundleFiles(List<FileRow> files) {
+        return files
             .stream()
             .map(file -> new BundleFile(file.path(), file.content(), file.checksum(), file.byteSize()))
             .toList();
-        return DbtProjectBundleManifest.freeze(objectMapper, bundleFiles, validated);
     }
 
     private SourceBundleView sourceBundle(
@@ -2550,6 +2787,21 @@ public class DbtImplementationDraftService {
         RuntimeException failure
     ) {
         DraftException safe = safeFailure(failure, correlationId);
+        if (safe.kind() == ErrorKind.SYSTEM_ERROR) {
+            Throwable rootFailure = rootCause(failure);
+            LOG.error(
+                "Advanced dbt draft operation failed correlationId={} action={} modelSpecId={} draftId={} " +
+                "failureType={} failureLocation={} rootFailureType={} rootFailureLocation={}",
+                correlationId,
+                action,
+                modelSpecId,
+                draftId,
+                failure.getClass().getName(),
+                failureLocation(failure),
+                rootFailure.getClass().getName(),
+                failureLocation(rootFailure)
+            );
+        }
         LinkedHashMap<String, Object> payload = new LinkedHashMap<>();
         payload.put("correlationId", correlationId);
         payload.put("result", "FAILED");
@@ -2580,9 +2832,36 @@ public class DbtImplementationDraftService {
         try {
             auditRecorder.recordFailure(action, resourceId, Map.copyOf(payload));
         } catch (RuntimeException auditFailure) {
+            Throwable rootFailure = rootCause(auditFailure);
+            LOG.error(
+                "Advanced dbt draft failure audit failed correlationId={} action={} modelSpecId={} draftId={} " +
+                "failureType={} failureLocation={} rootFailureType={} rootFailureLocation={}",
+                correlationId,
+                action,
+                modelSpecId,
+                draftId,
+                auditFailure.getClass().getName(),
+                failureLocation(auditFailure),
+                rootFailure.getClass().getName(),
+                failureLocation(rootFailure)
+            );
             return DbtImplementationDraftContract.systemError(correlationId, auditFailure);
         }
         return safe;
+    }
+
+    private static Throwable rootCause(Throwable failure) {
+        Throwable root = failure;
+        while (root.getCause() != null && root.getCause() != root) root = root.getCause();
+        return root;
+    }
+
+    private static StackTraceElement failureLocation(Throwable failure) {
+        StackTraceElement[] trace = failure.getStackTrace();
+        for (StackTraceElement frame : trace) {
+            if (frame.getClassName().startsWith("com.yuzhi.dts.")) return frame;
+        }
+        return trace.length == 0 ? null : trace[0];
     }
 
     private static DraftException safeFailure(RuntimeException failure, String correlationId) {

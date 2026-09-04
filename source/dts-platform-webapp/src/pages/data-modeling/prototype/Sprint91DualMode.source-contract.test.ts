@@ -61,6 +61,31 @@ describe("Sprint-92 unified authoring source contracts", () => {
 		expect(session).toContain("!open || shouldPersistBeforeAuthoringValidation(open.state, dirty, codeDirty)");
 	});
 
+	it("refreshes repaired projection state after validation without dropping the commit credential", () => {
+		const session = source("useModelAuthoringSession.ts");
+		const validateStart = session.indexOf("const checked = await validateModelAuthoringDraft");
+		const retainCredential = session.indexOf("setValidation(checked)", validateStart);
+		const refreshContext = session.indexOf("const refreshed = await getModelAuthoringContext(modelId)", validateStart);
+		expect(validateStart).toBeGreaterThan(-1);
+		expect(retainCredential).toBeGreaterThan(validateStart);
+		expect(refreshContext).toBeGreaterThan(retainCredential);
+		expect(session).toContain("if (refreshedOpen) setFiles(authoringFilesOf(refreshedOpen))");
+	});
+
+	it("replaces the consumed authoring draft with authoritative context after commit", () => {
+		const session = source("useModelAuthoringSession.ts");
+		const commitStart = session.indexOf("const committed = await commitModelAuthoringDraft");
+		const refreshContext = session.indexOf(
+			"const refreshed = await getModelAuthoringContext(authoringContext.model.id)",
+			commitStart,
+		);
+		expect(commitStart).toBeGreaterThan(-1);
+		expect(refreshContext).toBeGreaterThan(commitStart);
+		expect(session).toContain("setAuthoringContext(refreshed)");
+		expect(session).toContain("setFiles(authoringFilesOf(refreshed.openDraft))");
+		expect(session).toContain("模型实现已提交，但页面状态刷新失败。请刷新后继续。");
+	});
+
 	it("reloads the authoring session explicitly and keeps request failures in one display lane", () => {
 		const page = source("ModelingWorkbenchPage.tsx");
 		const session = source("useModelAuthoringSession.ts");

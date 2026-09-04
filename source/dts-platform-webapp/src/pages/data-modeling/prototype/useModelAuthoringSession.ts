@@ -104,15 +104,12 @@ export function useModelAuthoringSession({
 		setFocusNode(null);
 	}, []);
 
-	const recordFailure = useCallback(
-		(error: unknown, fallback: string) => {
-			const status = Number((error as { response?: { status?: unknown } } | null)?.response?.status ?? 0);
-			setConflict(status === 409 || status === 412);
-			const normalized = normalizeModelingRequestFailure(error, fallback);
-			setAuthoringFailure(normalized.message);
-		},
-		[],
-	);
+	const recordFailure = useCallback((error: unknown, fallback: string) => {
+		const status = Number((error as { response?: { status?: unknown } } | null)?.response?.status ?? 0);
+		setConflict(status === 409 || status === 412);
+		const normalized = normalizeModelingRequestFailure(error, fallback);
+		setAuthoringFailure(normalized.message);
+	}, []);
 	const clearFailure = useCallback(() => {
 		setConflict(false);
 		setAuthoringFailure("");
@@ -271,20 +268,22 @@ export function useModelAuthoringSession({
 			if (!open || shouldPersistBeforeAuthoringValidation(open.state, dirty, codeDirty)) {
 				open = await persist(activeView);
 			}
-			const checked = await validateModelAuthoringDraft(
-				authoringContext?.model.id || selectedModelId,
-				open.draftId,
-				open.etag,
-			);
+			const modelId = authoringContext?.model.id || selectedModelId;
+			const checked = await validateModelAuthoringDraft(modelId, open.draftId, open.etag);
 			setValidation(checked);
 			if (checked.implementationValidation) {
-				const nextOpen: DbtImplementationDraft = {
-					...open,
-					state: "VALIDATED",
-					etag: checked.implementationValidation.etag,
-					expiresAt: checked.implementationValidation.expiresAt,
-				};
-				setAuthoringContext((current) => (current ? { ...current, openDraft: nextOpen } : current));
+				const refreshed = await getModelAuthoringContext(modelId);
+				const refreshedOpen = refreshed.openDraft?.draftId === open.draftId ? refreshed.openDraft : null;
+				const nextOpen: DbtImplementationDraft =
+					refreshedOpen ||
+					({
+						...open,
+						state: "VALIDATED",
+						etag: checked.implementationValidation.etag,
+						expiresAt: checked.implementationValidation.expiresAt,
+					} satisfies DbtImplementationDraft);
+				setAuthoringContext({ ...refreshed, openDraft: nextOpen });
+				if (refreshedOpen) setFiles(authoringFilesOf(refreshedOpen));
 			}
 			show(checked.modelIssues.length || checked.projectionIssues.length ? "校验完成，请处理诊断" : "模型草稿校验通过");
 		} catch (error) {
@@ -308,9 +307,17 @@ export function useModelAuthoringSession({
 				idempotencyKey: newModelingIdempotencyKey(),
 			});
 			setCommit(committed);
+			setValidation(null);
 			setCodeDirty(false);
 			show(`模型实现已提交：模型 r${committed.receipt.modelRevision}`);
 			await loadWorkbench(authoringContext.model.id);
+			try {
+				const refreshed = await getModelAuthoringContext(authoringContext.model.id);
+				setAuthoringContext(refreshed);
+				setFiles(authoringFilesOf(refreshed.openDraft));
+			} catch (refreshError) {
+				recordFailure(refreshError, "模型实现已提交，但页面状态刷新失败。请刷新后继续。");
+			}
 		} catch (error) {
 			recordFailure(error, "模型实现提交失败。");
 		} finally {

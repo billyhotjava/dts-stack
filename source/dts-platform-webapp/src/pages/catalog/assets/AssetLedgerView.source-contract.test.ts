@@ -23,8 +23,10 @@ test("asset directory keeps only the existing bounded batch actions", () => {
 	assert.match(SOURCE, /manageTag/);
 });
 
-test("asset rows navigate to the canonical detail page and expose no inline action column", () => {
+test("asset rows navigate to the canonical detail page and expose an explicit edit action", () => {
 	assert.match(SOURCE, /router\.push\(`\/catalog\/datasets\/\$\{row\.id\}`\)/);
+	assert.match(SOURCE, /router\.push\(`\/catalog\/datasets\/\$\{row\.id\}\?tab=governance`\)/);
+	assert.match(SOURCE, /const sourceRoute = family === "SCREEN" \? "\/bi\/screens" : row\.detailRoute/);
 	assert.match(SOURCE, /title: "资产名称"/);
 	assert.match(SOURCE, /title: "数据源类型"/);
 	assert.match(SOURCE, /title: "来源系统"/);
@@ -33,7 +35,9 @@ test("asset rows navigate to the canonical detail page and expose no inline acti
 	assert.match(SOURCE, /title: "密级"/);
 	assert.match(SOURCE, /title: "责任归属"/);
 	assert.match(SOURCE, /title: "更新时间"/);
-	assert.doesNotMatch(SOURCE, /title: "操作"|row-request-access|治理资产|申请权限/);
+	assert.match(SOURCE, /title: "操作"/);
+	assert.match(SOURCE, /编辑资产/);
+	assert.doesNotMatch(SOURCE, /row-request-access|治理资产|申请权限/);
 });
 
 test("screen assets enter screen management instead of a preview-only source route", () => {

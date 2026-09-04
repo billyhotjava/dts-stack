@@ -25,7 +25,10 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleCompilerPort;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleService;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyReadPort;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencyService.Resolution;
 import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.DependencyFacts;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Reconciliation;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Snapshot;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Grain;
@@ -42,6 +45,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelingDbtCompiler.CompileExcept
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ArtifactType;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ImportCommand;
 import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.ImportResult;
+import com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportService.NodeKind;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CommitDraftRequest;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.CommitView;
 import com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftContract.AuthoringOrigin;
@@ -586,6 +590,97 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     @Test
+    void validationRetiresOnlyUnchangedHistoricalCompilerSiblings() throws Exception {
+        ModelLifecycleCompilerPort visualCompiler = org.mockito.Mockito.mock(ModelLifecycleCompilerPort.class);
+        ReflectionTestUtils.setField(service, "visualCompiler", visualCompiler);
+        String projectFile = "name: sprint83\nversion: '1.0'\nconfig-version: 2\nmodel-paths: [models]\n";
+        String stalePath = "models/dwd/orders/v2/i1/stg_orders.sql";
+        String currentStgPath = "models/dwd/orders/v3/i2/stg_orders.sql";
+        String currentModelPath = "models/dwd/orders/v3/i2/orders.sql";
+        String customPath = "models/dwd/orders/v2/i1/custom_business_rule.sql";
+        List<FileInput> working = List.of(
+            new FileInput("dbt_project.yml", projectFile),
+            new FileInput(stalePath, "select old_value as record_id\n"),
+            new FileInput(currentStgPath, "select current_value as record_id\n"),
+            new FileInput(currentModelPath, "select record_id from {{ ref('stg_orders') }}\n"),
+            new FileInput(customPath, "select 'keep me' as note\n")
+        );
+        SourceBundleView canonical = sourceBundle("sprint83", working);
+        SourceBundleView frozen = new SourceBundleView(
+            canonical.projectKey(),
+            canonical.projectChecksum(),
+            canonical.bundleChecksum(),
+            SourceBundleKind.FROZEN_SOURCE_BUNDLE,
+            true,
+            canonical.files()
+        );
+        DraftRow current = authoringRowWithSource(
+            objectMapper.writeValueAsString(versionedVisualSnapshot()),
+            objectMapper.writeValueAsString(frozen),
+            "{}"
+        );
+        DraftRow repaired = copyDraft(current, DraftState.DRAFT, "repair-etag");
+        List<FileRow> beforeRepair = working.stream().map(file -> file(file.path(), file.content())).toList();
+        List<FileRow> afterRepair = beforeRepair.stream().filter(file -> !stalePath.equals(file.path())).toList();
+        when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(current));
+        when(repository.listFiles(DRAFT_ID)).thenReturn(beforeRepair, afterRepair);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        ImplementationView implementation = baseImplementation();
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(implementation, List.of(), List.of()));
+        when(visualCompiler.compile(eq(TENANT), any(ModelSpecView.class), any(ImplementationView.class)))
+            .thenReturn(List.of(
+                new ArtifactWrite("SQL", currentStgPath, "1".repeat(64), "select current_value as record_id\n", "MODEL", "ephemeral", null),
+                new ArtifactWrite("SQL", currentModelPath, "2".repeat(64), "select record_id from {{ ref('stg_orders') }}\n", "MODEL", "table", null)
+            ));
+        when(repository.replaceFiles(any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(Optional.of(repaired));
+        ValidatedProject validatedProject = project();
+        when(validator.validate(any(Map.class))).thenReturn(validatedProject);
+        when(repository.markValidated(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(Optional.of(copyDraft(repaired, DraftState.VALIDATED, "validated-etag")));
+
+        service.validate(
+            TENANT,
+            ACTOR,
+            MODEL_ID,
+            DRAFT_ID,
+            new ValidateDraftRequest("authoring-etag")
+        );
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<FileInput>> repairedFiles = ArgumentCaptor.forClass(List.class);
+        verify(repository).replaceFiles(
+            eq(TENANT),
+            eq(MODEL_ID),
+            eq(DRAFT_ID),
+            eq(ACTOR),
+            eq("authoring-etag"),
+            any(),
+            repairedFiles.capture(),
+            eq(NOW)
+        );
+        assertThat(repairedFiles.getValue()).extracting(FileInput::path)
+            .doesNotContain(stalePath)
+            .contains(currentStgPath, currentModelPath, customPath);
+        verify(repository).markValidated(
+            eq(TENANT),
+            eq(MODEL_ID),
+            eq(DRAFT_ID),
+            eq(ACTOR),
+            eq("repair-etag"),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            eq(NOW)
+        );
+    }
+
+    @Test
     void visualSaveRejectsAnyMutationOfAnUnmanagedBundleFileBeforeCompilation() throws Exception {
         String managedPath = "models/dwd/orders/v3/i2/orders.sql";
         String unmanagedPath = "macros/custom_business_rule.sql";
@@ -1065,32 +1160,82 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     @Test
-    void commitsTheFrozenBundleAsAnImmutableConfigArtifactAndBindsItIntoImplementationIdempotency() {
-        List<FileRow> files = files();
-        ValidatedProject project = project();
-        BundleSnapshot bundle = bundle(files, project);
-        String derivedKey = commitKey("commit-83", VALIDATED_CHECKSUM, bundle.bundleChecksum());
-        DraftRow validated = row(
-            DraftState.VALIDATED,
-            "etag",
-            NOW.plusSeconds(60),
-            VALIDATED_CHECKSUM,
-            bundle.projectChecksum(),
-            bundle.bundleChecksum(),
-            bundle.manifest(),
-            null,
-            null
+    void commitsTheFrozenBundleAsAnImmutableConfigArtifactAndBindsItIntoImplementationIdempotency() throws Exception {
+        String targetSql = "select * from {{ ref('stg_orders') }}\n";
+        String stagingSql = "{{ config(materialized='ephemeral') }}\nselect 1 as order_id\n";
+        List<FileRow> files = List.of(
+            file("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            file("models/orders.sql", targetSql),
+            file("models/stg_orders.sql", stagingSql)
         );
-        DraftRow claimed = row(
-            DraftState.COMMITTING,
-            "claimed-etag",
-            NOW.plusSeconds(60),
-            VALIDATED_CHECKSUM,
+        ValidatedProject project = projectWithGeneratedStaging(targetSql);
+        BundleSnapshot bundle = bundle(files, project);
+        String dependencyChecksum = "9".repeat(64);
+        Snapshot dependencySnapshot = new Snapshot(
+            MODEL_ID,
+            3,
+            MODEL_CHECKSUM,
+            1,
+            IMPLEMENTATION_CHECKSUM,
+            List.of(),
+            List.of(),
+            dependencyChecksum
+        );
+        SourceBundleView sourceBundle = new SourceBundleView(
+            "sprint83",
             bundle.projectChecksum(),
             bundle.bundleChecksum(),
-            bundle.manifest(),
-            derivedKey,
-            null
+            SourceBundleKind.FROZEN_SOURCE_BUNDLE,
+            true,
+            files
+                .stream()
+                .map(file ->
+                    new DbtImplementationDraftContract.BundleFileView(
+                        file.path(),
+                        file.content(),
+                        file.checksum(),
+                        file.byteSize()
+                    )
+                )
+                .toList(),
+            dependencyChecksum,
+            dependencySnapshot,
+            Map.of()
+        );
+        String sourceBundleSnapshot = objectMapper.writeValueAsString(sourceBundle);
+        String derivedKey = commitKey(
+            "commit-83",
+            VALIDATED_CHECKSUM,
+            bundle.bundleChecksum(),
+            dependencyChecksum
+        );
+        DraftRow validated = withSourceBundle(
+            row(
+                DraftState.VALIDATED,
+                "etag",
+                NOW.plusSeconds(60),
+                VALIDATED_CHECKSUM,
+                bundle.projectChecksum(),
+                bundle.bundleChecksum(),
+                bundle.manifest(),
+                null,
+                null
+            ),
+            sourceBundleSnapshot
+        );
+        DraftRow claimed = withSourceBundle(
+            row(
+                DraftState.COMMITTING,
+                "claimed-etag",
+                NOW.plusSeconds(60),
+                VALIDATED_CHECKSUM,
+                bundle.projectChecksum(),
+                bundle.bundleChecksum(),
+                bundle.manifest(),
+                derivedKey,
+                null
+            ),
+            sourceBundleSnapshot
         );
         DraftRow committed = row(
             DraftState.COMMITTED,
@@ -1125,17 +1270,37 @@ class DbtImplementationDraftServiceSecurityTest {
         when(lifecycle.saveImportedDbtImplementation(any(), any(), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn(implementation);
         ImportResult importResult = org.mockito.Mockito.mock(ImportResult.class);
-        when(importResult.artifactCount()).thenReturn(3);
+        when(importResult.artifactCount()).thenReturn(4);
         when(artifactImports.importArtifacts(any())).thenReturn(importResult);
         when(repository.completeCommit(any(), any(), any(), any(), any(), any(), any(), anyInt(), any(), anyInt(), any()))
             .thenReturn(committed);
+        ModelImplementationDependencyService dependencyService = org.mockito.Mockito.mock(
+            ModelImplementationDependencyService.class
+        );
+        when(dependencyService.resolveForDraft(any(), any(), any(), any(), any()))
+            .thenReturn(new Resolution(dependencySnapshot, Map.of()));
+        when(dependencyService.reconcile(any(), any())).thenReturn(new Reconciliation(List.of(), List.of(), List.of()));
+        DbtImplementationDraftService dependencyAwareService = new DbtImplementationDraftService(
+            repository,
+            modelSpecs,
+            lifecycle,
+            writeAccess,
+            validator,
+            artifactImports,
+            representationEvidence,
+            audit,
+            objectMapper,
+            dependencyService,
+            org.mockito.Mockito.mock(ModelLifecycleCompilerPort.class),
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        );
 
-        CommitView receipt = service.commit(
+        CommitView receipt = dependencyAwareService.commit(
             TENANT,
             ACTOR,
             MODEL_ID,
             DRAFT_ID,
-            new CommitDraftRequest("etag", VALIDATED_CHECKSUM, "commit-83")
+            new CommitDraftRequest("etag", VALIDATED_CHECKSUM, dependencyChecksum, "commit-83")
         );
 
         assertThat(receipt.modelRevision()).isEqualTo(4);
@@ -1164,6 +1329,11 @@ class DbtImplementationDraftServiceSecurityTest {
         assertThat(generated.config())
             .containsEntry("bundleChecksum", bundle.bundleChecksum())
             .containsEntry("projectChecksum", bundle.projectChecksum());
+        assertThat(generated.config().get("dependencySnapshot"))
+            .isInstanceOf(Map.class)
+            .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+            .containsEntry("modelSpecId", MODEL_ID.toString())
+            .containsEntry("dependencyChecksum", dependencyChecksum);
 
         ArgumentCaptor<ImportCommand> importCommand = ArgumentCaptor.forClass(ImportCommand.class);
         verify(artifactImports).importArtifacts(importCommand.capture());
@@ -1175,6 +1345,14 @@ class DbtImplementationDraftServiceSecurityTest {
                 assertThat(artifact.content()).isEqualTo(bundle.manifest());
                 assertThat(artifact.checksum()).isEqualTo(bundle.bundleChecksum());
             });
+        assertThat(importCommand.getValue().artifacts())
+            .filteredOn(artifact -> artifact.nodeKind() == NodeKind.EPHEMERAL)
+            .singleElement()
+            .satisfies(artifact -> {
+                assertThat(artifact.artifactType()).isEqualTo(ArtifactType.SQL);
+                assertThat(artifact.path()).isEqualTo("models/stg_orders.sql");
+                assertThat(artifact.content()).isEqualTo(stagingSql);
+            });
     }
 
     @Test
@@ -1183,6 +1361,10 @@ class DbtImplementationDraftServiceSecurityTest {
         ValidatedProject project = project();
         BundleSnapshot bundle = bundle(files, project);
         String derivedKey = commitKey("authoring-commit-83", VALIDATED_CHECKSUM, bundle.bundleChecksum());
+        var authoringSnapshot = versionedVisualSnapshot();
+        authoringSnapshot
+            .withObject("/visualImplementation/settings")
+            .put("targetPhysicalName", "biz_dwd_orders");
         DraftRow validated = authoringRow(
             DraftState.VALIDATED,
             "authoring-etag",
@@ -1193,7 +1375,7 @@ class DbtImplementationDraftServiceSecurityTest {
             bundle.manifest(),
             null,
             null,
-            objectMapper.writeValueAsString(versionedVisualSnapshot())
+            objectMapper.writeValueAsString(authoringSnapshot)
         );
         DraftRow claimed = authoringRow(
             DraftState.COMMITTING,
@@ -1275,6 +1457,8 @@ class DbtImplementationDraftServiceSecurityTest {
         );
         GeneratedInput generated = (GeneratedInput) implementationCommand.getValue().inputs().getFirst();
         assertThat(generated.config()).containsKey("visualImplementation");
+        assertThat(implementationCommand.getValue().settings())
+            .containsEntry("targetPhysicalName", "biz_dwd_orders");
         verify(modelSpecs, never()).synchronizeDbtManagedFields(any(), any(), any(), any(), any());
     }
 
@@ -1575,6 +1759,30 @@ class DbtImplementationDraftServiceSecurityTest {
         return new ValidatedProject(VALIDATED_CHECKSUM, PROJECT_CHECKSUM, "sprint83", List.of(node), List.of());
     }
 
+    private ValidatedProject projectWithGeneratedStaging(String targetSql) {
+        ValidatedNode base = project().nodes().getFirst();
+        ValidatedNode target = new ValidatedNode(
+            base.dbtUniqueId(),
+            base.name(),
+            base.resourcePath(),
+            base.materialization(),
+            base.nodeKind(),
+            targetSql,
+            ModelPackageChecksum.sha256Text(targetSql),
+            base.schema(),
+            base.schemaChecksum(),
+            List.of("source.sprint83.public.orders"),
+            base.reasonCodes()
+        );
+        return new ValidatedProject(
+            VALIDATED_CHECKSUM,
+            PROJECT_CHECKSUM,
+            "sprint83",
+            List.of(target),
+            List.of()
+        );
+    }
+
     private ValidatedProject initialProject(String name) {
         String sql = "-- DTS canonical initialization; replace this placeholder before commit.\n" +
         "select 1 as _dts_placeholder where 1 = 0\n";
@@ -1604,6 +1812,24 @@ class DbtImplementationDraftServiceSecurityTest {
     private static String commitKey(String idempotencyKey, String validatedChecksum, String bundleChecksum) {
         return ModelPackageChecksum.sha256Text(
             String.join("\u0000", "dbt-draft-commit-v1", idempotencyKey, validatedChecksum, bundleChecksum)
+        );
+    }
+
+    private static String commitKey(
+        String idempotencyKey,
+        String validatedChecksum,
+        String bundleChecksum,
+        String dependencyChecksum
+    ) {
+        return ModelPackageChecksum.sha256Text(
+            String.join(
+                "\u0000",
+                "dbt-draft-commit-v2",
+                idempotencyKey,
+                validatedChecksum,
+                bundleChecksum,
+                dependencyChecksum
+            )
         );
     }
 
@@ -1696,6 +1922,78 @@ class DbtImplementationDraftServiceSecurityTest {
             implementationId == null ? null : NOW,
             NOW,
             NOW
+        );
+    }
+
+    private static DraftRow withSourceBundle(DraftRow row, String sourceBundleSnapshot) {
+        return new DraftRow(
+            row.id(),
+            row.tenantId(),
+            row.planId(),
+            row.modelSpecId(),
+            row.actorId(),
+            row.baseModelRevision(),
+            row.baseModelChecksum(),
+            row.baseImplementationRevision(),
+            row.baseImplementationChecksum(),
+            row.idempotencyKey(),
+            row.requestHash(),
+            sourceBundleSnapshot,
+            row.modelSpecSnapshot(),
+            row.projectionSummary(),
+            row.authoringOrigin(),
+            row.state(),
+            row.etag(),
+            row.expiresAt(),
+            row.validatedChecksum(),
+            row.projectChecksum(),
+            row.bundleChecksum(),
+            row.bundleManifest(),
+            row.validationSummary(),
+            row.commitIdempotencyKey(),
+            row.implementationId(),
+            row.implementationRevision(),
+            row.implementationChecksum(),
+            row.artifactCount(),
+            row.committedAt(),
+            row.createdAt(),
+            row.updatedAt()
+        );
+    }
+
+    private static DraftRow copyDraft(DraftRow row, DraftState state, String etag) {
+        return new DraftRow(
+            row.id(),
+            row.tenantId(),
+            row.planId(),
+            row.modelSpecId(),
+            row.actorId(),
+            row.baseModelRevision(),
+            row.baseModelChecksum(),
+            row.baseImplementationRevision(),
+            row.baseImplementationChecksum(),
+            row.idempotencyKey(),
+            row.requestHash(),
+            row.sourceBundleSnapshot(),
+            row.modelSpecSnapshot(),
+            row.projectionSummary(),
+            row.authoringOrigin(),
+            state,
+            etag,
+            row.expiresAt(),
+            row.validatedChecksum(),
+            row.projectChecksum(),
+            row.bundleChecksum(),
+            row.bundleManifest(),
+            row.validationSummary(),
+            row.commitIdempotencyKey(),
+            row.implementationId(),
+            row.implementationRevision(),
+            row.implementationChecksum(),
+            row.artifactCount(),
+            row.committedAt(),
+            row.createdAt(),
+            row.updatedAt()
         );
     }
 

@@ -88,7 +88,7 @@ public class ModelMaterializationSourceAvailabilityGuard {
 
     private PinnedSourceDefinition pinnedSource(PhysicalSourceRequest request, UUID dispatchId) {
         SourceRef source = sourceValidation
-            .resolveCurrentBindingForCompiler(
+            .resolveCurrentBindingForExecutionCompiler(
                 request.tenantId(),
                 request.planId(),
                 request.sourceBindingId(),

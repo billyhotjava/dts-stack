@@ -330,38 +330,29 @@ export function ModelPublishDialog({
 		setBusy("build");
 		setFailure("");
 		try {
-			let checkedPlan: MaterializationPlanPreview | null = null;
-			if (requiresPlan) {
-				checkedPlan = await previewMaterializationPlan(planId, {
+			const requireCurrentMaterializationPlan = async (fallback: string) => {
+				const preview = await previewMaterializationPlan(planId, {
 					environment,
 					requestedModelSpecIds: materializationRequestedIds,
 					strategy,
 				});
-				setMaterializationPlan(checkedPlan);
-				setPlanState(checkedPlan.canStart ? "ready" : "blocked");
-				if (!checkedPlan.canStart) {
+				setMaterializationPlan(preview);
+				setPlanState(preview.canStart ? "ready" : "blocked");
+				if (!preview.canStart) {
 					throw new Error(
-						checkedPlan.blockers.map((blocker) => `${blocker.code}：${blocker.message}`).join("；") ||
-							"当前依赖计划存在阻断。",
+						preview.blockers.map((blocker) => `${blocker.code}：${blocker.message}`).join("；") || fallback,
 					);
 				}
+				return preview;
+			};
+			let checkedPlan: MaterializationPlanPreview | null = null;
+			if (requiresPlan) {
+				checkedPlan = await requireCurrentMaterializationPlan("当前依赖计划存在阻断。");
 				await compileSelectedModels(
 					selection,
 					checkedPlan.orderedEntries.filter((entry) => entry.action === "BUILD").map((entry) => entry.modelSpecId),
 				);
-				checkedPlan = await previewMaterializationPlan(planId, {
-					environment,
-					requestedModelSpecIds: materializationRequestedIds,
-					strategy,
-				});
-				setMaterializationPlan(checkedPlan);
-				setPlanState(checkedPlan.canStart ? "ready" : "blocked");
-				if (!checkedPlan.canStart) {
-					throw new Error(
-						checkedPlan.blockers.map((blocker) => `${blocker.code}：${blocker.message}`).join("；") ||
-							"编译后依赖计划发生变化，请确认阻断后重试。",
-					);
-				}
+				checkedPlan = await requireCurrentMaterializationPlan("编译后依赖计划发生变化，请确认阻断后重试。");
 			} else if (buildAction === "START_BUILD" && candidate) {
 				await compileSelectedModels(
 					selection,
@@ -370,7 +361,7 @@ export function ModelPublishDialog({
 			} else if (buildAction !== "RETRY_BUILD") {
 				await compileSelectedModels(selection);
 			}
-			const planFence = checkedPlan
+			let planFence = checkedPlan
 				? { materializationPlanChecksum: checkedPlan.planChecksum, strategy: checkedPlan.strategy }
 				: {};
 			if (buildAction === "CREATE_CANDIDATE") {
@@ -398,6 +389,13 @@ export function ModelPublishDialog({
 					await refreshReleaseCandidate(planId, candidate, crypto.randomUUID(), "模型已发生新修订，废弃旧候选");
 				else if (buildAction === "CANCEL_AND_CREATE")
 					await cancelReleaseCandidate(planId, candidate, crypto.randomUUID(), "所选模型范围已变化，关闭旧候选");
+				if (buildAction !== "CREATE_AFTER_TERMINAL") {
+					checkedPlan = await requireCurrentMaterializationPlan("候选更新后依赖计划存在阻断。");
+					planFence = {
+						materializationPlanChecksum: checkedPlan.planChecksum,
+						strategy: checkedPlan.strategy,
+					};
+				}
 				const created = await createReleaseCandidate(planId, crypto.randomUUID(), {
 					environment,
 					entries,
@@ -406,11 +404,17 @@ export function ModelPublishDialog({
 				});
 				await lockReleaseCandidate(planId, created.candidate, crypto.randomUUID(), "从模型工作台启动新范围构建");
 			} else if ((buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT") && candidate) {
-				const source =
-					buildAction === "REFRESH_AND_REPLACE"
-						? (await refreshReleaseCandidate(planId, candidate, crypto.randomUUID(), "模型已发生新修订，废弃旧候选"))
-								.candidate
-						: candidate;
+				let source = candidate;
+				if (buildAction === "REFRESH_AND_REPLACE") {
+					source = (
+						await refreshReleaseCandidate(planId, candidate, crypto.randomUUID(), "模型已发生新修订，废弃旧候选")
+					).candidate;
+					checkedPlan = await requireCurrentMaterializationPlan("候选刷新后依赖计划存在阻断。");
+					planFence = {
+						materializationPlanChecksum: checkedPlan.planChecksum,
+						strategy: checkedPlan.strategy,
+					};
+				}
 				const replacement = await createReplacementReleaseCandidate(planId, source, crypto.randomUUID(), {
 					environment,
 					entries,
@@ -429,10 +433,13 @@ export function ModelPublishDialog({
 			if (!batch) setTab("publish");
 		} catch (error) {
 			const normalized = normalizeModelingRequestFailure(error, "物化构建未能启动。");
+			await Promise.all([load(), refreshMaterializationPlan()]);
 			setFailure(
 				normalized.code === "MODEL_MATERIALIZATION_PLAN_STALE"
-					? "依赖已变化，请重新预览后再创建候选。"
-					: normalized.message,
+					? "依赖计划已自动刷新，请确认后重试。"
+					: normalized.code === "MODEL_RELEASE_CANDIDATE_VERSION_CONFLICT"
+						? "候选状态已发生变化，页面已自动刷新，请确认后重试。"
+						: normalized.message,
 			);
 		} finally {
 			setBusy("");

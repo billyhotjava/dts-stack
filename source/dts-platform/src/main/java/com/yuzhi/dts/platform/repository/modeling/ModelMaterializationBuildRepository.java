@@ -1765,7 +1765,7 @@ public class ModelMaterializationBuildRepository
             );
         }
         JsonNode settings = json(row.settingsJson(), "settings", row.modelSpecId());
-        String targetIdentifier = settings.path("targetPhysicalName").asText("").trim();
+        String targetIdentifier = resolveTargetIdentifier(row, settings);
         if (!IDENTIFIER.matcher(targetIdentifier).matches()) {
             throw failure(
                 "IMPLEMENTATION_TARGET_REQUIRED",
@@ -1824,6 +1824,48 @@ public class ModelMaterializationBuildRepository
             artifactBundleChecksum,
             dependencySnapshotChecksum,
             activeClaimKey
+        );
+    }
+
+    private String resolveTargetIdentifier(BuildEntryRow row, JsonNode settings) {
+        String configuredTarget = settings.path("targetPhysicalName").asText("").trim();
+        JsonNode inputs = json(row.inputsJson(), "inputs", row.modelSpecId());
+        List<String> visualTargets = new ArrayList<>();
+        if (inputs.isArray()) {
+            inputs.forEach(input -> {
+                String visualTarget = input
+                    .path("config")
+                    .path("visualImplementation")
+                    .path("settings")
+                    .path("targetPhysicalName")
+                    .asText("")
+                    .trim();
+                if (!visualTarget.isBlank() && !visualTargets.contains(visualTarget)) {
+                    visualTargets.add(visualTarget);
+                }
+            });
+        }
+        if (visualTargets.isEmpty()) return configuredTarget;
+        if (visualTargets.size() > 1) {
+            throw failure(
+                "MODEL_IMPLEMENTATION_SNAPSHOT_INVALID",
+                "Current implementation contains conflicting visual targetPhysicalName values",
+                Kind.UNPROCESSABLE,
+                Map.of("modelSpecId", row.modelSpecId())
+            );
+        }
+        String visualTarget = visualTargets.getFirst();
+        if (
+            configuredTarget.equals(visualTarget) ||
+            configuredTarget.equals(dbtSelector(row.dbtUniqueId()))
+        ) {
+            return visualTarget;
+        }
+        throw failure(
+            "MODEL_IMPLEMENTATION_SNAPSHOT_INVALID",
+            "Current implementation targetPhysicalName conflicts with its visual authoring snapshot",
+            Kind.UNPROCESSABLE,
+            Map.of("modelSpecId", row.modelSpecId())
         );
     }
 
@@ -2250,6 +2292,24 @@ public class ModelMaterializationBuildRepository
                 Map.of("modelSpecId", row.modelSpecId())
             );
         }
+        FrozenBundleSnapshot frozenBundle = loadFrozenBundleSnapshot(tenantId, row);
+        List<BuildArtifact> executableArtifacts = FrozenDbtBundleArtifactRecovery.recover(
+            objectMapper,
+            row.modelSpecId(),
+            row.dbtUniqueId(),
+            frozenBundle.inputsJson(),
+            frozenBundle.evidence(),
+            artifacts
+                .stream()
+                .map(artifact ->
+                    new BuildArtifact(
+                        artifact.path(),
+                        artifact.contentChecksum(),
+                        artifact.content()
+                    )
+                )
+                .toList()
+        );
         return new CandidateBuildEntry(
             row.pipelineRunId(),
             row.modelSpecId(),
@@ -2260,21 +2320,87 @@ public class ModelMaterializationBuildRepository
             row.implementationMode(),
             row.dbtUniqueId(),
             row.targetIdentifier(),
-            artifacts
-                .stream()
-                .map(artifact ->
-                    new BuildArtifact(
-                        artifact.path(),
-                        artifact.contentChecksum(),
-                        artifact.content()
-                    )
-                )
-                .toList(),
+            executableArtifacts,
             pinnedModelColumns(
                 row.modelFieldsJson(),
                 row.modelSpecId()
             )
         );
+    }
+
+    private FrozenBundleSnapshot loadFrozenBundleSnapshot(
+        String tenantId,
+        CandidateBuildRow row
+    ) {
+        List<FrozenBundleSnapshot> bundles = jdbcTemplate.query(
+            """
+            select ir.inputs_json,
+                   a.project_key as artifact_project_key,
+                   a.dbt_unique_id as artifact_dbt_unique_id,
+                   a.path as artifact_path,
+                   a.content_checksum as artifact_content_checksum,
+                   a.content as artifact_content
+              from modeling_model_release_candidate_entry e
+              join modeling_model_implementation_revision ir
+                on ir.tenant_id = e.tenant_id
+               and ir.implementation_id = e.implementation_id
+               and ir.revision = e.implementation_revision
+               and ir.content_checksum = e.implementation_checksum
+               and ir.ownership = e.implementation_mode
+              left join modeling_dbt_artifact a
+                on a.model_spec_id = e.model_spec_id
+               and a.revision = e.revision
+               and a.model_checksum = e.checksum
+               and a.implementation_revision = e.implementation_revision
+               and a.ownership = e.implementation_mode
+               and a.dbt_unique_id = e.dbt_unique_id
+               and a.artifact_type = 'CONFIG'
+               and a.path = '.dts/dbt-project-bundle.json'
+               and a.status in ('COMPILED', 'IMPORTED')
+             where e.tenant_id = ?
+               and e.candidate_id = ?
+               and e.model_spec_id = ?
+               and e.revision = ?
+               and e.checksum = ?
+               and e.implementation_revision = ?
+               and e.implementation_checksum = ?
+               and e.implementation_mode = ?
+               and e.dbt_unique_id = ?
+            """,
+            (result, rowNumber) -> {
+                String artifactPath = result.getString("artifact_path");
+                return new FrozenBundleSnapshot(
+                    result.getString("inputs_json"),
+                    artifactPath == null
+                        ? null
+                        : new FrozenDbtBundleArtifactRecovery.FrozenBundleEvidence(
+                            result.getString("artifact_project_key"),
+                            result.getString("artifact_dbt_unique_id"),
+                            artifactPath,
+                            result.getString("artifact_content_checksum"),
+                            result.getString("artifact_content")
+                        )
+                );
+            },
+            tenantId,
+            row.candidateId(),
+            row.modelSpecId(),
+            row.modelRevision(),
+            row.modelChecksum(),
+            row.implementationRevision(),
+            row.implementationChecksum(),
+            row.implementationMode(),
+            row.dbtUniqueId()
+        );
+        if (bundles.size() != 1) {
+            throw failure(
+                "MODEL_IMPLEMENTATION_SNAPSHOT_INVALID",
+                "Candidate implementation bundle snapshot is unavailable or ambiguous",
+                Kind.CONFLICT,
+                Map.of("modelSpecId", row.modelSpecId())
+            );
+        }
+        return bundles.getFirst();
     }
 
     private ExecutionTarget executionTarget() {
@@ -2469,6 +2595,11 @@ public class ModelMaterializationBuildRepository
         String artifactType,
         String nodeKind,
         String dbtUniqueId
+    ) {}
+
+    private record FrozenBundleSnapshot(
+        String inputsJson,
+        FrozenDbtBundleArtifactRecovery.FrozenBundleEvidence evidence
     ) {}
 
     private record PreparedEntry(

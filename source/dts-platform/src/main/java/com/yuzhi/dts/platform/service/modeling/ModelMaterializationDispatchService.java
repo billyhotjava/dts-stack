@@ -646,7 +646,7 @@ public class ModelMaterializationDispatchService {
                 ));
                 if (sourceYaml != null) {
                     artifacts.add(new CandidateArtifact(
-                        "models/.dts-pinned-sources.yml",
+                        "models/_dts_pinned_sources.yml",
                         sha256(sourceYaml),
                         sourceYaml
                     ));

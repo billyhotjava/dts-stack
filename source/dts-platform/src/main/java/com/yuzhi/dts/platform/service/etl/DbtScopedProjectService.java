@@ -483,7 +483,9 @@ public class DbtScopedProjectService {
             );
             String content = identity == null
                 ? artifact.content()
-                : releaseIdentityConfig(identity) + artifact.content();
+                : artifact.content() +
+                (artifact.content().endsWith("\n") ? "" : "\n") +
+                releaseIdentityConfig(identity);
             Files.writeString(
                 target,
                 content,

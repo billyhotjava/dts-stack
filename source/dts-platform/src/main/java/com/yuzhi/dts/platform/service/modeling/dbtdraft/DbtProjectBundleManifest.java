@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.checksum.ModelPackageChec
 import com.yuzhi.dts.platform.service.modeling.imports.converter.AdvancedDbtDraftStaticValidator.ValidatedNode;
 import com.yuzhi.dts.platform.service.modeling.imports.converter.AdvancedDbtDraftStaticValidator.ValidatedProject;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -16,12 +17,19 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** Canonical, content-complete manifest pinned to an immutable implementation revision. */
 public final class DbtProjectBundleManifest {
 
     private static final int MANIFEST_VERSION = 1;
     private static final int MAX_MANIFEST_BYTES = 24 * 1024 * 1024;
+    private static final Pattern LOCAL_REF_PATTERN = Pattern.compile(
+        "ref\\s*\\(\\s*(?:['\"]([^'\"]+)['\"]\\s*,\\s*)?['\"]([^'\"]+)['\"]\\s*\\)",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern MODEL_NAME = Pattern.compile("^[A-Za-z_][A-Za-z0-9_]*$");
 
     private DbtProjectBundleManifest() {}
 
@@ -125,6 +133,71 @@ public final class DbtProjectBundleManifest {
         } catch (JsonProcessingException exception) {
             throw invalidBundle("The frozen dbt project bundle manifest is not valid JSON");
         }
+    }
+
+    /** Resolves one-argument ref() calls against the exact frozen project, including transitive refs. */
+    public static List<BundleFile> resolveLocalModelDependencies(
+        List<BundleFile> files,
+        List<String> rootSql,
+        Set<String> alreadyAvailableModelNames
+    ) {
+        List<BundleFile> verified = verifiedFiles(files)
+            .stream()
+            .map(file -> new BundleFile(file.path(), file.content(), file.checksum(), file.byteSize()))
+            .toList();
+        LinkedHashMap<String, BundleFile> models = new LinkedHashMap<>();
+        for (BundleFile file : verified) {
+            if (!isModelSql(file.path())) continue;
+            String name = modelName(file.path());
+            BundleFile previous = models.putIfAbsent(name, file);
+            if (previous != null && !Objects.equals(previous.path(), file.path())) {
+                throw invalidBundle("The frozen dbt project contains duplicate model names");
+            }
+        }
+        Set<String> available = new HashSet<>(
+            alreadyAvailableModelNames == null ? Set.of() : alreadyAvailableModelNames
+        );
+        ArrayDeque<String> pending = new ArrayDeque<>();
+        if (rootSql != null) rootSql.forEach(sql -> pending.addAll(localRefs(sql)));
+        List<BundleFile> dependencies = new ArrayList<>();
+        while (!pending.isEmpty()) {
+            String reference = pending.removeFirst();
+            if (!available.add(reference)) continue;
+            BundleFile dependency = models.get(reference);
+            if (dependency == null) {
+                throw DbtImplementationDraftContract.unprocessable(
+                    "DBT_DRAFT_BUNDLE_DEPENDENCY_MISSING",
+                    "The frozen dbt project does not contain local model dependency " + reference
+                );
+            }
+            dependencies.add(dependency);
+            pending.addAll(localRefs(dependency.content()));
+        }
+        return List.copyOf(dependencies);
+    }
+
+    private static List<String> localRefs(String sql) {
+        if (sql == null || sql.isBlank()) return List.of();
+        Set<String> refs = new java.util.LinkedHashSet<>();
+        Matcher matcher = LOCAL_REF_PATTERN.matcher(sql);
+        while (matcher.find()) {
+            if (matcher.group(1) != null) continue;
+            String reference = matcher.group(2) == null ? null : matcher.group(2).trim();
+            if (reference == null || !MODEL_NAME.matcher(reference).matches()) {
+                throw invalidBundle("The frozen dbt project contains an invalid local model reference");
+            }
+            refs.add(reference);
+        }
+        return List.copyOf(refs);
+    }
+
+    private static boolean isModelSql(String path) {
+        return path != null && path.startsWith("models/") && path.endsWith(".sql");
+    }
+
+    private static String modelName(String path) {
+        String fileName = path.substring(path.lastIndexOf('/') + 1);
+        return fileName.substring(0, fileName.length() - ".sql".length());
     }
 
     private static List<BundleFileEntry> verifiedFiles(List<BundleFile> files) {

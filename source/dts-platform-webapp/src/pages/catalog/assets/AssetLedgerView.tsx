@@ -211,6 +211,16 @@ export function AssetLedgerView({
 		router.push(`/catalog/datasets/${row.id}`);
 	};
 
+	const editAsset = (row: AssetDirectoryRow) => {
+		const family = String(row.assetFamily || row.assetType || "");
+		if (family === "DATASET") {
+			router.push(`/catalog/datasets/${row.id}?tab=governance`);
+			return;
+		}
+		const sourceRoute = family === "SCREEN" ? "/bi/screens" : row.detailRoute;
+		if (sourceRoute) router.push(sourceRoute);
+	};
+
 	const isInteractiveTarget = (event: ReactMouseEvent<HTMLElement>) =>
 		Boolean((event.target as HTMLElement).closest("a, button, input, .ant-checkbox-wrapper, .ant-select"));
 
@@ -438,6 +448,28 @@ export function AssetLedgerView({
 						title: "更新时间",
 						width: 170,
 						render: (_, row) => formatTime(row.snapshotTime || row.updatedAt),
+					},
+					{
+						title: "操作",
+						width: 110,
+						fixed: "right",
+						render: (_, row) => {
+							const family = String(row.assetFamily || row.assetType || "");
+							const editable = family === "DATASET" || family === "SCREEN" || Boolean(row.detailRoute);
+							return (
+								<Button
+									type="link"
+									size="small"
+									disabled={!editable}
+									onClick={(event) => {
+										event.stopPropagation();
+										editAsset(row);
+									}}
+								>
+									编辑资产
+								</Button>
+							);
+						},
 					},
 				]}
 			/>

@@ -79,7 +79,7 @@ class ModelMaterializationSourceAvailabilityGuardTest {
         when(snapshots.findDispatchInputs(DISPATCH)).thenReturn(List.of(physical(MODEL)));
         when(sourceValidation.isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1"))
             .thenReturn(true);
-        when(sourceValidation.resolveCurrentBindingForCompiler("tenant-a", PLAN, SOURCE, "source-version-1"))
+        when(sourceValidation.resolveCurrentBindingForExecutionCompiler("tenant-a", PLAN, SOURCE, "source-version-1"))
             .thenReturn(Optional.of(new SourceRef(
                 SourceKind.TABLE,
                 "public.prjdemo_ods_project_task_clean",
@@ -101,6 +101,12 @@ class ModelMaterializationSourceAvailabilityGuardTest {
                 "public",
                 "prjdemo_ods_project_task_clean"
             )
+        );
+        verify(sourceValidation).resolveCurrentBindingForExecutionCompiler(
+            "tenant-a",
+            PLAN,
+            SOURCE,
+            "source-version-1"
         );
     }
 

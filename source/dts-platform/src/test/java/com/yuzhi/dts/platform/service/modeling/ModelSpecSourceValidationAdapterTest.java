@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PhysicalSourceProjection;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.SourceBindingState;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.Layer;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
@@ -97,6 +98,28 @@ class ModelSpecSourceValidationAdapterTest {
             .thenReturn(ResolvedSource.available("客户表", "v1"));
 
         assertThat(validation.isCurrentBindingForExecution(TENANT, PLAN_ID, BINDING_ID, "v1")).isTrue();
+
+        verify(resolver).resolveForExecution(SourceType.CATALOG_TABLE, locator, context);
+        verify(resolver, never()).resolve(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    void resolvesMaterializationCompilerRelationThroughTheBackgroundExecutionPath() {
+        SourceBindingState binding = confirmedBinding("v1", LOCATOR_JSON);
+        SourceLocator locator = new SourceLocator(ASSET_ID, null, null, null, null, null, null);
+        AccessContext context = new AccessContext(TENANT, ACTOR, DEPARTMENT);
+        when(repository.findSourceBinding(TENANT, PLAN_ID, BINDING_ID)).thenReturn(Optional.of(binding));
+        when(resolver.resolveForExecution(SourceType.CATALOG_TABLE, locator, context))
+            .thenReturn(ResolvedSource.available("客户表", "v1"));
+        when(repository.findCurrentPhysicalSource(TENANT, PLAN_ID, BINDING_ID, "v1"))
+            .thenReturn(Optional.of(new PhysicalSourceProjection(SourceKind.TABLE, "public.orders", Layer.ODS, "v1")));
+
+        assertThat(validation.resolveCurrentBindingForExecutionCompiler(TENANT, PLAN_ID, BINDING_ID, "v1"))
+            .contains(source("public.orders", "v1"));
 
         verify(resolver).resolveForExecution(SourceType.CATALOG_TABLE, locator, context);
         verify(resolver, never()).resolve(

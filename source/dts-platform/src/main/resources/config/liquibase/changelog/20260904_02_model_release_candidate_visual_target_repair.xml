@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260904_02_model_release_candidate_visual_target_repair" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_release_candidate"/>
+            <tableExists tableName="modeling_model_release_candidate_entry"/>
+            <tableExists tableName="modeling_model_implementation_revision"/>
+            <tableExists tableName="modeling_pipeline_run"/>
+        </preConditions>
+
+        <comment>
+            Repair unfinished release-build projections created by the legacy commit path that
+            copied the dbt node name into targetPhysicalName. The immutable visual-authoring input
+            remains the source of truth; published and otherwise terminal history is not changed.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            with repairs as (
+                select e.tenant_id,
+                       e.candidate_id,
+                       e.id as entry_id,
+                       e.target_identifier as legacy_target,
+                       visual.targets ->> 0 as recovered_target
+                  from modeling_model_release_candidate c
+                  join modeling_model_release_candidate_entry e
+                    on e.tenant_id = c.tenant_id
+                   and e.candidate_id = c.id
+                  join modeling_model_implementation_revision ir
+                    on ir.tenant_id = e.tenant_id
+                   and ir.implementation_id = e.implementation_id
+                   and ir.revision = e.implementation_revision
+                   and ir.content_checksum = e.implementation_checksum
+                 cross join lateral (
+                     select jsonb_path_query_array(
+                                ir.inputs_json,
+                                '$[*].config.visualImplementation.settings.targetPhysicalName'
+                            ) as targets
+                 ) visual
+                 where c.status in ('DRAFT', 'LOCKED', 'BUILDING', 'BUILD_FAILED')
+                   and e.implementation_id is not null
+                   and e.implementation_revision is not null
+                   and e.implementation_checksum is not null
+                   and e.dbt_unique_id is not null
+                   and e.target_identifier = split_part(e.dbt_unique_id, '.', 3)
+                   and ir.settings_json ->> 'targetPhysicalName' = e.target_identifier
+                   and jsonb_array_length(visual.targets) = 1
+                   and visual.targets ->> 0 ~ '^[a-z][a-z0-9_]{0,62}$'
+                   and visual.targets ->> 0 <> e.target_identifier
+            )
+            update modeling_pipeline_run run
+               set target = repairs.recovered_target,
+                   last_modified_date = current_timestamp
+              from repairs
+             where run.tenant_id = repairs.tenant_id
+               and run.release_candidate_id = repairs.candidate_id
+               and run.release_candidate_entry_id = repairs.entry_id
+               and run.run_purpose = 'RELEASE_BUILD'
+               and run.target = repairs.legacy_target;
+
+            with repairs as (
+                select e.tenant_id,
+                       e.candidate_id,
+                       e.id as entry_id,
+                       visual.targets ->> 0 as recovered_target
+                  from modeling_model_release_candidate c
+                  join modeling_model_release_candidate_entry e
+                    on e.tenant_id = c.tenant_id
+                   and e.candidate_id = c.id
+                  join modeling_model_implementation_revision ir
+                    on ir.tenant_id = e.tenant_id
+                   and ir.implementation_id = e.implementation_id
+                   and ir.revision = e.implementation_revision
+                   and ir.content_checksum = e.implementation_checksum
+                 cross join lateral (
+                     select jsonb_path_query_array(
+                                ir.inputs_json,
+                                '$[*].config.visualImplementation.settings.targetPhysicalName'
+                            ) as targets
+                 ) visual
+                 where c.status in ('DRAFT', 'LOCKED', 'BUILDING', 'BUILD_FAILED')
+                   and e.implementation_id is not null
+                   and e.implementation_revision is not null
+                   and e.implementation_checksum is not null
+                   and e.dbt_unique_id is not null
+                   and e.target_identifier = split_part(e.dbt_unique_id, '.', 3)
+                   and ir.settings_json ->> 'targetPhysicalName' = e.target_identifier
+                   and jsonb_array_length(visual.targets) = 1
+                   and visual.targets ->> 0 ~ '^[a-z][a-z0-9_]{0,62}$'
+                   and visual.targets ->> 0 <> e.target_identifier
+            )
+            update modeling_model_release_candidate_entry entry
+               set target_identifier = repairs.recovered_target
+              from repairs
+             where entry.tenant_id = repairs.tenant_id
+               and entry.candidate_id = repairs.candidate_id
+               and entry.id = repairs.entry_id;
+        ]]></sql>
+
+        <!-- This is an irreversible correction of derived projection data. -->
+        <rollback><empty/></rollback>
+    </changeSet>
+</databaseChangeLog>

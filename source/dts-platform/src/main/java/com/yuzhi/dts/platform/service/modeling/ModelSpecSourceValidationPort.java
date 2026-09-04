@@ -33,4 +33,12 @@ public interface ModelSpecSourceValidationPort {
         UUID sourceBindingId,
         String resolvedVersion
     );
+
+    /** Resolves the executable relation for an already admitted, revision-pinned background run. */
+    Optional<SourceRef> resolveCurrentBindingForExecutionCompiler(
+        String tenantId,
+        UUID planId,
+        UUID sourceBindingId,
+        String resolvedVersion
+    );
 }

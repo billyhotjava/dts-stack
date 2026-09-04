@@ -642,6 +642,13 @@ describe("release and materialization dispatch", () => {
 		apiMocks.refreshCandidate.mockResolvedValue({ candidate: stale });
 		apiMocks.createReplacementCandidate.mockResolvedValue({ candidate: replacement });
 		apiMocks.lockCandidate.mockResolvedValue({ candidate: replacement });
+		apiMocks.previewMaterializationPlan.mockImplementation(
+			(_planId: string, request: { requestedModelSpecIds: string[] }) =>
+				Promise.resolve({
+					...materializationPreview(request.requestedModelSpecIds),
+					planChecksum: (apiMocks.refreshCandidate.mock.calls.length ? "e" : "a").repeat(64),
+				}),
+		);
 
 		await act(async () =>
 			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
@@ -661,6 +668,7 @@ describe("release and materialization dispatch", () => {
 			"idem-1",
 			expect.objectContaining({
 				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
+				materializationPlanChecksum: "e".repeat(64),
 			}),
 		);
 		expect(apiMocks.lockCandidate).toHaveBeenCalledWith(
@@ -670,12 +678,38 @@ describe("release and materialization dispatch", () => {
 			"从模型工作台启动新修订构建",
 		);
 		expect(apiMocks.refreshCandidate.mock.invocationCallOrder[0]).toBeLessThan(
+			apiMocks.previewMaterializationPlan.mock.invocationCallOrder.at(-1) ?? 0,
+		);
+		expect(apiMocks.previewMaterializationPlan.mock.invocationCallOrder.at(-1) ?? 0).toBeLessThan(
 			apiMocks.createReplacementCandidate.mock.invocationCallOrder[0],
 		);
 		expect(apiMocks.createReplacementCandidate.mock.invocationCallOrder[0]).toBeLessThan(
 			apiMocks.lockCandidate.mock.invocationCallOrder[0],
 		);
 		expect(apiMocks.rematerializeCandidate).not.toHaveBeenCalled();
+	});
+
+	it("reloads authoritative candidate and plan state after a partially applied build failure", async () => {
+		const reviewPending = candidate("BATCH_WORKBENCH", "REVIEW_PENDING");
+		const stale = { ...reviewPending, status: "STALE", version: 5 } as ReleaseCandidate;
+		apiMocks.getWorkbench
+			.mockResolvedValueOnce(workspace(["REFRESH_CANDIDATE"], reviewPending))
+			.mockResolvedValue(workspace(["CREATE_REPLACEMENT_CANDIDATE"], stale));
+		apiMocks.refreshCandidate.mockResolvedValue({ candidate: stale });
+		apiMocks.createReplacementCandidate.mockRejectedValue(new Error("替代候选创建失败"));
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("按新修订重新物化")?.click());
+		await flush();
+
+		expect(apiMocks.refreshCandidate).toHaveBeenCalled();
+		expect(apiMocks.createReplacementCandidate).toHaveBeenCalled();
+		expect(apiMocks.getWorkbench).toHaveBeenCalledTimes(2);
+		expect(apiMocks.previewMaterializationPlan.mock.calls.length).toBeGreaterThanOrEqual(5);
+		expect(container.textContent).toContain("替代候选创建失败");
 	});
 
 	it("publishes a batch candidate through the plan-owned endpoint", async () => {

@@ -221,6 +221,118 @@ class ModelLifecycleServiceTest {
     }
 
     @Test
+    void importedDbtCommitTransitionsThePinnedDesignerImplementation() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository modelSpecRepository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycle = mock(ModelLifecycleRepository.class);
+        ModelSpecPlanWriteAccessPort writeAccess = mock(ModelSpecPlanWriteAccessPort.class);
+        ModelLifecycleCommandReceiptRepository receipts = mock(ModelLifecycleCommandReceiptRepository.class);
+        AuditService audit = mock(AuditService.class);
+        ModelSpecView dbtManagedModel = mock(ModelSpecView.class);
+        when(dbtManagedModel.id()).thenReturn(MODEL_ID);
+        when(dbtManagedModel.planId()).thenReturn(PLAN_ID);
+        when(dbtManagedModel.revision()).thenReturn(3);
+        when(dbtManagedModel.checksum()).thenReturn("b".repeat(64));
+        when(dbtManagedModel.status()).thenReturn(ModelStatus.DRAFT);
+        when(dbtManagedModel.implementationMode()).thenReturn(ImplementationMode.DBT_MANAGED);
+        when(dbtManagedModel.materialization()).thenReturn("table");
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(dbtManagedModel);
+        when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID))
+            .thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
+        when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        when(receipts.payloadHash(any())).thenReturn("e".repeat(64));
+
+        String projectKey = "prjdemo";
+        String dbtUniqueId = "model.prjdemo.project_task_snapshot";
+        String designerImplementationChecksum = "c".repeat(64);
+        SaveImplementationCommand command = new SaveImplementationCommand(
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DBT", Map.of("projectKey", projectKey, "dbtUniqueId", dbtUniqueId))),
+            List.of(),
+            Map.of(),
+            ImplementationMode.DBT_MANAGED,
+            "table",
+            "commit-dbt-draft"
+        );
+        ImplementationView designer = new ImplementationView(
+            UUID.fromString("60000000-0000-0000-0000-000000000010"),
+            MODEL_ID,
+            PLAN_ID,
+            2,
+            CHECKSUM,
+            ImplementationMode.DESIGNER_GENERATED,
+            SYSTEM_PROJECT_KEY,
+            SYSTEM_DBT_UNIQUE_ID,
+            "ACTIVE",
+            1,
+            designerImplementationChecksum,
+            InputMode.GENERATED,
+            List.of(new GeneratedInput("DATE_DIMENSION", Map.of())),
+            List.of(),
+            Map.of(),
+            "table"
+        );
+        ImplementationView transitioned = new ImplementationView(
+            designer.id(),
+            MODEL_ID,
+            PLAN_ID,
+            3,
+            dbtManagedModel.checksum(),
+            ImplementationMode.DBT_MANAGED,
+            projectKey,
+            dbtUniqueId,
+            "ACTIVE",
+            2,
+            "d".repeat(64),
+            command.inputMode(),
+            command.inputs(),
+            command.fieldMappings(),
+            command.settings(),
+            command.materialization()
+        );
+        when(lifecycle.findImplementation("tenant-a", MODEL_ID))
+            .thenReturn(Optional.of(designer), Optional.of(transitioned));
+        when(lifecycle.transitionDesignerImplementationToDbtManaged(
+            eq("tenant-a"), eq("alice"), eq(dbtManagedModel), eq(projectKey), eq(dbtUniqueId), eq(command),
+            eq(2), eq(CHECKSUM), eq(1), eq(designerImplementationChecksum), eq(NOW)
+        )).thenReturn(1);
+        ModelLifecycleService service = new ModelLifecycleService(
+            modelSpecs,
+            modelSpecRepository,
+            lifecycle,
+            mock(ModelSpecStageGateService.class),
+            writeAccess,
+            mock(ModelLifecycleCompilerPort.class),
+            mock(ModelLifecycleTestEvidencePort.class),
+            mock(ModelImplementationInputPolicy.class),
+            receipts,
+            audit,
+            Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+
+        ImplementationView result = service.saveImportedDbtImplementation(
+            "tenant-a",
+            "alice",
+            MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 3, dbtManagedModel.checksum()),
+            ModelStatus.DRAFT,
+            new ExpectedImplementationVersion(MODEL_ID, 1, designerImplementationChecksum),
+            projectKey,
+            dbtUniqueId,
+            command
+        );
+
+        assertThat(result).isEqualTo(transitioned);
+        verify(lifecycle).transitionDesignerImplementationToDbtManaged(
+            "tenant-a", "alice", dbtManagedModel, projectKey, dbtUniqueId, command,
+            2, CHECKSUM, 1, designerImplementationChecksum, NOW
+        );
+        verify(lifecycle, never()).saveImportedDbtImplementation(
+            any(), any(), any(), any(), any(), any(), any(), anyInt(), any(), any()
+        );
+    }
+
+    @Test
     void auditsCanonicalImplementationSaveAndOwnershipConversion() {
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository modelSpecRepository = mock(ModelSpecRepository.class);

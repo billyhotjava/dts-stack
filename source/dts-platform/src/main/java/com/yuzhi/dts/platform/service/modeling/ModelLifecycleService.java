@@ -284,20 +284,49 @@ public class ModelLifecycleService {
         requireImplementationPrecondition(modelSpecId, current, expectedImplementation);
         ImplementationView saved;
         try {
-            saved = lifecycle
-                .saveImportedDbtImplementation(
+            if (current != null && current.ownership() == ImplementationMode.DESIGNER_GENERATED) {
+                int transitioned = lifecycle.transitionDesignerImplementationToDbtManaged(
                     tenantId,
                     actorId,
                     model,
-                    expectedModelStatus,
                     projectKey.trim(),
                     dbtUniqueId.trim(),
                     command,
+                    current.revision(),
+                    current.modelChecksum(),
                     expectedImplementation.revision(),
                     expectedImplementation.checksum(),
                     clock.instant()
-                )
-                .orElse(null);
+                );
+                saved = transitioned == 0
+                    ? null
+                    : lifecycle
+                        .findImplementation(tenantId, modelSpecId)
+                        .filter(candidate ->
+                            candidate.revision() == model.revision() &&
+                            Objects.equals(candidate.modelChecksum(), model.checksum()) &&
+                            candidate.ownership() == ImplementationMode.DBT_MANAGED &&
+                            "ACTIVE".equals(candidate.status()) &&
+                            Objects.equals(candidate.projectKey(), projectKey.trim()) &&
+                            Objects.equals(candidate.dbtUniqueId(), dbtUniqueId.trim())
+                        )
+                        .orElse(null);
+            } else {
+                saved = lifecycle
+                    .saveImportedDbtImplementation(
+                        tenantId,
+                        actorId,
+                        model,
+                        expectedModelStatus,
+                        projectKey.trim(),
+                        dbtUniqueId.trim(),
+                        command,
+                        expectedImplementation.revision(),
+                        expectedImplementation.checksum(),
+                        clock.instant()
+                    )
+                    .orElse(null);
+            }
         } catch (DataIntegrityViolationException duplicate) {
             throw conflict("MODEL_IMPLEMENTATION_DBT_CONFLICT", "The dbt node is already owned by another ModelSpec");
         } catch (IllegalArgumentException invalid) {

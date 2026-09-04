@@ -252,7 +252,7 @@ class ModelMaterializationDispatchServiceTest {
         DbtScopedProjectService.CandidateArtifact sourceYaml = entries.getValue()
             .stream()
             .flatMap(entry -> entry.artifacts().stream())
-            .filter(artifact -> artifact.path().equals("models/.dts-pinned-sources.yml"))
+            .filter(artifact -> artifact.path().equals("models/_dts_pinned_sources.yml"))
             .findFirst()
             .orElseThrow();
         assertThat(sourceYaml.content())

@@ -192,6 +192,41 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
         }
     }
 
+    @Override
+    public Optional<SourceRef> resolveCurrentBindingForExecutionCompiler(
+        String tenantId,
+        UUID planId,
+        UUID sourceBindingId,
+        String resolvedVersion
+    ) {
+        if (!isCurrentBindingForExecution(tenantId, planId, sourceBindingId, resolvedVersion)) {
+            return Optional.empty();
+        }
+        try {
+            PhysicalSourceProjection source = repository
+                .findCurrentPhysicalSource(tenantId, planId, sourceBindingId, resolvedVersion)
+                .orElse(null);
+            if (source == null) return Optional.empty();
+            return Optional.of(
+                new SourceRef(
+                    source.kind(),
+                    source.ref(),
+                    source.layer(),
+                    SourceRole.PRIMARY,
+                    null,
+                    null,
+                    null,
+                    0,
+                    sourceBindingId,
+                    source.resolvedVersion()
+                )
+            );
+        } catch (RuntimeException exception) {
+            LOG.warn("Model execution compiler source resolution failed ({})", exception.getClass().getSimpleName());
+            return Optional.empty();
+        }
+    }
+
     private boolean isCurrentResolvedBinding(
         String tenantId,
         String ownerId,
