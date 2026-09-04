@@ -134,7 +134,7 @@ public class QualityWorkflowReconciler {
         payload.put("passedCount", workflow.getPassedCount());
         payload.put("failedCount", workflow.getFailedCount());
         auditRecorder.recordMachine(
-            "quality-workflow-reconciler",
+            "scheduler",
             workflow.getId() + ":FINALIZE:" + workflow.getStatus(),
             workflow.getFinishedAt(),
             "GOV_QUALITY_WORKFLOW_FINALIZE",

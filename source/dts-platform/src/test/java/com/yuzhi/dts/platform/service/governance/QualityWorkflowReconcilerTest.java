@@ -52,7 +52,7 @@ class QualityWorkflowReconcilerTest {
         assertThat(workflow.getPassedCount()).isEqualTo(1);
         assertThat(workflow.getFailedCount()).isEqualTo(1);
         verify(auditRecorder).recordMachine(
-            org.mockito.ArgumentMatchers.eq("quality-workflow-reconciler"),
+            org.mockito.ArgumentMatchers.eq("scheduler"),
             org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.eq("GOV_QUALITY_WORKFLOW_FINALIZE"),
@@ -87,6 +87,15 @@ class QualityWorkflowReconcilerTest {
         assertThat(workflow.getPassedCount()).isEqualTo(2);
         assertThat(workflow.getFailedCount()).isZero();
         assertThat(workflow.getFinishedAt()).isNotNull();
+        verify(auditRecorder).recordMachine(
+            org.mockito.ArgumentMatchers.eq("scheduler"),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.eq("GOV_QUALITY_WORKFLOW_FINALIZE"),
+            org.mockito.ArgumentMatchers.eq(AuditStage.SUCCESS),
+            org.mockito.ArgumentMatchers.eq(WORKFLOW_ID.toString()),
+            org.mockito.ArgumentMatchers.any()
+        );
     }
 
     @Test
@@ -112,7 +121,7 @@ class QualityWorkflowReconcilerTest {
         assertThat(workflow.getErrorCategory()).isEqualTo("WORKFLOW_TIMEOUT");
         assertThat(workflow.getFinishedAt()).isNotNull();
         verify(auditRecorder).recordMachine(
-            org.mockito.ArgumentMatchers.eq("quality-workflow-reconciler"),
+            org.mockito.ArgumentMatchers.eq("scheduler"),
             org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.eq("GOV_QUALITY_WORKFLOW_FINALIZE"),

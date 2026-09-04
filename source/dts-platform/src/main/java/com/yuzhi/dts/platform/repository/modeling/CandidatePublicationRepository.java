@@ -49,6 +49,65 @@ public class CandidatePublicationRepository {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Completes the physical Catalog identity required by pre-publication governance quality.
+     *
+     * <p>The asset remains unpublished and pending governance. A later publication reuses the
+     * same physical identity and advances it to ACTIVE instead of creating a second asset.
+     */
+    public UUID prepareQualityDataset(
+        CandidateView candidate,
+        ResolvedCatalogTarget target,
+        PublicationEntryEvidence evidence,
+        ModelSpecView model,
+        String classification,
+        String actorId,
+        Instant now
+    ) {
+        Objects.requireNonNull(candidate, "candidate is required");
+        Objects.requireNonNull(target, "catalog target is required");
+        Objects.requireNonNull(evidence, "physical observation is required");
+        Objects.requireNonNull(model, "model is required");
+        Objects.requireNonNull(now, "registration time is required");
+        String actor = actor(actorId);
+        String tags = json(
+            Map.ofEntries(
+                Map.entry("tenantId", candidate.tenantId()),
+                Map.entry("candidateId", candidate.id()),
+                Map.entry("candidateVersion", candidate.version()),
+                Map.entry("sourceId", target.sourceId()),
+                Map.entry("executionTargetKey", target.executionTargetKey()),
+                Map.entry("modelSpecId", model.id()),
+                Map.entry("revision", model.revision()),
+                Map.entry("modelChecksum", model.checksum()),
+                Map.entry("implementationRevision", evidence.implementationRevision()),
+                Map.entry("implementationChecksum", evidence.implementationChecksum()),
+                Map.entry("dbtUniqueId", evidence.dbtUniqueId()),
+                Map.entry("targetIdentifier", evidence.targetIdentifier()),
+                Map.entry("adapter", evidence.adapter()),
+                Map.entry("database", evidence.databaseName()),
+                Map.entry("schema", evidence.schemaName()),
+                Map.entry("materializedTruth", true),
+                Map.entry("physicalAssetVerified", true),
+                Map.entry("artifactState", "CURRENT"),
+                Map.entry("runStatus", "SUCCESS"),
+                Map.entry("runInvocationId", evidence.dbtInvocationId()),
+                Map.entry("publicationState", "UNPUBLISHED")
+            )
+        );
+        return registerCatalogDataset(
+            candidate,
+            target,
+            evidence,
+            model,
+            tags,
+            actor,
+            now,
+            classification,
+            "PENDING_GOVERNANCE"
+        );
+    }
+
     public PublishedModelBinding registerModel(
         CandidateView candidate,
         ResolvedCatalogTarget target,
@@ -585,6 +644,34 @@ public class CandidatePublicationRepository {
         String actor,
         Instant now
     ) {
+        return registerCatalogDataset(
+            candidate,
+            target,
+            evidence,
+            model,
+            tags,
+            actor,
+            now,
+            SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code(),
+            "ACTIVE"
+        );
+    }
+
+    private UUID registerCatalogDataset(
+        CandidateView candidate,
+        ResolvedCatalogTarget target,
+        PublicationEntryEvidence evidence,
+        ModelSpecView model,
+        String tags,
+        String actor,
+        Instant now,
+        String requestedClassification,
+        String requestedLifecycle
+    ) {
+        String canonicalClassification = SecurityLevelCatalog.requireDataLevel(
+            requestedClassification
+        ).code();
+        String lifecycle = requiredCatalogLifecycle(requestedLifecycle);
         List<UUID> matching = lockCatalogAssetIds(
             target.sourceId(),
             evidence.schemaName(),
@@ -613,7 +700,7 @@ public class CandidatePublicationRepository {
                     last_modified_by, last_modified_date
                 ) values (
                     ?, ?, ?, 'jdbc', ?, ?, ?, ?, ?, ?, ?, ?, true,
-                    'VIEW', 'ACTIVE', ?, ?, ?, ?, ?
+                    'VIEW', ?, ?, ?, ?, ?, ?
                 )
                 on conflict do nothing
                 """,
@@ -621,13 +708,14 @@ public class CandidatePublicationRepository {
                 model.name(),
                 model.domainId(),
                 target.sourceId(),
-                SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code(),
+                canonicalClassification,
                 actor,
                 evidence.schemaName(),
                 evidence.identifier(),
                 tags,
                 model.description(),
                 model.layer().name(),
+                lifecycle,
                 Timestamp.from(evidence.observedAt()),
                 actor,
                 Timestamp.from(now),
@@ -647,6 +735,28 @@ public class CandidatePublicationRepository {
             );
         }
         UUID assetId = matching.getFirst();
+        Map<String, Object> current = jdbcTemplate.queryForMap(
+            "select classification, lifecycle_status from catalog_dataset where id = ? for update",
+            assetId
+        );
+        String currentClassification = current.get("classification") == null
+            ? null
+            : current.get("classification").toString();
+        String normalizedCurrent = SecurityLevelCatalog.normalizeDataCode(
+            currentClassification
+        );
+        String effectiveClassification = normalizedCurrent == null
+            ? canonicalClassification
+            : SecurityLevelCatalog.maxDataCode(
+                normalizedCurrent,
+                canonicalClassification
+            );
+        String effectiveLifecycle = advanceCatalogLifecycle(
+            current.get("lifecycle_status") == null
+                ? null
+                : current.get("lifecycle_status").toString(),
+            lifecycle
+        );
         int assetWrites = jdbcTemplate.update(
             """
             update catalog_dataset
@@ -663,7 +773,7 @@ public class CandidatePublicationRepository {
                    warehouse_layer = ?,
                    enabled = true,
                    exposed_by = 'VIEW',
-                   lifecycle_status = 'ACTIVE',
+                   lifecycle_status = ?,
                    snapshot_time = ?,
                    last_modified_by = ?,
                    last_modified_date = ?
@@ -672,13 +782,14 @@ public class CandidatePublicationRepository {
             model.name(),
             model.domainId(),
             target.sourceId(),
-            SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code(),
+            effectiveClassification,
             actor,
             evidence.schemaName(),
             evidence.identifier(),
             tags,
             model.description(),
             model.layer().name(),
+            effectiveLifecycle,
             Timestamp.from(evidence.observedAt()),
             actor,
             Timestamp.from(now),
@@ -691,6 +802,29 @@ public class CandidatePublicationRepository {
             );
         }
         return assetId;
+    }
+
+    private static String requiredCatalogLifecycle(String value) {
+        if ("ACTIVE".equals(value) || "PENDING_GOVERNANCE".equals(value)) {
+            return value;
+        }
+        throw new IllegalArgumentException("Catalog lifecycle is invalid");
+    }
+
+    private static String advanceCatalogLifecycle(
+        String current,
+        String requested
+    ) {
+        if ("ACTIVE".equals(requested)) {
+            return "ACTIVE";
+        }
+        if (
+            "ACTIVE".equalsIgnoreCase(current) ||
+            "PUBLISHED".equalsIgnoreCase(current)
+        ) {
+            return current.toUpperCase(Locale.ROOT);
+        }
+        return "PENDING_GOVERNANCE";
     }
 
     private List<UUID> lockCatalogAssetIds(

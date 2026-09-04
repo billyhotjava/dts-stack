@@ -32,12 +32,14 @@ public class ModelPublicationQualityReconciler {
     private final ModelReleaseCandidateRepository candidates;
     private final ModelReleaseCandidateService commands;
     private final CandidateGovernanceQualityEvidenceService governanceQuality;
+    private final CandidateQualityAssetRegistrationService qualityAssets;
 
     public ModelPublicationQualityReconciler(
         ModelPublicationQualityEvidenceRepository evidence,
         ModelReleaseCandidateRepository candidates,
         ModelReleaseCandidateService commands,
-        CandidateGovernanceQualityEvidenceService governanceQuality
+        CandidateGovernanceQualityEvidenceService governanceQuality,
+        CandidateQualityAssetRegistrationService qualityAssets
     ) {
         this.evidence = Objects.requireNonNull(
             evidence,
@@ -54,6 +56,10 @@ public class ModelPublicationQualityReconciler {
         this.governanceQuality = Objects.requireNonNull(
             governanceQuality,
             "governanceQuality is required"
+        );
+        this.qualityAssets = Objects.requireNonNull(
+            qualityAssets,
+            "qualityAssets is required"
         );
     }
 
@@ -120,6 +126,7 @@ public class ModelPublicationQualityReconciler {
             );
             CommandResult command;
             if (state == EvidenceState.PASSED) {
+                qualityAssets.ensureRegistered(candidate);
                 GovernanceQualitySummaryView governance = governanceQuality.evaluateLive(candidate);
                 if (governance.required() && !governance.passed()) {
                     return blocked(

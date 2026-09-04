@@ -65,6 +65,9 @@ class ModelPublicationQualityReconcilerTest {
     @Mock
     private CandidateGovernanceQualityEvidenceService governanceQuality;
 
+    @Mock
+    private CandidateQualityAssetRegistrationService qualityAssets;
+
     private ModelPublicationQualityReconciler reconciler;
 
     @BeforeEach
@@ -73,7 +76,8 @@ class ModelPublicationQualityReconcilerTest {
             evidence,
             candidates,
             commands,
-            governanceQuality
+            governanceQuality,
+            qualityAssets
         );
     }
 
@@ -114,6 +118,7 @@ class ModelPublicationQualityReconcilerTest {
 
         assertThat(result.outcome())
             .isEqualTo(QualityReconcileOutcome.PASSED);
+        verify(qualityAssets).ensureRegistered(running);
         ArgumentCaptor<TransitionCommand> command =
             ArgumentCaptor.forClass(TransitionCommand.class);
         verify(commands).transitionWithQualityEvidence(

@@ -685,6 +685,7 @@
                         <testInclude>**/service/modeling/ModelReleaseCandidateApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateGovernanceQualityEvidenceServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateGovernanceQualityRerunServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/CandidateQualityAssetRegistrationServiceTest.java</testInclude>
                         <testInclude>**/service/governance/JdbcGovernanceQualityEvidenceAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidatePreflightServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationAdmissionServiceTest.java</testInclude>

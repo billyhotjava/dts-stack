@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary.ClassificationFact;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary.SealRequest;
 import com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort;
+import com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.Snapshot;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationInput;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
@@ -95,9 +96,9 @@ public class ModelClassificationPublishGate {
 
         LinkedHashMap<String, String> upstreamLevels = new LinkedHashMap<>();
         for (ImplementationInput input : implementation.inputs()) {
-            resolveInput(tenantId, model, input, blockers).ifPresent(evidence ->
-                upstreamLevels.put(evidence.subjectKey(), evidence.level())
-            );
+            for (InputEvidence evidence : resolveInputEvidence(tenantId, model, input, blockers)) {
+                upstreamLevels.put(evidence.subjectKey(), evidence.level());
+            }
         }
 
         LinkedHashMap<String, String> fieldLevels = new LinkedHashMap<>();
@@ -210,6 +211,90 @@ public class ModelClassificationPublishGate {
             );
         }
         return decision.withSeal(seal);
+    }
+
+    private List<InputEvidence> resolveInputEvidence(
+        String tenantId,
+        ModelSpecView model,
+        ImplementationInput input,
+        List<Blocker> blockers
+    ) {
+        if (!(input instanceof GeneratedInput generated)) {
+            return resolveInput(tenantId, model, input, blockers).stream().toList();
+        }
+        Object snapshotValue = generated.config().get("dependencySnapshot");
+        if (snapshotValue == null) {
+            if (hasDeclaredDependencies(model)) {
+                blockers.add(
+                    new Blocker(
+                        "CLASSIFICATION_DEPENDENCY_SNAPSHOT_MISSING",
+                        "Generated implementation is missing revision-pinned dependency evidence",
+                        model.id().toString()
+                    )
+                );
+            }
+            return List.of();
+        }
+        try {
+            Snapshot snapshot = objectMapper.convertValue(snapshotValue, Snapshot.class);
+            if (
+                snapshot == null ||
+                !Objects.equals(model.id(), snapshot.modelSpecId()) ||
+                model.revision() != snapshot.modelRevision() ||
+                !Objects.equals(model.checksum(), snapshot.modelChecksum())
+            ) {
+                blockers.add(
+                    new Blocker(
+                        "CLASSIFICATION_DEPENDENCY_SNAPSHOT_STALE",
+                        "Generated implementation dependency evidence does not match the current ModelSpec revision",
+                        model.id().toString()
+                    )
+                );
+                return List.of();
+            }
+            List<InputEvidence> resolved = new ArrayList<>();
+            for (var source : snapshot.physicalSources()) {
+                resolveInput(
+                    tenantId,
+                    model,
+                    new PhysicalAssetInput(source.sourceBindingId(), source.resolvedVersion()),
+                    blockers
+                ).ifPresent(resolved::add);
+            }
+            for (var upstream : snapshot.modelInputs()) {
+                resolveInput(
+                    tenantId,
+                    model,
+                    new UpstreamModelInput(
+                        upstream.modelSpecId(),
+                        upstream.revision(),
+                        upstream.checksum(),
+                        upstream.implementationRevision(),
+                        upstream.implementationChecksum(),
+                        upstream.dbtUniqueId()
+                    ),
+                    blockers
+                ).ifPresent(resolved::add);
+            }
+            return List.copyOf(resolved);
+        } catch (IllegalArgumentException invalidSnapshot) {
+            blockers.add(
+                new Blocker(
+                    "CLASSIFICATION_DEPENDENCY_SNAPSHOT_INVALID",
+                    "Generated implementation dependency evidence cannot be read",
+                    model.id().toString()
+                )
+            );
+            return List.of();
+        }
+    }
+
+    private static boolean hasDeclaredDependencies(ModelSpecView model) {
+        return (
+            model.sourceRefs() != null && !model.sourceRefs().isEmpty() ||
+            model.dependsOn() != null && !model.dependsOn().isEmpty() ||
+            model.dimensionRefs() != null && !model.dimensionRefs().isEmpty()
+        );
     }
 
     private Optional<InputEvidence> resolveInput(

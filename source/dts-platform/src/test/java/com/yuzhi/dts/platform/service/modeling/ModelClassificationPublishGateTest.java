@@ -17,6 +17,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.SourceBind
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary.ClassificationFact;
+import com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort;
 import com.yuzhi.dts.platform.service.catalog.JpaCatalogSourceReferenceReadAdapter;
 import com.yuzhi.dts.platform.service.modeling.ModelClassificationPublishGate.Decision;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView;
@@ -162,5 +163,196 @@ class ModelClassificationPublishGateTest {
         assertThat(decision.ready()).isTrue();
         assertThat(decision.effectiveLevel()).isEqualTo("INTERNAL");
         assertThat(decision.upstreamLevels()).containsEntry(expectedSubjectKey, "DATA_INTERNAL");
+    }
+
+    @Test
+    void resolvesPhysicalSourcesFromCommittedDbtDependencySnapshot() {
+        String tenant = "tenant-a";
+        UUID modelId = UUID.randomUUID();
+        UUID planId = UUID.randomUUID();
+        UUID bindingId = UUID.randomUUID();
+        UUID tableId = UUID.randomUUID();
+        String checksum = "a".repeat(64);
+        String expectedSubjectKey = "source:lake/schema:public/table:orders";
+
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository modelRepository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycleRepository = mock(ModelLifecycleRepository.class);
+        CatalogSourceReferenceReadPort catalogSources = mock(CatalogSourceReferenceReadPort.class);
+        CatalogClassificationBoundary classifications = mock(CatalogClassificationBoundary.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        ImplementationView implementation = mock(ImplementationView.class);
+        when(modelSpecs.get(tenant, modelId)).thenReturn(model);
+        when(model.id()).thenReturn(modelId);
+        when(model.planId()).thenReturn(planId);
+        when(model.name()).thenReturn("orders_model");
+        when(model.revision()).thenReturn(3);
+        when(model.checksum()).thenReturn(checksum);
+        when(model.fields()).thenReturn(List.of());
+        when(model.standardBindings()).thenReturn(List.of());
+        when(lifecycleRepository.findImplementation(tenant, modelId)).thenReturn(Optional.of(implementation));
+        when(implementation.revision()).thenReturn(3);
+        when(implementation.modelChecksum()).thenReturn(checksum);
+        when(implementation.dbtUniqueId()).thenReturn("model.dts.orders_model");
+        when(implementation.inputs())
+            .thenReturn(
+                List.of(
+                    new GeneratedInput(
+                        "DBT",
+                        Map.of(
+                            "dependencySnapshot",
+                            Map.of(
+                                "modelSpecId",
+                                modelId.toString(),
+                                "modelRevision",
+                                3,
+                                "modelChecksum",
+                                checksum,
+                                "implementationRevision",
+                                1,
+                                "implementationChecksum",
+                                "0".repeat(64),
+                                "physicalSources",
+                                List.of(
+                                    Map.of(
+                                        "sourceBindingId",
+                                        bindingId.toString(),
+                                        "resolvedVersion",
+                                        "v1",
+                                        "dbtSourceUniqueId",
+                                        "source.dts.orders"
+                                    )
+                                ),
+                                "modelInputs",
+                                List.of(),
+                                "dependencyChecksum",
+                                "b".repeat(64)
+                            )
+                        )
+                    )
+                )
+            );
+        when(modelRepository.findSourceBinding(tenant, planId, bindingId))
+            .thenReturn(
+                Optional.of(
+                    new SourceBindingState(
+                        bindingId,
+                        "CATALOG_TABLE",
+                        tableId.toString(),
+                        "v1",
+                        "CONFIRMED",
+                        "{\"assetId\":\"" + tableId + "\"}",
+                        "owner-1",
+                        "dept-1"
+                    )
+                )
+            );
+        when(catalogSources.findDatasetAssetKeyByTableId(tableId)).thenReturn(Optional.of(expectedSubjectKey));
+        when(classifications.resolve("ASSET", expectedSubjectKey))
+            .thenReturn(Optional.of(new ClassificationFact("ASSET", expectedSubjectKey, "CONFIDENTIAL", "PROPAGATED")));
+        ModelClassificationPublishGate gate = new ModelClassificationPublishGate(
+            modelSpecs,
+            modelRepository,
+            lifecycleRepository,
+            catalogSources,
+            classifications,
+            new ObjectMapper()
+        );
+
+        Decision decision = gate.evaluate(tenant, modelId, 3, checksum);
+
+        assertThat(decision.ready()).isTrue();
+        assertThat(decision.effectiveLevel()).isEqualTo("CONFIDENTIAL");
+        assertThat(decision.upstreamLevels()).containsEntry(expectedSubjectKey, "CONFIDENTIAL");
+    }
+
+    @Test
+    void blocksMalformedCommittedDbtDependencySnapshot() {
+        String tenant = "tenant-a";
+        UUID modelId = UUID.randomUUID();
+        String checksum = "a".repeat(64);
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository modelRepository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycleRepository = mock(ModelLifecycleRepository.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        ImplementationView implementation = mock(ImplementationView.class);
+        when(modelSpecs.get(tenant, modelId)).thenReturn(model);
+        when(model.id()).thenReturn(modelId);
+        when(model.name()).thenReturn("orders_model");
+        when(model.revision()).thenReturn(3);
+        when(model.checksum()).thenReturn(checksum);
+        when(model.fields()).thenReturn(List.of());
+        when(model.standardBindings()).thenReturn(List.of());
+        when(lifecycleRepository.findImplementation(tenant, modelId)).thenReturn(Optional.of(implementation));
+        when(implementation.revision()).thenReturn(3);
+        when(implementation.modelChecksum()).thenReturn(checksum);
+        when(implementation.dbtUniqueId()).thenReturn("model.dts.orders_model");
+        when(implementation.inputs())
+            .thenReturn(
+                List.of(
+                    new GeneratedInput(
+                        "DBT",
+                        Map.of("dependencySnapshot", Map.of("modelSpecId", "not-a-uuid"))
+                    )
+                )
+            );
+        ModelClassificationPublishGate gate = new ModelClassificationPublishGate(
+            modelSpecs,
+            modelRepository,
+            lifecycleRepository,
+            mock(CatalogSourceReferenceReadPort.class),
+            mock(CatalogClassificationBoundary.class),
+            new ObjectMapper()
+        );
+
+        Decision decision = gate.evaluate(tenant, modelId, 3, checksum);
+
+        assertThat(decision.ready()).isFalse();
+        assertThat(decision.blockers())
+            .extracting(ModelClassificationPublishGate.Blocker::code)
+            .contains("CLASSIFICATION_DEPENDENCY_SNAPSHOT_INVALID");
+    }
+
+    @Test
+    void blocksGeneratedImplementationWhenDeclaredDependenciesHaveNoSnapshot() {
+        String tenant = "tenant-a";
+        UUID modelId = UUID.randomUUID();
+        String checksum = "a".repeat(64);
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository modelRepository = mock(ModelSpecRepository.class);
+        ModelLifecycleRepository lifecycleRepository = mock(ModelLifecycleRepository.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        ModelField field = mock(ModelField.class);
+        ImplementationView implementation = mock(ImplementationView.class);
+        when(modelSpecs.get(tenant, modelId)).thenReturn(model);
+        when(model.id()).thenReturn(modelId);
+        when(model.name()).thenReturn("orders_model");
+        when(model.revision()).thenReturn(3);
+        when(model.checksum()).thenReturn(checksum);
+        when(model.fields()).thenReturn(List.of(field));
+        when(field.name()).thenReturn("order_id");
+        when(field.securityLevel()).thenReturn("INTERNAL");
+        when(model.standardBindings()).thenReturn(List.of());
+        when(model.sourceRefs()).thenReturn(List.of(mock(ModelSpecContract.SourceRef.class)));
+        when(lifecycleRepository.findImplementation(tenant, modelId)).thenReturn(Optional.of(implementation));
+        when(implementation.revision()).thenReturn(3);
+        when(implementation.modelChecksum()).thenReturn(checksum);
+        when(implementation.dbtUniqueId()).thenReturn("model.dts.orders_model");
+        when(implementation.inputs()).thenReturn(List.of(new GeneratedInput("DBT", Map.of())));
+        ModelClassificationPublishGate gate = new ModelClassificationPublishGate(
+            modelSpecs,
+            modelRepository,
+            lifecycleRepository,
+            mock(CatalogSourceReferenceReadPort.class),
+            mock(CatalogClassificationBoundary.class),
+            new ObjectMapper()
+        );
+
+        Decision decision = gate.evaluate(tenant, modelId, 3, checksum);
+
+        assertThat(decision.ready()).isFalse();
+        assertThat(decision.blockers())
+            .extracting(ModelClassificationPublishGate.Blocker::code)
+            .contains("CLASSIFICATION_DEPENDENCY_SNAPSHOT_MISSING");
     }
 }

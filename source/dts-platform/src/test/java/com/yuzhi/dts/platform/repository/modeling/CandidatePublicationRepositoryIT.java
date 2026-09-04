@@ -145,6 +145,112 @@ class CandidatePublicationRepositoryIT {
     }
 
     @Test
+    void preparesHarvestedPhysicalAssetBeforeQualityAndReusesItAtPublication() {
+        TestScope scope = TestScope.create();
+        TransactionTemplate transaction = new TransactionTemplate(
+            transactionManager
+        );
+        UUID harvestedAssetId = UUID.randomUUID();
+        String tableName =
+            "fct_quality_" +
+            scope.prodModelId().toString().replace("-", "").substring(0, 12);
+        try {
+            transaction.executeWithoutResult(status -> {
+                seedPlanAndCandidate(scope);
+                seedPublishedModel(
+                    scope,
+                    scope.prodModelId(),
+                    scope.prodReleaseId(),
+                    "PROD",
+                    true
+                );
+                seedCompiledArtifact(scope);
+                jdbcTemplate.update(
+                    """
+                    insert into catalog_dataset (
+                        id, name, type, source_id,
+                        hive_database, hive_table, enabled,
+                        lifecycle_status, created_date, last_modified_date
+                    ) values (
+                        ?, ?, 'jdbc', ?,
+                        'finance', ?, true,
+                        'PENDING_GOVERNANCE', ?, ?
+                    )
+                    """,
+                    harvestedAssetId,
+                    tableName,
+                    SOURCE_ID,
+                    tableName,
+                    Timestamp.from(NOW.minusSeconds(60)),
+                    Timestamp.from(NOW.minusSeconds(60))
+                );
+            });
+            CandidateView candidate = candidate(scope);
+            ResolvedCatalogTarget target = new ResolvedCatalogTarget(
+                TARGET_KEY,
+                SOURCE_ID,
+                "postgres"
+            );
+            PublicationEntryEvidence observation =
+                publicationObservation(scope, tableName);
+            ModelSpecView model = publicationModel(scope);
+
+            UUID preparedAssetId = transaction.execute(status ->
+                publications.prepareQualityDataset(
+                    candidate,
+                    target,
+                    observation,
+                    model,
+                    "CONFIDENTIAL",
+                    "quality-service",
+                    NOW
+                )
+            );
+
+            assertThat(preparedAssetId).isEqualTo(harvestedAssetId);
+            assertThat(catalogDatasetCount(tableName)).isEqualTo(1);
+            assertThat(catalogDatasetValue(harvestedAssetId, "classification"))
+                .isEqualTo("CONFIDENTIAL");
+            assertThat(catalogDatasetValue(harvestedAssetId, "warehouse_layer"))
+                .isEqualTo("DWD");
+            assertThat(catalogDatasetValue(harvestedAssetId, "lifecycle_status"))
+                .isEqualTo("PENDING_GOVERNANCE");
+            assertThat(
+                jdbcTemplate.queryForObject(
+                    "select domain_id from catalog_dataset where id = ?",
+                    UUID.class,
+                    harvestedAssetId
+                )
+            ).isEqualTo(scope.domainId());
+
+            LifecycleEventView release = org.mockito.Mockito.mock(
+                LifecycleEventView.class
+            );
+            org.mockito.Mockito.when(release.id())
+                .thenReturn(scope.prodReleaseId());
+            transaction.executeWithoutResult(status ->
+                publications.registerModel(
+                    candidate,
+                    target,
+                    observation,
+                    model,
+                    release,
+                    "release-operator",
+                    NOW.plusSeconds(1)
+                )
+            );
+
+            assertThat(catalogDatasetCount(tableName)).isEqualTo(1);
+            assertThat(catalogDatasetValue(harvestedAssetId, "classification"))
+                .isEqualTo("CONFIDENTIAL");
+            assertThat(catalogDatasetValue(harvestedAssetId, "lifecycle_status"))
+                .isEqualTo("ACTIVE");
+        } finally {
+            transaction.executeWithoutResult(status -> cleanup(scope));
+        }
+    }
+
+    @Test
     void registersOneSourceBoundPhysicalAssetAndProjectsObservedColumns() {
         TestScope scope = TestScope.create();
         TransactionTemplate transaction = new TransactionTemplate(
@@ -2138,6 +2244,38 @@ class CandidatePublicationRepositoryIT {
             scope.tenantId(),
             scope.planId(),
             TARGET_KEY
+        );
+    }
+
+    private Integer catalogDatasetCount(String tableName) {
+        return jdbcTemplate.queryForObject(
+            """
+            select count(*)
+              from catalog_dataset
+             where source_id = ?
+               and lower(btrim(hive_database)) = 'finance'
+               and lower(btrim(hive_table)) = lower(btrim(?))
+            """,
+            Integer.class,
+            SOURCE_ID,
+            tableName
+        );
+    }
+
+    private String catalogDatasetValue(UUID assetId, String column) {
+        if (
+            !List.of(
+                "classification",
+                "warehouse_layer",
+                "lifecycle_status"
+            ).contains(column)
+        ) {
+            throw new IllegalArgumentException("Unsupported Catalog column");
+        }
+        return jdbcTemplate.queryForObject(
+            "select " + column + " from catalog_dataset where id = ?",
+            String.class,
+            assetId
         );
     }
 
