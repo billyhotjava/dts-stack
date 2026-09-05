@@ -61,6 +61,28 @@ const glossaryRow: StandardsRow = {
 };
 
 describe("standards archive safety", () => {
+	it("saves a selected published status without losing code ownership", async () => {
+		await saveStandardsRow(
+			"codes",
+			{
+				code: "TASK_STATUS",
+				name: "任务状态",
+				dataType: "STRING",
+				domain: "PROJECT",
+				definition: "",
+				scope: "",
+				version: "v1",
+				status: "1",
+			},
+			{ ...glossaryRow, id: "code-1", source: { status: 0, ownerDept: "DEPT_A" } },
+		);
+		expect(apiMocks.updateReferenceCode).toHaveBeenCalledWith(
+			"code-1",
+			expect.objectContaining({ status: 1, ownerDept: "DEPT_A" }),
+		);
+		apiMocks.updateReferenceCode.mockClear();
+	});
+
 	it("does not advertise archive when the glossary owner only exposes permanent delete", () => {
 		const capability = standardsCapability("dictionary");
 		expect(capability.archive).toBe(false);

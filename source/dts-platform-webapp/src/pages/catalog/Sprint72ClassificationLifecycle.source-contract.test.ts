@@ -18,6 +18,13 @@ const SCREEN_SOURCE = readFileSync(
 );
 const API = readFileSync(new URL("../../api/platformApi.ts", import.meta.url), "utf8");
 
+test("asset details defer global lifecycle reports until the matching tab is selected", () => {
+	assert.match(WORKBENCH, /useAssetLifecycleWorkspace/);
+	assert.match(WORKBENCH, /activeKey=\{activeTab\}/);
+	assert.doesNotMatch(WORKBENCH, /getCatalogLifecycleMetrics\(/);
+	assert.match(WORKBENCH, /if \(!open \|\| activeTab !== "migration"\) return/);
+});
+
 test("Sprint-72 keeps immutable classification facts in asset detail instead of the directory table", () => {
 	for (const label of ["来源声明", "识别结果", "人工下限", "字段有效密级", "继承来源"]) {
 		assert.match(FACTS, new RegExp(label));
@@ -54,7 +61,7 @@ test("Sprint-72 lifecycle workbench exposes the six-stage timeline, events and v
 
 test("Sprint-72 dataset governance only raises a manual floor and routes lifecycle changes through approval", () => {
 	const governanceSource = `${DATASET_DETAIL}\n${GOVERNANCE_EXTENSION}`;
-	for (const label of ["当前有效密级", "人工密级下限", "密级与生命周期", "生命周期状态只能通过审批动作改变"]) {
+	for (const label of ["当前有效密级", "人工密级下限", "密级与生命周期", "生命周期变更需要审批"]) {
 		assert.match(governanceSource, new RegExp(label));
 	}
 	assert.match(governanceSource, /raiseCatalogClassificationManualFloor/);

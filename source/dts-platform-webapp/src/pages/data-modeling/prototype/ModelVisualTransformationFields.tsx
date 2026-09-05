@@ -131,6 +131,7 @@ const defaultFilterValue = (valueType: ModelImplementationFilterValueType): Mode
 
 export function ModelVisualTransformationFields({ draft, context, validationMessage, onChange }: Props) {
 	const aliases = visualTransformationInputAliases(draft, context);
+	const namedFields = draft.fields.filter((field) => field.name.trim());
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
 	const canEdit = Boolean(draft.implementationInputMode) && draft.implementationInputMode !== "GENERATED";
 
@@ -212,10 +213,10 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 					<small>仅支持结构化白名单；不接收自由 SQL。复杂逻辑请切换到代码模式维护。</small>
 				</div>
 				<Button
-					disabled={!aliases.length || !draft.fields.length}
+					disabled={!aliases.length || !namedFields.length}
 					onClick={() =>
 						patch({
-							fieldMappings: draft.fields.map((field) => ({
+							fieldMappings: namedFields.map((field) => ({
 								sourceField: `${aliases.length > 1 ? "src_0." : ""}${field.name}`,
 								targetField: field.name,
 							})),
@@ -249,7 +250,7 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 						</tr>
 					</thead>
 					<tbody>
-						{draft.fields.map((field) => {
+						{namedFields.map((field) => {
 							const mapping = draft.fieldMappings.find((item) => item.targetField === field.name);
 							const aggregation = draft.aggregations.find((item) => item.targetField === field.name);
 							return (

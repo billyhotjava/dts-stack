@@ -89,8 +89,9 @@ function dataSourceIssues(location: ComponentLocation): ScreenAuthoringIssue[] {
 		}
 	} else if (type === "sql") {
 		const sql = dataSource.sqlConfig ?? dataSource.databaseConfig;
-		if (Number(sql?.databaseId ?? 0) <= 0 && !sql?.connectionId?.trim()) {
-			add("DATA_SOURCE_DATABASE_MISSING", "SQL 数据源尚未选择数据库");
+		const databaseId = Number(sql?.databaseId ?? sql?.connectionId);
+		if (!Number.isFinite(databaseId) || databaseId <= 0) {
+			add("DATA_SOURCE_DATABASE_MISSING", "SQL 数据源尚未选择有效数据库；旧版导入内容请重新绑定当前环境数据库后保存");
 		}
 		if (!sql?.query?.trim()) {
 			add("DATA_SOURCE_SQL_MISSING", "SQL 数据源尚未填写查询语句");

@@ -17,6 +17,7 @@ mkdir -p \
   "${TEST_REPO}/builds/legacy-dist" \
   "${TEST_REPO}/bin/lib" \
   "${TEST_REPO}/services/dts-dbt/models" \
+  "${TEST_REPO}/services/dts-dbt/dbt_model/models/stg" \
   "${TEST_REPO}/services/dts-dbt/macros" \
   "${TEST_REPO}/services/dts-dbt/profiles" \
   "${TEST_REPO}/services/dts-airflow/config" \
@@ -85,6 +86,11 @@ EOF_FILE
 cat > "${TEST_REPO}/services/dts-dbt/dbt_project.yml" <<'EOF_FILE'
 name: dts
 version: 1.0.0
+model-paths: ["models", "dbt_model/models"]
+EOF_FILE
+
+cat > "${TEST_REPO}/services/dts-dbt/dbt_model/models/stg/reference_project.sql" <<'EOF_FILE'
+select 1 as project_id
 EOF_FILE
 
 cat > "${TEST_REPO}/services/dts-dbt/profiles/profiles.yml" <<'EOF_FILE'
@@ -235,6 +241,16 @@ fi
 
 if grep -qx 'dts-stack/services/dts-dbt/profiles/.user.yml' <<<"${ARCHIVE_CONTENTS}"; then
   echo "deployment package leaked the local dbt profiles/.user.yml" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/services/dts-dbt/dbt_model/models/stg/reference_project.sql' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include every configured dbt model path" >&2
+  exit 1
+fi
+
+if ! grep -Fqx 'select 1 as project_id' "${PACKAGE_EXTRACT}/dts-stack/services/dts-dbt/dbt_model/models/stg/reference_project.sql"; then
+  echo "expected packaged dbt dependency content to remain intact" >&2
   exit 1
 fi
 

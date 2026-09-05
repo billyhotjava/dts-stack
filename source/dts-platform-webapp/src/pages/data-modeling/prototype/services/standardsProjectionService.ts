@@ -49,6 +49,7 @@ export type StandardsCapability = {
 };
 
 export type StandardsEditorValues = {
+	status?: string;
 	code: string;
 	name: string;
 	dataType: string;
@@ -520,7 +521,7 @@ const referenceCodePayload = (
 	stdLevel: values.scope.trim() || current?.stdLevel,
 	bizCatalog: values.domain.trim() || current?.bizCatalog,
 	dataType: values.dataType.trim() || current?.dataType,
-	status: nextStatus ?? Number(current?.status ?? 0),
+	status: nextStatus ?? Number(values.status ?? current?.status ?? 0),
 	ownerDept: current?.ownerDept,
 	version: values.version.trim() || text(current?.version, "v1"),
 });

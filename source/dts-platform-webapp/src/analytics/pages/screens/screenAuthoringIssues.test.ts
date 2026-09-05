@@ -35,6 +35,39 @@ function config(overrides: Partial<ScreenConfig> = {}): ScreenConfig {
 }
 
 describe("deriveScreenAuthoringIssues", () => {
+	it.each(["{{DATABASE_ID}}", "", "missing"])("locates invalid imported SQL database %s", (databaseId) => {
+		const issues = deriveScreenAuthoringIssues(
+			config({
+				components: [
+					component({
+						dataSource: { type: "sql", sqlConfig: { databaseId: databaseId as unknown as number, query: "select 1" } },
+					}),
+				],
+			}),
+		);
+		expect(issues).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					code: "DATA_SOURCE_DATABASE_MISSING",
+					componentId: "chart-1",
+					tab: "data",
+					level: "blocker",
+				}),
+			]),
+		);
+	});
+	it("accepts a numeric legacy SQL connection identity", () => {
+		const issues = deriveScreenAuthoringIssues(
+			config({
+				components: [
+					component({
+						dataSource: { type: "sql", sqlConfig: { connectionId: "42", query: "select 1" } },
+					}),
+				],
+			}),
+		);
+		expect(issues.filter((issue) => issue.code === "DATA_SOURCE_DATABASE_MISSING")).toHaveLength(0);
+	});
 	it("reports governed data-source blockers with component location", () => {
 		const issues = deriveScreenAuthoringIssues(
 			config({

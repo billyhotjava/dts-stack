@@ -3,6 +3,17 @@ import { describe, expect, it } from "vitest";
 import { buildAssetV2Query } from "./assetV2Query";
 
 describe("buildAssetV2Query", () => {
+	it("translates the unassigned navigation sentinel instead of sending it as a UUID", () => {
+		expect(buildAssetV2Query({ domainId: "__UNASSIGNED__" })).toMatchObject({
+			domainId: undefined,
+			domainUnassigned: true,
+		});
+		expect(buildAssetV2Query({ domainId: "domain-1" })).toMatchObject({
+			domainId: "domain-1",
+			domainUnassigned: undefined,
+		});
+	});
+
 	it("maps ALL selectors to undefined and keeps page/size", () => {
 		const query = buildAssetV2Query(
 			{ assetType: "ALL", classification: "ALL", warehouseLayer: "ALL", governanceStatus: "ALL", matchStatus: "ALL" },

@@ -92,13 +92,8 @@
           "titleColor": "#334155",
           "valueColor": "#044b8c",
           "backgroundColor": "#ffffff",
-          "header": ["指标", "值"],
-          "data": [["项目数", "2"]]
-        },
-        "dataSource": {
-          "type": "static",
-          "classificationSubjectType": "DATASET",
-          "classificationSubjectKey": "23b1d236-55f5-3af2-8b33-9506b8e3b2ef"
+          "header": ["value"],
+          "data": [["2"]]
         }
       },
       {
@@ -120,13 +115,8 @@
           "titleColor": "#334155",
           "valueColor": "#044b8c",
           "backgroundColor": "#ffffff",
-          "header": ["指标", "值"],
-          "data": [["任务总数", "8"]]
-        },
-        "dataSource": {
-          "type": "static",
-          "classificationSubjectType": "DATASET",
-          "classificationSubjectKey": "23b1d236-55f5-3af2-8b33-9506b8e3b2ef"
+          "header": ["value"],
+          "data": [["8"]]
         }
       },
       {
@@ -155,11 +145,6 @@
             "dimension": "项目名称",
             "measures": ["平均完成进度"]
           }
-        },
-        "dataSource": {
-          "type": "static",
-          "classificationSubjectType": "DATASET",
-          "classificationSubjectKey": "23b1d236-55f5-3af2-8b33-9506b8e3b2ef"
         }
       },
       {
@@ -192,11 +177,6 @@
           "oddRowBackground": "#ffffff",
           "evenRowBackground": "#f5f9fd",
           "borderColor": "#cbd5e1"
-        },
-        "dataSource": {
-          "type": "static",
-          "classificationSubjectType": "DATASET",
-          "classificationSubjectKey": "23b1d236-55f5-3af2-8b33-9506b8e3b2ef"
         }
       }
     ]

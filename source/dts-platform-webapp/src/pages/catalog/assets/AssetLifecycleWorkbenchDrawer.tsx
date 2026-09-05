@@ -1,7 +1,6 @@
 import { Alert, Button, Descriptions, Drawer, Input, Modal, message, Space, Tabs, Tag, Typography } from "antd";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-	type AssetGovernanceWorkspace,
 	applyClassificationMigrationBatch,
 	approveCatalogLifecycleAction,
 	type ClassificationFactView,
@@ -12,12 +11,8 @@ import {
 	createClassificationMigrationDryRun,
 	freezeLegacyClassificationWrites,
 	type GovernanceIssueView,
-	getCatalogAssetGovernanceWorkspace,
-	getCatalogGovernanceIssues,
-	getCatalogLifecycleMetrics,
 	getClassificationMigrationRun,
 	type LifecycleActionView,
-	type LifecycleMetrics,
 	listClassificationMigrationItems,
 	listClassificationWriteFreezes,
 	pauseClassificationMigration,
@@ -32,6 +27,7 @@ import { useRouter } from "@/routes/hooks";
 import { governanceEventLabel, migrationDecisionLabel, qualityLabel, statusLabel } from "@/utils/customerDisplayLabels";
 import type { AssetRow } from "./assetPageShared";
 import { classificationText, formatTime } from "./assetPageShared";
+import { useAssetLifecycleWorkspace } from "./useAssetLifecycleWorkspace";
 
 type Props = {
 	open: boolean;
@@ -144,42 +140,25 @@ const promptReason = (title: string, warning?: string) =>
 
 export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact, onClose, onChanged }: Props) {
 	const router = useRouter();
-	const [workspace, setWorkspace] = useState<AssetGovernanceWorkspace | null>(null);
-	const [metrics, setMetrics] = useState<LifecycleMetrics | null>(null);
-	const [issues, setIssues] = useState<GovernanceIssueView[]>([]);
 	const [migrationRun, setMigrationRun] = useState<ClassificationMigrationRun | null>(null);
 	const [migrationItems, setMigrationItems] = useState<ClassificationMigrationItem[]>([]);
 	const [reconciliation, setReconciliation] = useState<ClassificationMigrationReconciliation | null>(null);
 	const [writeFreezes, setWriteFreezes] = useState<ClassificationWriteFreeze[]>([]);
-	const [loading, setLoading] = useState(false);
 	const [actingId, setActingId] = useState<string | null>(null);
 
 	const datasetId = asset?.legacyDatasetId || (asset?.metadataSource === "dts-catalog" ? asset.id : undefined);
 	const subjectKey = asset?.assetKey;
+	const { workspace, metrics, issues, loading, load, activeTab, setActiveTab } = useAssetLifecycleWorkspace(
+		open,
+		datasetId,
+		subjectKey,
+	);
 	const fact = workspace?.classification || classificationFact;
 	const lifecycle = workspace?.lifecycle;
 	const lifecycleStages = lifecycle ? lifecycle.stages || [] : [];
 	const lifecycleEvents = lifecycle ? lifecycle.events || [] : [];
 	const destructionProofs = lifecycle ? lifecycle.destructionProofs || [] : [];
 	const lifecycleStageMap = new Map(lifecycleStages.map((stage) => [String(stage.stage).toUpperCase(), stage]));
-
-	const load = useCallback(async () => {
-		if (!open || !asset) return;
-		setLoading(true);
-		const [workspaceResult, metricsResult, issuesResult] = await Promise.allSettled([
-			datasetId && subjectKey ? getCatalogAssetGovernanceWorkspace(datasetId, subjectKey) : Promise.resolve(null),
-			getCatalogLifecycleMetrics({ days: 30 }),
-			getCatalogGovernanceIssues(100),
-		]);
-		setWorkspace(workspaceResult.status === "fulfilled" ? workspaceResult.value : null);
-		setMetrics(metricsResult.status === "fulfilled" ? metricsResult.value : null);
-		setIssues(issuesResult.status === "fulfilled" && Array.isArray(issuesResult.value) ? issuesResult.value : []);
-		setLoading(false);
-	}, [asset, datasetId, open, subjectKey]);
-
-	useEffect(() => {
-		void load();
-	}, [load]);
 
 	const refreshMigration = useCallback(async (runId: string) => {
 		const [runResult, itemsResult, reconciliationResult, freezesResult] = await Promise.allSettled([
@@ -197,10 +176,10 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 	}, []);
 
 	useEffect(() => {
-		if (!open) return;
+		if (!open || activeTab !== "migration") return;
 		const runId = window.localStorage.getItem("catalog.classification.migration.run");
 		if (runId) void refreshMigration(runId);
-	}, [open, refreshMigration]);
+	}, [open, activeTab, refreshMigration]);
 
 	const availableActions = useMemo(() => {
 		if (!workspace?.lifecycle || !fact?.sealed || !datasetId) return [];
@@ -377,6 +356,8 @@ export function AssetLifecycleWorkbenchDrawer({ open, asset, classificationFact,
 				</div>
 			) : null}
 			<Tabs
+				activeKey={activeTab}
+				onChange={setActiveTab}
 				items={[
 					{
 						key: "classification",

@@ -41,24 +41,24 @@ export default function GovernanceCenterPage() {
 			{
 				title: "标准管理",
 				entries: [
-					{ title: "术语表", description: "维护业务术语及解释", path: "/governance/standards/glossary" },
-					{ title: "数据元", description: "维护字段标准与口径", path: "/governance/standards/elements" },
-					{ title: "参考码表", description: "维护统一代码与映射", path: "/governance/standards/reference" },
-					{ title: "模板管理", description: "维护标准模板与字段约束", path: "/governance/templates" },
+					{ title: "命名词典", description: "维护业务术语及解释", path: "/data-modeling/standards/dictionary" },
+					{ title: "字段标准", description: "维护字段标准与口径", path: "/data-modeling/standards/fields" },
+					{ title: "标准代码", description: "维护统一代码与映射", path: "/data-modeling/standards/codes" },
+					{ title: "标准包", description: "下载模板并导入标准定义", path: "/foundation/standard-package" },
 				],
 			},
 			{
 				title: "质量管控",
 				entries: [
-					{ title: "质量规则", description: "定义并执行质量规则", path: "/governance/rules" },
+					{ title: "质量规则", description: "定义并执行质量规则", path: "/governance/rules/catalog" },
 					{ title: "质量检查", description: "运行质量检查并查看执行结果", path: "/governance/rules/runs" },
-					{ title: "资产视图", description: "联动查看数据资产质量", path: "/catalog/quality" },
+					{ title: "资产视图", description: "联动查看数据资产质量", path: "/catalog/search" },
 				],
 			},
 			{
 				title: "主题域与安全",
 				entries: [
-					{ title: "主题域", description: "定义数据责任域和资产归属", path: "/governance/subjects" },
+					{ title: "主题域", description: "定义数据责任域和资产归属", path: "/data-architecture?view=subjects" },
 					{ title: "分级分类", description: "配置密级映射、脱敏规则和安全字段", path: "/security/data-security" },
 					{ title: "权限审批", description: "处理资产访问申请和授权链路", path: "/security/dataset-access-approval" },
 					{ title: "权限审计", description: "核对权限变更和访问审计证据", path: "/governance/permission-audit" },

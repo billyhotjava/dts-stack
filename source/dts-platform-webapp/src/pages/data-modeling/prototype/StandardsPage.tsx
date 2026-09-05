@@ -1,6 +1,7 @@
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyStandardPackageImport, previewStandardPackageImport } from "@/api/modelingStandardsApi";
+import catalogDomainService, { type CatalogDomain } from "@/api/services/catalogDomainService";
 import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 import type { DataModelingRoute } from "../types";
 import { Button, Modal, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
@@ -518,9 +519,36 @@ function StandardsEditor({
 					domain: row.domain === "—" ? "" : row.domain,
 					scope: row.scope === "—" ? "" : row.scope,
 					version: row.version === "—" ? "v1" : row.version,
+					status: String(row.source.status ?? 0),
 				}
 			: emptyEditor(),
 	);
+	const [domains, setDomains] = useState<CatalogDomain[]>([]);
+	const [domainsLoading, setDomainsLoading] = useState(view === "codes");
+	const [domainsError, setDomainsError] = useState("");
+	useEffect(() => {
+		if (view !== "codes") return;
+		let active = true;
+		void catalogDomainService.list().then(
+			(items) => {
+				if (active) {
+					setDomains(items);
+					setDomainsLoading(false);
+				}
+			},
+			() => {
+				if (active) {
+					setDomainsError("数据域加载失败，请关闭后重试。");
+					setDomainsLoading(false);
+				}
+			},
+		);
+		return () => {
+			active = false;
+		};
+	}, [view]);
+	const dataTypes = ["STRING", "BOOLEAN", "INT", "BIGINT", "DECIMAL", "DATE", "TIMESTAMP"];
+	if (values.dataType && !dataTypes.includes(values.dataType)) dataTypes.push(values.dataType);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState("");
 	const set = (key: keyof StandardsEditorValues, value: string) =>
@@ -554,15 +582,64 @@ function StandardsEditor({
 		>
 			<div className="dmx-form-grid">
 				{fields.map((key) => (
-					<label key={key}>
+					<label key={key} htmlFor={`standard-${view}-${key}`}>
 						<span>{labels[key]}</span>
-						<input
-							disabled={saving || (Boolean(row) && key === "code")}
-							onChange={(event) => set(key, event.target.value)}
-							value={values[key]}
-						/>
+						{view === "codes" && key === "dataType" ? (
+							<select
+								id={`standard-${view}-${key}`}
+								disabled={saving}
+								onChange={(event) => set(key, event.target.value)}
+								value={values[key]}
+							>
+								<option value="">请选择数据类型</option>
+								{dataTypes.map((type) => (
+									<option key={type} value={type}>
+										{type}
+									</option>
+								))}
+							</select>
+						) : view === "codes" && key === "domain" ? (
+							<select
+								id={`standard-${view}-${key}`}
+								disabled={saving || domainsLoading || Boolean(domainsError)}
+								onChange={(event) => set(key, event.target.value)}
+								value={values[key]}
+							>
+								<option value="">{domainsLoading ? "加载数据域…" : "请选择数据域"}</option>
+								{values.domain && !domains.some((domain) => domain.code === values.domain) ? (
+									<option value={values.domain}>{values.domain}（已保存）</option>
+								) : null}
+								{domains.map((domain) => (
+									<option key={domain.id} value={domain.code}>
+										{domain.name} · {domain.code}
+									</option>
+								))}
+							</select>
+						) : (
+							<input
+								id={`standard-${view}-${key}`}
+								disabled={saving || (Boolean(row) && key === "code")}
+								onChange={(event) => set(key, event.target.value)}
+								value={values[key]}
+							/>
+						)}
 					</label>
 				))}
+				{view === "codes" ? (
+					<label>
+						<span>状态</span>
+						<select
+							disabled={saving}
+							value={values.status ?? "0"}
+							onChange={(event) => set("status", event.target.value)}
+						>
+							<option value="0">草稿</option>
+							<option value="1">已发布</option>
+							<option value="2">已废弃</option>
+						</select>
+					</label>
+				) : null}
+				{domainsError ? <div role="alert">{domainsError}</div> : null}
 				{view !== "roots" ? (
 					<label className="dmx-form-field--wide">
 						<span>业务定义</span>

@@ -24,6 +24,7 @@ import {
 	upsertDatasetSecurityMapping,
 } from "@/api/platformApi";
 import { AssetActionMatrixPanel } from "./AssetActionMatrixPanel";
+import { SensitiveFieldDetectionPanel } from "./SensitiveFieldDetectionPanel";
 
 const { Text } = Typography;
 const SECURITY_LINKAGE_VERSION_KEY = "catalog.security.linkage.version";
@@ -560,6 +561,13 @@ export default function Page() {
 							label: "脱敏规则",
 							children: (
 								<>
+									<SensitiveFieldDetectionPanel
+										datasets={datasets}
+										onComplete={async () => {
+											await loadMaskingRules();
+											notifySecurityLinkageChanged();
+										}}
+									/>
 									<Space className="mb-3">
 										<Button type="primary" onClick={() => openMaskingModal()}>
 											新增规则

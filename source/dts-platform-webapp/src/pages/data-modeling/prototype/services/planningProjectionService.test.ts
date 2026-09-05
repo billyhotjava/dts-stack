@@ -3,6 +3,24 @@ import { describe, expect, it } from "vitest";
 import { normalizeModelingRequestFailure } from "./planningProjectionService";
 
 describe("normalizeModelingRequestFailure", () => {
+	it("explains stale source bindings in Chinese while preserving the diagnostic code", () => {
+		const failure = normalizeModelingRequestFailure(
+			{
+				response: {
+					status: 422,
+					data: {
+						code: "MODEL_SPEC_SOURCE_BINDING_INVALID",
+						message: "Every source must resolve to the confirmed source version in the current warehouse plan",
+					},
+				},
+			},
+			"模型保存失败。",
+		);
+		expect(failure.message).toContain("请在数仓规划中确认来源");
+		expect(failure.message).toContain("MODEL_SPEC_SOURCE_BINDING_INVALID");
+		expect(failure.message).not.toContain("Every source");
+	});
+
 	it("uses a fixed permission message", () => {
 		expect(
 			normalizeModelingRequestFailure(

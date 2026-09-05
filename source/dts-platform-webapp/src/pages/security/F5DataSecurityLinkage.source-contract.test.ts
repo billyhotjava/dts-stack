@@ -6,6 +6,10 @@ const SECURITY_SOURCE = readFileSync(new URL("./data-security.tsx", import.meta.
 const ASSET_LEDGER_SOURCE = readFileSync(new URL("../catalog/assets/AssetLedgerView.tsx", import.meta.url), "utf8");
 const ASSET_DETAIL_SOURCE = readFileSync(new URL("../catalog/DatasetDetailPage.tsx", import.meta.url), "utf8");
 
+test("sensitive field detection is available in the existing masking workspace", () => {
+	assert.match(SECURITY_SOURCE, /<SensitiveFieldDetectionPanel/);
+});
+
 test("F5-T04 asset directory delegates security work to asset detail", () => {
 	assert.match(ASSET_LEDGER_SOURCE, /router\.push\(`\/catalog\/datasets\/\$\{row\.id\}`\)/);
 	assert.doesNotMatch(ASSET_LEDGER_SOURCE, /\/security\/data-security\?tab=datasetSecurity/);

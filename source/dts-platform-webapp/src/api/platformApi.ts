@@ -762,7 +762,7 @@ export type DatasetField = {
 };
 
 export const getDatasetFields = (datasetId: string): Promise<DatasetField[]> =>
-	api.get({ url: `/catalog/datasets/${datasetId}/fields` }).then((r: any) => r.data?.data ?? []);
+	api.get<DatasetField[]>({ url: `/catalog/datasets/${datasetId}/fields` });
 
 // Asset extras (tasks)
 export const syncDatasetSchema = (datasetId: string, data?: any) =>

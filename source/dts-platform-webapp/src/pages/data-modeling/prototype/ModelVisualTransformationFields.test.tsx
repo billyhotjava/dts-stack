@@ -85,6 +85,48 @@ const draft = (): ModelSpecDraft => {
 };
 
 describe("ModelVisualTransformationFields", () => {
+	it("ignores blank editor rows when rendering and repeatedly mapping by name", () => {
+		container = document.createElement("div");
+		document.body.append(container);
+		root = createRoot(container);
+		let current = draft();
+		current.fields.unshift({ ...current.fields[0], name: "" }, { ...current.fields[0], name: "   " });
+		const originalFields = current.fields;
+		const onChange = vi.fn((next: ModelSpecDraft) => {
+			current = next;
+			root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={onChange} />);
+		});
+		act(() =>
+			root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={onChange} />),
+		);
+		const autoMap = Array.from(container.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("按名称一一映射"),
+		);
+		for (let click = 0; click < 2; click += 1) {
+			act(() => autoMap?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			expect(current.fieldMappings).toEqual([
+				{ sourceField: "src_0.record_id", targetField: "record_id" },
+				{ sourceField: "src_0.amount", targetField: "amount" },
+			]);
+			expect(container.querySelectorAll('[aria-label^="来源字段 "]')).toHaveLength(2);
+			expect(current.fields).toBe(originalFields);
+		}
+	});
+
+	it("disables automatic mapping when all editor rows are blank", () => {
+		container = document.createElement("div");
+		document.body.append(container);
+		root = createRoot(container);
+		const current = draft();
+		current.fields = [{ ...current.fields[0], name: "   " }];
+		act(() => root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={vi.fn()} />));
+		const autoMap = Array.from(container.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("按名称一一映射"),
+		);
+		expect(autoMap?.disabled).toBe(true);
+		expect(container.querySelectorAll('[aria-label^="来源字段 "]')).toHaveLength(0);
+	});
+
 	it("uses the same stable input ordering as the dependency snapshot", () => {
 		const current = draft();
 		current.sourceRefs.push({
