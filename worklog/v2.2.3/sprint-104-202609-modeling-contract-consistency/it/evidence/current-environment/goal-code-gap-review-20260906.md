@@ -21,7 +21,7 @@ F1 已有源码专项、IT-04 dbt 样例和历史提交证据，只证明相应�
 
 22:55:07，analytics 的 `DataLakeDatabaseInitializer` 请求 platform `/infra/data-sources` 发生 I/O 失败。初始化是单次启动动作，失败后没有自动恢复；23:04 随后的 semantic publish 返回 HTTP 400，本轮只读查询 `analytics_database` 为 0 行。请求 payload 包含 `platformDataSourceId`，因此不支持将根因归为 `dataSourceName=null`。
 
-本轮只实施 T13-A：为内置数仓启动初始化失败增加有界自动重试和专项测试。不得扩大为任意平台源按需接入、唯一约束或目标表/字段验证；该启动缺陷可以解释本次缺失关联导致的 HTTP 400；其它 HTTP 400 原因不在本切片范围内。测试、构建、部署和提交均**待验证**，没有 PASS 结论。
+本轮只实施 T13-A：为内置数仓启动初始化失败增加有界自动重试和专项测试。不得扩大为任意平台源按需接入、唯一约束或目标表/字段验证；该启动缺陷可以解释本次缺失关联导致的 HTTP 400；其它 HTTP 400 原因不在本切片范围内。代码已提交推送为 `6191dbca4`；部署目录同 SHA 的专项测试 11/11 通过，JAR 构建通过。镜像部署、故障恢复实测及实际可查询仍未验证。
 
 ## 后续顺序
 
@@ -29,3 +29,13 @@ F1 已有源码专项、IT-04 dbt 样例和历史提交证据，只证明相应�
 2. T10-B3：用现有工作台承载 W1–W4、`step`/`candidateId` 上下文和服务端动作，不以旧弹窗替代步骤页。
 3. T11：在 W3 固定当前输出资产，复用规则页并安全返回，保存后重读候选质量证据。
 4. T12：待目录局部更新 CAS 定案后，将常用资产维护接入 W4；随后补 T13 完整接入约束与 T14 实际验收。
+
+## T13-A 本轮验证结果
+
+- 流程：开发目录仅编辑/静态检查/commit/push；部署目录 `git pull --ff-only origin v2.2.3` 至 `6191dbca4` 后执行测试及构建。
+- 命令：在部署目录的 Maven 3.9.9 / Temurin 21 容器内，以 source 为工作目录执行 `mvn -B -Dmaven.repo.local=/home/billy/.m2/repository -s /home/billy/.m2/settings.xml -pl dts-analytics -am -Dtest=DataLakeInitializationRetryTest,DataLakeDatabaseInitializerTest,SemanticPublishResourceTest -Dsurefire.failIfNoSpecifiedTests=false package`。
+- 结果：11 tests，0 failures，0 errors，0 skipped；`BUILD SUCCESS`，27.302 秒。新增 10 项验证启动前不执行、依赖恢复、事务失败、次数上限、重复触发、已有源、缺失源、稳定 ID 注册和元数据失败边界；既有 1 项验证语义发布按平台源 ID 匹配。
+- 产物：部署目录 `source/dts-analytics/target/dts-analytics-2.2.3-SNAPSHOT.jar`；日志 `/tmp/s104-datalake-retry-verification.log`。本轮没有重建或替换业务容器，无容器补丁、数据库修改或运行状态强制清理。
+- 代码影响：GitNexus upstream 为 LOW，初始化方法 0 直接调用，类仅 DatabaseResource 引用；静态核对启动事件已迁移至重试协调器，数据库识别方法未变。提交前 detect_changes 为 low；新增调度器和测试由实际 diff 与专项测试补充核对。
+- 限制：GitNexus 重建出现 worker 超时并回退串行；长时间未完成，已终止本轮重建，未宣称索引已刷新。影响结果结合未改变的初始化源码使用；本轮没有把静态调用图当作 Spring 事件或调度执行证明。提交钩子提示 lefthook 不在 PATH，不计为钩子通过。
+- 运行验收待办：使用正式镜像验证平台晚启动时源注册自动恢复，再通过既有 serving-sync 重试确认当前模型结果；同时核对物化/发布次数未增加。耗尽 6 次后先恢复依赖，再重启 analytics 重新尝试。单实例有界恢复不替代多实例唯一性或任意源自动接入设计。
