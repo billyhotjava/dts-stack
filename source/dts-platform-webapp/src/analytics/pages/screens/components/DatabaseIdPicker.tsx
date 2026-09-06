@@ -17,12 +17,11 @@ function loadPlatformSources(): Promise<PlatformSourceWithDbId[]> {
     fetchPromise = analyticsApi.listPlatformSources()
         .then((list) => {
             const filtered = (Array.isArray(list) ? list : []).filter((s) => s?.platformId != null);
-            cachedSources = filtered;
+            cachedSources = filtered.length > 0 ? filtered : null;
             return filtered;
         })
-        .catch(() => {
+        .finally(() => {
             fetchPromise = null;
-            return [] as PlatformSourceWithDbId[];
         });
 
     return fetchPromise;
@@ -33,6 +32,7 @@ export function DatabaseIdPicker({ value, onChange, placeholder }: DatabaseIdPic
     const [loading, setLoading] = useState(!cachedSources);
     const [registering, setRegistering] = useState(false);
     const [error, setError] = useState('');
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
         if (cachedSources) {
@@ -47,11 +47,14 @@ export function DatabaseIdPicker({ value, onChange, placeholder }: DatabaseIdPic
             if (!cancelled) {
                 setSources(list);
                 if (list.length === 0) setError('无可用数据源');
-                setLoading(false);
             }
+        }).catch(() => {
+            if (!cancelled) setError('数据源加载失败，请重试');
+        }).finally(() => {
+            if (!cancelled) setLoading(false);
         });
         return () => { cancelled = true; };
-    }, []);
+    }, [reloadKey]);
 
     const handleChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
         const selected = e.target.value;
@@ -108,6 +111,7 @@ export function DatabaseIdPicker({ value, onChange, placeholder }: DatabaseIdPic
                 : (placeholder ?? '-- 选择数据库 --');
 
     return (
+        <>
         <select
             className="property-input"
             value={value > 0 ? String(value) : '0'}
@@ -126,6 +130,13 @@ export function DatabaseIdPicker({ value, onChange, placeholder }: DatabaseIdPic
                 </option>
             ))}
         </select>
+        {error && !loading && !registering && (
+            <button type="button" className="property-input" onClick={() => {
+                invalidateDatabaseCache();
+                setReloadKey((key) => key + 1);
+            }}>重新加载数据源</button>
+        )}
+        </>
     );
 }
 

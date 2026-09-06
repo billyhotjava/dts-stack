@@ -9,7 +9,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -182,7 +184,7 @@ public class PlatformTrustedUserService {
             }
         }
 
-        String displayName = header(request, "X-DTS-Display-Name");
+        String displayName = decodeDisplayName(header(request, "X-DTS-Display-Name"));
         if (!StringUtils.hasText(displayName)) {
             displayName = username;
         }
@@ -242,7 +244,7 @@ public class PlatformTrustedUserService {
             return Optional.empty();
         }
 
-        String displayName = response.headers().firstValue("X-DTS-Display-Name").orElse("");
+        String displayName = decodeDisplayName(response.headers().firstValue("X-DTS-Display-Name").orElse(""));
         if (!StringUtils.hasText(displayName)) {
             displayName = username;
         }
@@ -250,6 +252,18 @@ public class PlatformTrustedUserService {
         String roles = response.headers().firstValue("X-DTS-Roles").orElse("");
         boolean superuser = isSuperuser(roles);
         return Optional.of(new PlatformIdentity(username, displayName, platformUserId, superuser));
+    }
+
+    // New platform responses use an ASCII-safe encoded word; older responses remain valid.
+    private static String decodeDisplayName(String value) {
+        if (value.startsWith("=?UTF-8?B?") && value.endsWith("?=")) {
+            try {
+                return new String(Base64.getDecoder().decode(value.substring(10, value.length() - 2)), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException ex) {
+                return ""; // Malformed display metadata must not break authenticated requests.
+            }
+        }
+        return value;
     }
 
     private boolean isSuperuser(String rolesHeader) {

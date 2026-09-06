@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -93,7 +94,8 @@ public class ForwardAuthResource {
 
         HttpHeaders headers = new HttpHeaders();
         headers.add("X-DTS-User", username);
-        SecurityUtils.getCurrentUserDisplayName().filter(StringUtils::hasText).ifPresent(v -> headers.add("X-DTS-Display-Name", v));
+        SecurityUtils.getCurrentUserDisplayName().filter(StringUtils::hasText).ifPresent(v -> headers.add("X-DTS-Display-Name",
+            "=?UTF-8?B?" + Base64.getEncoder().encodeToString(v.getBytes(StandardCharsets.UTF_8)) + "?="));
         SecurityUtils.getCurrentUserId().filter(StringUtils::hasText).ifPresent(v -> headers.add("X-DTS-User-Id", v));
 
         List<String> roles = new ArrayList<>(authorities(authentication));
