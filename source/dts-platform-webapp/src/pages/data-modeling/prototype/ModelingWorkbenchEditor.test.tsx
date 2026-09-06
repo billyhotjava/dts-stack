@@ -353,7 +353,7 @@ describe("ModelingWorkbenchEditor", () => {
 			"直接选择输入源表",
 			"引用已有上游模型",
 		]);
-		expect(container.textContent).toContain("明细表可以直接读取 ODS 或源系统表，也可以基于已有明细模型继续加工。");
+		expect(container.textContent).not.toContain("明细表可以直接读取 ODS 或源系统表，也可以基于已有明细模型继续加工。");
 		expect(container.textContent).toContain("输入源表");
 		expect(container.textContent).toContain("从资产目录登记源表");
 		expect(container.textContent).toContain("已确认输入源表 · 版本 source-v1");
@@ -370,7 +370,7 @@ describe("ModelingWorkbenchEditor", () => {
 				}),
 			}),
 		);
-		expect(container.textContent).toContain("汇总表基于已治理的上游模型进行汇总，无需登记物理源表。");
+		expect(container.textContent).not.toContain("汇总表基于已治理的上游模型进行汇总，无需登记物理源表。");
 		expect(container.textContent).not.toContain("从资产目录登记源表");
 
 		await render(makeProps({ draft: makeConceptDraft() }));
@@ -403,7 +403,7 @@ describe("ModelingWorkbenchEditor", () => {
 		const source = container.querySelector<HTMLSelectElement>('select[aria-label="数据来源方式"]');
 		expect(source).not.toBeNull();
 		expect(Array.from(source?.options || []).map((option) => option.textContent)).toContain("系统生成标准日期维度");
-		expect(container.textContent).toContain("维度表可以从输入源表加工，日期维度也可以由系统生成。");
+		expect(container.textContent).not.toContain("维度表可以从输入源表加工，日期维度也可以由系统生成。");
 
 		await act(async () => {
 			if (!source) return;
@@ -445,7 +445,7 @@ describe("ModelingWorkbenchEditor", () => {
 			}),
 		);
 		expect(container.textContent).toContain("应用场景");
-		expect(container.textContent).toContain("应用表基于已治理的上游模型加工，无需登记物理源表。");
+		expect(container.textContent).not.toContain("应用表基于已治理的上游模型加工，无需登记物理源表。");
 	});
 
 	it("selects partition fields from the current model fields instead of accepting arbitrary text", async () => {

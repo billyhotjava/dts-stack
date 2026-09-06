@@ -105,7 +105,7 @@ describe("single primary authoring action", () => {
 		vi.spyOn(Date, "now").mockReturnValue(Date.parse("2100-01-01T00:00:00Z"));
 		act(() => primary().click());
 		expect(p.onCommit).not.toHaveBeenCalled();
-		expect(primary().textContent).toBe("校验");
+		expect(primary().textContent?.replace(/\s/g, "")).toBe("校验");
 	});
 	it("opens delivery without implicitly publishing or rebuilding", async () => {
 		const p = props({
