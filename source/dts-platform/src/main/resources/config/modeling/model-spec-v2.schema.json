@@ -1128,6 +1128,44 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "modelType": {
+                "const": "FACT"
+              }
+            },
+            "required": [
+              "modelType"
+            ]
+          },
+          "else": {
+            "properties": {
+              "businessProcessId": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "modelType": {
+                "const": "APPLICATION"
+              }
+            },
+            "required": [
+              "modelType"
+            ]
+          },
+          "else": {
+            "properties": {
+              "subjectDomainId": {
+                "type": "null"
+              }
+            }
+          }
         }
       ]
     },
@@ -1198,6 +1236,20 @@
             "null"
           ],
           "pattern": "^[A-Z][A-Z0-9_]{0,31}$"
+        },
+        "businessProcessId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "subjectDomainId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
         }
       },
       "additionalProperties": false,
@@ -1221,6 +1273,44 @@
           "else": {
             "properties": {
               "dimensionDefinitionRef": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "modelType": {
+                "const": "FACT"
+              }
+            },
+            "required": [
+              "modelType"
+            ]
+          },
+          "else": {
+            "properties": {
+              "businessProcessId": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "modelType": {
+                "const": "APPLICATION"
+              }
+            },
+            "required": [
+              "modelType"
+            ]
+          },
+          "else": {
+            "properties": {
+              "subjectDomainId": {
                 "type": "null"
               }
             }
@@ -1434,6 +1524,20 @@
             "string",
             "null"
           ]
+        },
+        "businessProcessId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "subjectDomainId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
         }
       },
       "additionalProperties": false,
@@ -1528,6 +1632,12 @@
             "string",
             "null"
           ]
+        },
+        "businessProcessId": {
+          "$ref": "#/$defs/createModelSpecCommand/properties/businessProcessId"
+        },
+        "subjectDomainId": {
+          "$ref": "#/$defs/createModelSpecCommand/properties/subjectDomainId"
         }
       },
       "additionalProperties": false,
@@ -1813,6 +1923,20 @@
         },
         "warehouseLayerCode": {
           "type": "string"
+        },
+        "businessProcessId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
+        },
+        "subjectDomainId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uuid"
         }
       },
       "additionalProperties": false,

@@ -523,6 +523,12 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 	if (raw.businessProcessId != null && !isUuid(raw.businessProcessId)) {
 		add("MODEL_SPEC_BUSINESS_PROCESS_INVALID", "businessProcessId", "Business process id must be a UUID");
 	}
+	if (raw.dataMartId != null && !isUuid(raw.dataMartId)) {
+		add("MODEL_SPEC_DATA_MART_INVALID", "dataMartId", "Data mart id must be a UUID");
+	}
+	if (raw.subjectDomainId != null && !isUuid(raw.subjectDomainId)) {
+		add("MODEL_SPEC_SUBJECT_DOMAIN_INVALID", "subjectDomainId", "Subject domain id must be a UUID");
+	}
 	if (!isNullableString(raw.consumptionScenario)) {
 		add("MODEL_SPEC_CONSUMPTION_SCENARIO_INVALID", "consumptionScenario", "Consumption scenario must be text or null");
 	}
@@ -713,6 +719,23 @@ export const validateModelSpecCreate = (input: unknown): ModelSpecFieldIssue[] =
 			),
 		);
 	}
+	for (const [field, code] of [
+		["businessProcessId", "MODEL_SPEC_BUSINESS_PROCESS_INVALID"],
+		["dataMartId", "MODEL_SPEC_DATA_MART_INVALID"],
+		["subjectDomainId", "MODEL_SPEC_SUBJECT_DOMAIN_INVALID"],
+	] as const) {
+		if (input[field] != null && !isUuid(input[field])) issues.push(issue(code, field, "Context id must be a UUID"));
+	}
+	if (input.businessProcessId != null && input.modelType !== "FACT") {
+		issues.push(
+			issue("MODEL_SPEC_BUSINESS_PROCESS_NOT_ALLOWED", "businessProcessId", "Business process belongs to FACT models only"),
+		);
+	}
+	if (input.subjectDomainId != null && input.modelType !== "APPLICATION") {
+		issues.push(
+			issue("MODEL_SPEC_SUBJECT_DOMAIN_NOT_ALLOWED", "subjectDomainId", "Subject domain belongs to APPLICATION models only"),
+		);
+	}
 	const definitionRef = input.dimensionDefinitionRef;
 	const validDefinitionRef =
 		isRecord(definitionRef) &&
@@ -773,6 +796,11 @@ const validateModelSpecFull = (input: unknown): ModelSpecFieldIssue[] => {
 				"businessProcessId",
 				"Business process belongs to FACT models only",
 			),
+		);
+	}
+	if (command.subjectDomainId != null && command.modelType !== "APPLICATION") {
+		issues.push(
+			issue("MODEL_SPEC_SUBJECT_DOMAIN_NOT_ALLOWED", "subjectDomainId", "Subject domain belongs to APPLICATION models only"),
 		);
 	}
 	if (command.modelType === "FACT" && !isUuid(command.businessProcessId)) {
@@ -1048,5 +1076,12 @@ export const validateModelSpecUpdate = (input: unknown): ModelSpecFieldIssue[] =
 					),
 				]
 			: [];
-	return [...fieldIssues, ...validateModelSpecFull(createShape), ...movedDefinitionIssues];
+	// Match backend validateUpdate: missing stable context is a later-stage gate, not an edit lock.
+	const deferredContextCodes = new Set([
+		"MODEL_SPEC_BUSINESS_PROCESS_REQUIRED",
+		"MODEL_SPEC_DATA_MART_REQUIRED",
+		"MODEL_SPEC_SUBJECT_DOMAIN_REQUIRED",
+	]);
+	const updateIssues = validateModelSpecFull(createShape).filter((item) => !deferredContextCodes.has(item.code));
+	return [...fieldIssues, ...updateIssues, ...movedDefinitionIssues];
 };

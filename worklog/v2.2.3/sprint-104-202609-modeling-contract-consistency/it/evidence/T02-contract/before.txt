@@ -1,0 +1,400 @@
+✔ generic full-refresh grain schema permits no keys without weakening dimension or incremental keys (80.637466ms)
+✖ canonical create and update accept the additive warehouse-layer selection (6.330878ms)
+✔ canonical create fields exclude client-owned and retired metadata (0.243786ms)
+✔ interactive create accepts only the minimum draft identity and never accepts a client-owned layer (0.743558ms)
+✖ canonical update is a full replacement without create-only or retired metadata (0.735847ms)
+✔ canonical dimension update keeps SCD and hierarchy but moves code and reuse scope to the definition (0.620459ms)
+✔ canonical CAS token produces the backend strong ETag exactly (0.306544ms)
+✖ all four model types satisfy their deterministic save boundary (1.226002ms)
+✔ all four model categories reject target layers outside their fixed output layer (1.110727ms)
+✔ upstream model candidates follow the four-category dependency matrix (0.483892ms)
+✔ analysis dimensions accept canonical DWD dimension models only (0.264592ms)
+✔ reference targets require an exact canonical unpolluted revision and the owner relationship matrix (0.878075ms)
+✔ exact pinned reference rejects historical targets whose physical inputs use derived layers (0.334602ms)
+✔ persisted fields hidden by the current model type are type-boundary mismatches (0.359085ms)
+✖ direct physical inputs are limited to ODS, STG or DWD (0.879936ms)
+✔ generation strategy is dimension-only input (0.590794ms)
+✔ all model input kinds follow the same four-table type boundary as the backend (1.763244ms)
+✖ all four model types accept their minimal request with unrelated collections absent (0.812241ms)
+✔ dimension draft requires grain and a KEY but not a source or generation strategy (0.509736ms)
+✔ legacy v2 dimension definition and key mapping remain backward compatible (0.327442ms)
+✔ dimension profile remains optional but legacy code and reuse fields are read-only (0.859373ms)
+✖ FACT draft requires grain but may defer both physical sources and upstream models (0.554772ms)
+✖ standard bindings must resolve to declared fields (0.576691ms)
+✖ a field accepts only one standard binding (0.458539ms)
+✖ APPLICATION requires a consumption scenario and other model types reject one (0.71174ms)
+✔ APPLICATION requires stable data mart and subject domain references (0.374399ms)
+✖ only FACT accepts optional business activity (1.34415ms)
+✔ retired and unknown fields are rejected (0.422816ms)
+✔ required field codes stay explicit and backend-compatible (0.33878ms)
+✖ shared fixtures keep Java and TypeScript validation issue codes aligned (139.72767ms)
+✔ nested references reject incomplete ids and non-positive versions (0.684305ms)
+✔ JSON Schema accepts canonical view and rejects client-only or unknown view fields (170.616154ms)
+✔ JSON Schema update payload is a strict full replacement without create-only or legacy fields (106.461247ms)
+✔ JSON Schema directly accepts the generic wire fixture including explicit null optionals (90.197073ms)
+✔ JSON Schema declares executable trim-aware uniqueness for fields and sources (0.662292ms)
+✖ model views are a strict contract-version and compatibility-mode discriminated union (123.209293ms)
+✖ JSON Schema enforces all four model-type save boundaries (87.891341ms)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 24
+ℹ fail 13
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1078.952862
+
+✖ failing tests:
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:246:1
+✖ canonical create and update accept the additive warehouse-layer selection (6.330878ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   {
+  +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+  +     field: 'businessProcessId',
+  +     message: 'FACT requires a stable business process reference',
+  +     severity: 'ERROR'
+  +   }
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:250:9)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', field: 'businessProcessId', severity: 'ERROR', message: 'FACT requires a stable business process reference' } ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:296:1
+✖ canonical update is a full replacement without create-only or retired metadata (0.735847ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   {
+  +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+  +     field: 'businessProcessId',
+  +     message: 'FACT requires a stable business process reference',
+  +     severity: 'ERROR'
+  +   }
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:299:9)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', field: 'businessProcessId', severity: 'ERROR', message: 'FACT requires a stable business process reference' } ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:342:1
+✖ all four model types satisfy their deterministic save boundary (1.226002ms)
+  AssertionError [ERR_ASSERTION]: FACT
+  + actual - expected
+  
+  + [
+  +   {
+  +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+  +     field: 'businessProcessId',
+  +     message: 'FACT requires a stable business process reference',
+  +     severity: 'ERROR'
+  +   }
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:344:10)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ { code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', field: 'businessProcessId', severity: 'ERROR', message: 'FACT requires a stable business process reference' } ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:521:1
+✖ direct physical inputs are limited to ODS, STG or DWD (0.879936ms)
+  AssertionError [ERR_ASSERTION]: FACT
+  + actual - expected
+  
+    [
+      {
+  +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+  +     field: 'businessProcessId'
+  +   },
+  +   {
+        code: 'MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED',
+        field: 'sourceRefs'
+      }
+    ]
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:528:10)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ { code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', field: 'businessProcessId' }, { code: 'MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED', field: 'sourceRefs' } ],
+    expected: [ { code: 'MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED', field: 'sourceRefs' } ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:600:1
+✖ all four model types accept their minimal request with unrelated collections absent (0.812241ms)
+  AssertionError [ERR_ASSERTION]: FACT
+  + actual - expected
+  
+  + [
+  +   {
+  +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+  +     field: 'businessProcessId',
+  +     message: 'FACT requires a stable business process reference',
+  +     severity: 'ERROR'
+  +   }
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:602:10)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ { code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', field: 'businessProcessId', severity: 'ERROR', message: 'FACT requires a stable business process reference' } ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:676:1
+✖ FACT draft requires grain but may defer both physical sources and upstream models (0.554772ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   {
+  +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+  +     field: 'businessProcessId',
+  +     message: 'FACT requires a stable business process reference',
+  +     severity: 'ERROR'
+  +   }
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:680:9)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', field: 'businessProcessId', severity: 'ERROR', message: 'FACT requires a stable business process reference' } ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:683:1
+✖ standard bindings must resolve to declared fields (0.576691ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+      'MODEL_SPEC_STANDARD_BINDING_INVALID'
+    ]
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:689:9)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', 'MODEL_SPEC_STANDARD_BINDING_INVALID' ],
+    expected: [ 'MODEL_SPEC_STANDARD_BINDING_INVALID' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:695:1
+✖ a field accepts only one standard binding (0.458539ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+      'MODEL_SPEC_STANDARD_BINDING_INVALID'
+    ]
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:702:9)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', 'MODEL_SPEC_STANDARD_BINDING_INVALID' ],
+    expected: [ 'MODEL_SPEC_STANDARD_BINDING_INVALID' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:708:1
+✖ APPLICATION requires a consumption scenario and other model types reject one (0.71174ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    [
+  +   'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+      'MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED'
+    ]
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:715:9)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', 'MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED' ],
+    expected: [ 'MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:741:1
+✖ only FACT accepts optional business activity (1.34415ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+  + [
+  +   {
+  +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+  +     field: 'businessProcessId',
+  +     message: 'FACT requires a stable business process reference',
+  +     severity: 'ERROR'
+  +   }
+  + ]
+  - []
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:756:9)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: [ { code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', field: 'businessProcessId', severity: 'ERROR', message: 'FACT requires a stable business process reference' } ],
+    expected: [],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:788:1
+✖ shared fixtures keep Java and TypeScript validation issue codes aligned (139.72767ms)
+  AssertionError [ERR_ASSERTION]: duplicate-field-name
+  + actual - expected
+  
+    [
+  +   'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+      'MODEL_SPEC_FIELD_INVALID'
+    ]
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:817:10)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: [ 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED', 'MODEL_SPEC_FIELD_INVALID' ],
+    expected: [ 'MODEL_SPEC_FIELD_INVALID' ],
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:985:1
+✖ model views are a strict contract-version and compatibility-mode discriminated union (123.209293ms)
+  AssertionError [ERR_ASSERTION]: APPLICATION legacy: [{"instancePath":"","schemaPath":"#/additionalProperties","keyword":"additionalProperties","params":{"additionalProperty":"subjectDomainId"},"message":"must NOT have additional properties"}]
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:1047:10)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at src/features/modeling/contracts/modelSpecV2Contract.test.ts:1054:1
+✖ JSON Schema enforces all four model-type save boundaries (87.891341ms)
+  AssertionError [ERR_ASSERTION]: APPLICATION: [{"instancePath":"","schemaPath":"#/additionalProperties","keyword":"additionalProperties","params":{"additionalProperty":"subjectDomainId"},"message":"must NOT have additional properties"}]
+  
+  false !== true
+  
+      at TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:1070:10)
+      at Test.runInAsyncScope (node:async_hooks:228:14)
+      at Test.run (node:internal/test_runner/test:1118:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+      at Test.postRun (node:internal/test_runner/test:1247:19)
+      at Test.run (node:internal/test_runner/test:1175:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

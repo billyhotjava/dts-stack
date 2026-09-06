@@ -728,14 +728,11 @@ test("APPLICATION requires a consumption scenario and other model types reject o
 	);
 });
 
-test("APPLICATION requires stable data mart and subject domain references", () => {
-	const application = minimal("APPLICATION");
-	assert.deepEqual(validateModelSpecCreate({ ...application, dataMartId: null }).map((item) => item.code), [
-		"MODEL_SPEC_DATA_MART_REQUIRED",
-	]);
-	assert.deepEqual(validateModelSpecCreate({ ...application, subjectDomainId: null }).map((item) => item.code), [
-		"MODEL_SPEC_SUBJECT_DOMAIN_REQUIRED",
-	]);
+test("editable APPLICATION updates defer missing stable context to later stage gates", () => {
+	const { idempotencyKey: _key, ...application } = minimal("APPLICATION");
+	assert.deepEqual(validateModelSpecUpdate({ ...application, dataMartId: null, subjectDomainId: null }), []);
+	const { dataMartId: _mart, subjectDomainId: _subject, ...withoutContext } = application;
+	assert.deepEqual(validateModelSpecUpdate(withoutContext), []);
 });
 
 test("only FACT accepts optional business activity", () => {
@@ -1095,5 +1092,107 @@ test("JSON Schema enforces all four model-type save boundaries", () => {
 	assert.equal(
 		validate({ ...valid("FACT"), standardBindings: [{ fieldName: "record_id", securityLevel: "   " }] }),
 		false,
+	);
+});
+
+// Sprint-104: update permits incomplete context, but never malformed or wrong-type context.
+test("editable stable context accepts only UUIDs and preserves model-type ownership", () => {
+	for (const [modelType, field, code] of [
+		["FACT", "businessProcessId", "MODEL_SPEC_BUSINESS_PROCESS_INVALID"],
+		["APPLICATION", "dataMartId", "MODEL_SPEC_DATA_MART_INVALID"],
+		["APPLICATION", "subjectDomainId", "MODEL_SPEC_SUBJECT_DOMAIN_INVALID"],
+	] as const) {
+		const { idempotencyKey: _key, ...command } = minimal(modelType);
+		assert.deepEqual(validateModelSpecUpdate({ ...command, [field]: null }), []);
+		for (const value of ["", "invalid-id", 42, {}, []]) {
+			assert.deepEqual(
+				validateModelSpecUpdate({ ...command, [field]: value }).map((item) => item.code),
+				[code],
+			);
+		}
+	}
+	const { idempotencyKey: _key, ...fact } = minimal("FACT");
+	assert.deepEqual(
+		validateModelSpecUpdate({ ...fact, subjectDomainId: "80000000-0000-0000-0000-000000000001" }).map(
+			(item) => item.code,
+		),
+		["MODEL_SPEC_SUBJECT_DOMAIN_NOT_ALLOWED"],
+	);
+});
+
+test("Schema admits stable context on all wire shapes without admitting malformed or foreign context", () => {
+	const schema = JSON.parse(
+		readFileSync(
+			new URL(
+				"../../../../../dts-platform/src/main/resources/config/modeling/model-spec-v2.schema.json",
+				import.meta.url,
+			),
+			"utf8",
+		),
+	);
+	const ajv = createContractAjv();
+	ajv.addSchema(schema, "sprint104");
+	for (const shape of [
+		"interactiveCreateModelSpecRequest",
+		"createModelSpecCommand",
+		"updateModelSpecCommand",
+		"modelSpecView",
+	]) {
+		for (const field of ["businessProcessId", "subjectDomainId"]) {
+			const validate = ajv.compile({ $ref: `sprint104#/$defs/${shape}/properties/${field}` });
+			for (const value of [null, "80000000-0000-0000-0000-000000000001"])
+				assert.equal(validate(value), true, `${shape}.${field}`);
+			for (const value of ["invalid", 42, {}, []]) assert.equal(validate(value), false, `${shape}.${field}`);
+		}
+	}
+	const validate = ajv.compile({ $ref: "sprint104#/$defs/updateModelSpecCommand" });
+	const { idempotencyKey: _key, ...fact } = minimal("FACT");
+	assert.equal(validate({ ...fact, businessProcessId: null }), true);
+	assert.equal(validate({ ...fact, businessProcessId: "80000000-0000-0000-0000-000000000001" }), true);
+	assert.equal(validate({ ...fact, subjectDomainId: "80000000-0000-0000-0000-000000000001" }), false);
+});
+
+test("interactive creation validates supplied stable context without requiring missing context", () => {
+	const { planId, domainId, name, idempotencyKey } = minimal("FACT");
+	for (const [modelType, field, code] of [
+		["FACT", "businessProcessId", "MODEL_SPEC_BUSINESS_PROCESS_INVALID"],
+		["APPLICATION", "dataMartId", "MODEL_SPEC_DATA_MART_INVALID"],
+		["APPLICATION", "subjectDomainId", "MODEL_SPEC_SUBJECT_DOMAIN_INVALID"],
+	] as const) {
+		const command = { planId, domainId, name, idempotencyKey, modelType };
+		assert.deepEqual(validateInteractiveModelSpecCreate(command), []);
+		assert.deepEqual(validateInteractiveModelSpecCreate({ ...command, [field]: null }), []);
+		assert.deepEqual(
+			validateInteractiveModelSpecCreate({ ...command, [field]: "80000000-0000-0000-0000-000000000001" }),
+			[],
+		);
+		for (const value of ["", "invalid-id", 42, {}, []]) {
+			assert.deepEqual(
+				validateInteractiveModelSpecCreate({ ...command, [field]: value }).map((item) => item.code),
+				[code],
+			);
+		}
+	}
+	assert.deepEqual(
+		validateInteractiveModelSpecCreate({
+			planId,
+			domainId,
+			name,
+			idempotencyKey,
+			modelType: "FACT",
+			subjectDomainId: "80000000-0000-0000-0000-000000000001",
+		}).map((item) => item.code),
+		["MODEL_SPEC_SUBJECT_DOMAIN_NOT_ALLOWED"],
+	);
+	assert.deepEqual(
+		validateInteractiveModelSpecCreate({
+			planId,
+			domainId,
+			name,
+			idempotencyKey,
+			modelType: "APPLICATION",
+			businessProcessId: "80000000-0000-0000-0000-000000000001",
+		}).map((item) => item.code),
+		["MODEL_SPEC_BUSINESS_PROCESS_NOT_ALLOWED"],
 	);
 });
