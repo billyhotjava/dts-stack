@@ -210,8 +210,8 @@ class ModelingDbtCompilerTest {
             .contains("{{ ref('stg_project_node_detail') }}");
         assertThat(first.files().get("project_node_detail.yml"))
             .contains("tests:")
-            .contains("unique:")
-            .contains("column_name: project_no")
+            .contains("dts_unique_combination:")
+            .contains("- project_no", "- subsystem", "- node_task", "- plan_date")
             .contains("contract:")
             .contains("enforced: true")
             .contains("data_type: text")
