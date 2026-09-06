@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { expect, it } from "vitest";
 import type { ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import { currentCatalogOutputs } from "./ModelCatalogDeliveryPanel";
