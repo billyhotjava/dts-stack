@@ -61,6 +61,7 @@ const apiMocks = vi.hoisted(() => ({
 	getWorkbench: vi.fn(),
 	lockCandidate: vi.fn(),
 	runQualityCandidate: vi.fn(),
+	rerunGovernanceQuality: vi.fn(),
 	submitReviewCandidate: vi.fn(),
 	approveCandidate: vi.fn(),
 	rejectCandidate: vi.fn(),
@@ -97,6 +98,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	getReleaseCandidateWorkbench: apiMocks.getWorkbench,
 	lockReleaseCandidate: apiMocks.lockCandidate,
 	runReleaseCandidateQuality: apiMocks.runQualityCandidate,
+	rerunReleaseCandidateGovernanceQuality: apiMocks.rerunGovernanceQuality,
 	submitReleaseCandidateReview: apiMocks.submitReviewCandidate,
 	approveReleaseCandidateReview: apiMocks.approveCandidate,
 	rejectReleaseCandidateReview: apiMocks.rejectCandidate,
@@ -553,6 +555,76 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).toContain("public.dim_budget_date");
 		expect(container.textContent).not.toContain("public.other_model");
 	});
+
+	it.each([
+		{ matching: true, qualityState: "PASSED" },
+		{ matching: false, qualityState: "PASSED" },
+		{ matching: true, qualityState: "FAILED" },
+		{ matching: false, qualityState: "FAILED" },
+	] as const)(
+		"scopes release and quality evidence to the selected model ($matching, $qualityState)",
+		async ({ matching, qualityState }) => {
+			const current = {
+				...candidate("BATCH_WORKBENCH", "PUBLISHED"),
+				entries: [{ modelSpecId: matching ? model.id : secondModel.id }],
+			} as ReleaseCandidate;
+			apiMocks.getWorkbench.mockResolvedValue({
+				...workspace(["ROLLBACK"], current),
+				evidence: [{ type: "QUALITY_RUN", state: "PASSED" }],
+				primaryBlocker: { code: "EVIDENCE_BLOCKER", message: "当前候选的专属阻断" },
+				governanceQuality: {
+					required: true,
+					state: qualityState,
+					maxAgeSeconds: 86400,
+					evidence: [
+						{
+							assetKey: "candidate-specific-asset",
+							ruleId: "candidate-rule",
+							ruleVersionId: "candidate-rule-version",
+							bindingId: "candidate-binding",
+							runId: "candidate-quality-run",
+							status: qualityState,
+							violations: qualityState === "FAILED" ? ["FAILED"] : [],
+						},
+					],
+				},
+			});
+			await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+			await flush();
+			await act(async () => button("发布模型").click());
+			await flush();
+			for (const text of [
+				"candidate-specific-asset",
+				"candidate-rule-version",
+				"candidate-quality-run",
+				"1/1 项证据已通过",
+				"当前候选的专属阻断",
+			]) {
+				if (matching) expect(container.textContent).toContain(text);
+				else expect(container.textContent).not.toContain(text);
+			}
+			if (matching && qualityState === "FAILED") {
+				await act(async () => button("重新运行治理质量")?.click());
+				await flush();
+				expect(apiMocks.rerunGovernanceQuality).toHaveBeenCalledWith(model.planId, current, expect.any(String));
+			} else {
+				expect(button("重新运行治理质量")).toBeUndefined();
+				expect(apiMocks.rerunGovernanceQuality).not.toHaveBeenCalled();
+			}
+			if (!matching) {
+				expect(container.textContent).toContain("尚无发布证据");
+				expect(container.textContent).not.toContain("规则版本、资产绑定和有效运行证据均已通过");
+				expect(container.querySelector('a[href*="candidate-quality-run"]')).toBeNull();
+			}
+			if (matching) {
+				await act(async () => root.render(<ModelPublishDialog canMaintain models={[secondModel]} onClose={vi.fn()} />));
+				await flush();
+				expect(container.textContent).not.toContain("candidate-quality-run");
+				expect(container.textContent).not.toContain("1/1 项证据已通过");
+				expect(button("重新运行治理质量")).toBeUndefined();
+			}
+		},
+	);
 
 	it.each(["PUBLISHED", "BUILDING"])(
 		"handles cancelled selected history behind a %s foreign candidate",

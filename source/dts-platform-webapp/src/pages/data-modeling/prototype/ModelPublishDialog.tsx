@@ -748,10 +748,12 @@ export function ModelPublishDialog({
 							<ModelReleaseWorkflowPanel
 								binding={executionBinding}
 								candidate={scopedCandidate}
-								evidence={workspace?.evidence || []}
-								governanceQuality={workspace?.governanceQuality || null}
+								evidence={candidateScopeMatches ? workspace?.evidence || [] : []}
+								governanceQuality={candidateScopeMatches ? workspace?.governanceQuality || null : null}
 								governanceQualityRerunning={busy === "governance-quality"}
-								onRerunGovernanceQuality={canMaintain ? () => void rerunGovernanceQuality() : undefined}
+								onRerunGovernanceQuality={
+									canMaintain && scopedCandidate ? () => void rerunGovernanceQuality() : undefined
+								}
 								releaseActions={releaseActions}
 							/>
 							<label>
@@ -768,7 +770,7 @@ export function ModelPublishDialog({
 								</dd>
 								<dt>主要阻断</dt>
 								<dd>
-									{workspace?.primaryBlocker
+									{candidateScopeMatches && workspace?.primaryBlocker
 										? `${workspace.primaryBlocker.code}：${workspace.primaryBlocker.message}`
 										: "无"}
 								</dd>
