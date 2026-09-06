@@ -123,11 +123,24 @@ export function normalizeModelingRequestFailure(error: unknown, fallback: string
 			safeString(headerValue(response.headers, "x-correlation-id"), SAFE_CORRELATION_ID) ??
 			safeString(headerValue(response.headers, "x-request-id"), SAFE_CORRELATION_ID);
 		const serverMessage =
-			code === "MODEL_SPEC_SOURCE_BINDING_INVALID"
-				? "所选数据来源尚未确认，或来源版本已更新。请在数仓规划中确认来源，再重新选择该来源后保存。"
-				: code && (code.startsWith("MODEL_") || code.startsWith("IMPLEMENTATION_"))
-					? safeServerMessage(recordValue(response.data, "message"))
-					: null;
+			code === "MODEL_LIFECYCLE_GATE_BLOCKED"
+				? (() => {
+						const blockers = recordValue(recordValue(response.data, "data"), "blockers");
+						const messages = Array.isArray(blockers)
+							? blockers
+									.slice(0, 6)
+									.map((blocker) => safeServerMessage(recordValue(blocker, "message")))
+									.filter(Boolean)
+							: [];
+						return messages.length
+							? `模型前置校验未通过：${Array.from(new Set(messages)).join("；")}`
+							: "模型前置校验未通过，请查看模型校验中的具体阻断项。";
+					})()
+				: code === "MODEL_SPEC_SOURCE_BINDING_INVALID"
+					? "所选数据来源尚未确认，或来源版本已更新。请在数仓规划中确认来源，再重新选择该来源后保存。"
+					: code && (code.startsWith("MODEL_") || code.startsWith("IMPLEMENTATION_"))
+						? safeServerMessage(recordValue(response.data, "message"))
+						: null;
 		const dependencyDetail = dependencyGuidance(code, response.data);
 		const evidence = [code ? `错误码 ${code}` : null, correlationId ? `关联 ID ${correlationId}` : null].filter(
 			Boolean,

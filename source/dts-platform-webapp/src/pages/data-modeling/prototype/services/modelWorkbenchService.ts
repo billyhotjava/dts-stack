@@ -853,10 +853,17 @@ export function validateModelDraftInput(
 		errors.partitionFields = "分区字段必须来自当前模型字段";
 	}
 	if (draft.createKind === "fact") {
-		if (!draft.factShape) errors.factShape = "请选择事实类型";
+		const snapshot = draft.factShape === "PERIODIC_SNAPSHOT" || draft.factShape === "ACCUMULATING_SNAPSHOT";
 		const hasTimeSemanticsInput = Boolean(draft.timeSemanticsType) || draft.timeSemanticsFields.length > 0;
-		if (hasTimeSemanticsInput && (!draft.timeSemanticsType || !draft.timeSemanticsFields.length)) {
+		if ((snapshot || hasTimeSemanticsInput) && (!draft.timeSemanticsType || !draft.timeSemanticsFields.length)) {
 			errors.timeSemantics = "请选择时间语义和至少一个时间字段";
+		} else if (
+			hasTimeSemanticsInput &&
+			((draft.factShape === "TRANSACTION" && draft.timeSemanticsType !== "EVENT_TIME") ||
+				(draft.factShape === "PERIODIC_SNAPSHOT" && !["SNAPSHOT_DATE", "PERIOD"].includes(draft.timeSemanticsType)) ||
+				(draft.factShape === "ACCUMULATING_SNAPSHOT" && draft.timeSemanticsType !== "MILESTONE_DATES"))
+		) {
+			errors.timeSemantics = "业务时间与事实形态不匹配";
 		} else if (
 			hasTimeSemanticsInput &&
 			draft.timeSemanticsFields.some(

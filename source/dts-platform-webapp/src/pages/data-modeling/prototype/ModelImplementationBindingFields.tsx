@@ -381,13 +381,13 @@ export function ModelImplementationBindingFields({
 				{draft.createKind === "fact" ? (
 					<>
 						<label>
-							<span className="required">事实类型</span>
+							<span>事实类型（可选）</span>
 							<select
 								aria-label="事实类型"
 								onChange={(event) => patch({ factShape: event.target.value as ModelSpecFactShape })}
 								value={draft.factShape}
 							>
-								<option value="">请选择事实类型</option>
+								<option value="">普通明细（不限定事实类型）</option>
 								{FACT_SHAPES.map((shape) => (
 									<option key={shape.value} value={shape.value}>
 										{shape.label}
@@ -397,13 +397,18 @@ export function ModelImplementationBindingFields({
 							<ValidationMessage message={validationErrors.factShape} />
 						</label>
 						<label>
-							<span className="required">时间语义</span>
+							<span>时间语义（普通明细可不配置）</span>
 							<select
 								aria-label="时间语义"
-								onChange={(event) => patch({ timeSemanticsType: event.target.value as ModelSpecTimeSemanticsType })}
+								onChange={(event) =>
+									patch({
+										timeSemanticsType: event.target.value as ModelSpecTimeSemanticsType | "",
+										timeSemanticsFields: event.target.value ? draft.timeSemanticsFields : [],
+									})
+								}
 								value={draft.timeSemanticsType}
 							>
-								<option value="">请选择时间语义</option>
+								<option value="">不配置时间语义</option>
 								{TIME_SEMANTICS.map((item) => (
 									<option key={item.value} value={item.value}>
 										{item.label}
@@ -429,7 +434,9 @@ export function ModelImplementationBindingFields({
 								</label>
 							))}
 							{timeFieldCandidates.length ? (
-								<small>请从当前模型字段中选择；勾选后字段作用会同步设置为“时间”。</small>
+								<small>
+									仅选择有业务时间含义的字段；勾选会设置字段作用为“时间”，不会转换字段类型或数据。普通明细无需选择。
+								</small>
 							) : (
 								<small>请先在字段管理中新增字段。</small>
 							)}

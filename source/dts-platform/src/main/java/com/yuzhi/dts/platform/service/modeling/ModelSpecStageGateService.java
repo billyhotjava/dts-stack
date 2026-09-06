@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.StoredMode
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionHierarchy;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionLevel;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.DimensionProfile;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FactShape;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldIssue;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
@@ -743,11 +744,12 @@ public class ModelSpecStageGateService {
         ModelSpecView view,
         LinkedHashMap<String, GateBlocker> blockers
     ) {
-        if (view.factShape() == null) {
-            add(blockers, blocker(view, "MODEL_SPEC_FACT_SHAPE_REQUIRED", "factShape", "请选择事实形态", "design"));
-        }
+        // Ordinary detail records need not represent an event or a time-based snapshot.
+        // Snapshot-specific requirements apply only when the author explicitly selects that shape.
         if (view.timeSemantics() == null) {
-            add(blockers, blocker(view, "MODEL_SPEC_TIME_SEMANTICS_REQUIRED", "timeSemantics", "请声明业务时间语义", "design"));
+            if (view.factShape() == FactShape.PERIODIC_SNAPSHOT || view.factShape() == FactShape.ACCUMULATING_SNAPSHOT) {
+                add(blockers, blocker(view, "MODEL_SPEC_TIME_SEMANTICS_REQUIRED", "timeSemantics", "快照模型需声明对应的业务时间语义；普通明细可不配置", "design"));
+            }
         } else {
             boolean compatible = view.factShape() == null ||
                 switch (view.factShape()) {

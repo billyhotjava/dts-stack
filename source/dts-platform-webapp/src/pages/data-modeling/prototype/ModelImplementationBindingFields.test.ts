@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import type { ModelSpecDraft } from "./services/modelWorkbenchService";
 import { applyFactTimeFieldSelection } from "./ModelImplementationBindingFields";

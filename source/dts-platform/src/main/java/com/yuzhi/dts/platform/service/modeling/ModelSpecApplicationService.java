@@ -1147,7 +1147,7 @@ public class ModelSpecApplicationService {
     private static List<String> requiredFields(ModelType targetType) {
         return switch (targetType) {
             case DIMENSION -> List.of("dimensionDefinitionRef", "grain", "fields.KEY", "dimensionProfile.scdPolicy");
-            case FACT -> List.of("grain", "factShape", "timeSemantics", "fields.TIME");
+            case FACT -> List.of("grain");
             case SUMMARY -> List.of("grain", "dependsOn", "fields.MEASURE");
             case APPLICATION -> List.of("consumptionScenario", "dependsOn");
         };
