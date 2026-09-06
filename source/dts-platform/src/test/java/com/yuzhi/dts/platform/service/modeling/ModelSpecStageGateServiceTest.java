@@ -860,6 +860,36 @@ class ModelSpecStageGateServiceTest {
     }
 
     @Test
+    void releaseGateReportsRequiredBindingMissingAndDeclaredOutsideBindingStaleTogether() {
+        ModelSpecView model = withStandardsForRoles(releaseReadyFact(), Set.of(FieldRole.ATTRIBUTE));
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        ModelGovernancePolicyPort governancePolicy = mock(ModelGovernancePolicyPort.class);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(standards.evaluate("tenant-a", model)).thenReturn(StandardEvidence.STALE);
+        when(governancePolicy.resolve()).thenReturn(
+            ModelGovernancePolicyPort.Policy.available(
+                ModelGovernancePolicyPort.StandardCoverage.KEY_AND_MEASURE,
+                ModelGovernancePolicyPort.QualityGate.ADVISORY
+            )
+        );
+
+        GateView release = new ModelSpecStageGateService(
+            modelSpecs, repository, standards, null, null, null, null, null, null, governancePolicy
+        ).evaluateAll("tenant-a", MODEL_ID).stream()
+            .filter(gate -> gate.stage() == Stage.RELEASE_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(release.blockers())
+            .filteredOn(blocker -> "MODEL_SPEC_STANDARD_EVIDENCE_STALE".equals(blocker.code()))
+            .extracting(ModelSpecStageGateService.GateBlocker::field)
+            .containsExactlyInAnyOrder("standardBindings", "$");
+        verify(standards).evaluate("tenant-a", model);
+    }
+
+    @Test
     void releaseGateWithNoneCoverageSkipsEmptyStandardEvidenceButChecksDeclaredBindings() {
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
         ModelSpecRepository repository = mock(ModelSpecRepository.class);

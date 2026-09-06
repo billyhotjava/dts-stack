@@ -262,7 +262,6 @@ public class ModelSpecStageGateService {
                     "standards"
                 )
             );
-            return;
         }
         if (bindings.values().stream().noneMatch(ModelSpecStageGateService::hasDeclaredStandard)) return;
         StandardEvidence ownerEvidence;
