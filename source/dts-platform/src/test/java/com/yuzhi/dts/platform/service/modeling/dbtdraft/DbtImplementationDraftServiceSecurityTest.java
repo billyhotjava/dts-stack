@@ -590,6 +590,137 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     @Test
+    void visualSaveUpgradesAProvenLegacySchemaAtTheCurrentVersionPath() throws Exception {
+        ModelLifecycleCompilerPort visualCompiler = org.mockito.Mockito.mock(ModelLifecycleCompilerPort.class);
+        ReflectionTestUtils.setField(service, "visualCompiler", visualCompiler);
+        String projectFile = "name: sprint83\nmodel-paths: [models]\n";
+        String previousSchemaPath = "models/dwd/orders/v2/i1/orders.yml";
+        String currentSchemaPath = "models/dwd/orders/v3/i2/orders.yml";
+        String frozenSchema = """
+            version: 2
+            models:
+              - name: orders
+                columns:
+                  - name: order_id
+                    description: "模型字段"
+                    data_type: text
+                    meta:
+                      dts_logical_data_type: "string"
+            """;
+        String workingSchema = """
+            version: 2
+            models:
+              - name: orders
+                columns:
+                  - name: order_id
+                    description: "模型字段"
+                    data_type: text
+                    meta:
+                      dts_logical_data_type: "text"
+            """;
+        String expectedSchema = """
+            version: 2
+            models:
+              - name: orders
+                columns:
+                  - name: order_id
+                    data_type: text
+                    meta:
+                      dts_logical_data_type: "text"
+            """;
+        String notesPath = "models/dwd/orders/v3/i2/business_notes.md";
+        List<FileInput> frozenFiles = List.of(
+            new FileInput("dbt_project.yml", projectFile),
+            new FileInput(previousSchemaPath, frozenSchema)
+        );
+        List<FileInput> submitted = List.of(
+            new FileInput("dbt_project.yml", projectFile),
+            new FileInput(previousSchemaPath, frozenSchema),
+            new FileInput(currentSchemaPath, workingSchema),
+            new FileInput(notesPath, "Keep this hand-authored note.\n")
+        );
+        SourceBundleView source = sourceBundle("sprint83", frozenFiles);
+        var projection = objectMapper.createObjectNode();
+        projection.putArray("managedPaths");
+        DraftRow current = authoringRowWithSource(
+            objectMapper.writeValueAsString(versionedVisualSnapshot()),
+            objectMapper.writeValueAsString(source),
+            projection.toString()
+        );
+        when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(current));
+        when(repository.listFiles(DRAFT_ID)).thenReturn(submitted.stream().map(file -> file(file.path(), file.content())).toList());
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(designerImplementation(), List.of(), List.of()));
+        when(visualCompiler.compile(eq(TENANT), any(ModelSpecView.class), any(ImplementationView.class)))
+            .thenReturn(List.of(new ArtifactWrite("SCHEMA", currentSchemaPath, "5".repeat(64), expectedSchema, "MODEL", "table", null)));
+        when(repository.replaceAuthoringContent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(Optional.of(current));
+
+        service.saveAuthoring(TENANT, ACTOR, MODEL_ID, DRAFT_ID, "authoring-etag", versionedVisualSnapshot(), projection, submitted, true);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<FileInput>> savedFiles = ArgumentCaptor.forClass(List.class);
+        verify(repository).replaceAuthoringContent(any(), any(), any(), any(), any(), any(), any(), any(), savedFiles.capture(), any());
+        assertThat(savedFiles.getValue()).filteredOn(file -> currentSchemaPath.equals(file.path())).singleElement()
+            .extracting(FileInput::content).isEqualTo(expectedSchema);
+        assertThat(savedFiles.getValue()).filteredOn(file -> notesPath.equals(file.path())).singleElement()
+            .extracting(FileInput::content).isEqualTo("Keep this hand-authored note.\n");
+    }
+
+    @Test
+    void visualSaveRejectsAChangedCurrentLegacySchemaDespiteFrozenEvidence() throws Exception {
+        ModelLifecycleCompilerPort visualCompiler = org.mockito.Mockito.mock(ModelLifecycleCompilerPort.class);
+        ReflectionTestUtils.setField(service, "visualCompiler", visualCompiler);
+        String previousSchemaPath = "models/dwd/orders/v2/i1/orders.yml";
+        String currentSchemaPath = "models/dwd/orders/v3/i2/orders.yml";
+        String frozenSchema = "      - name: order_id\n        description: \"模型字段\"\n        data_type: text\n";
+        String changedSchema = frozenSchema + "        # user extension\n";
+        String typeChangedSchema = "      - name: order_id\n        description: \"模型字段\"\n        data_type: bigint\n";
+        List<FileInput> frozenFiles = List.of(new FileInput("dbt_project.yml", "name: sprint83\n"), new FileInput(previousSchemaPath, frozenSchema));
+        List<FileInput> submitted = List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\n"),
+            new FileInput(previousSchemaPath, frozenSchema),
+            new FileInput(currentSchemaPath, changedSchema)
+        );
+        List<FileInput> typeChanged = List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\n"),
+            new FileInput(previousSchemaPath, frozenSchema),
+            new FileInput(currentSchemaPath, typeChangedSchema)
+        );
+        DraftRow current = authoringRowWithSource(
+            objectMapper.writeValueAsString(versionedVisualSnapshot()),
+            objectMapper.writeValueAsString(sourceBundle("sprint83", frozenFiles)),
+            "{\"managedPaths\":[]}"
+        );
+        when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(current));
+        when(repository.listFiles(DRAFT_ID)).thenReturn(submitted.stream().map(file -> file(file.path(), file.content())).toList());
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(designerImplementation(), List.of(), List.of()));
+        when(visualCompiler.compile(eq(TENANT), any(ModelSpecView.class), any(ImplementationView.class)))
+            .thenReturn(List.of(new ArtifactWrite("SCHEMA", currentSchemaPath, "6".repeat(64), "      - name: order_id\n        data_type: text\n", "MODEL", "table", null)));
+
+        DraftException failure = assertFailure(
+            ErrorKind.CONFLICT,
+            () -> service.saveAuthoring(TENANT, ACTOR, MODEL_ID, DRAFT_ID, "authoring-etag", versionedVisualSnapshot(), objectMapper.createObjectNode().putArray("managedPaths"), submitted, true)
+        );
+
+        assertThat(failure.code()).isEqualTo("MODEL_AUTHORING_UNMANAGED_FILE_CHANGED");
+        when(repository.listFiles(DRAFT_ID)).thenReturn(typeChanged.stream().map(file -> file(file.path(), file.content())).toList());
+        DraftException typeFailure = assertFailure(
+            ErrorKind.CONFLICT,
+            () -> service.saveAuthoring(TENANT, ACTOR, MODEL_ID, DRAFT_ID, "authoring-etag", versionedVisualSnapshot(), objectMapper.createObjectNode().putArray("managedPaths"), typeChanged, true)
+        );
+        assertThat(typeFailure.code()).isEqualTo("MODEL_AUTHORING_UNMANAGED_FILE_CHANGED");
+        verify(repository, never()).replaceAuthoringContent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void validationRetiresOnlyUnchangedHistoricalCompilerSiblings() throws Exception {
         ModelLifecycleCompilerPort visualCompiler = org.mockito.Mockito.mock(ModelLifecycleCompilerPort.class);
         ReflectionTestUtils.setField(service, "visualCompiler", visualCompiler);

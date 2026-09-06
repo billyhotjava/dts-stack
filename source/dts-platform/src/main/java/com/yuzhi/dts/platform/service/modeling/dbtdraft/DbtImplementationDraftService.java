@@ -828,6 +828,7 @@ public class DbtImplementationDraftService {
             currentCompilerFiles
         );
         addMatchingFrozenCompilerFiles(paths, persisted, draft, currentCompilerFiles.keySet());
+        addMatchingLegacyFrozenSchemaFiles(paths, persisted, draft, currentCompilerFiles);
         addMatchingHistoricalFrozenCompilerFiles(paths, persisted, draft, currentCompilerFiles.keySet());
 
         Map<String, String> savedCompilerFiles = authoringCompilerEvidence(
@@ -839,6 +840,7 @@ public class DbtImplementationDraftService {
         );
         addMatchingCompilerFiles(paths, persisted, savedCompilerFiles);
         addMatchingFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
+        addMatchingLegacyFrozenSchemaFiles(paths, persisted, draft, savedCompilerFiles);
         addMatchingHistoricalFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
         return java.util.Set.copyOf(paths);
     }
@@ -962,6 +964,80 @@ public class DbtImplementationDraftService {
                 ownedPaths.add(path);
             }
         });
+    }
+
+    /**
+     * Upgrades an older generated schema at the current artifact path only when its frozen
+     * predecessor proves the exact legacy column-description mapping. This is deliberately not
+     * used by historical-file cleanup: the current artifact must remain available for replacement.
+     */
+    private void addMatchingLegacyFrozenSchemaFiles(
+        java.util.Set<String> ownedPaths,
+        Map<String, FileInput> persisted,
+        DraftRow draft,
+        Map<String, String> expected
+    ) {
+        if (draft.sourceBundleSnapshot() == null || expected.isEmpty()) return;
+        SourceBundleView frozen = sourceBundleSnapshot(draft.sourceBundleSnapshot());
+        if (frozen.sourceKind() == SourceBundleKind.FROZEN_SOURCE_BUNDLE) return;
+        Map<String, String> frozenFiles = new LinkedHashMap<>();
+        frozen.files().forEach(file -> frozenFiles.put(file.path(), file.content()));
+        expected.forEach((currentPath, expectedContent) -> {
+            if (!isVersionedSchemaPath(currentPath)) return;
+            FileInput actual = persisted.get(currentPath);
+            if (actual == null) return;
+            String signature = compilerArtifactSignature(currentPath);
+            if (signature == null) return;
+            frozenFiles.forEach((frozenPath, frozenContent) -> {
+                if (Objects.equals(frozenPath, currentPath) || !Objects.equals(signature, compilerArtifactSignature(frozenPath))) return;
+                Map<String, String> descriptions = legacyColumnDescriptions(frozenContent);
+                String normalizedActual = stripProvenLegacyColumnDescriptions(actual.content(), descriptions);
+                if (normalizedActual != null && normalizedActual.equals(expectedContent)) ownedPaths.add(currentPath);
+            });
+        });
+    }
+
+    private static boolean isVersionedSchemaPath(String path) {
+        Matcher matcher = path == null ? null : VERSIONED_COMPILER_ARTIFACT.matcher(path);
+        return matcher != null && matcher.matches() && matcher.group(2).endsWith(".yml");
+    }
+
+    private static Map<String, String> legacyColumnDescriptions(String yaml) {
+        Map<String, String> descriptions = new LinkedHashMap<>();
+        String currentColumn = null;
+        if (yaml == null) return Map.of();
+        for (String line : yaml.split("\\n", -1)) {
+            if (line.startsWith("      - name: ")) {
+                currentColumn = line.substring("      - name: ".length()).trim();
+                continue;
+            }
+            if (currentColumn != null && line.startsWith("        description: \"") && line.endsWith("\"")) {
+                String value = line.substring("        description: \"".length(), line.length() - 1);
+                if (!("模型字段".equals(value) || value.startsWith("数据标准 ")) || descriptions.putIfAbsent(currentColumn, value) != null) {
+                    return Map.of();
+                }
+            }
+        }
+        return descriptions;
+    }
+
+    private static String stripProvenLegacyColumnDescriptions(String yaml, Map<String, String> descriptions) {
+        if (descriptions == null || descriptions.isEmpty() || yaml == null) return null;
+        StringBuilder normalized = new StringBuilder();
+        String currentColumn = null;
+        String[] lines = yaml.split("\\n", -1);
+        for (int index = 0; index < lines.length; index++) {
+            String line = lines[index];
+            if (line.startsWith("      - name: ")) currentColumn = line.substring("      - name: ".length()).trim();
+            if (currentColumn != null && line.startsWith("        description: \"") && line.endsWith("\"")) {
+                String value = line.substring("        description: \"".length(), line.length() - 1);
+                if (!Objects.equals(value, descriptions.get(currentColumn))) return null;
+                continue;
+            }
+            normalized.append(line);
+            if (index < lines.length - 1) normalized.append("\n");
+        }
+        return normalized.toString();
     }
 
     private static String compilerArtifactSignature(String path) {
