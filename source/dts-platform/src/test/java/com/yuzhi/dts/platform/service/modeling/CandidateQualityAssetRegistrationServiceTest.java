@@ -157,8 +157,6 @@ class CandidateQualityAssetRegistrationServiceTest {
     void acceptsBuildVerifiedCandidatesBeforeQualityStarts() {
         CandidateView candidate = mock(CandidateView.class);
         when(candidate.status()).thenReturn(DeliveryStatus.BUILT);
-        when(candidate.tenantId()).thenReturn(TENANT);
-        when(candidate.version()).thenReturn(7);
         when(evidence.requireCurrent(candidate, false)).thenReturn(List.of());
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.ensureRegistered(candidate))

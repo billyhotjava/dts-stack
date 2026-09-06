@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.GovernanceQualitySummaryView;
@@ -80,16 +81,37 @@ class ModelDeliveryStatusQueryServiceTest {
     void defaultCandidateForAnotherModelDoesNotExposeItsWorkspaceOrEvidence() {
         Fixture fixture = new Fixture();
         CandidateView otherCandidate = mock(CandidateView.class);
-        when(otherCandidate.entries()).thenReturn(java.util.List.of());
+        EntryView otherEntry = mock(EntryView.class);
+        when(otherEntry.modelSpecId()).thenReturn(UUID.randomUUID());
+        when(otherCandidate.entries()).thenReturn(java.util.List.of(otherEntry));
         WorkbenchView workspace = mock(WorkbenchView.class);
         when(workspace.candidate()).thenReturn(otherCandidate);
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        fixture.selectDefault(null, workspace);
 
         var result = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
 
         assertThat(result.candidate()).isNull();
         assertThat(result.workspace()).isNull();
         assertThat(result.steps()).allMatch(step -> !step.matchesCurrentTarget());
+        verify(fixture.candidates).workspaceForCurrentModel(
+            "tenant", "actor", fixture.planId, fixture.modelId, fixture.modelRevision, fixture.checksum, null
+        );
+    }
+
+    @Test
+    void defaultReadRequestsOnlyItsCurrentModelAndRequestedEnvironment() {
+        Fixture fixture = new Fixture();
+        CandidateView current = fixture.currentCandidate("prod", DeliveryStatus.PUBLISHED, fixture.modelId, fixture.modelRevision, fixture.checksum, null);
+        WorkbenchView workspace = fixture.workspace(current, java.util.List.of());
+        fixture.selectDefault("prod", workspace);
+
+        var result = fixture.service.get("tenant", "actor", fixture.modelId, "prod", null);
+
+        assertThat(result.candidate().id()).isEqualTo(fixture.candidateId);
+        assertThat(result.candidate().matchesCurrentModel()).isTrue();
+        verify(fixture.candidates).workspaceForCurrentModel(
+            "tenant", "actor", fixture.planId, fixture.modelId, fixture.modelRevision, fixture.checksum, "prod"
+        );
     }
 
     @Test
@@ -101,7 +123,7 @@ class ModelDeliveryStatusQueryServiceTest {
         assertThatThrownBy(() -> fixture.service.get("tenant", "actor", fixture.modelId, "dev", fixture.candidateId))
             .isInstanceOf(ModelReleaseCandidateException.class);
 
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        fixture.selectDefault("dev", workspace);
         var defaultResult = fixture.service.get("tenant", "actor", fixture.modelId, "dev", null);
         assertThat(defaultResult.candidate()).isNull();
         assertThat(defaultResult.workspace()).isNull();
@@ -112,13 +134,16 @@ class ModelDeliveryStatusQueryServiceTest {
         Fixture fixture = new Fixture();
         CandidateView oldCandidate = fixture.currentCandidate("prod", DeliveryStatus.PUBLISHED, fixture.modelId, fixture.modelRevision - 1, fixture.checksum, null);
         WorkbenchView workspace = fixture.workspace(oldCandidate, java.util.List.of());
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        fixture.selectDefault(null, workspace);
 
         var result = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
 
         assertThat(result.candidate().matchesCurrentModel()).isFalse();
         assertThat(result.steps()).allMatch(step -> step.state().equals("UNKNOWN") || step.state().equals("NOT_STARTED"));
         assertThat(result.wizard().stream().filter(page -> page.key().equals("delivery")).findFirst().orElseThrow().primaryAction()).isNull();
+        verify(fixture.candidates).workspaceForCurrentModel(
+            "tenant", "actor", fixture.planId, fixture.modelId, fixture.modelRevision, fixture.checksum, null
+        );
     }
 
     @Test
@@ -126,7 +151,7 @@ class ModelDeliveryStatusQueryServiceTest {
         Fixture fixture = new Fixture();
         CandidateView stale = fixture.currentCandidate("prod", DeliveryStatus.DRAFT, fixture.modelId, fixture.modelRevision - 1, fixture.checksum, null);
         WorkbenchView workspace = fixture.workspace(stale, java.util.List.of(com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction.REFRESH_CANDIDATE));
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        fixture.selectDefault(null, workspace);
 
         var result = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
 
@@ -150,7 +175,7 @@ class ModelDeliveryStatusQueryServiceTest {
         when(evidence.candidateEntryId()).thenReturn(fixture.entryId);
         when(evidence.implementationRevision()).thenReturn(8);
         when(workspace.entryEvidence()).thenReturn(java.util.List.of(evidence));
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        fixture.selectDefault(null, workspace);
 
         var result = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
 
@@ -164,7 +189,7 @@ class ModelDeliveryStatusQueryServiceTest {
         CandidateView candidate = fixture.currentCandidate("prod", DeliveryStatus.QUALITY_FAILED, fixture.modelId, fixture.modelRevision, fixture.checksum, null);
         WorkbenchView workspace = fixture.workspace(candidate, java.util.List.of());
         when(workspace.governanceQuality()).thenReturn(new GovernanceQualitySummaryView(true, EvidenceState.FAILED, "QUALITY_FAILED", "failed", 60, java.util.List.of()));
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        fixture.selectDefault(null, workspace);
         UUID physicalAssetId = UUID.randomUUID();
         PublishedRef published = new PublishedRef(fixture.modelId, fixture.modelRevision, fixture.checksum, 1, "b".repeat(64), fixture.candidateId, 2, 2, physicalAssetId, Instant.now());
         when(fixture.serving.get("tenant", fixture.modelId)).thenReturn(serving(published));
@@ -182,7 +207,7 @@ class ModelDeliveryStatusQueryServiceTest {
         Fixture fixture = new Fixture();
         CandidateView candidate = fixture.currentCandidate("prod", DeliveryStatus.BUILT, fixture.modelId, fixture.modelRevision, fixture.checksum, null);
         WorkbenchView workspace = fixture.workspace(candidate, java.util.List.of());
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        fixture.selectDefault(null, workspace);
         UUID datasetId = UUID.randomUUID();
         var asset = new CandidateQualityRuleContextService.QualityAssetView(fixture.modelId, fixture.modelRevision, datasetId, "lake:db.table", "db.table", false, "QUALITY_DATASET_NOT_DEFAULT_LAKE", java.util.List.of());
         var qualityContext = new CandidateQualityRuleContextService.CandidateQualityContextView(fixture.candidateId, 3, DeliveryStatus.BUILT, java.util.List.of(asset), new CandidateQualityRuleContextService.QualityActionView("NONE", null), null, null);
@@ -201,7 +226,7 @@ class ModelDeliveryStatusQueryServiceTest {
         Fixture fixture = new Fixture();
         CandidateView candidate = fixture.currentCandidate("prod", DeliveryStatus.BUILT, fixture.modelId, fixture.modelRevision, fixture.checksum, null);
         WorkbenchView workspace = fixture.workspace(candidate, java.util.List.of());
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        fixture.selectDefault(null, workspace);
         var asset = new CandidateQualityRuleContextService.QualityAssetView(fixture.modelId, fixture.modelRevision, null, "lake:db.missing", "db.missing", false, "QUALITY_DATASET_REGISTRATION_MISSING", java.util.List.of());
         var qualityContext = new CandidateQualityRuleContextService.CandidateQualityContextView(fixture.candidateId, 3, DeliveryStatus.BUILT, java.util.List.of(asset), new CandidateQualityRuleContextService.QualityActionView("NONE", null), null, null);
         when(fixture.qualityContexts.context(candidate, null)).thenReturn(qualityContext);
@@ -221,7 +246,7 @@ class ModelDeliveryStatusQueryServiceTest {
         Fixture fixture = new Fixture();
         CandidateView candidate = fixture.currentCandidate("prod", DeliveryStatus.BUILT, fixture.modelId, fixture.modelRevision, fixture.checksum, null);
         WorkbenchView workspace = fixture.workspace(candidate, java.util.List.of());
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        fixture.selectDefault(null, workspace);
         when(fixture.candidates.canMaintainForRead("tenant", "actor", fixture.planId)).thenReturn(true);
         var qualityContext = new CandidateQualityRuleContextService.CandidateQualityContextView(
             fixture.candidateId, 3, DeliveryStatus.BUILT, java.util.List.of(),
@@ -245,13 +270,13 @@ class ModelDeliveryStatusQueryServiceTest {
         WorkbenchView empty = mock(WorkbenchView.class);
         when(empty.candidate()).thenReturn(noCandidate);
         when(empty.allowedActions()).thenReturn(java.util.List.of(com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction.CREATE_CANDIDATE));
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(empty);
+        fixture.selectDefault(null, empty);
         var emptyResult = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
         assertThat(emptyResult.wizard().stream().filter(page -> page.key().equals("verification")).findFirst().orElseThrow().primaryAction().code()).isEqualTo("CREATE_CANDIDATE");
 
         CandidateView reviewCandidate = fixture.currentCandidate("prod", DeliveryStatus.REVIEW_PENDING, fixture.modelId, fixture.modelRevision, fixture.checksum, null);
         WorkbenchView review = fixture.workspace(reviewCandidate, java.util.List.of(com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction.APPROVE));
-        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(review);
+        fixture.selectDefault(null, review);
         var reviewResult = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
         assertThat(reviewResult.wizard().stream().filter(page -> page.key().equals("delivery")).findFirst().orElseThrow().primaryAction().code()).isEqualTo("APPROVE");
     }
@@ -291,6 +316,12 @@ class ModelDeliveryStatusQueryServiceTest {
             WorkbenchView workspace = mock(WorkbenchView.class);
             when(workspace.candidate()).thenReturn(candidate); when(workspace.allowedActions()).thenReturn(actions); when(workspace.entryEvidence()).thenReturn(java.util.List.of());
             return workspace;
+        }
+
+        void selectDefault(String environment, WorkbenchView workspace) {
+            when(candidates.workspaceForCurrentModel(
+                "tenant", "actor", planId, modelId, modelRevision, checksum, environment
+            )).thenReturn(workspace);
         }
     }
 }

@@ -504,7 +504,10 @@ build_image_ctx() {
   fi
 
   echo "[dts-build] Building ${name} -> ${tag} (${cache_label})"
-  docker build "${cache_args[@]}" -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
+  local source_revision
+  source_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+  docker build "${cache_args[@]}" --label "org.opencontainers.image.revision=${source_revision}" \
+    --label "org.opencontainers.image.version=${tag##*:}" -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
   save_image "$tag" "$output_dir"
   if [[ "$name" == "dts-addax" && "$injected_runner_jar" == "true" ]]; then
     if [[ -n "${INJECT_ADDAX_RUNNER_BACKUP}" ]]; then
@@ -1233,6 +1236,9 @@ pack_deployment() {
     fi
   done
 
+  # The package must select the exact image versions used by this invocation.
+  cp "${IMGVERSION_FILE}" "${pack_dir}/imgversion.conf"
+
   # Copy directories
   for dir in "${include_dirs[@]}"; do
     if [[ -d "${REPO_ROOT}/${dir}" ]]; then
@@ -1447,15 +1453,6 @@ Detailed field instructions are included at:
 DEPLOY_README
   echo "[dts-build]   + DEPLOY.md"
 
-  cat > "${extra_dir}/release-manifest.json" <<'RELEASE_MANIFEST'
-{
-  "version": "generated-at-pack-time",
-  "images": [],
-  "notes": "Populate during release packaging."
-}
-RELEASE_MANIFEST
-  echo "[dts-build]   + extra/release-manifest.json"
-
 cat > "${extra_dir}/merge-rules.yml" <<'MERGE_RULES'
 env:
   strategy: preserve-site-values-update-image-keys
@@ -1466,9 +1463,6 @@ config:
 MERGE_RULES
   echo "[dts-build]   + extra/merge-rules.yml"
 
-  : > "${extra_dir}/checksums.txt"
-  echo "[dts-build]   + extra/checksums.txt"
-
   cat > "${extra_dir}/rollback-manifest.json" <<'ROLLBACK_MANIFEST'
 {
   "backups": [],
@@ -1476,6 +1470,9 @@ MERGE_RULES
 }
 ROLLBACK_MANIFEST
   echo "[dts-build]   + extra/rollback-manifest.json"
+
+  python3 "${REPO_ROOT}/builds/write-release-metadata.py" \
+    --root "${tmp_dir}" --metadata-dir extra --revision "$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 
   # Create the tarball
   echo "[dts-build] Creating tarball..."
@@ -1581,6 +1578,8 @@ create_opmanager_upgrade_package() {
     fi
   fi
 
+  python3 "${REPO_ROOT}/builds/write-release-metadata.py" \
+    --root "${workspace_dir}" --metadata-dir misc --revision "$(git -C "${REPO_ROOT}" rev-parse HEAD)"
   tar -czf "${archive_path}" -C "${workspace_dir}" "images" "dts-stack" "misc"
   local size
   size="$(du -h "${archive_path}" | cut -f1)"
@@ -1604,7 +1603,15 @@ attempt_git_pull() {
 
   echo "[dts-build] Updating repository with git pull --ff-only"
   if ! git -C "${REPO_ROOT}" pull --ff-only; then
+    if [[ -n "${DTS_BUILD_EXPECTED_SHA:-}" ]]; then
+      echo "[dts-build] ERROR: release source pull failed" >&2
+      return 1
+    fi
     echo "[dts-build] WARN: git pull --ff-only failed; continuing with current local sources"
+  fi
+  if [[ -n "${DTS_BUILD_EXPECTED_SHA:-}" && "$(git -C "${REPO_ROOT}" rev-parse HEAD)" != "${DTS_BUILD_EXPECTED_SHA}" ]]; then
+    echo "[dts-build] ERROR: source changed from DTS_BUILD_EXPECTED_SHA; choose a new release version" >&2
+    return 1
   fi
 }
 

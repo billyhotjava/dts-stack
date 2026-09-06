@@ -3,5 +3,6 @@
     <changeSet id="20260906-01-catalog-dataset-version" author="platform">
         <preConditions onFail="HALT" onError="HALT"><tableExists tableName="catalog_dataset"/><not><columnExists tableName="catalog_dataset" columnName="version"/></not></preConditions>
         <addColumn tableName="catalog_dataset"><column name="version" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column></addColumn>
+        <rollback><dropColumn tableName="catalog_dataset" columnName="version"/></rollback>
     </changeSet>
 </databaseChangeLog>

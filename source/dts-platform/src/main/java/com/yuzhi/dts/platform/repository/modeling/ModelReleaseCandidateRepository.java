@@ -510,6 +510,65 @@ public class ModelReleaseCandidateRepository {
         );
     }
 
+    /**
+     * Reads one candidate whose entry is pinned to the requested ModelSpec revision and checksum.
+     * Active delivery is preferred over a published history row; both outrank replacement-source history.
+     */
+    public Optional<CandidateView> findLatestForModelCurrentRevision(
+        String tenantId,
+        UUID planId,
+        UUID modelSpecId,
+        int revision,
+        String checksum,
+        String environment
+    ) {
+        requireTenantAndId(tenantId, planId);
+        if (modelSpecId == null || revision < 1 || checksum == null || checksum.isBlank()) return Optional.empty();
+        String environmentClause = environment == null || environment.isBlank() ? "" : " and environment = ?";
+        ArrayList<Object> arguments = new ArrayList<>();
+        arguments.add(tenantId.trim());
+        arguments.add(planId);
+        arguments.add(tenantId.trim());
+        arguments.add(planId);
+        arguments.add(modelSpecId);
+        arguments.add(revision);
+        arguments.add(checksum);
+        if (!environmentClause.isEmpty()) arguments.add(environment.trim());
+        return queryCandidatesWithOrder(
+            HEADER_SELECTION +
+            """
+             where tenant_id = ? and plan_id = ?
+               and id in (
+                   select candidate_id
+                     from modeling_model_release_candidate_entry
+                    where tenant_id = ? and plan_id = ? and model_spec_id = ?
+                      and revision = ? and checksum = ?
+               )
+            """ +
+            environmentClause +
+            """
+             order by case
+                        when status not in ('PUBLISHED', 'REJECTED', 'ROLLED_BACK', 'CANCELLED', 'STALE') then 0
+                        when status = 'PUBLISHED' then 1
+                        else 2
+                      end,
+                      last_modified_date desc,
+                      id
+             limit 1
+            """,
+            """
+            case
+              when c.status not in ('PUBLISHED', 'REJECTED', 'ROLLED_BACK', 'CANCELLED', 'STALE') then 0
+              when c.status = 'PUBLISHED' then 1
+              else 2
+            end,
+            c.last_modified_date desc,
+            c.id
+            """,
+            arguments.toArray()
+        ).stream().findFirst();
+    }
+
     @Transactional
     int compareAndSetVersion(
         String tenantId,

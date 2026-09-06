@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.O
 import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.PreparedDispatch;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.ScopedCandidateProject;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
@@ -40,6 +41,7 @@ public class PlanOperationalRunService {
     private final AirflowClient airflow;
     private final ModelMaterializationProperties properties;
     private final DbtConfigService dbtConfig;
+    private final DbtDagService dags;
     private final ModelSpecPlanWriteAccessPort planAccess;
     private final ReleaseDutyResolver duties;
     private final Clock clock;
@@ -52,6 +54,7 @@ public class PlanOperationalRunService {
         AirflowClient airflow,
         ModelMaterializationProperties properties,
         DbtConfigService dbtConfig,
+        DbtDagService dags,
         ModelSpecPlanWriteAccessPort planAccess,
         ReleaseDutyResolver duties
     ) {
@@ -62,6 +65,7 @@ public class PlanOperationalRunService {
             airflow,
             properties,
             dbtConfig,
+            dags,
             planAccess,
             duties,
             Clock.systemUTC()
@@ -75,6 +79,7 @@ public class PlanOperationalRunService {
         AirflowClient airflow,
         ModelMaterializationProperties properties,
         DbtConfigService dbtConfig,
+        DbtDagService dags,
         ModelSpecPlanWriteAccessPort planAccess,
         ReleaseDutyResolver duties,
         Clock clock
@@ -97,6 +102,7 @@ public class PlanOperationalRunService {
             dbtConfig,
             "dbtConfig is required"
         );
+        this.dags = Objects.requireNonNull(dags, "dags is required");
         this.planAccess = Objects.requireNonNull(
             planAccess,
             "planAccess is required"
@@ -287,11 +293,12 @@ public class PlanOperationalRunService {
             );
             submitManual(opened, prepared, now);
         } catch (RuntimeException unavailable) {
-            runs.markUnknown(
-                opened.pipelineRunGroupId(),
-                "MODEL_OPERATIONAL_DISPATCH_RECOVERY_FAILED",
-                now
-            );
+            if (unavailable instanceof PlanExecutionException execution) {
+                if ("MODEL_OPERATIONAL_AIRFLOW_SUBMISSION_UNKNOWN".equals(execution.code())) return;
+                runs.markUnknown(opened.pipelineRunGroupId(), execution.code(), now);
+                return;
+            }
+            runs.markUnknown(opened.pipelineRunGroupId(), "MODEL_OPERATIONAL_DISPATCH_RECOVERY_FAILED", now);
         }
     }
 
@@ -413,6 +420,7 @@ public class PlanOperationalRunService {
             prepared.projectBundleChecksum()
         );
         try {
+            dags.ensureReleaseBuildDag(opened.airflowDagId());
             if (
                 airflow
                     .getDagRun(

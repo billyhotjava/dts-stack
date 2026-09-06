@@ -154,6 +154,30 @@ public class ModelReleaseCandidateApplicationService {
         return withPersistedEvidence(project(candidate, access.actorId(), access.duties()), workbenchEvidence.findCurrent(candidate));
     }
 
+    /** Read-only model-scoped candidate projection; never creates a candidate or falls back to another model. */
+    @Transactional(readOnly = true)
+    public WorkbenchView workspaceForCurrentModel(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        UUID modelSpecId,
+        int modelRevision,
+        String modelChecksum,
+        String environment
+    ) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        CandidateView candidate = repository.findLatestForModelCurrentRevision(
+            access.tenantId(),
+            access.planId(),
+            modelSpecId,
+            modelRevision,
+            modelChecksum,
+            environment
+        ).orElse(null);
+        if (candidate == null) return empty(access.planId(), access.duties());
+        return withPersistedEvidence(project(candidate, access.actorId(), access.duties()), workbenchEvidence.findCurrent(candidate));
+    }
+
     @Transactional(readOnly = true)
     public List<ModelMaterializationStatusView> materializationStatuses(
         String tenantId,
@@ -1661,7 +1685,7 @@ public class ModelReleaseCandidateApplicationService {
 
     private Access releaseAccess(String tenantId, String actorId, UUID planId) {
         Access access = authorizeRead(tenantId, actorId, planId);
-        if (!planAccess.canMaintain(access.tenantId(), access.planId(), access.actorId())) {
+        if (access.duties().isEmpty() || !planAccess.canMaintain(access.tenantId(), access.planId(), access.actorId())) {
             throw planForbidden();
         }
         return access;

@@ -125,9 +125,10 @@ class ModelMaterializationRunArtifactServiceTest {
         when(
             sourceAvailability.checkPinnedCurrentForUpdate(GROUP_ID)
         ).thenReturn(GenerationCheck.currentCheck());
+        ModelReleaseCandidateContract.CandidateView builtCandidate = mock(ModelReleaseCandidateContract.CandidateView.class);
         when(candidates.transition(any(), any(), any(), any())).thenReturn(
             new ModelReleaseCandidateContract.CommandResult(
-                mock(ModelReleaseCandidateContract.CandidateView.class),
+                builtCandidate,
                 false,
                 List.of()
             )

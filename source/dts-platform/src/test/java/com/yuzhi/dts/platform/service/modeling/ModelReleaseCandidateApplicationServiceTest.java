@@ -601,7 +601,11 @@ class ModelReleaseCandidateApplicationServiceTest {
     void readOnlyPlanCanReadPublishedCandidateWithoutWriteActions() {
         when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(false);
         when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER));
-        CandidateView published = candidate(DeliveryStatus.PUBLISHED, List.of(entry(DeliveryStatus.PUBLISHED)));
+        CandidateView published = candidate(
+            DeliveryStatus.PUBLISHED,
+            List.of(entry(DeliveryStatus.PUBLISHED)),
+            new DeliveryAuditView(ACTOR, NOW.minusSeconds(60), ACTOR, NOW.minusSeconds(30), null, null, ACTOR, NOW)
+        );
         when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(published));
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(java.util.Optional.of(published));
 

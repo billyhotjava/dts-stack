@@ -112,6 +112,7 @@ class PlanOperationalRunServiceTest {
                 eq(null),
                 eq(NOW)
             );
+        order.verify(fixture.dags).ensureReleaseBuildDag("dts_plan_binding");
         order.verify(fixture.airflow)
             .getDagRun("dts_plan_binding", "run-1");
         order.verify(fixture.airflow)
@@ -230,6 +231,21 @@ class PlanOperationalRunServiceTest {
         verify(fixture.scoped, never()).prepareCandidate(any());
     }
 
+    @Test
+    void recoveryPreservesSubmissionUnknownInsteadOfMaskingIt() {
+        Fixture fixture = fixture();
+        when(fixture.runs.claimRecoverableManual(NOW)).thenReturn(Optional.of(opened("UNKNOWN", true)), Optional.empty());
+        when(fixture.airflow.getDagRun("dts_plan_binding", "run-1")).thenReturn(Optional.empty(), Optional.empty(), Optional.empty());
+        when(fixture.runs.loadScope(GROUP_ID)).thenReturn(scope());
+        when(fixture.runs.findPrepared(GROUP_ID)).thenReturn(Optional.of(new PlanOperationalRunRepository.PreparedDispatch(GROUP_ID, "b".repeat(64), "sha256:" + "c".repeat(64), NOW.plusSeconds(900), "UNKNOWN")));
+        when(fixture.tokens.restore(GROUP_ID, NOW.plusSeconds(900))).thenReturn(new ModelRuntimeSpecTokenCodec.IssuedToken("runtime-token", "sha256:" + "c".repeat(64), NOW.plusSeconds(900)));
+        when(fixture.airflow.triggerDag(eq("dts_plan_binding"), any())).thenThrow(new IllegalStateException("airflow unavailable"));
+
+        assertThat(fixture.service.reconcilePendingManualRuns()).isEqualTo(1);
+
+        verify(fixture.runs).markUnknown(GROUP_ID, "MODEL_OPERATIONAL_AIRFLOW_SUBMISSION_UNKNOWN", NOW);
+    }
+
     private static Fixture fixture() {
         PlanOperationalRunRepository runs =
             mock(PlanOperationalRunRepository.class);
@@ -242,6 +258,7 @@ class PlanOperationalRunServiceTest {
             new ModelMaterializationProperties();
         properties.setExecutionTargetKey("postgres-primary");
         DbtConfigService dbtConfig = mock(DbtConfigService.class);
+        DbtDagService dags = mock(DbtDagService.class);
         when(dbtConfig.loadRuntimeConfig()).thenReturn(
             new DbtConfigService.DbtWorkspaceConfig(
                 true,
@@ -267,6 +284,7 @@ class PlanOperationalRunServiceTest {
             runs,
             scoped,
             tokens,
+            dags,
             airflow,
             new PlanOperationalRunService(
                 runs,
@@ -275,6 +293,7 @@ class PlanOperationalRunServiceTest {
                 airflow,
                 properties,
                 dbtConfig,
+                dags,
                 access,
                 duties,
                 Clock.fixed(NOW, ZoneOffset.UTC)
@@ -319,6 +338,7 @@ class PlanOperationalRunServiceTest {
         PlanOperationalRunRepository runs,
         DbtScopedProjectService scoped,
         ModelRuntimeSpecTokenCodec tokens,
+        DbtDagService dags,
         AirflowClient airflow,
         PlanOperationalRunService service
     ) {}

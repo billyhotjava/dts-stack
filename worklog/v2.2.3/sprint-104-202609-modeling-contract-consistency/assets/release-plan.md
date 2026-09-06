@@ -56,12 +56,122 @@
 - 包及镜像完整信息：`it/evidence/current-environment/release-2161b2cda.json`。
 - 旧草稿校验/提交及显示名保留已通过页面复验。新样例首次物化/质量/发布登记通过；再次运行与目录同步未通过，Sprint不可标记DONE。
 
-## F2 交付增量（规划，未构建/未部署）
+## F2/T10–T13 正式交付计划（Gate G3，待执行）
 
-责任 F2/T14。预计影响 `dts-platform`、`dts-platform-webapp`、`dts-analytics`；实际清单依最终代码、配置及必要前向迁移确定，F1 历史双镜像不能充当 F2 完整交付。
+**变更类型**：组合（`dts-platform`、`dts-analytics`、`dts-platform-webapp` 的 API/UI 与两套 Liquibase expand migration）。
 
-1. 开发区仅修改/审查，commit/push 后部署区 pull --ff-only、核对 SHA，再运行专项测试和正式构建。
-2. 包含分析接入/目标同步逻辑及全部必要资源；如有新约束，先进行存量重复映射预检，再验证升级与清洁库迁移。
-3. 服务 API/DTO 增量兼容旧 serving 客户端；状态字段缺失显示未知，不误报成功。部分部署不一致时给明确诊断，不能静默跳过分析准备。
-4. 部署后复核 IT-08–IT-18；离线安装使用同一包/校验和，禁止 docker cp、docker commit、hotfix 镜像、开发挂载和临时下载。
-5. 只恢复受影响模型的失败分析交付，保留物化/发布历史；不自动批量重物化、不新增回滚镜像标签。当前文档不代表执行部署或操作用户数据。
+**风险等级**：高。`dts-platform` 和 `dts-analytics` 分别在启动时执行 Liquibase；T13 还依赖平台到 analytics 的受信任服务调用。F1 历史双镜像不能作为本范围的构建、离线包或验收证据。
+
+本节是执行计划，不表示已构建、已部署或已完成回滚演练。逐项实际 SHA、镜像 ID、包校验和和结果填入 [release-evidence-plan.md](release-evidence-plan.md)。
+
+### 1. 迁移和兼容性
+
+| 服务/变更 | changeSet | 本次阶段 | 旧代码兼容性 | 物理回滚 | 当前状态 |
+|---|---|---|---|---|---|
+| platform 资产乐观锁 | `20260906-01-catalog-dataset-version` | Expand：`catalog_dataset.version bigint NOT NULL DEFAULT 0` | 旧代码忽略新增列；新代码可读取初始 `0` | 不建议线上 drop column；代码镜像可回退且列保留 | 未在清洁库/升级库实测 |
+| analytics 平台源绑定 | `0054-01` | Expand：`tenant_id`、`platform_data_source_id` 可空，加二元唯一约束 | 旧代码可忽略可空列；无 tenant 的存量行保持 legacy-unresolved | 不建议线上 drop constraint/column；代码镜像可回退且列保留 | 未在清洁库/升级库实测 |
+
+两个尚未在当前环境执行的新 changeSet 已补显式逆向 rollback，供隔离库演练；实测通过前不登记 PASS。生产代码回退仍保留 expand schema，禁止自动删除新增列或唯一约束。若迁移已完成，回退仅限重新部署上一个不可变镜像并保留 expand schema；如果新版本已写入依赖新字段的数据，选择前向修复，不盲目回退代码。
+
+升级库预检必须在部署环境进行并保存只读结果：
+
+```sql
+-- 0054 应用后检查唯一性是否仍可证明；任何结果均阻断自动修复。
+SELECT tenant_id, platform_data_source_id, COUNT(*)
+FROM analytics_database
+WHERE tenant_id IS NOT NULL AND platform_data_source_id IS NOT NULL
+GROUP BY tenant_id, platform_data_source_id
+HAVING COUNT(*) > 1;
+
+-- 存量无归属行不会自动匹配或合并，须记录并按 T13 合同人工处置。
+SELECT id, name
+FROM analytics_database
+WHERE tenant_id IS NULL OR platform_data_source_id IS NULL;
+```
+
+通过条件是第一条返回 0 行；第二条仅作为 legacy-unresolved 清单，不可由脚本按名称补 tenant 或 source。迁移前后的 schema、Liquibase 日志、上述 SQL 输出都须进入 evidence。当前 `analytics_database` 为 0 行不是升级路径通过证据。
+
+### 2. 开发提交到部署目录
+
+以下命令的目录和顺序已由仓库脚本与 Compose 文件确认；其中 `<release-sha>` 等值必须由本次部署实际生成，不能复用历史 SHA。开发目录绝不执行 build、image 或 Compose：
+
+```bash
+# /opt/prod/s10/v2.2.3：仅在 review 通过后执行
+git status --short
+# 仅提交已审查并明确暂存的 Sprint-104 文件；不得用 git add -A 吞入共享工作树改动。
+git diff --cached --check
+git diff --cached --name-only
+git commit -m 'feat(modeling): sprint104 delivery and analysis consistency'
+git push origin HEAD
+
+# /opt/prod/s10/deploy：必须是同一分支的干净独立检出
+git status --short --branch
+git pull --ff-only
+RELEASE_SHA="$(git rev-parse HEAD)"
+git show -s --format='%H %D %s' "$RELEASE_SHA"
+test -z "$(git status --porcelain)"
+```
+
+`builds/dts-build.sh` 的 backend jar 构建使用 `-DskipTests`；所以专项测试须先在 `/opt/prod/s10/deploy` 按本次测试清单完成并把结果记录为单独证据。构建成功不等同于测试、部署或浏览器验收通过。
+
+### 3. 不可变镜像与离线升级包
+
+构建脚本从 `IMGVERSION_FILE` 读取镜像名。不要覆盖 deploy 的常规 `imgversion.conf` 或运行中的 `.env` 的 `1.0.0` 标签；在 release 目录生成仅供本次构建和 Compose 使用的不可变标签文件：
+
+```bash
+cd /opt/prod/s10/deploy
+RELEASE_ID="s104-${RELEASE_SHA:0:12}"
+RELEASE_DIR="data/sprint104-release/${RELEASE_ID}"
+mkdir -p "$RELEASE_DIR"
+RELEASE_CONF="$RELEASE_DIR/imgversion.conf"
+cp imgversion.conf "$RELEASE_CONF"
+sed -i -E \
+  -e "s|^IMAGE_DTS_PLATFORM=.*|IMAGE_DTS_PLATFORM=dts-platform:${RELEASE_ID}|" \
+  -e "s|^IMAGE_DTS_ANALYTICS=.*|IMAGE_DTS_ANALYTICS=dts-analytics:${RELEASE_ID}|" \
+  -e "s|^IMAGE_DTS_PLATFORM_WEBAPP=.*|IMAGE_DTS_PLATFORM_WEBAPP=dts-platform-webapp:${RELEASE_ID}|" \
+  "$RELEASE_CONF"
+
+DTS_BUILD_EXPECTED_SHA="$RELEASE_SHA" IMGVERSION_FILE="$RELEASE_CONF" \
+  builds/dts-build.sh --image dts-platform dts-analytics dts-platform-webapp \
+  --opmanager-output "$RELEASE_DIR"
+
+# dts-build.sh 会再次尝试 git pull；HEAD 漂移即废弃本次产物，不得沿用旧 RELEASE_ID。
+test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+```
+
+该入口会构建三项镜像，并将**本次调用生成**的 image tar 放入 OpManager 升级包。构建结束后立即记录 SHA、镜像 reference/ID/digest、包路径、archive SHA-256 和每个 image tar SHA-256，命令见 evidence 方案。
+
+构建器现从实际 image tar 生成源码 SHA、镜像 ID、标签、架构、archive SHA-256 清单；`checksums.txt` 与 lite upgrader 的 images 目录基准一致，另有部署文件校验。镜像携带源码 revision 标签，`DTS_BUILD_EXPECTED_SHA` 阻断拉取后源码漂移。仍须实际包生成与离线校验通过后关闭 GAP。
+
+### 4. 受控 Compose 部署与验证
+
+从 `RELEASE_CONF` 生成只覆盖三项镜像的环境文件，保留站点 `.env` 其余配置。先以 `config` 证明 Compose 将使用本次不可变标签；不得运行 `init.sh`、不得修改现网 `.env`、不得重建无关服务：
+
+```bash
+RELEASE_ENV="$RELEASE_DIR/compose-release.env"
+cp .env "$RELEASE_ENV"
+grep -E '^IMAGE_DTS_(PLATFORM|ANALYTICS|PLATFORM_WEBAPP)=' "$RELEASE_CONF" >> "$RELEASE_ENV"
+
+docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml config > "$RELEASE_DIR/compose.rendered.yml"
+rg 'image: dts-(platform|analytics|platform-webapp):' "$RELEASE_DIR/compose.rendered.yml"
+
+# analytics 先执行其 expand migration；确认 healthy 后才更新 platform，再更新 UI。
+docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml up -d --no-deps --pull never --force-recreate dts-analytics
+docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml ps dts-analytics
+
+docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml up -d --no-deps --pull never --force-recreate dts-platform
+docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml ps dts-platform
+
+docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml up -d --no-deps --pull never --force-recreate dts-platform-webapp
+docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml ps dts-platform-webapp
+```
+
+在每一步之间等待对应 healthcheck 为 `healthy` 并保存容器 ID、image ID、启动时间和日志。若 `dts-platform` 的本次提交改变了 `dts-dbt-runtime-init` 所依赖的镜像内脚本，先在维护窗口单独重跑该 one-shot 服务并确认 `exited (0)`；否则不得用 `--no-deps` 隐式跳过它。Compose health、HTTP 和日志仅证明容器运行，T10–T13 真实模型路径、质量闭环和 Chrome 95 页面验收仍须按 IT-08–IT-18 单独完成。
+
+### 5. 离线交付、回滚和停止条件
+
+离线目标只接收本次 archive、archive SHA-256、三项 image tar SHA-256、`compose-release.env`、源码 SHA 和证据 manifest；先校验 SHA 再 `docker load`。不得下载依赖、使用开发目录 bind mount、`docker cp`、`docker commit` 或容器内热修复。对已有站点先运行包内 `bin/dts-upgrade-lite plan` 审阅差异，再由授权操作员执行 `apply`；`plan` 或 manifest 校验失败即停止。
+
+容器回滚条件是 migration 未破坏兼容性且保留上一版本三项不可变镜像、其 SHA 和上次 Compose env。回滚命令使用上一版本 env 的同一受控三服务范围并保存新旧容器/镜像证据；**不执行 schema drop 或 Liquibase rollback**。运行前必须在隔离/预生产环境演练：升级三服务、核对两项迁移、执行一条 T13 注册失败重试和一条 T12 CAS 冲突、再按上一 release env 回退三服务并确认旧读路径可用。该演练尚未执行，Gate G3 保持 GAP。
+
+停止条件：任一 migration 失败、唯一性预检有重复、legacy 无归属行被自动写入、三服务任一非 healthy、镜像/包 SHA 不一致、或 release manifest 仍为占位且没有随包可验证替代物时，停止部署并保留现状；修复后重新走部署目录正式构建。

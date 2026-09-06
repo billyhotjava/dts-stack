@@ -14,5 +14,10 @@
             tableName="analytics_database"
             columnNames="tenant_id,platform_data_source_id"
             constraintName="uk_analytics_database_tenant_platform_source"/>
+        <rollback>
+            <dropUniqueConstraint tableName="analytics_database" constraintName="uk_analytics_database_tenant_platform_source"/>
+            <dropColumn tableName="analytics_database" columnName="platform_data_source_id"/>
+            <dropColumn tableName="analytics_database" columnName="tenant_id"/>
+        </rollback>
     </changeSet>
 </databaseChangeLog>

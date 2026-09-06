@@ -68,6 +68,7 @@ class OperationPermissionMatrixIT {
         CatalogDatasetRepository repository = mock(CatalogDatasetRepository.class);
         AccessChecker access = mock(AccessChecker.class);
         CatalogResourceHelper helper = mock(CatalogResourceHelper.class);
+        when(helper.trimToNull(org.mockito.ArgumentMatchers.anyString())).thenCallRealMethod();
         CatalogDatasetResource resource = resource(repository, access, helper);
         CatalogDataset existing = dataset("finance"); existing.setOwner("before"); existing.setDescription("before");
         when(repository.findById(existing.getId())).thenReturn(java.util.Optional.of(existing));
@@ -90,6 +91,7 @@ class OperationPermissionMatrixIT {
         CatalogDatasetRepository repository = mock(CatalogDatasetRepository.class);
         AccessChecker access = mock(AccessChecker.class);
         CatalogResourceHelper helper = mock(CatalogResourceHelper.class);
+        when(helper.trimToNull(org.mockito.ArgumentMatchers.anyString())).thenCallRealMethod();
         CatalogDatasetResource resource = resource(repository, access, helper);
         CatalogDataset existing = dataset("finance"); existing.setOwner("before"); existing.setDescription("before");
         when(repository.findById(existing.getId())).thenReturn(java.util.Optional.of(existing));

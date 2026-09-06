@@ -45,7 +45,9 @@ public class ModelDeliveryStatusQueryService {
     public DeliveryStatusView get(String tenantId, String actorId, UUID modelSpecId, String environment, UUID candidateId) {
         ModelSpecView model = models.get(tenantId, modelSpecId);
         AuthoringContextView authoringContext = authoring.context(tenantId, actorId, modelSpecId, null, null, true);
-        WorkbenchView workspace = candidateId == null ? candidates.workspace(tenantId, actorId, model.planId()) :
+        WorkbenchView workspace = candidateId == null ? candidates.workspaceForCurrentModel(
+            tenantId, actorId, model.planId(), model.id(), model.revision(), model.checksum(), environment
+        ) :
             candidates.workspaceForCandidate(tenantId, actorId, model.planId(), candidateId);
         CandidateView candidate = workspace.candidate();
         if (candidate != null && environment != null && !environment.isBlank() && !environment.trim().equals(candidate.environment())) {

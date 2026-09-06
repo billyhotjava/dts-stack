@@ -24,3 +24,13 @@ GitNexus 重建完成：165454 symbols / 353200 relationships。工作台及代�
 - 既有 UNKNOWN 运行阻断的真实恢复验证。
 
 所有任务继续保持 IN_PROGRESS，未将源码完成计作 Sprint DONE。
+
+## 正式验证进展（2026-09-07）
+
+源码 `6817843b9` 与修正 `ae21a9c10` 均完成开发目录 commit/push、部署目录 ff-only 同步。测试和构建全部在部署目录执行。
+
+- 前端首轮 31 项通过、6 项失败：测试 runner 混用、matchMedia 模拟缺失、中文按钮空格及重构后的旧源位置断言，已分别纠正。Node 原生契约独立运行 21/21。
+- `ae21a9c10` 的失败范围复测 15/16，通过规则编辑、治理摘要异步/CAS、交付状态组件；余下源断言错误限制了正常指标表单还原字段，已修正待复跑。
+- `ae21a9c10` 前端 `pnpm build` 退出 0，TypeScript 与 legacy production bundle 通过；日志 `/tmp/s104-formal-frontend-rebuild.log`。
+- Java 首轮 testCompile 的 fixture 无 setter 已修正；第二轮 platform 128 tests，3 failures/25 errors：一项命令权限回归须恢复早拒绝，其余 fixture 缺 published audit、Mockito 嵌套 mock/无用 stub 和文本 helper 默认 null。分析服务独立编译发现缺失 Optional 导入。均正按失败范围修复，尚不能登记后端通过。
+- 新镜像尚未部署，以上不是 Chrome 或运行验收证据。

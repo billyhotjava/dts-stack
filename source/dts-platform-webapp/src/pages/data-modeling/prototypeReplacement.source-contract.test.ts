@@ -307,7 +307,10 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(standardsService).not.toContain("deleteGlossaryTerm");
 		expect(relationshipService).toContain("limit: GRAPH_PAGE_SIZE");
 		expect(relationshipService).not.toMatch(/kind:\s*kindForView|query:\s*query\.query/);
-		expect(metrics).not.toContain("expressionSql");
+		// The page preserves the existing formula while the canonical editor owns inputs.
+		expect(metrics).toContain('expressionSql: selected.expressionSql || ""');
+		expect(metrics).not.toMatch(/(?:value|defaultValue)=\{[^}]*expressionSql/);
+		expect(metrics).toContain("<MetricEditor");
 		expect(metrics).not.toMatch(/loadPlanningContextPolicy|warehousePlanApi|建模策略/);
 		expect(metrics).toContain('from "@/components/table"');
 		expect(metrics).toMatch(/<CompactTable<IndicatorDefinition>/);
