@@ -536,10 +536,9 @@ const rawModelSpecIssues = (raw: Record<string, unknown>): ModelSpecFieldIssue[]
 			!hasOnlyFields(raw.grain, GRAIN_FIELDS) ||
 			!isNonBlankString(raw.grain.statement) ||
 			!Array.isArray(raw.grain.keys) ||
-			raw.grain.keys.length === 0 ||
 			!raw.grain.keys.every(isNonBlankString))
 	) {
-		add("MODEL_SPEC_GRAIN_INVALID", "grain", "Grain requires a statement and non-empty keys");
+		add("MODEL_SPEC_GRAIN_INVALID", "grain", "Grain requires a statement and a valid key list");
 	}
 	if (
 		raw.timeSemantics != null &&
@@ -889,10 +888,11 @@ const validateModelSpecFull = (input: unknown): ModelSpecFieldIssue[] => {
 		issues.push(issue("MODEL_SPEC_FIELD_INVALID", "fields", "Fields require unique names, data types and roles"));
 	}
 	const sourceKeys = new Set<string>();
+	const requiresKey = command.modelType === "DIMENSION" || command.materialization === "incremental";
 	const hasGrain = Boolean(
 		command.grain?.statement?.trim() &&
 			Array.isArray(command.grain.keys) &&
-			command.grain.keys.some((key) => typeof key === "string" && key.trim()),
+			(!requiresKey || command.grain.keys.some((key) => typeof key === "string" && key.trim())),
 	);
 	const invalidSource = sources.some((source) => {
 		if (!source || typeof source !== "object" || Array.isArray(source)) return true;

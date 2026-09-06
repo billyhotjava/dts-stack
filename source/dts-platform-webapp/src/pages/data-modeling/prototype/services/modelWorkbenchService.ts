@@ -885,8 +885,11 @@ export function validateModelDraftInput(
 		errors.fields = "请至少添加一个字段";
 	} else if (draft.fields.some((field) => !field.name.trim() || !field.dataType.trim())) {
 		errors.fields = "请补齐字段名称和数据类型";
-	} else if (!draft.fields.some((field) => field.role === "KEY")) {
-		errors.fields = "请至少设置一个主键字段";
+	} else if (
+		(isDimensionDraft(draft) || draft.loadStrategy !== "FULL" || draft.materialization === "incremental") &&
+		!draft.fields.some((field) => field.role === "KEY")
+	) {
+		errors.fields = "维度表或非全量加载模型需至少设置一个主键字段";
 	} else if (new Set(draft.fields.map((field) => field.name.trim())).size !== draft.fields.length) {
 		errors.fields = "字段名称不能重复";
 	} else if (
@@ -982,7 +985,7 @@ const validateDesignerTransformations = (draft: ModelSpecDraft): string | null =
 	}
 	const hasAggregation = groupBy.length > 0 || aggregations.length > 0;
 	if (hasAggregation) {
-		if (!groupBy.length || !aggregations.length) return "分组字段和聚合配置必须同时填写";
+		if (!aggregations.length) return "请为分组配置聚合字段；全表聚合可不设置分组字段";
 		if (deduplicateBy.length) return "聚合与去重不能同时启用";
 		const grouped = new Set(groupBy);
 		const aggregateTargets = new Set<string>();
@@ -1038,7 +1041,10 @@ export const modelDraftToUpdateCommand = (draft: ModelSpecDraft): UpdateModelSpe
 			config.modelType === "DIMENSION"
 				? {
 						hierarchies: base?.dimensionProfile?.hierarchies || [],
-						scdPolicy: { type: draft.scdType },
+						scdPolicy:
+							draft.scdType === "TYPE2" && base?.dimensionProfile?.scdPolicy.type === "TYPE2"
+								? { ...base.dimensionProfile.scdPolicy }
+								: { type: draft.scdType },
 					}
 				: null,
 		dataMartId: config.modelType === "APPLICATION" ? draft.dataMartId?.trim() || null : null,
@@ -1240,8 +1246,8 @@ const buildImplementationCommand = (
 			...(draft.filters.length ? { filters: draft.filters } : {}),
 			...(draft.deduplicateBy.length ? { deduplicateBy: draft.deduplicateBy } : {}),
 			...(draft.joins.length ? { joins: draft.joins } : {}),
-			...(draft.groupBy.length && draft.aggregations.length
-				? { groupBy: draft.groupBy, aggregations: draft.aggregations }
+			...(draft.aggregations.length
+				? { ...(draft.groupBy.length ? { groupBy: draft.groupBy } : {}), aggregations: draft.aggregations }
 				: {}),
 		},
 		ownership: model.implementationMode,

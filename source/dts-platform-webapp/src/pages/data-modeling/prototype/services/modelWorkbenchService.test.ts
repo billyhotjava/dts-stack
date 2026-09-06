@@ -530,6 +530,7 @@ describe("model workbench draft validation", () => {
 		const base = { ...canonicalFactView(), implementationMode: "DESIGNER_GENERATED" as const };
 		vi.mocked(updateModelSpec).mockResolvedValue(base);
 		const draft = modelDraftFromView(base) as ModelSpecDraft;
+		draft.physicalName = "global_total";
 		draft.factShape = "";
 		draft.timeSemanticsType = "";
 		draft.timeSemanticsFields = [];
@@ -543,7 +544,7 @@ describe("model workbench draft validation", () => {
 		draft.aggregations = [{ sourceField: "src_0.amount", targetField: "total_amount", function: "SUM", distinct: false }];
 		expect(validateModelDraftInput(draft).transformations).toBeUndefined();
 		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [] });
-		expect(saveModelImplementation).toHaveBeenCalledWith(expect.anything(), expect.anything(),
+		expect(saveModelImplementation).toHaveBeenCalledWith(expect.anything(), null,
 			expect.objectContaining({ settings: expect.objectContaining({ aggregations: draft.aggregations }) }));
 	});
 

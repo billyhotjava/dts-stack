@@ -1300,7 +1300,7 @@ public final class ModelSpecContract {
         rawEnum(fields.get("factShape"), FACT_SHAPES, "MODEL_SPEC_FACT_SHAPE_INVALID", "factShape", issues);
 
         if (invalidObject(fields.get("grain"), GRAIN_FIELDS, ModelSpecContract::invalidRawGrain)) {
-            addIssueOnce(issues, "MODEL_SPEC_GRAIN_INVALID", "grain", "Grain requires a statement and non-empty keys");
+            addIssueOnce(issues, "MODEL_SPEC_GRAIN_INVALID", "grain", "Grain requires a statement and a valid key list");
         }
         if (invalidObject(fields.get("timeSemantics"), TIME_SEMANTICS_FIELDS, ModelSpecContract::invalidRawTimeSemantics)) {
             addIssueOnce(issues, "MODEL_SPEC_TIME_SEMANTICS_INVALID", "timeSemantics", "Time semantics are invalid");
@@ -1734,6 +1734,10 @@ public final class ModelSpecContract {
 
     private static void validateTypeBoundary(CreateModelSpecCommand command, List<FieldIssue> issues) {
         if (command.modelType() == null) return;
+        boolean requiresKey = command.modelType() == ModelType.DIMENSION || "incremental".equals(command.materialization()) ||
+            (command.implementationPolicy() != null && command.implementationPolicy().loadStrategy() != LoadStrategy.FULL);
+        boolean completeGrain = command.grain() != null && notBlank(command.grain().statement()) &&
+            (!requiresKey || hasGrain(command.grain()));
         if (command.layer() != null && !matchesTargetLayer(command.modelType(), command.layer())) {
             issues.add(
                 issue(
@@ -1821,7 +1825,7 @@ public final class ModelSpecContract {
         }
         switch (command.modelType()) {
             case DIMENSION -> {
-                if (!hasGrain(command.grain())) {
+                if (!completeGrain) {
                     issues.add(issue("MODEL_SPEC_GRAIN_REQUIRED", "grain", "Dimension requires a grain statement and keys"));
                 }
                 boolean hasKey = command.fields().stream().anyMatch(field -> field != null && field.role() == FieldRole.KEY);
@@ -1833,7 +1837,7 @@ public final class ModelSpecContract {
                 if (command.dimensionProfile() != null) {
                     issues.add(issue("MODEL_SPEC_DIMENSION_PROFILE_NOT_ALLOWED", "dimensionProfile", "Dimension profile belongs to DIMENSION models only"));
                 }
-                if (!hasGrain(command.grain())) issues.add(issue("MODEL_SPEC_GRAIN_REQUIRED", "grain", "FACT requires a grain statement and keys"));
+                if (!completeGrain) issues.add(issue("MODEL_SPEC_GRAIN_REQUIRED", "grain", "FACT requires a grain statement and keys when not loaded in full"));
             }
             case SUMMARY, APPLICATION -> {
                 if (command.dimensionProfile() != null) {
@@ -1842,7 +1846,7 @@ public final class ModelSpecContract {
                 if (command.dependsOn().isEmpty()) {
                     issues.add(issue("MODEL_SPEC_UPSTREAM_REQUIRED", "dependsOn", "Derived models require a revision-pinned upstream model"));
                 }
-                if (!hasGrain(command.grain())) {
+                if (!completeGrain) {
                     issues.add(issue("MODEL_SPEC_GRAIN_REQUIRED", "grain", "Derived models require an output grain"));
                 }
                 if (command.modelType() == ModelType.APPLICATION && command.consumptionScenario() == null) {
@@ -1902,7 +1906,8 @@ public final class ModelSpecContract {
     }
 
     private static boolean invalidRawGrain(Map<?, ?> grain) {
-        return !isNonBlankText(grain.get("statement")) || !isNonEmptyTextList(grain.get("keys"));
+        return !isNonBlankText(grain.get("statement")) || !(grain.get("keys") instanceof List<?> keys) ||
+            keys.stream().anyMatch(key -> !isNonBlankText(key));
     }
 
     private static boolean invalidRawTimeSemantics(Map<?, ?> timeSemantics) {

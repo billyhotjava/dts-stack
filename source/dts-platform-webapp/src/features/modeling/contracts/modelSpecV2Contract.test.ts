@@ -2,6 +2,22 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import Ajv2020 from "ajv/dist/2020.js";
+
+test("generic full-refresh grain schema permits no keys without weakening dimension or incremental keys", () => {
+	const schema = JSON.parse(readFileSync(new URL(
+		"../../../../../dts-platform/src/main/resources/config/modeling/model-spec-v2.schema.json", import.meta.url,
+	), "utf8"));
+	const ajv = new Ajv2020({ strict: false });
+	const grain = ajv.compile(schema.$defs.grain);
+	assert.equal(grain({ statement: "global total", keys: [] }), true);
+	assert.equal(grain({ statement: "global total", keys: [""] }), false);
+	const keyBoundary = ajv.compile(schema.$defs.modelTypeSaveBoundaries.allOf[0]);
+	for (const modelType of ["FACT", "SUMMARY", "APPLICATION"]) {
+		assert.equal(keyBoundary({ modelType, grain: { keys: [] }, materialization: "table" }), true);
+		assert.equal(keyBoundary({ modelType, grain: { keys: [] }, materialization: "incremental" }), false);
+	}
+	assert.equal(keyBoundary({ modelType: "DIMENSION", grain: { keys: [] } }), false);
+});
 import {
 	type CanonicalModelSpecView,
 	hasModelSpecTypeBoundaryMismatch,

@@ -130,7 +130,8 @@ public final class ModelingDbtCompiler {
         if (model == null) throw new CompileException("MODEL_REQUIRED");
         if (isBlank(model.name())) throw new CompileException("MODEL_NAME_REQUIRED");
         if (model.revision() < 1) throw new CompileException("REVISION_INVALID");
-        if (model.grain() == null || isBlank(model.grain().statement()) || model.grain().keys() == null || model.grain().keys().stream().noneMatch(ModelingDbtCompiler::notBlank)) {
+        if (model.grain() == null || isBlank(model.grain().statement()) || model.grain().keys() == null ||
+            (model.modelType() == ModelingCompilerContract.ModelType.DIMENSION && model.grain().keys().stream().noneMatch(ModelingDbtCompiler::notBlank))) {
             throw new CompileException("GRAIN_REQUIRED");
         }
         if (sourceRequired && (model.sourceRefs() == null || model.sourceRefs().isEmpty())) throw new CompileException("SOURCE_REQUIRED");
@@ -269,7 +270,7 @@ public final class ModelingDbtCompiler {
 			}
 			if (!aggregations.isEmpty()) {
 				List<String> groupBy = groupByExpressions(projection.settings(), columns, mappings, casts);
-				sql.append("\n    group by ").append(String.join(", ", groupBy));
+				if (!groupBy.isEmpty()) sql.append("\n    group by ").append(String.join(", ", groupBy));
 			}
         }
         sql.append("\n)");
@@ -646,7 +647,7 @@ public final class ModelingDbtCompiler {
 		Object value = settings.get("aggregations");
 		List<String> groupBy = settingValues(settings, "groupBy");
 		if (value == null && groupBy.isEmpty()) return Map.of();
-		if (!(value instanceof List<?> values) || values.isEmpty() || groupBy.isEmpty()) {
+		if (!(value instanceof List<?> values) || values.isEmpty()) {
 			throw new CompileException("IMPLEMENTATION_AGGREGATION_INVALID");
 		}
 		Set<String> output = new LinkedHashSet<>(columns);
@@ -826,12 +827,10 @@ public final class ModelingDbtCompiler {
             .append(escape(model.grain().statement()))
             .append("\"\n");
         if (includeModelTests) {
-            String key = model.grain().keys().stream().filter(ModelingDbtCompiler::notBlank).findFirst().orElseThrow();
-            yaml
-                .append("    config:\n      contract:\n        enforced: true\n")
-                .append("    tests:\n      - unique:\n          column_name: ")
-                .append(key)
-                .append("\n");
+            yaml.append("    config:\n      contract:\n        enforced: true\n");
+            model.grain().keys().stream().filter(ModelingDbtCompiler::notBlank).findFirst().ifPresent(key ->
+                yaml.append("    tests:\n      - unique:\n          column_name: ").append(key).append("\n")
+            );
         }
         yaml.append("    columns:\n");
         for (String column : columns) {
@@ -868,7 +867,8 @@ public final class ModelingDbtCompiler {
     }
 
     private static String renderTests(ModelingCompilerContract.CompilerModel model, String resourceName) {
-        String key = model.grain().keys().stream().filter(ModelingDbtCompiler::notBlank).findFirst().orElseThrow();
+        String key = model.grain().keys().stream().filter(ModelingDbtCompiler::notBlank).findFirst().orElse(null);
+        if (key == null) return "version: 2\nmodels: []\n";
         return "version: 2\nmodels:\n  - name: " + resourceName + "\n    tests:\n      - unique:\n          column_name: " + key + "\n    columns:\n      - name: " + key + "\n        tests:\n          - not_null\n";
     }
 

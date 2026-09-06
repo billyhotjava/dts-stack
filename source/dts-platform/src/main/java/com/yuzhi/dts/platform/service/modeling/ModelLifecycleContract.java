@@ -519,7 +519,7 @@ public final class ModelLifecycleContract {
         validateIdentifierList(settings.get("partitionFields"), "partitionFields", true);
         validateJoinShape(settings.get("joins"));
 		validateFilterShape(settings.get("filters"));
-		validateIdentifierList(settings.get("groupBy"), "groupBy");
+		validateIdentifierList(settings.get("groupBy"), "groupBy", true);
 		validateAggregationShape(settings.get("aggregations"));
 		validateAggregationCoverage(settings);
         Object targetPhysicalName = settings.get("targetPhysicalName");
@@ -646,14 +646,14 @@ public final class ModelLifecycleContract {
 	private static void validateAggregationCoverage(Map<String, Object> settings) {
 		boolean grouped = settings.containsKey("groupBy");
 		boolean aggregated = settings.containsKey("aggregations");
-		if (grouped != aggregated) {
-			throw new IllegalArgumentException("groupBy and aggregations must be configured together");
+		if (grouped && !aggregated) {
+			throw new IllegalArgumentException("groupBy requires aggregations");
 		}
 		if (aggregated && (settings.containsKey("deduplicateBy") || settings.containsKey("dedupBy"))) {
 			throw new IllegalArgumentException("aggregation and deduplication cannot be combined");
 		}
 		if (!aggregated) return;
-		Set<String> groupBy = new LinkedHashSet<>((List<String>) settings.get("groupBy"));
+		Set<String> groupBy = new LinkedHashSet<>((List<String>) settings.getOrDefault("groupBy", List.of()));
 		for (Object item : (List<?>) settings.get("aggregations")) {
 			String target = textValue(((Map<?, ?>) item).get("targetField"));
 			if (groupBy.contains(target)) {
