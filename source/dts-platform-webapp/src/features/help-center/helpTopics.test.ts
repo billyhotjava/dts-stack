@@ -31,10 +31,10 @@ test("covers the DTS product areas from onboarding through administration", () =
 
 test("resolves the most specific route topic and falls back to overview", () => {
 	assert.equal(resolveHelpTopic("/data-modeling/home/workspace").id, "data-modeling");
-	assert.equal(resolveHelpTopic("/data-modeling/planning/domains").id, "construction-planning");
+	assert.equal(resolveHelpTopic("/data-architecture").id, "construction-planning");
 	assert.equal(resolveHelpTopic("/data-modeling/dimensions/workbench").id, "model-center");
 	assert.equal(resolveHelpTopic("/data-modeling/metrics/atomic").id, "metric-workbench");
-	assert.equal(resolveHelpTopic("/data-modeling/standards/fields").id, "governance");
+	assert.equal(resolveHelpTopic("/governance/standards/elements").id, "governance");
 	assert.equal(resolveHelpTopic("/catalog/lineage").id, "quality-security-lineage");
 	assert.equal(resolveHelpTopic("/unknown-page").id, "overview");
 });
