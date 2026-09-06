@@ -7,10 +7,8 @@ import {
 	normalizeModelWizardStep,
 } from "@/api/modelDeliveryStatusApi";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
-import {
-	CatalogDatasetGovernanceSummaryEditor,
-	type UnsavedEditorHandle,
-} from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
+import { type UnsavedEditorHandle } from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
+import { ModelCatalogDeliveryPanel } from "./ModelCatalogDeliveryPanel";
 import { ModelAnalysisPreparationAction } from "./ModelAnalysisPreparationAction";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelTargetQualityPanel } from "./ModelTargetQualityPanel";
@@ -174,25 +172,15 @@ export function ModelWizardFrame({
 							onChanged={onRefresh}
 						/>
 					) : null}
-					{step === "delivery"
-						? delivery?.steps
-								.filter(
-									(item) =>
-										item.key === "catalog" &&
-										item.matchesCurrentTarget &&
-										item.state === "SUCCEEDED" &&
-										item.resourceId,
-								)
-								.map((item) => (
-									<CatalogDatasetGovernanceSummaryEditor
-										key={item.resourceId}
-										datasetId={item.resourceId!}
-										canMaintain={canMaintain}
-										onSaved={onRefresh}
-										onNavigationGuardChange={onAssetGuardChange}
-									/>
-								))
-						: null}
+					{step === "delivery" ? (
+						<ModelCatalogDeliveryPanel
+							delivery={delivery}
+							modelName={model.name}
+							canMaintain={canMaintain}
+							onSaved={onRefresh}
+							onNavigationGuardChange={onAssetGuardChange}
+						/>
+					) : null}
 				</>
 			)}
 		</section>
