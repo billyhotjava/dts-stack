@@ -155,6 +155,35 @@ describe("dimension workbench presentation", () => {
 		expect(modelDraftFingerprint(makeDraft({ businessProcessId: "process-a" }))).not.toBe(
 			modelDraftFingerprint(makeDraft({ businessProcessId: "process-b" })),
 		);
+		const type2Profile = {
+			hierarchies: [{ code: "region", name: "区域层级", levels: [{ fieldName: "province_id", order: 1 }] }],
+			scdPolicy: {
+				type: "TYPE2" as const,
+				effectiveFromField: "effective_from",
+				effectiveToField: "effective_to",
+				currentFlagField: "is_current",
+			},
+		};
+		expect(modelDraftFingerprint(makeDraft({ dimensionProfile: type2Profile }))).not.toBe(
+			modelDraftFingerprint(
+				makeDraft({
+					dimensionProfile: { ...type2Profile, scdPolicy: { ...type2Profile.scdPolicy, effectiveFromField: "valid_from" } },
+				}),
+			),
+		);
+		expect(modelDraftFingerprint(makeDraft({ dimensionProfile: type2Profile }))).not.toBe(
+			modelDraftFingerprint(
+				makeDraft({
+					dimensionProfile: {
+						...type2Profile,
+						hierarchies: [{ ...type2Profile.hierarchies[0], name: "行政区域层级" }],
+					},
+				}),
+			),
+		);
+		expect(modelDraftFingerprint(makeDraft({ dimensionProfile: type2Profile }))).toBe(
+			modelDraftFingerprint(makeDraft({ dimensionProfile: type2Profile })),
+		);
 		expect(
 			modelDraftFingerprint(makeDraft({ fieldMappings: [{ sourceField: "src_0.id", targetField: "id" }] })),
 		).not.toBe(modelDraftFingerprint(makeDraft()));

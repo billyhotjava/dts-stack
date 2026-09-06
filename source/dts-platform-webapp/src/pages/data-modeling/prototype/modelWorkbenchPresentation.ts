@@ -115,6 +115,7 @@ export function modelDraftFingerprint(draft: ModelDraft): string {
 		warehouseLayerCode: draft.warehouseLayerCode,
 		businessProcessId: draft.businessProcessId,
 		scdType: draft.scdType,
+		dimensionProfile: draft.dimensionProfile,
 		reuseScope: draft.reuseScope,
 		dimensionDefinitionId: draft.dimensionDefinitionId,
 		standardBindings: draft.standardBindings,

@@ -862,22 +862,36 @@ public final class ModelingDbtCompiler {
             // Generated contracts have no field-level business description.  A placeholder here
             // is later projected back into the ModelSpec and would overwrite an authored display name.
             yaml.append("      - name: ").append(column).append("\n");
+            String standard = model.standardBindings() == null
+                ? null
+                : model.standardBindings().stream()
+                    .filter(binding -> binding != null && column.equals(binding.fieldName()))
+                    .map(ModelingCompilerContract.StandardBinding::standardElementId)
+                    .filter(ModelingDbtCompiler::notBlank)
+                    .findFirst()
+                    .orElse(null);
             ValidatedField fieldType =
                 fieldTypes.get(column);
             if (fieldType != null) {
-                yaml
-                    .append("        data_type: ")
-                    .append(fieldType.type().postgresType())
-                    .append("\n        meta:\n")
-                    .append("          dts_logical_data_type: \"")
-                    .append(escape(fieldType.type().logicalType()))
-                    .append("\"\n")
-                    .append("          dts_expected_physical_type: \"")
-                    .append(escape(fieldType.type().postgresType()))
-                    .append("\"\n")
-                    .append("          dts_nullable: ")
-                    .append(fieldType.field().nullable())
-                    .append("\n");
+                yaml.append("        data_type: ").append(fieldType.type().postgresType()).append("\n");
+            }
+            if (fieldType != null || standard != null) {
+                yaml.append("        meta:\n");
+                if (fieldType != null) {
+                    yaml
+                        .append("          dts_logical_data_type: \"")
+                        .append(escape(fieldType.type().logicalType()))
+                        .append("\"\n")
+                        .append("          dts_expected_physical_type: \"")
+                        .append(escape(fieldType.type().postgresType()))
+                        .append("\"\n")
+                        .append("          dts_nullable: ")
+                        .append(fieldType.field().nullable())
+                        .append("\n");
+                }
+                if (standard != null) {
+                    yaml.append("          dts_standard_element_id: \"").append(escape(standard)).append("\"\n");
+                }
             }
             if (model.grain().keys().stream().anyMatch(key -> column.equals(key))) {
                 yaml.append("        tests:\n          - not_null\n");

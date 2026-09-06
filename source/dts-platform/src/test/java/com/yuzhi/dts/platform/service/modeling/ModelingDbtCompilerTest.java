@@ -46,7 +46,10 @@ class ModelingDbtCompilerTest {
 
         assertThat(artifacts.files()).containsKeys("project_node_detail.sql", "project_node_detail.yml", "project_node_detail.tests.yml", "project_node_detail.md");
         assertThat(artifacts.files().get("project_node_detail.sql")).contains("{{ source('ods', 'ods_project_subject_domain_v2') }}");
-        assertThat(artifacts.files().get("project_node_detail.yml")).contains("std.project.code").contains("not_null");
+        assertThat(artifacts.files().get("project_node_detail.yml"))
+            .contains("dts_standard_element_id: \"std.project.code\"")
+            .doesNotContain("description: \"数据标准 ")
+            .contains("not_null");
         assertThat(artifacts.files().get("project_node_detail.tests.yml")).contains("unique").contains("project_no");
         assertThat(artifacts.files().get("project_node_detail.md")).contains("业务粒度");
     }
@@ -216,6 +219,7 @@ class ModelingDbtCompilerTest {
             .contains("enforced: true")
             .contains("data_type: text")
             .contains("dts_logical_data_type: \"string\"")
+            .contains("dts_standard_element_id: \"std.project.code\"")
             .doesNotContain("description: \"模型字段\"")
             .doesNotContain("description: \"数据标准 ");
     }
