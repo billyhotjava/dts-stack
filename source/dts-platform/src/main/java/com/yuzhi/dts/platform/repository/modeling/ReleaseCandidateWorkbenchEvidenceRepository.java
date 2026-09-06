@@ -410,7 +410,8 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
         }
         return switch (runStatus) {
             case "DBT_SUCCEEDED" -> RelationEvidenceState.PROBING;
-            case "FAILED", "BLOCKED" -> RelationEvidenceState.FAILED;
+            case "FAILED" -> RelationEvidenceState.FAILED;
+            case "BLOCKED" -> RelationEvidenceState.UNKNOWN;
             case "UNKNOWN" -> RelationEvidenceState.UNKNOWN;
             default -> RelationEvidenceState.PENDING;
         };

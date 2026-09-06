@@ -2,10 +2,12 @@ package com.yuzhi.dts.platform.repository.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.RelationEvidenceState;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class ModelMaterializationBatchContractTest {
 
@@ -69,6 +71,24 @@ class ModelMaterializationBatchContractTest {
         assertThat(method)
             .contains("case when c.status in ('CANCELLED', 'REJECTED') then 1 else 0 end")
             .contains("c.created_date desc, c.last_modified_date desc, c.id desc");
+    }
+
+    @Test
+    void relationStateDoesNotFabricateRelationFailureWhenABlockedRunHasNoObservation() {
+        assertThat(relationState("BLOCKED", null, null)).isEqualTo(RelationEvidenceState.UNKNOWN);
+        assertThat(relationState("BLOCKED", false, false)).isEqualTo(RelationEvidenceState.FAILED);
+        assertThat(relationState("BLOCKED", true, true)).isEqualTo(RelationEvidenceState.VERIFIED);
+        assertThat(relationState("FAILED", null, null)).isEqualTo(RelationEvidenceState.FAILED);
+    }
+
+    private static RelationEvidenceState relationState(String runStatus, Boolean verified, Boolean relationExists) {
+        return ReflectionTestUtils.invokeMethod(
+            ReleaseCandidateWorkbenchEvidenceRepository.class,
+            "relationState",
+            runStatus,
+            verified,
+            relationExists
+        );
     }
 
     private static String method(String file, String start, String end) throws IOException {

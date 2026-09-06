@@ -554,6 +554,93 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).not.toContain("public.other_model");
 	});
 
+	it.each(["PUBLISHED", "BUILDING"])(
+		"handles cancelled selected history behind a %s foreign candidate",
+		async (foreignStatus) => {
+			const foreign = {
+				...candidate("BATCH_WORKBENCH", foreignStatus),
+				entries: [{ modelSpecId: secondModel.id }],
+			} as ReleaseCandidate;
+			apiMocks.getWorkbench.mockResolvedValue(
+				workspace(foreignStatus === "PUBLISHED" ? ["CREATE_CANDIDATE", "ROLLBACK"] : [], foreign),
+			);
+			apiMocks.getMaterializationStatuses.mockResolvedValue([
+				{
+					modelSpecId: model.id,
+					candidateId: "cancelled-history",
+					candidateVersion: 8,
+					environment: "dev",
+					candidateStatus: "CANCELLED",
+					currentImplementationRevision: 1,
+					evidence: {
+						candidateEntryId: "old-entry",
+						modelSpecId: model.id,
+						modelName: model.name,
+						modelRevision: 1,
+						targetRelation: "public.old_detail",
+						runStatus: "BLOCKED",
+						relationState: "FAILED",
+						observedAt: null,
+						repairCode: "MODEL_AIRFLOW_DAG_NOT_REGISTERED",
+					},
+				},
+			]);
+			const replacement = { ...candidate("BATCH_WORKBENCH"), id: "replacement", version: 1 };
+			apiMocks.createCandidate.mockResolvedValue({ candidate: replacement });
+			apiMocks.lockCandidate.mockResolvedValue({ candidate: { ...replacement, status: "BUILDING" } });
+			await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+			await flush();
+			expect(container.textContent).toContain("历史候选");
+			expect(container.textContent).toContain("不代表当前模型修订的核验结果");
+			expect(container.textContent).toContain("未完成核验");
+			expect(container.textContent).toContain("执行任务尚未就绪，构建未启动");
+			expect(container.textContent).not.toContain("FAILED");
+			if (foreignStatus === "PUBLISHED") {
+				expect(button("创建并运行").disabled).toBe(false);
+				await act(async () => button("创建并运行").click());
+				await flush();
+				expect(apiMocks.createCandidate).toHaveBeenCalledWith(
+					model.planId,
+					"idem-1",
+					expect.objectContaining({
+						environment: "dev",
+						entries: [expect.objectContaining({ modelSpecId: model.id })],
+						materializationPlanChecksum: "a".repeat(64),
+					}),
+				);
+				expect(apiMocks.lockCandidate).toHaveBeenCalledWith(model.planId, replacement, "idem-1", expect.any(String));
+			} else {
+				expect(button("创建并运行").disabled).toBe(true);
+				expect(apiMocks.createCandidate).not.toHaveBeenCalled();
+			}
+			expect(apiMocks.createReplacementCandidate).not.toHaveBeenCalled();
+			expect(apiMocks.cancelCandidate).not.toHaveBeenCalled();
+			expect(apiMocks.rematerializeCandidate).not.toHaveBeenCalled();
+		},
+	);
+
+	it("preserves a failed physical observation as a real verification failure", async () => {
+		apiMocks.getWorkbench.mockResolvedValue({
+			...workspace([], candidate("BATCH_WORKBENCH", "BUILD_FAILED")),
+			entryEvidence: [
+				{
+					candidateEntryId: "observed-entry",
+					modelSpecId: model.id,
+					modelName: model.name,
+					modelRevision: model.revision,
+					runStatus: "BLOCKED",
+					relationState: "FAILED",
+					observedAt: "2026-09-06T08:20:12Z",
+					repairCode: "MODEL_PHYSICAL_RELATION_MISSING",
+				},
+			],
+		});
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+		await flush();
+		expect(container.textContent).toContain("FAILED");
+		expect(container.textContent).not.toContain("未完成核验");
+	});
+
 	it("cancels an unpublished candidate and creates a fresh candidate when the selected scope changed", async () => {
 		const built = candidate("BATCH_WORKBENCH", "BUILT");
 		const cancelled = { ...built, status: "CANCELLED", version: 5 } as ReleaseCandidate;

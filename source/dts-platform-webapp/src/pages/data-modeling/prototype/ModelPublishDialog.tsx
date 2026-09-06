@@ -226,6 +226,12 @@ export function ModelPublishDialog({
 			: materializations.length > 1
 				? `${materializations.length} 个模型有历史物化`
 				: "所选模型尚无";
+	const evidenceIsHistorical =
+		!candidateScopeMatches ||
+		candidate?.status === "CANCELLED" ||
+		selectedEvidence.some((entry) =>
+			selection.some((model) => model.id === entry.modelSpecId && model.revision !== entry.modelRevision),
+		);
 	const buildAction: MaterializationBuildAction | null = workspace?.allowedActions.includes("CREATE_CANDIDATE")
 		? "CREATE_CANDIDATE"
 		: candidate && !candidateScopeMatches
@@ -539,17 +545,31 @@ export function ModelPublishDialog({
 	);
 	const evidenceColumns = useMemo<CompactColumns<ReleaseCandidateEntryEvidence>>(
 		() => [
-			{ title: "模型", dataIndex: "modelName" },
+			{
+				title: "模型",
+				dataIndex: "modelName",
+				render: (value: string, row: ReleaseCandidateEntryEvidence) => `${value} · r${row.modelRevision}`,
+			},
 			{ title: "目标关系", dataIndex: "targetRelation", render: (value?: string | null) => value || "—" },
 			{ title: "运行", dataIndex: "runStatus", render: (value?: string | null) => value || "未启动" },
 			{
 				title: "关系核验",
 				dataIndex: "relationState",
-				render: (value: ReleaseCandidateEntryEvidence["relationState"]) => (
+				render: (value: ReleaseCandidateEntryEvidence["relationState"], row: ReleaseCandidateEntryEvidence) => (
 					<Status tone={value === "VERIFIED" ? "success" : "warning"}>
-						{value === "VERIFIED" ? "关系已核验" : value}
+						{value === "VERIFIED"
+							? "关系已核验"
+							: !row.observedAt && row.runStatus === "BLOCKED"
+								? "未完成核验"
+								: value}
 					</Status>
 				),
+			},
+			{
+				title: "原因",
+				dataIndex: "repairCode",
+				render: (value?: string | null) =>
+					value === "MODEL_AIRFLOW_DAG_NOT_REGISTERED" ? "执行任务尚未就绪，构建未启动" : value || "—",
 			},
 			{ title: "尝试", dataIndex: "attempt", render: (value?: number | null) => value ?? "—" },
 			{ title: "完成时间", dataIndex: "finishedAt", render: (value?: string | null) => formatTime(value) },
@@ -656,15 +676,18 @@ export function ModelPublishDialog({
 								<dd>{selection.map((model) => `${model.name} · r${model.revision}`).join("；")}</dd>
 								<dt>物化方式</dt>
 								<dd>{batch ? "按各模型实现策略" : primary?.materialization || "由实现策略决定"}</dd>
-								<dt>当前候选</dt>
+								<dt>{evidenceIsHistorical ? "历史候选" : "当前候选"}</dt>
 								<dd>{selectedCandidateSummary}</dd>
 								<dt>主要阻断</dt>
 								<dd>
-									{workspace?.primaryBlocker
+									{candidateScopeMatches && workspace?.primaryBlocker
 										? `${workspace.primaryBlocker.code}：${workspace.primaryBlocker.message}`
 										: "无"}
 								</dd>
 							</dl>
+							{selectedEvidence.length && evidenceIsHistorical ? (
+								<p className="dmx-capability-note">以下为历史运行结果，不代表当前模型修订的核验结果。</p>
+							) : null}
 							{selectedEvidence.length ? (
 								<div className="dmx-table-scroll dmx-materialization-evidence">
 									<CompactTable<ReleaseCandidateEntryEvidence>
