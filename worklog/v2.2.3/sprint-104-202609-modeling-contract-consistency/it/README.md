@@ -74,3 +74,5 @@ mvn -pl dts-platform -am -Dtest=ModelSpecContractTest,ModelSpecStageGateServiceT
 最新页面证据见 [新独立明细验收](evidence/current-environment/fresh-detail-acceptance.md)。旧草稿校验/提交修复已在2161b2cda真实页面通过；旧取消候选重新构建已在5e00e914f页面通过，见[关系核验误报复验](evidence/current-environment/blocked-relation-check.md)；目录同步和已发布模型再次运行仍有未通过分支。
 
 T10-A 首个帮助切片的源码、专项测试和构建记录见 [验证记录](evidence/T10-A-help/verification.md)。IT-18 仅当前组件/契约部分通过；四步页面、Chrome95 与离线验收仍待执行。
+
+T10-B1 单主动作、当前校验凭据与诊断显示：6 个专项文件累计65项通过（首轮26项及修正后39项），见 [验证记录](evidence/T10-B1-workflow/verification.md)。真实页面/Chrome95/离线验收未执行。
