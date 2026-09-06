@@ -72,3 +72,5 @@ mvn -pl dts-platform -am -Dtest=ModelSpecContractTest,ModelSpecStageGateServiceT
 见 [T02 验证记录](evidence/T02-contract/verification.md)及[源码专项证据](evidence/source-test-summary-20260906.md)：源码契约40/40、部署目录前端92/92、后端99/99。IT-04 见 [dbt真实证据](evidence/IT-04/verification.md)；不能替代其他模型页面场景。正式交付构建使用部署目录的 builds/dts-build.sh / builds/dts-platform-webapp/Dockerfile，不把单独 pnpm build 等同于完成交付包。
 
 最新页面证据见 [新独立明细验收](evidence/current-environment/fresh-detail-acceptance.md)。旧草稿校验/提交修复已在2161b2cda真实页面通过；旧取消候选重新构建已在5e00e914f页面通过，见[关系核验误报复验](evidence/current-environment/blocked-relation-check.md)；目录同步和已发布模型再次运行仍有未通过分支。
+
+T10-A 首个帮助切片的源码、专项测试和构建记录见 [验证记录](evidence/T10-A-help/verification.md)。IT-18 仅当前组件/契约部分通过；四步页面、Chrome95 与离线验收仍待执行。
