@@ -1,0 +1,57 @@
+{
+  "model": {
+    "id": "39c5e6b7-0b35-4728-8877-273f6418da17",
+    "grain": {
+      "keys": [],
+      "statement": "每条来源记录一行"
+    },
+    "fields": [
+      {
+        "name": "project_id",
+        "role": "ATTRIBUTE",
+        "dataType": "text",
+        "nullable": true
+      },
+      {
+        "name": "remark",
+        "role": "ATTRIBUTE",
+        "dataType": "text",
+        "nullable": true
+      }
+    ],
+    "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+    "source": {
+      "kinds": [
+        "TABLE"
+      ],
+      "referenceCount": 1
+    },
+    "status": "DRAFT",
+    "checksum": "af581c32f46f2d4e8299144e4df4aff76c033459e823f0337b603602c1871ce4",
+    "revision": 3,
+    "modelType": "FACT",
+    "planVersion": 1,
+    "timeSemantics": {},
+    "contractVersion": 2,
+    "planSourcesVersion": 2,
+    "planLifecycleStatus": "DRAFT",
+    "planSourceMappingsVersion": 1
+  },
+  "capturedAtUtc": "2026-09-06T08:20:02.525Z",
+  "evidenceScope": "single-model PostgreSQL READ ONLY projection; source references are summarized; tenant, actor, credentials, idempotency values and source reference values are omitted",
+  "implementation": {
+    "status": "ACTIVE",
+    "settings": {
+      "loadStrategy": "FULL",
+      "partitionFields": []
+    },
+    "inputMode": "GENERATED",
+    "ownership": "DBT_MANAGED",
+    "modelChecksum": "af581c32f46f2d4e8299144e4df4aff76c033459e823f0337b603602c1871ce4",
+    "modelRevision": 3,
+    "materialization": "table",
+    "implementationChecksum": "84b10dc0b7b0d3e6b0892154d7b6c4c0bd7b93cb2ee656639bdfa4f40a969de7",
+    "implementationRevision": 2
+  },
+  "observation": "Captured while materialization work continued. Current revisions differ from the earlier creation observation (model r2, implementation r1); this artifact records only the database state at capturedAtUtc and does not infer the cause."
+}

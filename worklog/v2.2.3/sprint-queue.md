@@ -3,7 +3,7 @@
 ## Sprint-104: 通用建模契约与物化一致性整改 (202609)
 
 **目录**: [sprint-104-202609-modeling-contract-consistency](sprint-104-202609-modeling-contract-consistency/README.md)
-**状态**: IN_PROGRESS（T01 归因、T02 首批契约源码整改；G0 现场验收仍有缺口）
+**状态**: IN_PROGRESS（T01–T08 均在推进；T02–T07 源码证据已归档，G0 现场验收仍有缺口）
 **目标**: 同一模型在保存、草稿恢复、校验、物化和质量检查中遵循一致规则，无需假时间或假主键。
 **依赖**: 延续 Sprint-91/92/93 的建模、创作草稿和治理控制面，以及 fefea6844/a33ba6b0a 已有修复；不重复计算历史完成项。
 
@@ -11,10 +11,10 @@
 |---|---|---:|---|
 | F1-通用建模契约与物化一致性 | P1（能力边界 T07 为 P2） | 8 | IN_PROGRESS |
 
-**统计**: DRAFT=6，READY=0，IN_PROGRESS=2，DONE=0，BLOCKED=0。
+**统计**: DRAFT=0，READY=0，IN_PROGRESS=8，DONE=0，BLOCKED=0。
 **执行顺序**: T01 归因 → T07 保存/执行边界冻结 → T02 契约 → T05/T06/T03/T04 → T07 一致性验证 → T08 集成验收。
 **关键决策**: 一个 Feature 承接全部整改，基线作为独立 T01；分开格式/阶段/治理；当前配置优先；不新增平行 owner、菜单或未授权执行能力。
-**已知风险**: 原 37 项中的 13 项失败已归因并在 T02 首批修复，新增反例后 40/40 通过；部署目录因缺少 node_modules/Vitest 尚不能运行工作台测试，正式构建未执行；当前目标环境、Chrome 95、真实样本和离线验收仍未核验。
+**当前证据与风险**: `bd0670acc89e7dd1be82e0d12961ba7744f63ca2` 的部署目录 Java 专项已 99/99，工作台 Vitest 日志已 92/92；首轮 Java 失败仅为测试夹具/断言滞后，修正后通过。IT-04 ephemeral 已通过，但目标环境、Chrome 95、其余 UI、正式交付/部署、真实样本、物化和离线验收仍未核验；T08 不得标 DONE。证据见 [源码专项归档](sprint-104-202609-modeling-contract-consistency/it/evidence/source-test-summary-20260906.md)。
 
 ## 2026-07-16 Goal 完成度审计
 

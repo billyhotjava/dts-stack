@@ -69,9 +69,14 @@
 | G0 | 领域不变量 | PASS | 本文 ADR，计划不新增 owner/菜单/业务表；不代表代码验收 | — |
 | G1 | 契约与 DoR | GAP | Feature K1–K6；阶段矩阵、草稿 CAS/存储细节待固定 | T01、T02 |
 | G1 | 非功能预算 | GAP | [nfr-budget](assets/nfr-budget.md)，检查目标已列、未执行 | T01、T08 |
-| G2 | 实现及聚焦 review | PENDING | T02 首批契约源码已修复；见 it/evidence/T02-contract | T02–T07、T08 |
-| G3 | 发布安全 | PENDING | T08 产出 release-plan；未授权部署 | T08 |
+| G2 | 实现及单次聚焦 review | PASS（源码） | T02–T07 源码与专项测试归档；见 [source-test-summary](it/evidence/source-test-summary-20260906.md)。仅代表源码实现/review，不替代页面或运行验收 | T08 页面、部署与真实竖切片 |
+| G3 | 发布安全 | PENDING | 正式双镜像及交付包已构建、当前测试环境已部署；离线安装与全部运行验收待完成 | T08 |
 | G4 | 可运维性与 DoD | PENDING | [IT](it/README.md)；T08 产出 runbook | T08 |
+
+## 当前源码测试证据（2026-09-06）
+
+- 提交 `bd0670acc89e7dd1be82e0d12961ba7744f63ca2` 的部署目录 Docker Maven 专项为 99/99；工作台 Vitest 日志为 92/92。正式命令、首轮测试夹具修复原因和边界见 [源码专项归档](it/evidence/source-test-summary-20260906.md)。
+- IT-04 ephemeral dbt 样例已通过，但其余 UI、Chrome 95、正式交付/部署、真实物化和质量未完成；不以源码证据替代 G0、G3 或 G4。
 
 ## Feature 与执行顺序
 
@@ -80,8 +85,8 @@
 | [F1-通用建模契约与物化一致性](features/F1-通用建模契约与物化一致性/README.md) | 8 | P1（T07 为 P2） | IN_PROGRESS |
 
 建议顺序：T01 归因 → T07 能力契约冻结 → T02 → T05/T06/T03/T04 → T07 一致性验证 → T08。任务依赖优先于排序；不默认启用多代理。
-统计：DRAFT=6，READY=0，IN_PROGRESS=2，DONE=0，BLOCKED=0。
-现场基线/DoR 仍有缺口；用户已授权启动具有固定源码输入的 T01/T02 子项，其余任务仍保持 DRAFT。
+统计：DRAFT=0，READY=0，IN_PROGRESS=8，DONE=0，BLOCKED=0。
+T01–T08 均在推进中：源码专项、IT-04真实dbt、历史草稿主要页面分支已留证；正式构建及测试环境部署完成。无时间明细物化、其余场景、Chrome 95和离线安装尚未全部通过，禁止登记Sprint DONE。
 
 ## 追溯矩阵
 

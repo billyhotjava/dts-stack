@@ -1,6 +1,6 @@
 # Sprint-104 集成验收
 
-**状态**：计划已登记，IT-01–IT-07 均未执行。  
+**状态**：独立验收样例已初始化；IT-04 真实 dbt 专项通过；其余模型页面场景正在执行，未宣称整体验收通过。
 **注意**：本文件是可执行走查要求，不是验收通过证据。
 
 ## 场景矩阵
@@ -8,12 +8,12 @@
 | ID | Task | 操作及正反分支 | 通过标准 | 状态 |
 |---|---|---|---|---|
 | IT-01 | T01/T02/T08 | 四类模型在草稿、设计、物化、发布阶段分别输入完整/未完整/非法字段 | 同阶段 Java/TS/Schema 一致；非法字段不被静默忽略 | 未执行 |
-| IT-02 | T05/T08 | 修改历史绑定和层级→暂存→关闭→恢复→提交，重复两轮；另测 TYPE2→NONE 与版本冲突 | 配置完整，冲突不覆写，专属字段正确清理 | 未执行 |
+| IT-02 | T05/T08 | 修改历史绑定和层级→暂存→关闭→恢复→提交，重复两轮；另测 TYPE2→NONE 与版本冲突 | 配置完整，冲突不覆写，专属字段正确清理 | 两轮纯profile恢复、NONE清理、版本冲突、提交修订PASS；普通FULL构建另行失败 |
 | IT-03 | T06/T08 | 旧增量和分区模型→当前 FULL/[]→保存→重开→编译；再测无键增量 | FULL/[] 不回退；无键增量明确拒绝 | 未执行 |
-| IT-04 | T04/T08 | 项目/月组合键，跨月合法/同月重复/键空值/交换顺序；执行真实 dbt tests | 完整组合唯一性正确，各必需键非空，无假首列唯一 | 未执行 |
+| IT-04 | T04/T08 | 项目/月组合键，跨月合法/同月重复/键空值/交换顺序；执行真实 dbt tests | 完整组合唯一性正确，各必需键非空，无假首列唯一 | dbt专项PASS；模型端到端待验 |
 | IT-05 | T03/T08 | 主键度量已绑、属性未绑；三种覆盖策略；标准版本失效/服务不可用 | 必绑范围与证据检查一致，失效/未知有明确提示 | 未执行 |
 | IT-06 | T07/T08 | 遍历能力矩阵，尝试不支持的来源/加载/历史执行 | 页面与后端一致，物化前明确阻断，不伪装支持 | 未执行 |
-| IT-07 | T02–T08 | 两字段无时间明细、无键全量应用、无分组 COUNT/SUM，连续两次物化并查看质量/版本证据 | 不补造字段；执行行为遵循既有幂等/并发协议；结果绑定当前版本 | 未执行 |
+| IT-07 | T02–T08 | 两字段无时间明细、无键全量应用、无分组 COUNT/SUM，连续两次物化并查看质量/版本证据 | 不补造字段；执行行为遵循既有幂等/并发协议；结果绑定当前版本 | 无时间明细已建；首次发布遇DAG注册延迟，修复版待复测 |
 
 ## 执行入口（实施时记录实际命令和退出码）
 
@@ -33,7 +33,7 @@ pnpm build
 mvn -pl dts-platform -am -Dtest=ModelSpecContractTest,ModelSpecStageGateServiceTest,ModelLifecycleContractTest,ModelSpecCompilerProjectionTest,ModelingDbtCompilerTest,ModelImplementationExecutionPlannerTest -Dsurefire.failIfNoSpecifiedTests=false test
 ```
 
-新增 adapter/草稿测试按 T03/T05 落点加入；Node 原生测试不得交给 Vitest。以上命令尚未为本 sprint 执行。
+新增 adapter/草稿测试按 T03/T05 落点加入；Node 原生测试不得交给 Vitest。实际执行及通过结果见 [源码专项证据](evidence/source-test-summary-20260906.md)。
 
 ## 证据要求
 
@@ -49,4 +49,4 @@ mvn -pl dts-platform -am -Dtest=ModelSpecContractTest,ModelSpecStageGateServiceT
 
 ## 首批实现检查
 
-见 [T02 验证记录](evidence/T02-contract/verification.md)：源码契约 40/40，部署目录测试尚未启动；IT-01–IT-07 仍未验收。正式交付构建使用部署目录的 builds/dts-build.sh / builds/dts-platform-webapp/Dockerfile，不把单独 pnpm build 等同于完成交付包。
+见 [T02 验证记录](evidence/T02-contract/verification.md)及[源码专项证据](evidence/source-test-summary-20260906.md)：源码契约40/40、部署目录前端92/92、后端99/99。IT-04 见 [dbt真实证据](evidence/IT-04/verification.md)；不能替代其他模型页面场景。正式交付构建使用部署目录的 builds/dts-build.sh / builds/dts-platform-webapp/Dockerfile，不把单独 pnpm build 等同于完成交付包。
