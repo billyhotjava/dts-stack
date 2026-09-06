@@ -766,6 +766,8 @@
                         <testInclude>**/service/modeling/ModelSpecCreateRequestDecoderTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecRequestDecoderTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSpecContractTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelDraftSaveApplicationServiceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelDraftOperationResourceTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanModelCandidateServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanContractTest.java</testInclude>
                         <testInclude>**/service/modeling/warehouse/WarehousePlanningContextPolicyTest.java</testInclude>

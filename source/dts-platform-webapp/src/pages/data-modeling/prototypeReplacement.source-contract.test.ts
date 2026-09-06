@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 const read = (relative: string) => readFileSync(new URL(relative, import.meta.url), "utf8");
 
@@ -69,22 +69,7 @@ describe("prototype-owned data modeling frontend", () => {
 	});
 
 	it("keeps workbench route selection and navigation guards deterministic", async () => {
-		vi.doMock("@/api/modelRepresentationApi", () => ({}));
-		vi.doMock("@/api/modelAuthoringApi", () => ({}));
-		vi.doMock("@/api/dimensionDefinitionApi", () => ({}));
-		vi.doMock("@/api/modelSpecApi", () => ({}));
-		vi.doMock("@/store/userStore", () => ({}));
-		vi.doMock("./navigation", () => ({}));
-		vi.doMock("./prototype/ModelFieldEditorTable", () => ({}));
-		vi.doMock("./prototype/AdvancedDbtWorkspace", () => ({}));
-		vi.doMock("./prototype/ModelingWorkbenchEditor", () => ({}));
-		vi.doMock("./prototype/ModelWorkbenchDialog", () => ({}));
-		vi.doMock("./prototype/modelWorkbenchPresentation", () => ({}));
-		vi.doMock("./prototype/PrototypePrimitives", () => ({}));
-		vi.doMock("./prototype/services/modelWorkbenchService", () => ({}));
-		vi.doMock("./prototype/services/planningProjectionService", () => ({}));
-		vi.doMock("./prototype/useDataModelingMenuGrant", () => ({}));
-		const module = (await import("./prototype/ModelingWorkbenchPage")) as Record<string, unknown>;
+		const module = (await import("./prototype/modelingWorkbenchNavigation")) as Record<string, unknown>;
 		const resolveRequestedModelSelection = module.resolveRequestedModelSelection as
 			| ((
 					models: Array<{ id: string }>,

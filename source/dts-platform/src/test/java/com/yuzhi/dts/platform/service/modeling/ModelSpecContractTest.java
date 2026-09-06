@@ -128,11 +128,11 @@ class ModelSpecContractTest {
         UpdateModelSpecCommand invalidFields = new UpdateModelSpecCommand(
             update.planId(), update.domainId(), update.modelType(), update.layer(), update.name(), update.description(),
             update.implementationMode(), update.materialization(), update.businessActivityRef(), update.consumptionScenario(),
-            update.grain(), update.factShape(), update.timeSemantics(), List.of(), update.sourceRefs(), update.dependsOn(),
+            update.grain(), update.factShape(), update.timeSemantics(), List.of(update.fields().getFirst(), update.fields().getFirst()), update.sourceRefs(), update.dependsOn(),
             update.dimensionRefs(), update.metricRefs(), update.standardBindings(), update.generationStrategy(), update.dimensionProfile()
         );
         assertThat(ModelSpecContract.validateDefinitionUpdate(invalidFields)).extracting(ModelSpecContract.FieldIssue::code)
-            .contains("MODEL_SPEC_FIELD_REQUIRED");
+            .contains("MODEL_SPEC_FIELD_INVALID");
     }
 
     @Test
