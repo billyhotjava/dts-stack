@@ -7,8 +7,6 @@ import com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,16 +41,15 @@ public class DataLakeDatabaseInitializer {
         this.objectMapper = objectMapper;
     }
 
-    @EventListener(ApplicationReadyEvent.class)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void initializeDataLake() {
+    public boolean initializeDataLake() {
         try {
             // Check if data lake already exists locally
             boolean exists = databaseRepository.findAll().stream()
                 .anyMatch(DataLakeDatabaseInitializer::isDataLakeDatabase);
             if (exists) {
                 LOG.info("[data-lake-init] Data lake database already exists, skipping");
-                return;
+                return true;
             }
 
             // Find biadmin data source from platform
@@ -64,7 +61,7 @@ public class DataLakeDatabaseInitializer {
 
             if (biadmin == null || !StringUtils.hasText(biadmin.id())) {
                 LOG.warn("[data-lake-init] biadmin data source not found in platform, skipping");
-                return;
+                return false;
             }
 
             // Create AnalyticsDatabase referencing the platform data source
@@ -96,9 +93,10 @@ public class DataLakeDatabaseInitializer {
             } catch (Exception ex) {
                 LOG.warn("[data-lake-init] Metadata sync failed (will retry later): {}", ex.getMessage());
             }
-
+            return true;
         } catch (Exception ex) {
             LOG.warn("[data-lake-init] Failed to initialize data lake database: {}", ex.getMessage());
+            return false;
         }
     }
 
