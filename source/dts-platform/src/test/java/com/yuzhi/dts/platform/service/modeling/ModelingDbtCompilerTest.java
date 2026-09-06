@@ -252,7 +252,7 @@ class ModelingDbtCompilerTest {
                 typedFields(model).stream()
                     .map(field -> new ModelSpecCompilerProjection.CompilerField(
                         field.name(),
-                        "project_no".equals(field.name()) ? "text); drop table catalog_dataset; --" : field.logicalType(),
+                        "project_no".equals(field.name()) ? "text); drop table catalog_dataset; --" : field.dataType(),
                         field.nullable()
                     ))
                     .toList()
