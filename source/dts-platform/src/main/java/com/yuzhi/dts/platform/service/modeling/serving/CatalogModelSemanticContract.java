@@ -8,6 +8,7 @@ public final class CatalogModelSemanticContract {
     private CatalogModelSemanticContract() {}
 
     public record PublishPayload(
+        String tenantId,
         String platformDataSourceId,
         String modelName,
         String tableName,

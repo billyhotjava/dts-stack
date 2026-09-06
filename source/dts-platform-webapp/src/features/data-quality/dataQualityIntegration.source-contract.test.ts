@@ -132,6 +132,9 @@ test("rule editor isolates route loads and saves only the loaded rule identity a
 	assert.match(RULE_EDITOR, /loadedIdentity\.version === Number\(operationRule\.latestVersion\?\.version\)/);
 	assert.match(RULE_EDITOR, /loadedIdentity\.versionId === String\(operationRule\.latestVersion\?\.id \|\| ""\)/);
 	assert.match(RULE_EDITOR, /if \(operationRuleId && !isLoadedRuleCurrent\(operationRuleId, operationRule\)\)/);
+	assert.match(RULE_EDITOR, /expectedVersion: loadedRuleIdentity\.current\?\.version/);
+	assert.match(RULE_EDITOR, /sanitizeModelingReturnTo/);
+	assert.match(RULE_EDITOR, /Boolean\(message\) \|\| Boolean\(linkedDatasetId\)/);
 });
 
 test("rule editor isolates template route loads and saves only the current loaded template snapshot", () => {

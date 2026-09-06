@@ -20,6 +20,8 @@ public class QualityRuleUpsertRequest {
     private Boolean template;
     private Boolean enabled;
     private Boolean publishNow;
+    /** The latest business version observed by the editor when modifying an existing rule. */
+    private Integer expectedVersion;
     private UUID datasetId;
     private Map<String, Object> definition;
     private List<QualityRuleBindingRequest> bindings;
@@ -134,6 +136,14 @@ public class QualityRuleUpsertRequest {
 
     public void setPublishNow(Boolean publishNow) {
         this.publishNow = publishNow;
+    }
+
+    public Integer getExpectedVersion() {
+        return expectedVersion;
+    }
+
+    public void setExpectedVersion(Integer expectedVersion) {
+        this.expectedVersion = expectedVersion;
     }
 
     public UUID getDatasetId() {

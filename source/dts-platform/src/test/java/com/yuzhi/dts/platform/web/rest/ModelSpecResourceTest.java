@@ -153,6 +153,26 @@ class ModelSpecResourceTest {
     }
 
     @Test
+    void savesAnExistingDraftDefinitionWithTheCanonicalEtagAndNoImplementationCommand() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.updateDefinition(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any())).thenReturn(view());
+
+        mockMvc
+            .perform(
+                put("/api/modeling/model-specs/{id}/definition", MODEL_ID)
+                    .header("If-Match", ETAG)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(updateJson())
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", ETAG))
+            .andExpect(jsonPath("$.data.id").value(MODEL_ID.toString()));
+
+        verify(service).updateDefinition(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any());
+        verify(service, never()).update(eq("server-tenant"), eq("alice"), eq(MODEL_ID), any(), any());
+    }
+
+    @Test
     void deletesDraftsOnlyWithAStrongCurrentEtag() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
 

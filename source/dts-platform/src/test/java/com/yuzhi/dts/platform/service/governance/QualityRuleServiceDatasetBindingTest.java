@@ -40,6 +40,7 @@ import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @ExtendWith(MockitoExtension.class)
 class QualityRuleServiceDatasetBindingTest {
@@ -229,6 +230,49 @@ class QualityRuleServiceDatasetBindingTest {
     }
 
     @Test
+    void rejectsUpdateWhenTheEditorVersionIsStaleBeforeWritingAnotherVersion() {
+        GovRule rule = existingRule();
+        GovRuleVersion latest = latestVersion(4);
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(DATASET_ID);
+        QualityRuleUpsertRequest request = executableRequest(DATASET_ID);
+        request.setExpectedVersion(3);
+
+        when(ruleRepository.findByIdForUpdate(RULE_ID)).thenReturn(Optional.of(rule));
+        when(versionRepository.findFirstByRuleIdOrderByVersionDesc(RULE_ID)).thenReturn(Optional.of(latest));
+        when(datasetRepository.findById(DATASET_ID)).thenReturn(Optional.of(dataset));
+        when(accessChecker.canRead(dataset)).thenReturn(true);
+        when(departmentResolver.resolve("dept-a")).thenReturn("dept-a");
+
+        assertThatThrownBy(() -> service.updateRule(RULE_ID, request, "actor", "dept-a"))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("QUALITY_RULE_VERSION_CONFLICT");
+        verify(versionRepository, org.mockito.Mockito.never()).save(any(GovRuleVersion.class));
+    }
+
+    @Test
+    void rejectsRebindingAnExistingRuleEvenWithTheCurrentVersion() {
+        UUID otherDataset = UUID.fromString("40000000-0000-0000-0000-000000000099");
+        GovRule rule = existingRule();
+        GovRuleVersion latest = latestVersion(4);
+        CatalogDataset dataset = new CatalogDataset();
+        dataset.setId(DATASET_ID);
+        QualityRuleUpsertRequest request = executableRequest(otherDataset);
+        request.setExpectedVersion(4);
+
+        when(ruleRepository.findByIdForUpdate(RULE_ID)).thenReturn(Optional.of(rule));
+        when(versionRepository.findFirstByRuleIdOrderByVersionDesc(RULE_ID)).thenReturn(Optional.of(latest));
+        when(datasetRepository.findById(DATASET_ID)).thenReturn(Optional.of(dataset));
+        when(accessChecker.canRead(dataset)).thenReturn(true);
+        when(departmentResolver.resolve("dept-a")).thenReturn("dept-a");
+
+        assertThatThrownBy(() -> service.updateRule(RULE_ID, request, "actor", "dept-a"))
+            .isInstanceOf(ResponseStatusException.class)
+            .hasMessageContaining("QUALITY_RULE_DATASET_REBIND_FORBIDDEN");
+        verify(datasetReadGuard, org.mockito.Mockito.never()).requireReadable(otherDataset, "dept-a");
+    }
+
+    @Test
     void rejectsPublishingADraftWhoseVersionHasNoBinding() {
         GovRule rule = new GovRule();
         rule.setId(RULE_ID);
@@ -307,5 +351,20 @@ class QualityRuleServiceDatasetBindingTest {
         request.setDatasetId(datasetId);
         request.setDefinition(Map.of("sql", "select 1"));
         return request;
+    }
+
+    private static GovRule existingRule() {
+        GovRule rule = new GovRule();
+        rule.setId(RULE_ID);
+        rule.setName("订单完整性检查");
+        rule.setDatasetId(DATASET_ID);
+        return rule;
+    }
+
+    private static GovRuleVersion latestVersion(int version) {
+        GovRuleVersion latest = new GovRuleVersion();
+        latest.setId(VERSION_ID);
+        latest.setVersion(version);
+        return latest;
     }
 }

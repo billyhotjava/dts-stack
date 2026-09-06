@@ -42,6 +42,7 @@ class QueryDatasetPublishedModelContractTest {
             null
         );
         PublishPayload semantic = new PublishPayload(
+            "default",
             asset.getSourceDatasourceId().toString(),
             "model_spec_" + modelId.toString().replace("-", ""),
             "biz_ads_budget_kpi_v2",

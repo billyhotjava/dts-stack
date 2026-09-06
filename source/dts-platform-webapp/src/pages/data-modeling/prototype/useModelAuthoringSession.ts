@@ -15,6 +15,7 @@ import type { DimensionDefinitionView } from "@/features/modeling/contracts/dime
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { shouldPersistBeforeAuthoringValidation } from "./modelAuthoringDraftLifecycle";
 import { newModelingIdempotencyKey } from "./modelingIdempotency";
+import { hasCurrentAuthoringValidation } from "./modelWorkflowAction";
 import {
 	isModelSpecDraft,
 	type ModelDraft,
@@ -293,34 +294,71 @@ export function useModelAuthoringSession({
 		}
 	};
 
+	const finishCommit = async (
+		modelId: string,
+		draftId: string,
+		checked: NonNullable<ModelAuthoringValidation["implementationValidation"]>,
+	) => {
+		const committed = await commitModelAuthoringDraft(modelId, draftId, {
+			expectedEtag: checked.etag,
+			validatedChecksum: checked.validatedChecksum,
+			dependencyChecksum: checked.dependencyValidation?.dependencyChecksum,
+			idempotencyKey: newModelingIdempotencyKey(),
+		});
+		setCommit(committed);
+		setValidation(null);
+		setCodeDirty(false);
+		show(`模型实现已提交：模型 r${committed.receipt.modelRevision}`);
+		await loadWorkbench(modelId);
+		const refreshed = await getModelAuthoringContext(modelId);
+		setAuthoringContext(refreshed);
+		setFiles(authoringFilesOf(refreshed.openDraft));
+	};
 	const commitDraft = async () => {
 		const open = authoringContext?.openDraft;
 		const checked = validation?.implementationValidation;
-		if (busy || !canMaintain || !authoringContext || !open || !checked) return;
+		if (busy || !canMaintain || !authoringContext || !open || !checked) return false;
 		setBusy("commit");
 		clearFailure();
 		try {
-			const committed = await commitModelAuthoringDraft(authoringContext.model.id, open.draftId, {
-				expectedEtag: checked.etag,
-				validatedChecksum: checked.validatedChecksum,
-				dependencyChecksum: checked.dependencyValidation?.dependencyChecksum,
-				idempotencyKey: newModelingIdempotencyKey(),
-			});
-			setCommit(committed);
-			setValidation(null);
-			setCodeDirty(false);
-			show(`模型实现已提交：模型 r${committed.receipt.modelRevision}`);
-			await loadWorkbench(authoringContext.model.id);
-			try {
-				const refreshed = await getModelAuthoringContext(authoringContext.model.id);
-				setAuthoringContext(refreshed);
-				setFiles(authoringFilesOf(refreshed.openDraft));
-			} catch (refreshError) {
-				recordFailure(refreshError, "模型实现已提交，但页面状态刷新失败。请刷新后继续。");
-			}
+			await finishCommit(authoringContext.model.id, open.draftId, checked);
+			return true;
 		} catch (error) {
-			recordFailure(error, "模型实现提交失败。");
+			recordFailure(error, "模型实现提交失败，请刷新确认当前版本。");
+			return false;
 		} finally {
+			setBusy("");
+		}
+	};
+	const submitting = useRef(false);
+	const submitImplementation = async (activeView: AuthoringView) => {
+		if (busy || submitting.current || !canMaintain || !selectedModelId) return false;
+		submitting.current = true;
+		setBusy("validate");
+		clearFailure();
+		try {
+			const existing = authoringContext?.openDraft;
+			const open =
+				!existing || existing.state === "COMMITTED" || dirty || codeDirty ? await persist(activeView) : existing;
+			const checked = await validateModelAuthoringDraft(selectedModelId, open.draftId, open.etag);
+			setValidation(checked);
+			const current = await getModelAuthoringContext(selectedModelId);
+			setAuthoringContext(current);
+			if (
+				!current.allowedActions.includes("COMMIT") ||
+				!hasCurrentAuthoringValidation(current, checked) ||
+				!checked.implementationValidation
+			) {
+				throw new Error("实现检查未通过，请处理当前诊断后重新提交");
+			}
+			setBusy("commit");
+			await finishCommit(selectedModelId, open.draftId, checked.implementationValidation);
+			return true;
+		} catch (error) {
+			recordFailure(error, "提交实现失败，请修复后重试。");
+			return false;
+		} finally {
+			submitting.current = false;
 			setBusy("");
 		}
 	};
@@ -389,6 +427,7 @@ export function useModelAuthoringSession({
 	}, [reload, selectedModelChecksum, selectedModelIdValue, selectedModelRevision]);
 
 	return {
+		submitImplementation,
 		busy,
 		changeFiles,
 		codeDirty,

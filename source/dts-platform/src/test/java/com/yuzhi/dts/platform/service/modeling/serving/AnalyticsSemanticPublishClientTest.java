@@ -35,6 +35,7 @@ class AnalyticsSemanticPublishClientTest {
     @Test
     void publishesWithStablePlatformSourceIdentityAndServiceHeader() {
         var payload = new CatalogModelSemanticContract.PublishPayload(
+            "default",
             "10000000-0000-0000-0000-000000000001",
             "model_spec_30000000000000000000000000000001",
             "pjm_dws_budget_execution",
@@ -53,6 +54,7 @@ class AnalyticsSemanticPublishClientTest {
             .andExpect(method(HttpMethod.POST))
             .andExpect(header("X-DTS-Service", "dts-platform"))
             .andExpect(header("X-DTS-Service-Token", "platform-analytics-pair-token-20260819"))
+            .andExpect(jsonPath("$.tenantId").value("default"))
             .andExpect(jsonPath("$.platformDataSourceId").value("10000000-0000-0000-0000-000000000001"))
             .andExpect(jsonPath("$.modelName").value("model_spec_30000000000000000000000000000001"))
             .andRespond(withSuccess("{\"modelName\":\"model_spec_30000000000000000000000000000001\"}", MediaType.APPLICATION_JSON));

@@ -606,6 +606,7 @@ class F4StrictAuditRollbackPostgresIT {
             PhysicalRelationInspectorRegistry inspectors,
             PhysicalRelationObservationRepository observations,
             ModelReleaseCandidateService candidates,
+            CandidateQualityAssetRegistrationService qualityAssets,
             AuditService auditService,
             ObjectMapper objectMapper,
             PlatformTransactionManager transactionManager
@@ -618,6 +619,7 @@ class F4StrictAuditRollbackPostgresIT {
                 inspectors,
                 observations,
                 candidates,
+                qualityAssets,
                 auditService,
                 objectMapper,
                 TEST_CLOCK,

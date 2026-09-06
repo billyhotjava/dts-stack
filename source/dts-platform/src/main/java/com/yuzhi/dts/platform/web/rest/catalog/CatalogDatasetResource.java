@@ -23,6 +23,7 @@ import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
+import com.yuzhi.dts.platform.web.rest.ResultStatus;
 import jakarta.validation.Valid;
 import java.util.*;
 import org.springframework.data.domain.Page;
@@ -30,6 +31,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
@@ -601,10 +603,15 @@ public class CatalogDatasetResource {
     @PutMapping("/datasets/{id}")
     @Transactional
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
-    public ApiResponse<CatalogDataset> updateDataset(@PathVariable UUID id, @Valid @RequestBody CatalogDataset patch) {
+    public ApiResponse<CatalogDataset> updateDataset(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @Valid @RequestBody CatalogDataset patch
+    ) {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
         helper.ensureDatasetEditPermission(existing);
         requireAction(existing, AssetAction.UPDATE);
+        requireDatasetEtag(existing, ifMatch);
         Map<String, Object> before = helper.datasetSnapshot(existing);
         try {
             String previousOwnerDept = existing.getOwnerDept();
@@ -649,6 +656,27 @@ public class CatalogDatasetResource {
             );
             throw ex;
         }
+    }
+
+    @PatchMapping("/datasets/{id}/governance-summary")
+    @Transactional
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<CatalogDataset>> updateGovernanceSummary(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestBody Map<String, Object> patch
+    ) {
+        CatalogDataset existing = datasetRepo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问"));
+        helper.ensureDatasetEditPermission(existing);
+        requireAction(existing, AssetAction.UPDATE);
+        requireDatasetEtag(existing, ifMatch);
+        validateGovernanceSummaryPatch(patch);
+        Map<String, Object> before = helper.datasetSnapshot(existing);
+        if (patch.containsKey("owner")) existing.setOwner(trim((String) patch.get("owner")));
+        if (patch.containsKey("description")) existing.setDescription(helper.trimToNull((String) patch.get("description")));
+        CatalogDataset saved = datasetRepo.saveAndFlush(existing);
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), helper.datasetChangePayload("修改数据资产基本治理信息", before, helper.datasetSnapshot(saved)));
+        return ResponseEntity.ok().eTag(datasetEtag(saved)).body(ApiResponses.ok(saved));
     }
 
     @PostMapping("/datasets/{id}/publish")
@@ -768,5 +796,21 @@ public class CatalogDatasetResource {
                 "asset_action_not_allowed:" + action.code()
             );
         }
+    }
+
+    static String datasetEtag(CatalogDataset dataset) { return "\"catalog-dataset:" + dataset.getId() + ":" + dataset.getVersion() + "\""; }
+    static void requireDatasetEtag(CatalogDataset dataset, String value) {
+        if (value == null || value.isBlank()) throw new ResponseStatusException(HttpStatus.PRECONDITION_REQUIRED, "Catalog dataset If-Match is required");
+        if (!datasetEtag(dataset).equals(value.trim())) throw new ResponseStatusException(HttpStatus.CONFLICT, "Catalog dataset has changed; reload before saving");
+    }
+    private static String trim(String value) { return value == null || value.isBlank() ? null : value.trim(); }
+    private static void validateGovernanceSummaryPatch(Map<String, Object> patch) {
+        if (patch == null || patch.isEmpty() || patch.keySet().stream().anyMatch(key -> !Set.of("owner", "description").contains(key))) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "仅允许修改负责人或资产说明");
+        for (String key : List.of("owner", "description")) if (patch.containsKey(key) && patch.get(key) != null && !(patch.get(key) instanceof String)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "负责人和资产说明必须是字符串或 null");
+    }
+
+    @ExceptionHandler(org.springframework.orm.ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Object>> optimisticConflict(org.springframework.orm.ObjectOptimisticLockingFailureException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiResponse<>(ResultStatus.ERROR.getCode(), "资产已被其他操作修改，请重新加载后保存", "CATALOG_DATASET_VERSION_CONFLICT", null));
     }
 }

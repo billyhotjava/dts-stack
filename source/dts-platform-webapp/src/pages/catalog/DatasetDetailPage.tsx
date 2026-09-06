@@ -23,6 +23,7 @@ import {
 } from "./DatasetDetailSupportTabs";
 import { resolveDatasetDetailId } from "./datasetDetailRoute";
 import { OpenMetadataGovernanceTab } from "./OpenMetadataGovernanceTab";
+import { CatalogDatasetGovernanceSummaryEditor } from "./CatalogDatasetGovernanceSummaryEditor";
 const DETAIL_TAB_KEYS = [
 	"overview",
 	"classification-lifecycle",
@@ -41,10 +42,8 @@ const DETAIL_TAB_ALIASES: Record<string, (typeof DETAIL_TAB_KEYS)[number]> = {
 	quality: "quality-sla",
 	sla: "quality-sla",
 };
-
 const resolveDetailTabKey = (value?: string | null) =>
 	DETAIL_TAB_KEYS.includes(value as any) ? String(value) : DETAIL_TAB_ALIASES[String(value || "")] || "overview";
-
 const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 	const asset = detail?.asset || {};
 	return {
@@ -85,7 +84,6 @@ const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 		__tags: Array.isArray(detail?.asset?.tags) ? detail.asset.tags : [],
 	};
 };
-
 export default function DatasetDetailPage() {
 	const { id: routeId } = useParams<{ id?: string }>();
 	const location = useLocation();
@@ -109,7 +107,6 @@ export default function DatasetDetailPage() {
 		loading: domainLoading,
 		error: domainError,
 	} = useCatalogDomainOptions();
-
 	useEffect(() => {
 		const sequence = ++datasetRequestSequence.current;
 		setDataset(null);
@@ -378,12 +375,12 @@ export default function DatasetDetailPage() {
 						key: "overview",
 						label: "概览",
 						children: (
-							<DatasetOverviewTab
+							<><CatalogDatasetGovernanceSummaryEditor datasetId={String(dataset.__legacyDatasetId || id)} canMaintain={assetContract?.canMaintain === true} onSaved={() => void getDataset(String(dataset.__legacyDatasetId || id))} /><DatasetOverviewTab
 								dataset={dataset}
 								domainName={domainName}
 								assetContract={assetContract}
 								schemaContract={schemaContract}
-							/>
+							/></>
 						),
 					},
 					{

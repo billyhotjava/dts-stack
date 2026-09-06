@@ -29,17 +29,18 @@ beforeAll(() => {
 });
 
 const apiMocks = vi.hoisted(() => ({
-	getMaterializationStatuses: vi.fn(),
-	getServingSyncStatuses: vi.fn(),
+	getDeliveryStatus: vi.fn(),
 	listWorkbenchCatalogPage: vi.fn(),
 }));
 const routerPush = vi.hoisted(() => vi.fn());
 
 vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/api/modelSpecApi")>()),
-	getModelMaterializationStatuses: apiMocks.getMaterializationStatuses,
-	getModelServingSyncStatuses: apiMocks.getServingSyncStatuses,
 	listModelWorkbenchCatalogPage: apiMocks.listWorkbenchCatalogPage,
+}));
+vi.mock("@/api/modelDeliveryStatusApi", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/api/modelDeliveryStatusApi")>()),
+	getModelDeliveryStatus: apiMocks.getDeliveryStatus,
 }));
 
 vi.mock("@/routes/hooks", () => ({ useRouter: () => ({ push: routerPush }) }));
@@ -65,6 +66,18 @@ const publishedModel = {
 	modelType: "FACT",
 	status: "PUBLISHED",
 } as ModelSpecView;
+const emptyDeliveryStatus = {
+	modelRevision: 2,
+	candidate: null,
+	steps: [
+		{ key: "materialization", state: "NOT_STARTED", matchesCurrentTarget: false, resourceId: null },
+		{ key: "quality", state: "NOT_STARTED", matchesCurrentTarget: false, resourceId: null },
+		{ key: "publication", state: "NOT_STARTED", matchesCurrentTarget: false, resourceId: null },
+		{ key: "catalog", state: "UNKNOWN", matchesCurrentTarget: false, resourceId: null },
+		{ key: "analysis", state: "UNKNOWN", matchesCurrentTarget: false, resourceId: null },
+	],
+} as never;
+
 const currentDimension = {
 	id: "dimension-current",
 	name: "日期",
@@ -79,10 +92,8 @@ beforeEach(() => {
 	container = document.createElement("div");
 	document.body.appendChild(container);
 	root = createRoot(container);
-	apiMocks.getMaterializationStatuses.mockReset();
-	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
-	apiMocks.getServingSyncStatuses.mockReset();
-	apiMocks.getServingSyncStatuses.mockResolvedValue([]);
+	apiMocks.getDeliveryStatus.mockReset();
+	apiMocks.getDeliveryStatus.mockResolvedValue(emptyDeliveryStatus);
 	routerPush.mockReset();
 	apiMocks.listWorkbenchCatalogPage.mockReset();
 	const content = [
@@ -186,7 +197,9 @@ describe("ModelWorkbenchCatalogList", () => {
 		const views = Array.from(container.querySelectorAll("button")).filter((button) => label(button) === "查看");
 		expect(edits).toHaveLength(2);
 		expect(views).toHaveLength(1);
-		const dimensionRow = Array.from(container.querySelectorAll("tr")).find((row) => row.textContent?.includes("DIM_DATE"));
+		const dimensionRow = Array.from(container.querySelectorAll("tr")).find((row) =>
+			row.textContent?.includes("DIM_DATE"),
+		);
 		const dimensionEdit = Array.from(dimensionRow?.querySelectorAll("button") || []).find(
 			(button) => label(button) === "编辑",
 		);
@@ -229,28 +242,13 @@ describe("ModelWorkbenchCatalogList", () => {
 
 	it("multi-selects physical models from one plan and opens one batch materialization", async () => {
 		const onMaterialize = vi.fn();
-		apiMocks.getMaterializationStatuses.mockResolvedValue([
-			{
-				modelSpecId: draftModel.id,
-				candidateId: "candidate-1",
-				candidateVersion: 5,
-				environment: "dev",
-				candidateStatus: "BUILT",
-				candidateUpdatedAt: "2026-08-09T02:47:00Z",
-				currentImplementationRevision: 2,
-				evidence: {
-					modelSpecId: draftModel.id,
-					modelName: draftModel.name,
-					modelRevision: draftModel.revision,
-					implementationRevision: 2,
-					targetRelation: "public.it_demo_dwd_dim_date",
-					runStatus: "BUILT",
-					relationState: "VERIFIED",
-					attempt: 1,
-					finishedAt: "2026-08-09T02:47:00Z",
-				},
-			},
-		]);
+		apiMocks.getDeliveryStatus.mockResolvedValue({
+			...emptyDeliveryStatus,
+			candidate: { matchesCurrentModel: true },
+			steps: emptyDeliveryStatus.steps.map((step: any) =>
+				step.key === "materialization" ? { ...step, state: "SUCCEEDED", matchesCurrentTarget: true } : step,
+			),
+		});
 
 		await act(async () =>
 			root.render(
@@ -292,17 +290,23 @@ describe("ModelWorkbenchCatalogList", () => {
 	});
 
 	it("shows one batch-read asset delivery status and deep-links the canonical asset", async () => {
-		apiMocks.getServingSyncStatuses.mockResolvedValue([
-			{
-				modelSpecId: publishedModel.id,
-				catalogAssetKey: `semantic-model:${publishedModel.id}`,
-				syncStatus: "SYNCED",
-				syncAttempts: 0,
-				version: 8,
-				servingReady: true,
-				servingRef: { physicalAssetId: "33333333-3333-3333-3333-333333333333" },
-			},
-		]);
+		apiMocks.getDeliveryStatus.mockImplementation(async (id: string) => ({
+			...emptyDeliveryStatus,
+			modelSpecId: id,
+			candidate: { matchesCurrentModel: true },
+			steps: emptyDeliveryStatus.steps.map((step: any) =>
+				step.key === "catalog"
+					? {
+							...step,
+							state: "SUCCEEDED",
+							matchesCurrentTarget: true,
+							resourceId: "33333333-3333-3333-3333-333333333333",
+						}
+					: step.key === "analysis"
+						? { ...step, state: "FAILED", matchesCurrentTarget: true }
+						: step,
+			),
+		}));
 
 		await act(async () =>
 			root.render(
@@ -330,9 +334,11 @@ describe("ModelWorkbenchCatalogList", () => {
 		);
 		await act(async () => Promise.resolve());
 
-		expect(apiMocks.getServingSyncStatuses).toHaveBeenCalledWith([draftModel.id, publishedModel.id]);
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(2);
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(publishedModel.id);
 		const row = Array.from(container.querySelectorAll("tr")).find((item) => item.textContent?.includes("订单明细表"));
-		expect(row?.textContent).toContain("目录同步成功");
+		expect(row?.textContent).toContain("资产已登记");
+		expect(row?.textContent).toContain("分析准备失败");
 		const viewAsset = Array.from(row?.querySelectorAll("button") || []).find((item) => item.textContent === "查看资产");
 		await act(async () => viewAsset?.click());
 

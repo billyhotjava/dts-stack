@@ -1,9 +1,18 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from "vitest";
-import { saveModelDraftOperation } from "@/api/modelSpecApi";
+import api from "@/api/apiClient";
+
+vi.mock("@/api/apiClient", () => ({ default: { put: vi.fn() } }));
+
 import { saveModelImplementation, validateModelImplementation } from "@/api/modelImplementationApi";
+import { saveModelDraftOperation } from "@/api/modelSpecApi";
+import {
+	saveExistingModelDefinition,
+	saveModelDefinitionDraft,
+	validateModelDefinitionInput,
+} from "./modelDefinitionCreation";
 import type { ModelSpecDraft } from "./modelWorkbenchService";
-import { saveModelDefinitionDraft, validateModelDefinitionInput } from "./modelDefinitionCreation";
+
 vi.mock("@/api/dimensionDefinitionApi", () => ({
 	confirmDimensionDefinition: vi.fn(),
 	createDimensionDefinition: vi.fn(),
@@ -145,4 +154,27 @@ it("rejects existing models in the creation-only path", async () => {
 		saveModelDefinitionDraft({ ...definition(), base: { id: "existing" } as ModelSpecDraft["base"] }, context),
 	).rejects.toThrow("新建模型");
 	expect(saveModelDraftOperation).not.toHaveBeenCalled();
+});
+
+it("existing definition uses the loaded canonical revision and does not write implementation", async () => {
+	const base = {
+		id: "10000000-0000-0000-0000-000000000002",
+		compatibilityMode: "CANONICAL",
+		revision: 3,
+		checksum: "abc",
+		status: "DRAFT",
+	} as any;
+	const draft = { ...definition(), base };
+	vi.mocked(api.put).mockResolvedValue({ ...base, revision: 4 });
+	await saveExistingModelDefinition(draft, context);
+	expect(api.put).toHaveBeenCalledWith(
+		expect.objectContaining({
+			url: expect.stringContaining("/definition"),
+			headers: { "If-Match": expect.stringContaining(":3:abc") },
+		}),
+	);
+	expect(saveModelImplementation).not.toHaveBeenCalled();
+	vi.mocked(api.put).mockRejectedValueOnce(new Error("conflict"));
+	await expect(saveExistingModelDefinition(draft, context)).rejects.toThrow("conflict");
+	expect(draft.base.revision).toBe(3);
 });

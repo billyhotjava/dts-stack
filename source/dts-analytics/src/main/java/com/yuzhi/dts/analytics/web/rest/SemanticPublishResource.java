@@ -8,23 +8,26 @@ import com.yuzhi.dts.analytics.domain.AnalyticsMetric;
 import com.yuzhi.dts.analytics.domain.AnalyticsSemanticJoin;
 import com.yuzhi.dts.analytics.domain.AnalyticsSemanticModel;
 import com.yuzhi.dts.analytics.domain.AnalyticsTable;
-import com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsFieldRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsMetricRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsSemanticJoinRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsSemanticModelRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsConsumerClassificationService;
+import com.yuzhi.dts.analytics.service.PlatformAnalyticsDatabaseRegistrationService;
+import com.yuzhi.dts.analytics.service.PlatformAnalyticsDatabaseRegistrationService.AnalysisRegistrationException;
 import com.yuzhi.dts.analytics.service.SemanticAuditService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +47,6 @@ public class SemanticPublishResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(SemanticPublishResource.class);
 
-    private final AnalyticsDatabaseRepository databaseRepository;
     private final AnalyticsTableRepository tableRepository;
     private final AnalyticsFieldRepository fieldRepository;
     private final AnalyticsMetricRepository metricRepository;
@@ -53,9 +55,9 @@ public class SemanticPublishResource {
     private final ObjectMapper objectMapper;
     private final SemanticAuditService semanticAuditService;
     private final AnalyticsConsumerClassificationService classificationService;
+    private final PlatformAnalyticsDatabaseRegistrationService registrationService;
 
     public SemanticPublishResource(
-        AnalyticsDatabaseRepository databaseRepository,
         AnalyticsTableRepository tableRepository,
         AnalyticsFieldRepository fieldRepository,
         AnalyticsMetricRepository metricRepository,
@@ -63,9 +65,9 @@ public class SemanticPublishResource {
         AnalyticsSemanticJoinRepository semanticJoinRepository,
         ObjectMapper objectMapper,
         SemanticAuditService semanticAuditService,
-        AnalyticsConsumerClassificationService classificationService
+        AnalyticsConsumerClassificationService classificationService,
+        PlatformAnalyticsDatabaseRegistrationService registrationService
     ) {
-        this.databaseRepository = databaseRepository;
         this.tableRepository = tableRepository;
         this.fieldRepository = fieldRepository;
         this.metricRepository = metricRepository;
@@ -74,6 +76,7 @@ public class SemanticPublishResource {
         this.objectMapper = objectMapper;
         this.semanticAuditService = semanticAuditService;
         this.classificationService = classificationService;
+        this.registrationService = registrationService;
     }
 
     @PostMapping(path = "/publish", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -94,9 +97,9 @@ public class SemanticPublishResource {
         }
 
         String modelName = textOrNull(body, "modelName");
+        String tenantId = textOrNull(body, "tenantId");
         String tableName = textOrNull(body, "tableName");
         String schemaName = textOrNull(body, "schemaName");
-        String dataSourceName = textOrNull(body, "dataSourceName");
         String platformDataSourceId = textOrNull(body, "platformDataSourceId");
         String description = textOrNull(body, "description");
 
@@ -107,40 +110,49 @@ public class SemanticPublishResource {
                 null,
                 request,
                 modelName,
-                Map.of("dataSourceName", dataSourceName == null ? "" : dataSourceName),
+                Map.of("tenantId", tenantId == null ? "" : tenantId),
                 "tableName is required"
             );
             return ResponseEntity.badRequest().body(Map.of("error", "tableName is required"));
         }
-        if (schemaName == null) {
-            schemaName = "public";
-        }
-
-        LOG.info("[semantic-publish] modelName={} tableName={} schemaName={} dataSourceName={}", modelName, tableName, schemaName, dataSourceName);
-
-        AnalyticsDatabase database = resolveDatabase(dataSourceName, platformDataSourceId);
-        if (database == null) {
+        if (schemaName == null || tenantId == null || platformDataSourceId == null) {
             semanticAuditService.logFailure(
                 "SEMANTIC_CONTRACT_PUBLISH",
                 "推送语义契约",
                 null,
                 request,
                 modelName,
-                Map.of(
-                    "dataSourceName", dataSourceName == null ? "" : dataSourceName,
-                    "platformDataSourceId", platformDataSourceId == null ? "" : platformDataSourceId,
-                    "tableName", tableName
-                ),
-                "datasource not found"
+                Map.of("platformDataSourceId", platformDataSourceId == null ? "" : platformDataSourceId, "tableName", tableName),
+                "tenantId, schemaName and platformDataSourceId are required"
             );
-            return ResponseEntity.badRequest().body(Map.of(
-                "error", "No analytics database found for platformDataSourceId/dataSourceName: " +
-                    firstNonBlank(platformDataSourceId, dataSourceName, "unspecified"),
-                "hint", "Ensure the data source is registered in dts-analytics before publishing."
-            ));
+            return ResponseEntity.badRequest().body(Map.of("code", "ANALYSIS_PREPARATION_INPUT_REQUIRED"));
         }
-
-        AnalyticsTable table = resolveOrCreateTable(database.getId(), schemaName, tableName, description);
+        PlatformAnalyticsDatabaseRegistrationService.TargetRegistration registration;
+        try {
+            registration = registrationService.ensureTarget(
+                tenantId,
+                UUID.fromString(platformDataSourceId),
+                schemaName,
+                tableName,
+                requiredFields(body)
+            );
+        } catch (IllegalArgumentException invalidId) {
+            return ResponseEntity.badRequest().body(Map.of("code", "ANALYSIS_PLATFORM_SOURCE_INVALID"));
+        } catch (AnalysisRegistrationException failure) {
+            semanticAuditService.logFailure(
+                "SEMANTIC_CONTRACT_PUBLISH",
+                "推送语义契约",
+                null,
+                request,
+                modelName,
+                Map.of("tenantId", tenantId, "platformDataSourceId", platformDataSourceId, "tableName", tableName),
+                failure.code()
+            );
+            return ResponseEntity.status(isTransientRegistrationFailure(failure.code()) ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_REQUEST)
+                .body(Map.of("code", failure.code()));
+        }
+        AnalyticsDatabase database = registration.database();
+        AnalyticsTable table = registration.table();
         AnalyticsSemanticModel semanticModel = upsertSemanticModel(body, table, database.getId(), modelName, schemaName, tableName, description);
 
         List<Map<String, Object>> metricsCreated = new ArrayList<>();
@@ -209,65 +221,24 @@ public class SemanticPublishResource {
         return ResponseEntity.ok(summary);
     }
 
-    private AnalyticsDatabase resolveDatabase(String dataSourceName, String platformDataSourceId) {
-        List<AnalyticsDatabase> databases = databaseRepository.findAll();
-        if (platformDataSourceId != null && !platformDataSourceId.isBlank()) {
-            return databases.stream()
-                .filter(database -> platformDataSourceId.equalsIgnoreCase(platformDataSourceId(database)))
-                .findFirst()
-                .orElse(null);
+    private static Set<String> requiredFields(JsonNode body) {
+        java.util.LinkedHashSet<String> fields = new java.util.LinkedHashSet<>();
+        JsonNode dimensions = body.path("dimensions");
+        if (dimensions.isArray()) for (JsonNode dimension : dimensions) addRequiredField(fields, textOrNull(dimension, "name"));
+        JsonNode metrics = body.path("metrics");
+        if (metrics.isArray()) for (JsonNode metric : metrics) {
+            addRequiredField(fields, textOrNull(metric, "field"));
+            addRequiredField(fields, textOrNull(metric, "timeDimension"));
         }
-        if (dataSourceName == null || dataSourceName.isBlank()) {
-            return databases.stream()
-                .filter(db -> !db.isSample())
-                .findFirst()
-                .orElse(null);
-        }
-        return databases.stream()
-            .filter(db -> dataSourceName.equalsIgnoreCase(db.getName()))
-            .findFirst()
-            .or(() -> databases.stream()
-                .filter(db -> db.getName() != null && db.getName().toLowerCase().contains(dataSourceName.toLowerCase()))
-                .findFirst())
-            .orElse(null);
+        return fields;
     }
 
-    private String platformDataSourceId(AnalyticsDatabase database) {
-        if (database == null || database.getDetailsJson() == null || database.getDetailsJson().isBlank()) {
-            return null;
-        }
-        try {
-            JsonNode details = objectMapper.readTree(database.getDetailsJson());
-            return firstNonBlank(
-                textOrNull(details, "platformDataSourceId"),
-                textOrNull(details, "platform_data_source_id"),
-                textOrNull(details.path("platform"), "dataSourceId"),
-                textOrNull(details.path("platform"), "id")
-            );
-        } catch (Exception invalidDetails) {
-            LOG.warn("[semantic-publish] Invalid analytics database details id={}", database.getId());
-            return null;
-        }
+    private static void addRequiredField(Set<String> fields, String value) {
+        if (value != null) fields.add(value);
     }
 
-    private AnalyticsTable resolveOrCreateTable(Long databaseId, String schemaName, String tableName, String description) {
-        Optional<AnalyticsTable> existing = tableRepository.findByDatabaseIdAndSchemaNameAndName(databaseId, schemaName, tableName);
-        if (existing.isPresent()) {
-            AnalyticsTable table = existing.get();
-            if (description != null && !description.isBlank() && (table.getDescription() == null || table.getDescription().isBlank())) {
-                table.setDescription(description);
-                tableRepository.save(table);
-            }
-            return table;
-        }
-        AnalyticsTable table = new AnalyticsTable();
-        table.setDatabaseId(databaseId);
-        table.setSchemaName(schemaName);
-        table.setName(tableName);
-        table.setDescription(description);
-        table.setActive(true);
-        table.setVisibilityType("normal");
-        return tableRepository.save(table);
+    private static boolean isTransientRegistrationFailure(String code) {
+        return "ANALYSIS_PLATFORM_UNAVAILABLE".equals(code) || "ANALYSIS_METADATA_TRANSIENT_FAILURE".equals(code);
     }
 
     private AnalyticsSemanticModel upsertSemanticModel(

@@ -198,6 +198,52 @@ public class MetadataSyncService {
                 disabledFields);
     }
 
+    /** Reads and upserts only the declared physical target; it never enumerates or disables other tables. */
+    @Transactional(noRollbackFor = TargetNotFoundException.class)
+    public TargetSyncResult syncTarget(long databaseId, String schemaName, String tableName, Set<String> requiredFields) throws SQLException {
+        if (schemaName == null || schemaName.isBlank() || tableName == null || tableName.isBlank()) {
+            throw new TargetNotFoundException("ANALYSIS_TARGET_NOT_FOUND");
+        }
+        AnalyticsDatabase database = databaseRepository.findById(databaseId)
+            .orElseThrow(() -> new IllegalArgumentException("Database not found: " + databaseId));
+        DiscoveredTable discovered = discoverTarget(dataSourceRegistry.get(databaseId), schemaName.trim(), tableName.trim());
+        if (discovered == null) throw new TargetNotFoundException("ANALYSIS_TARGET_NOT_FOUND");
+        Set<String> discoveredNames = discovered.fields().stream()
+            .map(field -> field.name().toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toSet());
+        if (!discoveredNames.containsAll(requiredFields)) throw new TargetNotFoundException("ANALYSIS_REQUIRED_FIELD_MISSING");
+        AnalyticsTable table = tableRepository.findByDatabaseIdAndSchemaNameAndName(database.getId(), discovered.schemaName(), discovered.name())
+            .orElseGet(AnalyticsTable::new);
+        table.setDatabaseId(database.getId());
+        table.setSchemaName(discovered.schemaName());
+        table.setName(discovered.name());
+        table.setDisplayName(discovered.displayName());
+        table.setActive(true);
+        table.setVisibilityType("normal");
+        table = tableRepository.save(table);
+        Map<String, AnalyticsField> existing = new HashMap<>();
+        for (AnalyticsField field : fieldRepository.findAllByTableIdOrderByPositionAscIdAsc(table.getId())) {
+            existing.put(field.getName().toLowerCase(Locale.ROOT), field);
+        }
+        for (DiscoveredField discoveredField : discovered.fields()) {
+            AnalyticsField field = existing.get(discoveredField.name().toLowerCase(Locale.ROOT));
+            if (field == null) {
+                field = new AnalyticsField();
+                field.setDatabaseId(database.getId());
+                field.setTableId(table.getId());
+                field.setName(discoveredField.name());
+            }
+            field.setDisplayName(discoveredField.displayName());
+            field.setBaseType(discoveredField.baseType());
+            field.setEffectiveType(discoveredField.effectiveType());
+            field.setPosition(discoveredField.position());
+            field.setActive(true);
+            field.setVisibilityType("normal");
+            fieldRepository.save(field);
+        }
+        return new TargetSyncResult(table, Set.copyOf(discoveredNames));
+    }
+
     private static List<DiscoveredTable> discoverTablesAndFields(HikariDataSource dataSource) throws SQLException {
         try (Connection connection = dataSource.getConnection()) {
             DatabaseMetaData meta = connection.getMetaData();
@@ -245,6 +291,28 @@ public class MetadataSyncService {
         }
     }
 
+    private static DiscoveredTable discoverTarget(HikariDataSource dataSource, String schemaName, String tableName) throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            DatabaseMetaData metadata = connection.getMetaData();
+            try (ResultSet tables = metadata.getTables(connection.getCatalog(), schemaName, tableName, new String[] {"TABLE", "VIEW"})) {
+                if (!tables.next()) return null;
+                String schema = tables.getString("TABLE_SCHEM");
+                String name = tables.getString("TABLE_NAME");
+                if (!schemaName.equalsIgnoreCase(schema) || !tableName.equalsIgnoreCase(name)) return null;
+                List<DiscoveredField> fields = new ArrayList<>();
+                try (ResultSet columns = metadata.getColumns(connection.getCatalog(), schema, name, "%")) {
+                    while (columns.next()) {
+                        String columnName = columns.getString("COLUMN_NAME");
+                        if (columnName == null || columnName.isBlank()) continue;
+                        String baseType = MetabaseTypeMapper.toBaseType(columns.getInt("DATA_TYPE"));
+                        fields.add(new DiscoveredField(columnName, columnName, baseType, baseType, columns.getInt("ORDINAL_POSITION")));
+                    }
+                }
+                return new DiscoveredTable(schema, name, schema + "." + name, fields);
+            }
+        }
+    }
+
     private static String normalizeSchema(String schema) {
         if (schema == null) {
             return "";
@@ -273,6 +341,15 @@ public class MetadataSyncService {
             int createdFields,
             int updatedFields,
             int disabledFields) {}
+
+    public record TargetSyncResult(AnalyticsTable table, Set<String> fieldNames) {}
+
+    public static class TargetNotFoundException extends RuntimeException {
+        private final String code;
+
+        public TargetNotFoundException(String code) { super(code); this.code = code; }
+        public String code() { return code; }
+    }
 
     private record DiscoveredTable(String schemaName, String name, String displayName, List<DiscoveredField> fields) {}
 

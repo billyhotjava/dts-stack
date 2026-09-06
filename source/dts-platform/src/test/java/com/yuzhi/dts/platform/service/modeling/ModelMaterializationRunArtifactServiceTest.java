@@ -79,6 +79,7 @@ class ModelMaterializationRunArtifactServiceTest {
     private PhysicalRelationInspectorRegistry inspectors;
     private PhysicalRelationObservationRepository observations;
     private ModelReleaseCandidateService candidates;
+    private CandidateQualityAssetRegistrationService qualityAssets;
     private AuditService auditService;
     private ModelMaterializationRunArtifactService service;
 
@@ -98,6 +99,7 @@ class ModelMaterializationRunArtifactServiceTest {
             PhysicalRelationObservationRepository.class
         );
         candidates = mock(ModelReleaseCandidateService.class);
+        qualityAssets = mock(CandidateQualityAssetRegistrationService.class);
         auditService = mock(AuditService.class);
         service = new ModelMaterializationRunArtifactService(
             runs,
@@ -107,6 +109,7 @@ class ModelMaterializationRunArtifactServiceTest {
             inspectors,
             observations,
             candidates,
+            qualityAssets,
             auditService,
             new ObjectMapper(),
             Clock.fixed(NOW, ZoneOffset.UTC),
@@ -122,6 +125,13 @@ class ModelMaterializationRunArtifactServiceTest {
         when(
             sourceAvailability.checkPinnedCurrentForUpdate(GROUP_ID)
         ).thenReturn(GenerationCheck.currentCheck());
+        when(candidates.transition(any(), any(), any(), any())).thenReturn(
+            new ModelReleaseCandidateContract.CommandResult(
+                mock(ModelReleaseCandidateContract.CandidateView.class),
+                false,
+                List.of()
+            )
+        );
         when(scoped.verifyCandidateProject(BUNDLE))
             .thenReturn(project);
         when(inspectors.require("postgres"))
@@ -176,6 +186,7 @@ class ModelMaterializationRunArtifactServiceTest {
         assertThat(result.status()).isEqualTo("BUILT");
         assertThat(result.dbtInvocationId()).isEqualTo(INVOCATION_ID);
         assertThat(result.modelCount()).isEqualTo(1);
+        verify(qualityAssets).ensureRegistered(any(ModelReleaseCandidateContract.CandidateView.class));
         verify(runs).markDbtSucceeded(
             GROUP_ID,
             INVOCATION_ID,

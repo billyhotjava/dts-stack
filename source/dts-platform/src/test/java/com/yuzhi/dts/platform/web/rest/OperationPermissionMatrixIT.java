@@ -1,9 +1,11 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
@@ -46,6 +48,72 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class OperationPermissionMatrixIT {
 
     @Test
+    void catalogGovernanceSummaryAndFullPutRejectStaleEtagsAfterPermissionCheck() {
+        CatalogDatasetRepository repository = mock(CatalogDatasetRepository.class);
+        AccessChecker access = mock(AccessChecker.class);
+        CatalogResourceHelper helper = mock(CatalogResourceHelper.class);
+        CatalogDatasetResource resource = resource(repository, access, helper);
+        CatalogDataset existing = dataset("finance");
+        when(repository.findById(existing.getId())).thenReturn(java.util.Optional.of(existing));
+        when(access.canPerform(existing, AssetAction.UPDATE)).thenReturn(true);
+
+        assertThatThrownBy(() -> resource.updateGovernanceSummary(existing.getId(), "\"catalog-dataset:" + existing.getId() + ":9\"", java.util.Map.of("owner", "alice"))).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThatThrownBy(() -> resource.updateDataset(existing.getId(), "\"catalog-dataset:" + existing.getId() + ":9\"", new CatalogDataset())).isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        verify(repository, never()).saveAndFlush(existing);
+        verify(repository, never()).save(existing);
+    }
+
+    @Test
+    void staleFullPutCannotOverwriteGovernanceSummarySavedAtNewVersion() {
+        CatalogDatasetRepository repository = mock(CatalogDatasetRepository.class);
+        AccessChecker access = mock(AccessChecker.class);
+        CatalogResourceHelper helper = mock(CatalogResourceHelper.class);
+        CatalogDatasetResource resource = resource(repository, access, helper);
+        CatalogDataset existing = dataset("finance"); existing.setOwner("before"); existing.setDescription("before");
+        when(repository.findById(existing.getId())).thenReturn(java.util.Optional.of(existing));
+        when(access.canPerform(existing, AssetAction.UPDATE)).thenReturn(true);
+        when(repository.saveAndFlush(existing)).thenReturn(existing);
+
+        resource.updateGovernanceSummary(existing.getId(), "\"catalog-dataset:" + existing.getId() + ":0\"", java.util.Map.of("owner", "alice", "description", "new"));
+        existing.setVersion(1L); // represents the flush committed by the PATCH request
+        CatalogDataset staleBody = new CatalogDataset(); staleBody.setName(existing.getName()); staleBody.setTrinoCatalog("finance"); staleBody.setOwner("before"); staleBody.setDescription("before");
+
+        assertThatThrownBy(() -> resource.updateDataset(existing.getId(), "\"catalog-dataset:" + existing.getId() + ":0\"", staleBody))
+            .isInstanceOf(org.springframework.web.server.ResponseStatusException.class);
+        assertThat(existing.getOwner()).isEqualTo("alice");
+        assertThat(existing.getDescription()).isEqualTo("new");
+        verify(repository, never()).save(existing);
+    }
+
+    @Test
+    void catalogGovernanceSummarySavesOwnerAndDescriptionWithOriginalVersion() {
+        CatalogDatasetRepository repository = mock(CatalogDatasetRepository.class);
+        AccessChecker access = mock(AccessChecker.class);
+        CatalogResourceHelper helper = mock(CatalogResourceHelper.class);
+        CatalogDatasetResource resource = resource(repository, access, helper);
+        CatalogDataset existing = dataset("finance"); existing.setOwner("before"); existing.setDescription("before");
+        when(repository.findById(existing.getId())).thenReturn(java.util.Optional.of(existing));
+        when(access.canPerform(existing, AssetAction.UPDATE)).thenReturn(true);
+        when(repository.saveAndFlush(existing)).thenReturn(existing);
+
+        resource.updateGovernanceSummary(existing.getId(), "\"catalog-dataset:" + existing.getId() + ":0\"", java.util.Map.of("owner", "alice", "description", "说明"));
+        assertThat(existing.getOwner()).isEqualTo("alice");
+        assertThat(existing.getDescription()).isEqualTo("说明");
+        verify(repository).saveAndFlush(existing);
+    }
+
+    @Test
+    void catalogGovernanceSummaryChecksPermissionBeforeVersion() {
+        CatalogDatasetRepository repository = mock(CatalogDatasetRepository.class);
+        AccessChecker access = mock(AccessChecker.class);
+        CatalogDataset existing = dataset("finance");
+        when(repository.findById(existing.getId())).thenReturn(java.util.Optional.of(existing));
+        CatalogDatasetResource resource = resource(repository, access, mock(CatalogResourceHelper.class));
+        assertThatThrownBy(() -> resource.updateGovernanceSummary(existing.getId(), "\"catalog-dataset:" + existing.getId() + ":9\"", java.util.Map.of("owner", "alice"))).isInstanceOf(AccessDeniedException.class);
+        verify(repository, never()).saveAndFlush(existing);
+    }
+
+    @Test
     void catalogDatasetMutationsFailClosedForCreateImportUpdateAndDelete() {
         CatalogDatasetRepository datasetRepository = mock(CatalogDatasetRepository.class);
         AccessChecker accessChecker = mock(AccessChecker.class);
@@ -65,7 +133,7 @@ class OperationPermissionMatrixIT {
             .isInstanceOf(AccessDeniedException.class);
         verify(accessChecker).canPerform(imported, AssetAction.IMPORT);
 
-        assertThatThrownBy(() -> resource.updateDataset(existing.getId(), new CatalogDataset()))
+        assertThatThrownBy(() -> resource.updateDataset(existing.getId(), null, new CatalogDataset()))
             .isInstanceOf(AccessDeniedException.class);
         verify(accessChecker).canPerform(existing, AssetAction.UPDATE);
 

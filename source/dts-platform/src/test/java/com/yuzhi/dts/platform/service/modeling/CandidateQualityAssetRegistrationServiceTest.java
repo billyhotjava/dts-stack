@@ -153,6 +153,21 @@ class CandidateQualityAssetRegistrationServiceTest {
         assertThat(observation.getValue().domainId()).isEqualTo(DOMAIN_ID);
     }
 
+    @Test
+    void acceptsBuildVerifiedCandidatesBeforeQualityStarts() {
+        CandidateView candidate = mock(CandidateView.class);
+        when(candidate.status()).thenReturn(DeliveryStatus.BUILT);
+        when(candidate.tenantId()).thenReturn(TENANT);
+        when(candidate.version()).thenReturn(7);
+        when(evidence.requireCurrent(candidate, false)).thenReturn(List.of());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.ensureRegistered(candidate))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .hasMessageContaining("Candidate has no verified physical outputs");
+
+        verify(evidence).requireCurrent(candidate, false);
+    }
+
     private static PublicationEntryEvidence physicalEvidence() {
         return new PublicationEntryEvidence(
             UUID.randomUUID(),

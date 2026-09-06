@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -47,6 +48,31 @@ public class CandidatePublicationRepository {
     public CandidatePublicationRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+    }
+
+    /** Reads the already-registered physical Catalog identity without creating or reconciling anything. */
+    public Optional<UUID> findRegisteredQualityDataset(UUID sourceId, String schemaName, String identifier) {
+        if (sourceId == null || schemaName == null || identifier == null) {
+            return Optional.empty();
+        }
+        List<UUID> matches = jdbcTemplate.queryForList(
+            """
+            select id
+              from catalog_dataset
+             where source_id = ?
+               and lower(btrim(hive_database)) = lower(btrim(?))
+               and lower(btrim(hive_table)) = lower(btrim(?))
+             order by id
+            """,
+            UUID.class,
+            sourceId,
+            schemaName,
+            identifier
+        );
+        if (matches.size() > 1) {
+            throw new IllegalStateException("Catalog physical locator is ambiguous");
+        }
+        return matches.stream().findFirst();
     }
 
     /**

@@ -16,6 +16,8 @@ import com.yuzhi.dts.analytics.service.MetadataSyncService;
 import com.yuzhi.dts.analytics.service.DatabaseUploadTableService;
 import com.yuzhi.dts.analytics.service.ExternalDatabaseDataSourceRegistry;
 import com.yuzhi.dts.analytics.service.PlatformInfraClient;
+import com.yuzhi.dts.analytics.service.PlatformAnalyticsDatabaseRegistrationService;
+import com.yuzhi.dts.analytics.service.PlatformAnalyticsDatabaseRegistrationService.AnalysisRegistrationException;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -63,6 +65,7 @@ public class DatabaseResource {
     private final ExternalDatabaseDataSourceRegistry dataSourceRegistry;
     private final DatabaseUploadTableService uploadTableService;
     private final ObjectMapper objectMapper;
+    private final PlatformAnalyticsDatabaseRegistrationService registrationService;
 
     public DatabaseResource(
             AnalyticsSessionService sessionService,
@@ -74,7 +77,8 @@ public class DatabaseResource {
             PlatformInfraClient platformInfraClient,
             ExternalDatabaseDataSourceRegistry dataSourceRegistry,
             DatabaseUploadTableService uploadTableService,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            PlatformAnalyticsDatabaseRegistrationService registrationService) {
         this.sessionService = sessionService;
         this.databaseRepository = databaseRepository;
         this.tableRepository = tableRepository;
@@ -85,6 +89,7 @@ public class DatabaseResource {
         this.dataSourceRegistry = dataSourceRegistry;
         this.uploadTableService = uploadTableService;
         this.objectMapper = objectMapper;
+        this.registrationService = registrationService;
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -111,22 +116,12 @@ public class DatabaseResource {
             return ResponseEntity.badRequest().body(Map.of("errors", Map.of("details", "仅支持从平台导入数据源")));
         }
 
-        PlatformInfraClient.DataSourceDetail platformDetail = platformInfraClient.fetchDataSourceDetail(platformId);
-        if (!StringUtils.hasText(platformDetail.jdbcUrl())) {
-            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("details", "平台数据源缺少 JDBC URL")));
+        try {
+            AnalyticsDatabase db = registrationService.ensureDatabase(registrationService.defaultTenantId(), platformId);
+            return ResponseEntity.ok(toDatabaseGet(db, true));
+        } catch (AnalysisRegistrationException failure) {
+            return ResponseEntity.badRequest().body(Map.of("code", failure.code()));
         }
-        AnalyticsDatabase db = findByPlatformDataSource(platformId).orElseGet(AnalyticsDatabase::new);
-        boolean isNew = db.getId() == null;
-
-        applyPlatformDetail(db, platformId, platformDetail);
-        if (isNew) {
-            applyNewDefaults(db);
-        } else {
-            applyMissingDefaults(db);
-        }
-
-        db = databaseRepository.save(db);
-        return ResponseEntity.ok(toDatabaseGet(db, true));
     }
 
     @GetMapping(path = "/{dbId}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -601,31 +596,11 @@ public class DatabaseResource {
         if (auth.isPresent()) {
             return auth.orElseThrow();
         }
-        // 如果已存在则直接返回
-        Optional<AnalyticsDatabase> existing = findByPlatformDataSource(platformDataSourceId);
-        if (existing.isPresent()) {
-            return ResponseEntity.ok(toDatabaseGet(existing.orElseThrow(), false));
-        }
-        // 从 platform 获取详情并创建
         try {
-            PlatformInfraClient.DataSourceDetail detail = platformInfraClient.fetchDataSourceDetail(platformDataSourceId);
-            if (!StringUtils.hasText(detail.jdbcUrl())) {
-                return ResponseEntity.badRequest().body(Map.of("error", "平台数据源缺少 JDBC URL"));
-            }
-            AnalyticsDatabase db = new AnalyticsDatabase();
-            applyPlatformDetail(db, platformDataSourceId, detail);
-            applyNewDefaults(db);
-            db = databaseRepository.save(db);
-            // 异步同步元数据
-            final long dbId = db.getId();
-            try {
-                metadataSyncService.syncDatabaseSchema(dbId);
-            } catch (Exception ex) {
-                // 不阻塞返回
-            }
+            AnalyticsDatabase db = registrationService.ensureDatabase(registrationService.defaultTenantId(), platformDataSourceId);
             return ResponseEntity.ok(toDatabaseGet(db, false));
-        } catch (Exception ex) {
-            return ResponseEntity.status(502).body(Map.of("error", "注册数据源失败: " + ex.getMessage()));
+        } catch (AnalysisRegistrationException failure) {
+            return ResponseEntity.badRequest().body(Map.of("code", failure.code()));
         }
     }
 

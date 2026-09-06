@@ -169,6 +169,7 @@ class ModelQueryDatasetProjectionServiceTest {
 
     private static PublishPayload payload() {
         return new PublishPayload(
+            "default",
             SOURCE_ID.toString(),
             "model_spec_" + MODEL_ID.toString().replace("-", ""),
             "biz_ads_budget_kpi_v2",

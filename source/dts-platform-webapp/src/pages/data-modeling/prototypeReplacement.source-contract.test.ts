@@ -117,15 +117,18 @@ describe("prototype-owned data modeling frontend", () => {
 	}, 20000);
 
 	it("integrates the approved editor contract into the workbench orchestrator", () => {
-		const modeling = read("./prototype/ModelingWorkbenchPage.tsx");
-		const editor = read("./prototype/ModelingWorkbenchEditor.tsx");
+		const modeling =
+			read("./prototype/ModelingWorkbenchPage.tsx") + read("./prototype/ModelWorkbenchNavigationGuard.tsx");
+		const editor = ["ModelingWorkbenchEditor", "ModelDefinitionForm", "ModelImplementationForm"]
+			.map((name) => read(`./prototype/${name}.tsx`))
+			.join("\n");
 		const fieldTable = read("./prototype/ModelFieldEditorTable.tsx");
 		const workbenchService = read("./prototype/services/modelWorkbenchService.ts");
 		const implementationBinding = read("./prototype/ModelImplementationBindingFields.tsx");
 		const implementationExecution = read("./prototype/ModelImplementationExecutionFields.tsx");
 		const partitionFieldSelector = read("./prototype/ModelPartitionFieldSelector.tsx");
 		const sourceInventory = read("./prototype/ModelSourceInventoryDialog.tsx");
-		const modelingLineCount = modeling.trimEnd().split("\n").length;
+		const modelingLineCount = read("./prototype/ModelingWorkbenchPage.tsx").trimEnd().split("\n").length;
 
 		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量门禁"])
 			expect(editor).toContain(label);
@@ -151,9 +154,13 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modeling).not.toContain("await load(saved.id)");
 		expect(workbenchService).toMatch(/saveModelImplementation|targetPhysicalName/);
 		expect(editor).toMatch(/import \{ ModelImplementationBindingFields \} from "\.\/ModelImplementationBindingFields"/);
-		expect(editor).toMatch(/import \{ ModelImplementationExecutionFields \} from "\.\/ModelImplementationExecutionFields"/);
+		expect(editor).toMatch(
+			/import \{ ModelImplementationExecutionFields \} from "\.\/ModelImplementationExecutionFields"/,
+		);
 		expect(editor).toContain("<ModelImplementationExecutionFields");
-		expect(implementationExecution).toMatch(/import \{ ModelPartitionFieldSelector \} from "\.\/ModelPartitionFieldSelector"/);
+		expect(implementationExecution).toMatch(
+			/import \{ ModelPartitionFieldSelector \} from "\.\/ModelPartitionFieldSelector"/,
+		);
 		expect(implementationExecution).toContain("<ModelPartitionFieldSelector");
 		expect(partitionFieldSelector).toContain('aria-label="分区字段"');
 		expect(partitionFieldSelector).toContain("已选分区字段");
@@ -164,7 +171,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(workbenchService).toMatch(
 			/collectCurrentWarehousePlanSources|sourceRefs: draft\.sourceRefs|dependsOn: draft\.dependsOn/,
 		);
-		expect(modeling).toMatch(/applyModelDraftFieldPatch/);
+		expect(read("./prototype/useModelDraftFields.ts")).toMatch(/applyModelDraftFieldPatch/);
 		expect(modeling).toMatch(/reconcileModelDraftSources/);
 		expect(implementationBinding).not.toMatch(/disabled=\{!context\.planId\}/);
 		expect(sourceInventory).toMatch(/createWarehousePlan/);
@@ -172,14 +179,13 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(sourceInventory).toMatch(/initialSourceRefs: \[\{ sourceType: "CATALOG_TABLE", sourceId: assetId \}\]/);
 		expect(modeling).toMatch(/isConceptDimensionDraft/);
 		expect(modeling).toMatch(/conceptDimensionDraftFromView/);
-		// Sprint-91：右侧记录栏的隐藏条件由 dialog 状态改为 URL 的 view 模式。
-		expect(modeling).toMatch(
-			/\{requestedView !== "code" && selectedModel\?\.modelType === "FACT" \? \(\s*<aside className="dmx-record-rail"/s,
-		);
+		expect(editor).toContain("版本与记录");
+		expect(modeling).toContain("<ModelWizardFrame");
+		expect(editor).toContain("<ModelWizardEditorActions");
 		expect(modeling).toContain('"beforeunload"');
-		expect(modeling).toMatch(/const blocker = useBlocker\(/);
+		expect(modeling).toMatch(/const blocker\s*=\s*useBlocker\(/);
 		expect(modeling).toContain("blocker.proceed()");
-		expect(modeling).toContain("blocker.reset()");
+		expect(modeling).toContain("onStay={blocker.reset}");
 		expect(modeling).not.toMatch(/function ModelEditor|function FieldTable/);
 		expect(modelingLineCount).toBeLessThanOrEqual(800);
 	});
@@ -244,7 +250,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(catalogActions).toContain("确认永久删除草稿模型");
 		expect(catalogActions).toContain("确认归档模型");
 		expect(catalogList).toContain("在用状态（不含已归档）");
-		expect(catalogList).toContain('statusLabel(status)');
+		expect(catalogList).toContain("statusLabel(status)");
 		expect(modeling).not.toMatch(/ModelWorkbenchCatalogPanel|WorkbenchCatalogTree|buildWorkbenchCatalogGroups/);
 		expect(catalogList).toMatch(/ModelWorkbenchCreateMenu|新建模型/);
 		expect(catalogList).not.toContain("进入目录编辑器");

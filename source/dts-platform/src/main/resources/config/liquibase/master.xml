@@ -276,4 +276,5 @@
     <include file="config/liquibase/changelog/20260822_02_modeling_word_root.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260904_01_model_release_candidate_stable_model_scope.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260904_02_model_release_candidate_visual_target_repair.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260906_01_catalog_dataset_version.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

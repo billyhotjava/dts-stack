@@ -123,6 +123,33 @@ public class ModelReleaseCandidateApplicationService {
         return candidateForPlan(access.tenantId(), access.planId(), candidateId);
     }
 
+    /** Server-authorized command projection for a read-only delivery consumer. */
+    @Transactional(readOnly = true)
+    public List<DeliveryAction> allowedActionsForRead(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        UUID candidateId
+    ) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        CandidateView candidate = candidateForPlan(access.tenantId(), access.planId(), candidateId);
+        return roleAware(new CommandResult(candidate, false, List.of()), access).allowedActions();
+    }
+
+    /** Read-only eligibility for UI-only auxiliary actions that are not DeliveryAction enum values. */
+    @Transactional(readOnly = true)
+    public boolean canMaintainForRead(String tenantId, String actorId, UUID planId) {
+        return authorizeRead(tenantId, actorId, planId).duties().contains(DeliveryActorRole.MODEL_MAINTAINER);
+    }
+
+    /** Exact candidate workbench projection for a model-bound read consumer. */
+    @Transactional(readOnly = true)
+    public WorkbenchView workspaceForCandidate(String tenantId, String actorId, UUID planId, UUID candidateId) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        CandidateView candidate = candidateForPlan(access.tenantId(), access.planId(), candidateId);
+        return withPersistedEvidence(project(candidate, access.actorId(), access.duties()), workbenchEvidence.findCurrent(candidate));
+    }
+
     @Transactional(readOnly = true)
     public List<ModelMaterializationStatusView> materializationStatuses(
         String tenantId,

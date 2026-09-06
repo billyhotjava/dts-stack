@@ -16,6 +16,10 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     @Column(name = "id", columnDefinition = "uuid")
     private UUID id;
 
+    @Version
+    @Column(name = "version", nullable = false)
+    private long version;
+
     @NotBlank
     @Column(name = "name", length = 128)
     private String name;
@@ -89,6 +93,8 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     public void setId(UUID id) {
         this.id = id;
     }
+
+    public long getVersion() { return version; }
 
     public String getName() {
         return name;

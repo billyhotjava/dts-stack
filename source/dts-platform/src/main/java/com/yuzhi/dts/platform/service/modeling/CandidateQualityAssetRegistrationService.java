@@ -94,7 +94,7 @@ public class CandidateQualityAssetRegistrationService {
 
     @Transactional
     public List<UUID> ensureRegistered(CandidateView candidate) {
-        requireQualityRunning(candidate);
+        requireBuildVerified(candidate);
         try {
             ResolvedCatalogTarget target = targets.resolve(candidate);
             List<UUID> registered = new ArrayList<>();
@@ -154,11 +154,15 @@ public class CandidateQualityAssetRegistrationService {
         }
     }
 
-    private static void requireQualityRunning(CandidateView candidate) {
-        if (candidate == null || candidate.status() != DeliveryStatus.QUALITY_RUNNING) {
+    private static void requireBuildVerified(CandidateView candidate) {
+        if (
+            candidate == null ||
+            (candidate.status() != DeliveryStatus.BUILT &&
+                candidate.status() != DeliveryStatus.QUALITY_RUNNING)
+        ) {
             throw new ModelReleaseCandidateException(
-                "MODEL_RELEASE_QUALITY_RUNNING_REQUIRED",
-                "Candidate must be running quality validation before physical assets are prepared",
+                "MODEL_RELEASE_BUILT_REQUIRED",
+                "Candidate must have verified physical outputs before governance assets are prepared",
                 Kind.CONFLICT
             );
         }

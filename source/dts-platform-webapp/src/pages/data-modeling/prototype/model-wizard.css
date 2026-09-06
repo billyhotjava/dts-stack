@@ -1,0 +1,59 @@
+.dmx-wizard-navigation {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 16px;
+	border-bottom: 1px solid #e2e8f0;
+}
+.dmx-wizard-navigation .active {
+	color: #2563eb;
+	border-color: #2563eb;
+	background: #eff6ff;
+}
+.dmx-delivery-step {
+	padding: 20px;
+}
+.dmx-delivery-step > section > label {
+	display: block;
+	margin-bottom: 16px;
+}
+.dmx-delivery-step > section > label > span {
+	display: block;
+	margin-bottom: 6px;
+}
+.dmx-delivery-step select,
+.dmx-delivery-step input {
+	width: 100%;
+	padding: 9px 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+}
+.dmx-wizard-results {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	padding: 16px 20px;
+}
+.dmx-wizard-results > div {
+	flex: 1 1 145px;
+	padding: 12px;
+	border: 1px solid #e2e8f0;
+	border-radius: 6px;
+}
+.dmx-wizard-results strong,
+.dmx-wizard-results small {
+	display: block;
+	margin-bottom: 8px;
+}
+.dmx-wizard-results small {
+	color: #64748b;
+	margin-top: 8px;
+}
+.dmx-model-wizard .dmx-editor-toolbar {
+	position: sticky;
+	bottom: 0;
+	z-index: 2;
+	background: #fff;
+	padding: 14px 20px;
+	border-top: 1px solid #e2e8f0;
+}

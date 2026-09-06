@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateApplicationService;
+import com.yuzhi.dts.platform.service.modeling.CandidateQualityRuleContextService;
+import com.yuzhi.dts.platform.service.modeling.CandidateQualityRuleContextService.CandidateQualityContextView;
 import com.yuzhi.dts.platform.service.modeling.CandidateGovernanceQualityRerunService;
 import com.yuzhi.dts.platform.service.modeling.CandidateGovernanceQualityRerunService.RerunResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
@@ -50,17 +52,20 @@ public class ModelReleaseCandidateResource {
     );
 
     private final ModelReleaseCandidateApplicationService service;
+    private final CandidateQualityRuleContextService qualityContext;
     private final CandidateGovernanceQualityRerunService governanceQualityReruns;
     private final WarehousePlanActorProvider actorProvider;
     private final String serverTenantId;
 
     public ModelReleaseCandidateResource(
         ModelReleaseCandidateApplicationService service,
+        CandidateQualityRuleContextService qualityContext,
         CandidateGovernanceQualityRerunService governanceQualityReruns,
         WarehousePlanActorProvider actorProvider,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.service = service;
+        this.qualityContext = qualityContext;
         this.governanceQualityReruns = governanceQualityReruns;
         this.actorProvider = actorProvider;
         this.serverTenantId = serverTenantId;
@@ -86,6 +91,18 @@ public class ModelReleaseCandidateResource {
             .ok()
             .eTag(ModelReleaseCandidateApplicationService.etag(candidate))
             .body(ApiResponses.ok(candidate));
+    }
+
+    /** Exact verified physical outputs and their quality-rule bindings. This read never registers assets. */
+    @GetMapping("/{candidateId}/quality-context")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CandidateQualityContextView>> qualityContext(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CandidateView candidate = service.get(serverTenantId, actorId(), planId, candidateId);
+        return ResponseEntity.ok(ApiResponses.ok(qualityContext.context(candidate, activeDept)));
     }
 
     @GetMapping("/materializations")

@@ -132,6 +132,20 @@ public class ModelSpecResource {
         return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
     }
 
+    /** Saves only a DRAFT model's logical definition; implementation remains owned by authoring. */
+    @PutMapping("/{id}/definition")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<ModelSpecView>> updateDefinition(
+        @PathVariable UUID id,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestBody JsonNode body
+    ) {
+        ModelSpecUpdateRequestDecoder.DecodeResult decoded = updateDecoder.decodeDefinition(body);
+        if (!decoded.valid()) throw invalidRequest(decoded.issues());
+        ModelSpecView view = service.updateDefinition(serverTenantId, actorId(), id, parseExpected(ifMatch), decoded.command());
+        return ResponseEntity.ok().eTag(ModelSpecApplicationService.etag(view)).body(ApiResponses.ok(view));
+    }
+
     @GetMapping("/{id}/stage-gates")
     public ApiResponse<List<GateView>> stageGates(@PathVariable UUID id) {
         return ApiResponses.ok(stageGates.evaluateAll(serverTenantId, id));

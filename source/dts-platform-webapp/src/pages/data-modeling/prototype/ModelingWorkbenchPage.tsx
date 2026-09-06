@@ -1,18 +1,23 @@
+import { normalizeModelWizardStep } from "@/api/modelDeliveryStatusApi";
+import type { UnsavedEditorHandle } from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
+import { ModelWizardFrame } from "./ModelWizardFrame";
+import { ModelWorkbenchNavigationGuard } from "./ModelWorkbenchNavigationGuard";
 import { resolveRequestedModelSelection, shouldBlockWorkbenchNavigation } from "./modelingWorkbenchNavigation";
+import { useModelDeliveryStatus } from "./useModelDeliveryStatus";
+import { useModelDraftFields } from "./useModelDraftFields";
+
 export { resolveRequestedModelSelection, shouldBlockWorkbenchNavigation } from "./modelingWorkbenchNavigation";
-import { saveModelDefinitionDraft, validateModelDefinitionInput } from "./services/modelDefinitionCreation";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type BlockerFunction, useBlocker, useNavigate, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { useUserInfo } from "@/store/userStore";
 import { statusLabel } from "@/utils/customerDisplayLabels";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
-
 import { AdvancedDbtWorkspace } from "./AdvancedDbtWorkspace";
 import { ConceptDimensionRecordDialog } from "./ConceptDimensionRecordDialog";
-import { isBlankModelField } from "./ModelFieldEditorTable";
 import { ModelingWorkbenchEditor } from "./ModelingWorkbenchEditor";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelWorkbenchCatalogList } from "./ModelWorkbenchCatalogList";
@@ -21,7 +26,11 @@ import { type ModelingWorkbenchView, normalizeWorkbenchView } from "./modelingWo
 import { modelDraftFingerprint } from "./modelWorkbenchPresentation";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
-	applyModelDraftFieldPatch,
+	saveExistingModelDefinition,
+	saveModelDefinitionDraft,
+	validateModelDefinitionInput,
+} from "./services/modelDefinitionCreation";
+import {
 	conceptDimensionDraftFromView,
 	emptyModelDraft,
 	isConceptDimensionDraft,
@@ -30,9 +39,9 @@ import {
 	loadModelWorkbenchContext,
 	loadModelWorkbenchDraft,
 	MODEL_KIND_CONFIG,
-	ModelDraftPartialSaveError,
 	type ModelCreateKind,
 	type ModelDraft,
+	ModelDraftPartialSaveError,
 	type ModelDraftValidationErrors,
 	type ModelWorkbenchContext,
 	modelDraftFromView,
@@ -88,6 +97,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	);
 	const [context, setContext] = useState<ModelWorkbenchContext | null>(null);
 	const [draft, setDraft] = useState<ModelDraft | null>(null);
+	const cleanDraftRef = useRef<ModelDraft | null>(null);
 	const [cleanFingerprint, setCleanFingerprint] = useState<string | null>(null);
 	const [validationErrors, setValidationErrors] = useState<ModelDraftValidationErrors>({});
 	const [fieldRowIds, setFieldRowIds] = useState<string[]>([]);
@@ -105,6 +115,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const { message, show } = useTransientMessage();
 	const draftBase = draft && isModelSpecDraft(draft) ? draft.base : null;
 	const selectedModel = draftBase;
+	const delivery = useModelDeliveryStatus(
+		selectedModel,
+		searchParams.get("environment") || "",
+		searchParams.get("candidateId") || "",
+		materializationRefreshKey,
+	);
+	const wizardStep =
+		normalizeModelWizardStep(searchParams.get("step")) || delivery.data?.recommendedStep || "definition";
 	const conceptDraft = draft && isConceptDimensionDraft(draft) ? draft : null;
 	const draftCreateKind = draft?.createKind || null;
 	const draftDimensionDefinitionId = draft && isDimensionTableDraft(draft) ? draft.dimensionDefinitionId : "";
@@ -113,6 +131,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const dirty = draft !== null && cleanFingerprint !== null && modelDraftFingerprint(draft) !== cleanFingerprint;
 	const saveNeeded = dirty || modelDraftNeedsImplementationRecovery(draft, context?.implementationCapabilities);
 	const replaceDraft = useCallback((nextDraft: ModelDraft | null) => {
+		cleanDraftRef.current = nextDraft;
 		setDraft(nextDraft);
 		setCleanFingerprint(nextDraft ? modelDraftFingerprint(nextDraft) : null);
 		setFieldRowIds(nextDraft && isModelSpecDraft(nextDraft) ? nextDraft.fields.map(() => crypto.randomUUID()) : []);
@@ -243,14 +262,8 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		validate: validateAuthoring,
 		validation: authoringValidation,
 	} = authoring;
-	const unsavedChanges = dirty || authoringCodeDirty;
-	const blocker = useBlocker(
-		useCallback<BlockerFunction>(
-			({ currentLocation, nextLocation }) =>
-				shouldBlockWorkbenchNavigation(unsavedChanges, currentLocation.pathname, nextLocation.pathname),
-			[unsavedChanges],
-		),
-	);
+	const [assetGuard, setAssetGuard] = useState<UnsavedEditorHandle | null>(null);
+	const unsavedChanges = dirty || authoringCodeDirty || Boolean(assetGuard?.dirty);
 	const confirmDiscard = useCallback(() => !unsavedChanges || window.confirm(DISCARD_PROMPT), [unsavedChanges]);
 
 	useEffect(() => {
@@ -259,22 +272,6 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			requestEpoch.current += 1;
 		};
 	}, [load]);
-
-	useEffect(() => {
-		if (!unsavedChanges) return;
-		const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-			event.preventDefault();
-			event.returnValue = "";
-		};
-		window.addEventListener("beforeunload", handleBeforeUnload);
-		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-	}, [unsavedChanges]);
-
-	useEffect(() => {
-		if (blocker.state !== "blocked") return;
-		if (window.confirm(DISCARD_PROMPT)) blocker.proceed();
-		else blocker.reset();
-	}, [blocker]);
 
 	useEffect(() => {
 		const activeModelId = selectedModelId;
@@ -346,13 +343,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		});
 	};
 
-	const save = async () => {
-		if (savingRef.current || !draft || !context || !canMaintain) return;
+	const save = async (advance = true): Promise<boolean> => {
+		if (savingRef.current || !draft || !context || !canMaintain) return false;
 		setFailure(null);
 		if (isConceptDimensionDraft(draft)) {
 			const nextValidationErrors = validateConceptDimensionDraftInput(draft);
 			setValidationErrors(nextValidationErrors);
-			if (Object.keys(nextValidationErrors).length) return;
+			if (Object.keys(nextValidationErrors).length) return false;
 			savingRef.current = true;
 			setSaving(true);
 			try {
@@ -372,6 +369,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					params.delete("modelSpecId");
 				});
 				show(`维度草稿已保存：${saved.systemCode}`);
+				return true;
 			} catch (error) {
 				const failure = normalizeModelingRequestFailure(error, "维度保存失败。");
 				if (failure.code === "DIMENSION_DEFINITION_NAME_CONFLICT") {
@@ -379,7 +377,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					if (recovered) {
 						setSaving(false);
 						savingRef.current = false;
-						return;
+						return true;
 					}
 				}
 				setFailure(failure);
@@ -387,28 +385,34 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				savingRef.current = false;
 				setSaving(false);
 			}
-			return;
+			return false;
 		}
 		const preparedDraft = normalizeModelDraftImplementation(
 			prepareModelDraftForSave(draft, dimensionDefinitions),
 			context.implementationCapabilities,
 		);
-		const nextValidationErrors = preparedDraft.base
-			? validateModelDraftInput(preparedDraft, context.implementationCapabilities)
-			: validateModelDefinitionInput(preparedDraft);
+		const nextValidationErrors =
+			wizardStep === "definition" || !preparedDraft.base
+				? validateModelDefinitionInput(preparedDraft)
+				: validateModelDraftInput(preparedDraft, context.implementationCapabilities);
 		setValidationErrors(nextValidationErrors);
-		if (Object.keys(nextValidationErrors).length) return;
+		if (Object.keys(nextValidationErrors).length) return false;
 		if (
+			wizardStep !== "definition" &&
 			preparedDraft.base &&
 			!modelDraftNeedsImplementationRecovery(preparedDraft, context.implementationCapabilities)
 		) {
-			await authoring.save("VISUAL");
-			return;
+			return await authoring.save("VISUAL");
 		}
 		savingRef.current = true;
 		setSaving(true);
 		try {
-			const saved = await (preparedDraft.base ? saveModelDraft : saveModelDefinitionDraft)(preparedDraft, {
+			const persistDraft = !preparedDraft.base
+				? saveModelDefinitionDraft
+				: wizardStep === "definition"
+					? saveExistingModelDefinition
+					: saveModelDraft;
+			const saved = await persistDraft(preparedDraft, {
 				ownerId: ownerIdOf(userInfo),
 				dimensionDefinitions,
 				models: context.models,
@@ -432,12 +436,14 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			syncWorkbenchUrl((params) => {
 				params.set("modelSpecId", saved.model.id);
 				params.delete("dimensionDefinitionId");
-				if (!preparedDraft.base) {
+				if (advance && (wizardStep === "definition" || !preparedDraft.base)) {
 					params.set("step", "implementation");
 					params.set("view", "visual");
 				}
 			});
 			show(`模型草稿已保存：r${saved.model.revision}`);
+			setMaterializationRefreshKey((value) => value + 1);
+			return true;
 		} catch (error) {
 			if (error instanceof ModelDraftPartialSaveError) {
 				const recovered = {
@@ -461,77 +467,18 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					"模型保存失败。",
 				),
 			);
+			return false;
 		} finally {
 			savingRef.current = false;
 			setSaving(false);
 		}
 	};
-	const updateField = (index: number, patch: Partial<ModelSpecField>) => {
-		if (savingRef.current) return;
-		setDraft((current) =>
-			current && isModelSpecDraft(current) ? applyModelDraftFieldPatch(current, index, patch) : current,
-		);
-	};
-	const addFields = (count: number) => {
-		if (savingRef.current || !draft || !isModelSpecDraft(draft)) return;
-		const additionCount = Number.isFinite(count) ? Math.max(1, Math.min(20, Math.floor(count))) : 1;
-		const nextFields = Array.from({ length: additionCount }, () => ({
-			name: "",
-			displayName: "",
-			dataType: "STRING",
-			nullable: true,
-			role: "ATTRIBUTE" as const,
-			dimensionAttributeCode: null,
-		}));
-		const nextRowIds = nextFields.map(() => crypto.randomUUID());
-		setDraft((current) =>
-			current && isModelSpecDraft(current) ? { ...current, fields: [...current.fields, ...nextFields] } : current,
-		);
-		setFieldRowIds((current) => [...current, ...nextRowIds]);
-	};
-	const removeBlankFields = () => {
-		if (savingRef.current || !draft || !isModelSpecDraft(draft)) return;
-		const keepIndexes = draft.fields
-			.map((field, index) => (isBlankModelField(field) ? -1 : index))
-			.filter((index) => index >= 0);
-		const fields = keepIndexes.map((index) => draft.fields[index]);
-		const fieldNames = new Set(fields.map((field) => field.name));
-		setDraft({
-			...draft,
-			fields,
-			standardBindings: draft.standardBindings.filter((binding) => fieldNames.has(binding.fieldName)),
-			timeSemanticsFields: draft.timeSemanticsFields.filter((fieldName) => fieldNames.has(fieldName)),
-		});
-		setFieldRowIds((current) => keepIndexes.map((index) => current[index] || crypto.randomUUID()));
-	};
-	const deleteField = (index: number) => {
-		if (savingRef.current) return;
-		setFieldRowIds((current) => current.filter((_, row) => row !== index));
-		setDraft((current) => {
-			if (!current || !isModelSpecDraft(current)) return current;
-			const fieldName = current.fields[index]?.name;
-			return {
-				...current,
-				fields: current.fields.filter((_, row) => row !== index),
-				standardBindings: current.standardBindings.filter((binding) => binding.fieldName !== fieldName),
-				timeSemanticsFields: current.timeSemanticsFields.filter((item) => item !== fieldName),
-			};
-		});
-	};
-	const updateStandardBinding = (index: number, value: string) => {
-		if (savingRef.current) return;
-		setDraft((current) => {
-			if (!current || !isModelSpecDraft(current)) return current;
-			const fieldName = current.fields[index]?.name || "";
-			const remaining = current.standardBindings.filter((binding) => binding.fieldName !== fieldName);
-			if (!value || !fieldName) return { ...current, standardBindings: remaining };
-			const [standardElementId, version] = value.split("@");
-			return {
-				...current,
-				standardBindings: [...remaining, { fieldName, standardElementId, standardElementVersion: Number(version) }],
-			};
-		});
-	};
+	const { updateField, addFields, removeBlankFields, deleteField, updateStandardBinding } = useModelDraftFields(
+		draft,
+		savingRef,
+		setDraft,
+		setFieldRowIds,
+	);
 	useEffect(() => {
 		if (!legacyAdvanced || !requestedModelId || selectedModel?.id !== requestedModelId) return;
 		syncWorkbenchUrl((params) => {
@@ -648,111 +595,143 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 								返回模型列表
 							</Button>
 						</div>
-						{editorLoading ? (
-							<RequestState description="正在读取所选模型的版本与实现信息。" kind="loading" title="正在打开模型" />
-						) : requestedView === "code" && selectedModel ? (
-							<AdvancedDbtWorkspace
-								busy={authoringBusy}
-								canMaintain={canMaintain}
-								commit={authoringCommit}
-								conflict={authoringConflict}
-								context={authoringContext}
-								dirty={authoringCodeDirty || dirty}
-								failure={authoringFailure}
-								files={authoringFiles}
-								initialFocusNode={authoringFocusNode}
-								initialTargetPhysicalName={draft && isModelSpecDraft(draft) ? draft.physicalName : ""}
-								model={selectedModel}
-								onBack={() => setWorkbenchView("visual")}
-								onCommit={() => void commitAuthoring()}
-								onCreate={(targetPhysicalName) => void createAuthoring(targetPhysicalName)}
-								onFilesChange={setAuthoringFiles}
-								onSave={() => void saveAuthoring("CODE")}
-								onValidate={() => void validateAuthoring("CODE")}
-								validation={authoringValidation}
-							/>
-						) : draft ? (
-							<ModelingWorkbenchEditor
-								definitionOnly={!selectedModel && isModelSpecDraft(draft)}
-								authoringBusy={authoringBusy}
-								authoringConflict={authoringConflict}
-								authoringContext={authoringContext}
-								authoringFailure={authoringFailure}
-								authoringValidation={authoringValidation}
-								canMaintain={canMaintain}
-								context={context}
-								currentOwnerId={ownerIdOf(userInfo)}
-								dimensionDefinitionFailure={dimensionDefinitionFailure}
-								dimensionDefinitions={dimensionDefinitions}
-								dirty={saveNeeded || authoringCodeDirty}
-								draft={draft}
-								editorAccessMessage={editorAccess.message}
-								failureMessage={failure?.message || ""}
-								fieldRowIds={fieldRowIds}
-								materializationRefreshKey={materializationRefreshKey}
-								onViewChange={setWorkbenchView}
-								onAddFields={addFields}
-								onChange={(nextDraft) => {
-									if (savingRef.current) return;
-									setDraft(
-										isModelSpecDraft(nextDraft)
-											? { ...nextDraft, implementationIdempotencyKey: crypto.randomUUID() }
-											: nextDraft,
-									);
-									setValidationErrors({});
-									invalidateValidation();
-								}}
-								onDeleteField={deleteField}
-								onConfirmDimension={() => void confirmConceptVersion()}
-								onCommitAuthoring={() => void commitAuthoring()}
-								onDialog={(nextDialog) => {
-									if (!savingRef.current) setDialog(nextDialog);
-								}}
-								onRefresh={refresh}
-								onForkPublished={() => void createAuthoring()}
-								onOpenRawNode={(node) => {
-									setAuthoringFocusNode(node);
-									setWorkbenchView("code");
-								}}
-								onRemoveBlankFields={removeBlankFields}
-								onSave={() => void save()}
-								onStandardChange={updateStandardBinding}
-								onSourcesChanged={(sources, sourcePlanId) => {
-									if (savingRef.current) return;
-									setContext((current) =>
-										current ? { ...current, planId: sourcePlanId || current.planId, sources } : current,
-									);
-									setDraft((current) => {
-										if (!current || !isModelSpecDraft(current)) return current;
-										const next = reconcileModelDraftSources(current, sourcePlanId, sources);
-										if (next.planId === current.planId && next.sourceRefs === current.sourceRefs) return current;
-										return { ...next, implementationIdempotencyKey: crypto.randomUUID() };
-									});
-									setValidationErrors({});
-									invalidateValidation();
-								}}
-								onUpdateField={updateField}
-								onValidateAuthoring={() => void validateAuthoring("VISUAL")}
-								readOnly={editorAccess.readOnly}
-								saving={saving}
-								selectedModel={selectedModel}
-								validationErrors={validationErrors}
-								view={requestedView}
-							/>
-						) : (
-							<RequestState description="未能打开模型，请返回模型列表重试。" kind="error" title="模型打开失败" />
-						)}
+						<ModelWizardFrame
+							model={selectedModel}
+							enabled={!conceptDraft}
+							delivery={delivery.data}
+							loading={delivery.loading}
+							failure={delivery.failure}
+							onRefresh={() => setMaterializationRefreshKey((value) => value + 1)}
+							canMaintain={canMaintain}
+							onBack={returnToList}
+							dirty={dirty || authoringCodeDirty}
+							onAssetGuardChange={setAssetGuard}
+							commandsBlocked={unsavedChanges}
+						>
+							{editorLoading ? (
+								<RequestState description="正在读取所选模型的版本与实现信息。" kind="loading" title="正在打开模型" />
+							) : wizardStep === "implementation" && requestedView === "code" && selectedModel ? (
+								<AdvancedDbtWorkspace
+									busy={authoringBusy}
+									canMaintain={canMaintain}
+									commit={authoringCommit}
+									conflict={authoringConflict}
+									context={authoringContext}
+									dirty={authoringCodeDirty || dirty}
+									failure={authoringFailure}
+									files={authoringFiles}
+									initialFocusNode={authoringFocusNode}
+									initialTargetPhysicalName={draft && isModelSpecDraft(draft) ? draft.physicalName : ""}
+									model={selectedModel}
+									onBack={() => setWorkbenchView("visual")}
+									onCommit={() => void commitAuthoring()}
+									onSubmit={() =>
+										void authoring.submitImplementation("CODE").then((ok) => {
+											if (ok) {
+												setMaterializationRefreshKey((value) => value + 1);
+												syncWorkbenchUrl((params) => params.set("step", "verification"));
+											}
+										})
+									}
+									onNext={() => syncWorkbenchUrl((params) => params.set("step", "verification"))}
+									onPrevious={() => syncWorkbenchUrl((params) => params.set("step", "definition"))}
+									onCreate={(targetPhysicalName) => void createAuthoring(targetPhysicalName)}
+									onFilesChange={setAuthoringFiles}
+									onSave={() => void saveAuthoring("CODE")}
+									onValidate={() => void validateAuthoring("CODE")}
+									validation={authoringValidation}
+								/>
+							) : draft ? (
+								<ModelingWorkbenchEditor
+									definitionOnly={wizardStep === "definition" && isModelSpecDraft(draft)}
+									authoringBusy={authoringBusy}
+									authoringConflict={authoringConflict}
+									authoringContext={authoringContext}
+									authoringFailure={authoringFailure}
+									authoringValidation={authoringValidation}
+									canMaintain={canMaintain}
+									context={context}
+									currentOwnerId={ownerIdOf(userInfo)}
+									dimensionDefinitionFailure={dimensionDefinitionFailure}
+									dimensionDefinitions={dimensionDefinitions}
+									dirty={saveNeeded || authoringCodeDirty}
+									draft={draft}
+									editorAccessMessage={editorAccess.message}
+									failureMessage={failure?.message || ""}
+									fieldRowIds={fieldRowIds}
+									materializationRefreshKey={materializationRefreshKey}
+									onViewChange={setWorkbenchView}
+									onAddFields={addFields}
+									onChange={(nextDraft) => {
+										if (savingRef.current) return;
+										setDraft(
+											isModelSpecDraft(nextDraft)
+												? { ...nextDraft, implementationIdempotencyKey: crypto.randomUUID() }
+												: nextDraft,
+										);
+										setValidationErrors({});
+										invalidateValidation();
+									}}
+									onDeleteField={deleteField}
+									onConfirmDimension={() => void confirmConceptVersion()}
+									onCommitAuthoring={() => void commitAuthoring()}
+									onDialog={(nextDialog) => {
+										if (!savingRef.current) setDialog(nextDialog);
+									}}
+									onRefresh={refresh}
+									onForkPublished={() => void createAuthoring()}
+									onOpenRawNode={(node) => {
+										setAuthoringFocusNode(node);
+										setWorkbenchView("code");
+									}}
+									onRemoveBlankFields={removeBlankFields}
+									onSave={() => void save()}
+									onStash={() => void save(false)}
+									onSubmitImplementation={() =>
+										void authoring.submitImplementation("VISUAL").then((ok) => {
+											if (ok) {
+												setMaterializationRefreshKey((value) => value + 1);
+												syncWorkbenchUrl((params) => params.set("step", "verification"));
+											}
+										})
+									}
+									onNext={() => syncWorkbenchUrl((params) => params.set("step", "verification"))}
+									onPrevious={() => syncWorkbenchUrl((params) => params.set("step", "definition"))}
+									onStandardChange={updateStandardBinding}
+									onSourcesChanged={(sources, sourcePlanId) => {
+										if (savingRef.current) return;
+										setContext((current) =>
+											current ? { ...current, planId: sourcePlanId || current.planId, sources } : current,
+										);
+										setDraft((current) => {
+											if (!current || !isModelSpecDraft(current)) return current;
+											const next = reconcileModelDraftSources(current, sourcePlanId, sources);
+											if (next.planId === current.planId && next.sourceRefs === current.sourceRefs) return current;
+											return { ...next, implementationIdempotencyKey: crypto.randomUUID() };
+										});
+										setValidationErrors({});
+										invalidateValidation();
+									}}
+									onUpdateField={updateField}
+									onValidateAuthoring={() => void validateAuthoring("VISUAL")}
+									readOnly={
+										editorAccess.readOnly ||
+										Boolean(
+											selectedModel &&
+												(!delivery.data ||
+													delivery.data.wizard.find((page) => page.key === wizardStep)?.canEdit === false),
+										)
+									}
+									saving={saving}
+									selectedModel={selectedModel}
+									validationErrors={validationErrors}
+									view={requestedView}
+								/>
+							) : (
+								<RequestState description="未能打开模型，请返回模型列表重试。" kind="error" title="模型打开失败" />
+							)}
+						</ModelWizardFrame>
 					</section>
-					{requestedView !== "code" && selectedModel?.modelType === "FACT" ? (
-						<aside className="dmx-record-rail">
-							<Button disabled={saving || !selectedModel} onClick={() => setDialog("versions")}>
-								版本管理
-							</Button>
-							<Button disabled={saving || !selectedModel} onClick={() => setDialog("releases")}>
-								发布记录
-							</Button>
-						</aside>
-					) : null}
 				</div>
 			) : (
 				<RequestState
@@ -762,6 +741,19 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					title="模型工作台加载失败"
 				/>
 			)}
+			<ModelWorkbenchNavigationGuard
+				dirty={unsavedChanges}
+				savingRef={savingRef}
+				onSave={() =>
+					assetGuard?.dirty ? assetGuard.save() : requestedView === "code" ? saveAuthoring("CODE") : save(false)
+				}
+				onDiscard={() => {
+					assetGuard?.discard();
+					replaceDraft(cleanDraftRef.current);
+					void reloadAuthoring();
+				}}
+			/>
+
 			<ModelWorkbenchDialog
 				canMaintain={canMaintain}
 				dialog={dialog}

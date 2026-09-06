@@ -683,9 +683,11 @@
                         <testInclude>**/service/modeling/ModelMaterializationStartServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PostgresPhysicalRelationInspectorTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateApplicationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelDeliveryStatusQueryServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateGovernanceQualityEvidenceServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateGovernanceQualityRerunServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateQualityAssetRegistrationServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/CandidateQualityRuleContextServiceTest.java</testInclude>
                         <testInclude>**/service/governance/JdbcGovernanceQualityEvidenceAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidatePreflightServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidatePublicationAdmissionServiceTest.java</testInclude>
@@ -873,6 +875,7 @@
                         <testInclude>**/web/rest/catalog/CatalogDomainResourceFactsTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogDomainResourceWebMvcTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogGovernanceResourceTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogDatasetGovernanceSummaryTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogTag*.java</testInclude>
                         <testInclude>**/web/rest/internal/CatalogExternalAssetIdentity*.java</testInclude>
                         <testInclude>**/web/rest/internal/DbtRuntimeProfile*.java</testInclude>

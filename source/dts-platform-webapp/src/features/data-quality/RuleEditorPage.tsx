@@ -15,6 +15,7 @@ import { displayName, type QualityRule, type QualityTemplate, toList } from "./q
 import { bindTemplateTargetTable } from "./templateBindings";
 import { useDefaultLakeDatasets } from "./useDefaultLakeDatasets";
 import { useQualityMaintainerAccess } from "./useQualityAccess";
+import { sanitizeModelingReturnTo } from "@/features/modeling/navigation/modelingReturnPath";
 
 type RuleForm = {
 	name: string;
@@ -54,6 +55,7 @@ export function RuleEditorPage() {
 	const [searchParams] = useSearchParams();
 	const linkedDatasetId = searchParams.get("datasetId") || undefined;
 	const linkedTemplateId = searchParams.get("templateId") || undefined;
+	const workflowReturnTo = sanitizeModelingReturnTo(searchParams.get("returnTo"));
 	const navigate = useNavigate();
 	const canManage = useQualityMaintainerAccess();
 	const { datasets, loading: datasetsLoading, message, lakeName } = useDefaultLakeDatasets();
@@ -130,6 +132,9 @@ export function RuleEditorPage() {
 				if (sequence !== loadSequence.current || activeRuleId.current !== requestedRuleId) return;
 				const rule = toList<QualityRule>(response).find((item) => String(item.id) === requestedRuleId);
 				if (!rule) throw new Error("未找到需要编辑的规则");
+				if (linkedDatasetId && rule.datasetId !== linkedDatasetId) {
+					throw new Error("该规则不属于当前模型物化资产，不能在此上下文编辑");
+				}
 				const version = Number(rule.latestVersion?.version);
 				if (
 					!Number.isSafeInteger(version) ||
@@ -298,6 +303,9 @@ export function RuleEditorPage() {
 		}
 		try {
 			const values = await form.validateFields();
+			if (linkedDatasetId && values.datasetId !== linkedDatasetId) {
+				throw new Error("模型物化资产不可变更，请返回模型交付流程后重新进入");
+			}
 			if (
 				activeRuleId.current !== operationRuleId ||
 				(operationRuleId && !isLoadedRuleCurrent(operationRuleId, operationRule)) ||
@@ -318,13 +326,14 @@ export function RuleEditorPage() {
 			) {
 				throw new Error("规则、版本或模板已切换，请重新确认后保存");
 			}
-			const payload = buildQualityRulePayload(
-				{
+			const payload = {
+				...buildQualityRulePayload(
+					{
 					name: values.name.trim(),
 					code: values.code?.trim() || undefined,
 					type: values.type,
 					severity: values.severity,
-					datasetId: values.datasetId,
+					datasetId: linkedDatasetId || values.datasetId,
 					category: values.category?.trim() || undefined,
 					description: values.description?.trim() || undefined,
 					owner: values.owner?.trim() || undefined,
@@ -335,9 +344,11 @@ export function RuleEditorPage() {
 					enabled: values.enabled,
 					publishNow: values.publishNow,
 					definition: { sql: renderedSql },
-				},
-				operationRule,
-			);
+					},
+					operationRule,
+				),
+				...(operationRuleId ? { expectedVersion: loadedRuleIdentity.current?.version } : {}),
+			};
 			if (operationRuleId) await updateQualityRule(operationRuleId, payload);
 			else await createQualityRule(payload);
 			if (
@@ -346,7 +357,9 @@ export function RuleEditorPage() {
 			)
 				return;
 			toast.success(operationRuleId ? "规则已更新并保存新版本" : "规则已创建");
-			navigate(operationRuleId ? qualityPath("rule-detail", { ruleId: operationRuleId }) : qualityPath("rule-list"));
+			navigate(
+				workflowReturnTo || (operationRuleId ? qualityPath("rule-detail", { ruleId: operationRuleId }) : qualityPath("rule-list")),
+			);
 		} catch (error) {
 			if ((error as { errorFields?: unknown })?.errorFields) return;
 			if (
@@ -433,7 +446,7 @@ export function RuleEditorPage() {
 							showSearch
 							optionFilterProp="label"
 							loading={datasetsLoading}
-							disabled={Boolean(message)}
+							disabled={Boolean(message) || Boolean(linkedDatasetId)}
 							options={datasetOptions}
 							placeholder="选择数据资产"
 							onChange={() => setPreviewSql("")}
@@ -499,7 +512,9 @@ export function RuleEditorPage() {
 					</Space>
 					<Space>
 						<Button
-							onClick={() => navigate(ruleId ? qualityPath("rule-detail", { ruleId }) : qualityPath("rule-list"))}
+							onClick={() =>
+								navigate(workflowReturnTo || (ruleId ? qualityPath("rule-detail", { ruleId }) : qualityPath("rule-list")))
+							}
 						>
 							取消
 						</Button>

@@ -9,6 +9,7 @@ import type {
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { DbtEditorFocusLocation } from "./DbtCodeEditor";
 import { dbtDraftStatusLabel } from "./dbtCodeEditorContract";
+import { ModelWizardEditorActions } from "./ModelWizardEditorActions";
 import { Button, RequestState, Status } from "./PrototypePrimitives";
 
 const LazyDbtCodeEditor = lazy(() => import("./DbtCodeEditor").then((module) => ({ default: module.DbtCodeEditor })));
@@ -47,6 +48,9 @@ export type AdvancedDbtWorkspaceProps = {
 	onSave: () => void;
 	onValidate: () => void;
 	onCommit: () => void;
+	onSubmit?: () => void;
+	onNext?: () => void;
+	onPrevious?: () => void;
 };
 
 export function AdvancedDbtWorkspace({
@@ -68,6 +72,9 @@ export function AdvancedDbtWorkspace({
 	onSave,
 	onValidate,
 	onCommit,
+	onSubmit,
+	onNext,
+	onPrevious,
 }: AdvancedDbtWorkspaceProps) {
 	const draft = context?.openDraft || null;
 	const projection = context?.projection || null;
@@ -272,26 +279,22 @@ export function AdvancedDbtWorkspace({
 								<RequestState description="选择已有文件或新增文件。" kind="empty" title="暂无选中文件" />
 							)}
 						</section>
-						<footer>
-							<span>
-								状态：{draftStatus} · 到期：{draft.expiresAt}
-							</span>
-							<Button disabled={!canEditImplementation || Boolean(busy) || !dirty} onClick={onSave}>
-								{busy === "save" ? "保存中…" : "保存草稿"}
-							</Button>
-							<Button disabled={!canMaintain || Boolean(busy) || !files.length} onClick={onValidate}>
-								{busy === "validate" ? "校验中…" : "校验"}
-							</Button>
-							<Button
-								disabled={
-									!canMaintain || Boolean(busy) || dirty || validationBlocked || !validation?.implementationValidation
-								}
-								onClick={onCommit}
-								primary
-							>
-								{busy === "commit" ? "提交中…" : "提交实现"}
-							</Button>
-						</footer>
+						<ModelWizardEditorActions
+							definition={false}
+							persisted
+							published={context.publishedForkRequired}
+							dirty={dirty}
+							busy={Boolean(busy)}
+							readOnly={conflict}
+							canMaintain={canMaintain}
+							context={context}
+							onSave={onSave}
+							onStash={onSave}
+							onSubmit={onSubmit || onCommit}
+							onNext={onNext || onBack}
+							onPrevious={onPrevious || onBack}
+							onFork={() => onCreate(targetPhysicalName.trim())}
+						/>
 					</div>
 				</>
 			)}

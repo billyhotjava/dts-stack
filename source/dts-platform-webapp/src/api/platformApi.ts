@@ -36,6 +36,9 @@ export const deleteDomain = (id: string) => api.delete({ url: `/catalog/domains/
 
 export const listDatasets = (params: any = {}) => api.get({ url: "/catalog/datasets", params });
 export const getDataset = (id: string) => api.get({ url: `/catalog/datasets/${id}` });
+export type DatasetGovernanceSummary = { id: string; version: number; owner?: string | null; description?: string | null };
+export const updateDatasetGovernanceSummary = (id: string, data: Pick<DatasetGovernanceSummary, "owner" | "description">, version: number) =>
+	api.patch({ url: `/catalog/datasets/${id}/governance-summary`, data, headers: { "If-Match": `"catalog-dataset:${id}:${version}"` } });
 export const getDatasetOpenMetadata = (id: string) => api.get({ url: `/catalog/datasets/${id}/openmetadata` });
 export const batchDatasetOpenMetadata = (ids: string[]) =>
 	api.post({ url: "/catalog/datasets/openmetadata/batch", data: { ids } });
@@ -733,7 +736,8 @@ export const listAirflowJobRuns = (dagId: string, limit = 20) =>
 export const triggerAirflowJob = (dagId: string, data?: any) =>
 	api.post({ url: `/etl/airflow/jobs/${dagId}/trigger`, data });
 export const createDataset = (data: any) => api.post({ url: "/catalog/datasets", data });
-export const updateDataset = (id: string, data: any) => api.put({ url: `/catalog/datasets/${id}`, data });
+export const updateDataset = (id: string, data: any, version: number) =>
+	api.put({ url: `/catalog/datasets/${id}`, data, headers: { "If-Match": `"catalog-dataset:${id}:${version}"` } });
 export const deleteDataset = (id: string) => api.delete({ url: `/catalog/datasets/${id}` });
 export const listDatasetGrants = (datasetId: string) => api.get({ url: `/catalog/datasets/${datasetId}/grants` });
 export const createDatasetGrant = (datasetId: string, data: any) =>
@@ -1106,14 +1110,33 @@ export const getRuleHistory = (ruleId: string, limit?: number) =>
 	api.get<RuleRunHistory[]>({ url: `/governance/quality/rules/${ruleId}/history`, params: { limit } });
 
 // Governance
+export type QualityRuleUpsertPayload = {
+	name: string;
+	code?: string;
+	type: string;
+	severity?: string;
+	datasetId?: string;
+	expectedVersion?: number;
+	category?: string;
+	description?: string;
+	owner?: string;
+	dataLevel?: string;
+	executor?: string;
+	frequencyCron?: string;
+	template?: boolean;
+	enabled?: boolean;
+	publishNow?: boolean;
+	definition?: { sql?: string };
+	bindings?: Array<{ datasetId: string; scopeType: "DATASET" }>;
+};
 export const listQualityRules = () => api.get({ url: "/governance/quality/rules" });
 export const listQualityRuleVersions = (id: string) => api.get({ url: `/governance/quality/rules/${id}/versions` });
 export const getQualityRuleVersion = (id: string, version: number) =>
 	api.get({ url: `/governance/quality/rules/${id}/versions/${version}` });
 export const changeQualityRuleVersionStatus = (id: string, version: number, data: { status: string; notes?: string }) =>
 	api.post({ url: `/governance/quality/rules/${id}/versions/${version}/status`, data });
-export const createQualityRule = (data: any) => api.post({ url: "/governance/quality/rules", data });
-export const updateQualityRule = (id: string, data: any) => api.put({ url: `/governance/quality/rules/${id}`, data });
+export const createQualityRule = (data: QualityRuleUpsertPayload) => api.post({ url: "/governance/quality/rules", data });
+export const updateQualityRule = (id: string, data: QualityRuleUpsertPayload) => api.put({ url: `/governance/quality/rules/${id}`, data });
 export const deleteQualityRule = (id: string) => api.delete({ url: `/governance/quality/rules/${id}` });
 export const toggleQualityRule = (id: string, enabled: boolean) =>
 	api.post({ url: `/governance/quality/rules/${id}/toggle`, data: { enabled } });

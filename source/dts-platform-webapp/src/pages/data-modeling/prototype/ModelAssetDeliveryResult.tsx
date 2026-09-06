@@ -1,27 +1,33 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { getModelServingSyncStatuses, type ModelServingSyncStatus } from "@/api/modelSpecApi";
+import { useEffect, useMemo, useState } from "react";
+import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import { type CompactColumns, CompactTable } from "@/components/table";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { useRouter } from "@/routes/hooks";
-import { MODEL_SERVING_SYNC_PRESENTATION, resolveModelServingPhysicalAssetId } from "./modelServingSyncPresentation";
-import { Button, Status } from "./PrototypePrimitives";
+import { ModelDeliveryStatusCell, resolveModelDeliveryCell } from "./ModelDeliveryStatusCell";
+import { Button } from "./PrototypePrimitives";
 
-type DeliveryRow = Pick<ModelSpecView, "id" | "name"> & { status: ModelServingSyncStatus | null };
+type DeliveryRow = Pick<ModelSpecView, "id" | "name" | "revision"> & { status: ModelDeliveryStatus | null };
 
+/** Current-revision registration and serving state; it never reads legacy sync badges. */
 export function ModelAssetDeliveryResult({ models }: { models: ModelSpecView[] }) {
 	const router = useRouter();
-	const modelIdsKey = models.map((model) => model.id).join(",");
-	const [statuses, setStatuses] = useState<Map<string, ModelServingSyncStatus>>(() => new Map());
+	const modelIdsKey = models.map((model) => `${model.id}:${model.revision}`).join(",");
+	const [statuses, setStatuses] = useState<Map<string, ModelDeliveryStatus>>(() => new Map());
 	const [loading, setLoading] = useState(true);
 	const [failed, setFailed] = useState(false);
 	const load = useCallback(async () => {
-		const modelSpecIds = modelIdsKey.split(",").filter(Boolean);
-		if (!modelSpecIds.length) return;
+		if (!models.length) {
+			setStatuses(new Map());
+			setLoading(false);
+			return;
+		}
 		setLoading(true);
 		setFailed(false);
 		try {
-			const result = await getModelServingSyncStatuses(modelSpecIds);
-			setStatuses(new Map(result.map((status) => [status.modelSpecId, status])));
+			const results = await Promise.all(
+				models.map(async (model) => [model.id, await getModelDeliveryStatus(model.id)] as const),
+			);
+			setStatuses(new Map(results));
 		} catch {
 			setStatuses(new Map());
 			setFailed(true);
@@ -32,40 +38,36 @@ export function ModelAssetDeliveryResult({ models }: { models: ModelSpecView[] }
 	useEffect(() => {
 		void load();
 	}, [load]);
-	const rows = models.map((model) => ({ id: model.id, name: model.name, status: statuses.get(model.id) || null }));
+	const rows = models.map((model) => ({
+		id: model.id,
+		name: model.name,
+		revision: model.revision,
+		status: statuses.get(model.id) || null,
+	}));
 	const columns = useMemo<CompactColumns<DeliveryRow>>(
 		() => [
 			{ title: "模型", dataIndex: "name" },
 			{
-				title: "目录状态",
-				key: "syncStatus",
-				render: (_, row) => {
-					const presentation = row.status
-						? MODEL_SERVING_SYNC_PRESENTATION[row.status.syncStatus]
-						: MODEL_SERVING_SYNC_PRESENTATION.NOT_REGISTERED;
-					return (
-						<Status tone={failed && !row.status ? "danger" : presentation.tone}>
-							{loading && !row.status
-								? "目录同步读取中"
-								: failed && !row.status
-									? "目录同步读取失败"
-									: presentation.label}
-						</Status>
-					);
-				},
+				title: "目录登记",
+				key: "catalog",
+				render: (_, row) => (
+					<ModelDeliveryStatusCell model={row} status={row.status} kind="catalog" loading={loading} failed={failed} />
+				),
 			},
 			{
-				title: "资产",
-				key: "asset",
-				render: (_, row) => row.status?.catalogAssetKey || "尚未登记",
+				title: "分析准备",
+				key: "analysis",
+				render: (_, row) => (
+					<ModelDeliveryStatusCell model={row} status={row.status} kind="analysis" loading={loading} failed={failed} />
+				),
 			},
 			{
 				title: "操作",
 				key: "action",
 				render: (_, row) => {
-					const physicalAssetId = resolveModelServingPhysicalAssetId(row.status);
-					return physicalAssetId ? (
-						<Button onClick={() => router.push(`/catalog/datasets/${encodeURIComponent(physicalAssetId)}`)} type="text">
+					const assetId = resolveModelDeliveryCell(row, row.status, "catalog").assetId;
+					return assetId ? (
+						<Button onClick={() => router.push(`/catalog/datasets/${encodeURIComponent(assetId)}`)} type="text">
 							查看资产
 						</Button>
 					) : (
@@ -80,11 +82,11 @@ export function ModelAssetDeliveryResult({ models }: { models: ModelSpecView[] }
 		<section aria-label="资产登记结果">
 			<div className="dmx-materialization-plan-toolbar">
 				<strong>资产登记结果</strong>
-				<Button disabled={loading} onClick={() => void load()}>
+				<Button disabled={loading} onClick={() => setReload((value) => value + 1)}>
 					{loading ? "读取中…" : "刷新资产状态"}
 				</Button>
 			</div>
-			<p className="dmx-capability-note">发布登记与物理表构建分别核验；目录同步成功后可直接进入治理资产详情。</p>
+			<p className="dmx-capability-note">目录登记与分析准备分别以当前模型版本的交付证据展示。</p>
 			<div className="dmx-table-scroll">
 				<CompactTable<DeliveryRow> columns={columns} dataSource={rows} pagination={false} rowKey="id" />
 			</div>

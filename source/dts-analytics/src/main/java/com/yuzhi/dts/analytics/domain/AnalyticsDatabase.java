@@ -23,6 +23,12 @@ public class AnalyticsDatabase implements Serializable {
     @Column(name = "name", nullable = false, length = 255)
     private String name;
 
+    @Column(name = "tenant_id", length = 128)
+    private String tenantId;
+
+    @Column(name = "platform_data_source_id")
+    private java.util.UUID platformDataSourceId;
+
     @Column(name = "engine", nullable = false, length = 64)
     private String engine;
 
@@ -73,6 +79,22 @@ public class AnalyticsDatabase implements Serializable {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getTenantId() {
+        return tenantId;
+    }
+
+    public void setTenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+
+    public java.util.UUID getPlatformDataSourceId() {
+        return platformDataSourceId;
+    }
+
+    public void setPlatformDataSourceId(java.util.UUID platformDataSourceId) {
+        this.platformDataSourceId = platformDataSourceId;
     }
 
     public String getEngine() {
@@ -177,4 +199,3 @@ public class AnalyticsDatabase implements Serializable {
         updatedAt = Instant.now();
     }
 }
-

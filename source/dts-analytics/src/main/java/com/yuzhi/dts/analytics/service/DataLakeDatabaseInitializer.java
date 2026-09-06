@@ -1,9 +1,7 @@
 package com.yuzhi.dts.analytics.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.domain.AnalyticsDatabase;
-import com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository;
+import java.util.UUID;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,34 +22,23 @@ public class DataLakeDatabaseInitializer {
     static final String DATA_LAKE_SOURCE_KEY = "data-lake";
     static final String DATA_LAKE_NAME = "数据湖 (数仓)";
 
-    private final AnalyticsDatabaseRepository databaseRepository;
     private final PlatformInfraClient platformInfraClient;
     private final MetadataSyncService metadataSyncService;
-    private final ObjectMapper objectMapper;
+    private final PlatformAnalyticsDatabaseRegistrationService registrationService;
 
     public DataLakeDatabaseInitializer(
-        AnalyticsDatabaseRepository databaseRepository,
         PlatformInfraClient platformInfraClient,
         MetadataSyncService metadataSyncService,
-        ObjectMapper objectMapper
+        PlatformAnalyticsDatabaseRegistrationService registrationService
     ) {
-        this.databaseRepository = databaseRepository;
         this.platformInfraClient = platformInfraClient;
         this.metadataSyncService = metadataSyncService;
-        this.objectMapper = objectMapper;
+        this.registrationService = registrationService;
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public boolean initializeDataLake() {
         try {
-            // Check if data lake already exists locally
-            boolean exists = databaseRepository.findAll().stream()
-                .anyMatch(DataLakeDatabaseInitializer::isDataLakeDatabase);
-            if (exists) {
-                LOG.info("[data-lake-init] Data lake database already exists, skipping");
-                return true;
-            }
-
             // Find biadmin data source from platform
             List<PlatformInfraClient.DataSourceSummary> sources = platformInfraClient.listDataSources();
             PlatformInfraClient.DataSourceSummary biadmin = sources.stream()
@@ -64,26 +51,7 @@ public class DataLakeDatabaseInitializer {
                 return false;
             }
 
-            // Create AnalyticsDatabase referencing the platform data source
-            ObjectNode details = objectMapper.createObjectNode();
-            details.put("platformDataSourceId", biadmin.id());
-            details.put("source", DATA_LAKE_SOURCE_KEY);
-            details.put("system", true);
-
-            AnalyticsDatabase db = new AnalyticsDatabase();
-            db.setName(DATA_LAKE_NAME);
-            db.setEngine("postgres");
-            db.setDetailsJson(details.toString());
-            db.setDescription("内置数据湖，用于存储建模输出与上传数据");
-            db.setSample(false);
-            db.setTimezone(java.time.ZoneId.systemDefault().getId());
-            db.setMetadataSyncSchedule("0 50 * * * ? *");
-            db.setCacheFieldValuesSchedule("0 50 0 * * ? *");
-            db.setAutoRunQueries(true);
-            db.setFullSync(true);
-            db.setOnDemand(false);
-
-            db = databaseRepository.save(db);
+            AnalyticsDatabase db = registrationService.ensureDataLakeDatabase(UUID.fromString(biadmin.id()));
             LOG.info("[data-lake-init] Created data lake database id={} platformDataSourceId={}", db.getId(), biadmin.id());
 
             // Sync metadata so tables appear immediately

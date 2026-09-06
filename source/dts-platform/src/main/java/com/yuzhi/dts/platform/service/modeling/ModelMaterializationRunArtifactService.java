@@ -16,6 +16,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliverySt
 import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.GenerationCheck;
 import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.GenerationDrift;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.ExpectedRelationType;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalColumn;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalRelationObservation;
@@ -66,6 +67,7 @@ public class ModelMaterializationRunArtifactService {
     private final PhysicalRelationInspectorRegistry inspectors;
     private final PhysicalRelationObservationRepository observations;
     private final ModelReleaseCandidateService candidates;
+    private final CandidateQualityAssetRegistrationService qualityAssets;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final Clock clock;
@@ -80,6 +82,7 @@ public class ModelMaterializationRunArtifactService {
         PhysicalRelationInspectorRegistry inspectors,
         PhysicalRelationObservationRepository observations,
         ModelReleaseCandidateService candidates,
+        CandidateQualityAssetRegistrationService qualityAssets,
         AuditService auditService,
         ObjectMapper objectMapper,
         PlatformTransactionManager transactionManager
@@ -92,6 +95,7 @@ public class ModelMaterializationRunArtifactService {
             inspectors,
             observations,
             candidates,
+            qualityAssets,
             auditService,
             objectMapper,
             Clock.systemUTC(),
@@ -107,6 +111,7 @@ public class ModelMaterializationRunArtifactService {
         PhysicalRelationInspectorRegistry inspectors,
         PhysicalRelationObservationRepository observations,
         ModelReleaseCandidateService candidates,
+        CandidateQualityAssetRegistrationService qualityAssets,
         AuditService auditService,
         ObjectMapper objectMapper,
         Clock clock,
@@ -136,6 +141,10 @@ public class ModelMaterializationRunArtifactService {
         this.candidates = Objects.requireNonNull(
             candidates,
             "candidates is required"
+        );
+        this.qualityAssets = Objects.requireNonNull(
+            qualityAssets,
+            "qualityAssets is required"
         );
         this.auditService = Objects.requireNonNull(
             auditService,
@@ -268,12 +277,19 @@ public class ModelMaterializationRunArtifactService {
                     scope.entries().size(),
                     now
                 );
-                transitionCandidate(
+                CommandResult built = transitionCandidate(
                     group,
                     DeliveryStatus.BUILT,
                     "materialization-built-" + groupId,
                     "dbt build and physical relation evidence verified"
                 );
+                if (built == null || built.candidate() == null) {
+                    throw failure(
+                        "MODEL_SPEC_GOVERNANCE_ASSET_REGISTRATION_FAILED",
+                        "Built candidate was not available for governance asset registration"
+                    );
+                }
+                qualityAssets.ensureRegistered(built.candidate());
                 auditRun(
                     group,
                     "relations-verified:" + invocationId,
@@ -1135,13 +1151,13 @@ public class ModelMaterializationRunArtifactService {
             .toList();
     }
 
-    private void transitionCandidate(
+    private CommandResult transitionCandidate(
         RunGroupRecord group,
         DeliveryStatus target,
         String idempotencyKey,
         String reason
     ) {
-        candidates.transition(
+        return candidates.transition(
             group.tenantId(),
             "service:dts-airflow",
             group.candidateId(),

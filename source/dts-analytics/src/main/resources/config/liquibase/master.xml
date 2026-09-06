@@ -58,4 +58,5 @@
     <include file="config/liquibase/changelog/0051_governed_analysis_spec.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0052_analysis_publication.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0053_data_portal.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0054_platform_database_registration.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

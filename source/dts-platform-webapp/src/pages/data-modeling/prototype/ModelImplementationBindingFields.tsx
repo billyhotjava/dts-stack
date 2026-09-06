@@ -15,8 +15,8 @@ import { ModelSourceInventoryDialog } from "./ModelSourceInventoryDialog";
 import { ModelVisualTransformationFields } from "./ModelVisualTransformationFields";
 import { Button } from "./PrototypePrimitives";
 import {
-	MODEL_KIND_CONFIG,
 	applyModelDraftFieldPatch,
+	MODEL_KIND_CONFIG,
 	type ModelDraftValidationErrors,
 	type ModelSpecDraft,
 	type ModelWorkbenchContext,
@@ -25,6 +25,7 @@ import {
 
 type Props = {
 	definitionOnly?: boolean;
+	implementationOnly?: boolean;
 	draft: ModelSpecDraft;
 	context: ModelWorkbenchContext;
 	validationErrors: ModelDraftValidationErrors;
@@ -100,6 +101,7 @@ function ValidationMessage({ message }: { message?: string }) {
 
 export function ModelImplementationBindingFields({
 	definitionOnly = false,
+	implementationOnly = false,
 	draft,
 	context,
 	validationErrors,
@@ -331,7 +333,7 @@ export function ModelImplementationBindingFields({
 							</div>
 						) : null}
 
-						{draft.createKind === "fact" ? (
+						{!implementationOnly && draft.createKind === "fact" ? (
 							<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
 								<strong>引用维度模型</strong>
 								{dimensionCandidates.map((model) => (
@@ -368,7 +370,7 @@ export function ModelImplementationBindingFields({
 					</>
 				) : null}
 
-				{draft.createKind === "fact" ? (
+				{!implementationOnly && draft.createKind === "fact" ? (
 					<>
 						<label>
 							<span>事实类型（可选）</span>
@@ -429,7 +431,7 @@ export function ModelImplementationBindingFields({
 					</>
 				) : null}
 
-				{draft.createKind === "application" ? (
+				{!implementationOnly && draft.createKind === "application" ? (
 					<label className="dmx-workbench-editor__wide-field">
 						<span className="required">应用场景</span>
 						<textarea

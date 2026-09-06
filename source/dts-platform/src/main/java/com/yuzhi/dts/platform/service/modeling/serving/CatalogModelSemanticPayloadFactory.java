@@ -97,6 +97,7 @@ public class CatalogModelSemanticPayloadFactory {
             ? null
             : firstText(model.grain().statement(), String.join(", ", model.grain().keys()));
         return new PublishPayload(
+            projection.tenantId(),
             serving.sourceId().toString(),
             "model_spec_" + model.id().toString().replace("-", ""),
             serving.identifier(),

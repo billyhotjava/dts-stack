@@ -1,12 +1,9 @@
 import { Space } from "antd";
 import { Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import {
-	getModelMaterializationStatuses,
-	getModelServingSyncStatuses,
 	listModelWorkbenchCatalogPage,
-	type ModelMaterializationStatus,
-	type ModelServingSyncStatus,
 	type ModelWorkbenchCatalogEntry,
 	type ModelWorkbenchCatalogPage,
 } from "@/api/modelSpecApi";
@@ -16,9 +13,8 @@ import type { DimensionDefinitionView } from "@/features/modeling/contracts/dime
 import type { ModelSpecLayer, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { useRouter } from "@/routes/hooks";
 import { statusLabel } from "@/utils/customerDisplayLabels";
-import { resolveMaterializationPresentation } from "./ModelMaterializationStatus";
+import { ModelDeliveryStatusCell, resolveModelDeliveryCell } from "./ModelDeliveryStatusCell";
 import { ModelWorkbenchCreateMenu } from "./ModelWorkbenchCreateMenu";
-import { MODEL_SERVING_SYNC_PRESENTATION, resolveModelServingPhysicalAssetId } from "./modelServingSyncPresentation";
 import { Button, RequestState, Status } from "./PrototypePrimitives";
 import type { ModelCreateKind } from "./services/modelWorkbenchService";
 import "./modeling-workbench.css";
@@ -104,12 +100,9 @@ export function ModelWorkbenchCatalogList({
 	const [catalogLoading, setCatalogLoading] = useState(true);
 	const [compatibilityFallback, setCompatibilityFallback] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-	const [materializationByModel, setMaterializationByModel] = useState<Map<string, ModelMaterializationStatus>>(
-		() => new Map(),
-	);
-	const [servingByModel, setServingByModel] = useState<Map<string, ModelServingSyncStatus>>(() => new Map());
-	const [servingLoading, setServingLoading] = useState(false);
-	const [servingFailure, setServingFailure] = useState(false);
+	const [deliveryByModel, setDeliveryByModel] = useState<Map<string, ModelDeliveryStatus>>(() => new Map());
+	const [deliveryLoading, setDeliveryLoading] = useState(false);
+	const [deliveryFailure, setDeliveryFailure] = useState(false);
 	const domainById = useMemo(() => new Map(domains.map((domain) => [domain.id, domain.name])), [domains]);
 	const modelById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models]);
 	const dimensionById = useMemo(() => new Map(dimensions.map((dimension) => [dimension.id, dimension])), [dimensions]);
@@ -122,36 +115,13 @@ export function ModelWorkbenchCatalogList({
 	);
 	const statusOptions = useMemo(
 		() =>
-			Array.from(new Set([...dimensions.map((item) => item.status), ...models.map((item) => item.status), "ARCHIVED"])).sort(),
+			Array.from(
+				new Set([...dimensions.map((item) => item.status), ...models.map((item) => item.status), "ARCHIVED"]),
+			).sort(),
 		[dimensions, models],
 	);
 	const normalized = query.trim().toLowerCase();
 	const categoryRoots = useMemo(() => domains.filter((domain) => !domain.parentCode), [domains]);
-
-	useEffect(() => {
-		let active = true;
-		const byPlan = new Map<string, string[]>();
-		models.forEach((model) => {
-			if (!model.planId) return;
-			byPlan.set(model.planId, [...(byPlan.get(model.planId) || []), model.id]);
-		});
-		const requests = Array.from(byPlan.entries()).flatMap(([planId, ids]) => {
-			const chunks: Promise<ModelMaterializationStatus[]>[] = [];
-			for (let offset = 0; offset < ids.length; offset += 100)
-				chunks.push(getModelMaterializationStatuses(planId, ids.slice(offset, offset + 100)));
-			return chunks;
-		});
-		void Promise.all(requests)
-			.then((groups) => {
-				if (active) setMaterializationByModel(new Map(groups.flat().map((item) => [item.modelSpecId, item])));
-			})
-			.catch(() => {
-				if (active) setMaterializationByModel(new Map());
-			});
-		return () => {
-			active = false;
-		};
-	}, [models]);
 
 	useEffect(() => {
 		const available = new Set(models.map((model) => model.id));
@@ -281,36 +251,41 @@ export function ModelWorkbenchCatalogList({
 		? filteredLocalRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 		: serverRows;
 	const pageModelIdsKey = pageRows
-		.map((row) => row.model?.id || "")
+		.map((row) => (row.model ? `${row.model.id}:${row.model.revision}` : ""))
 		.filter(Boolean)
 		.join(",");
 	useEffect(() => {
-		const modelSpecIds = pageModelIdsKey.split(",").filter(Boolean);
+		const modelSpecIds = pageModelIdsKey
+			.split(",")
+			.map((item) => item.split(":")[0])
+			.filter(Boolean);
 		if (!modelSpecIds.length) {
-			setServingByModel(new Map());
-			setServingLoading(false);
-			setServingFailure(false);
+			setDeliveryByModel(new Map());
+			setDeliveryLoading(false);
+			setDeliveryFailure(false);
 			return;
 		}
 		let active = true;
-		setServingLoading(true);
-		setServingFailure(false);
-		void getModelServingSyncStatuses(modelSpecIds)
-			.then((statuses) => {
-				if (active) setServingByModel(new Map(statuses.map((status) => [status.modelSpecId, status])));
+		setDeliveryLoading(true);
+		setDeliveryFailure(false);
+		void Promise.all(modelSpecIds.map(async (id) => [id, await getModelDeliveryStatus(id)] as const))
+			.then((results) => {
+				if (active) setDeliveryByModel(new Map(results));
 			})
 			.catch(() => {
-				if (!active) return;
-				setServingByModel(new Map());
-				setServingFailure(true);
+				if (active) {
+					setDeliveryByModel(new Map());
+					setDeliveryFailure(true);
+				}
 			})
 			.finally(() => {
-				if (active) setServingLoading(false);
+				if (active) setDeliveryLoading(false);
 			});
 		return () => {
 			active = false;
 		};
 	}, [pageModelIdsKey]);
+
 	const totalElements = compatibilityFallback ? filteredLocalRows.length : catalogPage?.totalElements || 0;
 	const pageCount = Math.max(1, compatibilityFallback ? localPageCount : catalogPage?.totalPages || 0);
 	const currentPage = Math.min(page, pageCount);
@@ -334,14 +309,17 @@ export function ModelWorkbenchCatalogList({
 		if (page > pageCount) setPage(pageCount);
 	}, [page, pageCount]);
 
-	const toggleModel = (model: ModelSpecView) => {
-		setSelectedIds((current) => {
-			const next = new Set(current);
-			if (next.has(model.id)) next.delete(model.id);
-			else if ((!selectedPlanId || selectedPlanId === model.planId) && next.size < 100) next.add(model.id);
-			return next;
-		});
-	};
+	const toggleModel = useCallback(
+		(model: ModelSpecView) => {
+			setSelectedIds((current) => {
+				const next = new Set(current);
+				if (next.has(model.id)) next.delete(model.id);
+				else if ((!selectedPlanId || selectedPlanId === model.planId) && next.size < 100) next.add(model.id);
+				return next;
+			});
+		},
+		[selectedPlanId],
+	);
 	const toggleCurrentPage = () => {
 		setSelectedIds((current) => {
 			const next = new Set(current);
@@ -404,45 +382,59 @@ export function ModelWorkbenchCatalogList({
 			{
 				title: "物化状态",
 				key: "materialization",
-				render: (_, row) => {
-					if (!row.model) return "不适用";
-					const materialization = resolveMaterializationPresentation(
-						materializationByModel.get(row.model.id) || null,
-						row.model.revision,
-					);
-					return <Status tone={materialization.tone}>{materialization.label}</Status>;
-				},
+				render: (_, row) =>
+					row.model ? (
+						<ModelDeliveryStatusCell
+							model={row.model}
+							status={deliveryByModel.get(row.model.id)}
+							kind="materialization"
+							loading={deliveryLoading}
+							failed={deliveryFailure}
+						/>
+					) : (
+						"不适用"
+					),
 			},
 			{
-				title: "资产联动",
-				key: "serving-sync",
+				title: "目录登记",
+				key: "catalog-registration",
 				render: (_, row) => {
 					if (!row.model) return "不适用";
-					const serving = servingByModel.get(row.model.id) || null;
-					const physicalAssetId = resolveModelServingPhysicalAssetId(serving);
-					const presentation = serving
-						? MODEL_SERVING_SYNC_PRESENTATION[serving.syncStatus]
-						: MODEL_SERVING_SYNC_PRESENTATION.NOT_REGISTERED;
+					const delivery = deliveryByModel.get(row.model.id);
+					const assetId = resolveModelDeliveryCell(row.model, delivery, "catalog").assetId;
 					return (
 						<Space size={4}>
-							<Status tone={servingFailure && !serving ? "danger" : presentation.tone}>
-								{servingLoading && !serving
-									? "目录同步读取中"
-									: servingFailure && !serving
-										? "目录同步读取失败"
-										: presentation.label}
-							</Status>
-							{physicalAssetId ? (
-								<Button
-									onClick={() => router.push(`/catalog/datasets/${encodeURIComponent(physicalAssetId)}`)}
-									type="text"
-								>
+							<ModelDeliveryStatusCell
+								model={row.model}
+								status={delivery}
+								kind="catalog"
+								loading={deliveryLoading}
+								failed={deliveryFailure}
+							/>
+							{assetId ? (
+								<Button onClick={() => router.push(`/catalog/datasets/${encodeURIComponent(assetId)}`)} type="text">
 									查看资产
 								</Button>
 							) : null}
 						</Space>
 					);
 				},
+			},
+			{
+				title: "分析准备",
+				key: "analysis-preparation",
+				render: (_, row) =>
+					row.model ? (
+						<ModelDeliveryStatusCell
+							model={row.model}
+							status={deliveryByModel.get(row.model.id)}
+							kind="analysis"
+							loading={deliveryLoading}
+							failed={deliveryFailure}
+						/>
+					) : (
+						"不适用"
+					),
 			},
 			actionColumn<CatalogRow>(
 				(row) => [
@@ -461,7 +453,7 @@ export function ModelWorkbenchCatalogList({
 					},
 					{
 						key: "materialize",
-						label: row.model && materializationByModel.has(row.model.id) ? "物化历史 / 再次物化" : "物化详情",
+						label: row.model && deliveryByModel.has(row.model.id) ? "物化历史 / 再次物化" : "物化详情",
 						hidden: !row.model,
 						disabled: busy || !canMaintain || row.model?.status === "ARCHIVED",
 						onClick: () => onMaterialize([row.model as ModelSpecView]),
@@ -509,7 +501,9 @@ export function ModelWorkbenchCatalogList({
 			busy,
 			canMaintain,
 			domainById,
-			materializationByModel,
+			deliveryByModel,
+			deliveryFailure,
+			deliveryLoading,
 			onCloneDimension,
 			onGoToGraphDimension,
 			onGoToGraphModel,
@@ -520,10 +514,6 @@ export function ModelWorkbenchCatalogList({
 			router,
 			selectedIds,
 			selectedPlanId,
-			servingByModel,
-			servingFailure,
-			servingLoading,
-			toggleCurrentPage,
 			toggleModel,
 		],
 	);

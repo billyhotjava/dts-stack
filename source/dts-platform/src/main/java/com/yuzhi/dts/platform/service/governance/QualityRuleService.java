@@ -35,6 +35,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @Transactional
@@ -313,8 +315,11 @@ public class QualityRuleService {
     }
 
     private QualityRuleDto updateRuleInternal(UUID id, QualityRuleUpsertRequest request, String actor, String activeDeptHeader) {
-        GovRule rule = ruleRepository.findById(id).orElseThrow(EntityNotFoundException::new);
+        GovRule rule = ruleRepository.findByIdForUpdate(id).orElseThrow(EntityNotFoundException::new);
         ensureRuleWritable(rule, activeDeptHeader);
+        java.util.Optional<GovRuleVersion> latest = versionRepository.findFirstByRuleIdOrderByVersionDesc(id);
+        requireExpectedVersion(request, latest.orElse(null));
+        requireUnchangedDataset(rule, request);
         Map<String, Object> before = toRuleAuditView(rule);
         validateDatasetBindingContract(request, activeDeptHeader);
         if (StringUtils.isNotBlank(request.getCode())) {
@@ -334,7 +339,7 @@ public class QualityRuleService {
         applyRuleMetadata(rule, request, ownerDept);
         ruleRepository.save(rule);
 
-        int nextVersion = versionRepository.findFirstByRuleIdOrderByVersionDesc(id).map(v -> v.getVersion() + 1).orElse(1);
+        int nextVersion = latest.map(v -> v.getVersion() + 1).orElse(1);
         GovRuleVersion version = persistVersion(rule, request, nextVersion, actor);
         rule.setLatestVersion(version);
         ruleRepository.save(rule);
@@ -717,6 +722,24 @@ public class QualityRuleService {
             return;
         }
         datasetReadGuard.requireReadable(datasetId, activeDeptHeader);
+    }
+
+    private void requireUnchangedDataset(GovRule rule, QualityRuleUpsertRequest request) {
+        if (!Objects.equals(rule.getDatasetId(), request.getDatasetId())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "QUALITY_RULE_DATASET_REBIND_FORBIDDEN");
+        }
+    }
+
+    private void requireExpectedVersion(QualityRuleUpsertRequest request, GovRuleVersion latest) {
+        if (latest == null || latest.getVersion() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "QUALITY_RULE_VERSION_UNAVAILABLE");
+        }
+        if (request.getExpectedVersion() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "QUALITY_RULE_EXPECTED_VERSION_REQUIRED");
+        }
+        if (!Objects.equals(request.getExpectedVersion(), latest.getVersion())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "QUALITY_RULE_VERSION_CONFLICT");
+        }
     }
 
     private void requireExecutableBinding(GovRule rule, GovRuleVersion version, String activeDeptHeader) {
