@@ -86,6 +86,19 @@ public class ModelMaterializationSourceAvailabilityGuard {
             .toList();
     }
 
+    /** Operational runs use only the published identities captured by their fixed run scope. */
+    @Transactional(readOnly = true)
+    public List<PinnedSourceDefinition> pinnedOperationalSources(UUID groupId) {
+        return requireCurrent(snapshots.findOperationalInputs(groupId), groupId, false)
+            .stream()
+            .map(request -> pinnedSource(request, groupId))
+            .filter(java.util.Objects::nonNull)
+            .sorted(Comparator.comparing(PinnedSourceDefinition::sourceName)
+                .thenComparing(PinnedSourceDefinition::tableName)
+                .thenComparing(definition -> definition.sourceBindingId().toString()))
+            .toList();
+    }
+
     private PinnedSourceDefinition pinnedSource(PhysicalSourceRequest request, UUID dispatchId) {
         SourceRef source = sourceValidation
             .resolveCurrentBindingForExecutionCompiler(
@@ -228,6 +241,12 @@ public class ModelMaterializationSourceAvailabilityGuard {
     }
 
     private List<PhysicalSourceRequest> requireCurrent(List<InputSnapshot> roots, UUID boundaryId) {
+        return requireCurrent(roots, boundaryId, true);
+    }
+
+    private List<PhysicalSourceRequest> requireCurrent(
+        List<InputSnapshot> roots, UUID boundaryId, boolean allowPublishedHead
+    ) {
         if (roots == null || roots.isEmpty()) {
             throw unavailable(boundaryId, null, "Materialization input snapshot is missing");
         }
@@ -255,7 +274,8 @@ public class ModelMaterializationSourceAvailabilityGuard {
                     inputs,
                     boundaryId,
                     candidateInputs,
-                    pending
+                    pending,
+                    allowPublishedHead
                 );
                 case "GENERATED" -> validateGeneratedSources(
                     snapshot,
@@ -398,7 +418,8 @@ public class ModelMaterializationSourceAvailabilityGuard {
         JsonNode inputs,
         UUID boundaryId,
         Map<ModelPin, InputSnapshot> candidateInputs,
-        ArrayDeque<InputSnapshot> pending
+        ArrayDeque<InputSnapshot> pending,
+        boolean allowPublishedHead
     ) {
         for (JsonNode input : inputs) {
             UUID modelSpecId = uuid(input.path("modelSpecId").asText(null));
@@ -410,6 +431,9 @@ public class ModelMaterializationSourceAvailabilityGuard {
             ModelPin pin = new ModelPin(modelSpecId, revision, checksum);
             InputSnapshot snapshot = candidateInputs.get(pin);
             if (snapshot == null) {
+                if (!allowPublishedHead) {
+                    throw unavailable(boundaryId, owner.modelSpecId(), "An upstream model is outside the fixed operational scope");
+                }
                 List<InputSnapshot> published = snapshots.findPublishedInput(
                     owner.tenantId(),
                     modelSpecId,

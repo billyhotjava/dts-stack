@@ -38,6 +38,7 @@ public class PlanOperationalRunService {
 
     private final PlanOperationalRunRepository runs;
     private final DbtScopedProjectService scopedProjects;
+    private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
     private final ModelRuntimeSpecTokenCodec tokens;
     private final AirflowClient airflow;
     private final ModelMaterializationProperties properties;
@@ -51,6 +52,7 @@ public class PlanOperationalRunService {
     public PlanOperationalRunService(
         PlanOperationalRunRepository runs,
         DbtScopedProjectService scopedProjects,
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         ModelRuntimeSpecTokenCodec tokens,
         AirflowClient airflow,
         ModelMaterializationProperties properties,
@@ -62,6 +64,7 @@ public class PlanOperationalRunService {
         this(
             runs,
             scopedProjects,
+            sourceAvailability,
             tokens,
             airflow,
             properties,
@@ -76,6 +79,7 @@ public class PlanOperationalRunService {
     PlanOperationalRunService(
         PlanOperationalRunRepository runs,
         DbtScopedProjectService scopedProjects,
+        ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         ModelRuntimeSpecTokenCodec tokens,
         AirflowClient airflow,
         ModelMaterializationProperties properties,
@@ -86,6 +90,7 @@ public class PlanOperationalRunService {
         Clock clock
     ) {
         this.runs = Objects.requireNonNull(runs, "runs is required");
+        this.sourceAvailability = Objects.requireNonNull(sourceAvailability, "sourceAvailability is required");
         this.scopedProjects = Objects.requireNonNull(
             scopedProjects,
             "scopedProjects is required"
@@ -296,11 +301,20 @@ public class PlanOperationalRunService {
         } catch (RuntimeException unavailable) {
             if (unavailable instanceof PlanExecutionException execution) {
                 if ("MODEL_OPERATIONAL_AIRFLOW_SUBMISSION_UNKNOWN".equals(execution.code())) return;
+                if (Set.of("MODEL_OPERATIONAL_SOURCE_SNAPSHOT_MISSING", "MODEL_OPERATIONAL_SOURCE_SNAPSHOT_MISMATCH")
+                    .contains(execution.code())) {
+                    runs.finalizeFailed(opened.pipelineRunGroupId(), execution.code(), now);
+                    return;
+                }
                 runs.markUnknown(opened.pipelineRunGroupId(), execution.code(), now);
                 return;
             }
             if (unavailable instanceof ScopedProjectException scoped) {
                 runs.markUnknown(opened.pipelineRunGroupId(), scoped.code(), now);
+                return;
+            }
+            if (unavailable instanceof ModelReleaseCandidateException source) {
+                runs.markUnknown(opened.pipelineRunGroupId(), source.code(), now);
                 return;
             }
             runs.markUnknown(opened.pipelineRunGroupId(), "MODEL_OPERATIONAL_DISPATCH_RECOVERY_FAILED", now);
@@ -381,7 +395,9 @@ public class PlanOperationalRunService {
             );
         }
         ScopedCandidateProject project =
-            scopedProjects.prepareCandidate(scope.entries());
+            scopedProjects.prepareCandidate(PinnedDbtSourceArtifacts.attach(
+                scope.entries(), sourceAvailability.pinnedOperationalSources(opened.pipelineRunGroupId())
+            ));
         ModelRuntimeSpecTokenCodec.IssuedToken issued =
             tokens.issue(opened.pipelineRunGroupId(), now);
         if (

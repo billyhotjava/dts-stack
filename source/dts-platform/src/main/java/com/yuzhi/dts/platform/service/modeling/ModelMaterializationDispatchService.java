@@ -26,7 +26,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -624,7 +623,7 @@ public class ModelMaterializationDispatchService {
     ) {
         List<ModelMaterializationBuildRepository.BuildArtifact> dependencies =
             pinnedDependencies == null ? List.of() : List.copyOf(pinnedDependencies);
-        String sourceYaml = renderPinnedSources(pinnedSources);
+        String sourceYaml = PinnedDbtSourceArtifacts.renderPinnedSources(pinnedSources);
         List<CandidateArtifactEntry> entries = new ArrayList<>();
         for (int index = 0; index < scope.entries().size(); index++) {
             CandidateBuildEntry entry = scope.entries().get(index);
@@ -667,50 +666,6 @@ public class ModelMaterializationDispatchService {
         return List.copyOf(entries);
     }
 
-    private static String renderPinnedSources(List<PinnedSourceDefinition> requestedSources) {
-        if (requestedSources == null || requestedSources.isEmpty()) return null;
-        List<PinnedSourceDefinition> sources = requestedSources
-            .stream()
-            .sorted(
-                Comparator.comparing(PinnedSourceDefinition::sourceName)
-                    .thenComparing(PinnedSourceDefinition::schemaName)
-                    .thenComparing(PinnedSourceDefinition::tableName)
-                    .thenComparing(definition -> definition.sourceBindingId().toString())
-            )
-            .toList();
-        Map<SourceGroup, Map<String, List<PinnedSourceDefinition>>> grouped = new LinkedHashMap<>();
-        for (PinnedSourceDefinition source : sources) {
-            grouped
-                .computeIfAbsent(
-                    new SourceGroup(source.sourceName(), source.schemaName()),
-                    ignored -> new LinkedHashMap<>()
-                )
-                .computeIfAbsent(source.tableName(), ignored -> new ArrayList<>())
-                .add(source);
-        }
-        StringBuilder yaml = new StringBuilder("version: 2\nsources:\n");
-        grouped.forEach((group, tables) -> {
-            yaml.append("  - name: ").append(group.sourceName()).append('\n');
-            yaml.append("    schema: ").append(group.schemaName()).append('\n');
-            yaml.append("    tables:\n");
-            tables.forEach((table, pins) -> {
-                for (PinnedSourceDefinition pin : pins) {
-                    yaml.append("      # dts-pin: ")
-                        .append(pin.sourceBindingId())
-                        .append('/')
-                        .append(safeYamlComment(pin.resolvedVersion()))
-                        .append('\n');
-                }
-                yaml.append("      - name: ").append(table).append('\n');
-            });
-        });
-        return yaml.toString();
-    }
-
-    private static String safeYamlComment(String value) {
-        return value == null ? "" : value.replace('\r', '_').replace('\n', '_');
-    }
-
     private static String sha256(String value) {
         try {
             return HexFormat.of().formatHex(
@@ -721,7 +676,6 @@ public class ModelMaterializationDispatchService {
         }
     }
 
-    private record SourceGroup(String sourceName, String schemaName) {}
 
     public record DispatchResult(
         java.util.UUID pipelineRunGroupId,

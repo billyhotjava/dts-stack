@@ -34,3 +34,9 @@ GitNexus 重建完成：165454 symbols / 353200 relationships。工作台及代�
 - `ae21a9c10` 前端 `pnpm build` 退出 0，TypeScript 与 legacy production bundle 通过；日志 `/tmp/s104-formal-frontend-rebuild.log`。
 - Java 首轮 testCompile 的 fixture 无 setter 已修正；第二轮 platform 128 tests，3 failures/25 errors：一项命令权限回归须恢复早拒绝，其余 fixture 缺 published audit、Mockito 嵌套 mock/无用 stub 和文本 helper 默认 null。分析服务独立编译发现缺失 Optional 导入。均正按失败范围修复，尚不能登记后端通过。
 - 新镜像尚未部署，以上不是 Chrome 或运行验收证据。
+
+## 正式验证与交付当前结果（2026-09-07）
+
+部署目录已完成修正后的后端恢复组 29/29、analytics 15/15、Node 原生契约 21/21、最终 source-contract 9/9、前端正式构建、隔离 Liquibase update/rollback/re-update，以及三镜像与离线包校验。后端首轮目标组的 73 项通过来自一个另有 23 项夹具错误的失败命令，未与恢复组相加或写成整体成功。构建源码为 `e83b51076e216a2464d5b8703186a7cb93ac723c`；迁移脚本验证使用 `3aa077d0c49d48aa0600705a11c3676fb5bf95ce`。完整边界、日志、镜像 ID 和包校验见[正式验证与离线交付证据](formal-validation-and-delivery-evidence-20260907.md)。
+
+三个 e83 镜像已部署：platform 与 analytics 为 `healthy`，webapp 为 `running`（该容器无 healthcheck），且部署清单记录仅这三个服务容器替换。已对解包离线包在独立临时目标执行 `dts-upgrade-lite plan` 并本地加载三份 image archive，均成功；未执行离线 `apply`/`rollback` 或 dbt 运行。线上两条新增 migration 已执行。catalog 多输出组件 5/5、helper 定向复测 3/3、typecheck 已有专项证据；新 W4 前端不在 e83 镜像中。当前物化 dispatch 已定位为 `MATERIALIZATION_SOURCE_MISSING`，通用根因仍在修复，未标为恢复。Chrome 95、真实租户页面及剩余 IT 场景仍未执行，Sprint 保持 IN_PROGRESS。完整容器、离线 plan、包内 dbt 资源和限制见[正式验证与离线交付证据](formal-validation-and-delivery-evidence-20260907.md)。

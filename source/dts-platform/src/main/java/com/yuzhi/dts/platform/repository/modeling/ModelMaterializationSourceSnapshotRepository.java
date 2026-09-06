@@ -1,5 +1,7 @@
 package com.yuzhi.dts.platform.repository.modeling;
 
+import com.yuzhi.dts.platform.service.modeling.PlanExecutionException;
+import com.yuzhi.dts.platform.service.modeling.PlanExecutionException.Kind;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -53,6 +55,92 @@ public class ModelMaterializationSourceSnapshotRepository {
            and r.content_checksum = e.implementation_checksum
         """;
 
+    private static final String OPERATIONAL_SCOPE_COUNT = """
+        select count(*)
+          from modeling_operational_run_dispatch dispatch
+          join modeling_pipeline_run pipeline_run
+            on pipeline_run.pipeline_run_group_id = dispatch.id
+           and pipeline_run.run_purpose = 'OPERATIONAL_RUN'
+         where dispatch.id = ?
+        """;
+
+    private static final String OPERATIONAL_INPUTS_SELECT = """
+        select pipeline_run.tenant_id, pipeline_run.plan_id,
+               pipeline_run.model_spec_id,
+               pipeline_run.model_revision,
+               pipeline_run.model_checksum,
+               implementation_revision.input_mode,
+               implementation_revision.inputs_json::text as inputs_json,
+               model_revision.snapshot_json -> 'sourceRefs' as source_refs_json
+          from modeling_operational_run_dispatch dispatch
+          join modeling_plan_execution_binding binding
+            on binding.id = dispatch.binding_id
+           and binding.tenant_id = dispatch.tenant_id
+           and binding.version = dispatch.binding_version
+           and binding.execution_target_key = dispatch.execution_target_key
+          join modeling_pipeline_run pipeline_run
+            on pipeline_run.pipeline_run_group_id = dispatch.id
+           and pipeline_run.run_purpose = 'OPERATIONAL_RUN'
+           and pipeline_run.tenant_id = dispatch.tenant_id
+           and pipeline_run.execution_binding_id = dispatch.binding_id
+           and pipeline_run.binding_version = dispatch.binding_version
+           and pipeline_run.plan_id = binding.plan_id
+           and pipeline_run.environment = binding.environment
+           and pipeline_run.target = dispatch.target_name
+          join modeling_plan_execution_binding_entry binding_entry
+            on binding_entry.tenant_id = pipeline_run.tenant_id
+           and binding_entry.binding_id = dispatch.binding_id
+           and binding_entry.model_spec_id = pipeline_run.model_spec_id
+           and binding_entry.model_revision = pipeline_run.model_revision
+          join modeling_model_lifecycle_event release_event
+            on release_event.id = binding_entry.published_release_id
+           and release_event.tenant_id = pipeline_run.tenant_id
+           and release_event.plan_id = pipeline_run.plan_id
+           and release_event.model_spec_id = pipeline_run.model_spec_id
+           and release_event.model_revision = pipeline_run.model_revision
+           and release_event.model_checksum = pipeline_run.model_checksum
+           and release_event.event_type = 'RELEASE'
+           and release_event.status = 'PUBLISHED'
+           and release_event.details_json ->> 'executionTargetKey' = binding.execution_target_key
+           and release_event.details_json ->> 'environment' = binding.environment
+           and release_event.details_json ->> 'targetIdentifier' = binding_entry.target_identifier
+           and release_event.details_json ->> 'dbtUniqueId' = binding_entry.dbt_unique_id
+           and release_event.details_json ->> 'candidateVersion' ~ '^[1-9][0-9]*$'
+           and release_event.details_json ->> 'implementationRevision' =
+               pipeline_run.implementation_revision::text
+           and release_event.details_json ->> 'implementationChecksum' =
+               pipeline_run.implementation_checksum
+          join modeling_model_release_candidate candidate
+            on candidate.tenant_id = release_event.tenant_id
+           and candidate.id = case
+                 when release_event.details_json ->> 'candidateId' ~
+                     '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+                 then (release_event.details_json ->> 'candidateId')::uuid
+               end
+           and candidate.plan_id = pipeline_run.plan_id
+          join modeling_model_release_candidate_entry candidate_entry
+            on candidate_entry.tenant_id = pipeline_run.tenant_id
+           and candidate_entry.candidate_id = candidate.id
+           and candidate_entry.plan_id = pipeline_run.plan_id
+           and candidate_entry.model_spec_id = pipeline_run.model_spec_id
+           and candidate_entry.revision = pipeline_run.model_revision
+           and candidate_entry.checksum = pipeline_run.model_checksum
+           and candidate_entry.implementation_revision = pipeline_run.implementation_revision
+           and candidate_entry.implementation_checksum = pipeline_run.implementation_checksum
+          join modeling_model_implementation_revision implementation_revision
+            on implementation_revision.tenant_id = candidate_entry.tenant_id
+           and implementation_revision.implementation_id = candidate_entry.implementation_id
+           and implementation_revision.revision = pipeline_run.implementation_revision
+           and implementation_revision.content_checksum = pipeline_run.implementation_checksum
+           and implementation_revision.ownership = candidate_entry.implementation_mode
+          join modeling_model_spec_revision model_revision
+            on model_revision.tenant_id = pipeline_run.tenant_id
+           and model_revision.model_spec_id = pipeline_run.model_spec_id
+           and model_revision.revision = pipeline_run.model_revision
+           and model_revision.content_checksum = pipeline_run.model_checksum
+           and model_revision.contract_version = 2
+        """;
+
     private final JdbcTemplate jdbcTemplate;
 
     public ModelMaterializationSourceSnapshotRepository(JdbcTemplate jdbcTemplate) {
@@ -80,6 +168,31 @@ public class ModelMaterializationSourceSnapshotRepository {
             ModelMaterializationSourceSnapshotRepository::map,
             dispatchId
         );
+    }
+
+    /**
+     * Returns every operational-run root only when each pipeline row still proves the exact
+     * published implementation and source snapshot captured when the run was opened.
+     */
+    public List<InputSnapshot> findOperationalInputs(UUID groupId) {
+        if (groupId == null) throw new IllegalArgumentException("groupId is required");
+        Integer expectedScope = jdbcTemplate.queryForObject(
+            OPERATIONAL_SCOPE_COUNT,
+            Integer.class,
+            groupId
+        );
+        if (expectedScope == null || expectedScope < 1) {
+            throw operationalInputMissing();
+        }
+        List<InputSnapshot> snapshots = jdbcTemplate.query(
+            OPERATIONAL_INPUTS_SELECT + " where dispatch.id = ? order by pipeline_run.model_spec_id, pipeline_run.id",
+            ModelMaterializationSourceSnapshotRepository::map,
+            groupId
+        );
+        if (snapshots.size() != expectedScope) {
+            throw operationalInputMismatch();
+        }
+        return snapshots;
     }
 
     public List<InputSnapshot> findPublishedInput(
@@ -162,6 +275,22 @@ public class ModelMaterializationSourceSnapshotRepository {
             row.getString("input_mode"),
             row.getString("inputs_json"),
             row.getString("source_refs_json")
+        );
+    }
+
+    private static PlanExecutionException operationalInputMissing() {
+        return new PlanExecutionException(
+            "MODEL_OPERATIONAL_SOURCE_SNAPSHOT_MISSING",
+            "Operational materialization inputs are missing",
+            Kind.CONFLICT
+        );
+    }
+
+    private static PlanExecutionException operationalInputMismatch() {
+        return new PlanExecutionException(
+            "MODEL_OPERATIONAL_SOURCE_SNAPSHOT_MISMATCH",
+            "Operational materialization inputs cannot prove their published snapshot",
+            Kind.CONFLICT
         );
     }
 

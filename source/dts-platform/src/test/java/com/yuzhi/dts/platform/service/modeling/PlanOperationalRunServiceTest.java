@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -262,11 +263,83 @@ class PlanOperationalRunServiceTest {
         verify(fixture.runs).markUnknown(GROUP_ID, "MODEL_OPERATIONAL_AIRFLOW_SUBMISSION_UNKNOWN", NOW);
     }
 
+    @Test
+    void recoveryAddsVersionBoundSourcesBeforePreparingTheOperationalProject() {
+        Fixture fixture = fixture();
+        var entry = new DbtScopedProjectService.CandidateArtifactEntry(
+            UUID.randomUUID(), 2, "a".repeat(64), 1, "b".repeat(64), "model.dts.sales", List.of()
+        );
+        when(fixture.runs.claimRecoverableManual(NOW)).thenReturn(Optional.of(opened("UNKNOWN", true)), Optional.empty());
+        when(fixture.airflow.getDagRun("dts_plan_binding", "run-1")).thenReturn(Optional.empty());
+        when(fixture.runs.loadScope(GROUP_ID)).thenReturn(new OperationalScope(
+            GROUP_ID, "tenant-a", BINDING_ID, 4, "postgres-primary", "prod", "dts_plan_binding", "run-1",
+            "a".repeat(64), null, List.of(entry)
+        ));
+        when(fixture.runs.findPrepared(GROUP_ID)).thenReturn(Optional.empty());
+        UUID sourceId = UUID.randomUUID();
+        when(fixture.sources.pinnedOperationalSources(GROUP_ID)).thenReturn(List.of(
+            new ModelMaterializationSourceAvailabilityGuard.PinnedSourceDefinition(sourceId, "pinned-v1", "public", "public", "sales")
+        ));
+        when(fixture.scoped.prepareCandidate(any())).thenThrow(
+            new DbtScopedProjectService.ScopedProjectException("MATERIALIZATION_BUNDLE_WRITE_FAILED", "fixture stop after capture")
+        );
+
+        fixture.service.reconcilePendingManualRuns();
+
+        verify(fixture.scoped).prepareCandidate(argThat(entries -> entries.size() == 1
+            && entries.getFirst().artifacts().size() == 1
+            && entries.getFirst().artifacts().getFirst().path().equals("models/_dts_pinned_sources.yml")
+            && entries.getFirst().artifacts().getFirst().content().contains("schema: public")
+            && entries.getFirst().artifacts().getFirst().content().contains("- name: sales")
+            && entries.getFirst().artifacts().getFirst().content().contains(sourceId + "/pinned-v1")
+        ));
+        assertThat(entry.artifacts()).isEmpty();
+        verify(fixture.airflow, never()).triggerDag(any(), any());
+    }
+
+    @Test
+    void sourceFenceFailureKeepsItsReasonAndDoesNotSubmitAirflow() {
+        Fixture fixture = fixture();
+        when(fixture.runs.claimRecoverableManual(NOW)).thenReturn(Optional.of(opened("UNKNOWN", true)), Optional.empty());
+        when(fixture.airflow.getDagRun("dts_plan_binding", "run-1")).thenReturn(Optional.empty());
+        when(fixture.runs.loadScope(GROUP_ID)).thenReturn(scope());
+        when(fixture.runs.findPrepared(GROUP_ID)).thenReturn(Optional.empty());
+        when(fixture.sources.pinnedOperationalSources(GROUP_ID)).thenThrow(new ModelReleaseCandidateException(
+            ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE, "pinned source unavailable",
+            ModelReleaseCandidateException.Kind.UNPROCESSABLE, Map.of()
+        ));
+
+        fixture.service.reconcilePendingManualRuns();
+
+        verify(fixture.runs).markUnknown(GROUP_ID, ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE, NOW);
+        verify(fixture.scoped, never()).prepareCandidate(any());
+        verify(fixture.airflow, never()).triggerDag(any(), any());
+    }
+
+    @Test
+    void missingImmutableSourceEvidenceTerminatesInsteadOfRetryingForever() {
+        Fixture fixture = fixture();
+        when(fixture.runs.claimRecoverableManual(NOW)).thenReturn(Optional.of(opened("UNKNOWN", true)), Optional.empty());
+        when(fixture.airflow.getDagRun("dts_plan_binding", "run-1")).thenReturn(Optional.empty());
+        when(fixture.runs.loadScope(GROUP_ID)).thenReturn(scope());
+        when(fixture.runs.findPrepared(GROUP_ID)).thenReturn(Optional.empty());
+        when(fixture.sources.pinnedOperationalSources(GROUP_ID)).thenThrow(new PlanExecutionException(
+            "MODEL_OPERATIONAL_SOURCE_SNAPSHOT_MISSING", "Missing published input snapshot", PlanExecutionException.Kind.CONFLICT
+        ));
+
+        fixture.service.reconcilePendingManualRuns();
+
+        verify(fixture.runs).finalizeFailed(GROUP_ID, "MODEL_OPERATIONAL_SOURCE_SNAPSHOT_MISSING", NOW);
+        verify(fixture.runs, never()).markUnknown(any(), any(), any());
+        verify(fixture.airflow, never()).triggerDag(any(), any());
+    }
+
     private static Fixture fixture() {
         PlanOperationalRunRepository runs =
             mock(PlanOperationalRunRepository.class);
         DbtScopedProjectService scoped =
             mock(DbtScopedProjectService.class);
+        ModelMaterializationSourceAvailabilityGuard sources = mock(ModelMaterializationSourceAvailabilityGuard.class);
         ModelRuntimeSpecTokenCodec tokens =
             mock(ModelRuntimeSpecTokenCodec.class);
         AirflowClient airflow = mock(AirflowClient.class);
@@ -299,12 +372,14 @@ class PlanOperationalRunServiceTest {
         return new Fixture(
             runs,
             scoped,
+            sources,
             tokens,
             dags,
             airflow,
             new PlanOperationalRunService(
                 runs,
                 scoped,
+                sources,
                 tokens,
                 airflow,
                 properties,
@@ -353,6 +428,7 @@ class PlanOperationalRunServiceTest {
     private record Fixture(
         PlanOperationalRunRepository runs,
         DbtScopedProjectService scoped,
+        ModelMaterializationSourceAvailabilityGuard sources,
         ModelRuntimeSpecTokenCodec tokens,
         DbtDagService dags,
         AirflowClient airflow,

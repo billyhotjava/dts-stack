@@ -111,6 +111,35 @@ class ModelMaterializationSourceAvailabilityGuardTest {
     }
 
     @Test
+    void operationalSourcesUseFixedRunSnapshots() {
+        when(snapshots.findOperationalInputs(DISPATCH)).thenReturn(List.of(physical(MODEL)));
+        when(sourceValidation.isCurrentBindingForExecution("tenant-a", PLAN, SOURCE, "source-version-1")).thenReturn(true);
+        when(sourceValidation.resolveCurrentBindingForExecutionCompiler("tenant-a", PLAN, SOURCE, "source-version-1"))
+            .thenReturn(Optional.of(new SourceRef(SourceKind.TABLE, "public.sales", Layer.ODS, SourceRole.PRIMARY,
+                null, null, null, 0, SOURCE, "source-version-1")));
+
+        assertThat(guard.pinnedOperationalSources(DISPATCH)).containsExactly(
+            new ModelMaterializationSourceAvailabilityGuard.PinnedSourceDefinition(SOURCE, "source-version-1", "public", "public", "sales")
+        );
+        verify(snapshots).findOperationalInputs(DISPATCH);
+        org.mockito.Mockito.verifyNoMoreInteractions(snapshots);
+    }
+
+    @Test
+    void operationalUpstreamCannotFallBackToTheCurrentPublishedHead() {
+        UUID upstream = UUID.randomUUID();
+        InputSnapshot root = new InputSnapshot("tenant-a", PLAN, MODEL, 2, "a".repeat(64), "UPSTREAM_MODEL",
+            "[{\"modelSpecId\":\"" + upstream + "\",\"revision\":3,\"checksum\":\"" + "b".repeat(64) + "\"}]", "[]");
+        when(snapshots.findOperationalInputs(DISPATCH)).thenReturn(List.of(root));
+
+        assertThatThrownBy(() -> guard.pinnedOperationalSources(DISPATCH))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .hasMessageContaining("fixed operational scope");
+        verify(snapshots).findOperationalInputs(DISPATCH);
+        org.mockito.Mockito.verifyNoMoreInteractions(snapshots);
+    }
+
+    @Test
     void fencedPhysicalSourceFailsClosed() {
         when(snapshots.findCandidateInputs("tenant-a", CANDIDATE, 4)).thenReturn(List.of(physical(MODEL)));
 

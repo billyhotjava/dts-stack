@@ -549,6 +549,7 @@
                         <testInclude>**/repository/modeling/ModelSpecRepositoryForwardUndoTest.java</testInclude>
                         <testInclude>**/repository/modeling/PlanExecutionHealthRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/PlanOperationalRunRepositoryTest.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelMaterializationSourceSnapshotRepositoryTest.java</testInclude>
                         <testInclude>**/service/modeling/imports/reconciliation/ModelSpecImportForwardRestorePostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelLifecycleCommandReceiptRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelImplementationCommandReceiptLiquibaseIT.java</testInclude>
