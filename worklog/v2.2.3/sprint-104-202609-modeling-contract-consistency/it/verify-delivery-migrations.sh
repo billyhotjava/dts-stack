@@ -132,11 +132,10 @@ run_analytics() {
     expect_sql_failure "$ANALYTICS_DB" "insert into analytics_database (id, name, tenant_id, platform_data_source_id) values (3, 'duplicate-again', 'tenant-a', '10000000-0000-0000-0000-000000000001')"
 }
 
-# Read deploy secrets without printing them; Maven receives only the scoped plugin property.
-set -a
-# shellcheck source=/dev/null
-source "$REPO_ROOT/.env"
-set +a
+# Read only the deploy password in a subprocess so `.env` cannot overwrite this
+# script's readonly connection settings. Nothing writes the value to stdout.
+PG_SUPER_PASSWORD="$(bash -c 'set -a; source "$1"; printf %s "$PG_SUPER_PASSWORD"' -- "$REPO_ROOT/.env")"
+[[ -n "$PG_SUPER_PASSWORD" ]] || fail "PG_SUPER_PASSWORD must be set in deploy .env"
 PG_DRIVER="$(find "${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}"/org/postgresql/postgresql -type f -name 'postgresql-*.jar' -print 2>/dev/null | sort -V | tail -n 1)"
 [[ -n "$PG_DRIVER" ]] || fail "PostgreSQL JDBC driver is absent from the local Maven cache"
 
