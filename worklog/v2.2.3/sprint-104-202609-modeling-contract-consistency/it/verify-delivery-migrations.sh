@@ -82,51 +82,85 @@ write_wrapper() {
 EOF
 }
 
+write_minimal_maven_pom() {
+    cat > "$TMP_DIR/pom.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>local.s104</groupId>
+    <artifactId>isolated-liquibase-verification</artifactId>
+    <version>1.0.0</version>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.liquibase</groupId>
+                <artifactId>liquibase-maven-plugin</artifactId>
+                <version>4.29.2</version>
+                <configuration>
+                    <changeLogFile>${liquibase.changeLogFile}</changeLogFile>
+                    <url>${liquibase.url}</url>
+                    <username>${liquibase.username}</username>
+                    <password>${liquibase.password}</password>
+                    <driver>org.postgresql.Driver</driver>
+                    <classpath>${liquibase.classpath}</classpath>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.postgresql</groupId>
+                        <artifactId>postgresql</artifactId>
+                        <version>42.7.11</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+EOF
+}
+
 run_liquibase() {
-    local module="$1"
-    local database="$2"
-    local wrapper="$3"
-    local goal="$4"
-    shift 4
-    (
-        cd "$REPO_ROOT/source"
-        mvn -o -B -q -f pom.xml -pl "$module" \
-            -Dliquibase.changeLogFile="$wrapper" \
-            -Dliquibase.url="jdbc:postgresql://127.0.0.1:5432/${database}" \
-            -Dliquibase.username="$PG_SUPER_USER" \
-            -Dliquibase.password="${PG_SUPER_PASSWORD:?PG_SUPER_PASSWORD must be set in deploy .env}" \
-            -Dliquibase.classpath="$PG_DRIVER" \
-            "org.liquibase:liquibase-maven-plugin:4.29.2:${goal}" "$@"
-    )
+    local database="$1"
+    local wrapper="$2"
+    local goal="$3"
+    shift 3
+    mvn -o -B -q -f "$TMP_DIR/pom.xml" \
+        -Dliquibase.changeLogFile="$wrapper" \
+        -Dliquibase.url="jdbc:postgresql://127.0.0.1:5432/${database}" \
+        -Dliquibase.username="$PG_SUPER_USER" \
+        -Dliquibase.password="${PG_SUPER_PASSWORD:?PG_SUPER_PASSWORD must be set in deploy .env}" \
+        -Dliquibase.classpath="$PG_DRIVER" \
+        "org.liquibase:liquibase-maven-plugin:4.29.2:${goal}" "$@"
 }
 
 run_platform() {
     local wrapper="$TMP_DIR/platform.xml"
     write_wrapper "$wrapper" "$REPO_ROOT/source/dts-platform/src/main/resources/config/liquibase/changelog/20260906_01_catalog_dataset_version.xml"
-    run_liquibase dts-platform "$PLATFORM_DB" "$wrapper" update
+    run_liquibase "$PLATFORM_DB" "$wrapper" update
     assert_scalar "$PLATFORM_DB" "select count(*) from catalog_dataset where version = 0" "1"
     assert_scalar "$PLATFORM_DB" "select count(*) from information_schema.columns where table_name = 'catalog_dataset' and column_name = 'version' and is_nullable = 'NO' and column_default like '0%'" "1"
     psql_database "$PLATFORM_DB" "insert into catalog_dataset (id, name) values ('00000000-0000-0000-0000-000000000002', 'post-update')" >/dev/null
     assert_scalar "$PLATFORM_DB" "select count(*) from catalog_dataset where version = 0" "2"
-    run_liquibase dts-platform "$PLATFORM_DB" "$wrapper" rollback -Dliquibase.rollbackCount=1
+    run_liquibase "$PLATFORM_DB" "$wrapper" rollback -Dliquibase.rollbackCount=1
     assert_scalar "$PLATFORM_DB" "select count(*) from information_schema.columns where table_name = 'catalog_dataset' and column_name = 'version'" "0"
     assert_scalar "$PLATFORM_DB" "select count(*) from catalog_dataset" "2"
-    run_liquibase dts-platform "$PLATFORM_DB" "$wrapper" update
+    run_liquibase "$PLATFORM_DB" "$wrapper" update
     assert_scalar "$PLATFORM_DB" "select count(*) from catalog_dataset where version = 0" "2"
 }
 
 run_analytics() {
     local wrapper="$TMP_DIR/analytics.xml"
     write_wrapper "$wrapper" "$REPO_ROOT/source/dts-analytics/src/main/resources/config/liquibase/changelog/0054_platform_database_registration.xml"
-    run_liquibase dts-analytics "$ANALYTICS_DB" "$wrapper" update
+    run_liquibase "$ANALYTICS_DB" "$wrapper" update
     assert_scalar "$ANALYTICS_DB" "select count(*) from analytics_database where tenant_id is null and platform_data_source_id is null" "1"
     assert_scalar "$ANALYTICS_DB" "select count(*) from pg_constraint where conname = 'uk_analytics_database_tenant_platform_source'" "1"
     psql_database "$ANALYTICS_DB" "insert into analytics_database (id, name, tenant_id, platform_data_source_id) values (2, 'bound', 'tenant-a', '10000000-0000-0000-0000-000000000001')" >/dev/null
     expect_sql_failure "$ANALYTICS_DB" "insert into analytics_database (id, name, tenant_id, platform_data_source_id) values (3, 'duplicate', 'tenant-a', '10000000-0000-0000-0000-000000000001')"
-    run_liquibase dts-analytics "$ANALYTICS_DB" "$wrapper" rollback -Dliquibase.rollbackCount=1
+    run_liquibase "$ANALYTICS_DB" "$wrapper" rollback -Dliquibase.rollbackCount=1
     assert_scalar "$ANALYTICS_DB" "select count(*) from information_schema.columns where table_name = 'analytics_database' and column_name in ('tenant_id', 'platform_data_source_id')" "0"
     assert_scalar "$ANALYTICS_DB" "select count(*) from analytics_database" "2"
-    run_liquibase dts-analytics "$ANALYTICS_DB" "$wrapper" update
+    run_liquibase "$ANALYTICS_DB" "$wrapper" update
     assert_scalar "$ANALYTICS_DB" "select count(*) from analytics_database where tenant_id is null and platform_data_source_id is null" "2"
     psql_database "$ANALYTICS_DB" "update analytics_database set tenant_id = 'tenant-a', platform_data_source_id = '10000000-0000-0000-0000-000000000001' where id = 2" >/dev/null
     expect_sql_failure "$ANALYTICS_DB" "insert into analytics_database (id, name, tenant_id, platform_data_source_id) values (3, 'duplicate-again', 'tenant-a', '10000000-0000-0000-0000-000000000001')"
@@ -138,6 +172,7 @@ PG_SUPER_PASSWORD="$(bash -c 'set -a; source "$1"; printf %s "$PG_SUPER_PASSWORD
 [[ -n "$PG_SUPER_PASSWORD" ]] || fail "PG_SUPER_PASSWORD must be set in deploy .env"
 PG_DRIVER="$(find "${MAVEN_REPO_LOCAL:-$HOME/.m2/repository}"/org/postgresql/postgresql -type f -name 'postgresql-*.jar' -print 2>/dev/null | sort -V | tail -n 1)"
 [[ -n "$PG_DRIVER" ]] || fail "PostgreSQL JDBC driver is absent from the local Maven cache"
+write_minimal_maven_pom
 
 drop_database "$PLATFORM_DB"
 drop_database "$ANALYTICS_DB"

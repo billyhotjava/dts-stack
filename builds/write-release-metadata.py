@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import re
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -45,6 +46,25 @@ def write_metadata(root, metadata_dir, revision):
         digest = sha256(path)
         images.append({"archive": path.name, "sha256": digest, "images": image_records(path)})
         checksums.append(f"{digest}  {path.name}\n")
+    # The lite upgrader reads .env after imgversion.conf. Align only image tags
+    # actually shipped in this archive; retain all other site-specific values.
+    tags = {tag for archive in images for image in archive["images"] for tag in image["tags"]}
+    config = root / "dts-stack" / "imgversion.conf"
+    environment = root / "dts-stack" / ".env"
+    if config.exists() and environment.exists():
+        shipped = {}
+        for line in config.read_text().splitlines():
+            match = re.fullmatch(r"(IMAGE_[A-Z0-9_]+)=(.+)", line.strip())
+            if match and match[2].strip("\"'") in tags:
+                shipped[match[1]] = match[2]
+        lines = environment.read_text().splitlines()
+        for index, line in enumerate(lines):
+            key = line.split("=", 1)[0]
+            if key in shipped:
+                lines[index] = f"{key}={shipped[key]}"
+        existing = {line.split("=", 1)[0] for line in lines}
+        lines.extend(f"{key}={value}" for key, value in shipped.items() if key not in existing)
+        environment.write_text("\n".join(lines) + "\n")
     manifest = {
         "formatVersion": 1,
         "version": revision[:12],

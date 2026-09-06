@@ -19,6 +19,7 @@ class ReleaseMetadataTest(unittest.TestCase):
             (root / "images").mkdir()
             (root / "dts-stack").mkdir()
             (root / "dts-stack" / "imgversion.conf").write_text("IMAGE_DTS_PLATFORM=dts-platform:s104-test\n")
+            (root / "dts-stack" / ".env").write_text("IMAGE_DTS_PLATFORM=dts-platform:old\nIMAGE_POSTGRES=private/postgres:site\nSITE_SETTING=preserved\n")
             config = json.dumps({"architecture": "amd64", "os": "linux", "config": {"Labels": {"org.opencontainers.image.revision": "a" * 40}}}).encode()
             image_id = hashlib.sha256(config).hexdigest()
             archive_path = root / "images" / "platform.tar"
@@ -32,6 +33,7 @@ class ReleaseMetadataTest(unittest.TestCase):
             manifest = json.loads((root / "misc" / "release-manifest.json").read_text())
             self.assertEqual(manifest["images"][0]["images"][0]["imageId"], "sha256:" + image_id)
             self.assertEqual(manifest["sourceCommit"], "a" * 40)
+            self.assertEqual((root / "dts-stack" / ".env").read_text(), "IMAGE_DTS_PLATFORM=dts-platform:s104-test\nIMAGE_POSTGRES=private/postgres:site\nSITE_SETTING=preserved\n")
             digest, filename = (root / "misc" / "checksums.txt").read_text().strip().split("  ")
             self.assertEqual(digest, metadata.sha256(root / "images" / filename))
             for line in (root / "misc" / "files-checksums.txt").read_text().splitlines():
