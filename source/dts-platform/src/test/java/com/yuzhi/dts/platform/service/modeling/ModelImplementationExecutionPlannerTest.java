@@ -116,6 +116,22 @@ class ModelImplementationExecutionPlannerTest {
     }
 
     @Test
+    void carriesEveryCompositeKeyIntoTheIncrementalExecutionPlan() {
+        var result = plan(
+            List.of("project_id", "month_id"),
+            Map.of(
+                "targetPhysicalName", "dwd_project_month",
+                "loadStrategy", "INCREMENTAL",
+                "partitionFields", List.of()
+            ),
+            "incremental"
+        );
+
+        assertThat(result.valid()).isTrue();
+        assertThat(result.executionPlan().uniqueKey()).containsExactly("project_id", "month_id");
+    }
+
+    @Test
     void failsClosedForMissingTargetSnapshotPartitionAndUnknownSettings() {
         assertThat(plan(
             List.of("finance_id"),

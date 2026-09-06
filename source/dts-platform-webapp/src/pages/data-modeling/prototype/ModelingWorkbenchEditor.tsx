@@ -8,6 +8,7 @@ import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sp
 import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { ModelDimensionHistoryFields } from "./ModelDimensionHistoryFields";
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
 import { ModelImplementationBindingFields } from "./ModelImplementationBindingFields";
 import { ModelImplementationExecutionFields } from "./ModelImplementationExecutionFields";
@@ -350,6 +351,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 				</div>
 			</section>
 			<FieldsPanel {...props} dimensionMode />
+			<ModelDimensionHistoryFields draft={draft} onChange={patch} />
 			<ModelImplementationBindingFields
 				context={context}
 				draft={draft}

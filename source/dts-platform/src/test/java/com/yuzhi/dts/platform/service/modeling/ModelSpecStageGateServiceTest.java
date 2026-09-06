@@ -64,6 +64,24 @@ class ModelSpecStageGateServiceTest {
     }
 
     @Test
+    void implementationStagesRejectGrainKeyContractWithoutBlockingDraftOrDesignedStages() {
+        ModelSpecView duplicate = withGrain(releaseReadyFact(), List.of("organization_id", "organization_id"));
+        ModelSpecView unknown = withGrain(releaseReadyFact(), List.of("missing_key"));
+
+        for (Stage stage : List.of(Stage.DRAFT_SAVE, Stage.DESIGNED)) {
+            assertThat(ModelSpecStageGateService.evaluate(duplicate, stage, GateEvidence.currentFor(duplicate)).blockers())
+                .extracting(ModelSpecStageGateService.GateBlocker::code)
+                .doesNotContain("MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID", "MODEL_IMPLEMENTATION_GRAIN_KEY_MISMATCH");
+        }
+        assertThat(ModelSpecStageGateService.evaluate(duplicate, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(duplicate)).blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID", "MODEL_IMPLEMENTATION_GRAIN_KEY_MISMATCH");
+        assertThat(ModelSpecStageGateService.evaluate(unknown, Stage.RELEASE_READY, GateEvidence.currentFor(unknown)).blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_IMPLEMENTATION_KEY_FIELD_UNKNOWN", "MODEL_IMPLEMENTATION_GRAIN_KEY_MISMATCH");
+    }
+
+    @Test
     void separatesLegacyCompatibleDraftSaveFromDimensionImplementationRequirements() {
         ModelSpecView legacyCompatible = withDimensionDefinitionRef(dimension(null, List.of(), null), 1);
 
@@ -813,6 +831,69 @@ class ModelSpecStageGateServiceTest {
     }
 
     @Test
+    void releaseGateChecksDeclaredStandardOutsideKeyAndMeasureCoverage() {
+        ModelSpecView model = withStandardsForRoles(releaseReadyFact(), Set.of(FieldRole.KEY, FieldRole.ATTRIBUTE));
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        ModelGovernancePolicyPort governancePolicy = mock(ModelGovernancePolicyPort.class);
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
+        when(standards.evaluate("tenant-a", model)).thenReturn(StandardEvidence.STALE);
+        when(governancePolicy.resolve()).thenReturn(
+            ModelGovernancePolicyPort.Policy.available(
+                ModelGovernancePolicyPort.StandardCoverage.KEY_AND_MEASURE,
+                ModelGovernancePolicyPort.QualityGate.ADVISORY
+            )
+        );
+
+        GateView release = new ModelSpecStageGateService(
+            modelSpecs, repository, standards, null, null, null, null, null, null, governancePolicy
+        ).evaluateAll("tenant-a", MODEL_ID).stream()
+            .filter(gate -> gate.stage() == Stage.RELEASE_READY)
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(release.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_STANDARD_EVIDENCE_STALE");
+        verify(standards).evaluate("tenant-a", model);
+    }
+
+    @Test
+    void releaseGateWithNoneCoverageSkipsEmptyStandardEvidenceButChecksDeclaredBindings() {
+        ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
+        ModelSpecRepository repository = mock(ModelSpecRepository.class);
+        ModelSpecStandardEvidencePort standards = mock(ModelSpecStandardEvidencePort.class);
+        ModelGovernancePolicyPort governancePolicy = mock(ModelGovernancePolicyPort.class);
+        ModelSpecView noBindings = releaseReadyFact();
+        ModelSpecView declaredBinding = withStandardsForRoles(releaseReadyFact(), Set.of(FieldRole.ATTRIBUTE));
+        when(governancePolicy.resolve()).thenReturn(
+            ModelGovernancePolicyPort.Policy.available(
+                ModelGovernancePolicyPort.StandardCoverage.NONE,
+                ModelGovernancePolicyPort.QualityGate.ADVISORY
+            )
+        );
+        when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(noBindings, declaredBinding);
+        when(standards.evaluate("tenant-a", declaredBinding)).thenReturn(StandardEvidence.UNKNOWN);
+
+        new ModelSpecStageGateService(
+            modelSpecs, repository, standards, null, null, null, null, null, null, governancePolicy
+        ).evaluateAll("tenant-a", MODEL_ID);
+        GateView release = new ModelSpecStageGateService(
+            modelSpecs, repository, standards, null, null, null, null, null, null, governancePolicy
+        ).evaluateAll("tenant-a", MODEL_ID).stream()
+            .filter(gate -> gate.stage() == Stage.RELEASE_READY)
+            .findFirst()
+            .orElseThrow();
+
+        verify(standards, times(0)).evaluate("tenant-a", noBindings);
+        verify(standards).evaluate("tenant-a", declaredBinding);
+        assertThat(release.blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .contains("MODEL_SPEC_STANDARD_EVIDENCE_UNKNOWN");
+    }
+
+    @Test
     void releaseGateRequiresStandardsButLeavesGovernanceQualityToTheCandidateControlPlane() {
         ModelSpecView model = withStandardsForRoles(releaseReadyFact(), Set.of(FieldRole.KEY));
         ModelSpecApplicationService modelSpecs = mock(ModelSpecApplicationService.class);
@@ -1506,6 +1587,18 @@ class ModelSpecStageGateServiceTest {
             model.warehouseLayerCode(),
             model.businessProcessId(),
             model.subjectDomainId()
+        );
+    }
+
+    private static ModelSpecView withGrain(ModelSpecView model, List<String> keys) {
+        return new ModelSpecView(
+            model.contractVersion(), model.id(), model.planId(), model.domainId(), model.modelType(), model.layer(),
+            model.name(), model.description(), model.implementationMode(), model.materialization(), model.businessActivityRef(),
+            model.consumptionScenario(), new Grain(model.grain().statement(), keys), model.factShape(), model.timeSemantics(),
+            model.fields(), model.sourceRefs(), model.dependsOn(), model.dimensionRefs(), model.metricRefs(), model.standardBindings(),
+            model.generationStrategy(), model.dimensionProfile(), model.dimensionDefinitionRef(), model.status(), model.revision(),
+            model.checksum(), model.createdAt(), model.updatedAt(), model.compatibilityMode(), model.legacyRefs(), model.dataMartId(),
+            model.variantCode(), model.implementationPolicy(), model.warehouseLayerCode(), model.businessProcessId(), model.subjectDomainId()
         );
     }
 

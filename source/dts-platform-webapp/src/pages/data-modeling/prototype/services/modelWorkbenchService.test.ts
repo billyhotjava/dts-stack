@@ -43,6 +43,7 @@ import {
 	emptyModelDraft,
 	loadModelWorkbenchContext,
 	loadModelWorkbenchDraft,
+	normalizeModelDraftImplementation,
 	modelDraftFromAuthoringSnapshot,
 	modelDraftFromView,
 	modelDraftNeedsImplementationRecovery,
@@ -1639,5 +1640,84 @@ describe("model workbench draft validation", () => {
 		expect(updateModelSpec).not.toHaveBeenCalled();
 		expect(saveModelImplementation).not.toHaveBeenCalled();
 		expect(result).toEqual({ model: saved, implementation: null });
+	});
+});
+
+
+describe("sprint-104 draft configuration round trips", () => {
+	it("restores new TYPE2 bindings and complete hierarchy without aliasing the baseline or snapshot", () => {
+		const model = {
+			...canonicalFactView(),
+			modelType: "DIMENSION" as const,
+			dimensionProfile: { hierarchies: [], scdPolicy: { type: "TYPE1" as const } },
+		};
+		const profile = {
+			hierarchies: [{ code: "region", name: "地区", levels: [{ fieldName: "record_id", order: 1 }] }],
+			scdPolicy: {
+				type: "TYPE2" as const,
+				effectiveFromField: "valid_from",
+				effectiveToField: "valid_to",
+				currentFlagField: "is_current",
+			},
+		};
+		let snapshot = { ...modelDraftToUpdateCommand(modelDraftFromView(model)), dimensionProfile: profile };
+		for (let iteration = 0; iteration < 2; iteration += 1) {
+			const restored = modelDraftFromAuthoringSnapshot(model, null, snapshot);
+			expect(restored.dimensionProfile).toEqual(profile);
+			expect(restored.dimensionProfile).not.toBe(snapshot.dimensionProfile);
+			expect(restored.dimensionProfile?.hierarchies[0].levels).not.toBe(
+				snapshot.dimensionProfile.hierarchies[0].levels,
+			);
+			snapshot = modelDraftToUpdateCommand(restored) as typeof snapshot;
+			expect(snapshot.dimensionProfile).toEqual(profile);
+		}
+		expect(model.dimensionProfile.scdPolicy.type).toBe("TYPE1");
+		const cleared = modelDraftFromAuthoringSnapshot(model, null, { ...snapshot, dimensionProfile: null });
+		expect(modelDraftToUpdateCommand(cleared).dimensionProfile).toBeNull();
+		const none = { ...modelDraftFromAuthoringSnapshot(model, null, snapshot), scdType: "NONE" as const };
+		expect(modelDraftToUpdateCommand(none).dimensionProfile).toEqual({
+			hierarchies: profile.hierarchies,
+			scdPolicy: { type: "NONE" },
+		});
+	});
+
+	it("honors FULL and empty partition settings for visual and retained DBT_MANAGED implementations", () => {
+		const model = {
+			...canonicalFactView(),
+			implementationPolicy: { loadStrategy: "INCREMENTAL" as const, partitionFields: ["event_time"] },
+		};
+		const visual = generatedImplementation(model, {
+			settings: { targetPhysicalName: "current_table", loadStrategy: "FULL", partitionFields: [] },
+		});
+		const retained = {
+			...visual,
+			ownership: "DBT_MANAGED" as const,
+			inputs: [
+				{ generatorType: "DBT_MANAGED", config: { visualImplementation: { ...visual, idempotencyKey: "retained" } } },
+			],
+		};
+		for (const implementation of [visual, retained]) {
+			const draft = modelDraftFromView(model, implementation);
+			expect(draft).toMatchObject({ loadStrategy: "FULL", partitionFields: "" });
+			expect(normalizeModelDraftImplementation(draft, implementationCapabilities)).toMatchObject({
+				loadStrategy: "FULL",
+				partitionFields: "",
+			});
+		}
+		const missing = modelDraftFromView(model, { ...visual, settings: { targetPhysicalName: "current_table" } });
+		expect(missing).toMatchObject({ loadStrategy: "INCREMENTAL", partitionFields: "event_time" });
+		const unsupported = { ...missing, loadStrategy: "SNAPSHOT" as const, materialization: "snapshot" };
+		expect(normalizeModelDraftImplementation(unsupported, implementationCapabilities)).toEqual(unsupported);
+		const invalid = modelDraftFromView(model, { ...visual, settings: { loadStrategy: null, partitionFields: null } });
+		expect(invalid.loadStrategy).not.toBe("INCREMENTAL");
+		expect(invalid.partitionFields).not.toBe("event_time");
+	});
+
+	it("does not lock editable context behind release completeness", () => {
+		const draft = modelDraftFromView(canonicalFactView());
+		expect(validateModelDraftInput({ ...draft, businessProcessId: "" })).not.toHaveProperty("businessProcessId");
+		const application = { ...draft, createKind: "application" as const, dataMartId: "", subjectDomainId: "" };
+		expect(validateModelDraftInput(application)).not.toHaveProperty("dataMartId");
+		expect(validateModelDraftInput(application)).not.toHaveProperty("subjectDomainId");
 	});
 });

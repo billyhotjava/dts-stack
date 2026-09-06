@@ -1,3 +1,4 @@
+import { copyDimensionProfile, dimensionProfileForSave, implementationConfiguration } from "./modelDraftConfiguration";
 import { listDataMarts } from "@/api/dataMartApi";
 import type { ModelAuthoringSnapshot, ModelAuthoringSnapshotInput } from "@/api/dbtImplementationDraftApi";
 import {
@@ -50,6 +51,7 @@ import {
 import {
 	type CanonicalModelSpecView,
 	type ModelSpecFactShape,
+	type ModelSpecDimensionProfile,
 	type ModelSpecField,
 	type ModelSpecImplementationMode,
 	type ModelSpecLayer,
@@ -120,6 +122,7 @@ export type ModelSpecDraft = {
 	partitionFields: string;
 	loadStrategy: ModelSpecLoadStrategy;
 	scdType: ModelSpecScdType;
+	dimensionProfile?: ModelSpecDimensionProfile | null;
 	reuseScope: DimensionDefinitionReuseScope;
 	dimensionDefinitionId: string;
 	standardBindings: ModelSpecStandardBinding[];
@@ -435,7 +438,7 @@ export function modelDraftFromView(
 	implementation: ModelImplementationView | null = null,
 ): ModelSpecDraft {
 	const structuredImplementation = structuredImplementationView(model, implementation);
-	const implementationLoadStrategy = implementationText(structuredImplementation, "loadStrategy");
+	const configuration = implementationConfiguration(structuredImplementation, model.implementationPolicy);
 	const generationStrategyType =
 		generatedInput(structuredImplementation)?.generatorType || model.generationStrategy?.type || "";
 	const logicalInputMode = model.sourceRefs.length
@@ -454,19 +457,13 @@ export function modelDraftFromView(
 			implementationText(structuredImplementation, "targetPhysicalName") ||
 			model.implementationPolicy?.physicalName ||
 			"",
-		materialization: structuredImplementation?.materialization || model.materialization || "table",
+		materialization: structuredImplementation ? structuredImplementation.materialization : model.materialization || "table",
 		grainStatement: model.grain?.statement || "",
 		businessProcessId: model.businessProcessId || "",
 		fields: model.fields.map((field) => ({ ...field })),
-		partitionFields:
-			implementationStringList(structuredImplementation, "partitionFields").join(",") ||
-			model.implementationPolicy?.partitionFields?.join(",") ||
-			"",
-		loadStrategy:
-			implementationLoadStrategy === "INCREMENTAL" || implementationLoadStrategy === "SNAPSHOT"
-				? implementationLoadStrategy
-				: model.implementationPolicy?.loadStrategy || "FULL",
+		...configuration,
 		scdType: model.dimensionProfile?.scdPolicy.type || "NONE",
+		dimensionProfile: copyDimensionProfile(model.dimensionProfile),
 		reuseScope: model.dimensionProfile?.reuseScope === "TENANT" ? "TENANT" : "DOMAIN",
 		dimensionDefinitionId: model.dimensionDefinitionRef?.dimensionDefinitionId || "",
 		standardBindings: model.standardBindings.map((binding) => ({ ...binding })),
@@ -532,7 +529,8 @@ export function modelDraftFromAuthoringSnapshot(
 		grainStatement: modelSnapshot.grain?.statement || "",
 		businessProcessId: modelSnapshot.businessProcessId || "",
 		fields: (modelSnapshot.fields || []).map((field) => ({ ...field })),
-		scdType: modelSnapshot.dimensionProfile?.scdPolicy.type || "NONE",
+		scdType: (modelSnapshot.dimensionProfile === undefined ? base.dimensionProfile : modelSnapshot.dimensionProfile)?.scdPolicy.type || "NONE",
+		dimensionProfile: copyDimensionProfile(modelSnapshot.dimensionProfile === undefined ? base.dimensionProfile : modelSnapshot.dimensionProfile),
 		standardBindings: (modelSnapshot.standardBindings || []).map((binding) => ({ ...binding })),
 		warehouseLayerCode: modelSnapshot.warehouseLayerCode || modelSnapshot.layer,
 		implementationMode: modelSnapshot.implementationMode,
@@ -707,26 +705,10 @@ export function prepareModelDraftForSave(
 
 export function normalizeModelDraftImplementation(
 	draft: ModelSpecDraft,
-	capabilities: ModelImplementationCapabilities,
+	_capabilities: ModelImplementationCapabilities,
 ): ModelSpecDraft {
-	const loadStrategy = capabilities.loadStrategies.includes(draft.loadStrategy)
-		? draft.loadStrategy
-		: capabilities.loadStrategies[0];
-	const allowedMaterializations = loadStrategy
-		? capabilities.materializationsByLoadStrategy[loadStrategy] || []
-		: [];
-	const materialization = allowedMaterializations.includes(draft.materialization)
-		? draft.materialization
-		: allowedMaterializations[0];
-	if (!loadStrategy || !materialization) {
-		throw new Error("服务端没有为当前执行目标配置可用的加载与物化组合");
-	}
-	return {
-		...draft,
-		loadStrategy,
-		materialization,
-		partitionFields: capabilities.partitionFieldsSupported ? draft.partitionFields : "",
-	};
+	// Existing explicit choices must reach validation, never be replaced by a default.
+	return { ...draft };
 }
 
 export function validateConceptDimensionDraftInput(draft: ConceptDimensionDraft): ModelDraftValidationErrors {
@@ -814,15 +796,6 @@ export function validateModelDraftInput(
 		if (draft.implementationInputMode && !/^[a-z][a-z0-9_]*$/.test(draft.physicalName.trim())) {
 			errors.physicalName = "产出表英文名只能使用小写字母、数字和下划线，且必须以字母开头";
 		}
-	}
-	if (draft.createKind === "fact" && !draft.businessProcessId?.trim()) {
-		errors.businessProcessId = "请选择业务过程";
-	}
-	if (draft.createKind === "application" && !draft.dataMartId?.trim()) {
-		errors.dataMartId = "请选择数据集市";
-	}
-	if (draft.createKind === "application" && !draft.subjectDomainId?.trim()) {
-		errors.subjectDomainId = "请选择主题域";
 	}
 	const allowedInputModes = capabilities?.inputModesByModelType[MODEL_KIND_CONFIG[draft.createKind].modelType];
 	if (
@@ -1037,16 +1010,7 @@ export const modelDraftToUpdateCommand = (draft: ModelSpecDraft): UpdateModelSpe
 					? { type: draft.generationStrategyType, reference: null }
 					: null
 				: null,
-		dimensionProfile:
-			config.modelType === "DIMENSION"
-				? {
-						hierarchies: base?.dimensionProfile?.hierarchies || [],
-						scdPolicy:
-							draft.scdType === "TYPE2" && base?.dimensionProfile?.scdPolicy.type === "TYPE2"
-								? { ...base.dimensionProfile.scdPolicy }
-								: { type: draft.scdType },
-					}
-				: null,
+		dimensionProfile: config.modelType === "DIMENSION" ? dimensionProfileForSave(draft) : null,
 		dataMartId: config.modelType === "APPLICATION" ? draft.dataMartId?.trim() || null : null,
 		subjectDomainId: config.modelType === "APPLICATION" ? draft.subjectDomainId?.trim() || null : null,
 		variantCode: base?.variantCode || null,

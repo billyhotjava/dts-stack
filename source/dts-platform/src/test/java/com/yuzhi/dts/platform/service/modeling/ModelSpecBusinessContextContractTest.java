@@ -56,6 +56,30 @@ class ModelSpecBusinessContextContractTest {
     }
 
     @Test
+    void editableDraftDefersMissingStableContextButRejectsSuppliedWrongTypeContext() {
+        CreateModelSpecCommand incompleteFact = fact(null);
+        ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(new ObjectMapper().findAndRegisterModules());
+        ModelSpecView editableFact = codec.toCreatedView(
+            UUID.fromString("60000000-0000-0000-0000-000000000002"),
+            incompleteFact,
+            Instant.EPOCH
+        );
+
+        assertThat(codes(ModelSpecContract.validateUpdate(update(incompleteFact))))
+            .doesNotContain("MODEL_SPEC_BUSINESS_PROCESS_REQUIRED");
+        assertThat(codes(ModelSpecContract.validateEditableView(editableFact)))
+            .doesNotContain("MODEL_SPEC_BUSINESS_PROCESS_REQUIRED");
+        assertThat(codes(ModelSpecContract.validateDeliverableCreate(incompleteFact)))
+            .contains("MODEL_SPEC_BUSINESS_PROCESS_REQUIRED");
+        assertThat(codes(ModelSpecContract.validateView(editableFact)))
+            .contains("MODEL_SPEC_BUSINESS_PROCESS_REQUIRED");
+
+        UpdateModelSpecCommand wrongTypeContext = update(withContext(incompleteFact, PROCESS_ID, MART_ID, SUBJECT_ID));
+        assertThat(codes(ModelSpecContract.validateUpdate(wrongTypeContext)))
+            .contains("MODEL_SPEC_SUBJECT_DOMAIN_NOT_ALLOWED");
+    }
+
+    @Test
     void snapshotRoundTripPinsStableContextAndLegacyUpdatePayloadCannotDropIt() {
         ModelSpecSnapshotCodec codec = new ModelSpecSnapshotCodec(new ObjectMapper().findAndRegisterModules());
         CreateModelSpecCommand command = fact(PROCESS_ID);
@@ -178,6 +202,17 @@ class ModelSpecBusinessContextContractTest {
             command.sourceRefs(), command.dependsOn(), command.dimensionRefs(), command.metricRefs(), command.standardBindings(),
             command.generationStrategy(), command.dimensionProfile(), command.dimensionDefinitionRef(), command.idempotencyKey(),
             martId, command.variantCode(), command.implementationPolicy(), command.warehouseLayerCode(), processId, subjectId
+        );
+    }
+
+    private static UpdateModelSpecCommand update(CreateModelSpecCommand command) {
+        return new UpdateModelSpecCommand(
+            command.planId(), command.domainId(), command.modelType(), command.layer(), command.name(),
+            command.description(), command.implementationMode(), command.materialization(), command.businessActivityRef(),
+            command.consumptionScenario(), command.grain(), command.factShape(), command.timeSemantics(), command.fields(),
+            command.sourceRefs(), command.dependsOn(), command.dimensionRefs(), command.metricRefs(), command.standardBindings(),
+            command.generationStrategy(), command.dimensionProfile(), command.dataMartId(), command.variantCode(),
+            command.implementationPolicy(), command.warehouseLayerCode(), command.businessProcessId(), command.subjectDomainId()
         );
     }
 

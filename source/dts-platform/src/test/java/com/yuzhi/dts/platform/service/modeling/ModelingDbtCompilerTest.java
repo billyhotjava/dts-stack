@@ -52,6 +52,85 @@ class ModelingDbtCompilerTest {
     }
 
     @Test
+    void compilesCompositeGrainTestsAcrossBothYamlPathsWithoutStringConcatenation() {
+        ModelingCompilerContract.CompilerModel base = PjmModelingFixture.projectNode().compilerModel();
+        ModelingCompilerContract.CompilerModel composite = new ModelingCompilerContract.CompilerModel(
+            base.id(), base.layer(), base.modelType(), base.implementationMode(), base.name(),
+            new ModelingCompilerContract.Grain("one row per project and month", List.of("project_no", "month_id")),
+            base.standardBindings(), base.sourceRefs(), List.of("project_no", "month_id"), base.metrics(), base.revision()
+        );
+        ModelSpecCompilerProjection.ImplementationProjection implementation = new ModelSpecCompilerProjection.ImplementationProjection(
+            composite, "tenant-a", "a".repeat(64), 3, "b".repeat(64), "model.pjm.project_node_detail",
+            InputMode.PHYSICAL_ASSET, List.of(), List.of(),
+            Map.of("targetPhysicalName", "project_node_detail", "loadStrategy", "FULL", "partitionFields", List.of()),
+            "table", List.of("project_no", "month_id"), "plan-a", typedFields(composite)
+        );
+
+        String standaloneTests = ModelingDbtCompiler.compile(composite).files().get("project_node_detail.tests.yml");
+        String runnableSchema = ModelingDbtCompiler.compile(implementation).files().get("project_node_detail.yml");
+
+        for (String yaml : List.of(standaloneTests, runnableSchema)) {
+            assertThat(yaml)
+                .contains("dts_unique_combination:")
+                .contains("combination_of_columns:")
+                .contains("- project_no")
+                .contains("- month_id")
+                .doesNotContain("project_no ||", "concat(");
+        }
+        assertThat(standaloneTests).contains("name: project_no\n        tests:\n          - not_null")
+            .contains("name: month_id\n        tests:\n          - not_null");
+        assertThat(runnableSchema)
+            .containsPattern("(?s)name: project_no.*?tests:\\n          - not_null")
+            .containsPattern("(?s)name: month_id.*?tests:\\n          - not_null");
+    }
+
+    @Test
+    void rejectsMismatchedDuplicateOrUnknownGrainKeysBeforeRendering() {
+        ModelingCompilerContract.CompilerModel base = PjmModelingFixture.projectNode().compilerModel();
+        ModelingCompilerContract.CompilerModel composite = new ModelingCompilerContract.CompilerModel(
+            base.id(), base.layer(), base.modelType(), base.implementationMode(), base.name(),
+            new ModelingCompilerContract.Grain("one row per project and month", List.of("project_no", "month_id")),
+            base.standardBindings(), base.sourceRefs(), List.of("project_no", "month_id"), base.metrics(), base.revision()
+        );
+        ModelSpecCompilerProjection.ImplementationProjection missingKey = new ModelSpecCompilerProjection.ImplementationProjection(
+            composite, "tenant-a", "a".repeat(64), 3, "b".repeat(64), "model.pjm.project_node_detail",
+            InputMode.PHYSICAL_ASSET, List.of(), List.of(),
+            Map.of("targetPhysicalName", "project_node_detail", "loadStrategy", "FULL", "partitionFields", List.of()),
+            "table", List.of("project_no"), "plan-a", typedFields(composite)
+        );
+        assertThatThrownBy(() -> ModelingDbtCompiler.compile(missingKey))
+            .hasMessageContaining("MODEL_IMPLEMENTATION_GRAIN_KEY_MISMATCH");
+        ModelSpecCompilerProjection.ImplementationProjection duplicateKey = new ModelSpecCompilerProjection.ImplementationProjection(
+            composite, "tenant-a", "a".repeat(64), 3, "b".repeat(64), "model.pjm.project_node_detail",
+            InputMode.PHYSICAL_ASSET, List.of(), List.of(),
+            Map.of("targetPhysicalName", "project_node_detail", "loadStrategy", "FULL", "partitionFields", List.of()),
+            "table", List.of("project_no", "month_id", "month_id"), "plan-a", typedFields(composite)
+        );
+        assertThatThrownBy(() -> ModelingDbtCompiler.compile(duplicateKey))
+            .hasMessageContaining("MODEL_IMPLEMENTATION_KEY_FIELD_INVALID");
+        ModelingCompilerContract.CompilerModel duplicateGrain = new ModelingCompilerContract.CompilerModel(
+            composite.id(), composite.layer(), composite.modelType(), composite.implementationMode(), composite.name(),
+            new ModelingCompilerContract.Grain("invalid grain", List.of("project_no", "project_no")),
+            composite.standardBindings(), composite.sourceRefs(), composite.dimensions(), composite.metrics(), composite.revision()
+        );
+        assertThatThrownBy(() -> ModelingDbtCompiler.compile(duplicateGrain))
+            .hasMessageContaining("MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID");
+        ModelingCompilerContract.CompilerModel unknown = new ModelingCompilerContract.CompilerModel(
+            composite.id(), composite.layer(), composite.modelType(), composite.implementationMode(), composite.name(),
+            new ModelingCompilerContract.Grain("invalid grain", List.of("project_no", "missing_key")),
+            composite.standardBindings(), composite.sourceRefs(), composite.dimensions(), composite.metrics(), composite.revision()
+        );
+        ModelSpecCompilerProjection.ImplementationProjection implementation = new ModelSpecCompilerProjection.ImplementationProjection(
+            unknown, "tenant-a", "a".repeat(64), 3, "b".repeat(64), "model.pjm.project_node_detail",
+            InputMode.PHYSICAL_ASSET, List.of(), List.of(),
+            Map.of("targetPhysicalName", "project_node_detail", "loadStrategy", "FULL", "partitionFields", List.of()),
+            "table", List.of("project_no", "missing_key"), "plan-a", typedFields(composite)
+        );
+        assertThatThrownBy(() -> ModelingDbtCompiler.compile(implementation))
+            .hasMessageContaining("MODEL_IMPLEMENTATION_KEY_FIELD_UNKNOWN");
+    }
+
+    @Test
     void usesRefForDbtModelSourcesAndKeepsRevisionInOutputPath() {
         PjmModelingFixture.GoldenPathFixture fixture = PjmModelingFixture.goldenPath();
 

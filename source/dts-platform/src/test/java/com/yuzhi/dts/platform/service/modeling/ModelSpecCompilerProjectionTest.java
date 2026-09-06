@@ -133,6 +133,38 @@ class ModelSpecCompilerProjectionTest {
     }
 
     @Test
+    void retainsEveryCompositeKeyForTheCompilationBoundary() {
+        ModelSpecView composite = new ModelSpecView(
+            2,
+            UUID.fromString("30000000-0000-0000-0000-000000000001"),
+            UUID.fromString("10000000-0000-0000-0000-000000000001"),
+            UUID.fromString("20000000-0000-0000-0000-000000000001"),
+            ModelType.FACT, Layer.DWD, "project_month", null, ImplementationMode.DESIGNER_GENERATED,
+            "table", null, null, new Grain("one row per project and month", List.of("project_id", "month_id")),
+            null, null,
+            List.of(
+                new ModelField("project_id", "varchar", false, null, FieldRole.KEY, null),
+                new ModelField("month_id", "varchar", false, null, FieldRole.KEY, null),
+                new ModelField("amount", "numeric", true, null, FieldRole.MEASURE, null)
+            ),
+            List.of(source()), List.of(), List.of(), List.of(), List.of(), null, ModelStatus.DRAFT, 1,
+            "b".repeat(64), Instant.EPOCH, Instant.EPOCH, CompatibilityMode.CANONICAL, null
+        );
+        ImplementationView implementation = new ImplementationView(
+            UUID.fromString("60000000-0000-0000-0000-000000000001"), composite.id(), composite.planId(), composite.revision(),
+            composite.checksum(), ImplementationMode.DESIGNER_GENERATED, "warehouse", "model.dts.project_month", "ACTIVE",
+            1, "c".repeat(64), InputMode.PHYSICAL_ASSET, List.of(), List.of(), Map.of(), "table"
+        );
+
+        ModelSpecCompilerProjection.ImplementationProjection projected = ModelSpecCompilerProjection.project(
+            composite, implementation, ignored -> null
+        );
+
+        assertThat(projected.model().grain().keys()).containsExactly("project_id", "month_id");
+        assertThat(projected.keyFields()).containsExactly("project_id", "month_id");
+    }
+
+    @Test
     void rejectsAnUpstreamInputWhenItsPinnedChecksumNoLongerMatches() {
         UUID upstreamId = UUID.fromString("40000000-0000-0000-0000-000000000001");
         ModelRevisionRef logicalRef = new ModelRevisionRef(upstreamId, 3);

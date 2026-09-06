@@ -244,9 +244,6 @@ public class ModelSpecStageGateService {
         ModelGovernancePolicyPort.StandardCoverage coverage,
         LinkedHashMap<String, GateBlocker> blockers
     ) {
-        if (coverage == ModelGovernancePolicyPort.StandardCoverage.NONE) {
-            return;
-        }
         List<ModelField> required = standardRequiredFields(view, coverage);
         Map<String, StandardBinding> bindings = standardBindings(view);
         List<String> missing = required
@@ -267,6 +264,7 @@ public class ModelSpecStageGateService {
             );
             return;
         }
+        if (bindings.values().stream().noneMatch(ModelSpecStageGateService::hasDeclaredStandard)) return;
         StandardEvidence ownerEvidence;
         try {
             ownerEvidence = standardEvidence.evaluate(tenantId, view);
@@ -677,6 +675,7 @@ public class ModelSpecStageGateService {
         GateEvidence evidence,
         LinkedHashMap<String, GateBlocker> blockers
     ) {
+        validateImplementationKeyContract(view, blockers);
         switch (view.modelType()) {
             case DIMENSION -> dimensionInputBlockers(view, evidence, blockers);
             case FACT -> factInputBlockers(view, evidence, blockers);
@@ -685,6 +684,38 @@ public class ModelSpecStageGateService {
             }
             case APPLICATION ->
                 referenceEvidence(view, evidence.dependencies(), "MODEL_SPEC_UPSTREAM_EVIDENCE", "上游模型版本已变化", blockers);
+        }
+    }
+
+    private static void validateImplementationKeyContract(
+        ModelSpecView view,
+        LinkedHashMap<String, GateBlocker> blockers
+    ) {
+        if (view.grain() == null) return;
+        List<String> grainKeys = view.grain().keys();
+        List<String> keyFields = view.fields().stream()
+            .filter(Objects::nonNull)
+            .filter(field -> field.role() == FieldRole.KEY)
+            .map(ModelField::name)
+            .toList();
+        Set<String> fieldNames = view.fields().stream()
+            .filter(Objects::nonNull)
+            .map(ModelField::name)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        if (grainKeys.stream().anyMatch(key -> key == null || !FIELD_CODE.matcher(key).matches()) ||
+            new HashSet<>(grainKeys).size() != grainKeys.size()) {
+            add(blockers, blocker(view, "MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID", "grain.keys", "粒度键必须是唯一有效的字段编码", "fields"));
+        }
+        if (keyFields.stream().anyMatch(key -> key == null || !FIELD_CODE.matcher(key).matches()) ||
+            new HashSet<>(keyFields).size() != keyFields.size()) {
+            add(blockers, blocker(view, "MODEL_IMPLEMENTATION_KEY_FIELD_INVALID", "fields", "KEY 字段必须是唯一有效的字段编码", "fields"));
+        }
+        if (!fieldNames.containsAll(grainKeys) || !fieldNames.containsAll(keyFields)) {
+            add(blockers, blocker(view, "MODEL_IMPLEMENTATION_KEY_FIELD_UNKNOWN", "grain.keys", "粒度键和 KEY 字段必须引用已声明字段", "fields"));
+        }
+        if (!new java.util.LinkedHashSet<>(grainKeys).equals(new java.util.LinkedHashSet<>(keyFields))) {
+            add(blockers, blocker(view, "MODEL_IMPLEMENTATION_GRAIN_KEY_MISMATCH", "grain.keys", "粒度键必须与 KEY 字段集合一致", "fields"));
         }
     }
 
@@ -953,6 +984,14 @@ public class ModelSpecStageGateService {
             notBlank(binding.referenceCode()) && binding.referenceCodeVersion() != null
         ) || (
             binding.measurementUnitId() != null && binding.measurementUnitVersion() != null
+        );
+    }
+
+    private static boolean hasDeclaredStandard(StandardBinding binding) {
+        return binding != null && (
+            binding.standardElementId() != null ||
+            notBlank(binding.referenceCode()) ||
+            binding.measurementUnitId() != null
         );
     }
 

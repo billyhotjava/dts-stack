@@ -112,6 +112,24 @@ class GovernanceModelSpecStandardEvidenceAdapterTest {
         assertThat(adapter.evaluate("tenant-a", modelWithReferenceCodeVersion(1))).isEqualTo(StandardEvidence.STALE);
     }
 
+    @Test
+    void checksOnlyActuallyDeclaredStandardReferences() {
+        MeasurementUnitRepository units = mock(MeasurementUnitRepository.class);
+        when(units.findCurrent(UNIT_ID)).thenReturn(Optional.of(unit(2, MeasurementUnitStatus.ACTIVE)));
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.fields()).thenReturn(List.of(
+            new ModelField("amount", "decimal", false, "source.amount", FieldRole.MEASURE, "INTERNAL"),
+            new ModelField("remark", "varchar", true, "source.remark", FieldRole.ATTRIBUTE, "INTERNAL")
+        ));
+        when(model.standardBindings()).thenReturn(List.of(
+            new StandardBinding("amount", null, null, null, null, UNIT_ID, 2, "INTERNAL"),
+            new StandardBinding("remark", null, null, null, null, null, null, "INTERNAL")
+        ));
+
+        assertThat(adapter(mock(MetadataStandardRepository.class), mock(StdCodeDirectoryRepository.class), units)
+            .evaluate("tenant-a", model)).isEqualTo(StandardEvidence.CURRENT);
+    }
+
     private static ModelSpecView modelWithUnitVersion(int version) {
         ModelSpecView model = mock(ModelSpecView.class);
         ModelField field = new ModelField("amount", "decimal", false, "source.amount", FieldRole.MEASURE, "INTERNAL");

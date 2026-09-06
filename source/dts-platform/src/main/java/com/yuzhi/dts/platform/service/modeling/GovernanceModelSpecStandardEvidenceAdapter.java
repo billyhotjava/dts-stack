@@ -2,11 +2,8 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.service.governance.GovernanceStandardEvidenceReadPort;
 import com.yuzhi.dts.platform.service.governance.GovernanceStandardEvidenceReadPort.EvidenceState;
-import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.StandardBinding;
-import java.util.HashMap;
-import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /** Resolves field-standard evidence without copying professional owner records into ModelSpec. */
@@ -21,21 +18,24 @@ public class GovernanceModelSpecStandardEvidenceAdapter implements ModelSpecStan
 
     @Override
     public StandardEvidence evaluate(String tenantId, ModelSpecView modelSpec) {
-        if (modelSpec == null || modelSpec.fields().isEmpty()) return StandardEvidence.STALE;
-        Map<String, StandardBinding> bindings = new HashMap<>();
+        if (modelSpec == null) return StandardEvidence.STALE;
         for (StandardBinding binding : modelSpec.standardBindings()) {
-            if (binding != null && binding.fieldName() != null) bindings.put(binding.fieldName(), binding);
-        }
-        for (ModelField field : modelSpec.fields()) {
-            if (field == null) return StandardEvidence.STALE;
-            StandardBinding binding = bindings.get(field.name());
-            if (binding == null || !hasCompleteReference(binding)) return StandardEvidence.STALE;
+            if (!hasDeclaredReference(binding)) continue;
+            if (!hasCompleteReference(binding)) return StandardEvidence.STALE;
 
             EvidenceState state = currentOwnerState(binding);
             if (state == EvidenceState.UNKNOWN) return StandardEvidence.UNKNOWN;
             if (state != EvidenceState.CURRENT) return StandardEvidence.STALE;
         }
         return StandardEvidence.CURRENT;
+    }
+
+    private static boolean hasDeclaredReference(StandardBinding binding) {
+        return binding != null && (
+            binding.standardElementId() != null ||
+            (binding.referenceCode() != null && !binding.referenceCode().isBlank()) ||
+            binding.measurementUnitId() != null
+        );
     }
 
     private EvidenceState currentOwnerState(StandardBinding binding) {

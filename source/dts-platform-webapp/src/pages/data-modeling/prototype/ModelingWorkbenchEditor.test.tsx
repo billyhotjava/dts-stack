@@ -1079,3 +1079,59 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(select?.querySelector('option[value="retired-domain"]')).toHaveProperty("disabled", true);
 	});
 });
+
+
+describe("sprint-104 configuration editing", () => {
+	it("permits TYPE2 metadata selection and binds current fields while explaining execution limits", async () => {
+		const props = await render();
+		const strategy = container.querySelector<HTMLSelectElement>('select[aria-label="历史保留策略"]');
+		expect(strategy).not.toBeNull();
+		await act(async () => {
+			if (strategy) {
+				strategy.value = "TYPE2";
+				strategy.dispatchEvent(new Event("change", { bubbles: true }));
+			}
+		});
+		expect(props.onChange).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				scdType: "TYPE2",
+				dimensionProfile: expect.objectContaining({ scdPolicy: { type: "TYPE2" } }),
+			}),
+		);
+		const type2 = makeProps({
+			draft: makeDraft({ scdType: "TYPE2", dimensionProfile: { hierarchies: [], scdPolicy: { type: "TYPE2" } } }),
+		});
+		await render(type2);
+		const binding = container.querySelector<HTMLSelectElement>('select[aria-label="生效开始字段"]');
+		await act(async () => {
+			if (binding) {
+				binding.value = "subject_code";
+				binding.dispatchEvent(new Event("change", { bubbles: true }));
+			}
+		});
+		expect(type2.onChange).toHaveBeenLastCalledWith(
+			expect.objectContaining({
+				dimensionProfile: expect.objectContaining({ scdPolicy: { type: "TYPE2", effectiveFromField: "subject_code" } }),
+			}),
+		);
+		expect(container.textContent).toContain("不提供历史版本维护");
+	});
+
+	it("shows unsupported persisted strategy and requires explicit clearing of old partitions", async () => {
+		const props = makeProps({
+			draft: makeDraft({
+				createKind: "fact",
+				loadStrategy: "SNAPSHOT",
+				materialization: "snapshot",
+				partitionFields: "old_month",
+			}),
+		});
+		await render(props);
+		expect(container.textContent).toContain("已保存但不可执行");
+		expect(container.textContent).toContain("已保存分区：old_month");
+		await act(async () => button("清空分区配置").click());
+		expect(props.onChange).toHaveBeenLastCalledWith(
+			expect.objectContaining({ partitionFields: "", loadStrategy: "SNAPSHOT" }),
+		);
+	});
+});

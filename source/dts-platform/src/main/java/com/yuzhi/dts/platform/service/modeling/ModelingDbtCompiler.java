@@ -101,8 +101,6 @@ public final class ModelingDbtCompiler {
      */
     public static CompiledArtifacts compile(ModelSpecCompilerProjection.ImplementationProjection projection) {
         if (projection == null) throw new CompileException("MODEL_IMPLEMENTATION_REQUIRED");
-        ModelImplementationExecutionPlanner.ExecutionPlan executionPlan =
-            validateImplementationProjection(projection);
         ModelingCompilerContract.CompilerModel model = projection.model();
         validate(model, projection.inputMode() != ModelLifecycleContract.InputMode.GENERATED);
         if (model.implementationMode() != ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED) {
@@ -112,8 +110,14 @@ public final class ModelingDbtCompiler {
         String layer = model.layer().name().toLowerCase();
         String outputDirectory = "models/" + layer + "/" + name + "/v" + model.revision() + "/i" + projection.implementationRevision();
         List<String> columns = selectedColumns(model);
+        validateGrainKeyContract(
+            projection,
+            projection.typedFields().stream().map(ModelSpecCompilerProjection.CompilerField::name).collect(Collectors.toSet())
+        );
         Map<String, ValidatedField> fieldTypes =
             validateTypedFields(projection, columns);
+        ModelImplementationExecutionPlanner.ExecutionPlan executionPlan =
+            validateImplementationProjection(projection);
         String stgName = "stg_" + name;
         Map<String, String> files = new java.util.LinkedHashMap<>();
         files.put(stgName + ".sql", renderEphemeralStg(projection, columns));
@@ -133,6 +137,9 @@ public final class ModelingDbtCompiler {
         if (model.grain() == null || isBlank(model.grain().statement()) || model.grain().keys() == null ||
             (model.modelType() == ModelingCompilerContract.ModelType.DIMENSION && model.grain().keys().stream().noneMatch(ModelingDbtCompiler::notBlank))) {
             throw new CompileException("GRAIN_REQUIRED");
+        }
+        if (model.grain().keys().stream().anyMatch(key -> !identifier(key)) || hasDuplicates(model.grain().keys())) {
+            throw new CompileException("MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID");
         }
         if (sourceRequired && (model.sourceRefs() == null || model.sourceRefs().isEmpty())) throw new CompileException("SOURCE_REQUIRED");
         if (model.sourceRefs() == null) return;
@@ -751,6 +758,26 @@ public final class ModelingDbtCompiler {
         return execution.executionPlan();
     }
 
+    private static void validateGrainKeyContract(
+        ModelSpecCompilerProjection.ImplementationProjection projection,
+        Set<String> fieldNames
+    ) {
+        List<String> grainKeys = projection.model().grain().keys();
+        List<String> keyFields = projection.keyFields();
+        if (grainKeys.stream().anyMatch(key -> !identifier(key)) || hasDuplicates(grainKeys)) {
+            throw new CompileException("MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID");
+        }
+        if (keyFields.stream().anyMatch(key -> !identifier(key)) || hasDuplicates(keyFields)) {
+            throw new CompileException("MODEL_IMPLEMENTATION_KEY_FIELD_INVALID");
+        }
+        if (!fieldNames.containsAll(grainKeys) || !fieldNames.containsAll(keyFields)) {
+            throw new CompileException("MODEL_IMPLEMENTATION_KEY_FIELD_UNKNOWN");
+        }
+        if (!new LinkedHashSet<>(grainKeys).equals(new LinkedHashSet<>(keyFields))) {
+            throw new CompileException("MODEL_IMPLEMENTATION_GRAIN_KEY_MISMATCH");
+        }
+    }
+
     private static void validateIdentifierSetting(Map<String, Object> settings, String key) {
         Object value = settings.get(key);
         if (value == null) return;
@@ -828,9 +855,7 @@ public final class ModelingDbtCompiler {
             .append("\"\n");
         if (includeModelTests) {
             yaml.append("    config:\n      contract:\n        enforced: true\n");
-            model.grain().keys().stream().filter(ModelingDbtCompiler::notBlank).findFirst().ifPresent(key ->
-                yaml.append("    tests:\n      - unique:\n          column_name: ").append(key).append("\n")
-            );
+            appendUniqueTest(yaml, model.grain().keys());
         }
         yaml.append("    columns:\n");
         for (String column : columns) {
@@ -867,9 +892,26 @@ public final class ModelingDbtCompiler {
     }
 
     private static String renderTests(ModelingCompilerContract.CompilerModel model, String resourceName) {
-        String key = model.grain().keys().stream().filter(ModelingDbtCompiler::notBlank).findFirst().orElse(null);
-        if (key == null) return "version: 2\nmodels: []\n";
-        return "version: 2\nmodels:\n  - name: " + resourceName + "\n    tests:\n      - unique:\n          column_name: " + key + "\n    columns:\n      - name: " + key + "\n        tests:\n          - not_null\n";
+        List<String> keys = model.grain().keys().stream().filter(ModelingDbtCompiler::notBlank).toList();
+        if (keys.isEmpty()) return "version: 2\nmodels: []\n";
+        StringBuilder yaml = new StringBuilder("version: 2\nmodels:\n  - name: ").append(resourceName).append("\n");
+        appendUniqueTest(yaml, keys);
+        yaml.append("    columns:\n");
+        for (String key : keys) {
+            yaml.append("      - name: ").append(key).append("\n        tests:\n          - not_null\n");
+        }
+        return yaml.toString();
+    }
+
+    private static void appendUniqueTest(StringBuilder yaml, List<String> keys) {
+        if (keys.isEmpty()) return;
+        yaml.append("    tests:\n");
+        if (keys.size() == 1) {
+            yaml.append("      - unique:\n          column_name: ").append(keys.get(0)).append("\n");
+            return;
+        }
+        yaml.append("      - dts_unique_combination:\n          combination_of_columns:\n");
+        for (String key : keys) yaml.append("            - ").append(key).append("\n");
     }
 
     private static String renderDocs(ModelingCompilerContract.CompilerModel model, List<String> columns) {
@@ -902,6 +944,10 @@ public final class ModelingDbtCompiler {
 
     private static boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    private static boolean hasDuplicates(List<String> values) {
+        return new LinkedHashSet<>(values).size() != values.size();
     }
 
     private record ValidatedField(

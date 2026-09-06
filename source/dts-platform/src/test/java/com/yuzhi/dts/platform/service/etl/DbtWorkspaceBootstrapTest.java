@@ -57,6 +57,11 @@ class DbtWorkspaceBootstrapTest {
         assertThat(projectDir.resolve("macros/parse_date_safe.sql")).exists();
         assertThat(Files.readString(projectDir.resolve("macros/parse_date_safe.sql"))).contains("\\d{1,2}").contains("make_date(");
         assertThat(projectDir.resolve("macros/truncate_relation.sql")).exists();
+        assertThat(Files.readString(projectDir.resolve("macros/dts_unique_combination.sql")))
+            .contains("{% test dts_unique_combination(model, combination_of_columns) %}")
+            .contains("group by")
+            .contains("having count(*) > 1")
+            .doesNotContain("concat(", "||");
         assertThat(projectDir.resolve("seeds")).isDirectory();
         assertThat(projectDir.resolve("tests")).isDirectory();
         assertThat(projectDir.resolve("analyses")).isDirectory();

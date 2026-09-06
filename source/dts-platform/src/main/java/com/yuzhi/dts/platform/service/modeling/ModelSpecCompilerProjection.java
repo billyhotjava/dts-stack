@@ -424,7 +424,6 @@ public final class ModelSpecCompilerProjection {
             .filter(field -> field.role() == FieldRole.KEY)
             .map(ModelSpecContract.ModelField::name)
             .filter(ModelSpecCompilerProjection::notBlank)
-            .distinct()
             .toList();
     }
 
