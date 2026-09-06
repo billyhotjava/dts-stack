@@ -1885,6 +1885,46 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void archivesADraftWithImplementationEvidenceWithoutDeletingItsHistory() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("archive-failed", "customer_detail"), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.hasReclassificationEvidence(TENANT, MODEL_ID)).thenReturn(true);
+        when(repository.compareAndSetLifecycle(
+            eq(TENANT), eq(ACTOR), eq(current.revision()), eq(current.checksum()), eq(ModelStatus.DRAFT), any()
+        )).thenReturn(1);
+        when(repository.updateV2RevisionLifecycle(eq(TENANT), eq(ACTOR), eq(ModelStatus.DRAFT), any(), anyString()))
+            .thenReturn(1);
+
+        ModelSpecView archived = service.archive(
+            TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, current.revision(), current.checksum())
+        );
+
+        assertThat(archived.status()).isEqualTo(ModelStatus.ARCHIVED);
+        verify(repository).hasActiveModelReferences(TENANT, MODEL_ID);
+        verify(repository, never()).deleteDraft(anyString(), any(), anyInt(), anyString());
+        verify(auditService).auditAction(eq("MODELING_MODEL_SPEC_ARCHIVE"), eq(AuditStage.SUCCESS), eq(MODEL_ID.toString()), any());
+    }
+
+    @Test
+    void refusesToArchiveADraftWithEvidenceWhenAnotherActiveModelReferencesIt() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("archive-referenced", "customer_detail"), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(repository.hasReclassificationEvidence(TENANT, MODEL_ID)).thenReturn(true);
+        when(repository.hasActiveModelReferences(TENANT, MODEL_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.archive(
+            TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, current.revision(), current.checksum())
+        ))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code())
+            .isEqualTo("MODEL_SPEC_ARCHIVE_REFERENCED");
+        verify(repository, never()).compareAndSetLifecycle(any(), any(), anyInt(), anyString(), any(), any());
+        verify(auditService, never()).auditAction(anyString(), any(), anyString(), any());
+    }
+
+    @Test
     void startsANewDraftRevisionWhenPublishedDbtSchemaAddsFields() {
         CreateModelSpecCommand base = command("dbt-schema-revision", "progress_kpi");
         CreateModelSpecCommand dbtManaged = new CreateModelSpecCommand(

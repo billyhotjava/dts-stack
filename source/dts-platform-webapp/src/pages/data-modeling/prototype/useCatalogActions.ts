@@ -1,4 +1,4 @@
-import { useCallback, type MutableRefObject } from "react";
+import { type MutableRefObject, useCallback } from "react";
 import {
 	createDimensionDefinition,
 	deleteDimensionDefinition,
@@ -60,32 +60,39 @@ export function useCatalogActions(options: CatalogActionOptions) {
 
 	const removeModel = useCallback(
 		async (model: ModelSpecView) => {
-			if (
-				savingRef.current ||
-				!canMaintain ||
-				model.status !== "DRAFT" ||
-				model.compatibilityMode !== "CANONICAL"
-			)
+			if (savingRef.current || !canMaintain || model.status !== "DRAFT" || model.compatibilityMode !== "CANONICAL")
 				return;
-			if (
-				!window.confirm(
-					`确认永久删除草稿模型「${model.name}」？该操作不可恢复，但不会删除数据源或已存在的物理表。`,
-				)
-			)
+			if (!window.confirm(`确认永久删除草稿模型「${model.name}」？该操作不可恢复，但不会删除数据源或已存在的物理表。`))
 				return;
 			setFailure(null);
 			savingRef.current = true;
 			setSaving(true);
+			let action = "删除";
 			try {
-				await deleteModelSpec({ id: model.id, revision: model.revision, checksum: model.checksum });
+				let archived = false;
+				try {
+					await deleteModelSpec({ id: model.id, revision: model.revision, checksum: model.checksum });
+				} catch (error) {
+					const failure = normalizeModelingRequestFailure(error, "模型删除失败。");
+					if (failure.code !== "MODEL_SPEC_DELETE_IN_USE") throw error;
+					if (
+						!window.confirm(
+							`模型「${model.name}」已有实现或运行记录，无法永久删除。是否改为归档？归档后从默认列表隐藏，保留历史记录和物理表，可通过“已归档”筛选查看。`,
+						)
+					)
+						return;
+					action = "归档";
+					await archiveModelSpec({ id: model.id, revision: model.revision, checksum: model.checksum });
+					archived = true;
+				}
 				if (selectedModelId === model.id) {
 					requestedModelIdRef.current = "";
 					syncWorkbenchUrl((params) => params.delete("modelSpecId"));
 				}
-				show(`模型已删除：${model.name}`);
+				show(`模型已${archived ? "归档" : "删除"}：${model.name}`);
 				await reload();
 			} catch (error) {
-				setFailure(normalizeModelingRequestFailure(error, "模型删除失败。"));
+				setFailure(normalizeModelingRequestFailure(error, `模型${action}失败。`));
 			} finally {
 				savingRef.current = false;
 				setSaving(false);

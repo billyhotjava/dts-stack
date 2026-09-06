@@ -1281,10 +1281,13 @@ public class ModelSpecApplicationService {
         ModelSpecView current = compatibilityReader.read(stored);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
-        if (current.status() == ModelStatus.DRAFT || current.status() == ModelStatus.ARCHIVED) {
+        if (
+            current.status() == ModelStatus.ARCHIVED ||
+            (current.status() == ModelStatus.DRAFT && !repository.hasReclassificationEvidence(serverTenantId, modelSpecId))
+        ) {
             throw new ModelSpecException(
                 "MODEL_SPEC_ARCHIVE_STATUS_INVALID",
-                "DRAFT ModelSpecs must be deleted; ARCHIVED ModelSpecs require no further archive action",
+                "Drafts without implementation or delivery evidence must be deleted; archived models require no further archive action",
                 ModelSpecException.Kind.CONFLICT,
                 Map.of("status", current.status())
             );
