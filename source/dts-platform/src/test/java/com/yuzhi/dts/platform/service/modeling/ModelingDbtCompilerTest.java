@@ -215,7 +215,9 @@ class ModelingDbtCompilerTest {
             .contains("contract:")
             .contains("enforced: true")
             .contains("data_type: text")
-            .contains("dts_logical_data_type: \"string\"");
+            .contains("dts_logical_data_type: \"string\"")
+            .doesNotContain("description: \"模型字段\"")
+            .doesNotContain("description: \"数据标准 ");
     }
 
     @Test

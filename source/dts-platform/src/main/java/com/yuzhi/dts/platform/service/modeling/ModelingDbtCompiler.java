@@ -859,10 +859,9 @@ public final class ModelingDbtCompiler {
         }
         yaml.append("    columns:\n");
         for (String column : columns) {
-            String standard = model.standardBindings() == null
-                ? null
-                : model.standardBindings().stream().filter(binding -> binding != null && column.equals(binding.fieldName())).map(ModelingCompilerContract.StandardBinding::standardElementId).filter(ModelingDbtCompiler::notBlank).findFirst().orElse(null);
-            yaml.append("      - name: ").append(column).append("\n        description: \"").append(escape(standard == null ? "模型字段" : "数据标准 " + standard)).append("\"\n");
+            // Generated contracts have no field-level business description.  A placeholder here
+            // is later projected back into the ModelSpec and would overwrite an authored display name.
+            yaml.append("      - name: ").append(column).append("\n");
             ValidatedField fieldType =
                 fieldTypes.get(column);
             if (fieldType != null) {

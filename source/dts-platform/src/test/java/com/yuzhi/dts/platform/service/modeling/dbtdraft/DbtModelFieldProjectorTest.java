@@ -62,4 +62,31 @@ class DbtModelFieldProjectorTest {
             .extracting(error -> ((DbtImplementationDraftContract.DraftException) error).code())
             .isEqualTo("DBT_DRAFT_SCHEMA_INVALID");
     }
+
+    @Test
+    void keepsAnExistingDisplayNameWhenTheGeneratedContractHasNoDescription() {
+        ModelField existing = new ModelField(
+            "project_id",
+            "项目编号",
+            "string",
+            true,
+            "source.project_id",
+            FieldRole.KEY,
+            null,
+            null,
+            false,
+            null
+        );
+        String schema =
+            """
+            {"columns":[{"name":"project_id","dataType":"text","role":"KEY","tests":["not_null"]}]}
+            """;
+
+        List<ModelField> projected = DbtModelFieldProjector.project(objectMapper, schema, List.of(existing));
+
+        assertThat(projected).singleElement().satisfies(field -> {
+            assertThat(field.displayName()).isEqualTo("项目编号");
+            assertThat(field.dataType()).isEqualTo("text");
+        });
+    }
 }

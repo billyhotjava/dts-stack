@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.service.etl;
 
 import com.yuzhi.dts.platform.config.AirflowProperties;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -33,7 +35,7 @@ public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
         }
         Map<String, Object> dag;
         try {
-            dag = airflow.getDag(request.dagId()).orElse(null);
+            dag = waitForDagRegistration(request.dagId());
         } catch (RuntimeException unavailable) {
             return SubmissionResult.retryableUnknown(
                 request.dagRunId(),
@@ -84,6 +86,41 @@ public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
                         "MODEL_AIRFLOW_TRIGGER_UNKNOWN"
                     )
                 );
+        }
+    }
+
+    /**
+     * A managed DAG file can be durable before Airflow has parsed and registered it. Keep the
+     * release-build submission within the configured readiness window so that short parser lag
+     * does not become a terminal candidate failure.
+     */
+    private Map<String, Object> waitForDagRegistration(String dagId) {
+        int waitSeconds = Math.max(0, properties.getDagReadyWaitSeconds());
+        if (waitSeconds <= 0) {
+            return airflow.getDag(dagId).orElse(null);
+        }
+        Instant deadline = Instant.now().plus(Duration.ofSeconds(waitSeconds));
+        long pollMillis = Duration.ofSeconds(
+            Math.max(1, properties.getDagReadyPollSeconds())
+        ).toMillis();
+        while (true) {
+            Map<String, Object> dag = airflow.getDag(dagId).orElse(null);
+            if (dag != null) {
+                return dag;
+            }
+            long remainingMillis = Duration.between(Instant.now(), deadline).toMillis();
+            if (remainingMillis <= 0) {
+                return null;
+            }
+            try {
+                Thread.sleep(Math.min(remainingMillis, pollMillis));
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(
+                    "Interrupted while waiting for Airflow DAG registration",
+                    interrupted
+                );
+            }
         }
     }
 

@@ -252,6 +252,59 @@ class AirflowDbtExecutionGatewayTest {
         verify(airflow, never()).triggerDag(any(), any());
     }
 
+    @Test
+    void waitsForAirflowDagRegistrationBeforeTriggering() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        when(airflow.getDag(DAG_ID)).thenReturn(
+            Optional.empty(),
+            Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+        );
+        when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(Optional.empty());
+        when(airflow.triggerDag(eq(DAG_ID), any())).thenReturn(
+            Optional.of(Map.of("dag_run_id", DAG_RUN_ID))
+        );
+        AirflowProperties properties = new AirflowProperties();
+        properties.setEnabled(true);
+        properties.setDagReadyWaitSeconds(1);
+        properties.setDagReadyPollSeconds(0);
+
+        DbtExecutionGateway.SubmissionResult result = new AirflowDbtExecutionGateway(airflow, properties)
+            .submitReleaseBuild(request());
+
+        assertThat(result.status()).isEqualTo(DbtExecutionGateway.SubmissionStatus.SUBMITTED);
+        verify(airflow).triggerDag(eq(DAG_ID), any());
+    }
+
+    @Test
+    void registrationWaitDeadlineRemainsBlocked() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        when(airflow.getDag(DAG_ID)).thenReturn(Optional.empty());
+        AirflowProperties properties = new AirflowProperties();
+        properties.setEnabled(true);
+        properties.setDagReadyWaitSeconds(1);
+        properties.setDagReadyPollSeconds(10);
+
+        DbtExecutionGateway.SubmissionResult result = new AirflowDbtExecutionGateway(airflow, properties)
+            .submitReleaseBuild(request());
+
+        assertThat(result.status()).isEqualTo(DbtExecutionGateway.SubmissionStatus.BLOCKED);
+        assertThat(result.errorCode()).isEqualTo("MODEL_AIRFLOW_DAG_NOT_REGISTERED");
+        verify(airflow, never()).triggerDag(any(), any());
+    }
+
+    @Test
+    void registrationLookupFailureRemainsRetryableUnknown() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        when(airflow.getDag(DAG_ID)).thenThrow(new RuntimeException("Airflow unavailable"));
+
+        DbtExecutionGateway.SubmissionResult result = gateway(airflow)
+            .submitReleaseBuild(request());
+
+        assertThat(result.status()).isEqualTo(DbtExecutionGateway.SubmissionStatus.RETRYABLE_UNKNOWN);
+        assertThat(result.errorCode()).isEqualTo("MODEL_AIRFLOW_UNAVAILABLE");
+        verify(airflow, never()).triggerDag(any(), any());
+    }
+
     private static AirflowDbtExecutionGateway gateway(
         AirflowClient airflow
     ) {
