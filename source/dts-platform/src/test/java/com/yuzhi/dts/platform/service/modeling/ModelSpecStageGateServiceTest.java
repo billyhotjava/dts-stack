@@ -75,7 +75,8 @@ class ModelSpecStageGateServiceTest {
         }
         assertThat(ModelSpecStageGateService.evaluate(duplicate, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(duplicate)).blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
-            .contains("MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID", "MODEL_IMPLEMENTATION_GRAIN_KEY_MISMATCH");
+            .contains("MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID")
+            .doesNotContain("MODEL_IMPLEMENTATION_GRAIN_KEY_MISMATCH");
         assertThat(ModelSpecStageGateService.evaluate(unknown, Stage.RELEASE_READY, GateEvidence.currentFor(unknown)).blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .contains("MODEL_IMPLEMENTATION_KEY_FIELD_UNKNOWN", "MODEL_IMPLEMENTATION_GRAIN_KEY_MISMATCH");

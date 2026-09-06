@@ -184,7 +184,7 @@ class ModelingDbtCompilerTest {
                 "deduplicateBy", List.of("project_no")
             ),
             "table",
-            List.of("project_no"),
+            model.grain().keys(),
             "plan-a",
             typedFields(model)
         );
@@ -247,15 +247,15 @@ class ModelingDbtCompilerTest {
                     List.of()
                 ),
                 "table",
-                List.of("project_no"),
+                model.grain().keys(),
                 "plan-a",
-                List.of(
-                    new ModelSpecCompilerProjection.CompilerField(
-                        "project_no",
-                        "text); drop table catalog_dataset; --",
-                        false
-                    )
-                )
+                typedFields(model).stream()
+                    .map(field -> new ModelSpecCompilerProjection.CompilerField(
+                        field.name(),
+                        "project_no".equals(field.name()) ? "text); drop table catalog_dataset; --" : field.logicalType(),
+                        field.nullable()
+                    ))
+                    .toList()
             );
 
         assertThatThrownBy(() ->
@@ -298,15 +298,11 @@ class ModelingDbtCompilerTest {
                     List.of()
                 ),
                 "table",
-                List.of("project_no"),
+                model.grain().keys(),
                 "plan-a",
-                List.of(
-                    new ModelSpecCompilerProjection.CompilerField(
-                        "project_no",
-                        "string",
-                        false
-                    )
-                )
+                typedFields(model).stream()
+                    .filter(field -> !"delay_days".equals(field.name()))
+                    .toList()
             );
 
         assertThatThrownBy(() ->
