@@ -92,9 +92,12 @@ class PlanOperationalRunRepositoryTest {
             jdbc.query(
                 anyString(),
                 org.mockito.ArgumentMatchers.<RowMapper<Object>>any(),
-                any()
+                any(Object[].class)
             )
         ).thenAnswer(invocation -> {
+            if (!invocation.<String>getArgument(0).contains("from modeling_plan_execution_binding")) {
+                return List.of();
+            }
             RowMapper<?> mapper = invocation.getArgument(1);
             return List.of(mapper.mapRow(row, 0));
         });
@@ -119,7 +122,7 @@ class PlanOperationalRunRepositoryTest {
                         "MODEL_PLAN_BINDING_OPERATIONAL_DAG_REQUIRED"
                     )
             );
-        verify(jdbc, never()).update(anyString(), any());
+        verify(jdbc, never()).update(anyString(), any(Object[].class));
     }
 
     @Test
@@ -142,7 +145,7 @@ class PlanOperationalRunRepositoryTest {
             jdbc.query(
                 anyString(),
                 org.mockito.ArgumentMatchers.<RowMapper<Object>>any(),
-                any()
+                any(Object[].class)
             )
         ).thenAnswer(invocation -> {
             RowMapper<?> mapper = invocation.getArgument(1);
@@ -192,7 +195,7 @@ class PlanOperationalRunRepositoryTest {
             jdbc.query(
                 anyString(),
                 org.mockito.ArgumentMatchers.<RowMapper<Object>>any(),
-                any()
+                any(Object[].class)
             )
         ).thenReturn(List.of());
 
@@ -206,12 +209,12 @@ class PlanOperationalRunRepositoryTest {
                 Instant.parse("2026-09-07T01:00:00Z")
             )
         ).isEmpty();
-        verify(jdbc, never()).update(anyString(), any());
+        verify(jdbc, never()).update(anyString(), any(Object[].class));
         ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
         verify(jdbc).query(
             sql.capture(),
             org.mockito.ArgumentMatchers.<RowMapper<Object>>any(),
-            any()
+            any(Object[].class)
         );
         assertThat(sql.getValue())
             .contains("from modeling_pipeline_run active")
