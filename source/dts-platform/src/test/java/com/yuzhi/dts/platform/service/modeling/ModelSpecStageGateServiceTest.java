@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -334,6 +335,48 @@ class ModelSpecStageGateServiceTest {
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .contains("DIMENSION_DEFINITION_NOT_CURRENT");
         verify(domainReadAccess, times(3)).canRead(definitionDomainId);
+    }
+
+    @Test
+    void ordinaryTwoFieldDetailDoesNotRequireFactShapeOrBusinessTime() {
+        for (FactShape shape : new FactShape[] { null, FactShape.TRANSACTION }) {
+            ModelSpecView model = spy(view(ModelType.FACT, null, shape, null, sources(), List.of(), List.of(), null));
+            when(model.fields()).thenReturn(List.of(
+                new ModelField("test_id", "varchar", false, "source.test_id", FieldRole.KEY, "INTERNAL"),
+                new ModelField("test_name", "varchar", true, "source.test_name", FieldRole.ATTRIBUTE, "INTERNAL")
+            ));
+            when(model.grain()).thenReturn(new Grain("one row per test", List.of("test_id")));
+            when(model.standardBindings()).thenReturn(List.of());
+
+            for (Stage stage : List.of(Stage.DRAFT_SAVE, Stage.DESIGNED, Stage.IMPLEMENTATION_READY)) {
+                assertThat(ModelSpecStageGateService.evaluate(model, stage, GateEvidence.currentFor(model)).blockers()).isEmpty();
+            }
+        }
+    }
+
+    @Test
+    void explicitSnapshotsStillRequireBusinessTime() {
+        for (FactShape shape : List.of(FactShape.PERIODIC_SNAPSHOT, FactShape.ACCUMULATING_SNAPSHOT)) {
+            ModelSpecView model = view(ModelType.FACT, null, shape, null, sources(), List.of(), List.of(), null);
+            assertThat(ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model)).blockers())
+                .extracting(ModelSpecStageGateService.GateBlocker::code)
+                .containsExactly("MODEL_SPEC_TIME_SEMANTICS_REQUIRED");
+        }
+    }
+
+    @Test
+    void ordinaryDetailStillRejectsMissingInput() {
+        ModelSpecView model = view(ModelType.FACT, null, null, null, List.of(), List.of(), List.of(), null);
+        assertThat(ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model)).blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::code)
+            .containsExactly("MODEL_SPEC_FACT_INPUT_REQUIRED");
+    }
+
+    @Test
+    void explicitBusinessTimeDoesNotRequireAnArtificialFactShape() {
+        ModelSpecView model = view(ModelType.FACT, null, null,
+            new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")), sources(), List.of(), List.of(), null);
+        assertThat(ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model)).blockers()).isEmpty();
     }
 
     @Test

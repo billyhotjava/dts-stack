@@ -812,6 +812,35 @@ describe("model workbench draft validation", () => {
 		);
 	});
 
+	it("saves an ordinary two-field detail without inventing a fact shape or time field", async () => {
+		const base = canonicalFactView();
+		vi.mocked(updateModelSpec).mockResolvedValue(base);
+		const draft = modelDraftFromView(base) as ModelSpecDraft;
+		draft.factShape = "";
+		draft.timeSemanticsType = "";
+		draft.timeSemanticsFields = [];
+		draft.fields = [
+			{ name: "test_id", displayName: "测试编号", dataType: "VARCHAR", nullable: false, role: "KEY" },
+			{ name: "test_name", displayName: "测试名称", dataType: "VARCHAR", nullable: true, role: "ATTRIBUTE" },
+		];
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [] });
+		expect(updateModelSpec).toHaveBeenCalledWith(
+			base,
+			expect.objectContaining({ factShape: null, timeSemantics: null }),
+		);
+	});
+
+	it("validates business time only when an explicit snapshot is selected", () => {
+		const draft = modelDraftFromView(canonicalFactView()) as ModelSpecDraft;
+		draft.factShape = "PERIODIC_SNAPSHOT";
+		draft.timeSemanticsType = "";
+		draft.timeSemanticsFields = [];
+		expect(validateModelDraftInput(draft).timeSemantics).toBeTruthy();
+		draft.timeSemanticsType = "EVENT_TIME";
+		draft.timeSemanticsFields = ["event_time"];
+		expect(validateModelDraftInput(draft).timeSemantics).toContain("不匹配");
+	});
+
 	it("allows an incomplete FACT draft to be saved without invented business time semantics", async () => {
 		const base = canonicalFactView();
 		vi.mocked(updateModelSpec).mockResolvedValue(base);
@@ -1177,16 +1206,9 @@ describe("model workbench draft validation", () => {
 		};
 		const context = { ownerId: "owner-1", dimensionDefinitions: [], models: [base] };
 
-		expect(() => modelDraftToAuthoringSnapshot(draft, context)).toThrow(
-			"模型创作草稿缺少服务端分配的 dbt 项目标识",
-		);
+		expect(() => modelDraftToAuthoringSnapshot(draft, context)).toThrow("模型创作草稿缺少服务端分配的 dbt 项目标识");
 
-		const snapshot = modelDraftToAuthoringSnapshot(
-			draft,
-			context,
-			true,
-			"dts_model_300000000000",
-		);
+		const snapshot = modelDraftToAuthoringSnapshot(draft, context, true, "dts_model_300000000000");
 
 		expect(snapshot.visualImplementation).toMatchObject({
 			projectKey: "dts_model_300000000000",
@@ -1369,7 +1391,7 @@ describe("model workbench draft validation", () => {
 		);
 	});
 
-	it("uses the explicitly selected implementation input kind when both logical reference collections exist", async () => {
+	it("rejects leftover logical sources instead of silently dropping them from a single-input implementation", async () => {
 		const owner = canonicalFactView();
 		const upstream = { ...canonicalFactView(), id: "30000000-0000-0000-0000-000000000002" };
 		const savedModel = { ...owner, revision: 2, checksum: "d".repeat(64) };
@@ -1398,20 +1420,16 @@ describe("model workbench draft validation", () => {
 			dependsOn: [{ modelSpecId: upstream.id, revision: upstream.revision }],
 		};
 
-		await saveModelDraft(draft, {
-			ownerId: "owner-1",
-			dimensionDefinitions: [],
-			models: [owner, upstream],
-		});
-
-		expect(saveModelImplementation).toHaveBeenCalledWith(
-			savedModel,
-			null,
-			expect.objectContaining({
-				inputMode: "UPSTREAM_MODEL",
-				inputs: [{ modelSpecId: upstream.id, revision: upstream.revision, checksum: upstream.checksum }],
+		// The dependency snapshot validates all declared sources, including inactive-mode leftovers.
+		await expect(
+			saveModelDraft(draft, {
+				ownerId: "owner-1",
+				dimensionDefinitions: [],
+				models: [owner, upstream],
 			}),
-		);
+		).rejects.toThrow("多输入模型必须为每个目标字段配置来源字段");
+		expect(updateModelSpec).not.toHaveBeenCalled();
+		expect(saveModelImplementation).not.toHaveBeenCalled();
 	});
 
 	it("saves a revision-pinned upstream model for derived models", async () => {

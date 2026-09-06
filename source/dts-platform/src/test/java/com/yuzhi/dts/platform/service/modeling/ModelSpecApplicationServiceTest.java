@@ -1527,6 +1527,17 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void detailReclassificationDoesNotAdvertiseMandatoryTimeFields() {
+        ModelSpecView current = codec.toCreatedView(MODEL_ID, command("generic-detail", "generic_detail"), NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        ModelSpecApplicationService.ReclassificationPreview preview = service.previewReclassification(
+            TENANT, ACTOR, MODEL_ID, new ModelSpecApplicationService.ReclassificationPreviewRequest(ModelType.FACT, null)
+        );
+        assertThat(preview.requiredFields()).doesNotContain("factShape", "timeSemantics", "fields.TIME");
+    }
+
+    @Test
     void reclassificationPreviewTransactionPermitsTheExistingSharedAccessChecks() throws NoSuchMethodException {
         Transactional transaction = ModelSpecApplicationService.class
             .getMethod(

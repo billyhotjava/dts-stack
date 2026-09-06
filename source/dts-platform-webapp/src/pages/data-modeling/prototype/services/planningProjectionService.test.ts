@@ -3,6 +3,57 @@ import { describe, expect, it } from "vitest";
 import { normalizeModelingRequestFailure } from "./planningProjectionService";
 
 describe("normalizeModelingRequestFailure", () => {
+	it("shows actionable lifecycle blockers instead of the generic English gate message", () => {
+		const failure = normalizeModelingRequestFailure(
+			{
+				response: {
+					status: 422,
+					data: {
+						errorCode: "MODEL_LIFECYCLE_GATE_BLOCKED",
+						message: "ModelSpec lifecycle gate is blocked",
+						data: {
+							stage: "IMPLEMENTATION_READY",
+							blockers: [
+								{
+									code: "MODEL_SPEC_FACT_TIME_SHAPE_MISMATCH",
+									field: "timeSemantics",
+									message: "业务时间与事实形态不匹配",
+								},
+								{
+									code: "MODEL_SPEC_FACT_INPUT_REQUIRED",
+									field: "sourceRefs",
+									message: "请至少选择已确认的上游输入来源或锁定上游模型",
+								},
+							],
+						},
+					},
+				},
+			},
+			"物化构建未能启动。",
+		);
+		expect(failure.message).toContain("业务时间与事实形态不匹配");
+		expect(failure.message).toContain("请至少选择已确认的上游输入来源");
+		expect(failure.message).not.toContain("ModelSpec lifecycle gate");
+	});
+
+	it("keeps malformed lifecycle evidence bounded and uses a Chinese fallback", () => {
+		const failure = normalizeModelingRequestFailure(
+			{
+				response: {
+					status: 422,
+					data: {
+						errorCode: "MODEL_LIFECYCLE_GATE_BLOCKED",
+						message: "ModelSpec lifecycle gate is blocked",
+						data: { blockers: [null, { message: "x".repeat(501) }, { message: "bad\u0000message" }] },
+					},
+				},
+			},
+			"构建失败。",
+		);
+		expect(failure.message).toContain("模型前置校验未通过");
+		expect(failure.message).not.toContain("bad");
+	});
+
 	it("explains stale source bindings in Chinese while preserving the diagnostic code", () => {
 		const failure = normalizeModelingRequestFailure(
 			{
