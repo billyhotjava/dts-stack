@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.O
 import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.OperationalScope;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import java.time.Clock;
@@ -99,7 +100,7 @@ class PlanOperationalRunServiceTest {
         );
 
         assertThat(result.status()).isEqualTo("SUBMITTED");
-        InOrder order = inOrder(fixture.runs, fixture.airflow);
+        InOrder order = inOrder(fixture.runs, fixture.dags, fixture.airflow);
         order.verify(fixture.runs)
             .open(
                 eq("tenant-a"),
@@ -229,6 +230,21 @@ class PlanOperationalRunServiceTest {
         verify(fixture.runs).markSubmitted(GROUP_ID, NOW);
         verify(fixture.airflow, never()).triggerDag(any(), any());
         verify(fixture.scoped, never()).prepareCandidate(any());
+    }
+
+    @Test
+    void recoveryPreservesScopedProjectFailureCode() {
+        Fixture fixture = fixture();
+        when(fixture.runs.claimRecoverableManual(NOW)).thenReturn(Optional.of(opened("UNKNOWN", true)), Optional.empty());
+        when(fixture.airflow.getDagRun("dts_plan_binding", "run-1")).thenReturn(Optional.empty());
+        when(fixture.runs.loadScope(GROUP_ID)).thenReturn(scope());
+        when(fixture.runs.findPrepared(GROUP_ID)).thenReturn(Optional.empty());
+        when(fixture.scoped.prepareCandidate(List.of())).thenThrow(new DbtScopedProjectService.ScopedProjectException("MATERIALIZATION_ARTIFACT_INVALID", "invalid"));
+
+        assertThat(fixture.service.reconcilePendingManualRuns()).isEqualTo(1);
+
+        verify(fixture.runs).markUnknown(GROUP_ID, "MATERIALIZATION_ARTIFACT_INVALID", NOW);
+        verify(fixture.airflow, never()).triggerDag(any(), any());
     }
 
     @Test

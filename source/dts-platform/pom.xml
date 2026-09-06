@@ -676,6 +676,7 @@
                         <testInclude>**/service/modeling/ModelMaterializationDispatchServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRunArtifactServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PlanOperationalRunArtifactServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/PlanOperationalRunServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/F4StrictAuditRollbackPostgresIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRuntimeSpecServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationSourceAvailabilityGuardTest.java</testInclude>

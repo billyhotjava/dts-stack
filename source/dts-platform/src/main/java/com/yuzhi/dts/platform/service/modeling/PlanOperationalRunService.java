@@ -9,6 +9,7 @@ import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
+import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.ScopedProjectException;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.ScopedCandidateProject;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import com.yuzhi.dts.platform.service.modeling.PlanExecutionException.Kind;
@@ -296,6 +297,10 @@ public class PlanOperationalRunService {
             if (unavailable instanceof PlanExecutionException execution) {
                 if ("MODEL_OPERATIONAL_AIRFLOW_SUBMISSION_UNKNOWN".equals(execution.code())) return;
                 runs.markUnknown(opened.pipelineRunGroupId(), execution.code(), now);
+                return;
+            }
+            if (unavailable instanceof ScopedProjectException scoped) {
+                runs.markUnknown(opened.pipelineRunGroupId(), scoped.code(), now);
                 return;
             }
             runs.markUnknown(opened.pipelineRunGroupId(), "MODEL_OPERATIONAL_DISPATCH_RECOVERY_FAILED", now);

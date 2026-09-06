@@ -126,13 +126,9 @@ class ModelMaterializationRunArtifactServiceTest {
             sourceAvailability.checkPinnedCurrentForUpdate(GROUP_ID)
         ).thenReturn(GenerationCheck.currentCheck());
         ModelReleaseCandidateContract.CandidateView builtCandidate = mock(ModelReleaseCandidateContract.CandidateView.class);
-        when(candidates.transition(any(), any(), any(), any())).thenReturn(
-            new ModelReleaseCandidateContract.CommandResult(
-                builtCandidate,
-                false,
-                List.of()
-            )
-        );
+        when(builtCandidate.status()).thenReturn(ModelLifecycleContract.DeliveryStatus.BUILT);
+        ModelReleaseCandidateContract.CommandResult transitionResult = new ModelReleaseCandidateContract.CommandResult(builtCandidate, false, List.of());
+        when(candidates.transition(any(), any(), any(), any())).thenReturn(transitionResult);
         when(scoped.verifyCandidateProject(BUNDLE))
             .thenReturn(project);
         when(inspectors.require("postgres"))
