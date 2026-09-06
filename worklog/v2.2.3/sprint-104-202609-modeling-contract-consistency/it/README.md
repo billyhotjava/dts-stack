@@ -46,3 +46,7 @@ mvn -pl dts-platform -am -Dtest=ModelSpecContractTest,ModelSpecStageGateServiceT
 认证/密级/跨租户错误、未知执行目标、数据覆盖风险或新迁移需求出现时停止对应操作并报告。
 目标环境与离线交付未授权前，不传包、不重建容器。T08 补充实际 release-plan 和 runbook；本计划不构成部署授权。
 
+
+## 首批实现检查
+
+见 [T02 验证记录](evidence/T02-contract/verification.md)：源码契约 40/40，部署目录测试尚未启动；IT-01–IT-07 仍未验收。正式交付构建使用部署目录的 builds/dts-build.sh / builds/dts-platform-webapp/Dockerfile，不把单独 pnpm build 等同于完成交付包。

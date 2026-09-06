@@ -12,7 +12,7 @@
 | P4 代表性数据 | 未验证 | 见 domain-profile，未查询现网 |
 | P5 API 走查 | 未验证 | 使用现有读取、保存/校验接口；写前确认金丝雀 |
 | P6 UI harness | 未验证 | Chrome 95、1366×768/窄屏、截图路径待确认 |
-| P7 构建/测试 | 源码契约 PASS；正式构建待验证 | 当前 Node 原生契约 40/40；见 evidence/T02-contract。不能替代构建或浏览器证据 |
+| P7 构建/测试 | 源码契约 PASS；部署目录测试 GAP | 当前 Node 原生契约 40/40；部署目录无 node_modules，Vitest 未启动。正式构建未执行，见 evidence/T02-contract/verification.md。不能替代浏览器证据 |
 | P8 外部依赖 | 未验证 | dbt/PostgreSQL/标准证据/质量发布控制面及离线资源 |
 
 ## 开工约束
