@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.etl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.AirflowProperties;
@@ -14,6 +15,27 @@ class DbtDagServiceTest {
 
     @TempDir
     Path tempDir;
+
+    @Test
+    void managedDagPurposesCannotOverwriteEachOther() throws Exception {
+        AirflowProperties properties = new AirflowProperties();
+        properties.setDagsDir(tempDir.toString());
+        DbtDagService service = new DbtDagService(properties, new ObjectMapper());
+        String releaseId = "dts_release_build_postgres_primary";
+        String planId = "dts_plan_finance_prod_primary";
+        service.ensureReleaseBuildDag(releaseId);
+        service.ensurePlanDag(planId, UUID.randomUUID(), null, "UTC", "a".repeat(64));
+        String releaseSource = Files.readString(tempDir.resolve(releaseId + ".py"));
+        String planSource = Files.readString(tempDir.resolve(planId + ".py"));
+
+        assertThatThrownBy(() -> service.ensurePlanDag(releaseId, UUID.randomUUID(), null, "UTC", "a".repeat(64)))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.ensureReleaseBuildDag(planId))
+            .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(Files.readString(tempDir.resolve(releaseId + ".py"))).isEqualTo(releaseSource);
+        assertThat(Files.readString(tempDir.resolve(planId + ".py"))).isEqualTo(planSource);
+    }
 
     @Test
     void shouldGenerateReleaseBuildAsAtomicThinManagedDag() throws Exception {

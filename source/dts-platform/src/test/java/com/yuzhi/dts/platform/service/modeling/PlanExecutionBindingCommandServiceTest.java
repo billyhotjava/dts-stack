@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.repository.modeling.PlanExecutionBindingRepository;
+import com.yuzhi.dts.platform.repository.modeling.PlanExecutionBindingRepository.RepairResult;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import java.time.Clock;
 import java.time.Instant;
@@ -40,7 +41,7 @@ class PlanExecutionBindingCommandServiceTest {
                 "operator-a",
                 NOW
             )
-        ).thenReturn(true);
+        ).thenReturn(java.util.Optional.of(new RepairResult(5)));
 
         var result = fixture.service.repair(
             "tenant-a",
@@ -51,7 +52,7 @@ class PlanExecutionBindingCommandServiceTest {
         );
 
         assertThat(result.deploymentStatus()).isEqualTo("DEPLOYING");
-        assertThat(result.bindingVersion()).isEqualTo(4);
+        assertThat(result.bindingVersion()).isEqualTo(5);
     }
 
     @Test

@@ -113,8 +113,45 @@ class CandidatePublicationRepositoryIT {
                 )
             );
             assertThat(bindingCount(scope)).isEqualTo(1);
+            assertThat(bindingDagId(scope))
+                .matches("dts_plan_[0-9a-f]{32}")
+                .doesNotContain("release_build");
             assertThat(bindingModelIds(scope))
                 .containsExactlyInAnyOrder(scope.prodModelId(), scope.secondProdModelId());
+
+            String operationalChecksum = bindingDeploymentChecksum(scope);
+            transaction.executeWithoutResult(status ->
+                jdbcTemplate.update(
+                    """
+                    update modeling_plan_execution_binding
+                       set dag_id = 'dts_release_build_postgres_primary',
+                           desired_deployment_checksum = ?,
+                           deployed_checksum = ?,
+                           deployment_status = 'ACTIVE'
+                     where tenant_id = ? and plan_id = ? and environment = 'PROD'
+                       and execution_target_key = ?
+                    """,
+                    "e".repeat(64),
+                    "e".repeat(64),
+                    scope.tenantId(),
+                    scope.planId(),
+                    TARGET_KEY
+                )
+            );
+            transaction.executeWithoutResult(status ->
+                publications.rebuildManualBinding(
+                    candidate,
+                    List.of(committed),
+                    "release-operator",
+                    NOW.plusSeconds(1)
+                )
+            );
+            assertThat(bindingDagId(scope)).matches("dts_plan_[0-9a-f]{32}");
+            assertThat(bindingDeploymentChecksum(scope))
+                .isEqualTo(operationalChecksum)
+                .isNotEqualTo("e".repeat(64));
+            assertThat(bindingVersion(scope)).isEqualTo(2);
+            assertThat(bindingDeploymentStatus(scope)).isEqualTo("DEPLOYING");
 
             transaction.executeWithoutResult(status ->
                 jdbcTemplate.update(
@@ -2223,6 +2260,48 @@ class CandidatePublicationRepositoryIT {
                and execution_target_key = ?
             """,
             Integer.class,
+            scope.tenantId(),
+            scope.planId(),
+            TARGET_KEY
+        );
+    }
+
+    private String bindingDagId(TestScope scope) {
+        return bindingValue(scope, "dag_id");
+    }
+
+    private String bindingDeploymentChecksum(TestScope scope) {
+        return bindingValue(scope, "desired_deployment_checksum");
+    }
+
+    private String bindingDeploymentStatus(TestScope scope) {
+        return bindingValue(scope, "deployment_status");
+    }
+
+    private int bindingVersion(TestScope scope) {
+        return jdbcTemplate.queryForObject(
+            """
+            select version
+              from modeling_plan_execution_binding
+             where tenant_id = ? and plan_id = ? and environment = 'PROD'
+               and execution_target_key = ?
+            """,
+            Integer.class,
+            scope.tenantId(),
+            scope.planId(),
+            TARGET_KEY
+        );
+    }
+
+    private String bindingValue(TestScope scope, String column) {
+        return jdbcTemplate.queryForObject(
+            """
+            select %s
+              from modeling_plan_execution_binding
+             where tenant_id = ? and plan_id = ? and environment = 'PROD'
+               and execution_target_key = ?
+            """.formatted(column),
+            String.class,
             scope.tenantId(),
             scope.planId(),
             TARGET_KEY

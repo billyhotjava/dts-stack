@@ -11,7 +11,7 @@
 
 ## 发布前记录
 
-当前已部署修复：`2161b2cda7b2782a0beed29158b9ca681c1a9d36`，正式构建并部署完成。`bd0670acc` 为前一次验收基线。最终交付记录以实际镜像及校验和为准。
+`2161b2cda7b2782a0beed29158b9ca681c1a9d36` 是 F1 的历史部署基线，`bd0670acc` 是更早的验收基线；两者不能作为 F2/T10–T13 的构建或验收证据。当前正式证据入口为 [formal-validation-and-delivery-evidence-20260907.md](../it/evidence/current-environment/formal-validation-and-delivery-evidence-20260907.md)：`e83b51076e21` 的三服务镜像、隔离迁移和离线预检已有记录，`90d111280` 已完成三镜像构建、包校验与受控部署；运营任务路由问题仍待修复。
 
 ## 执行顺序
 
@@ -56,22 +56,22 @@
 - 包及镜像完整信息：`it/evidence/current-environment/release-2161b2cda.json`。
 - 旧草稿校验/提交及显示名保留已通过页面复验。新样例首次物化/质量/发布登记通过；再次运行与目录同步未通过，Sprint不可标记DONE。
 
-## F2/T10–T13 正式交付计划（Gate G3，待执行）
+## F2/T10–T13 正式交付计划（Gate G3，进行中）
 
 **变更类型**：组合（`dts-platform`、`dts-analytics`、`dts-platform-webapp` 的 API/UI 与两套 Liquibase expand migration）。
 
 **风险等级**：高。`dts-platform` 和 `dts-analytics` 分别在启动时执行 Liquibase；T13 还依赖平台到 analytics 的受信任服务调用。F1 历史双镜像不能作为本范围的构建、离线包或验收证据。
 
-本节是执行计划，不表示已构建、已部署或已完成回滚演练。逐项实际 SHA、镜像 ID、包校验和和结果填入 [release-evidence-plan.md](release-evidence-plan.md)。
+本节保留可重复执行的发布步骤。实际结果以 [formal-validation-and-delivery-evidence-20260907.md](../it/evidence/current-environment/formal-validation-and-delivery-evidence-20260907.md) 和 [release-evidence-plan.md](release-evidence-plan.md) 为准：`e83b51076e21` 的三服务已经部署，隔离迁移 update/rollback/reupdate 与离线 hash/load/plan 已通过；`90d111280` 的正式三镜像构建及受控部署已完成；运营任务路由问题仍待修复。浏览器登录、完整离线安装目标和实际容器回滚演练仍是 G3 GAP，不能写为整体 DONE。
 
 ### 1. 迁移和兼容性
 
 | 服务/变更 | changeSet | 本次阶段 | 旧代码兼容性 | 物理回滚 | 当前状态 |
 |---|---|---|---|---|---|
-| platform 资产乐观锁 | `20260906-01-catalog-dataset-version` | Expand：`catalog_dataset.version bigint NOT NULL DEFAULT 0` | 旧代码忽略新增列；新代码可读取初始 `0` | 不建议线上 drop column；代码镜像可回退且列保留 | 未在清洁库/升级库实测 |
-| analytics 平台源绑定 | `0054-01` | Expand：`tenant_id`、`platform_data_source_id` 可空，加二元唯一约束 | 旧代码可忽略可空列；无 tenant 的存量行保持 legacy-unresolved | 不建议线上 drop constraint/column；代码镜像可回退且列保留 | 未在清洁库/升级库实测 |
+| platform 资产乐观锁 | `20260906-01-catalog-dataset-version` | Expand：`catalog_dataset.version bigint NOT NULL DEFAULT 0` | 旧代码忽略新增列；新代码可读取初始 `0` | 不建议线上 drop column；代码镜像可回退且列保留 | 隔离库 update/rollback/reupdate 已通过；线上 changeSet 已 EXECUTED |
+| analytics 平台源绑定 | `0054-01` | Expand：`tenant_id`、`platform_data_source_id` 可空，加二元唯一约束 | 旧代码可忽略可空列；无 tenant 的存量行保持 legacy-unresolved | 不建议线上 drop constraint/column；代码镜像可回退且列保留 | 隔离库 update/rollback/reupdate 已通过；线上 changeSet 已 EXECUTED |
 
-两个尚未在当前环境执行的新 changeSet 已补显式逆向 rollback，供隔离库演练；实测通过前不登记 PASS。生产代码回退仍保留 expand schema，禁止自动删除新增列或唯一约束。若迁移已完成，回退仅限重新部署上一个不可变镜像并保留 expand schema；如果新版本已写入依赖新字段的数据，选择前向修复，不盲目回退代码。
+两个 changeSet 均含显式 rollback，并已在隔离临时库完成 update/rollback/reupdate。该结果不授权线上 schema drop：生产代码回退仍保留 expand schema，禁止自动删除新增列或唯一约束。若新版本已写入依赖新字段的数据，选择前向修复，不盲目回退代码。
 
 升级库预检必须在部署环境进行并保存只读结果：
 
@@ -89,7 +89,7 @@ FROM analytics_database
 WHERE tenant_id IS NULL OR platform_data_source_id IS NULL;
 ```
 
-通过条件是第一条返回 0 行；第二条仅作为 legacy-unresolved 清单，不可由脚本按名称补 tenant 或 source。迁移前后的 schema、Liquibase 日志、上述 SQL 输出都须进入 evidence。当前 `analytics_database` 为 0 行不是升级路径通过证据。
+通过条件是第一条返回 0 行；第二条仅作为 legacy-unresolved 清单，不可由脚本按名称补 tenant 或 source。迁移前后的 schema、Liquibase 日志、上述 SQL 输出均应进入 evidence。当前 `analytics_database` 为 0 行不单独证明升级路径；已完成的隔离库 update/rollback/reupdate 及线上 EXECUTED 记录见当前正式证据页。
 
 ### 2. 开发提交到部署目录
 
@@ -141,7 +141,7 @@ test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
 
 该入口会构建三项镜像，并将**本次调用生成**的 image tar 放入 OpManager 升级包。构建结束后立即记录 SHA、镜像 reference/ID/digest、包路径、archive SHA-256 和每个 image tar SHA-256，命令见 evidence 方案。
 
-构建器现从实际 image tar 生成源码 SHA、镜像 ID、标签、架构、archive SHA-256 清单；`checksums.txt` 与 lite upgrader 的 images 目录基准一致，另有部署文件校验。镜像携带源码 revision 标签，`DTS_BUILD_EXPECTED_SHA` 阻断拉取后源码漂移。仍须实际包生成与离线校验通过后关闭 GAP。
+构建器从实际 image tar 生成源码 SHA、镜像 ID、标签、架构、archive SHA-256 清单；`checksums.txt` 与 lite upgrader 的 images 目录基准一致，另有部署文件校验。镜像携带源码 revision 标签，`DTS_BUILD_EXPECTED_SHA` 阻断拉取后源码漂移。`e83b51076e21` 已完成包校验和离线 hash/load/plan；`90d111280` 的正式三镜像构建日志为 `/tmp/s104-release-90d111280.log`，已完成包校验与受控部署，结果见正式证据页。
 
 ### 4. 受控 Compose 部署与验证
 
@@ -166,11 +166,11 @@ docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml up -d --no-de
 docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml ps dts-platform-webapp
 ```
 
-在每一步之间等待对应 healthcheck 为 `healthy` 并保存容器 ID、image ID、启动时间和日志。若 `dts-platform` 的本次提交改变了 `dts-dbt-runtime-init` 所依赖的镜像内脚本，先在维护窗口单独重跑该 one-shot 服务并确认 `exited (0)`；否则不得用 `--no-deps` 隐式跳过它。Compose health、HTTP 和日志仅证明容器运行，T10–T13 真实模型路径、质量闭环和 Chrome 95 页面验收仍须按 IT-08–IT-18 单独完成。
+在每一步之间等待对应 healthcheck 为 `healthy` 并保存容器 ID、image ID、启动时间和日志。`e83b51076e21` 已按此受控三服务范围部署，三个容器证据见当前正式证据页。若 `dts-platform` 的本次提交改变了 `dts-dbt-runtime-init` 所依赖的镜像内脚本，先在维护窗口单独重跑该 one-shot 服务并确认 `exited (0)`；否则不得用 `--no-deps` 隐式跳过它。Compose health、HTTP 和日志仅证明容器运行，T10–T13 真实模型路径、质量闭环和 Chrome 95 页面验收仍须按 IT-08–IT-18 单独完成。
 
 ### 5. 离线交付、回滚和停止条件
 
-离线目标只接收本次 archive、archive SHA-256、三项 image tar SHA-256、`compose-release.env`、源码 SHA 和证据 manifest；先校验 SHA 再 `docker load`。不得下载依赖、使用开发目录 bind mount、`docker cp`、`docker commit` 或容器内热修复。对已有站点先运行包内 `bin/dts-upgrade-lite plan` 审阅差异，再由授权操作员执行 `apply`；`plan` 或 manifest 校验失败即停止。
+离线目标只接收本次 archive、archive SHA-256、三项 image tar SHA-256、`compose-release.env`、源码 SHA 和证据 manifest；先校验 SHA 再 `docker load`。`e83b51076e21` 已完成 archive/hash 校验、三镜像本地 `docker load` 和隔离 target 的 `dts-upgrade-lite plan`，未执行 `apply`。不得下载依赖、使用开发目录 bind mount、`docker cp`、`docker commit` 或容器内热修复。对已有站点先运行包内 `bin/dts-upgrade-lite plan` 审阅差异，再由授权操作员执行 `apply`；`plan` 或 manifest 校验失败即停止。
 
 容器回滚条件是 migration 未破坏兼容性且保留上一版本三项不可变镜像、其 SHA 和上次 Compose env。回滚命令使用上一版本 env 的同一受控三服务范围并保存新旧容器/镜像证据；**不执行 schema drop 或 Liquibase rollback**。运行前必须在隔离/预生产环境演练：升级三服务、核对两项迁移、执行一条 T13 注册失败重试和一条 T12 CAS 冲突、再按上一 release env 回退三服务并确认旧读路径可用。该演练尚未执行，Gate G3 保持 GAP。
 

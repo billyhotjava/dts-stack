@@ -7,7 +7,6 @@ import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.O
 import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.PreparedDispatch;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
-import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.ScopedProjectException;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.ScopedCandidateProject;
@@ -43,7 +42,6 @@ public class PlanOperationalRunService {
     private final AirflowClient airflow;
     private final ModelMaterializationProperties properties;
     private final DbtConfigService dbtConfig;
-    private final DbtDagService dags;
     private final ModelSpecPlanWriteAccessPort planAccess;
     private final ReleaseDutyResolver duties;
     private final Clock clock;
@@ -57,7 +55,6 @@ public class PlanOperationalRunService {
         AirflowClient airflow,
         ModelMaterializationProperties properties,
         DbtConfigService dbtConfig,
-        DbtDagService dags,
         ModelSpecPlanWriteAccessPort planAccess,
         ReleaseDutyResolver duties
     ) {
@@ -69,7 +66,6 @@ public class PlanOperationalRunService {
             airflow,
             properties,
             dbtConfig,
-            dags,
             planAccess,
             duties,
             Clock.systemUTC()
@@ -84,7 +80,6 @@ public class PlanOperationalRunService {
         AirflowClient airflow,
         ModelMaterializationProperties properties,
         DbtConfigService dbtConfig,
-        DbtDagService dags,
         ModelSpecPlanWriteAccessPort planAccess,
         ReleaseDutyResolver duties,
         Clock clock
@@ -108,7 +103,6 @@ public class PlanOperationalRunService {
             dbtConfig,
             "dbtConfig is required"
         );
-        this.dags = Objects.requireNonNull(dags, "dags is required");
         this.planAccess = Objects.requireNonNull(
             planAccess,
             "planAccess is required"
@@ -331,6 +325,16 @@ public class PlanOperationalRunService {
             opened.pipelineRunGroupId()
         );
         if (
+            scope.deploymentChecksum() == null ||
+            !scope.deploymentChecksum().matches("^[0-9a-f]{64}$")
+        ) {
+            throw failure(
+                "MODEL_PLAN_DAG_DEPLOYMENT_STALE",
+                "Operational run is not pinned to an active plan deployment",
+                Kind.CONFLICT
+            );
+        }
+        if (
             !target
                 .executionTargetKey()
                 .equals(scope.executionTargetKey())
@@ -416,7 +420,10 @@ public class PlanOperationalRunService {
                 Kind.CONFLICT
             );
         }
-        return new Prepared(project.bundleChecksum(), issued.token());
+        return new Prepared(
+            project.bundleChecksum(),
+            issued.token()
+        );
     }
 
     private void submitManual(
@@ -441,7 +448,6 @@ public class PlanOperationalRunService {
             prepared.projectBundleChecksum()
         );
         try {
-            dags.ensureReleaseBuildDag(opened.airflowDagId());
             if (
                 airflow
                     .getDagRun(

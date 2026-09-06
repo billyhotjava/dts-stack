@@ -444,7 +444,17 @@ public class CandidatePublicationRepository {
                 )
                 .toList()
         );
-        String dagId = resolveExistingAirflowDag(candidate);
+        UUID bindingId = stableUuid(
+            "model-plan-binding:" +
+            candidate.tenantId() +
+            ":" +
+            candidate.planId() +
+            ":" +
+            candidate.environment() +
+            ":" +
+            candidate.executionTargetKey()
+        );
+        String dagId = operationalDagId(bindingId);
         String deploymentChecksum = digest(
             List.of(
                 candidate.tenantId(),
@@ -455,16 +465,6 @@ public class CandidatePublicationRepository {
                 dagId,
                 scopeChecksum
             )
-        );
-        UUID bindingId = stableUuid(
-            "model-plan-binding:" +
-            candidate.tenantId() +
-            ":" +
-            candidate.planId() +
-            ":" +
-            candidate.environment() +
-            ":" +
-            candidate.executionTargetKey()
         );
         String actor = actor(actorId);
         jdbcTemplate.update(
@@ -997,25 +997,8 @@ public class CandidatePublicationRepository {
         );
     }
 
-    private String resolveExistingAirflowDag(CandidateView candidate) {
-        List<String> dagIds = jdbcTemplate.queryForList(
-            """
-            select d.airflow_dag_id
-              from modeling_materialization_dispatch d
-             where d.tenant_id = ?
-               and d.candidate_id = ?
-               and d.status = 'COMPLETED'
-             order by d.attempt desc, d.last_modified_at desc, d.id desc
-             limit 1
-            """,
-            String.class,
-            candidate.tenantId(),
-            candidate.id()
-        );
-        if (dagIds.isEmpty() || dagIds.getFirst() == null || dagIds.getFirst().isBlank()) {
-            throw publicationConflict(candidate, "Existing Airflow release-build DAG evidence is required");
-        }
-        return dagIds.getFirst().trim();
+    private static String operationalDagId(UUID bindingId) {
+        return "dts_plan_" + bindingId.toString().replace("-", "");
     }
 
     private void replaceColumns(

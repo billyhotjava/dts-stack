@@ -76,14 +76,17 @@ public class PlanExecutionHealthService {
                 .desiredDeploymentChecksum()
                 .equals(binding.deployedChecksum());
         boolean scheduleMatches = scheduleMatches(binding, actual);
+        boolean activeRun = Set.of("QUEUED", "SUBMITTED", "UNKNOWN")
+            .contains(Objects.toString(binding.latestRunStatus(), ""));
         boolean executionAvailable =
+            operationalDagMatches(binding) &&
             "ACTIVE".equals(binding.deploymentStatus()) &&
             deploymentChecksumMatches &&
             "OBSERVED".equals(actual.state()) &&
             !Boolean.TRUE.equals(actual.paused()) &&
             scheduleMatches;
         List<String> allowedActions = new ArrayList<>();
-        if (access.operatorWithPlanAccess() && executionAvailable) {
+        if (access.operatorWithPlanAccess() && executionAvailable && !activeRun) {
             allowedActions.add("RUN_NOW");
         }
         BlockerView blocker = blocker(
@@ -94,8 +97,11 @@ public class PlanExecutionHealthService {
         );
         if (
             access.operatorWithPlanAccess() &&
-            blocker != null &&
-            !"MODEL_OPERATIONAL_RUN_FAILED".equals(blocker.code())
+            !activeRun &&
+            !executionAvailable &&
+            Set.of("ACTIVE", "STALE", "FAILED", "UNKNOWN")
+                .contains(Objects.toString(binding.deploymentStatus(), "")) &&
+            blocker != null
         ) {
             allowedActions.add("REPAIR_DEPLOYMENT");
         }
@@ -144,6 +150,7 @@ public class PlanExecutionHealthService {
     }
 
     private AirflowActual airflowActual(BindingHealthRecord binding) {
+        if (!operationalDagMatches(binding)) return AirflowActual.notRegistered();
         try {
             var dag = airflow.getDag(binding.airflowDagId());
             if (dag.isEmpty()) {
@@ -165,6 +172,11 @@ public class PlanExecutionHealthService {
         } catch (RuntimeException unavailable) {
             return AirflowActual.unknown();
         }
+    }
+
+    private static boolean operationalDagMatches(BindingHealthRecord binding) {
+        return ("dts_plan_" + binding.id().toString().replace("-", ""))
+            .equals(binding.airflowDagId());
     }
 
     private static DagRunActual latestDagRun(
@@ -224,6 +236,13 @@ public class PlanExecutionHealthService {
         boolean checksumMatches,
         boolean scheduleMatches
     ) {
+        if (!operationalDagMatches(binding)) {
+            return new BlockerView(
+                "MODEL_PLAN_BINDING_OPERATIONAL_DAG_REQUIRED",
+                "运行配置需要修复",
+                "RELEASE_OPERATOR"
+            );
+        }
         if (!"ACTIVE".equals(binding.deploymentStatus())) {
             return new BlockerView(
                 binding.deploymentErrorCode() == null

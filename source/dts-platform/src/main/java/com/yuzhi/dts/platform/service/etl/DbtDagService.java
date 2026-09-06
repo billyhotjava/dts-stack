@@ -49,6 +49,9 @@ public class DbtDagService {
      */
     public ManagedDagDeployment ensureReleaseBuildDag(String dagId) {
         String id = requireManagedDagId(dagId);
+        if (id.startsWith("dts_plan_")) {
+            throw new IllegalArgumentException("An operational DAG cannot be replaced by a release-build DAG");
+        }
         String deploymentChecksum = sha256(
             String.join(
                 "\u0000",
@@ -88,6 +91,9 @@ public class DbtDagService {
         String desiredDeploymentChecksum
     ) {
         String id = requireManagedDagId(dagId);
+        if (id.startsWith("dts_release_build_")) {
+            throw new IllegalArgumentException("A release-build DAG cannot be replaced by an operational DAG");
+        }
         UUID binding = java.util.Objects.requireNonNull(
             bindingId,
             "bindingId is required"

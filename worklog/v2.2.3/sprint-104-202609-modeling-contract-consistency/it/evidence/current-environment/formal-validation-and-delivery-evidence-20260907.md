@@ -1,10 +1,10 @@
 # Sprint 104 正式验证与离线交付证据（2026-09-07）
 
-**状态：IN_PROGRESS。** 本记录归档部署目录的正式测试、构建、交付包和隔离迁移结果；不证明当前容器已经完成替换，也不证明 Chrome 95 或真实租户的页面旅程通过。
+**状态：IN_PROGRESS。** 本记录归档部署目录的正式测试、构建、交付包、容器替换和隔离迁移结果；不证明 Chrome 95 或真实租户的页面旅程通过。
 
 ## 证据版本与边界
 
-- 正式构建和离线交付包源码：`e83b51076e216a2464d5b8703186a7cb93ac723c`。
+- 当前已部署源码：`90d111280b89ebb780425c4212aacfc0f4d8ff30`。下文保留 `e83b51076e216a2464d5b8703186a7cb93ac723c` 的历史包、迁移和离线预检证据。
 - 隔离迁移验证脚本提交：`3aa077d0c49d48aa0600705a11c3676fb5bf95ce`。
 - 执行目录：`/opt/prod/s10/deploy`；开发目录未用于编译、构建或测试。
 - 当前状态：三个镜像已由发布流程部署。Chrome 95 验收及 IT-08 至 IT-18 未执行，不能由本记录替代。
@@ -71,10 +71,32 @@ bin/dts-upgrade-lite plan \
 - 三份归档均由本地 `docker load -i` 加载，标签和 image ID 与 manifest 相同；加载后上述三个运行容器的 image ID 未变化。该命令没有拉取网络镜像的步骤或输出。
 - 解包包中存在 `dbt_project.yml`，其 `model-paths` 声明 `models` 与 `dbt_model/models`；后者含 46 个文件，另有 7 个 macro 和 1 个 profile 示例。`models` 目录当前为空，因此本次只证明包内容和预检路径，未执行 dbt，也不声称离线安装或模型运行已验收。
 
+## 运营源快照修复与 90d 部署结果
+
+- `90d111280` 的运营源快照专项 44/44 通过，日志 `/tmp/s104-operational-source-final.log`。运营运行从发布记录固定的模型和实现版本读取源快照，候选构建与运营运行共用确定性 source YAML 渲染；没有加入硬编码测试表。
+- 三服务正式构建退出码 0，日志 `/tmp/s104-release-90d111280.log`；包 `dts-opmanager-upgrade-20260907-010312.tar.gz`，SHA-256 `52f717ea4b1f8ff125cc5b34892f6fda5170f07e37573e2ce13874eba3e5e977`。
+- 交付目录 `/opt/prod/s10/deploy/data/sprint104-release/s104-90d111280b89/` 中 `validation-summary.json`、`package-verification.log`、`archive.sha256` 记录 image tar、镜像 ID、源码 revision 和整包校验结果。
+- 该版本含 W4 多输出资产维护。仅替换 analytics、platform、platform-webapp；前两者 healthy，webapp running 且没有容器 healthcheck。其他容器 ID/启动时间未变化。
+
+| 服务 | `s104-90d111280b89` 镜像 ID |
+|---|---|
+| dts-platform | `sha256:4baf3179061c25d41ba60752110007e7cf59840a2b31b0f922b78866ca317c6d` |
+| dts-analytics | `sha256:dfa4bd65bdadc49f002c1ac0c8895b2172b2d1b7015b7f2e46bc26fc3716f21a` |
+| dts-platform-webapp | `sha256:e2d2068e30e5f764a3e8c4f706e71ca86766752fc8b43f710cc1d53abbe8724f` |
+
+### 运营运行的两段故障与恢复边界
+
+1. 原 dispatch `d727145f-2b91-3fb7-882e-37af67443cbc` 的 `MATERIALIZATION_SOURCE_MISSING` 已恢复：正常协调器在 01:09:01 将同一条记录提交到 Airflow，bundle checksum 为 `714fc3e4589b68e069eca2e1d3b346403621941475adc2fb25d86568041195e6`，没有重置数据库或更换幂等键。
+2. 随后暴露任务路由错误：旧 MANUAL_ONLY 绑定把运营运行分配给 `dts_release_build_postgres_primary`。Airflow 准备阶段拒绝运营参数 `bindingId, bindingVersion, triggerType`，因此 SQL 未执行；finalize 也误走候选接口并返回 409。这不能记作重新运行成功。
+3. 01:14:03 正常协调器将同一 dispatch 收敛为 `FAILED / MODEL_OPERATIONAL_AIRFLOW_RUN_FAILED`，并发占用自然解除；没有强制清理运行状态。旧失败记录应保留。
+4. 后续修复限定为独立运营 DAG、绑定部署校验和及旧绑定的正常 repair 入口；两类 DAG 必须禁止互相覆盖，不降低 Airflow 参数校验，不要求重新发布模型来修复调度配置。修复与后续验证另行登记。
+
+原始运行观察：该 release 目录下 `operational-recovery-observation.json`（01:12 时点）及 Airflow prepare/finalize 日志；最终 FAILED 时点由业务库只读查询确认。
+
 ## 未执行或待确认
 
 - 仅三服务容器的替换与上述运行状态已有记录；未执行离线包 `apply`、回滚演练、dbt 运行或真实业务流程验证。
-- 新 W4 前端未打入 e83 镜像；本次构建、容器和浏览器证据不覆盖该新增界面。
-- 当前物化 dispatch 已精确返回 `MATERIALIZATION_SOURCE_MISSING`；通用根因仍在修复中，本文不把错误定位表述为恢复通过。
+- W4 已进入 90d 镜像，但当前浏览器登录尚未完成，页面验收仍待执行。
+- 源快照恢复已提交运行，任务类型路由仍待修复和正常业务入口复测；不能宣称运营运行通过。
 - Chrome 95、真实登录租户、四步 W1–W4 和 F2 IT-08 至 IT-18 的浏览器/运行时验收未执行。
 - 本文不把历史失败日志、构建成功或离线包校验表述为 Sprint DONE。

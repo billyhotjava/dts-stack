@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.repository.modeling.PlanExecutionBindingRepository;
+import com.yuzhi.dts.platform.repository.modeling.PlanExecutionBindingRepository.RepairResult;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import com.yuzhi.dts.platform.service.modeling.PlanExecutionException.Kind;
 import java.time.Clock;
@@ -75,8 +76,8 @@ public class PlanExecutionBindingCommandService {
                 Kind.FORBIDDEN
             );
         }
-        if (
-            !bindings.requestRedeployment(
+        RepairResult repaired = bindings
+            .requestRedeployment(
                 tenant,
                 planId,
                 bindingId,
@@ -84,16 +85,16 @@ public class PlanExecutionBindingCommandService {
                 actor,
                 clock.instant()
             )
-        ) {
-            throw new PlanExecutionException(
-                "MODEL_PLAN_EXECUTION_BINDING_CONFLICT",
-                "Execution binding changed or cannot be repaired",
-                Kind.CONFLICT
+            .orElseThrow(() ->
+                new PlanExecutionException(
+                    "MODEL_PLAN_EXECUTION_BINDING_CONFLICT",
+                    "Execution binding changed or cannot be repaired",
+                    Kind.CONFLICT
+                )
             );
-        }
         return new RepairView(
             bindingId,
-            expectedVersion,
+            repaired.bindingVersion(),
             "DEPLOYING"
         );
     }

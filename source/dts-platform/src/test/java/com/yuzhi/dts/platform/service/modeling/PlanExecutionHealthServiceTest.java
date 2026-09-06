@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.modeling;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.yuzhi.dts.platform.repository.modeling.PlanExecutionHealthRepository;
 import com.yuzhi.dts.platform.repository.modeling.PlanExecutionHealthRepository.BindingHealthRecord;
@@ -27,7 +28,7 @@ class PlanExecutionHealthServiceTest {
     @Test
     void reportsAirflowUnavailableWithoutInventingActualSchedule() {
         Fixture fixture = fixture(binding("MANUAL_ONLY", null, null));
-        when(fixture.airflow.getDag("dts_plan_finance"))
+        when(fixture.airflow.getDag("dts_plan_20000000000000000000000000000002"))
             .thenThrow(new IllegalStateException("offline"));
 
         var binding = fixture.service
@@ -50,14 +51,14 @@ class PlanExecutionHealthServiceTest {
     void allowsRunNowOnlyWhenActiveDagIsActuallyObserved() {
         Fixture fixture = fixture(binding("MANUAL_ONLY", null, null));
         Map<String, Object> actual = new HashMap<>();
-        actual.put("dag_id", "dts_plan_finance");
+        actual.put("dag_id", "dts_plan_20000000000000000000000000000002");
         actual.put("schedule_interval", null);
         actual.put("timezone", "UTC");
         actual.put("is_paused", false);
         actual.put("next_dagrun", null);
-        when(fixture.airflow.getDag("dts_plan_finance"))
+        when(fixture.airflow.getDag("dts_plan_20000000000000000000000000000002"))
             .thenReturn(Optional.of(actual));
-        when(fixture.airflow.listDagRuns("dts_plan_finance", 1))
+        when(fixture.airflow.listDagRuns("dts_plan_20000000000000000000000000000002", 1))
             .thenReturn(Optional.empty());
 
         var binding = fixture.service
@@ -75,12 +76,12 @@ class PlanExecutionHealthServiceTest {
         Fixture fixture = fixture(
             binding("CRON_ENABLED", "0 2 * * *", "Asia/Shanghai")
         );
-        when(fixture.airflow.getDag("dts_plan_finance"))
+        when(fixture.airflow.getDag("dts_plan_20000000000000000000000000000002"))
             .thenReturn(
                 Optional.of(
                     Map.of(
                         "dag_id",
-                        "dts_plan_finance",
+                        "dts_plan_20000000000000000000000000000002",
                         "schedule_interval",
                         Map.of(
                             "__type",
@@ -95,7 +96,7 @@ class PlanExecutionHealthServiceTest {
                     )
                 )
             );
-        when(fixture.airflow.listDagRuns("dts_plan_finance", 1))
+        when(fixture.airflow.listDagRuns("dts_plan_20000000000000000000000000000002", 1))
             .thenReturn(Optional.empty());
 
         var binding = fixture.service
@@ -111,6 +112,33 @@ class PlanExecutionHealthServiceTest {
         assertThat(binding.allowedActions()).containsExactly(
             "REPAIR_DEPLOYMENT"
         );
+    }
+
+    @Test
+    void legacyReleaseDagOffersOnlyRepairWithoutReadingAnotherRun() {
+        Fixture fixture = fixture(binding("MANUAL_ONLY", null, null,
+            "dts_release_build_postgres_primary", null));
+
+        var binding = fixture.service.workspace("tenant-a", "operator-a", PLAN_ID)
+            .bindings().getFirst();
+
+        assertThat(binding.allowedActions()).containsExactly("REPAIR_DEPLOYMENT");
+        assertThat(binding.primaryBlocker().code())
+            .isEqualTo("MODEL_PLAN_BINDING_OPERATIONAL_DAG_REQUIRED");
+        assertThat(binding.latestDagRun()).isNull();
+        verifyNoInteractions(fixture.airflow);
+    }
+
+    @Test
+    void activeRunPreventsRepairOfLegacyBinding() {
+        Fixture fixture = fixture(binding("MANUAL_ONLY", null, null,
+            "dts_release_build_postgres_primary", "SUBMITTED"));
+
+        var binding = fixture.service.workspace("tenant-a", "operator-a", PLAN_ID)
+            .bindings().getFirst();
+
+        assertThat(binding.allowedActions()).isEmpty();
+        verifyNoInteractions(fixture.airflow);
     }
 
     private static Fixture fixture(BindingHealthRecord binding) {
@@ -143,6 +171,14 @@ class PlanExecutionHealthServiceTest {
         String schedule,
         String timezone
     ) {
+        return binding(scheduleMode, schedule, timezone,
+            "dts_plan_20000000000000000000000000000002", null);
+    }
+
+    private static BindingHealthRecord binding(
+        String scheduleMode, String schedule, String timezone,
+        String dagId, String latestRunStatus
+    ) {
         return new BindingHealthRecord(
             BINDING_ID,
             3,
@@ -156,7 +192,7 @@ class PlanExecutionHealthServiceTest {
             "a".repeat(64),
             "b".repeat(64),
             "b".repeat(64),
-            "dts_plan_finance",
+            dagId,
             false,
             Instant.parse("2026-07-28T08:00:00Z"),
             null,
@@ -166,7 +202,7 @@ class PlanExecutionHealthServiceTest {
             null,
             null,
             null,
-            null,
+            latestRunStatus,
             null,
             null,
             null,

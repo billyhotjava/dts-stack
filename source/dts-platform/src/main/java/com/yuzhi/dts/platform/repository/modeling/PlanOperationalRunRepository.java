@@ -114,6 +114,13 @@ public class PlanOperationalRunRepository {
                 Kind.CONFLICT
             );
         }
+        if (!operationalDagId(binding.id()).equals(binding.dagId())) {
+            throw failure(
+                "MODEL_PLAN_BINDING_OPERATIONAL_DAG_REQUIRED",
+                "Plan execution binding must use its isolated operational DAG",
+                Kind.CONFLICT
+            );
+        }
         List<ScopeEntry> entries = loadEntries(binding);
         if (entries.isEmpty()) {
             throw failure(
@@ -250,7 +257,8 @@ public class PlanOperationalRunRepository {
             select d.id as group_id, d.tenant_id, d.binding_id,
                    d.binding_version, d.execution_target_key,
                    d.target_name, d.airflow_dag_id, d.airflow_run_id,
-                   d.scope_checksum, d.project_bundle_checksum,
+                   d.scope_checksum, b.desired_deployment_checksum,
+                   d.project_bundle_checksum,
                    pr.id as pipeline_run_id, pr.model_spec_id,
                    pr.model_revision, pr.model_checksum,
                    pr.implementation_revision,
@@ -258,6 +266,10 @@ public class PlanOperationalRunRepository {
                    i.dbt_unique_id,
                    a.path, a.content_checksum, a.content
               from modeling_operational_run_dispatch d
+              join modeling_plan_execution_binding b
+                on b.id = d.binding_id
+               and b.tenant_id = d.tenant_id
+               and b.version = d.binding_version
               join modeling_pipeline_run pr
                 on pr.tenant_id = d.tenant_id
                and pr.pipeline_run_group_id = d.id
@@ -309,6 +321,7 @@ public class PlanOperationalRunRepository {
                     row.getString("airflow_dag_id"),
                     row.getString("airflow_run_id"),
                     row.getString("scope_checksum"),
+                    row.getString("desired_deployment_checksum"),
                     row.getString("project_bundle_checksum"),
                     row.getObject("pipeline_run_id", UUID.class),
                     row.getObject("model_spec_id", UUID.class),
@@ -377,6 +390,7 @@ public class PlanOperationalRunRepository {
             first.airflowDagId(),
             first.airflowRunId(),
             first.scopeChecksum(),
+            first.deploymentChecksum(),
             first.projectBundleChecksum(),
             entries
         );
@@ -1030,6 +1044,10 @@ public class PlanOperationalRunRepository {
         return rows.getFirst();
     }
 
+    private static String operationalDagId(UUID bindingId) {
+        return "dts_plan_" + bindingId.toString().replace("-", "");
+    }
+
     private List<ScopeEntry> loadEntries(BindingScope binding) {
         List<ScopeEntry> entries = jdbcTemplate.query(
             """
@@ -1286,6 +1304,7 @@ public class PlanOperationalRunRepository {
         String airflowDagId,
         String airflowRunId,
         String scopeChecksum,
+        String deploymentChecksum,
         String projectBundleChecksum,
         UUID pipelineRunId,
         UUID modelSpecId,
@@ -1342,6 +1361,7 @@ public class PlanOperationalRunRepository {
         String airflowDagId,
         String airflowRunId,
         String scopeChecksum,
+        String deploymentChecksum,
         String projectBundleChecksum,
         List<CandidateArtifactEntry> entries
     ) {}

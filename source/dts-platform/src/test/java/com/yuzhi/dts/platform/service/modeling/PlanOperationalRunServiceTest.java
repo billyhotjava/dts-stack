@@ -16,7 +16,6 @@ import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.O
 import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.OperationalScope;
 import com.yuzhi.dts.platform.service.etl.AirflowClient;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
-import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import java.time.Clock;
@@ -101,7 +100,7 @@ class PlanOperationalRunServiceTest {
         );
 
         assertThat(result.status()).isEqualTo("SUBMITTED");
-        InOrder order = inOrder(fixture.runs, fixture.dags, fixture.airflow);
+        InOrder order = inOrder(fixture.runs, fixture.airflow);
         order.verify(fixture.runs)
             .open(
                 eq("tenant-a"),
@@ -114,11 +113,24 @@ class PlanOperationalRunServiceTest {
                 eq(null),
                 eq(NOW)
             );
-        order.verify(fixture.dags).ensureReleaseBuildDag("dts_plan_binding");
         order.verify(fixture.airflow)
             .getDagRun("dts_plan_binding", "run-1");
         order.verify(fixture.airflow)
-            .triggerDag(eq("dts_plan_binding"), any());
+            .triggerDag(
+                eq("dts_plan_binding"),
+                argThat(request ->
+                    "run-1".equals(request.get("dag_run_id")) &&
+                    Map.of(
+                        "pipelineRunGroupId", GROUP_ID.toString(),
+                        "bindingId", BINDING_ID.toString(),
+                        "bindingVersion", 4,
+                        "runPurpose", "OPERATIONAL_RUN",
+                        "triggerType", "MANUAL",
+                        "runtimeSpecToken", "runtime-token",
+                        "bundleChecksum", "b".repeat(64)
+                    ).equals(request.get("conf"))
+                )
+            );
         order.verify(fixture.runs).markSubmitted(GROUP_ID, NOW);
     }
 
@@ -273,7 +285,7 @@ class PlanOperationalRunServiceTest {
         when(fixture.airflow.getDagRun("dts_plan_binding", "run-1")).thenReturn(Optional.empty());
         when(fixture.runs.loadScope(GROUP_ID)).thenReturn(new OperationalScope(
             GROUP_ID, "tenant-a", BINDING_ID, 4, "postgres-primary", "prod", "dts_plan_binding", "run-1",
-            "a".repeat(64), null, List.of(entry)
+            "a".repeat(64), DEPLOYMENT_CHECKSUM, null, List.of(entry)
         ));
         when(fixture.runs.findPrepared(GROUP_ID)).thenReturn(Optional.empty());
         UUID sourceId = UUID.randomUUID();
@@ -347,7 +359,6 @@ class PlanOperationalRunServiceTest {
             new ModelMaterializationProperties();
         properties.setExecutionTargetKey("postgres-primary");
         DbtConfigService dbtConfig = mock(DbtConfigService.class);
-        DbtDagService dags = mock(DbtDagService.class);
         when(dbtConfig.loadRuntimeConfig()).thenReturn(
             new DbtConfigService.DbtWorkspaceConfig(
                 true,
@@ -374,7 +385,6 @@ class PlanOperationalRunServiceTest {
             scoped,
             sources,
             tokens,
-            dags,
             airflow,
             new PlanOperationalRunService(
                 runs,
@@ -384,7 +394,6 @@ class PlanOperationalRunServiceTest {
                 airflow,
                 properties,
                 dbtConfig,
-                dags,
                 access,
                 duties,
                 Clock.fixed(NOW, ZoneOffset.UTC)
@@ -420,6 +429,7 @@ class PlanOperationalRunServiceTest {
             "dts_plan_binding",
             "run-1",
             "a".repeat(64),
+            DEPLOYMENT_CHECKSUM,
             null,
             List.of()
         );
@@ -430,7 +440,6 @@ class PlanOperationalRunServiceTest {
         DbtScopedProjectService scoped,
         ModelMaterializationSourceAvailabilityGuard sources,
         ModelRuntimeSpecTokenCodec tokens,
-        DbtDagService dags,
         AirflowClient airflow,
         PlanOperationalRunService service
     ) {}
