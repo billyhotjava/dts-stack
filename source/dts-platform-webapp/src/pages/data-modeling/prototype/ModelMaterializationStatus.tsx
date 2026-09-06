@@ -58,7 +58,7 @@ export function ModelMaterializationStatusCard({
 	model: ModelSpecView;
 	currentImplementationRevision?: number | null;
 	canMaintain: boolean;
-	onOpen: () => void;
+	onOpen?: () => void;
 }) {
 	const [status, setStatus] = useState<ModelMaterializationStatus | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -100,9 +100,11 @@ export function ModelMaterializationStatusCard({
 					<strong>物化状态</strong>
 					<Status tone={presentation.tone}>{loading ? "读取中" : presentation.label}</Status>
 				</div>
-				<Button disabled={!canMaintain || loading} onClick={onOpen}>
-					{presentation.key === "MATERIALIZED" || presentation.key === "STALE" ? "重新物化" : "物化"}
-				</Button>
+				{onOpen ? (
+					<Button disabled={!canMaintain || loading} onClick={onOpen}>
+						{presentation.key === "MATERIALIZED" || presentation.key === "STALE" ? "重新物化" : "物化"}
+					</Button>
+				) : null}
 			</header>
 			{failure ? <p className="dmx-materialization-card__failure">{failure}</p> : null}
 			<dl>

@@ -36,11 +36,12 @@ describe("Sprint-92 unified authoring source contracts", () => {
 
 	it("presents one ordered model workflow and moves inspection actions out of the primary lane", () => {
 		const workflow = source("ModelWorkflowToolbar.tsx");
-		expect(workflow.indexOf('label: "保存草稿"')).toBeLessThan(workflow.indexOf('label: "校验"'));
-		expect(workflow.indexOf('label: "校验"')).toBeLessThan(workflow.indexOf('label: "提交实现"'));
-		expect(workflow.indexOf('label: "提交实现"')).toBeLessThan(workflow.indexOf('label: "发布与物化"'));
-		expect(workflow).toContain("下一步：");
+		expect(workflow).toContain("resolveModelWorkflowAction(input)");
+		expect(workflow).not.toContain("WORKFLOW_STEPS");
+		expect(workflow).not.toContain("下一步：");
 		expect(workflow).toContain("检查与记录");
+		const editor = source("ModelingWorkbenchEditor.tsx");
+		expect(editor.indexOf("</fieldset>")).toBeLessThan(editor.indexOf("<ModelWorkflowToolbar"));
 	});
 
 	it("treats provenance as evidence and removes ownership takeover", () => {

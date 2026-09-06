@@ -680,20 +680,10 @@ describe("ModelingWorkbenchEditor", () => {
 		])
 			expect(container.textContent).not.toContain(label);
 
-		for (const label of [
-			"保存",
-			"校验",
-			"提交实现",
-			"发布与物化",
-			"准入详情",
-			"刷新状态",
-			"关联关系",
-			"运行日志",
-			"质量门禁",
-		])
+		for (const label of ["保存", "构建与交付", "准入详情", "刷新状态", "关联关系", "运行日志", "质量门禁"])
 			expect(button(label)).toBeDefined();
-		expect(container.querySelector('[aria-current="step"]')?.textContent).toContain("保存草稿");
-		expect(container.textContent).toContain("下一步：保存草稿");
+		expect(container.querySelectorAll('[aria-label="模型主流程操作"] button')).toHaveLength(1);
+		expect(container.textContent).not.toContain("下一步：保存草稿");
 		expect(container.textContent).not.toContain("导出");
 		// Sprint-91：工具栏的「高级 dbt 工作区」入口已下线，可视化/代码切换只在选中模型时出现。
 		expect(container.textContent).not.toContain("高级 dbt 工作区");
@@ -764,17 +754,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(makeProps({ saving: true, selectedModel }));
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		for (const label of [
-			"保存中…",
-			"校验",
-			"提交实现",
-			"发布与物化",
-			"准入详情",
-			"刷新状态",
-			"关联关系",
-			"运行日志",
-			"质量门禁",
-		])
+		for (const label of ["保存中…", "构建与交付", "准入详情", "刷新状态", "关联关系", "运行日志", "质量门禁"])
 			expect(button(label)).toHaveProperty("disabled", true);
 	});
 
@@ -838,7 +818,7 @@ describe("ModelingWorkbenchEditor", () => {
 
 	it("disables unpublished actions and maps every supported toolbar dialog", async () => {
 		const unpublished = await render();
-		for (const label of ["准入详情", "关联关系", "发布与物化", "运行日志", "质量门禁"]) {
+		for (const label of ["准入详情", "关联关系", "构建与交付", "运行日志", "质量门禁"]) {
 			expect(button(label)).toHaveProperty("disabled", true);
 			act(() => button(label).click());
 		}
@@ -854,7 +834,6 @@ describe("ModelingWorkbenchEditor", () => {
 		for (const [label, dialog] of [
 			["准入详情", "gates"],
 			["关联关系", "association"],
-			["发布与物化", "publish"],
 			["运行日志", "logs"],
 			["质量门禁", "quality"],
 		] as const) {
@@ -862,6 +841,7 @@ describe("ModelingWorkbenchEditor", () => {
 			expect(published.onDialog).toHaveBeenLastCalledWith(dialog);
 		}
 		expect(container.textContent).not.toContain("导出");
+		expect(button("构建与交付")).toHaveProperty("disabled", true);
 		// 选中模型时才出现的可视化/代码双模切换
 		expect(button("可视化模式")).toBeDefined();
 		expect(button("代码模式")).toBeDefined();
@@ -876,10 +856,10 @@ describe("ModelingWorkbenchEditor", () => {
 			} as ModelSpecView,
 		});
 		await render(codeManaged);
-		expect(button("保存草稿")).toHaveProperty("disabled", false);
-		expect(button("发布与物化")).toHaveProperty("disabled", false);
-		act(() => button("发布与物化").click());
-		expect(codeManaged.onDialog).toHaveBeenLastCalledWith("publish");
+		expect(button("保存草稿")).toHaveProperty("disabled", true);
+		expect(button("构建与交付")).toHaveProperty("disabled", true);
+		act(() => button("构建与交付").click());
+		expect(codeManaged.onDialog).not.toHaveBeenCalled();
 	});
 
 	it("renders an authoring request failure only once", async () => {
@@ -968,7 +948,9 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 
 		expect(container.textContent).toContain("请填写模型名称");
-		expect(button("提交实现")).toHaveProperty("disabled", true);
+		expect(Array.from(container.querySelectorAll("button")).some((item) => item.textContent === "提交实现")).toBe(
+			false,
+		);
 	});
 
 	it("keeps a published revision immutable and exposes one explicit fork action", async () => {
@@ -1079,7 +1061,6 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(select?.querySelector('option[value="retired-domain"]')).toHaveProperty("disabled", true);
 	});
 });
-
 
 describe("sprint-104 configuration editing", () => {
 	it("permits TYPE2 metadata selection and binds current fields while explaining execution limits", async () => {

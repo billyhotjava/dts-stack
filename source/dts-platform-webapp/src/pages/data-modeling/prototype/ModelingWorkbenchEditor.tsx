@@ -15,6 +15,7 @@ import { ModelImplementationExecutionFields } from "./ModelImplementationExecuti
 import { ModelMaterializationStatusCard } from "./ModelMaterializationStatus";
 import { ModelServingSyncStatus } from "./ModelServingSyncStatus";
 import type { WorkbenchDialog } from "./ModelWorkbenchDialog";
+import { ModelAuthoringDiagnostics } from "./ModelAuthoringDiagnostics";
 import { ModelWorkflowToolbar } from "./ModelWorkflowToolbar";
 import {
 	authoringOriginLabel,
@@ -638,6 +639,12 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 	const effectiveReadOnly = readOnly;
 	const busy = saving || Boolean(authoringBusy);
 	const projection = authoringContext?.projection;
+	const currentAuthoringContext =
+		authoringContext?.model.id === selectedModel?.id &&
+		authoringContext?.model.revision === selectedModel?.revision &&
+		authoringContext?.model.checksum === selectedModel?.checksum
+			? authoringContext
+			: null;
 	const displayedFailure =
 		authoringFailure ||
 		(authoringConflict ? "草稿版本已变化，请刷新后继续，平台不会自动覆盖他人修改。" : failureMessage);
@@ -671,7 +678,6 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					currentImplementationRevision={authoringContext?.implementation?.implementationRevision}
 					key={`${selectedModel.id}:${materializationRefreshKey || 0}`}
 					model={selectedModel}
-					onOpen={() => onDialog("publish")}
 				/>
 			) : null}
 			{editorAccessMessage ? <output className="dmx-editor-access-note">{editorAccessMessage}</output> : null}
@@ -689,6 +695,48 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 			{projection?.reasons.length ? (
 				<div className="dmx-capability-note">{modelingCapabilityReasonsText(projection.reasons)}</div>
 			) : null}
+
+			{displayedFailure ? (
+				<div className="dmx-inline-error" role="alert">
+					{displayedFailure}
+				</div>
+			) : null}
+			{authoringValidation?.modelIssues.length ? (
+				<div className="dmx-dbt-diagnostics" role="alert">
+					<h3>模型定义校验</h3>
+					{authoringValidation.modelIssues.map((issue) => (
+						<div key={`${issue.code}:${issue.field}`}>
+							<b>{issue.field}</b>
+							<p>{issue.message}</p>
+						</div>
+					))}
+				</div>
+			) : null}
+			<ModelAuthoringDiagnostics validation={authoringValidation} />
+			{projection?.rawNodes.length ? (
+				<section className="dmx-dbt-diagnostics" aria-label="原始代码节点">
+					<h3>原始代码节点</h3>
+					{projection.rawNodes.map((node) => (
+						<div key={node.nodeId}>
+							<b>{node.sourcePath || node.nodeId}</b>
+							<span>{node.kind}</span>
+							<p>该实现片段无法安全转换成结构化表单，原始代码保持不变。</p>
+							<Button onClick={() => onOpenRawNode(node)} type="link">
+								在代码视图定位
+							</Button>
+						</div>
+					))}
+				</section>
+			) : null}
+			<fieldset className="dmx-editor-fieldset dmx-editor-scroll" disabled={effectiveReadOnly || busy}>
+				{conceptDimension ? (
+					<ConceptDimensionForm {...props} draft={draft} />
+				) : isDimensionTableDraft(draft) ? (
+					<DimensionDraftForm {...props} draft={draft} />
+				) : (
+					<CompatibilityDraftForm {...props} draft={draft} />
+				)}
+			</fieldset>
 			{conceptDimension ? (
 				<div className="dmx-editor-toolbar" role="toolbar">
 					<Button
@@ -716,8 +764,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					busy={busy}
 					canMaintain={canMaintain}
 					dirty={dirty}
-					draftState={authoringContext?.openDraft?.state}
-					hasImplementation={Boolean(authoringContext?.implementation)}
+					authoringContext={currentAuthoringContext}
 					onCommit={onCommitAuthoring}
 					onDialog={onDialog}
 					onForkPublished={onForkPublished}
@@ -730,46 +777,6 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					saving={saving}
 				/>
 			)}
-			{displayedFailure ? (
-				<div className="dmx-inline-error" role="alert">
-					{displayedFailure}
-				</div>
-			) : null}
-			{authoringValidation?.modelIssues.length ? (
-				<div className="dmx-dbt-diagnostics" role="alert">
-					<h3>模型定义校验</h3>
-					{authoringValidation.modelIssues.map((issue) => (
-						<div key={`${issue.code}:${issue.field}`}>
-							<b>{issue.field}</b>
-							<p>{issue.message}</p>
-						</div>
-					))}
-				</div>
-			) : null}
-			{projection?.rawNodes.length ? (
-				<section className="dmx-dbt-diagnostics" aria-label="原始代码节点">
-					<h3>原始代码节点</h3>
-					{projection.rawNodes.map((node) => (
-						<div key={node.nodeId}>
-							<b>{node.sourcePath || node.nodeId}</b>
-							<span>{node.kind}</span>
-							<p>该实现片段无法安全转换成结构化表单，原始代码保持不变。</p>
-							<Button onClick={() => onOpenRawNode(node)} type="link">
-								在代码视图定位
-							</Button>
-						</div>
-					))}
-				</section>
-			) : null}
-			<fieldset className="dmx-editor-fieldset dmx-editor-scroll" disabled={effectiveReadOnly || busy}>
-				{conceptDimension ? (
-					<ConceptDimensionForm {...props} draft={draft} />
-				) : isDimensionTableDraft(draft) ? (
-					<DimensionDraftForm {...props} draft={draft} />
-				) : (
-					<CompatibilityDraftForm {...props} draft={draft} />
-				)}
-			</fieldset>
 		</div>
 	);
 }
