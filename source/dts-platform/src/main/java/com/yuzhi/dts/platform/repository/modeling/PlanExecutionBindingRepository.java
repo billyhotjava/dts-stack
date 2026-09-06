@@ -286,7 +286,8 @@ public class PlanExecutionBindingRepository {
                 planId,
                 bindingId,
                 expectedVersion
-            ) == 1;
+            ) == 1
+        );
     }
 
     private static String operationalDagId(UUID bindingId) {
