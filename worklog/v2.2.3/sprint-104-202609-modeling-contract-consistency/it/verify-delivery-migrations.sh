@@ -105,6 +105,7 @@ write_minimal_maven_pom() {
                     <password>${liquibase.password}</password>
                     <driver>org.postgresql.Driver</driver>
                     <classpath>${liquibase.classpath}</classpath>
+                    <searchPath>${liquibase.searchPath}</searchPath>
                 </configuration>
                 <dependencies>
                     <dependency>
@@ -124,43 +125,47 @@ run_liquibase() {
     local database="$1"
     local wrapper="$2"
     local goal="$3"
-    shift 3
+    local resource_root="$4"
+    shift 4
     mvn -o -B -q -f "$TMP_DIR/pom.xml" \
-        -Dliquibase.changeLogFile="$wrapper" \
+        -Dliquibase.changeLogFile="$(basename "$wrapper")" \
         -Dliquibase.url="jdbc:postgresql://127.0.0.1:5432/${database}" \
         -Dliquibase.username="$PG_SUPER_USER" \
         -Dliquibase.password="${PG_SUPER_PASSWORD:?PG_SUPER_PASSWORD must be set in deploy .env}" \
         -Dliquibase.classpath="$PG_DRIVER" \
+        -Dliquibase.searchPath="$TMP_DIR,$resource_root" \
         "org.liquibase:liquibase-maven-plugin:4.29.2:${goal}" "$@"
 }
 
 run_platform() {
     local wrapper="$TMP_DIR/platform.xml"
-    write_wrapper "$wrapper" "$REPO_ROOT/source/dts-platform/src/main/resources/config/liquibase/changelog/20260906_01_catalog_dataset_version.xml"
-    run_liquibase "$PLATFORM_DB" "$wrapper" update
+    local resource_root="$REPO_ROOT/source/dts-platform/src/main/resources"
+    write_wrapper "$wrapper" "config/liquibase/changelog/20260906_01_catalog_dataset_version.xml"
+    run_liquibase "$PLATFORM_DB" "$wrapper" update "$resource_root"
     assert_scalar "$PLATFORM_DB" "select count(*) from catalog_dataset where version = 0" "1"
     assert_scalar "$PLATFORM_DB" "select count(*) from information_schema.columns where table_name = 'catalog_dataset' and column_name = 'version' and is_nullable = 'NO' and column_default like '0%'" "1"
     psql_database "$PLATFORM_DB" "insert into catalog_dataset (id, name) values ('00000000-0000-0000-0000-000000000002', 'post-update')" >/dev/null
     assert_scalar "$PLATFORM_DB" "select count(*) from catalog_dataset where version = 0" "2"
-    run_liquibase "$PLATFORM_DB" "$wrapper" rollback -Dliquibase.rollbackCount=1
+    run_liquibase "$PLATFORM_DB" "$wrapper" rollback "$resource_root" -Dliquibase.rollbackCount=1
     assert_scalar "$PLATFORM_DB" "select count(*) from information_schema.columns where table_name = 'catalog_dataset' and column_name = 'version'" "0"
     assert_scalar "$PLATFORM_DB" "select count(*) from catalog_dataset" "2"
-    run_liquibase "$PLATFORM_DB" "$wrapper" update
+    run_liquibase "$PLATFORM_DB" "$wrapper" update "$resource_root"
     assert_scalar "$PLATFORM_DB" "select count(*) from catalog_dataset where version = 0" "2"
 }
 
 run_analytics() {
     local wrapper="$TMP_DIR/analytics.xml"
-    write_wrapper "$wrapper" "$REPO_ROOT/source/dts-analytics/src/main/resources/config/liquibase/changelog/0054_platform_database_registration.xml"
-    run_liquibase "$ANALYTICS_DB" "$wrapper" update
+    local resource_root="$REPO_ROOT/source/dts-analytics/src/main/resources"
+    write_wrapper "$wrapper" "config/liquibase/changelog/0054_platform_database_registration.xml"
+    run_liquibase "$ANALYTICS_DB" "$wrapper" update "$resource_root"
     assert_scalar "$ANALYTICS_DB" "select count(*) from analytics_database where tenant_id is null and platform_data_source_id is null" "1"
     assert_scalar "$ANALYTICS_DB" "select count(*) from pg_constraint where conname = 'uk_analytics_database_tenant_platform_source'" "1"
     psql_database "$ANALYTICS_DB" "insert into analytics_database (id, name, tenant_id, platform_data_source_id) values (2, 'bound', 'tenant-a', '10000000-0000-0000-0000-000000000001')" >/dev/null
     expect_sql_failure "$ANALYTICS_DB" "insert into analytics_database (id, name, tenant_id, platform_data_source_id) values (3, 'duplicate', 'tenant-a', '10000000-0000-0000-0000-000000000001')"
-    run_liquibase "$ANALYTICS_DB" "$wrapper" rollback -Dliquibase.rollbackCount=1
+    run_liquibase "$ANALYTICS_DB" "$wrapper" rollback "$resource_root" -Dliquibase.rollbackCount=1
     assert_scalar "$ANALYTICS_DB" "select count(*) from information_schema.columns where table_name = 'analytics_database' and column_name in ('tenant_id', 'platform_data_source_id')" "0"
     assert_scalar "$ANALYTICS_DB" "select count(*) from analytics_database" "2"
-    run_liquibase "$ANALYTICS_DB" "$wrapper" update
+    run_liquibase "$ANALYTICS_DB" "$wrapper" update "$resource_root"
     assert_scalar "$ANALYTICS_DB" "select count(*) from analytics_database where tenant_id is null and platform_data_source_id is null" "2"
     psql_database "$ANALYTICS_DB" "update analytics_database set tenant_id = 'tenant-a', platform_data_source_id = '10000000-0000-0000-0000-000000000001' where id = 2" >/dev/null
     expect_sql_failure "$ANALYTICS_DB" "insert into analytics_database (id, name, tenant_id, platform_data_source_id) values (3, 'duplicate-again', 'tenant-a', '10000000-0000-0000-0000-000000000001')"
