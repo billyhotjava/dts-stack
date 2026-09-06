@@ -5,14 +5,21 @@ import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { ScrollArea } from "@/ui/scroll-area";
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "@/ui/sheet";
-import { buildHelpTopicHref, getRelatedHelpTopics, type HelpTopic, resolveHelpTopic } from "./helpTopics";
+import {
+	buildHelpTopicHref,
+	getRelatedHelpTopics,
+	type HelpTopic,
+	getHelpTopicById,
+	resolveHelpTopic,
+} from "./helpTopics";
 
 type HelpTopicContentProps = {
 	topic: HelpTopic;
 	compact?: boolean;
+	onSelectTopic?: (topicId: string) => void;
 };
 
-export function HelpTopicContent({ topic, compact = false }: HelpTopicContentProps) {
+export function HelpTopicContent({ topic, compact = false, onSelectTopic }: HelpTopicContentProps) {
 	const relatedTopics = getRelatedHelpTopics(topic);
 
 	return (
@@ -70,22 +77,35 @@ export function HelpTopicContent({ topic, compact = false }: HelpTopicContentPro
 				</section>
 			) : null}
 
-			{!compact && relatedTopics.length > 0 ? (
+			{relatedTopics.length > 0 ? (
 				<section aria-labelledby={`${topic.id}-related`} className="space-y-3">
 					<h3 id={`${topic.id}-related`} className="text-sm font-semibold text-text-primary">
-						相关主题
+						{compact ? "相关帮助" : "相关主题"}
 					</h3>
 					<div className="grid gap-2 sm:grid-cols-2">
-						{relatedTopics.map((relatedTopic) => (
-							<Link
-								key={relatedTopic.id}
-								to={buildHelpTopicHref(relatedTopic.id)}
-								className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-4 py-3 text-sm font-medium text-text-primary transition-colors hover:bg-accent"
-							>
-								<span>{relatedTopic.title}</span>
-								<ArrowRight className="h-4 w-4 text-text-secondary" />
-							</Link>
-						))}
+						{relatedTopics.map((relatedTopic) =>
+							onSelectTopic ? (
+								<Button
+									key={relatedTopic.id}
+									type="button"
+									variant="outline"
+									className="h-auto justify-between whitespace-normal px-4 py-3 text-left"
+									onClick={() => onSelectTopic(relatedTopic.id)}
+								>
+									<span>{relatedTopic.title}</span>
+									<ArrowRight aria-hidden="true" className="h-4 w-4 shrink-0" />
+								</Button>
+							) : (
+								<Link
+									key={relatedTopic.id}
+									to={buildHelpTopicHref(relatedTopic.id)}
+									className="flex items-center justify-between rounded-xl border border-border/70 bg-card px-4 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-accent"
+								>
+									<span>{relatedTopic.title}</span>
+									<ArrowRight aria-hidden="true" className="h-4 w-4" />
+								</Link>
+							),
+						)}
 					</div>
 				</section>
 			) : null}
@@ -96,12 +116,23 @@ export function HelpTopicContent({ topic, compact = false }: HelpTopicContentPro
 export default function HelpCenter() {
 	const location = useLocation();
 	const [open, setOpen] = useState(false);
+	const [selectedTopic, setSelectedTopic] = useState<{ context: string; id: string } | null>(null);
+	const context = `${location.pathname}${location.search}`;
 	const requestedTopicId =
 		location.pathname === "/settings/help" ? new URLSearchParams(location.search).get("topic") : undefined;
-	const topic = resolveHelpTopic(location.pathname, requestedTopicId);
+	const pageTopic = resolveHelpTopic(
+		location.pathname,
+		requestedTopicId,
+		new URLSearchParams(location.search).get("step"),
+	);
+	const topic = (selectedTopic?.context === context ? getHelpTopicById(selectedTopic.id) : undefined) || pageTopic;
+	const changeOpen = (nextOpen: boolean) => {
+		setOpen(nextOpen);
+		if (!nextOpen) setSelectedTopic(null);
+	};
 
 	return (
-		<Sheet open={open} onOpenChange={setOpen}>
+		<Sheet open={open} onOpenChange={changeOpen}>
 			<SheetTrigger asChild>
 				<Button
 					variant="ghost"
@@ -122,13 +153,18 @@ export default function HelpCenter() {
 					<SheetTitle className="text-xl">{topic.title}</SheetTitle>
 					<SheetDescription>内容会根据当前页面自动切换。</SheetDescription>
 				</SheetHeader>
-				<ScrollArea className="min-h-0 flex-1">
+				<ScrollArea key={topic.id} className="min-h-0 flex-1">
 					<div className="px-5 py-5">
-						<HelpTopicContent topic={topic} compact />
+						{topic.id !== pageTopic.id ? (
+							<Button type="button" variant="ghost" onClick={() => setSelectedTopic(null)}>
+								返回当前页面帮助
+							</Button>
+						) : null}
+						<HelpTopicContent topic={topic} compact onSelectTopic={(id) => setSelectedTopic({ context, id })} />
 					</div>
 				</ScrollArea>
 				<SheetFooter className="border-t border-border/70 px-5 py-4">
-					<Button asChild className="w-full" onClick={() => setOpen(false)}>
+					<Button asChild className="w-full" onClick={() => changeOpen(false)}>
 						<Link to={buildHelpTopicHref(topic.id)}>
 							打开完整帮助中心
 							<ArrowRight aria-hidden="true" className="h-4 w-4" />

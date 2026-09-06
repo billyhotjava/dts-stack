@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const read = (relativePath: string) =>
-	readFileSync(new URL(relativePath, import.meta.url), "utf8");
+const read = (relativePath: string) => readFileSync(new URL(relativePath, import.meta.url), "utf8");
 
 const HEADER = read("../../layouts/dashboard/header.tsx");
 const ROUTES = read("../../routes/sections/dashboard/static-routes.tsx");
@@ -32,12 +31,7 @@ test("full help center is a static settings route rather than a business menu", 
 });
 
 test("prototype modeling guidance lives in typed local topics", () => {
-	for (const topicId of [
-		"construction-planning",
-		"model-center",
-		"sql-modeling",
-		"metric-workbench",
-	]) {
+	for (const topicId of ["construction-planning", "model-center", "sql-modeling", "metric-workbench"]) {
 		assert.match(TOPICS, new RegExp(`id: "${topicId}"`));
 	}
 	assert.match(TOPICS, /DAG 未就绪/);
@@ -53,4 +47,14 @@ test("prototype modeling guidance lives in typed local topics", () => {
 	assert.doesNotMatch(JOURNEY_BAR, /此页面是数据产品旅程|从工作台开始可获得完整的上下文与下一步引导/);
 	assert.doesNotMatch(JOURNEY_BAR, /journey-join-enter|进入旅程/);
 	assert.doesNotMatch(`${LAUNCHER}\n${PAGE}`, /dangerouslySetInnerHTML/);
+});
+
+test("modeling stable guidance moves to help while live validation remains inline", () => {
+	const fields = read("../../pages/data-modeling/prototype/ModelImplementationBindingFields.tsx");
+	assert.doesNotMatch(fields, /仅选择有业务时间含义的字段|固定当前维度模型修订，用于关系图|sourceModeDescription/);
+	assert.match(fields, /ValidationMessage message=\{validationErrors.timeSemantics\}/);
+	assert.match(fields, /已绑定输入源表，当前规划中不可用/);
+	assert.match(fields, /请先在字段管理中新增字段/);
+	assert.match(LAUNCHER, /get\("step"\)/);
+	assert.match(LAUNCHER, /onSelectTopic=/);
 });

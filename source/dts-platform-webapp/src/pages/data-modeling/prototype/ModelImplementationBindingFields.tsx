@@ -66,19 +66,6 @@ const modeOptions = (
 		label: INPUT_MODE_LABELS[value],
 	}));
 
-const sourceModeDescription = (draft: ModelSpecDraft): string => {
-	if (draft.createKind === "dimension-table") {
-		return "维度表可以从输入源表加工，日期维度也可以由系统生成。";
-	}
-	if (draft.createKind === "fact") {
-		return "明细表可以直接读取 ODS 或源系统表，也可以基于已有明细模型继续加工。";
-	}
-	if (draft.createKind === "summary") {
-		return "汇总表基于已治理的上游模型进行汇总，无需登记物理源表。";
-	}
-	return "应用表基于已治理的上游模型加工，无需登记物理源表。";
-};
-
 const normalizeSourceOrder = (sources: ModelSpecSourceRef[]): ModelSpecSourceRef[] =>
 	sources.map((source, index) => ({
 		...source,
@@ -239,7 +226,6 @@ export function ModelImplementationBindingFields({
 						))}
 					</select>
 					<ValidationMessage message={validationErrors.implementationInputMode} />
-					<small>{sourceModeDescription(draft)}</small>
 				</label>
 
 				{draft.implementationInputMode === "GENERATED" ? (
@@ -249,11 +235,9 @@ export function ModelImplementationBindingFields({
 							disabled
 							value={draft.generationStrategyType === "DATE_DIMENSION" ? "系统生成标准日期维度" : "生成策略未配置"}
 						/>
-						<small>
-							{draft.generationStrategyType === "DATE_DIMENSION"
-								? "保存模型时由系统创建标准日期维度，后续可以继续调整并生成目标表。"
-								: "请选择系统生成标准日期维度，或切换到代码模式维护原始实现。"}
-						</small>
+						{draft.generationStrategyType !== "DATE_DIMENSION" ? (
+							<small>请选择系统生成标准日期维度，或切换到代码模式维护原始实现。</small>
+						) : null}
 					</label>
 				) : null}
 
@@ -345,7 +329,6 @@ export function ModelImplementationBindingFields({
 				{draft.createKind === "fact" ? (
 					<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
 						<strong>引用维度模型</strong>
-						<small>固定当前维度模型修订，用于关系图、发布门禁和候选版本审计。</small>
 						{dimensionCandidates.map((model) => (
 							<label key={model.id}>
 								<input
@@ -433,13 +416,7 @@ export function ModelImplementationBindingFields({
 									</span>
 								</label>
 							))}
-							{timeFieldCandidates.length ? (
-								<small>
-									仅选择有业务时间含义的字段；勾选会设置字段作用为“时间”，不会转换字段类型或数据。普通明细无需选择。
-								</small>
-							) : (
-								<small>请先在字段管理中新增字段。</small>
-							)}
+							{!timeFieldCandidates.length ? <small>请先在字段管理中新增字段。</small> : null}
 							<ValidationMessage message={validationErrors.timeSemantics} />
 						</div>
 					</>

@@ -33,3 +33,13 @@ describe("fact time field selection", () => {
 		expect(cleared.timeSemanticsFields).toEqual([]);
 	});
 });
+
+describe("time selection preserves the data contract after guidance moves", () => {
+	it("changes the semantic role without changing type or requiring selection", () => {
+		const original = factDraft();
+		const selected = applyFactTimeFieldSelection(original, 0, true);
+		expect(selected.fields[0].dataType).toBe(original.fields[0].dataType);
+		expect(original.timeSemanticsFields).toEqual([]);
+		expect(original.fields[0].role).toBe("ATTRIBUTE");
+	});
+});

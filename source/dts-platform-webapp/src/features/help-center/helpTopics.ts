@@ -138,7 +138,104 @@ export const HELP_TOPICS: HelpTopic[] = [
 			{ problem: "当前建设计划只读", action: "可以继续查看模型；新建或修改需要规划维护权限。" },
 			{ problem: "不能安全修改模型类型", action: "已有实现或发布证据时保留历史版本，按页面预检结果处理。" },
 		],
-		relatedTopicIds: ["construction-planning", "sql-modeling", "governance"],
+		relatedTopicIds: [
+			"construction-planning",
+			"model-definition",
+			"model-implementation",
+			"model-verification",
+			"model-delivery",
+			"sql-modeling",
+			"governance",
+		],
+	},
+	{
+		id: "model-definition",
+		title: "模型定义",
+		section: "数据建设",
+		summary: "明确模型类型、业务粒度、主键和字段口径，形成可保存的逻辑设计。",
+		keywords: ["模型定义", "逻辑设计", "模型类型", "粒度", "主键", "字段"],
+		routePrefixes: [],
+		prerequisites: ["已选择建设计划和业务分类", "已明确模型服务的业务对象或业务事件"],
+		steps: [
+			"根据用途选择维度、贴源、明细、汇总或应用模型。",
+			"填写模型名称、业务分类和数据粒度。",
+			"维护主键、字段及其业务口径，并绑定适用的数据标准。",
+			"保存逻辑设计，处理页面提示的必填项或字段约束。",
+		],
+		blockers: [
+			{ problem: "模型类型或粒度不明确", action: "先确认模型表达的是稳定对象、业务事件、聚合结果还是消费输出。" },
+			{ problem: "无法保存逻辑设计", action: "检查模型名称、主键、必填字段和标准绑定提示。" },
+		],
+		relatedTopicIds: ["model-center", "model-implementation", "governance"],
+	},
+	{
+		id: "model-implementation",
+		title: "模型实现",
+		section: "数据建设",
+		summary: "按模型类型配置稳定的数据来源和必要的实现参数。",
+		keywords: ["模型实现", "数据来源", "物理源", "上游模型", "日期生成", "固定维度", "时间字段"],
+		routePrefixes: [],
+		prerequisites: ["模型逻辑设计已保存", "来源表或上游模型已确认可用"],
+		steps: [
+			"来源方式以当前模型的可选项为准：维度表可读取输入源表或生成日期维度，明细表可读取输入源表或引用上游模型，汇总和应用表引用上游模型。",
+			"选择系统生成标准日期维度后，保存模型会创建相应实现；后续仍需执行物化才能生成目标表。",
+			"引用维度模型会固定所选修订；引用失效时重新选择，不自动替换成其他版本。",
+			"仅选择具有业务时间含义的字段，例如订单时间。选择后字段作用设为“时间”，不转换字段类型或已有数据；普通明细模型可以不选择时间字段。",
+		],
+		blockers: [
+			{ problem: "没有可选来源", action: "先确认物理表已采集，或上游模型已保存并在当前建设范围内可用。" },
+			{
+				problem: "日期生成配置不完整",
+				action: "检查生成策略是否已配置，按当前页面提示选择日期维度生成方式或处理实现限制。",
+			},
+		],
+		relatedTopicIds: ["model-definition", "model-verification", "model-center"],
+	},
+	{
+		id: "model-verification",
+		title: "模型验证",
+		section: "数据建设",
+		summary: "区分既有物化检查和质量检查，处理缺少规则等验证阻塞。",
+		keywords: ["模型验证", "物化", "质量检查", "质量规则", "验证阻塞"],
+		routePrefixes: [],
+		prerequisites: ["模型实现配置已保存", "已了解当前模型适用的质量规则或检查范围"],
+		steps: [
+			"先查看既有物化结果，确认数据是否已按当前配置生成。",
+			"再执行或查看质量检查，核对数据是否满足已配置的质量规则。",
+			"质量检查失败时，按失败规则修复来源数据、模型配置或规则定义。",
+			"缺少质量规则时，记录当前缺口并先补充适用规则，再完成验证。",
+		],
+		blockers: [
+			{
+				problem: "物化结果与质量结果混淆",
+				action: "物化确认数据生成，质量检查确认数据是否符合规则；分别查看对应结果。",
+			},
+			{ problem: "没有可执行的质量规则", action: "联系规则维护责任人补充适用规则，不把未检查当作已通过。" },
+		],
+		relatedTopicIds: ["model-implementation", "model-delivery", "quality-security-lineage"],
+	},
+	{
+		id: "model-delivery",
+		title: "模型交付",
+		section: "数据建设",
+		summary: "确认模型发布结果，并分别完成资产登记和分析准备。",
+		keywords: ["模型交付", "发布确认", "资产登记", "分析准备", "数据服务"],
+		routePrefixes: [],
+		prerequisites: ["模型验证结果已确认", "已明确交付对象和后续使用场景"],
+		steps: [
+			"确认模型发布状态、版本和相关证据已经满足当前职责范围的要求。",
+			"核对模型输出资产是否已登记；已登记的资产可维护负责人和业务说明。",
+			"按分析或服务使用场景，分别准备指标、报表、数据服务等后续内容。",
+			"分别核对发布确认、资产登记和分析准备的完成状态。",
+		],
+		blockers: [
+			{ problem: "发布状态未确认", action: "先核对模型版本、验证结果和发布证据，再处理后续交付。" },
+			{
+				problem: "资产或分析准备尚未完成",
+				action: "查看实际失败环节与原因；分析准备失败不等于目标表构建失败，避免重复物化。",
+			},
+		],
+		relatedTopicIds: ["model-verification", "assets", "metrics-bi", "services-products"],
 	},
 	{
 		id: "sql-modeling",
@@ -337,18 +434,32 @@ export const HELP_TOPICS: HelpTopic[] = [
 
 const HELP_TOPIC_MAP = new Map(HELP_TOPICS.map((topic) => [topic.id, topic]));
 const FALLBACK_TOPIC = HELP_TOPICS[0];
+const MODEL_WORKBENCH_STEP_TOPIC_IDS: Record<string, string> = {
+	definition: "model-definition",
+	implementation: "model-implementation",
+	verification: "model-verification",
+	delivery: "model-delivery",
+};
 
 export function getHelpTopicById(topicId?: string | null): HelpTopic | undefined {
 	if (!topicId) return undefined;
 	return HELP_TOPIC_MAP.get(topicId);
 }
 
-export function resolveHelpTopic(pathname: string, requestedTopicId?: string | null): HelpTopic {
+export function resolveHelpTopic(
+	pathname: string,
+	requestedTopicId?: string | null,
+	wizardStep?: string | null,
+): HelpTopic {
 	const requestedTopic = getHelpTopicById(requestedTopicId);
 	if (requestedTopic) return requestedTopic;
 
 	const normalizedPath = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 	if (normalizedPath === "/settings/help") return FALLBACK_TOPIC;
+	if (normalizedPath === "/data-modeling/dimensions/workbench" && wizardStep != null) {
+		const wizardTopic = getHelpTopicById(MODEL_WORKBENCH_STEP_TOPIC_IDS[wizardStep]);
+		if (wizardTopic) return wizardTopic;
+	}
 	let bestMatch: HelpTopic | undefined;
 	let bestPrefixLength = -1;
 	for (const topic of HELP_TOPICS) {
