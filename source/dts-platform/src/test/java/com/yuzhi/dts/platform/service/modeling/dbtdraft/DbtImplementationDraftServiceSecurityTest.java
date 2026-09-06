@@ -653,7 +653,8 @@ class DbtImplementationDraftServiceSecurityTest {
         ModelSpecView model = model(3, MODEL_CHECKSUM);
         when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
-        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(designerImplementation(), List.of(), List.of()));
+        ImplementationView implementation = designerImplementation();
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(implementation, List.of(), List.of()));
         when(visualCompiler.compile(eq(TENANT), any(ModelSpecView.class), any(ImplementationView.class)))
             .thenReturn(List.of(new ArtifactWrite("SCHEMA", currentSchemaPath, "5".repeat(64), expectedSchema, "MODEL", "table", null)));
         when(repository.replaceAuthoringContent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
@@ -701,7 +702,8 @@ class DbtImplementationDraftServiceSecurityTest {
         ModelSpecView model = model(3, MODEL_CHECKSUM);
         when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
-        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(designerImplementation(), List.of(), List.of()));
+        ImplementationView implementation = designerImplementation();
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(implementation, List.of(), List.of()));
         when(visualCompiler.compile(eq(TENANT), any(ModelSpecView.class), any(ImplementationView.class)))
             .thenReturn(List.of(new ArtifactWrite("SCHEMA", currentSchemaPath, "6".repeat(64), "      - name: order_id\n        data_type: text\n", "MODEL", "table", null)));
 
