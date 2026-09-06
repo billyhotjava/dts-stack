@@ -1,3 +1,4 @@
+import { ConceptDimensionForm } from "./ConceptDimensionForm";
 import { useEffect, useMemo, useState } from "react";
 import type {
 	ModelAuthoringContext,
@@ -21,12 +22,10 @@ import {
 	authoringOriginLabel,
 	isConceptDimensionDraft,
 	isDimensionTableDraft,
-	resolveConceptDimensionPresentation,
 	resolveDimensionFormPresentation,
 } from "./modelWorkbenchPresentation";
 import { Button } from "./PrototypePrimitives";
 import {
-	type ConceptDimensionDraft,
 	MODEL_KIND_CONFIG,
 	type ModelDraft,
 	type ModelDraftValidationErrors,
@@ -38,6 +37,7 @@ import "./modeling-workbench.css";
 import { type ModelingWorkbenchView, modelingCapabilityReasonsText } from "./modelingWorkbenchMode";
 
 export type ModelingWorkbenchEditorProps = {
+	definitionOnly?: boolean;
 	draft: ModelDraft;
 	context: ModelWorkbenchContext;
 	dimensionDefinitions: DimensionDefinitionView[];
@@ -79,6 +79,7 @@ export type ModelingWorkbenchEditorProps = {
 
 type DraftFormProps = Pick<
 	ModelingWorkbenchEditorProps,
+	| "definitionOnly"
 	| "draft"
 	| "context"
 	| "dimensionDefinitions"
@@ -99,7 +100,6 @@ type DraftFormProps = Pick<
 	| "onViewChange"
 >;
 
-type ConceptDimensionFormProps = Omit<DraftFormProps, "draft"> & { draft: ConceptDimensionDraft };
 type ModelSpecFormProps = Omit<DraftFormProps, "draft"> & { draft: ModelSpecDraft };
 
 function ValidationMessage({ message }: { message?: string }) {
@@ -148,60 +148,6 @@ function FieldsPanel(props: ModelSpecFormProps & { dimensionMode: boolean }) {
 				readOnly={readOnly}
 				standards={context.standards}
 			/>
-		</section>
-	);
-}
-
-function ConceptDimensionForm(props: ConceptDimensionFormProps) {
-	const { draft, context, validationErrors, onChange } = props;
-	const patch = (next: Partial<ConceptDimensionDraft>) => onChange({ ...draft, ...next });
-	const presentation = resolveConceptDimensionPresentation({ draft, domains: context.domains });
-
-	return (
-		<section className="dmx-editor-panel">
-			<h3>基本信息</h3>
-			<div className="dmx-workbench-editor__basic-grid">
-				<label>
-					<span>数仓分层</span>
-					<input aria-label="数仓分层" disabled value={presentation.warehouseLayer} />
-				</label>
-				<label>
-					<span className="required">数据域</span>
-					<select
-						aria-label="数据域"
-						disabled={Boolean(draft.definitionBase)}
-						onChange={(event) => patch({ domainId: event.target.value })}
-						value={draft.domainId}
-					>
-						<option value="">请选择数据域</option>
-						{context.domains
-							.filter((item) => Boolean(item.parentCode))
-							.map((item) => (
-								<option key={item.id} value={item.id}>
-									{item.name} · {item.code}
-								</option>
-							))}
-					</select>
-					<ValidationMessage message={validationErrors.domainId} />
-				</label>
-				<label>
-					<span>系统编码</span>
-					<input aria-label="系统编码" disabled value={presentation.systemCode} />
-				</label>
-				<label>
-					<span className="required">中文名称</span>
-					<input aria-label="中文名称" onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
-					<ValidationMessage message={validationErrors.name} />
-				</label>
-				<label className="dmx-workbench-editor__wide-field">
-					<span>描述</span>
-					<textarea
-						aria-label="描述"
-						onChange={(event) => patch({ description: event.target.value })}
-						value={draft.description}
-					/>
-				</label>
-			</div>
 		</section>
 	);
 }
@@ -273,12 +219,14 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							<small>当前规划暂无数据域，请先在数仓规划中创建数据域。</small>
 						) : null}
 					</label>
-					<ModelImplementationExecutionFields
-						capabilities={context.implementationCapabilities}
-						dimensionMode
-						draft={draft}
-						onChange={patch}
-					/>
+					{!props.definitionOnly ? (
+						<ModelImplementationExecutionFields
+							capabilities={context.implementationCapabilities}
+							dimensionMode
+							draft={draft}
+							onChange={patch}
+						/>
+					) : null}
 					<label>
 						<span className="required">维度</span>
 						<select
@@ -311,22 +259,26 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							<small>当前数据域有 {dimensionDefinitions.length} 个未确认维度，请先“确认定义”后再绑定。</small>
 						) : null}
 					</label>
-					<label>
-						<span>表名规则</span>
-						<input aria-label="表名规则" disabled value={presentation.tableNamingRule} />
-					</label>
-					<label>
-						<span className="required">产出表英文名</span>
-						<input
-							aria-label="产出表英文名"
-							onChange={(event) => patch({ physicalName: event.target.value })}
-							value={draft.physicalName}
-						/>
-						<ValidationMessage message={validationErrors.physicalName} />
-						{draft.base && !draft.physicalName.trim() ? (
-							<small>历史草稿尚未保存产出表英文名，请补录后保存。</small>
-						) : null}
-					</label>
+					{!props.definitionOnly ? (
+						<label>
+							<span>表名规则</span>
+							<input aria-label="表名规则" disabled value={presentation.tableNamingRule} />
+						</label>
+					) : null}
+					{!props.definitionOnly ? (
+						<label>
+							<span className="required">产出表英文名</span>
+							<input
+								aria-label="产出表英文名"
+								onChange={(event) => patch({ physicalName: event.target.value })}
+								value={draft.physicalName}
+							/>
+							<ValidationMessage message={validationErrors.physicalName} />
+							{draft.base && !draft.physicalName.trim() ? (
+								<small>历史草稿尚未保存产出表英文名，请补录后保存。</small>
+							) : null}
+						</label>
+					) : null}
 					<label>
 						<span className="required">表中文名</span>
 						<input aria-label="表中文名" onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
@@ -354,6 +306,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 			<FieldsPanel {...props} dimensionMode />
 			<ModelDimensionHistoryFields draft={draft} onChange={patch} />
 			<ModelImplementationBindingFields
+				definitionOnly={props.definitionOnly}
 				context={context}
 				draft={draft}
 				onChange={onChange}
@@ -564,17 +517,20 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 					</label>
 					<label>
 						<span className="required">模型名称</span>
-						<input onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
+						<input aria-label="模型名称" onChange={(event) => patch({ name: event.target.value })} value={draft.name} />
+						<ValidationMessage message={validationErrors.name} />
 					</label>
-					<label>
-						<span className="required">产出表英文名</span>
-						<input
-							aria-label="产出表英文名"
-							onChange={(event) => patch({ physicalName: event.target.value })}
-							value={draft.physicalName}
-						/>
-						<ValidationMessage message={validationErrors.physicalName} />
-					</label>
+					{!props.definitionOnly ? (
+						<label>
+							<span className="required">产出表英文名</span>
+							<input
+								aria-label="产出表英文名"
+								onChange={(event) => patch({ physicalName: event.target.value })}
+								value={draft.physicalName}
+							/>
+							<ValidationMessage message={validationErrors.physicalName} />
+						</label>
+					) : null}
 					<label className="dmx-workbench-editor__wide-field">
 						<span>业务定义</span>
 						<textarea onChange={(event) => patch({ description: event.target.value })} value={draft.description} />
@@ -584,16 +540,19 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						<input onChange={(event) => patch({ grainStatement: event.target.value })} value={draft.grainStatement} />
 						<ValidationMessage message={validationErrors.grainStatement} />
 					</label>
-					<ModelImplementationExecutionFields
-						capabilities={context.implementationCapabilities}
-						draft={draft}
-						onChange={patch}
-						partitionError={validationErrors.partitionFields}
-					/>
+					{!props.definitionOnly ? (
+						<ModelImplementationExecutionFields
+							capabilities={context.implementationCapabilities}
+							draft={draft}
+							onChange={patch}
+							partitionError={validationErrors.partitionFields}
+						/>
+					) : null}
 				</div>
 			</section>
 			<FieldsPanel {...props} dimensionMode={false} />
 			<ModelImplementationBindingFields
+				definitionOnly={props.definitionOnly}
 				context={context}
 				draft={draft}
 				onChange={onChange}
@@ -756,6 +715,12 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 							确认定义
 						</Button>
 					) : null}
+				</div>
+			) : props.definitionOnly ? (
+				<div className="dmx-editor-toolbar" role="toolbar">
+					<Button primary disabled={!canMaintain || effectiveReadOnly || busy} onClick={onSave}>
+						{saving ? "保存中…" : "保存设计并继续"}
+					</Button>
 				</div>
 			) : (
 				<ModelWorkflowToolbar

@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.web.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -116,4 +117,58 @@ class ModelDraftOperationResourceTest {
 
         verify(service).save(eq("server-tenant"), eq("alice"), eq(create), eq(update), any());
     }
+
+    @Test
+    void savesDefinitionOnlyWithoutAnImplementation() throws Exception {
+        CreateModelSpecCommand create = mock(CreateModelSpecCommand.class);
+        UpdateModelSpecCommand update = mock(UpdateModelSpecCommand.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(create.idempotencyKey()).thenReturn("definition-create-1");
+        when(model.id()).thenReturn(MODEL_ID);
+        when(model.revision()).thenReturn(2);
+        when(model.checksum()).thenReturn("a".repeat(64));
+        when(createDecoder.decode(any())).thenReturn(new ModelSpecCreateRequestDecoder.DecodeResult(create, List.of()));
+        when(updateDecoder.decodeDefinition(any())).thenReturn(new ModelSpecUpdateRequestDecoder.DecodeResult(update, List.of()));
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
+        when(service.saveDefinition("server-tenant", "alice", create, update)).thenReturn(
+            new ModelDraftSaveApplicationService.SaveResult(model, null, false)
+        );
+
+        mockMvc.perform(
+            post("/api/modeling/model-specs/draft-operations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"create\":{},\"modelSpec\":{},\"saveMode\":\"DEFINITION_ONLY\"}")
+        )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.implementation").doesNotExist());
+
+        verify(service).saveDefinition("server-tenant", "alice", create, update);
+        verify(service, never()).save(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsAnUnsupportedSaveModeBeforeDecodingCommands() throws Exception {
+        mockMvc.perform(
+            post("/api/modeling/model-specs/draft-operations")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"saveMode\":\"UNKNOWN\"}")
+        )
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.errorCode").value("MODEL_SPEC_REQUEST_INVALID"));
+
+        verify(createDecoder, never()).decode(any());
+    }
+    @Test
+    void rejectsReservedDefinitionKeysFromExternalRequests() throws Exception {
+        CreateModelSpecCommand create = mock(CreateModelSpecCommand.class);
+        when(create.idempotencyKey()).thenReturn("dm:v2:definition:" + "a".repeat(64));
+        when(createDecoder.decode(any())).thenReturn(new ModelSpecCreateRequestDecoder.DecodeResult(create, List.of()));
+        mockMvc.perform(post("/api/modeling/model-specs/draft-operations")
+            .contentType(MediaType.APPLICATION_JSON).content("{\"create\":{},\"modelSpec\":{}}"))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.data[0].code").value("MODEL_SPEC_IDEMPOTENCY_KEY_RESERVED"));
+        verify(service, never()).save(any(), any(), any(), any(), any());
+        verify(service, never()).saveDefinition(any(), any(), any(), any());
+    }
+
 }

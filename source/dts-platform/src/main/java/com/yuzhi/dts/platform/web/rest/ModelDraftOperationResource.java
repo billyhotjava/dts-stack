@@ -54,6 +54,15 @@ public class ModelDraftOperationResource {
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<SaveResult>> save(@RequestBody DraftOperationRequest request) {
         if (request == null) throw invalidRequest(List.of());
+        SaveMode saveMode = SaveMode.parse(request.saveMode());
+        if (saveMode == SaveMode.DEFINITION_ONLY && request.implementation() != null) {
+            throw invalidRequest(List.of(new FieldIssue(
+                "MODEL_DRAFT_OPERATION_IMPLEMENTATION_FORBIDDEN",
+                "implementation",
+                com.yuzhi.dts.platform.service.modeling.ModelSpecContract.IssueSeverity.ERROR,
+                "DEFINITION_ONLY save does not accept an implementation"
+            )));
+        }
         ModelSpecCreateRequestDecoder.DecodeResult create = createDecoder.decode(request.create());
         if (!create.valid()) throw invalidRequest(create.issues());
         if (DimensionModelCreateRequestDecoder.isInternalIdempotencyKey(create.command().idempotencyKey())) {
@@ -66,16 +75,20 @@ public class ModelDraftOperationResource {
                 ))
             );
         }
-        ModelSpecUpdateRequestDecoder.DecodeResult modelSpec = updateDecoder.decode(request.modelSpec());
+        ModelSpecUpdateRequestDecoder.DecodeResult modelSpec = saveMode == SaveMode.DEFINITION_ONLY
+            ? updateDecoder.decodeDefinition(request.modelSpec())
+            : updateDecoder.decode(request.modelSpec());
         if (!modelSpec.valid()) throw invalidRequest(modelSpec.issues());
 
-        SaveResult saved = service.save(
-            tenantId,
-            actorId(),
-            create.command(),
-            modelSpec.command(),
-            request.implementation() == null ? null : ModelLifecycleResource.decode(request.implementation())
-        );
+        SaveResult saved = saveMode == SaveMode.DEFINITION_ONLY
+            ? service.saveDefinition(tenantId, actorId(), create.command(), modelSpec.command())
+            : service.save(
+                tenantId,
+                actorId(),
+                create.command(),
+                modelSpec.command(),
+                request.implementation() == null ? null : ModelLifecycleResource.decode(request.implementation())
+            );
         HttpStatus status = saved.replayed() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity
             .status(status)
@@ -116,6 +129,26 @@ public class ModelDraftOperationResource {
     public record DraftOperationRequest(
         JsonNode create,
         JsonNode modelSpec,
-        ModelLifecycleResource.ImplementationWriteRequest implementation
+        ModelLifecycleResource.ImplementationWriteRequest implementation,
+        String saveMode
     ) {}
+
+    private enum SaveMode {
+        DEFINITION_ONLY,
+        WITH_IMPLEMENTATION;
+
+        private static SaveMode parse(String value) {
+            if (value == null || value.isBlank()) return WITH_IMPLEMENTATION;
+            try {
+                return SaveMode.valueOf(value);
+            } catch (IllegalArgumentException exception) {
+                throw invalidRequest(List.of(new FieldIssue(
+                    "MODEL_DRAFT_OPERATION_SAVE_MODE_INVALID",
+                    "saveMode",
+                    com.yuzhi.dts.platform.service.modeling.ModelSpecContract.IssueSeverity.ERROR,
+                    "saveMode must be DEFINITION_ONLY or WITH_IMPLEMENTATION"
+                )));
+            }
+        }
+    }
 }

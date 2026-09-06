@@ -1116,3 +1116,28 @@ describe("sprint-104 configuration editing", () => {
 		);
 	});
 });
+
+describe("initial definition save", () => {
+	it("shows logical dimension design and a single primary action", async () => {
+		const props = await render(makeProps({ definitionOnly: true }));
+		expect(container.querySelector('[aria-label="产出表英文名"]')).toBeNull();
+		expect(container.querySelector('[aria-label="数据来源方式"]')).toBeNull();
+		expect(container.querySelector('[aria-label="表中文名"]')).not.toBeNull();
+		expect(container.querySelectorAll('[role="toolbar"] button').length).toBe(1);
+		await act(async () => button("保存设计并继续").click());
+		expect(props.onSave).toHaveBeenCalledOnce();
+		expect(props.onValidateAuthoring).not.toHaveBeenCalled();
+		expect(props.onCommitAuthoring).not.toHaveBeenCalled();
+	});
+	it("keeps application semantics editable before choosing upstream", async () => {
+		await render(makeProps({ definitionOnly: true, draft: makeDraft({ createKind: "application" }) }));
+		expect(container.querySelector('[aria-label="应用场景"]')).not.toBeNull();
+		expect(container.querySelector('[aria-label="数据来源方式"]')).toBeNull();
+	});
+	it("keeps fact time semantics in definition and blocks save while busy", async () => {
+		await render(makeProps({ definitionOnly: true, saving: true, draft: makeDraft({ createKind: "fact" }) }));
+		expect(container.querySelector('[aria-label="事实类型"]')).not.toBeNull();
+		expect(container.querySelector('[aria-label="时间语义"]')).not.toBeNull();
+		expect(button("保存中…").disabled).toBe(true);
+	});
+});

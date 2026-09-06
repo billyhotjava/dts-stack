@@ -10,6 +10,9 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationM
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.UpdateModelSpecCommand;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Map;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
@@ -55,7 +58,7 @@ public class ModelDraftSaveApplicationService {
 
         CreateResult created = modelSpecs.create(tenantId, actorId, create);
         ModelSpecView savedModel = created.replayed()
-            ? replayedModel(tenantId, actorId, created.modelSpec(), modelSpec)
+            ? replayedModel(tenantId, actorId, created.modelSpec(), modelSpec, false)
             : modelSpecs.update(
                 tenantId,
                 actorId,
@@ -78,21 +81,40 @@ public class ModelDraftSaveApplicationService {
         return new SaveResult(savedModel, savedImplementation, created.replayed());
     }
 
+    /** Commits a complete logical model definition without creating a physical implementation. */
+    @Transactional
+    public SaveResult saveDefinition(
+        String tenantId,
+        String actorId,
+        CreateModelSpecCommand create,
+        UpdateModelSpecCommand modelSpec
+    ) {
+        requireConsistentContext(create, modelSpec);
+        CreateResult created = modelSpecs.create(tenantId, actorId, definitionCreate(create));
+        ModelSpecView savedModel = created.replayed()
+            ? replayedModel(tenantId, actorId, created.modelSpec(), modelSpec, true)
+            : modelSpecs.updateDefinition(
+                tenantId,
+                actorId,
+                created.modelSpec().id(),
+                expected(created.modelSpec()),
+                modelSpec
+            );
+        return new SaveResult(savedModel, null, created.replayed());
+    }
+
     private ModelSpecView replayedModel(
         String tenantId,
         String actorId,
         ModelSpecView originalSeed,
-        UpdateModelSpecCommand requestedDefinition
+        UpdateModelSpecCommand requestedDefinition,
+        boolean definitionOnly
     ) {
         ModelSpecView current = modelSpecs.get(tenantId, originalSeed.id());
         if (current.revision() == 1) {
-            return modelSpecs.update(
-                tenantId,
-                actorId,
-                current.id(),
-                expected(current),
-                requestedDefinition
-            );
+            return definitionOnly
+                ? modelSpecs.updateDefinition(tenantId, actorId, current.id(), expected(current), requestedDefinition)
+                : modelSpecs.update(tenantId, actorId, current.id(), expected(current), requestedDefinition);
         }
         ModelSpecView completed = modelSpecs.revision(
             tenantId,
@@ -112,6 +134,25 @@ public class ModelDraftSaveApplicationService {
             );
         }
         return completed;
+    }
+
+    private static CreateModelSpecCommand definitionCreate(CreateModelSpecCommand create) {
+        return create.withIdempotencyKey("dm:v2:definition:" + sha256(create.idempotencyKey()));
+    }
+
+    private static String sha256(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte valueByte : digest) {
+                int unsigned = Byte.toUnsignedInt(valueByte);
+                hex.append(Character.forDigit(unsigned >>> 4, 16));
+                hex.append(Character.forDigit(unsigned & 0x0f, 16));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 is required by the Java runtime", exception);
+        }
     }
 
     private static ExpectedVersion expected(ModelSpecView model) {

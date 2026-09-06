@@ -1,3 +1,4 @@
+import { createCommandForDraft } from "./modelDraftCreateCommand";
 import { copyDimensionProfile, dimensionProfileForSave, implementationConfiguration } from "./modelDraftConfiguration";
 import { listDataMarts } from "@/api/dataMartApi";
 import type { ModelAuthoringSnapshot, ModelAuthoringSnapshotInput } from "@/api/dbtImplementationDraftApi";
@@ -457,7 +458,9 @@ export function modelDraftFromView(
 			implementationText(structuredImplementation, "targetPhysicalName") ||
 			model.implementationPolicy?.physicalName ||
 			"",
-		materialization: structuredImplementation ? structuredImplementation.materialization : model.materialization || "table",
+		materialization: structuredImplementation
+			? structuredImplementation.materialization
+			: model.materialization || "table",
 		grainStatement: model.grain?.statement || "",
 		businessProcessId: model.businessProcessId || "",
 		fields: model.fields.map((field) => ({ ...field })),
@@ -529,8 +532,12 @@ export function modelDraftFromAuthoringSnapshot(
 		grainStatement: modelSnapshot.grain?.statement || "",
 		businessProcessId: modelSnapshot.businessProcessId || "",
 		fields: (modelSnapshot.fields || []).map((field) => ({ ...field })),
-		scdType: (modelSnapshot.dimensionProfile === undefined ? base.dimensionProfile : modelSnapshot.dimensionProfile)?.scdPolicy.type || "NONE",
-		dimensionProfile: copyDimensionProfile(modelSnapshot.dimensionProfile === undefined ? base.dimensionProfile : modelSnapshot.dimensionProfile),
+		scdType:
+			(modelSnapshot.dimensionProfile === undefined ? base.dimensionProfile : modelSnapshot.dimensionProfile)?.scdPolicy
+				.type || "NONE",
+		dimensionProfile: copyDimensionProfile(
+			modelSnapshot.dimensionProfile === undefined ? base.dimensionProfile : modelSnapshot.dimensionProfile,
+		),
 		standardBindings: (modelSnapshot.standardBindings || []).map((binding) => ({ ...binding })),
 		warehouseLayerCode: modelSnapshot.warehouseLayerCode || modelSnapshot.layer,
 		implementationMode: modelSnapshot.implementationMode,
@@ -567,18 +574,17 @@ export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext
 		warehouseLayers,
 		sources,
 		implementationCapabilities,
-	] =
-		await Promise.all([
-			catalogDomainService.list(),
-			listModelSpecs(),
-			listDimensionDefinitions({ offset: 0, limit: 100 }),
-			listModelFieldStandardOptions(),
-			listDataMarts({ status: "CURRENT", offset: 0, limit: 100 }),
-			listSubjectDomains({ status: "CURRENT", offset: 0, limit: 100 }),
-			listWarehouseLayers(),
-			planId ? collectCurrentWarehousePlanSources(planId) : Promise.resolve([]),
-			getModelImplementationCapabilities(),
-		]);
+	] = await Promise.all([
+		catalogDomainService.list(),
+		listModelSpecs(),
+		listDimensionDefinitions({ offset: 0, limit: 100 }),
+		listModelFieldStandardOptions(),
+		listDataMarts({ status: "CURRENT", offset: 0, limit: 100 }),
+		listSubjectDomains({ status: "CURRENT", offset: 0, limit: 100 }),
+		listWarehouseLayers(),
+		planId ? collectCurrentWarehousePlanSources(planId) : Promise.resolve([]),
+		getModelImplementationCapabilities(),
+	]);
 	return {
 		planId,
 		domains,
@@ -1142,8 +1148,7 @@ const implementationNeedsCapabilityRepair = (
 		!capabilities.loadStrategies.includes(loadStrategy) ||
 		!(capabilities.materializationsByLoadStrategy[loadStrategy] || []).includes(implementation.materialization) ||
 		Object.keys(implementation.settings || {}).some((key) => !capabilities.settingKeys.includes(key)) ||
-		(!capabilities.partitionFieldsSupported &&
-			implementationStringList(implementation, "partitionFields").length > 0)
+		(!capabilities.partitionFieldsSupported && implementationStringList(implementation, "partitionFields").length > 0)
 	);
 };
 
@@ -1281,32 +1286,6 @@ export const modelDraftToAuthoringSnapshot = (
 	};
 };
 
-const createCommandForDraft = (
-	draft: ModelSpecDraft,
-	update: UpdateModelSpecCommand,
-	context: ModelSaveContext,
-): ModelDraftOperationCommand["create"] => {
-	const createBase = {
-		planId: draft.planId,
-		domainId: draft.domainId,
-		name: draft.name.trim(),
-		description: draft.description.trim() || null,
-		warehouseLayerCode: update.warehouseLayerCode,
-		businessProcessId: update.modelType === "FACT" ? update.businessProcessId : null,
-		dataMartId: update.modelType === "APPLICATION" ? update.dataMartId : null,
-		subjectDomainId: update.modelType === "APPLICATION" ? update.subjectDomainId : null,
-		idempotencyKey: draft.creationOperationId || draft.implementationIdempotencyKey,
-	};
-	if (update.modelType !== "DIMENSION") return { ...createBase, modelType: update.modelType };
-	const definition = context.dimensionDefinitions.find((item) => item.id === draft.dimensionDefinitionId);
-	if (!definition) throw new Error("请选择一个当前有效的维度");
-	return {
-		...createBase,
-		modelType: "DIMENSION",
-		dimensionDefinitionRef: { dimensionDefinitionId: definition.id, revision: definition.revision },
-	};
-};
-
 const validatedImplementationSave = async (
 	draft: ModelSpecDraft,
 	model: CanonicalModelSpecView,
@@ -1341,12 +1320,12 @@ export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveCo
 			modelSpec: update,
 			implementation: resolvedImplementationInputs
 				? buildImplementationCommand(
-					preparedDraft,
-					{ id: "pending", implementationMode: update.implementationMode },
-					resolvedImplementationInputs,
-					null,
-					context.implementationCapabilities,
-				)
+						preparedDraft,
+						{ id: "pending", implementationMode: update.implementationMode },
+						resolvedImplementationInputs,
+						null,
+						context.implementationCapabilities,
+					)
 				: null,
 		};
 		const saved = await saveModelDraftOperation(operation);

@@ -24,6 +24,7 @@ import {
 } from "./services/modelWorkbenchService";
 
 type Props = {
+	definitionOnly?: boolean;
 	draft: ModelSpecDraft;
 	context: ModelWorkbenchContext;
 	validationErrors: ModelDraftValidationErrors;
@@ -98,6 +99,7 @@ function ValidationMessage({ message }: { message?: string }) {
 }
 
 export function ModelImplementationBindingFields({
+	definitionOnly = false,
 	draft,
 	context,
 	validationErrors,
@@ -206,159 +208,164 @@ export function ModelImplementationBindingFields({
 	const toggleTimeField = (fieldIndex: number, checked: boolean) =>
 		onChange(applyFactTimeFieldSelection(draft, fieldIndex, checked));
 
+	if (definitionOnly && draft.createKind !== "fact" && draft.createKind !== "application") return null;
 	return (
 		<section className="dmx-editor-panel">
-			<h3>数据来源与加工方式</h3>
+			<h3>{definitionOnly ? "业务语义" : "数据来源与加工方式"}</h3>
 			<div className="dmx-workbench-editor__basic-grid">
-				<label>
-					<span className="required">数据来源方式</span>
-					<select
-						aria-label="数据来源方式"
-						disabled={modes.length === 1}
-						onChange={(event) => changeMode(event.target.value as ModelImplementationInputMode | "")}
-						value={draft.implementationInputMode}
-					>
-						<option value="">请选择数据来源方式</option>
-						{modes.map((mode) => (
-							<option key={mode.value} value={mode.value}>
-								{mode.label}
-							</option>
-						))}
-					</select>
-					<ValidationMessage message={validationErrors.implementationInputMode} />
-				</label>
+				{!definitionOnly ? (
+					<>
+						<label>
+							<span className="required">数据来源方式</span>
+							<select
+								aria-label="数据来源方式"
+								disabled={modes.length === 1}
+								onChange={(event) => changeMode(event.target.value as ModelImplementationInputMode | "")}
+								value={draft.implementationInputMode}
+							>
+								<option value="">请选择数据来源方式</option>
+								{modes.map((mode) => (
+									<option key={mode.value} value={mode.value}>
+										{mode.label}
+									</option>
+								))}
+							</select>
+							<ValidationMessage message={validationErrors.implementationInputMode} />
+						</label>
 
-				{draft.implementationInputMode === "GENERATED" ? (
-					<label>
-						<span>生成策略</span>
-						<input
-							disabled
-							value={draft.generationStrategyType === "DATE_DIMENSION" ? "系统生成标准日期维度" : "生成策略未配置"}
-						/>
-						{draft.generationStrategyType !== "DATE_DIMENSION" ? (
-							<small>请选择系统生成标准日期维度，或切换到代码模式维护原始实现。</small>
+						{draft.implementationInputMode === "GENERATED" ? (
+							<label>
+								<span>生成策略</span>
+								<input
+									disabled
+									value={draft.generationStrategyType === "DATE_DIMENSION" ? "系统生成标准日期维度" : "生成策略未配置"}
+								/>
+								{draft.generationStrategyType !== "DATE_DIMENSION" ? (
+									<small>请选择系统生成标准日期维度，或切换到代码模式维护原始实现。</small>
+								) : null}
+							</label>
 						) : null}
-					</label>
-				) : null}
 
-				{draft.implementationInputMode === "PHYSICAL_ASSET" ? (
-					<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
-						<div className="dmx-source-inventory__heading">
-							<strong>输入源表</strong>
-							<Button onClick={() => setSourceDialogOpen(true)}>从资产目录登记源表</Button>
-						</div>
-						{context.sources.map((source) => {
-							const label =
-								source.displayName?.trim() || source.locator?.objectName || source.sourceId || source.bindingId;
-							return (
-								<label key={source.bindingId}>
-									<input
-										aria-label={`选择来源 ${label}`}
-										checked={draft.sourceRefs.some(
-											(item) =>
-												item.sourceBindingId === source.bindingId &&
-												item.resolvedVersion === (source.resolvedVersion || source.confirmedVersion),
-										)}
-										onChange={(event) => toggleSource(source.bindingId, event.target.checked)}
-										type="checkbox"
-									/>
-									<span>{label}</span>
-									<small>已确认输入源表 · 版本 {source.resolvedVersion || source.confirmedVersion}</small>
-								</label>
-							);
-						})}
-						{staleSources.map((source) => (
-							<label key={`stale-source:${source.sourceBindingId}:${source.resolvedVersion}`}>
-								<input
-									aria-label={`取消不可用来源 ${source.ref}`}
-									checked
-									onChange={(event) => toggleSource(source.sourceBindingId, event.target.checked)}
-									type="checkbox"
-								/>
-								<span>{source.ref}</span>
-								<small>已绑定输入源表，当前规划中不可用；请取消后重新选择。</small>
-							</label>
-						))}
-						{!context.sources.length && !staleSources.length ? (
-							<small>
-								{context.planId
-									? "当前暂无已确认且有效的输入源表，请从资产目录登记。"
-									: "当前尚未建立建模上下文，请从资产目录登记第一张输入源表。"}
-							</small>
+						{draft.implementationInputMode === "PHYSICAL_ASSET" ? (
+							<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
+								<div className="dmx-source-inventory__heading">
+									<strong>输入源表</strong>
+									<Button onClick={() => setSourceDialogOpen(true)}>从资产目录登记源表</Button>
+								</div>
+								{context.sources.map((source) => {
+									const label =
+										source.displayName?.trim() || source.locator?.objectName || source.sourceId || source.bindingId;
+									return (
+										<label key={source.bindingId}>
+											<input
+												aria-label={`选择来源 ${label}`}
+												checked={draft.sourceRefs.some(
+													(item) =>
+														item.sourceBindingId === source.bindingId &&
+														item.resolvedVersion === (source.resolvedVersion || source.confirmedVersion),
+												)}
+												onChange={(event) => toggleSource(source.bindingId, event.target.checked)}
+												type="checkbox"
+											/>
+											<span>{label}</span>
+											<small>已确认输入源表 · 版本 {source.resolvedVersion || source.confirmedVersion}</small>
+										</label>
+									);
+								})}
+								{staleSources.map((source) => (
+									<label key={`stale-source:${source.sourceBindingId}:${source.resolvedVersion}`}>
+										<input
+											aria-label={`取消不可用来源 ${source.ref}`}
+											checked
+											onChange={(event) => toggleSource(source.sourceBindingId, event.target.checked)}
+											type="checkbox"
+										/>
+										<span>{source.ref}</span>
+										<small>已绑定输入源表，当前规划中不可用；请取消后重新选择。</small>
+									</label>
+								))}
+								{!context.sources.length && !staleSources.length ? (
+									<small>
+										{context.planId
+											? "当前暂无已确认且有效的输入源表，请从资产目录登记。"
+											: "当前尚未建立建模上下文，请从资产目录登记第一张输入源表。"}
+									</small>
+								) : null}
+							</div>
 						) : null}
-					</div>
-				) : null}
 
-				{draft.implementationInputMode === "UPSTREAM_MODEL" ? (
-					<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
-						<strong>上游模型</strong>
-						{upstreamCandidates.map((model) => (
-							<label key={model.id}>
-								<input
-									aria-label={`选择上游 ${model.name}`}
-									checked={draft.dependsOn.some(
-										(item) => item.modelSpecId === model.id && item.revision === model.revision,
-									)}
-									onChange={(event) => toggleUpstream(model.id, event.target.checked)}
-									type="checkbox"
-								/>
-								<span>{model.name}</span>
-								<small>
-									{MODEL_TYPE_LABELS[model.modelType]} · {model.layer} · 第 {model.revision} 版
-								</small>
-							</label>
-						))}
-						{staleDependencies.map((dependency) => (
-							<label key={`stale-upstream:${dependency.modelSpecId}:${dependency.revision}`}>
-								<input
-									aria-label={`取消不可用上游 ${dependency.modelSpecId}`}
-									checked
-									onChange={(event) => toggleUpstream(dependency.modelSpecId, event.target.checked)}
-									type="checkbox"
-								/>
-								<span>{dependency.modelSpecId}</span>
-								<small>已绑定第 {dependency.revision} 版，当前不可作为上游；请重新选择。</small>
-							</label>
-						))}
-						{!upstreamCandidates.length && !staleDependencies.length ? (
-							<small>当前暂无满足分层规则且已有当前修订的上游模型。</small>
+						{draft.implementationInputMode === "UPSTREAM_MODEL" ? (
+							<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
+								<strong>上游模型</strong>
+								{upstreamCandidates.map((model) => (
+									<label key={model.id}>
+										<input
+											aria-label={`选择上游 ${model.name}`}
+											checked={draft.dependsOn.some(
+												(item) => item.modelSpecId === model.id && item.revision === model.revision,
+											)}
+											onChange={(event) => toggleUpstream(model.id, event.target.checked)}
+											type="checkbox"
+										/>
+										<span>{model.name}</span>
+										<small>
+											{MODEL_TYPE_LABELS[model.modelType]} · {model.layer} · 第 {model.revision} 版
+										</small>
+									</label>
+								))}
+								{staleDependencies.map((dependency) => (
+									<label key={`stale-upstream:${dependency.modelSpecId}:${dependency.revision}`}>
+										<input
+											aria-label={`取消不可用上游 ${dependency.modelSpecId}`}
+											checked
+											onChange={(event) => toggleUpstream(dependency.modelSpecId, event.target.checked)}
+											type="checkbox"
+										/>
+										<span>{dependency.modelSpecId}</span>
+										<small>已绑定第 {dependency.revision} 版，当前不可作为上游；请重新选择。</small>
+									</label>
+								))}
+								{!upstreamCandidates.length && !staleDependencies.length ? (
+									<small>当前暂无满足分层规则且已有当前修订的上游模型。</small>
+								) : null}
+							</div>
 						) : null}
-					</div>
-				) : null}
 
-				{draft.createKind === "fact" ? (
-					<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
-						<strong>引用维度模型</strong>
-						{dimensionCandidates.map((model) => (
-							<label key={model.id}>
-								<input
-									aria-label={`引用维度模型 ${model.name}`}
-									checked={draft.dimensionRefs.some(
-										(item) => item.modelSpecId === model.id && item.revision === model.revision,
-									)}
-									onChange={(event) => toggleDimension(model.id, event.target.checked)}
-									type="checkbox"
-								/>
-								<span>{model.name}</span>
-								<small>DWD · 第 {model.revision} 版</small>
-							</label>
-						))}
-						{staleDimensionRefs.map((dimension) => (
-							<label key={`stale-dimension:${dimension.modelSpecId}:${dimension.revision}`}>
-								<input
-									aria-label={`取消不可用维度 ${dimension.modelSpecId}`}
-									checked
-									onChange={(event) => toggleDimension(dimension.modelSpecId, event.target.checked)}
-									type="checkbox"
-								/>
-								<span>{dimension.modelSpecId}</span>
-								<small>已绑定第 {dimension.revision} 版，当前不可用；请取消后重新选择。</small>
-							</label>
-						))}
-						{!dimensionCandidates.length && !staleDimensionRefs.length ? (
-							<small>当前数据域暂无可引用的维度模型。</small>
+						{draft.createKind === "fact" ? (
+							<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
+								<strong>引用维度模型</strong>
+								{dimensionCandidates.map((model) => (
+									<label key={model.id}>
+										<input
+											aria-label={`引用维度模型 ${model.name}`}
+											checked={draft.dimensionRefs.some(
+												(item) => item.modelSpecId === model.id && item.revision === model.revision,
+											)}
+											onChange={(event) => toggleDimension(model.id, event.target.checked)}
+											type="checkbox"
+										/>
+										<span>{model.name}</span>
+										<small>DWD · 第 {model.revision} 版</small>
+									</label>
+								))}
+								{staleDimensionRefs.map((dimension) => (
+									<label key={`stale-dimension:${dimension.modelSpecId}:${dimension.revision}`}>
+										<input
+											aria-label={`取消不可用维度 ${dimension.modelSpecId}`}
+											checked
+											onChange={(event) => toggleDimension(dimension.modelSpecId, event.target.checked)}
+											type="checkbox"
+										/>
+										<span>{dimension.modelSpecId}</span>
+										<small>已绑定第 {dimension.revision} 版，当前不可用；请取消后重新选择。</small>
+									</label>
+								))}
+								{!dimensionCandidates.length && !staleDimensionRefs.length ? (
+									<small>当前数据域暂无可引用的维度模型。</small>
+								) : null}
+							</div>
 						) : null}
-					</div>
+					</>
 				) : null}
 
 				{draft.createKind === "fact" ? (
@@ -433,14 +440,16 @@ export function ModelImplementationBindingFields({
 						<ValidationMessage message={validationErrors.consumptionScenario} />
 					</label>
 				) : null}
-				<ModelVisualTransformationFields
-					context={context}
-					draft={draft}
-					onChange={onChange}
-					validationMessage={validationErrors.transformations}
-				/>
+				{!definitionOnly ? (
+					<ModelVisualTransformationFields
+						context={context}
+						draft={draft}
+						onChange={onChange}
+						validationMessage={validationErrors.transformations}
+					/>
+				) : null}
 			</div>
-			{sourceDialogOpen ? (
+			{!definitionOnly && sourceDialogOpen ? (
 				<ModelSourceInventoryDialog
 					onClose={() => setSourceDialogOpen(false)}
 					onSourcesChanged={onSourcesChanged}

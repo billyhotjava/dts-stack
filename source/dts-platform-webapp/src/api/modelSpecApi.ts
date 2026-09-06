@@ -103,6 +103,7 @@ export type CreateDimensionModelResult = {
 export type DimensionModelOperationView = CreateDimensionModelResult;
 
 export type ModelDraftOperationCommand = {
+	saveMode?: "DEFINITION_ONLY" | "WITH_IMPLEMENTATION";
 	create: CreateModelSpecCommand;
 	modelSpec: UpdateModelSpecCommand;
 	implementation: ModelImplementationWriteCommand | null;

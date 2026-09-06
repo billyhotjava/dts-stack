@@ -356,6 +356,29 @@ public class ModelSpecApplicationService {
         ExpectedVersion expected,
         UpdateModelSpecCommand command
     ) {
+        return updateInternal(serverTenantId, actorId, modelSpecId, expected, command, false);
+    }
+
+    /** Replaces a DRAFT logical definition while deferring only its missing derived-model upstream. */
+    @Transactional
+    public ModelSpecView updateDefinition(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected,
+        UpdateModelSpecCommand command
+    ) {
+        return updateInternal(serverTenantId, actorId, modelSpecId, expected, command, true);
+    }
+
+    private ModelSpecView updateInternal(
+        String serverTenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected,
+        UpdateModelSpecCommand command,
+        boolean definitionOnly
+    ) {
         requireServerContext(serverTenantId, actorId);
         requireCanonicalWriteEnabled();
         if (modelSpecId == null) throw notFound(null);
@@ -401,7 +424,7 @@ public class ModelSpecApplicationService {
                 Map.of("currentLayer", current.layer(), "requestedLayer", command.layer())
             );
         }
-        rejectIssues(ModelSpecContract.validateUpdate(command));
+        rejectIssues(definitionOnly ? ModelSpecContract.validateDefinitionUpdate(command) : ModelSpecContract.validateUpdate(command));
         if (!Objects.equals(current.planId(), command.planId())) {
             throw new ModelSpecException(
                 "MODEL_SPEC_PLAN_IMMUTABLE",
@@ -429,7 +452,7 @@ public class ModelSpecApplicationService {
         command = resolveWarehouseLayerSelection(command);
         ModelSpecView replacement = codec.toUpdatedView(current, command, current.revision() + 1, clock.instant());
         requireDimensionDefinitionRef(replacement);
-        rejectIssues(ModelSpecContract.validateEditableView(replacement));
+        rejectIssues(definitionOnly ? ModelSpecContract.validateDefinitionView(replacement) : ModelSpecContract.validateEditableView(replacement));
         requireUniqueDimensionVariant(serverTenantId, replacement, current.id());
         validateDataMartContext(serverTenantId, replacement.domainId(), replacement.dataMartId());
         validateBusinessContext(

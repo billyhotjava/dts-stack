@@ -1,3 +1,6 @@
+import { resolveRequestedModelSelection, shouldBlockWorkbenchNavigation } from "./modelingWorkbenchNavigation";
+export { resolveRequestedModelSelection, shouldBlockWorkbenchNavigation } from "./modelingWorkbenchNavigation";
+import { saveModelDefinitionDraft, validateModelDefinitionInput } from "./services/modelDefinitionCreation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type BlockerFunction, useBlocker, useNavigate, useSearchParams } from "react-router";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
@@ -57,21 +60,6 @@ const ownerIdOf = (userInfo: unknown) => {
 	return value == null ? "" : String(value).trim();
 };
 
-export function resolveRequestedModelSelection<T extends { id: string }>(
-	models: readonly T[],
-	requestedModelId: string,
-) {
-	const requestedModel = requestedModelId ? models.find((model) => model.id === requestedModelId) : undefined;
-	return {
-		selectedModel: requestedModel || null,
-		normalizedModelId: requestedModel?.id || "",
-	};
-}
-
-export function shouldBlockWorkbenchNavigation(dirty: boolean, currentPathname: string, nextPathname: string): boolean {
-	return dirty && currentPathname !== nextPathname;
-}
-
 export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
 	const canMaintain = useDataModelingMenuGrant();
@@ -123,8 +111,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const draftDomainId = draft?.domainId || "";
 	const editorAccess = useMemo(() => resolveWorkbenchEditorAccess(canMaintain, draft), [canMaintain, draft]);
 	const dirty = draft !== null && cleanFingerprint !== null && modelDraftFingerprint(draft) !== cleanFingerprint;
-	const saveNeeded =
-		dirty || modelDraftNeedsImplementationRecovery(draft, context?.implementationCapabilities);
+	const saveNeeded = dirty || modelDraftNeedsImplementationRecovery(draft, context?.implementationCapabilities);
 	const replaceDraft = useCallback((nextDraft: ModelDraft | null) => {
 		setDraft(nextDraft);
 		setCleanFingerprint(nextDraft ? modelDraftFingerprint(nextDraft) : null);
@@ -354,6 +341,8 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		syncWorkbenchUrl((params) => {
 			params.delete("modelSpecId");
 			params.delete("dimensionDefinitionId");
+			params.set("step", "definition");
+			params.set("view", "visual");
 		});
 	};
 
@@ -404,7 +393,9 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			prepareModelDraftForSave(draft, dimensionDefinitions),
 			context.implementationCapabilities,
 		);
-		const nextValidationErrors = validateModelDraftInput(preparedDraft, context.implementationCapabilities);
+		const nextValidationErrors = preparedDraft.base
+			? validateModelDraftInput(preparedDraft, context.implementationCapabilities)
+			: validateModelDefinitionInput(preparedDraft);
 		setValidationErrors(nextValidationErrors);
 		if (Object.keys(nextValidationErrors).length) return;
 		if (
@@ -417,7 +408,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		savingRef.current = true;
 		setSaving(true);
 		try {
-			const saved = await saveModelDraft(preparedDraft, {
+			const saved = await (preparedDraft.base ? saveModelDraft : saveModelDefinitionDraft)(preparedDraft, {
 				ownerId: ownerIdOf(userInfo),
 				dimensionDefinitions,
 				models: context.models,
@@ -441,6 +432,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			syncWorkbenchUrl((params) => {
 				params.set("modelSpecId", saved.model.id);
 				params.delete("dimensionDefinitionId");
+				if (!preparedDraft.base) {
+					params.set("step", "implementation");
+					params.set("view", "visual");
+				}
 			});
 			show(`模型草稿已保存：r${saved.model.revision}`);
 		} catch (error) {
@@ -582,27 +577,29 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			params.delete("dimensionDefinitionId");
 			params.delete("open");
 			params.delete("view");
+			params.delete("step");
 		});
 	};
-	const { goToGraph, removeModel, archiveModel, goToDimensionGraph, cloneDimension, removeDimension } = useCatalogActions({
-		canMaintain,
-		confirmDiscard,
-		navigate,
-		ownerId: ownerIdOf(userInfo),
-		reload: async () => {
-			await load();
-		},
-		replaceDraft,
-		requestedDimensionIdRef,
-		requestedModelIdRef,
-		savingRef,
-		selectedDimensionId,
-		selectedModelId,
-		setFailure,
-		setSaving,
-		show,
-		syncWorkbenchUrl,
-	});
+	const { goToGraph, removeModel, archiveModel, goToDimensionGraph, cloneDimension, removeDimension } =
+		useCatalogActions({
+			canMaintain,
+			confirmDiscard,
+			navigate,
+			ownerId: ownerIdOf(userInfo),
+			reload: async () => {
+				await load();
+			},
+			replaceDraft,
+			requestedDimensionIdRef,
+			requestedModelIdRef,
+			savingRef,
+			selectedDimensionId,
+			selectedModelId,
+			setFailure,
+			setSaving,
+			show,
+			syncWorkbenchUrl,
+		});
 	return (
 		<main className="dmx-workbench-page">
 			<PageHeader description={route.description} title="维度建模" trail="数据建模 / 维度建模" />
@@ -676,6 +673,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							/>
 						) : draft ? (
 							<ModelingWorkbenchEditor
+								definitionOnly={!selectedModel && isModelSpecDraft(draft)}
 								authoringBusy={authoringBusy}
 								authoringConflict={authoringConflict}
 								authoringContext={authoringContext}

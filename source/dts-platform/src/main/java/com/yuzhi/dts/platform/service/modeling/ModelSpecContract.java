@@ -808,6 +808,17 @@ public final class ModelSpecContract {
                 businessProcessId, subjectDomainId
             );
         }
+
+        /** Returns a copy with an operation-scoped idempotency key. */
+        public CreateModelSpecCommand withIdempotencyKey(String key) {
+            return new CreateModelSpecCommand(
+                planId, domainId, modelType, layer, name, description, implementationMode, materialization,
+                businessActivityRef, consumptionScenario, grain, factShape, timeSemantics, fields, sourceRefs,
+                dependsOn, dimensionRefs, metricRefs, standardBindings, generationStrategy, dimensionProfile,
+                dimensionDefinitionRef, key, dataMartId, variantCode, implementationPolicy, warehouseLayerCode,
+                businessProcessId, subjectDomainId
+            );
+        }
     }
 
     /** Full replacement payload for a CAS update. Server-managed and create-only fields are intentionally absent. */
@@ -1476,11 +1487,27 @@ public final class ModelSpecContract {
             .toList();
     }
 
+    /** Logical-design save permits an unbound derived-model upstream until implementation is authored. */
+    static List<FieldIssue> validateDefinitionUpdate(UpdateModelSpecCommand command) {
+        return validateUpdate(command)
+            .stream()
+            .filter(issue -> !"MODEL_SPEC_UPSTREAM_REQUIRED".equals(issue.code()))
+            .toList();
+    }
+
     /** Expand-phase draft validation: stable context remains a submit/import gate, not an edit lock. */
     static List<FieldIssue> validateEditableView(ModelSpecView view) {
         return validateView(view)
             .stream()
             .filter(issue -> !STABLE_CONTEXT_REQUIRED_ISSUE_CODES.contains(issue.code()))
+            .toList();
+    }
+
+    /** Logical-design save preserves all editable-view checks except a missing derived-model upstream. */
+    static List<FieldIssue> validateDefinitionView(ModelSpecView view) {
+        return validateEditableView(view)
+            .stream()
+            .filter(issue -> !"MODEL_SPEC_UPSTREAM_REQUIRED".equals(issue.code()))
             .toList();
     }
 

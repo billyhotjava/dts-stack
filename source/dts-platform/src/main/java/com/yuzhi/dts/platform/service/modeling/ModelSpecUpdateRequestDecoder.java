@@ -28,6 +28,15 @@ public final class ModelSpecUpdateRequestDecoder {
     }
 
     public DecodeResult decode(JsonNode request) {
+        return decode(request, false);
+    }
+
+    /** Decodes a complete logical definition while deferring only the derived-model upstream requirement. */
+    public DecodeResult decodeDefinition(JsonNode request) {
+        return decode(request, true);
+    }
+
+    private DecodeResult decode(JsonNode request, boolean definitionOnly) {
         if (request == null || !request.isObject()) return rejected(requestIssue("ModelSpec update request must be a JSON object"));
         if (request.has("implementationPolicy")) {
             return rejected(
@@ -57,7 +66,9 @@ public final class ModelSpecUpdateRequestDecoder {
             return rejected(requestIssue("ModelSpec update request cannot be decoded"));
         }
 
-        List<ModelSpecContract.FieldIssue> semanticIssues = ModelSpecContract.validateUpdate(command);
+        List<ModelSpecContract.FieldIssue> semanticIssues = definitionOnly
+            ? ModelSpecContract.validateDefinitionUpdate(command)
+            : ModelSpecContract.validateUpdate(command);
         return semanticIssues.isEmpty() ? new DecodeResult(command, List.of()) : new DecodeResult(null, semanticIssues);
     }
 

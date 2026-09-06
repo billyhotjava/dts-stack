@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.transaction.annotation.Transactional;
 
 class ModelDraftSaveApplicationServiceTest {
@@ -86,6 +87,18 @@ class ModelDraftSaveApplicationServiceTest {
     }
 
     @Test
+    void withImplementationModeStillRejectsAHandAuthoredModelWithoutImplementation() {
+        CreateModelSpecCommand create = createCommand();
+        UpdateModelSpecCommand update = updateCommand();
+
+        assertThatThrownBy(() -> service.save("tenant", "alice", create, update, null))
+            .isInstanceOfSatisfying(ModelSpecException.class, failure ->
+                assertThat(failure.code()).isEqualTo("MODEL_IMPLEMENTATION_INPUT_REQUIRED")
+            );
+        verify(modelSpecs, never()).create(any(), any(), any());
+    }
+
+    @Test
     void resumesAnExactCreateReplayFromTheCurrentModelRevision() {
         CreateModelSpecCommand create = createCommand();
         UpdateModelSpecCommand update = updateCommand();
@@ -138,6 +151,81 @@ class ModelDraftSaveApplicationServiceTest {
                 assertThat(failure.code()).isEqualTo("MODEL_DRAFT_OPERATION_INCONSISTENT")
             );
         verify(modelSpecs, never()).create(any(), any(), any());
+    }
+
+    @Test
+    void savesDefinitionOnlyThroughTheSameTransactionWithoutStartingLifecycle() {
+        CreateModelSpecCommand create = createCommand();
+        CreateModelSpecCommand namespacedCreate = mock(CreateModelSpecCommand.class);
+        UpdateModelSpecCommand update = updateCommand();
+        ModelSpecView seed = model(1, "a".repeat(64));
+        ModelSpecView savedModel = model(2, "b".repeat(64));
+        when(create.idempotencyKey()).thenReturn("definition-operation-1");
+        when(create.withIdempotencyKey(any())).thenReturn(namespacedCreate);
+        when(namespacedCreate.idempotencyKey()).thenReturn(
+            "dm:v2:definition:901965943c570b7e760f5fcbb592ed56f966d49141d87fad7893d77ae64732b9"
+        );
+        when(modelSpecs.create(eq("tenant"), eq("alice"), any())).thenReturn(new CreateResult(seed, false));
+        when(modelSpecs.updateDefinition(eq("tenant"), eq("alice"), eq(MODEL_ID), any(), eq(update))).thenReturn(savedModel);
+
+        var result = service.saveDefinition("tenant", "alice", create, update);
+
+        ArgumentCaptor<CreateModelSpecCommand> createCaptor = ArgumentCaptor.forClass(CreateModelSpecCommand.class);
+        verify(modelSpecs).create(eq("tenant"), eq("alice"), createCaptor.capture());
+        assertThat(createCaptor.getValue().idempotencyKey())
+            .isEqualTo("dm:v2:definition:901965943c570b7e760f5fcbb592ed56f966d49141d87fad7893d77ae64732b9");
+        verify(create).withIdempotencyKey("dm:v2:definition:901965943c570b7e760f5fcbb592ed56f966d49141d87fad7893d77ae64732b9");
+        assertThat(result.model()).isSameAs(savedModel);
+        assertThat(result.implementation()).isNull();
+        assertThat(result.replayed()).isFalse();
+        verify(modelSpecs).updateDefinition(eq("tenant"), eq("alice"), eq(MODEL_ID), any(), eq(update));
+        verify(lifecycle, never()).saveImplementation(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void definitionReplayDoesNotInvokeLifecycleAndRejectsChangedDefinition() {
+        CreateModelSpecCommand create = createCommand();
+        CreateModelSpecCommand namespacedCreate = mock(CreateModelSpecCommand.class);
+        UpdateModelSpecCommand update = updateCommand();
+        ModelSpecView originalSeed = model(1, "a".repeat(64));
+        ModelSpecView completed = model(2, "b".repeat(64));
+        when(create.idempotencyKey()).thenReturn("definition-operation-1");
+        when(create.withIdempotencyKey(any())).thenReturn(namespacedCreate);
+        when(modelSpecs.create(eq("tenant"), eq("alice"), any())).thenReturn(new CreateResult(originalSeed, true));
+        when(modelSpecs.get("tenant", MODEL_ID)).thenReturn(completed);
+        when(modelSpecs.revision(eq("tenant"), any())).thenReturn(completed);
+        when(modelSpecCodec.toUpdatedView(eq(originalSeed), eq(update), eq(2), any()))
+            .thenReturn(model(2, "c".repeat(64)));
+
+        assertThatThrownBy(() -> service.saveDefinition("tenant", "alice", create, update))
+            .isInstanceOfSatisfying(ModelSpecException.class, failure ->
+                assertThat(failure.code()).isEqualTo("MODEL_DRAFT_OPERATION_IDEMPOTENCY_CONFLICT")
+            );
+        verify(modelSpecs, never()).updateDefinition(any(), any(), any(), any(), any());
+        verify(lifecycle, never()).saveImplementation(any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void definitionReplayReturnsOriginalDefinitionWithoutStartingLifecycle() {
+        CreateModelSpecCommand create = createCommand();
+        CreateModelSpecCommand namespacedCreate = mock(CreateModelSpecCommand.class);
+        UpdateModelSpecCommand update = updateCommand();
+        ModelSpecView originalSeed = model(1, "a".repeat(64));
+        ModelSpecView completed = model(2, "b".repeat(64));
+        when(create.idempotencyKey()).thenReturn("definition-operation-1");
+        when(create.withIdempotencyKey(any())).thenReturn(namespacedCreate);
+        when(modelSpecs.create(eq("tenant"), eq("alice"), any())).thenReturn(new CreateResult(originalSeed, true));
+        when(modelSpecs.get("tenant", MODEL_ID)).thenReturn(completed);
+        when(modelSpecs.revision(eq("tenant"), any())).thenReturn(completed);
+        when(modelSpecCodec.toUpdatedView(eq(originalSeed), eq(update), eq(2), any()))
+            .thenReturn(completed);
+
+        var result = service.saveDefinition("tenant", "alice", create, update);
+        assertThat(result.model()).isSameAs(completed);
+        assertThat(result.replayed()).isTrue();
+        assertThat(result.implementation()).isNull();
+        verify(modelSpecs, never()).updateDefinition(any(), any(), any(), any(), any());
+        verify(lifecycle, never()).saveImplementation(any(), any(), any(), any(), any(), any(), any(), any());
     }
 
     private static CreateModelSpecCommand createCommand() {

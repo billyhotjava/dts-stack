@@ -102,6 +102,40 @@ class ModelSpecContractTest {
     }
 
     @Test
+    void definitionValidationDefersOnlyTheMissingDerivedModelUpstream() {
+        for (ModelType type : List.of(ModelType.SUMMARY, ModelType.APPLICATION)) {
+            CreateModelSpecCommand model = validCommand(type, null);
+            UpdateModelSpecCommand update = new UpdateModelSpecCommand(
+                model.planId(), model.domainId(), model.modelType(), model.layer(), model.name(), model.description(),
+                model.implementationMode(), model.materialization(), model.businessActivityRef(), model.consumptionScenario(),
+                model.grain(), model.factShape(), model.timeSemantics(), model.fields(), model.sourceRefs(), List.of(),
+                model.dimensionRefs(), model.metricRefs(), model.standardBindings(), model.generationStrategy(), model.dimensionProfile()
+            );
+
+            assertThat(ModelSpecContract.validateUpdate(update)).extracting(ModelSpecContract.FieldIssue::code)
+                .contains("MODEL_SPEC_UPSTREAM_REQUIRED");
+            assertThat(ModelSpecContract.validateDefinitionUpdate(update)).isEmpty();
+        }
+
+        CreateModelSpecCommand summary = validCommand(ModelType.SUMMARY, null);
+        UpdateModelSpecCommand update = new UpdateModelSpecCommand(
+            summary.planId(), summary.domainId(), summary.modelType(), summary.layer(), summary.name(), summary.description(),
+            summary.implementationMode(), summary.materialization(), summary.businessActivityRef(), summary.consumptionScenario(),
+            summary.grain(), summary.factShape(), summary.timeSemantics(), summary.fields(), summary.sourceRefs(), List.of(),
+            summary.dimensionRefs(), summary.metricRefs(), summary.standardBindings(), summary.generationStrategy(), summary.dimensionProfile()
+        );
+
+        UpdateModelSpecCommand invalidFields = new UpdateModelSpecCommand(
+            update.planId(), update.domainId(), update.modelType(), update.layer(), update.name(), update.description(),
+            update.implementationMode(), update.materialization(), update.businessActivityRef(), update.consumptionScenario(),
+            update.grain(), update.factShape(), update.timeSemantics(), List.of(), update.sourceRefs(), update.dependsOn(),
+            update.dimensionRefs(), update.metricRefs(), update.standardBindings(), update.generationStrategy(), update.dimensionProfile()
+        );
+        assertThat(ModelSpecContract.validateDefinitionUpdate(invalidFields)).extracting(ModelSpecContract.FieldIssue::code)
+            .contains("MODEL_SPEC_FIELD_REQUIRED");
+    }
+
+    @Test
     void validateViewRequiresTheCreationPinForDimensions() {
         ModelSpecView pinned = view(validCommand(ModelType.DIMENSION, null));
 
