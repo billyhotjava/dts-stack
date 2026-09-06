@@ -130,8 +130,8 @@ class ModelDraftSaveApplicationServiceTest {
         when(modelSpecs.create("tenant", "alice", create)).thenReturn(new CreateResult(originalSeed, true));
         when(modelSpecs.get("tenant", MODEL_ID)).thenReturn(completed);
         when(modelSpecs.revision(eq("tenant"), any())).thenReturn(completed);
-        when(modelSpecCodec.toUpdatedView(eq(originalSeed), eq(update), eq(2), any()))
-            .thenReturn(model(2, "c".repeat(64)));
+        ModelSpecView conflicting = model(2, "c".repeat(64));
+        when(modelSpecCodec.toUpdatedView(eq(originalSeed), eq(update), eq(2), any())).thenReturn(conflicting);
 
         assertThatThrownBy(() -> service.save("tenant", "alice", create, update, mock(SaveImplementationCommand.class)))
             .isInstanceOfSatisfying(ModelSpecException.class, failure ->
@@ -194,8 +194,8 @@ class ModelDraftSaveApplicationServiceTest {
         when(modelSpecs.create(eq("tenant"), eq("alice"), any())).thenReturn(new CreateResult(originalSeed, true));
         when(modelSpecs.get("tenant", MODEL_ID)).thenReturn(completed);
         when(modelSpecs.revision(eq("tenant"), any())).thenReturn(completed);
-        when(modelSpecCodec.toUpdatedView(eq(originalSeed), eq(update), eq(2), any()))
-            .thenReturn(model(2, "c".repeat(64)));
+        ModelSpecView conflicting = model(2, "c".repeat(64));
+        when(modelSpecCodec.toUpdatedView(eq(originalSeed), eq(update), eq(2), any())).thenReturn(conflicting);
 
         assertThatThrownBy(() -> service.saveDefinition("tenant", "alice", create, update))
             .isInstanceOfSatisfying(ModelSpecException.class, failure ->

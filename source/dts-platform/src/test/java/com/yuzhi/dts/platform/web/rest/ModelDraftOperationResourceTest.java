@@ -154,7 +154,7 @@ class ModelDraftOperationResourceTest {
                 .content("{\"saveMode\":\"UNKNOWN\"}")
         )
             .andExpect(status().isUnprocessableEntity())
-            .andExpect(jsonPath("$.errorCode").value("MODEL_SPEC_REQUEST_INVALID"));
+            .andExpect(jsonPath("$.code").value("MODEL_SPEC_REQUEST_INVALID"));
 
         verify(createDecoder, never()).decode(any());
     }
@@ -168,6 +168,17 @@ class ModelDraftOperationResourceTest {
             .andExpect(status().isUnprocessableEntity())
             .andExpect(jsonPath("$.data[0].code").value("MODEL_SPEC_IDEMPOTENCY_KEY_RESERVED"));
         verify(service, never()).save(any(), any(), any(), any(), any());
+        verify(service, never()).saveDefinition(any(), any(), any(), any());
+    }
+
+    @Test
+    void rejectsImplementationInDefinitionModeBeforeDecoding() throws Exception {
+        mockMvc.perform(post("/api/modeling/model-specs/draft-operations")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"saveMode\":\"DEFINITION_ONLY\",\"implementation\":{}}"))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(jsonPath("$.data[0].code").value("MODEL_DRAFT_OPERATION_IMPLEMENTATION_FORBIDDEN"));
+        verify(createDecoder, never()).decode(any());
         verify(service, never()).saveDefinition(any(), any(), any(), any());
     }
 
