@@ -1,0 +1,68 @@
+{
+  "evidenceType": "sprint-104-blocked-relation-read-only",
+  "capturedAt": "2026-09-06T17:20:00+08:00",
+  "modelSpecId": "39c5e6b7-0b35-4728-8877-273f6418da17",
+  "candidate": {
+    "id": "fa36a14c-7079-4317-a541-a010d976b7e1",
+    "version": 4,
+    "status": "CANCELLED"
+  },
+  "releaseBuild": {
+    "pipelineRunId": "fc22a616-3baf-3d24-a869-07b90bf8cf31",
+    "attempt": 1,
+    "status": "BLOCKED",
+    "airflowDagId": "dts_release_build_postgres_primary",
+    "airflowRunId": "dts_rc_fa36a14c70794317a541a010d976b7e1_v2_a1",
+    "finishedAt": "2026-09-06T16:20:12.333078+08:00",
+    "errorCode": "MODEL_AIRFLOW_DAG_NOT_REGISTERED"
+  },
+  "physicalRelationObservation": {
+    "count": 0,
+    "conclusion": "No physical relation probe was recorded for this candidate/model run. The relation was not actually observed as absent or invalid."
+  },
+  "workbenchProjection": {
+    "historicBehavior": "The previous projection mapped a BLOCKED run with no observation to relation FAILED.",
+    "semanticCorrection": "A BLOCKED run without physical observation is unverified/UNKNOWN. A real observation that is unverified or absent remains FAILED.",
+    "sourceEvidence": "ReleaseCandidateWorkbenchEvidenceRepository.relationState"
+  },
+  "replacementMaterialization": {
+    "candidate": {
+      "id": "ba6c1b2b-a318-48d9-8fb9-298581348765",
+      "version": 3,
+      "status": "BUILT",
+      "environment": "test"
+    },
+    "releaseBuild": {
+      "pipelineRunId": "0a48a41b-018c-36d6-8596-6e8fd264e58f",
+      "attempt": 1,
+      "dispatchStatus": "COMPLETED",
+      "runStatus": "BUILT",
+      "airflowDagId": "dts_release_build_postgres_primary",
+      "airflowRunId": "dts_rc_ba6c1b2ba31848d98fb9298581348765_v2_a1",
+      "dbtInvocationId": "b47a34c7-8426-4e1d-9f26-afab7a7b7ead",
+      "startedAt": "2026-09-06T17:38:18.343470+08:00",
+      "finishedAt": "2026-09-06T17:38:30.816342+08:00",
+      "airflowTasks": {
+        "prepare_runtime": "success",
+        "dbt_build": "success",
+        "sync_manifest_and_probe": "success",
+        "finalize_run": "success"
+      }
+    },
+    "physicalRelation": {
+      "database": "biadmin",
+      "schema": "public",
+      "identifier": "dwd_s104_detail",
+      "exists": true,
+      "verified": true,
+      "actualType": "TABLE",
+      "columns": [
+        {"name": "project_id", "dataType": "text", "nullable": true, "ordinalPosition": 1},
+        {"name": "remark", "dataType": "text", "nullable": true, "ordinalPosition": 2}
+      ],
+      "rowCount": 3
+    },
+    "conclusion": "The replacement candidate progressed from BUILDING to BUILT. Airflow, dbt and physical relation verification all succeeded."
+  },
+  "readOnlyScope": "Evidence is based on targeted pipeline-run and physical-relation-observation queries. No candidate, run, relation, Airflow, or database state was changed."
+}

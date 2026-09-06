@@ -32,3 +32,7 @@
 - 目录：SYNC_FAILED / ANALYTICS_SEMANTIC_PUBLISH_HTTP_400。Analytics数据库注册表0行，语义发布请求dataSourceName=null，无法解析分析数据库，HTTP400。
 - 再次运行：已生成第二个OPERATIONAL_RUN `5850295c-7516-3899-bd2c-aea5726f3e2f`，QUEUED；绑定ACTIVE/MANUAL_ONLY且未paused。对应Airflow DagRun不存在，dispatch UNKNOWN、已2次恢复，持久化错误MODEL_OPERATIONAL_DISPATCH_RECOVERY_FAILED。不是第二次物化成功；底层HTTP/传输异常未记录，不能断言具体上游原因。
 - 上述读取没有做运行环境写入或强制重试。完整去敏证据见同目录 `model-e71715b7-first-materialization.json`。
+
+## 5e00e914f 旧A关系核验误报复验
+
+本轮实测原页面创建按钮可点击，纠正上文“取消候选入口disabled”的未充分核实结论。旧A的历史BLOCKED来自DAG未注册，物理观测为0；状态映射和历史标识已修复。通过现有页面创建当前r4新候选，17:38:30 BUILT/关系已核验，目标biadmin.public.dwd_s104_detail为TABLE、2列3行。详见[完整复验记录](blocked-relation-check.md)及[只读运行证据](blocked-relation-check.json)。

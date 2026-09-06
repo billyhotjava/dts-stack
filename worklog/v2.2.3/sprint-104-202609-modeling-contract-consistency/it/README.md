@@ -13,7 +13,7 @@
 | IT-04 | T04/T08 | 项目/月组合键，跨月合法/同月重复/键空值/交换顺序；执行真实 dbt tests | 完整组合唯一性正确，各必需键非空，无假首列唯一 | dbt专项PASS；模型端到端待验 |
 | IT-05 | T03/T08 | 主键度量已绑、属性未绑；三种覆盖策略；标准版本失效/服务不可用 | 必绑范围与证据检查一致，失效/未知有明确提示 | 未执行 |
 | IT-06 | T07/T08 | 遍历能力矩阵，尝试不支持的来源/加载/历史执行 | 页面与后端一致，物化前明确阻断，不伪装支持 | 未执行 |
-| IT-07 | T02–T08 | 两字段无时间明细、无键全量应用、无分组 COUNT/SUM，连续两次物化并查看质量/版本证据 | 不补造字段；执行行为遵循既有幂等/并发协议；结果绑定当前版本 | 新独立无时间明细首次物化/质量/发布登记PASS；再次运行及旧取消候选重新构建受阻 |
+| IT-07 | T02–T08 | 两字段无时间明细、无键全量应用、无分组 COUNT/SUM，连续两次物化并查看质量/版本证据 | 不补造字段；执行行为遵循既有幂等/并发协议；结果绑定当前版本 | 新独立无时间明细首次物化/质量/发布登记PASS；旧取消候选重新构建/关系核验PASS；已发布模型再次运行仍受阻 |
 
 ## 执行入口（实施时记录实际命令和退出码）
 
@@ -51,4 +51,4 @@ mvn -pl dts-platform -am -Dtest=ModelSpecContractTest,ModelSpecStageGateServiceT
 
 见 [T02 验证记录](evidence/T02-contract/verification.md)及[源码专项证据](evidence/source-test-summary-20260906.md)：源码契约40/40、部署目录前端92/92、后端99/99。IT-04 见 [dbt真实证据](evidence/IT-04/verification.md)；不能替代其他模型页面场景。正式交付构建使用部署目录的 builds/dts-build.sh / builds/dts-platform-webapp/Dockerfile，不把单独 pnpm build 等同于完成交付包。
 
-最新页面证据见 [新独立明细验收](evidence/current-environment/fresh-detail-acceptance.md)。旧草稿校验/提交修复已在2161b2cda真实页面通过；目录同步、再次运行、取消候选重新构建仍有未通过分支。
+最新页面证据见 [新独立明细验收](evidence/current-environment/fresh-detail-acceptance.md)。旧草稿校验/提交修复已在2161b2cda真实页面通过；旧取消候选重新构建已在5e00e914f页面通过，见[关系核验误报复验](evidence/current-environment/blocked-relation-check.md)；目录同步和已发布模型再次运行仍有未通过分支。
