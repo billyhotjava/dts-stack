@@ -28,3 +28,5 @@ Surefire 汇总为 **99 tests, 0 failures, 0 errors, 0 skipped**，Maven `BUILD 
 - 同提交正式双镜像/交付包构建退出0，日志 `/tmp/sprint104-final-build.log`。上述测试通过不替代修复版真实页面复测。
 
 - `66fcd49dd8c1db3484e2358eecf1a3ae5f08df34`：DbtImplementationDraftServiceSecurityTest 27/27（0 failure/error/skip）。此前649e02400两个新增用例的Mockito嵌套stubbing错误已修复。受限旧schema升级和用户内容保护均通过；测试日志 `/tmp/sprint104-legacy-test.log`。正式构建及运行复测另行记录。
+
+- `2161b2cda7b2782a0beed29158b9ca681c1a9d36`：补齐实际DBT_MANAGED+GENERATED+FROZEN源及实现pin约束，SecurityTest 27/27（包括错误pin/非GENERATED/用户内容保护），正式双镜像构建通过；日志 `/tmp/sprint104-frozen-test.log`、`/tmp/sprint104-frozen-build.log`。

@@ -11,7 +11,7 @@
 
 ## 发布前记录
 
-当前已部署修复：`66fcd49dd8c1db3484e2358eecf1a3ae5f08df34`，正式构建并部署完成。`bd0670acc` 为前一次验收基线。最终交付记录以实际镜像及校验和为准。
+当前已部署修复：`2161b2cda7b2782a0beed29158b9ca681c1a9d36`，正式构建并部署完成。`bd0670acc` 为前一次验收基线。最终交付记录以实际镜像及校验和为准。
 
 ## 执行顺序
 
@@ -49,3 +49,9 @@
 - platform镜像：`sha256:7b2a3f6f739c4e6459f9f1d6414b6d44e8f2546d8407db901121ca2239849846`；webapp同3fa版本内容，正式构建复用同一镜像ID。
 - Compose更新退出0，platform healthy、webapp running，其他容器未变化。完整记录见 `it/evidence/current-environment/release-66fcd49dd.json`。
 - 部署后浏览器控制两次超时，未完成旧模型校验/提交及两次物化复测，不将测试与部署结果作为页面通过证据。
+
+## 冻结源实际生命周期修复交付（2161b2cda）
+
+- SecurityTest27/27；正式双镜像构建、Compose部署均退出0，platform healthy，webapp镜像未变，其他容器无变化。
+- 包及镜像完整信息：`it/evidence/current-environment/release-2161b2cda.json`。
+- 旧草稿校验/提交及显示名保留已通过页面复验。新样例首次物化/质量/发布登记通过；再次运行与目录同步未通过，Sprint不可标记DONE。
