@@ -35,6 +35,7 @@ import type {
 	ModelImplementationView,
 } from "@/features/modeling/contracts/modelImplementationContract";
 import type { CanonicalModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { validateModelSpecUpdate } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { ConceptDimensionDraft, ModelDraft, ModelSpecDraft } from "./modelWorkbenchService";
 import {
 	applyModelDraftFieldPatch,
@@ -46,6 +47,7 @@ import {
 	modelDraftFromView,
 	modelDraftNeedsImplementationRecovery,
 	modelDraftToAuthoringSnapshot,
+	modelDraftToUpdateCommand,
 	modelSourceRefFromBinding,
 	prepareModelDraftForSave,
 	reconcileModelDraftSources,
@@ -501,6 +503,58 @@ describe("model workbench draft preparation", () => {
 });
 
 describe("model workbench draft validation", () => {
+	it("preserves TYPE2 history bindings when saving an existing dimension", () => {
+		const policy = { type: "TYPE2" as const, effectiveFromField: "valid_from", effectiveToField: "valid_to", currentFlagField: "is_current" };
+		const base = { ...canonicalFactView(), modelType: "DIMENSION" as const,
+			dimensionProfile: { hierarchies: [], scdPolicy: policy } };
+		const draft = modelDraftFromView(base) as ModelSpecDraft;
+		expect(modelDraftToUpdateCommand(draft).dimensionProfile?.scdPolicy).toEqual(policy);
+		draft.scdType = "TYPE1";
+		expect(modelDraftToUpdateCommand(draft).dimensionProfile?.scdPolicy).toEqual({ type: "TYPE1" });
+	});
+
+	it("allows full-refresh keyless outputs but keeps dimension and incremental keys required", () => {
+		for (const createKind of ["fact", "summary", "application"] as const) {
+			const draft = { ...modelDraftFromView(canonicalFactView()), createKind, loadStrategy: "FULL" as const,
+				fields: [{ name: "total_amount", displayName: "总金额", dataType: "DECIMAL", nullable: true, role: "MEASURE" as const }] } as ModelSpecDraft;
+			expect(validateModelDraftInput(draft).fields).toBeUndefined();
+			draft.loadStrategy = "INCREMENTAL";
+			expect(validateModelDraftInput(draft).fields).toBeTruthy();
+			draft.loadStrategy = "FULL";
+			draft.createKind = "dimension-table";
+			expect(validateModelDraftInput(draft).fields).toBeTruthy();
+		}
+	});
+
+	it("saves a global aggregation without inventing grouping or key fields", async () => {
+		const base = { ...canonicalFactView(), implementationMode: "DESIGNER_GENERATED" as const };
+		vi.mocked(updateModelSpec).mockResolvedValue(base);
+		const draft = modelDraftFromView(base) as ModelSpecDraft;
+		draft.factShape = "";
+		draft.timeSemanticsType = "";
+		draft.timeSemanticsFields = [];
+		draft.implementationMode = "DESIGNER_GENERATED";
+		draft.implementationInputMode = "PHYSICAL_ASSET";
+		draft.sourceRefs = [modelSourceRefFromBinding(physicalSource, 0)!];
+		draft.loadStrategy = "FULL";
+		draft.fields = [{ name: "total_amount", displayName: "总金额", dataType: "DECIMAL", nullable: true, role: "MEASURE" }];
+		draft.fieldMappings = [{ sourceField: "src_0.amount", targetField: "total_amount" }];
+		draft.groupBy = [];
+		draft.aggregations = [{ sourceField: "src_0.amount", targetField: "total_amount", function: "SUM", distinct: false }];
+		expect(validateModelDraftInput(draft).transformations).toBeUndefined();
+		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [] });
+		expect(saveModelImplementation).toHaveBeenCalledWith(expect.anything(), expect.anything(),
+			expect.objectContaining({ settings: expect.objectContaining({ aggregations: draft.aggregations }) }));
+	});
+
+	it("accepts a keyless full-refresh grain through the shared model contract", () => {
+		const draft = modelDraftFromView(canonicalFactView()) as ModelSpecDraft;
+		draft.fields = [{ name: "total_amount", displayName: "总金额", dataType: "DECIMAL", nullable: true, role: "MEASURE" }];
+		const codes = validateModelSpecUpdate(modelDraftToUpdateCommand(draft)).map((issue) => issue.code);
+		expect(codes).not.toContain("MODEL_SPEC_GRAIN_INVALID");
+		expect(codes).not.toContain("MODEL_SPEC_GRAIN_REQUIRED");
+	});
+
 	it("uses a field explicitly marked as TIME as the fact time field", () => {
 		const draft = validDimensionDraft() as ModelSpecDraft;
 		draft.createKind = "fact";

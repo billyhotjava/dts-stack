@@ -28,6 +28,20 @@ import org.junit.jupiter.api.Test;
 class ModelLifecycleContractTest {
 
     @Test
+    void acceptsGlobalAggregationWithOmittedOrEmptyGrouping() {
+        for (boolean includeEmptyGroup : List.of(false, true)) {
+            Map<String, Object> settings = new java.util.HashMap<>();
+            settings.put("aggregations", List.of(Map.of("targetField", "total_amount", "function", "SUM", "sourceField", "src_0.amount", "distinct", false)));
+            if (includeEmptyGroup) settings.put("groupBy", List.of());
+            SaveImplementationCommand command = new SaveImplementationCommand(InputMode.PHYSICAL_ASSET,
+                List.of(new PhysicalAssetInput(UUID.randomUUID(), "v1")),
+                List.of(new FieldMapping("src_0.amount", "total_amount")), settings,
+                ImplementationMode.DESIGNER_GENERATED, "table", "global-aggregate");
+            assertThat(command.settings()).containsKey("aggregations");
+        }
+    }
+
+    @Test
     void deliveryStatusAllowsDriftBeforeTerminalStatesAndRequiresReplacementCandidatesAfterward() {
         assertThat(DeliveryStatus.canTransition(DeliveryStatus.DRAFT, DeliveryStatus.BUILDING)).isTrue();
         assertThat(

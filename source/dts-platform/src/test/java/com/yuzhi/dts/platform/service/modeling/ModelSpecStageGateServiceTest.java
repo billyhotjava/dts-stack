@@ -36,6 +36,34 @@ class ModelSpecStageGateServiceTest {
     private static final UUID MODEL_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
 
     @Test
+    void fullRefreshOutputsMayHaveNoKeyButIncrementalOutputsStillRequireOne() {
+        for (ModelType type : List.of(ModelType.FACT, ModelType.SUMMARY, ModelType.APPLICATION)) {
+            ModelSpecView model = spy(view(type, null, null, null,
+                type == ModelType.FACT ? sources() : List.of(),
+                type == ModelType.FACT ? List.of() : List.of(new ModelRevisionRef(UUID.randomUUID(), 1)),
+                List.of(), type == ModelType.APPLICATION ? "dashboard" : null));
+            when(model.fields()).thenReturn(List.of(new ModelField("total_amount", "decimal", true, "source.amount", FieldRole.MEASURE, "INTERNAL")));
+            when(model.grain()).thenReturn(new Grain("one row for all input", List.of()));
+            when(model.standardBindings()).thenReturn(List.of());
+            when(model.implementationPolicy()).thenReturn(new ImplementationPolicy("total_amount", LoadStrategy.FULL, null, List.of()));
+            for (Stage stage : List.of(Stage.DRAFT_SAVE, Stage.DESIGNED, Stage.IMPLEMENTATION_READY)) {
+                assertThat(ModelSpecStageGateService.evaluate(model, stage, GateEvidence.currentFor(model)).blockers()).isEmpty();
+            }
+            when(model.implementationPolicy()).thenReturn(new ImplementationPolicy("total_amount", LoadStrategy.INCREMENTAL, null, List.of()));
+            assertThat(ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model)).blockers())
+                .extracting(ModelSpecStageGateService.GateBlocker::code).contains("MODEL_SPEC_GRAIN_REQUIRED");
+        }
+    }
+
+    @Test
+    void rawGrainAllowsAnExplicitEmptyKeyListButNotMalformedKeys() {
+        assertThat(ModelSpecContract.validateUpdateShape(java.util.Map.of("grain", java.util.Map.of("statement", "global total", "keys", List.of()))))
+            .extracting(FieldIssue::code).doesNotContain("MODEL_SPEC_GRAIN_INVALID");
+        assertThat(ModelSpecContract.validateUpdateShape(java.util.Map.of("grain", java.util.Map.of("statement", "global total", "keys", List.of("")))))
+            .extracting(FieldIssue::code).contains("MODEL_SPEC_GRAIN_INVALID");
+    }
+
+    @Test
     void separatesLegacyCompatibleDraftSaveFromDimensionImplementationRequirements() {
         ModelSpecView legacyCompatible = withDimensionDefinitionRef(dimension(null, List.of(), null), 1);
 

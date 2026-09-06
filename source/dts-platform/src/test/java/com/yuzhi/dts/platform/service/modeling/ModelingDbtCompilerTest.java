@@ -13,6 +13,32 @@ import org.junit.jupiter.api.Test;
 class ModelingDbtCompilerTest {
 
     @Test
+    void compilesGlobalSumWithoutGroupByOrInventedUniqueTestsAndRejectsKeylessIncremental() {
+        ModelingCompilerContract.CompilerModel model = new ModelingCompilerContract.CompilerModel(
+            "global-total", ModelingCompilerContract.Layer.DWS, ModelingCompilerContract.ModelType.SUMMARY,
+            ModelingCompilerContract.ImplementationMode.DESIGNER_GENERATED, "global_total",
+            new ModelingCompilerContract.Grain("one row for all input", List.of()), List.of(),
+            List.of(new ModelingCompilerContract.SourceRef("DBT_MODEL", "dwd_orders", ModelingCompilerContract.Layer.DWD)),
+            List.of(), List.of("total_amount"), 1);
+        for (String strategy : List.of("FULL", "INCREMENTAL")) {
+            ModelSpecCompilerProjection.ImplementationProjection projection = new ModelSpecCompilerProjection.ImplementationProjection(
+                model, "tenant-a", "a".repeat(64), 1, "b".repeat(64), "model.dts.global_total", InputMode.UPSTREAM_MODEL,
+                List.of(), List.of(new FieldMapping("src_0.amount", "total_amount")),
+                Map.of("targetPhysicalName", "global_total", "loadStrategy", strategy,
+                    "aggregations", List.of(Map.of("targetField", "total_amount", "function", "SUM", "sourceField", "src_0.amount", "distinct", false))),
+                "FULL".equals(strategy) ? "table" : "incremental", typedFields(model));
+            if ("FULL".equals(strategy)) {
+                ModelingDbtCompiler.CompiledArtifacts artifacts = ModelingDbtCompiler.compile(projection);
+                assertThat(artifacts.files().get("stg_global_total.sql")).contains("sum(src_0.amount) as total_amount").doesNotContain("group by");
+                assertThat(artifacts.files().get("global_total.yml")).doesNotContain("unique", "not_null");
+                assertThat(ModelingDbtCompiler.compile(model).files().get("global_total.tests.yml")).doesNotContain("unique");
+            } else {
+                assertThatThrownBy(() -> ModelingDbtCompiler.compile(projection)).hasMessageContaining("IMPLEMENTATION_INCREMENTAL_KEY_REQUIRED");
+            }
+        }
+    }
+
+    @Test
     void compilesPjmDwdModelIntoTraceableDbtArtifacts() {
         ModelingCompilerContract.CompilerModel model = PjmModelingFixture.projectNode().compilerModel();
 
