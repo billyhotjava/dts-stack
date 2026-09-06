@@ -25,7 +25,7 @@ class CatalogDatasetGovernanceSummaryTest {
     @Test
     void versionChangesTheSharedEtagUsedByPatchAndFullPut() {
         CatalogDataset dataset = dataset();
-        dataset.setVersion(1L);
+        org.springframework.test.util.ReflectionTestUtils.setField(dataset, "version", 1L);
         assertThat(CatalogDatasetResource.datasetEtag(dataset)).endsWith(":1\"");
     }
 

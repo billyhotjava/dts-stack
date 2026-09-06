@@ -75,7 +75,7 @@ class OperationPermissionMatrixIT {
         when(repository.saveAndFlush(existing)).thenReturn(existing);
 
         resource.updateGovernanceSummary(existing.getId(), "\"catalog-dataset:" + existing.getId() + ":0\"", java.util.Map.of("owner", "alice", "description", "new"));
-        existing.setVersion(1L); // represents the flush committed by the PATCH request
+        org.springframework.test.util.ReflectionTestUtils.setField(existing, "version", 1L); // represents the flush committed by the PATCH request
         CatalogDataset staleBody = new CatalogDataset(); staleBody.setName(existing.getName()); staleBody.setTrinoCatalog("finance"); staleBody.setOwner("before"); staleBody.setDescription("before");
 
         assertThatThrownBy(() -> resource.updateDataset(existing.getId(), "\"catalog-dataset:" + existing.getId() + ":0\"", staleBody))

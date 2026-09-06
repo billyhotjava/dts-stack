@@ -12,7 +12,7 @@ import { ModelDefinitionForm } from "./ModelDefinitionForm";
 import { ModelImplementationForm } from "./ModelImplementationForm";
 import { ModelWizardEditorActions } from "./ModelWizardEditorActions";
 import type { WorkbenchDialog } from "./ModelWorkbenchDialog";
-import { authoringOriginLabel, isConceptDimensionDraft } from "./modelWorkbenchPresentation";
+import { isConceptDimensionDraft } from "./modelWorkbenchPresentation";
 import { Button } from "./PrototypePrimitives";
 import type { ModelDraft, ModelDraftValidationErrors, ModelWorkbenchContext } from "./services/modelWorkbenchService";
 import "./modeling-workbench.css";
@@ -79,15 +79,12 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 		failureMessage,
 		editorAccessMessage,
 		onSave,
-		onValidateAuthoring,
-		onCommitAuthoring,
 		onForkPublished,
 		onOpenRawNode,
 		onConfirmDimension,
 		onRefresh,
 		onDialog,
 		onViewChange,
-		materializationRefreshKey,
 		view,
 	} = props;
 	const conceptDimension = isConceptDimensionDraft(draft);
@@ -163,19 +160,17 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 				{conceptDimension ? (
 					<ConceptDimensionForm {...props} draft={draft} />
 				) : props.definitionOnly ? (
-					<ModelDefinitionForm {...props} />
+					<ModelDefinitionForm {...props} draft={draft} />
 				) : (
 					<ModelImplementationForm {...props} draft={draft} />
 				)}
 			</fieldset>
 			{conceptDimension ? (
 				<div className="dmx-editor-toolbar">
-					<Button disabled={busy || effectiveReadOnly || !dirty} onClick={onSave} primary>
+					<Button disabled={!canMaintain || busy || effectiveReadOnly || !dirty} onClick={onSave} primary>
 						保存草稿
 					</Button>
-					<Button disabled={busy || effectiveReadOnly || dirty} onClick={onConfirmDimension}>
-						确认版本
-					</Button>
+					{draft.definitionBase?.status === "DRAFT" ? <Button disabled={!canMaintain || busy || effectiveReadOnly || dirty} onClick={onConfirmDimension}>确认定义</Button> : null}
 				</div>
 			) : (
 				<ModelWizardEditorActions

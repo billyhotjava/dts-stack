@@ -12,7 +12,11 @@ let root: Root;
 let container: HTMLDivElement;
 const dataset = (id: string, version: number, owner = "原负责人") => ({ id, version, owner, description: `${id}说明` });
 const flush = async () => act(async () => Promise.resolve());
-const input = (label: string) => container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+const input = (label: string) => {
+	const element = container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`);
+	if (!element) throw new Error(`input not found: ${label}`);
+	return element;
+};
 const setInput = async (element: HTMLInputElement, value: string) => {
 	await act(async () => {
 		Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(element, value);
@@ -22,6 +26,13 @@ const setInput = async (element: HTMLInputElement, value: string) => {
 };
 const render = async (datasetId: string) => {
 	await act(async () => root.render(<CatalogDatasetGovernanceSummaryEditor datasetId={datasetId} canMaintain />));
+};
+const button = (label: string) => {
+	const element = Array.from(container.querySelectorAll("button")).find(
+		(item) => (item.textContent || "").replace(/\s/g, "") === label,
+	) as HTMLButtonElement | undefined;
+	if (!element) throw new Error(`button not found: ${label}`);
+	return element;
 };
 
 beforeEach(() => {
@@ -43,7 +54,7 @@ describe("CatalogDatasetGovernanceSummaryEditor", () => {
 		await render("dataset-a");
 		await flush();
 		await setInput(input("资产负责人"), "新负责人");
-		await act(async () => (Array.from(container.querySelectorAll("button")).find((item) => item.textContent === "保存") as HTMLButtonElement).click());
+		await act(async () => button("保存").click());
 		expect(api.updateDatasetGovernanceSummary).toHaveBeenCalledWith(
 			"dataset-a",
 			{ owner: "新负责人", description: "dataset-a说明" },
@@ -57,7 +68,7 @@ describe("CatalogDatasetGovernanceSummaryEditor", () => {
 		await render("dataset-a");
 		await flush();
 		await setInput(input("资产负责人"), "仍要保留");
-		await act(async () => (Array.from(container.querySelectorAll("button")).find((item) => item.textContent === "保存") as HTMLButtonElement).click());
+		await act(async () => button("保存").click());
 		expect(input("资产负责人").value).toBe("仍要保留");
 		expect(container.textContent).toContain("资产已被其他操作修改");
 	});
@@ -65,10 +76,13 @@ describe("CatalogDatasetGovernanceSummaryEditor", () => {
 	it("does not let a late load for A overwrite the active B dataset", async () => {
 		let resolveA!: (value: unknown) => void;
 		let resolveB!: (value: unknown) => void;
-		api.getDataset.mockImplementation((id: string) => new Promise((resolve) => {
-			if (id === "dataset-a") resolveA = resolve;
-			else resolveB = resolve;
-		}));
+		api.getDataset.mockImplementation(
+			(id: string) =>
+				new Promise((resolve) => {
+					if (id === "dataset-a") resolveA = resolve;
+					else resolveB = resolve;
+				}),
+		);
 		await render("dataset-a");
 		await render("dataset-b");
 		await act(async () => resolveB(dataset("dataset-b", 3, "B负责人")));

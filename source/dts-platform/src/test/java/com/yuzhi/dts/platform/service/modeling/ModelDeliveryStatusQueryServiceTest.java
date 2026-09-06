@@ -197,6 +197,26 @@ class ModelDeliveryStatusQueryServiceTest {
     }
 
     @Test
+    void missingCatalogDatasetIdReturnsBlockedOutputInsteadOfThrowing() {
+        Fixture fixture = new Fixture();
+        CandidateView candidate = fixture.currentCandidate("prod", DeliveryStatus.BUILT, fixture.modelId, fixture.modelRevision, fixture.checksum, null);
+        WorkbenchView workspace = fixture.workspace(candidate, java.util.List.of());
+        when(fixture.candidates.workspace("tenant", "actor", fixture.planId)).thenReturn(workspace);
+        var asset = new CandidateQualityRuleContextService.QualityAssetView(fixture.modelId, fixture.modelRevision, null, "lake:db.missing", "db.missing", false, "QUALITY_DATASET_REGISTRATION_MISSING", java.util.List.of());
+        var qualityContext = new CandidateQualityRuleContextService.CandidateQualityContextView(fixture.candidateId, 3, DeliveryStatus.BUILT, java.util.List.of(asset), new CandidateQualityRuleContextService.QualityActionView("NONE", null), null, null);
+        when(fixture.qualityContexts.context(candidate, null)).thenReturn(qualityContext);
+
+        var catalog = fixture.service.get("tenant", "actor", fixture.modelId, null, null).steps().stream()
+            .filter(step -> step.key().equals("catalog")).findFirst().orElseThrow();
+
+        assertThat(catalog.state()).isEqualTo("NOT_STARTED");
+        assertThat(catalog.outputs()).singleElement().satisfies(output -> {
+            assertThat(output.resourceId()).isNull();
+            assertThat(output.reasonCode()).isEqualTo("QUALITY_DATASET_REGISTRATION_MISSING");
+        });
+    }
+
+    @Test
     void mapsQualityContextPrimaryOnlyWhenItsExactCandidateIsCurrent() {
         Fixture fixture = new Fixture();
         CandidateView candidate = fixture.currentCandidate("prod", DeliveryStatus.BUILT, fixture.modelId, fixture.modelRevision, fixture.checksum, null);

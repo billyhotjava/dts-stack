@@ -33,11 +33,11 @@ import {
 	startModelPublicationIntent,
 	submitReleaseCandidateReview,
 } from "@/api/modelSpecApi";
-import { type CompactColumns, CompactTable } from "@/components/table";
+import { CompactTable } from "@/components/table";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelAssetDeliveryResult } from "./ModelAssetDeliveryResult";
 import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
-import { Button, Modal, RequestState, Status } from "./PrototypePrimitives";
+import { Button, Modal, RequestState } from "./PrototypePrimitives";
 import { compileSelectedModels } from "./services/compileSelectedModels";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 import { useModelMaterializationColumns } from "./useModelMaterializationColumns";

@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -153,7 +154,22 @@ public class SemanticPublishResource {
         }
         AnalyticsDatabase database = registration.database();
         AnalyticsTable table = registration.table();
-        AnalyticsSemanticModel semanticModel = upsertSemanticModel(body, table, database.getId(), modelName, schemaName, tableName, description);
+        String resolvedModelName = firstNonBlank(modelName, tableName);
+        AnalyticsSemanticModel existingModel = semanticModelRepository.findByModelNameIgnoreCase(resolvedModelName).orElse(null);
+        if (existingModel != null && !matchesRegisteredTarget(existingModel, database, table, tenantId, platformDataSourceId)) {
+            semanticAuditService.logFailure(
+                "SEMANTIC_CONTRACT_PUBLISH",
+                "推送语义契约",
+                null,
+                request,
+                resolvedModelName,
+                Map.of("tenantId", tenantId, "platformDataSourceId", platformDataSourceId, "tableName", tableName),
+                "ANALYSIS_SEMANTIC_MODEL_BINDING_CONFLICT"
+            );
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Map.of("code", "ANALYSIS_SEMANTIC_MODEL_BINDING_CONFLICT"));
+        }
+        AnalyticsSemanticModel semanticModel = upsertSemanticModel(body, table, database.getId(), resolvedModelName, schemaName, tableName, description, existingModel);
 
         List<Map<String, Object>> metricsCreated = new ArrayList<>();
         List<Map<String, Object>> metricsUpdated = new ArrayList<>();
@@ -248,11 +264,11 @@ public class SemanticPublishResource {
         String modelName,
         String schemaName,
         String tableName,
-        String description
+        String description,
+        AnalyticsSemanticModel existingModel
     ) {
         String resolvedModelName = firstNonBlank(modelName, tableName);
-        AnalyticsSemanticModel semanticModel = semanticModelRepository.findByModelNameIgnoreCase(resolvedModelName)
-            .orElseGet(AnalyticsSemanticModel::new);
+        AnalyticsSemanticModel semanticModel = existingModel == null ? new AnalyticsSemanticModel() : existingModel;
         semanticModel.setDatabaseId(databaseId);
         semanticModel.setTableId(table.getId());
         semanticModel.setModelName(resolvedModelName);
@@ -286,6 +302,23 @@ public class SemanticPublishResource {
             semanticModel.setMetaJson("{}");
         }
         return semanticModelRepository.save(semanticModel);
+    }
+
+    /** A global legacy name can only be reused after the new target proves the exact same tenant/source/table binding. */
+    private static boolean matchesRegisteredTarget(
+        AnalyticsSemanticModel existingModel,
+        AnalyticsDatabase database,
+        AnalyticsTable table,
+        String tenantId,
+        String platformDataSourceId
+    ) {
+        if (!Objects.equals(existingModel.getDatabaseId(), database.getId()) || !Objects.equals(existingModel.getTableId(), table.getId())) {
+            return false;
+        }
+        if (!tenantId.equals(database.getTenantId()) || database.getPlatformDataSourceId() == null) {
+            return false;
+        }
+        return platformDataSourceId.equals(database.getPlatformDataSourceId().toString());
     }
 
     private Map<String, Object> processMetric(JsonNode metricNode, AnalyticsTable table, AnalyticsSemanticModel semanticModel) {

@@ -70,7 +70,6 @@ export function AdvancedDbtWorkspace({
 	onCreate,
 	onFilesChange,
 	onSave,
-	onValidate,
 	onCommit,
 	onSubmit,
 	onNext,
@@ -113,7 +112,6 @@ export function AdvancedDbtWorkspace({
 		...(validation?.implementationValidation?.diagnostics || []),
 		...(validation?.projectionIssues || []),
 	];
-	const validationBlocked = Boolean(validation?.modelIssues.length);
 	const diagnosticsFor = (path: string) => diagnostics.filter((item) => item.path === path);
 	const draftStatus = draft
 		? dbtDraftStatusLabel({

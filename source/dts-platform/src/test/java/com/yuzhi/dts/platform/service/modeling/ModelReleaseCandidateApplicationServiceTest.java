@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository;
+import com.yuzhi.dts.platform.service.ops.WarehousePlanOperationsReadPort;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
@@ -88,6 +89,9 @@ class ModelReleaseCandidateApplicationServiceTest {
     private ModelSpecPlanWriteAccessPort planAccess;
 
     @Mock
+    private WarehousePlanOperationsReadPort planReadAccess;
+
+    @Mock
     private ReleaseDutyResolver dutyResolver;
 
     @Mock
@@ -120,6 +124,7 @@ class ModelReleaseCandidateApplicationServiceTest {
             commands,
             materializationStarts,
             planAccess,
+            planReadAccess,
             dutyResolver,
             publicationAdmission,
             publicationCoordinator,
@@ -130,6 +135,7 @@ class ModelReleaseCandidateApplicationServiceTest {
             governanceQuality
         );
         lenient().when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        lenient().when(planReadAccess.listPlans()).thenReturn(List.of(new WarehousePlanOperationsReadPort.WarehousePlanProjection(PLAN_ID, "plan", null, "ACTIVE")));
         lenient()
             .when(dutyResolver.currentDuties())
             .thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER));
@@ -564,8 +570,8 @@ class ModelReleaseCandidateApplicationServiceTest {
     }
 
     @Test
-    void planAuthorizationFailsBeforeCandidateStateIsRead() {
-        when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(false);
+    void planReadAuthorizationFailsBeforeCandidateStateIsRead() {
+        when(planReadAccess.listPlans()).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.workspace(TENANT, ACTOR, PLAN_ID))
             .isInstanceOf(ModelReleaseCandidateException.class)
@@ -575,6 +581,35 @@ class ModelReleaseCandidateApplicationServiceTest {
             );
 
         verify(repository, never()).listForWorkbench(TENANT, PLAN_ID);
+    }
+
+    @Test
+    void readOnlyPlanCanReadEmptyWorkspaceWithoutWriteActions() {
+        when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(false);
+        when(dutyResolver.currentDuties()).thenReturn(Set.of());
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of());
+
+        var workspace = service.workspace(TENANT, ACTOR, PLAN_ID);
+
+        assertThat(workspace.candidate()).isNull();
+        assertThat(workspace.allowedActions()).isEmpty();
+        assertThat(service.canMaintainForRead(TENANT, ACTOR, PLAN_ID)).isFalse();
+        verify(repository).listForWorkbench(TENANT, PLAN_ID);
+    }
+
+    @Test
+    void readOnlyPlanCanReadPublishedCandidateWithoutWriteActions() {
+        when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(false);
+        when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER));
+        CandidateView published = candidate(DeliveryStatus.PUBLISHED, List.of(entry(DeliveryStatus.PUBLISHED)));
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(published));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(java.util.Optional.of(published));
+
+        var workspace = service.workspace(TENANT, ACTOR, PLAN_ID);
+
+        assertThat(workspace.candidate().id()).isEqualTo(CANDIDATE_ID);
+        assertThat(workspace.allowedActions()).isEmpty();
+        assertThat(service.allowedActionsForRead(TENANT, ACTOR, PLAN_ID, CANDIDATE_ID)).isEmpty();
     }
 
     @Test

@@ -255,7 +255,7 @@ export const buildQualityRulePayload = (draft: QualityRuleDraft, existing: Prese
 	return {
 		...preserved,
 		...draft,
-		bindings: draft.datasetId ? [{ datasetId: draft.datasetId, scopeType: "DATASET" }] : [],
+		bindings: draft.datasetId ? [{ datasetId: draft.datasetId, scopeType: "DATASET" as const }] : [],
 	};
 };
 

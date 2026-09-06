@@ -130,9 +130,11 @@ describe("prototype-owned data modeling frontend", () => {
 		const sourceInventory = read("./prototype/ModelSourceInventoryDialog.tsx");
 		const modelingLineCount = read("./prototype/ModelingWorkbenchPage.tsx").trimEnd().split("\n").length;
 
-		for (const label of ["数仓分层", "存储策略", "表名规则", "表中文名", "生命周期", "负责人", "质量门禁"])
+		for (const label of ["数仓分层", "表名规则", "表中文名", "生命周期", "负责人"])
 			expect(editor).toContain(label);
-		// Sprint-92：可视化与代码是同一创作草稿的两个视图，不再暴露第二套“高级工作区”心智。
+		expect(implementationExecution).toContain("存储策略");
+        expect(read("./prototype/ModelTargetQualityPanel.tsx")).toContain("目标表质量规则");
+        // Sprint-92：可视化与代码是同一创作草稿的两个视图，不再暴露第二套“高级工作区”心智。
 		expect(read("./prototype/AdvancedDbtWorkspace.tsx")).toContain("可视化与代码使用同一个模型草稿");
 		expect(implementationBinding).not.toContain("高级 dbt 工作区");
 		expect(editor).not.toContain("<span>业务分类</span>");
@@ -276,13 +278,14 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(advancedDbtWorkspace).toMatch(/EDIT_IMPLEMENTATION|canMaintain|来源只用于追溯/);
 		expect(`${modeling}\n${advancedDbtWorkspace}`).not.toMatch(/接管代码实现|当前由代码维护|转为可视化维护/);
 		expect(`${modelDialogs}\n${advancedDbtWorkspace}`).not.toMatch(/\/api\/etl\/dbt\/files|\/etl\/dbt\/files/);
-		expect(modelPublishDialog).toMatch(/getModelLifecycle|compileModelLifecycle/);
+		expect(read("./prototype/services/compileSelectedModels.ts")).toMatch(/getModelLifecycle|compileModelLifecycle/);
+        expect(modelPublishDialog).toContain("compileSelectedModels");
 		expect(modelPublishDialog).toMatch(
 			/createReleaseCandidate|lockReleaseCandidate|retryReleaseCandidate|rematerializeReleaseCandidate|publishReleaseCandidate/,
 		);
 		expect(modelPublishDialog).toMatch(/getPlanExecutionWorkspace|ModelReleaseWorkflowPanel/);
 		expect(modelSpecApi).toMatch(/ReleaseCandidateGovernanceQuality|governanceQuality/);
-		expect(modelPublishDialog).toMatch(/governanceQuality=\{workspace\?\.governanceQuality \|\| null\}/);
+		expect(modelPublishDialog).toMatch(/governanceQuality=\{candidateScopeMatches \? workspace\?\.governanceQuality \|\| null : null\}/);
 		expect(modelReleaseWorkflow).toMatch(/候选发布流程|工程验证|治理数据质量|发布登记|上线就绪|无需另行审批/);
 		expect(modelReleaseWorkflow).toMatch(/ruleVersionId|bindingId|runId|evidenceChecksum|violations/);
 		expect(modelReleaseWorkflow).toMatch(/PUBLISHED|ONLINE|latestRelation/);

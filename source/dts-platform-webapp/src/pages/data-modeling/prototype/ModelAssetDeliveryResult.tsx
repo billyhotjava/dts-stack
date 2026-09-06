@@ -15,29 +15,39 @@ export function ModelAssetDeliveryResult({ models }: { models: ModelSpecView[] }
 	const [statuses, setStatuses] = useState<Map<string, ModelDeliveryStatus>>(() => new Map());
 	const [loading, setLoading] = useState(true);
 	const [failed, setFailed] = useState(false);
-	const load = useCallback(async () => {
-		if (!models.length) {
+	const [reload, setReload] = useState(0);
+	const requestKey = `${modelIdsKey}#${reload}`;
+	useEffect(() => {
+		const ids = requestKey
+			.split("#")[0]
+			.split(",")
+			.map((item) => item.split(":")[0])
+			.filter(Boolean);
+		if (!ids.length) {
 			setStatuses(new Map());
 			setLoading(false);
 			return;
 		}
+		let active = true;
 		setLoading(true);
 		setFailed(false);
-		try {
-			const results = await Promise.all(
-				models.map(async (model) => [model.id, await getModelDeliveryStatus(model.id)] as const),
-			);
-			setStatuses(new Map(results));
-		} catch {
-			setStatuses(new Map());
-			setFailed(true);
-		} finally {
-			setLoading(false);
-		}
-	}, [modelIdsKey]);
-	useEffect(() => {
-		void load();
-	}, [load]);
+		void Promise.all(ids.map(async (id) => [id, await getModelDeliveryStatus(id)] as const))
+			.then((results) => {
+				if (active) setStatuses(new Map(results));
+			})
+			.catch(() => {
+				if (active) {
+					setStatuses(new Map());
+					setFailed(true);
+				}
+			})
+			.finally(() => {
+				if (active) setLoading(false);
+			});
+		return () => {
+			active = false;
+		};
+	}, [requestKey]);
 	const rows = models.map((model) => ({
 		id: model.id,
 		name: model.name,

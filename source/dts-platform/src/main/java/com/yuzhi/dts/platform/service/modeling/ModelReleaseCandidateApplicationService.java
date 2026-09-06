@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository;
+import com.yuzhi.dts.platform.service.ops.WarehousePlanOperationsReadPort;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAction;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryActorRole;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType;
@@ -56,6 +57,7 @@ public class ModelReleaseCandidateApplicationService {
     private final ModelReleaseCandidateService commands;
     private final ModelMaterializationStartService materializationStarts;
     private final ModelSpecPlanWriteAccessPort planAccess;
+    private final WarehousePlanOperationsReadPort planReadAccess;
     private final ReleaseDutyResolver dutyResolver;
     private final CandidatePublicationAdmissionService publicationAdmission;
     private final CandidatePublicationCoordinator publicationCoordinator;
@@ -70,6 +72,7 @@ public class ModelReleaseCandidateApplicationService {
         ModelReleaseCandidateService commands,
         ModelMaterializationStartService materializationStarts,
         ModelSpecPlanWriteAccessPort planAccess,
+        WarehousePlanOperationsReadPort planReadAccess,
         ReleaseDutyResolver dutyResolver,
         CandidatePublicationAdmissionService publicationAdmission,
         CandidatePublicationCoordinator publicationCoordinator,
@@ -83,6 +86,7 @@ public class ModelReleaseCandidateApplicationService {
         this.commands = commands;
         this.materializationStarts = materializationStarts;
         this.planAccess = planAccess;
+        this.planReadAccess = planReadAccess;
         this.dutyResolver = dutyResolver;
         this.publicationAdmission = publicationAdmission;
         this.publicationCoordinator = publicationCoordinator;
@@ -1557,12 +1561,19 @@ public class ModelReleaseCandidateApplicationService {
     }
 
     private Access authorizeRead(String tenantId, String actorId, UUID planId) {
-        return releaseAccess(tenantId, actorId, planId);
+        String tenant = requiredText(tenantId, "tenantId");
+        String actor = requiredText(actorId, "actorId");
+        if (planId == null || !planReadAccess.listPlans().stream().anyMatch(plan -> planId.equals(plan.id()))) {
+            throw planForbidden();
+        }
+        Set<DeliveryActorRole> duties = dutyResolver.currentDuties();
+        boolean canMaintain = planAccess.canMaintain(tenant, planId, actor);
+        return new Access(tenant, actor, planId, !canMaintain || duties == null ? Set.of() : Set.copyOf(duties));
     }
 
     private Access authorizeMaintainer(String tenantId, String actorId, UUID planId) {
-        Access access = releaseAccess(tenantId, actorId, planId);
-        if (!access.duties().contains(DeliveryActorRole.MODEL_MAINTAINER)) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        if (!planAccess.canMaintain(access.tenantId(), access.planId(), access.actorId()) || !access.duties().contains(DeliveryActorRole.MODEL_MAINTAINER)) {
             throw planForbidden();
         }
         return access;
@@ -1649,13 +1660,7 @@ public class ModelReleaseCandidateApplicationService {
     }
 
     private Access releaseAccess(String tenantId, String actorId, UUID planId) {
-        String tenant = requiredText(tenantId, "tenantId");
-        String actor = requiredText(actorId, "actorId");
-        Set<DeliveryActorRole> duties = dutyResolver.currentDuties();
-        if (planId == null || duties == null || duties.isEmpty()) {
-            throw planForbidden();
-        }
-        Access access = new Access(tenant, actor, planId, Set.copyOf(duties));
+        Access access = authorizeRead(tenantId, actorId, planId);
         if (!planAccess.canMaintain(access.tenantId(), access.planId(), access.actorId())) {
             throw planForbidden();
         }

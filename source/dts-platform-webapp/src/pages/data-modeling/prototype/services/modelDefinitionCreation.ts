@@ -1,7 +1,7 @@
 import api from "@/api/apiClient";
 import { saveModelDraftOperation } from "@/api/modelSpecApi";
 import { resolveDefaultModelingContextId } from "@/api/services/modelingImportContextService";
-import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import type { CanonicalModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { toModelSpecEtag, validateModelSpecUpdate } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { createCommandForDraft } from "./modelDraftCreateCommand";
 import {

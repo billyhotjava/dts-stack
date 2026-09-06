@@ -128,7 +128,8 @@ public class ModelDeliveryStatusQueryService {
             boolean registered = asset.configurationBlockerCode() == null || !"QUALITY_DATASET_REGISTRATION_MISSING".equals(asset.configurationBlockerCode());
             String state = registered ? "SUCCEEDED" : "NOT_STARTED";
             String code = registered ? null : asset.configurationBlockerCode();
-            return new OutputView(asset.datasetId().toString(), state, code, registered ? "资产已登记" : "资产尚未登记", current, null);
+            String resourceId = asset.datasetId() == null ? null : asset.datasetId().toString();
+            return new OutputView(resourceId, state, code, registered ? "资产已登记" : "资产尚未登记", current, null);
         }).toList();
         if (outputs.isEmpty() && published) {
             String datasetId = physicalAssetId(serving);

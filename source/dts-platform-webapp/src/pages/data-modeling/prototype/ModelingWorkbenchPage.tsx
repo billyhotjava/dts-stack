@@ -2,7 +2,7 @@ import { normalizeModelWizardStep } from "@/api/modelDeliveryStatusApi";
 import type { UnsavedEditorHandle } from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
 import { ModelWizardFrame } from "./ModelWizardFrame";
 import { ModelWorkbenchNavigationGuard } from "./ModelWorkbenchNavigationGuard";
-import { resolveRequestedModelSelection, shouldBlockWorkbenchNavigation } from "./modelingWorkbenchNavigation";
+import { resolveRequestedModelSelection } from "./modelingWorkbenchNavigation";
 import { useModelDeliveryStatus } from "./useModelDeliveryStatus";
 import { useModelDraftFields } from "./useModelDraftFields";
 
@@ -11,7 +11,7 @@ export { resolveRequestedModelSelection, shouldBlockWorkbenchNavigation } from "
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
-import type { ModelSpecField, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { useUserInfo } from "@/store/userStore";
 import { statusLabel } from "@/utils/customerDisplayLabels";
 import { dataModelingPath } from "../navigation";
