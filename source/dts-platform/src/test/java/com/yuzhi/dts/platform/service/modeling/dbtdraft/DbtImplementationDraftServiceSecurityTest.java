@@ -639,7 +639,11 @@ class DbtImplementationDraftServiceSecurityTest {
             new FileInput(currentSchemaPath, workingSchema),
             new FileInput(notesPath, "Keep this hand-authored note.\n")
         );
-        SourceBundleView source = sourceBundle("sprint83", frozenFiles);
+        SourceBundleView canonical = sourceBundle("sprint83", frozenFiles);
+        SourceBundleView source = new SourceBundleView(
+            canonical.projectKey(), canonical.projectChecksum(), canonical.bundleChecksum(),
+            SourceBundleKind.FROZEN_SOURCE_BUNDLE, true, canonical.files()
+        );
         var projection = objectMapper.createObjectNode();
         projection.putArray("managedPaths");
         DraftRow current = authoringRowWithSource(
@@ -653,7 +657,7 @@ class DbtImplementationDraftServiceSecurityTest {
         ModelSpecView model = model(3, MODEL_CHECKSUM);
         when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
-        ImplementationView implementation = designerImplementation();
+        ImplementationView implementation = dbtManagedGeneratedImplementation();
         when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(implementation, List.of(), List.of()));
         when(visualCompiler.compile(eq(TENANT), any(ModelSpecView.class), any(ImplementationView.class)))
             .thenReturn(List.of(new ArtifactWrite("SCHEMA", currentSchemaPath, "5".repeat(64), expectedSchema, "MODEL", "table", null)));
@@ -691,9 +695,14 @@ class DbtImplementationDraftServiceSecurityTest {
             new FileInput(previousSchemaPath, frozenSchema),
             new FileInput(currentSchemaPath, typeChangedSchema)
         );
+        SourceBundleView canonical = sourceBundle("sprint83", frozenFiles);
+        SourceBundleView frozen = new SourceBundleView(
+            canonical.projectKey(), canonical.projectChecksum(), canonical.bundleChecksum(),
+            SourceBundleKind.FROZEN_SOURCE_BUNDLE, true, canonical.files()
+        );
         DraftRow current = authoringRowWithSource(
             objectMapper.writeValueAsString(versionedVisualSnapshot()),
-            objectMapper.writeValueAsString(sourceBundle("sprint83", frozenFiles)),
+            objectMapper.writeValueAsString(frozen),
             "{\"managedPaths\":[]}"
         );
         when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(current));
@@ -702,7 +711,7 @@ class DbtImplementationDraftServiceSecurityTest {
         ModelSpecView model = model(3, MODEL_CHECKSUM);
         when(model.implementationMode()).thenReturn(ImplementationMode.DESIGNER_GENERATED);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
-        ImplementationView implementation = designerImplementation();
+        ImplementationView implementation = dbtManagedGeneratedImplementation();
         when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(implementation, List.of(), List.of()));
         when(visualCompiler.compile(eq(TENANT), any(ModelSpecView.class), any(ImplementationView.class)))
             .thenReturn(List.of(new ArtifactWrite("SCHEMA", currentSchemaPath, "6".repeat(64), "      - name: order_id\n        data_type: text\n", "MODEL", "table", null)));
@@ -719,6 +728,29 @@ class DbtImplementationDraftServiceSecurityTest {
             () -> service.saveAuthoring(TENANT, ACTOR, MODEL_ID, DRAFT_ID, "authoring-etag", versionedVisualSnapshot(), objectMapper.createObjectNode().putArray("managedPaths"), typeChanged, true)
         );
         assertThat(typeFailure.code()).isEqualTo("MODEL_AUTHORING_UNMANAGED_FILE_CHANGED");
+
+        List<FileInput> matchingLegacy = List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\n"),
+            new FileInput(previousSchemaPath, frozenSchema),
+            new FileInput(currentSchemaPath, frozenSchema)
+        );
+        when(repository.listFiles(DRAFT_ID)).thenReturn(matchingLegacy.stream().map(file -> file(file.path(), file.content())).toList());
+        ImplementationView physicalImplementation = dbtManagedPhysicalImplementation();
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(physicalImplementation, List.of(), List.of()));
+        DraftException nonGeneratedFailure = assertFailure(
+            ErrorKind.CONFLICT,
+            () -> service.saveAuthoring(TENANT, ACTOR, MODEL_ID, DRAFT_ID, "authoring-etag", versionedVisualSnapshot(), objectMapper.createObjectNode().putArray("managedPaths"), matchingLegacy, true)
+        );
+        assertThat(nonGeneratedFailure.code()).isEqualTo("MODEL_AUTHORING_UNMANAGED_FILE_CHANGED");
+
+        ImplementationView mismatched = dbtManagedGeneratedImplementation();
+        when(mismatched.implementationRevision()).thenReturn(3);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(mismatched, List.of(), List.of()));
+        DraftException pinFailure = assertFailure(
+            ErrorKind.CONFLICT,
+            () -> service.saveAuthoring(TENANT, ACTOR, MODEL_ID, DRAFT_ID, "authoring-etag", versionedVisualSnapshot(), objectMapper.createObjectNode().putArray("managedPaths"), matchingLegacy, true)
+        );
+        assertThat(pinFailure.code()).isEqualTo("DBT_DRAFT_BASE_IMPLEMENTATION_CONFLICT");
         verify(repository, never()).replaceAuthoringContent(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
@@ -1818,7 +1850,20 @@ class DbtImplementationDraftServiceSecurityTest {
         when(implementation.status()).thenReturn("ACTIVE");
         when(implementation.implementationRevision()).thenReturn(2);
         when(implementation.implementationChecksum()).thenReturn(IMPLEMENTATION_CHECKSUM);
+        when(implementation.inputMode()).thenReturn(InputMode.GENERATED);
         when(implementation.materialization()).thenReturn("table");
+        return implementation;
+    }
+
+    private ImplementationView dbtManagedGeneratedImplementation() {
+        ImplementationView implementation = designerImplementation();
+        when(implementation.ownership()).thenReturn(ImplementationMode.DBT_MANAGED);
+        return implementation;
+    }
+
+    private ImplementationView dbtManagedPhysicalImplementation() {
+        ImplementationView implementation = dbtManagedGeneratedImplementation();
+        when(implementation.inputMode()).thenReturn(InputMode.PHYSICAL_ASSET);
         return implementation;
     }
 

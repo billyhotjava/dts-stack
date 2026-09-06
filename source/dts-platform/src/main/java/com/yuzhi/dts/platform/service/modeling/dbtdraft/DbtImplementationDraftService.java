@@ -828,7 +828,7 @@ public class DbtImplementationDraftService {
             currentCompilerFiles
         );
         addMatchingFrozenCompilerFiles(paths, persisted, draft, currentCompilerFiles.keySet());
-        addMatchingLegacyFrozenSchemaFiles(paths, persisted, draft, currentCompilerFiles);
+        addMatchingLegacyFrozenSchemaFiles(paths, persisted, draft, currentImplementation, currentCompilerFiles);
         addMatchingHistoricalFrozenCompilerFiles(paths, persisted, draft, currentCompilerFiles.keySet());
 
         Map<String, String> savedCompilerFiles = authoringCompilerEvidence(
@@ -840,7 +840,7 @@ public class DbtImplementationDraftService {
         );
         addMatchingCompilerFiles(paths, persisted, savedCompilerFiles);
         addMatchingFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
-        addMatchingLegacyFrozenSchemaFiles(paths, persisted, draft, savedCompilerFiles);
+        addMatchingLegacyFrozenSchemaFiles(paths, persisted, draft, currentImplementation, savedCompilerFiles);
         addMatchingHistoricalFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
         return java.util.Set.copyOf(paths);
     }
@@ -975,11 +975,15 @@ public class DbtImplementationDraftService {
         java.util.Set<String> ownedPaths,
         Map<String, FileInput> persisted,
         DraftRow draft,
+        ImplementationView currentImplementation,
         Map<String, String> expected
     ) {
         if (draft.sourceBundleSnapshot() == null || expected.isEmpty()) return;
         SourceBundleView frozen = sourceBundleSnapshot(draft.sourceBundleSnapshot());
-        if (frozen.sourceKind() == SourceBundleKind.FROZEN_SOURCE_BUNDLE) return;
+        if (
+            frozen.sourceKind() == SourceBundleKind.FROZEN_SOURCE_BUNDLE &&
+            !trustedFrozenVisualSource(draft, currentImplementation)
+        ) return;
         Map<String, String> frozenFiles = new LinkedHashMap<>();
         frozen.files().forEach(file -> frozenFiles.put(file.path(), file.content()));
         expected.forEach((currentPath, expectedContent) -> {
@@ -995,6 +999,19 @@ public class DbtImplementationDraftService {
                 if (normalizedActual != null && normalizedActual.equals(expectedContent)) ownedPaths.add(currentPath);
             });
         });
+    }
+
+    private boolean trustedFrozenVisualSource(DraftRow draft, ImplementationView currentImplementation) {
+        if (
+            currentImplementation == null ||
+            (currentImplementation.ownership() != ImplementationMode.DBT_MANAGED &&
+                currentImplementation.ownership() != ImplementationMode.DESIGNER_GENERATED) ||
+            currentImplementation.inputMode() != InputMode.GENERATED ||
+            !Objects.equals(draft.baseImplementationRevision(), currentImplementation.implementationRevision()) ||
+            !Objects.equals(draft.baseImplementationChecksum(), currentImplementation.implementationChecksum())
+        ) return false;
+        ModelAuthoringSnapshotDecoder.DecodeResult decoded = snapshotDecoder.decode(jsonNode(draft.modelSpecSnapshot()));
+        return decoded.valid() && decoded.visualImplementation() != null;
     }
 
     private static boolean isVersionedSchemaPath(String path) {
