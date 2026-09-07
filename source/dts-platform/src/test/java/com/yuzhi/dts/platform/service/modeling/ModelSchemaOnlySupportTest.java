@@ -12,6 +12,16 @@ import org.junit.jupiter.api.Test;
 
 class ModelSchemaOnlySupportTest {
     @Test
+    void generatedStructureFilesPassTheRealAuthoringStaticValidator() {
+        var artifacts = ModelingDbtCompiler.compile(projection("SOURCE", false));
+        Map<String, String> files = new java.util.LinkedHashMap<>();
+        files.put("dbt_project.yml", "name: dts\nversion: 1.0\nmodel-paths: [models]\n");
+        artifacts.files().forEach((name, content) -> files.put("models/" + name, content));
+        var validated = new com.yuzhi.dts.platform.service.modeling.imports.converter.AdvancedDbtDraftStaticValidator().validate(files);
+        assertThat(validated.nodes()).isNotEmpty();
+    }
+
+    @Test
     void supportsExplicitApiRawPayloadColumnsWithoutOpeningArbitrarySqlTypes() {
         var projection = org.mockito.Mockito.spy(projection("SOURCE", false));
         org.mockito.Mockito.when(projection.typedFields()).thenReturn(List.of(

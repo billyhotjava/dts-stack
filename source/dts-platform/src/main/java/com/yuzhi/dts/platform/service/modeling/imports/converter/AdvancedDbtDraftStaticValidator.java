@@ -243,7 +243,7 @@ public class AdvancedDbtDraftStaticValidator {
     /** Complete allowlist: comments plus literal ref/source/config expressions; every statement is rejected. */
     private static final class JinjaAllowlist {
 
-        private static final Set<String> MATERIALIZATIONS = Set.of("table", "view", "incremental", "ephemeral");
+        private static final Set<String> MATERIALIZATIONS = Set.of("table", "view", "incremental", "ephemeral", "dts_schema_only");
 
         private JinjaAllowlist() {}
 
@@ -337,6 +337,7 @@ public class AdvancedDbtDraftStaticValidator {
                 skipWhitespace();
                 if (peek(')')) unsupported(path, "empty config expression");
                 Set<String> keys = new HashSet<>();
+                String materialization = null;
                 while (true) {
                     String key = identifier();
                     if (!keys.add(key)) unsupported(path, "duplicate config key");
@@ -345,7 +346,12 @@ public class AdvancedDbtDraftStaticValidator {
                     skipWhitespace();
                     if ("materialized".equals(key)) {
                         String value = stringLiteral();
+                        materialization = value;
                         if (!MATERIALIZATIONS.contains(value)) unsupported(path, "unsupported materialization");
+                    } else if ("dts_columns".equals(key)) {
+                        schemaColumns();
+                    } else if ("dts_primary_keys".equals(key)) {
+                        stringList();
                     } else if ("tags".equals(key)) {
                         stringList();
                     } else if ("alias".equals(key)) {
@@ -359,11 +365,59 @@ public class AdvancedDbtDraftStaticValidator {
                     }
                     skipWhitespace();
                     if (peek(')')) {
+                        boolean schema = "dts_schema_only".equals(materialization);
+                        if (schema != keys.contains("dts_columns") || schema != keys.contains("dts_primary_keys")) {
+                            unsupported(path, "structure config requires the registered schema materialization");
+                        }
                         expect(')');
                         return;
                     }
                     expect(',');
                     skipWhitespace();
+                }
+            }
+
+            private void schemaColumns() {
+                expect('[');
+                Set<String> names = new HashSet<>();
+                while (true) {
+                    skipWhitespace();
+                    expect('{');
+                    Set<String> keys = new HashSet<>();
+                    while (true) {
+                        skipWhitespace();
+                        String key = stringLiteral();
+                        if (!keys.add(key)) unsupported(path, "duplicate structure column key");
+                        skipWhitespace();
+                        expect(':');
+                        skipWhitespace();
+                        switch (key) {
+                            case "name" -> {
+                                String name = stringLiteral();
+                                if (!name.matches("[A-Za-z_][A-Za-z0-9_]{0,62}") || !names.add(name)) unsupported(path, "invalid structure column name");
+                            }
+                            case "data_type" -> {
+                                String type = stringLiteral();
+                                try {
+                                    String canonical = com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.requirePhysicalColumnType(type);
+                                    if (!canonical.equals(type)) unsupported(path, "noncanonical structure column type");
+                                } catch (IllegalArgumentException invalid) { unsupported(path, "unsupported structure column type"); }
+                            }
+                            case "nullable" -> {
+                                String value = identifier();
+                                if (!"True".equals(value) && !"False".equals(value)) unsupported(path, "nonliteral structure nullability");
+                            }
+                            default -> unsupported(path, "unknown structure column key");
+                        }
+                        skipWhitespace();
+                        if (peek('}')) { expect('}'); break; }
+                        expect(',');
+                    }
+                    if (!keys.equals(Set.of("name", "data_type", "nullable"))) unsupported(path, "incomplete structure column");
+                    if (names.size() > 1000) unsupported(path, "too many structure columns");
+                    skipWhitespace();
+                    if (peek(']')) { expect(']'); return; }
+                    expect(',');
                 }
             }
 

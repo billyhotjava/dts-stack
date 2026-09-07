@@ -37,6 +37,10 @@ public final class ModelSchemaOnlySupport {
             (!settings.containsKey("partitionFields") || settings.get("partitionFields") instanceof List<?> partitions && partitions.isEmpty());
     }
 
+    public static String requirePhysicalColumnType(String value) {
+        return ModelFieldPhysicalTypeContract.canonicalPostgresType(value);
+    }
+
     public static String columnConfig(ModelSpecCompilerProjection.ImplementationProjection projection) {
         if (!validSettings(projection.materialization(), projection.settings()) || !projection.fieldMappings().isEmpty() ||
             !(projection.inputs().getFirst() instanceof GeneratedInput input) || !input.config().isEmpty()) {

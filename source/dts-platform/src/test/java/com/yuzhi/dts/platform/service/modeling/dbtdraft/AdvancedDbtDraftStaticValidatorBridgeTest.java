@@ -17,6 +17,23 @@ class AdvancedDbtDraftStaticValidatorBridgeTest {
     private final AdvancedDbtDraftStaticValidator validator = new AdvancedDbtDraftStaticValidator();
 
     @Test
+    void acceptsOnlyLiteralDeclaredStructureForTheRegisteredMaterialization() {
+        String config = "{{ config(materialized='dts_schema_only', dts_columns=[{'name':'payload','data_type':'jsonb','nullable':True}], dts_primary_keys=[]) }}";
+        Map<String, String> files = Map.of("dbt_project.yml", "name: dts\nversion: 1.0\nmodel-paths: [models]\n", "models/source.sql", config + "\nselect null::jsonb as payload where false");
+        assertThat(validator.validate(files).nodes()).hasSize(1);
+        for (String invalid : new String[] {
+            config.replace("'jsonb'", "'jsonb); drop table assets; --'"),
+            config.replace("True", "env_var('NULLABLE')"),
+            config.replace("dts_schema_only", "table"),
+            config.replace("'payload'", "'invalid-name'"),
+            config.replace("'nullable':True", "'hook':'delete from assets'")
+        }) {
+            assertThatThrownBy(() -> validator.validate(Map.of("dbt_project.yml", files.get("dbt_project.yml"), "models/source.sql", invalid + "\nselect 1")))
+                .isInstanceOf(AdvancedDbtDraftStaticValidator.StaticValidationException.class);
+        }
+    }
+
+    @Test
     void validatesAnIsolatedDraftThroughTheExistingSourceProjectAdapterWithoutExecution() {
         Map<String, String> files = new LinkedHashMap<>();
         files.put("dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n");
