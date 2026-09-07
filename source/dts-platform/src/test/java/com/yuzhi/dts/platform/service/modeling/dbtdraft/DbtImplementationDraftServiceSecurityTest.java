@@ -1703,6 +1703,35 @@ class DbtImplementationDraftServiceSecurityTest {
             .hasMessage("The owning implementation pin is unavailable");
     }
 
+    @Test
+    void replacesOnlyUneditedCanonicalInitializationSqlWhenCompiledSqlIsAvailable() throws Exception {
+        String initialPath = "models/orders.sql";
+        String compiledPath = "models/dwd/orders/v3/i1/orders.sql";
+        String placeholder = "select 1 as _dts_placeholder where 1 = 0\n";
+        SourceBundleView canonical = sourceBundle("sprint83", List.of(new FileInput(initialPath, placeholder)));
+        for (SourceBundleKind kind : SourceBundleKind.values()) {
+            DraftRow draft = org.mockito.Mockito.mock(DraftRow.class);
+            when(draft.sourceBundleSnapshot()).thenReturn(objectMapper.writeValueAsString(new SourceBundleView(
+                canonical.projectKey(), canonical.projectChecksum(), canonical.bundleChecksum(), kind, false, canonical.files()
+            )));
+            java.util.Set<String> owned = new java.util.LinkedHashSet<>();
+            Map<String, FileInput> working = Map.of(initialPath, new FileInput(initialPath, placeholder));
+            Map<String, String> replacements = Map.of(compiledPath, "select order_id from orders\n");
+            ReflectionTestUtils.invokeMethod(service, "addMatchingInitializationFiles", owned, working, draft, replacements);
+            if (kind == SourceBundleKind.CANONICAL_INITIALIZATION) {
+                assertThat(owned).containsExactly(initialPath);
+            } else {
+                assertThat(owned).isEmpty();
+            }
+            owned.clear();
+            ReflectionTestUtils.invokeMethod(service, "addMatchingInitializationFiles", owned,
+                Map.of(initialPath, new FileInput(initialPath, "select hand_written_rule from orders\n")), draft, replacements);
+            assertThat(owned).isEmpty();
+            ReflectionTestUtils.invokeMethod(service, "addMatchingInitializationFiles", owned, working, draft, Map.of());
+            assertThat(owned).isEmpty();
+        }
+    }
+
     private ModelSpecView model(int revision, String checksum) {
         ModelSpecView model = org.mockito.Mockito.mock(ModelSpecView.class);
         when(model.planId()).thenReturn(PLAN_ID);

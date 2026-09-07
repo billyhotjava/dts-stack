@@ -782,11 +782,16 @@ public class DbtImplementationDraftService {
         );
 
         java.util.Set<String> managedPaths = managedPaths(draft, projectionSummary);
+        java.util.Set<String> initializationPaths = new java.util.LinkedHashSet<>();
+        Map<String, FileInput> submittedByPath = new LinkedHashMap<>();
+        submittedFiles.forEach(file -> submittedByPath.put(file.path(), file));
+        addMatchingInitializationFiles(initializationPaths, submittedByPath, draft, assembled);
         LinkedHashMap<String, String> merged = new LinkedHashMap<>();
         submittedFiles.forEach(file -> merged.put(file.path(), file.content()));
         merged.remove("dbt_project.yml");
         managedPaths.forEach(merged::remove);
         compilerOwnedPaths.forEach(merged::remove);
+        initializationPaths.forEach(merged::remove);
         for (Map.Entry<String, String> generatedFile : assembled.entrySet()) {
             String path = generatedFile.getKey();
             if (
@@ -1291,6 +1296,12 @@ public class DbtImplementationDraftService {
             );
             java.util.Set<String> historical = new java.util.LinkedHashSet<>();
             addMatchingHistoricalFrozenCompilerFiles(historical, persisted, draft, expected.keySet());
+            Map<String, String> presentReplacements = new LinkedHashMap<>();
+            expected.forEach((path, content) -> {
+                FileInput actual = persisted.get(path);
+                if (actual != null && Objects.equals(actual.content(), content)) presentReplacements.put(path, content);
+            });
+            addMatchingInitializationFiles(historical, persisted, draft, presentReplacements);
             if (historical.isEmpty()) return new ValidationDraftContent(draft, files);
             List<FileInput> retained = DbtImplementationDraftContract.normalizeFiles(
                 files
@@ -1316,6 +1327,26 @@ public class DbtImplementationDraftService {
             throw failure;
         } catch (RuntimeException ignored) {
             return new ValidationDraftContent(draft, files);
+        }
+    }
+
+    /** Only immutable, unedited initialization SQL can be superseded by visual compiler output. */
+    private void addMatchingInitializationFiles(
+        java.util.Set<String> ownedPaths,
+        Map<String, FileInput> working,
+        DraftRow draft,
+        Map<String, String> replacements
+    ) {
+        if (draft.sourceBundleSnapshot() == null || replacements.isEmpty()) return;
+        SourceBundleView frozen = sourceBundleSnapshot(draft.sourceBundleSnapshot());
+        if (frozen.sourceKind() != SourceBundleKind.CANONICAL_INITIALIZATION) return;
+        boolean hasCompiledSql = replacements.keySet().stream()
+            .anyMatch(path -> path.endsWith(".sql") && compilerArtifactSignature(path) != null);
+        if (!hasCompiledSql) return;
+        for (BundleFileView file : frozen.files()) {
+            if (!file.path().matches("models/[a-z][a-z0-9_]{0,62}\\.sql") || replacements.containsKey(file.path())) continue;
+            FileInput actual = working.get(file.path());
+            if (actual != null && Objects.equals(actual.content(), file.content())) ownedPaths.add(file.path());
         }
     }
 
