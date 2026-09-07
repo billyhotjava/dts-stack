@@ -235,6 +235,12 @@ public class ModelReleaseCandidateService {
         );
     }
 
+    @Transactional
+    public CommandResult createSchemaOnlyIntent(String tenantId, String actorId, CreateCandidateCommand command) {
+        if (command == null || command.entries().size() != 1) throw invalid("Structure candidate requires one model");
+        return createWithOrigin(tenantId, actorId, command, CandidateOrigin.SCHEMA_ONLY_INTENT, AUDIT_CREATE);
+    }
+
     private CommandResult createWithOrigin(
         String tenantId,
         String actorId,
@@ -274,6 +280,14 @@ public class ModelReleaseCandidateService {
             );
         }
         repository.lockPlanForCandidate(tenant, command.planId());
+        repository.listForWorkbench(tenant, command.planId()).stream()
+            .filter(existing -> ModelCandidateScopePolicy.conflicts(existing, origin, command.environment(),
+                command.entries().stream().map(ScopeEntryCommand::modelSpecId).toList()))
+            .findFirst().ifPresent(existing -> {
+                throw new ModelReleaseCandidateException("MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS",
+                    "An active candidate already reserves the requested scope", Kind.CONFLICT,
+                    Map.of("candidateId", existing.id(), "planId", command.planId()));
+            });
         Map<UUID, CurrentModelReference> currentReferences = resolveCurrentScope(
             tenant,
             command.planId(),

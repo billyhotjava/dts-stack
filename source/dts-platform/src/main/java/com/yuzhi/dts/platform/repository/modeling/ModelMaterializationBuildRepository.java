@@ -1764,6 +1764,17 @@ public class ModelMaterializationBuildRepository
                 Map.of("modelSpecId", row.modelSpecId())
             );
         }
+        if (candidate.origin() == com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateOrigin.SCHEMA_ONLY_INTENT) {
+            JsonNode inputs = json(row.inputsJson(), "inputs", row.modelSpecId());
+            JsonNode input = inputs.isArray() && inputs.size() == 1 ? inputs.get(0) : null;
+            boolean schema = "GENERATED".equals(row.inputMode()) && input != null &&
+                ("SCHEMA_ONLY".equals(input.path("generatorType").asText()) ||
+                    ("DBT_MANAGED".equals(row.ownership()) && "DBT".equals(input.path("generatorType").asText()) &&
+                        "SCHEMA_ONLY".equals(input.path("config").path("buildMode").asText())));
+            if (!schema) throw failure("MODEL_BUILD_MODE_MISMATCH",
+                "Structure candidate requires the pinned schema-only implementation", Kind.CONFLICT,
+                Map.of("modelSpecId", row.modelSpecId()));
+        }
         JsonNode settings = json(row.settingsJson(), "settings", row.modelSpecId());
         String targetIdentifier = resolveTargetIdentifier(row, settings);
         if (!IDENTIFIER.matcher(targetIdentifier).matches()) {
@@ -2031,7 +2042,28 @@ public class ModelMaterializationBuildRepository
         }
     }
 
+    private void requireTargetUnclaimed(CandidateView candidate, PreparedEntry entry) {
+        String targetKey = executionTarget().executionTargetKey();
+        // Cross-plan writers serialize on the physical target; the lock is released on transaction end.
+        jdbcTemplate.query("select pg_advisory_xact_lock(hashtextextended(?, 0))",
+            result -> {}, targetKey + ":" + entry.targetIdentifier());
+        Integer conflicts = jdbcTemplate.queryForObject("""
+            select count(*) from modeling_model_release_candidate c
+            join modeling_model_release_candidate_entry e on e.tenant_id = c.tenant_id and e.candidate_id = c.id
+            where c.execution_target_key = ? and e.target_identifier = ?
+              and e.id <> ? and e.active_claim_key is not null
+              and c.status not in ('REJECTED','ROLLED_BACK','STALE','CANCELLED','PUBLISHED')
+              and (c.origin = 'SCHEMA_ONLY_INTENT' or ? = 'SCHEMA_ONLY_INTENT')
+            """, Integer.class, targetKey, entry.targetIdentifier(), entry.row().entryId(), candidate.origin().name());
+        if (conflicts != null && conflicts > 0) {
+            throw failure("MODEL_MATERIALIZATION_TARGET_CLAIM_CONFLICT",
+                "The target table is reserved by another active model build", Kind.CONFLICT,
+                Map.of("candidateId", candidate.id(), "modelSpecId", entry.row().modelSpecId()));
+        }
+    }
+
     private void persistEntrySnapshot(CandidateView candidate, PreparedEntry entry) {
+        requireTargetUnclaimed(candidate, entry);
         BuildEntryRow row = entry.row();
         int updated = jdbcTemplate.update(
             """

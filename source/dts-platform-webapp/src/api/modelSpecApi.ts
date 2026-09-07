@@ -718,7 +718,7 @@ export type ReleaseCandidate = {
 	lastModifiedBy: string;
 	lastModifiedAt: string;
 	entries: ReleaseCandidateEntry[];
-	origin: "SINGLE_MODEL_INTENT" | "BATCH_WORKBENCH";
+	origin: "SINGLE_MODEL_INTENT" | "SCHEMA_ONLY_INTENT" | "BATCH_WORKBENCH";
 	executionTargetKey?: string | null;
 	adapter?: string | null;
 	profileKey?: string | null;

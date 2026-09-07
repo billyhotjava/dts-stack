@@ -100,7 +100,8 @@ public class ModelReleaseCandidateApplicationService {
     @Transactional(readOnly = true)
     public WorkbenchView workspace(String tenantId, String actorId, UUID planId) {
         Access access = authorizeRead(tenantId, actorId, planId);
-        List<CandidateView> candidates = repository.listForWorkbench(access.tenantId(), access.planId());
+        List<CandidateView> candidates = repository.listForWorkbench(access.tenantId(), access.planId()).stream()
+            .filter(candidate -> candidate.origin() != ModelReleaseCandidateContract.CandidateOrigin.SCHEMA_ONLY_INTENT).toList();
         if (candidates.size() > 1 && isActive(candidates.get(0)) && isActive(candidates.get(1))) {
             throw new ModelReleaseCandidateException(
                 "MODEL_RELEASE_CANDIDATE_CURRENT_AMBIGUOUS",
@@ -272,7 +273,9 @@ public class ModelReleaseCandidateApplicationService {
         CandidateView current = repository
             .listForWorkbench(access.tenantId(), access.planId())
             .stream()
-            .filter(ModelReleaseCandidateApplicationService::isActive)
+            .filter(candidate -> ModelCandidateScopePolicy.conflicts(candidate,
+                ModelReleaseCandidateContract.CandidateOrigin.BATCH_WORKBENCH, command.environment(),
+                command.entries().stream().map(ModelReleaseCandidateContract.ScopeEntryCommand::modelSpecId).toList()))
             .findFirst()
             .orElse(null);
         if (current != null) {

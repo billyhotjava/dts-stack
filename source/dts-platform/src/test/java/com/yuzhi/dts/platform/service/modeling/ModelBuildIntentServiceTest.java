@@ -86,6 +86,37 @@ class ModelBuildIntentServiceTest {
     }
 
     @Test
+    void buildsSchemaOnlyAlongsideAnUnrelatedBuiltBatchAndReusesItsOwnCandidate() {
+        ModelSpecView current = model(ModelStatus.READY_TO_PUBLISH);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(current);
+        var implementation = org.mockito.Mockito.mock(ModelLifecycleContract.ImplementationView.class);
+        when(implementation.inputMode()).thenReturn(ModelLifecycleContract.InputMode.GENERATED);
+        when(implementation.inputs()).thenReturn(List.of(new ModelLifecycleContract.GeneratedInput("SCHEMA_ONLY", java.util.Map.of())));
+        when(implementations.findImplementation(TENANT, MODEL_ID)).thenReturn(java.util.Optional.of(implementation));
+        when(implementations.lockImplementation(TENANT, MODEL_ID, implementation)).thenReturn(true);
+        var batch = org.mockito.Mockito.mock(CandidateView.class);
+        var other = org.mockito.Mockito.mock(EntryView.class);
+        when(batch.status()).thenReturn(DeliveryStatus.BUILT);
+        when(batch.environment()).thenReturn("DEV");
+        when(batch.entries()).thenReturn(List.of(other));
+        when(other.modelSpecId()).thenReturn(UUID.randomUUID());
+        when(candidates.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(batch));
+        CandidateView draft = candidate(DeliveryStatus.DRAFT, CandidateOrigin.SCHEMA_ONLY_INTENT);
+        CandidateView building = candidate(DeliveryStatus.BUILDING, CandidateOrigin.SCHEMA_ONLY_INTENT);
+        when(candidateCommands.createSchemaOnlyIntent(eq(TENANT), eq(ACTOR), any()))
+            .thenReturn(new CommandResult(draft, false, List.of()));
+        when(materializationStarts.startWithBuild(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), eq(1), any(), any()))
+            .thenReturn(new StartResult(new CommandResult(building, false, List.of()), group()));
+        var command = new ModelBuildIntentService.BuildIntentCommand(PLAN_ID, "DEV", "schema-independent", "SCHEMA_ONLY");
+        assertThat(service.start(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 3, CHECKSUM), command).candidate()).isSameAs(building);
+        when(candidates.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(batch, building));
+        when(builds.requireQueuedBuild(building)).thenReturn(group());
+        assertThat(service.start(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 3, CHECKSUM), command).replayed()).isTrue();
+        verify(candidateCommands, org.mockito.Mockito.times(1)).createSchemaOnlyIntent(any(), any(), any());
+        verify(candidateCommands, never()).createSingleModelIntent(any(), any(), any());
+    }
+
+    @Test
     void refusesSchemaModeWithoutTheMatchingCurrentImplementation() {
         var current = org.mockito.Mockito.mock(ModelSpecView.class);
         when(current.planId()).thenReturn(PLAN_ID);

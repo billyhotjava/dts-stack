@@ -27,3 +27,16 @@ PUT /api/catalog/datasets/{id} 要求 If-Match: "catalog-dataset:{id}:{version}"
 ## 执行边界
 
 开发目录仅源码、静态检查、commit/push；部署目录拉取同 SHA 后执行编译测试和正式构建。正常业务测试及正式版本化迁移可验证，禁止手改业务数据/候选状态绕过缺陷。原始他人 review 保持不变。
+
+## R14 / K33 候选占用增量（FROZEN，待实现/验证）
+
+复用现有不可变 origin varchar(32)，新增 SCHEMA_ONLY_INTENT；该枚举是结构单模型命令的持久化用途，不新增候选表或执行器。外部请求仍为 build-intents.buildMode=SCHEMA_ONLY，只有与当前实现的结构生成器匹配时服务端可创建此 origin；旧请求缺省 DATA_BUILD 和旧 origin 保持不变。前端候选 DTO 同步枚举。
+
+- build-intents 在原 plan 行锁内读取候选。DATA_BUILD 保留普通候选的规划独占；SCHEMA_ONLY 仅复用同模型/版本/环境的结构候选。任何两类候选同模型同环境重叠均拒绝；无关批量 BUILT 不阻断结构候选。
+- canonical createWithOrigin 同样执行范围冲突校验，不能只在 HTTP facade 放行。结构候选恰有一个模型；原批量/数据候选间仍规划唯一。结构与普通候选同模型同环境互斥；模型 active_claim_key 的现有唯一索引继续保护运行。
+- 物化快照写入前，按 execution_target_key + target_identifier 获取事务级 advisory lock；存在其他活动候选占用同目标且任一为结构候选则409 MODEL_MATERIALIZATION_TARGET_CLAIM_CONFLICT。同候选不同模型也不可指向相同目标。以当前执行配置为范围，保守拒绝同执行目标下同名表，不猜测其他 schema 可安全共存。目标已有表仍由受控 CREATE 拒绝，绝不 DROP/TRUNCATE。
+- 规划发布工作台只选普通发布候选；模型工作台仍按精确模型/修订/环境读取自己的候选。结构 BUILT 保持真实历史，不自动发布或取消。原同模型修订更新沿用显式失效/替换流程，不静默删除历史。
+- 前向 Liquibase 20260908_01_model_schema_candidate_scope.xml 扩展 origin CHECK 并将原 uk_model_release_candidate_active_plan 的规划唯一范围限定为非 SCHEMA_ONLY_INTENT 活动候选；旧状态与数据不回填、不改写。保留原模型占用唯一索引。迁移失败整体回滚；若已有新 origin 行则拒绝旧 schema rollback。上线后旧应用不能识别新 origin，因此有新候选时必须前向修复，不能盲目回退旧镜像。
+- 只读基线：当前候选7条（批量 BUILT1/PUBLISHED2/STALE1/CANCELLED3），模型12条（SOURCE1/FACT7/DIMENSION2/SUMMARY1/APPLICATION1）；分析绑定1条、无缺 tenant/source 的 legacy 行。当前没有结构 origin 数据，迁移不需要数据清洗。
+
+验收：两种创建顺序的跨用途范围冲突；同请求重放与模式错配；同模型环境竞争；不同模型连续 BUILT；目标重叠拒绝且不产生新运行；旧 batch 独占；规划工作台不报结构候选歧义；隔离空库/升级库迁移和回退保护。当前未执行，不标 PASS。

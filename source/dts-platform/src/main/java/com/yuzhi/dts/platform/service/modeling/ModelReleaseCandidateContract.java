@@ -41,6 +41,7 @@ public final class ModelReleaseCandidateContract {
 
     public enum CandidateOrigin {
         SINGLE_MODEL_INTENT,
+        SCHEMA_ONLY_INTENT,
         BATCH_WORKBENCH,
     }
 

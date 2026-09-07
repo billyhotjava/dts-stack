@@ -299,7 +299,7 @@ class CandidatePublicationRepositoryIT {
                 "select version from catalog_dataset where id = ?", Long.class, harvestedAssetId
             )).isEqualTo(maintainedVersion + 1);
             // A stale editor must not be able to overwrite a publication's version.
-            assertThat(transaction.execute(status -> jdbcTemplate.update(
+            assertThat(transaction.<Integer>execute(status -> jdbcTemplate.update(
                 "update catalog_dataset set description = 'stale' where id = ? and version = ?",
                 harvestedAssetId, maintainedVersion
             ))).isZero();

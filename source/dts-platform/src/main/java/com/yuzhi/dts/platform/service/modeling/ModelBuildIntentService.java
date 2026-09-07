@@ -123,7 +123,7 @@ public class ModelBuildIntentService {
             );
         }
 
-        CandidateView active = activeCandidate(tenant, planId);
+        CandidateView active = activeCandidate(tenant, planId, modelSpecId, command.environment(), structure);
         if (active != null) {
             return reuseOrStartExisting(
                 tenant,
@@ -147,13 +147,12 @@ public class ModelBuildIntentService {
             createCommandKey(command.executionKey()),
             REASON
         );
-        CommandResult draft = candidateCommands.createSingleModelIntent(
-            tenant,
-            actor,
-            create
-        );
+        CandidateOrigin expectedOrigin = structure ? CandidateOrigin.SCHEMA_ONLY_INTENT : CandidateOrigin.SINGLE_MODEL_INTENT;
+        CommandResult draft = structure
+            ? candidateCommands.createSchemaOnlyIntent(tenant, actor, create)
+            : candidateCommands.createSingleModelIntent(tenant, actor, create);
         if (
-            draft.candidate().origin() != CandidateOrigin.SINGLE_MODEL_INTENT ||
+            draft.candidate().origin() != expectedOrigin ||
             !exactScope(draft.candidate(), model, command.environment())
         ) {
             throw new ModelReleaseCandidateException(
@@ -195,6 +194,13 @@ public class ModelBuildIntentService {
                 candidateConflict(active, model.id())
             );
         }
+        CandidateOrigin expectedOrigin = "SCHEMA_ONLY".equals(command.buildMode())
+            ? CandidateOrigin.SCHEMA_ONLY_INTENT : CandidateOrigin.SINGLE_MODEL_INTENT;
+        if (active.origin() != expectedOrigin) {
+            throw new ModelReleaseCandidateException("MODEL_BUILD_MODE_MISMATCH",
+                "An active candidate reserves this model for a different build mode", Kind.CONFLICT,
+                candidateConflict(active, model.id()));
+        }
         if (!exactScope(active, model, command.environment())) {
             throw new ModelReleaseCandidateException(
                 "MODEL_ACTIVE_SINGLE_CANDIDATE_CONFLICT",
@@ -227,11 +233,13 @@ public class ModelBuildIntentService {
         return new BuildIntentResult(active, builds.requireQueuedBuild(active), true);
     }
 
-    private CandidateView activeCandidate(String tenant, UUID planId) {
+    private CandidateView activeCandidate(String tenant, UUID planId, UUID modelId, String environment, boolean structure) {
         List<CandidateView> active = candidates
             .listForWorkbench(tenant, planId)
             .stream()
-            .filter(ModelBuildIntentService::isActive)
+            .filter(candidate -> ModelCandidateScopePolicy.conflicts(candidate,
+                structure ? CandidateOrigin.SCHEMA_ONLY_INTENT : CandidateOrigin.SINGLE_MODEL_INTENT,
+                environment, List.of(modelId)))
             .toList();
         if (active.size() > 1) {
             throw new ModelReleaseCandidateException(
