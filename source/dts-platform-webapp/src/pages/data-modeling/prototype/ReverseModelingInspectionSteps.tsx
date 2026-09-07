@@ -160,12 +160,48 @@ export function ConfirmStep(props: ConfirmStepProps) {
 			modelUniqueId: null,
 			affectedUniqueIds: [],
 		}));
+	const sqlNotices = diagnostics.filter((diagnostic) => {
+		if (diagnostic.axis !== "IMPORT_PROJECTION" || !diagnostic.code.startsWith("SQL_")) return false;
+		const ids = diagnostic.modelUniqueId ? [diagnostic.modelUniqueId] : diagnostic.affectedUniqueIds;
+		const models = ids.length
+			? ids.map((id) => inspection.package.models.find((model) => model.dbtUniqueId === id))
+			: inspection.package.models;
+		return (
+			models.length > 0 &&
+			models.every(
+				(model) =>
+					model &&
+					model.conversion?.mode === "DBT_BACKED" &&
+					candidateEligibility(inspection, model.dbtUniqueId) === "ELIGIBLE",
+			)
+		);
+	});
+	const remaining = diagnostics.filter((diagnostic) => !sqlNotices.includes(diagnostic));
+	const groups = [
+		{ title: "导入前需处理", blocking: true, items: remaining.filter((item) => item.blocksImport) },
+		{
+			title: "导入说明（不阻断草稿导入）",
+			blocking: false,
+			items: remaining.filter((item) => !item.blocksImport && item.axis !== "MATERIALIZATION"),
+		},
+		{
+			title: "后续构建注意事项（不阻断草稿导入）",
+			blocking: false,
+			items: remaining.filter((item) => !item.blocksImport && item.axis === "MATERIALIZATION"),
+		},
+	];
+	const canImport =
+		inspection.compatibility.importProjection === "IMPORTABLE" &&
+		summary.eligible > 0 &&
+		summary.blocked === 0 &&
+		summary.requiresMapping === 0 &&
+		groups[0].items.length === 0;
 	return (
 		<>
 			<div className="dmx-wizard-heading">
 				<div>
 					<h3>检查报告与模型映射</h3>
-					<p>检查、导入投影、物化能力分别判断；源项目包不会再被误报为数据库适配器不支持。</p>
+					<p>导入只生成模型草稿；是否可以物化，将在“构建与检查”阶段确认。</p>
 				</div>
 				<Status tone={inspection.compatibility.importProjection === "BLOCKED" ? "danger" : "info"}>
 					{packageProfileLabel(profile)}
@@ -174,15 +210,35 @@ export function ConfirmStep(props: ConfirmStepProps) {
 			<div className="dmx-inspection-axes">
 				<div>
 					<small>包结构检查</small>
-					<strong>{inspection.compatibility.inspection}</strong>
+					<strong>
+						{inspection.compatibility.inspection === "SUPPORTED"
+							? "支持检查"
+							: inspection.compatibility.inspection === "UNSUPPORTED"
+								? "不支持"
+								: "待确认"}
+					</strong>
 				</div>
 				<div>
-					<small>导入投影</small>
-					<strong>{inspection.compatibility.importProjection}</strong>
+					<small>草稿导入能力</small>
+					<strong>
+						{inspection.compatibility.importProjection === "IMPORTABLE"
+							? "可导入草稿"
+							: inspection.compatibility.importProjection === "BLOCKED"
+								? "导入受阻"
+								: "仅可查看结构"}
+					</strong>
 				</div>
 				<div>
-					<small>dbt 物化</small>
-					<strong>{inspection.compatibility.materialization}</strong>
+					<small>后续物化环境</small>
+					<strong>
+						{inspection.compatibility.materialization === "CERTIFIED"
+							? "已认证"
+							: inspection.compatibility.materialization === "NOT_CERTIFIED"
+								? "尚未认证"
+								: inspection.compatibility.materialization === "UNSUPPORTED"
+									? "不支持物化"
+									: "待确认"}
+					</strong>
 				</div>
 			</div>
 			<div className="dmx-inspection-summary">
@@ -192,22 +248,60 @@ export function ConfirmStep(props: ConfirmStepProps) {
 				<Status tone="warning">待补充 {summary.requiresMapping}</Status>
 				<Status tone={summary.blocked ? "danger" : "neutral"}>阻断 {summary.blocked}</Status>
 			</div>
-			{diagnostics.length ? (
-				<div className="dmx-inspection-diagnostics">
-					{diagnostics.map((diagnostic, index) => (
-						<div key={`${diagnostic.code}-${diagnostic.modelUniqueId || index}`}>
-							<Status
-								tone={diagnostic.blocksImport ? "danger" : diagnostic.severity === "WARNING" ? "warning" : "info"}
-							>
-								{diagnostic.axis}
-							</Status>
-							<span>
-								<strong>{diagnostic.code}</strong>：{diagnostic.message}
-							</span>
-							<small>{diagnostic.recoveryAction ? `处理建议：${diagnostic.recoveryAction}` : ""}</small>
-						</div>
-					))}
+			<p>
+				{canImport
+					? "可以继续导入草稿。请完成下方模型映射并生成预览；导入不会自动发布或物化。"
+					: "请处理受阻模型或补充映射，最终可导入范围以预览结果为准。"}
+			</p>
+			{sqlNotices.length > 0 ? (
+				<div className="dmx-capability-note">
+					<strong>SQL 编辑说明（不阻断草稿导入）</strong>
+					<p>部分 SQL 无法完整转换为可视化配置，将保留原始 SQL。导入后请通过代码模式编辑，无需因此重新上传。</p>
 				</div>
+			) : null}
+			{groups
+				.filter((group) => group.items.length > 0)
+				.map((group) => (
+					<section key={group.title}>
+						<h4>{group.title}</h4>
+						<div className="dmx-inspection-diagnostics">
+							{group.items.map((diagnostic, index) => (
+								<div key={`${diagnostic.code}-${diagnostic.modelUniqueId || index}`}>
+									<Status tone={group.blocking ? "danger" : "info"}>{group.blocking ? "需处理" : "提示"}</Status>
+									<span>
+										{diagnostic.code === "CATALOG_MISSING"
+											? "包中缺少运行时字段类型信息。请在构建检查前确认字段类型，或补充 catalog.json。"
+											: diagnostic.code === "DBT_RUNTIME_NOT_CERTIFIED"
+												? "当前运行环境尚未通过对应认证。请在构建与检查阶段由管理员确认环境。"
+												: diagnostic.message}
+									</span>
+									<small>
+										{["CATALOG_MISSING", "DBT_RUNTIME_NOT_CERTIFIED"].includes(diagnostic.code)
+											? ""
+											: diagnostic.recoveryAction === "REUPLOAD"
+												? group.blocking
+													? "处理建议：修正受影响模型后重新上传"
+													: "如需消除此提示，可调整包内容后重新上传"
+												: diagnostic.recoveryAction === "CONTACT_ADMIN"
+													? "处理建议：联系管理员确认"
+													: diagnostic.recoveryAction
+														? `处理建议：${diagnostic.recoveryAction}`
+														: ""}
+									</small>
+								</div>
+							))}
+						</div>
+					</section>
+				))}
+			{diagnostics.length > 0 ? (
+				<details>
+					<summary>查看技术诊断详情</summary>
+					{diagnostics.map((diagnostic, index) => (
+						<p key={`${diagnostic.code}-${index}`}>
+							{diagnostic.axis} · {diagnostic.code}：{diagnostic.message}
+						</p>
+					))}
+				</details>
 			) : null}
 			<div className="dmx-mapping-grid">
 				<label className="dmx-reverse-plan">
