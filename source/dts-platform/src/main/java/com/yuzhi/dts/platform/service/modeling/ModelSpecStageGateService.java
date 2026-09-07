@@ -410,7 +410,7 @@ public class ModelSpecStageGateService {
         Set<String> obsoleteCodes = switch (view.modelType()) {
             case DIMENSION -> Set.of("MODEL_SPEC_DIMENSION_INPUT_REQUIRED", "MODEL_SPEC_SOURCE_EVIDENCE");
             case FACT -> Set.of("MODEL_SPEC_FACT_INPUT_REQUIRED", "MODEL_SPEC_SOURCE_EVIDENCE", "MODEL_SPEC_UPSTREAM_EVIDENCE");
-            case SUMMARY, APPLICATION -> Set.of();
+            case SOURCE, SUMMARY, APPLICATION -> Set.of();
         };
         if (obsoleteCodes.isEmpty()) return gate;
         List<GateBlocker> blockers = gate.blockers().stream().filter(blocker -> !obsoleteCodes.contains(blocker.code())).toList();

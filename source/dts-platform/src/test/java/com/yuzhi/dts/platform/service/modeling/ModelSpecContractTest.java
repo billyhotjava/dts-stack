@@ -260,10 +260,10 @@ class ModelSpecContractTest {
                 for (Layer upstreamLayer : Layer.values()) {
                     boolean expected = ModelSpecContract.matchesTargetLayer(upstreamType, upstreamLayer) &&
                         switch (ownerType) {
-                            case DIMENSION -> false;
-                            case FACT -> upstreamType == ModelType.FACT;
-                            case SUMMARY -> upstreamType != ModelType.APPLICATION;
-                            case APPLICATION -> true;
+                            case SOURCE, DIMENSION -> false;
+                            case FACT -> upstreamType == ModelType.SOURCE || upstreamType == ModelType.FACT;
+                            case SUMMARY -> upstreamType != ModelType.SOURCE && upstreamType != ModelType.APPLICATION;
+                            case APPLICATION -> upstreamType != ModelType.SOURCE;
                         };
 
                     assertThat(ModelSpecContract.allowsUpstreamModel(ownerType, upstreamType, upstreamLayer))
@@ -607,6 +607,7 @@ class ModelSpecContractTest {
             UUID.fromString("20000000-0000-0000-0000-000000000001"),
             type,
             switch (type) {
+                case SOURCE -> Layer.ODS;
                 case DIMENSION, FACT -> Layer.DWD;
                 case SUMMARY -> Layer.DWS;
                 case APPLICATION -> Layer.ADS;
@@ -621,7 +622,7 @@ class ModelSpecContractTest {
             type == ModelType.FACT ? FactShape.TRANSACTION : null,
             type == ModelType.FACT ? new TimeSemantics(TimeSemanticsType.EVENT_TIME, List.of("event_time")) : null,
             fields,
-            type == ModelType.SUMMARY || type == ModelType.APPLICATION || type == ModelType.DIMENSION ? List.of() : sources,
+            type == ModelType.FACT ? sources : List.of(),
             dependencies,
             List.of(),
             List.of(),

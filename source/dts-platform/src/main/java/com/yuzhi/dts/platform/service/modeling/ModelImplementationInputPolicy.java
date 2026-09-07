@@ -203,6 +203,7 @@ public class ModelImplementationInputPolicy {
     private static boolean allows(ModelType type, InputMode mode) {
         if (type == null || mode == null) return false;
         return switch (type) {
+            case SOURCE -> false;
             case DIMENSION -> mode == InputMode.PHYSICAL_ASSET || mode == InputMode.GENERATED;
             case FACT -> mode == InputMode.PHYSICAL_ASSET || mode == InputMode.UPSTREAM_MODEL;
             case SUMMARY, APPLICATION -> mode == InputMode.UPSTREAM_MODEL;
@@ -220,10 +221,10 @@ public class ModelImplementationInputPolicy {
     private static boolean allowsImplementationUpstream(ModelType ownerType, ModelSpecView upstream) {
         if (ownerType == null || !ModelSpecContract.isCanonicalModel(upstream)) return false;
         return switch (ownerType) {
-            case DIMENSION -> false;
-            case FACT -> upstream.modelType() == ModelType.FACT;
-            case SUMMARY -> upstream.modelType() != ModelType.APPLICATION;
-            case APPLICATION -> true;
+            case SOURCE, DIMENSION -> false;
+            case FACT -> upstream.modelType() == ModelType.SOURCE || upstream.modelType() == ModelType.FACT;
+            case SUMMARY -> upstream.modelType() != ModelType.SOURCE && upstream.modelType() != ModelType.APPLICATION;
+            case APPLICATION -> upstream.modelType() != ModelType.SOURCE;
         };
     }
 

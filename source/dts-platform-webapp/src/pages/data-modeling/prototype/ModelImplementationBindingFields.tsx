@@ -47,6 +47,7 @@ const TIME_SEMANTICS: Array<{ value: ModelSpecTimeSemanticsType; label: string }
 ];
 
 const MODEL_TYPE_LABELS: Record<ModelSpecType, string> = {
+	SOURCE: "贴源表",
 	DIMENSION: "维度表",
 	FACT: "明细表",
 	SUMMARY: "汇总表",

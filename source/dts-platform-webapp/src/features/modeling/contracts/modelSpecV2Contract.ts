@@ -70,8 +70,9 @@ export const MODEL_SPEC_COLLECTION_FIELDS = [
 ] as const;
 
 export type ModelSpecLayer = "ODS" | "STG" | "DWD" | "DWS" | "ADS";
-export type ModelSpecType = "FACT" | "DIMENSION" | "SUMMARY" | "APPLICATION";
+export type ModelSpecType = "SOURCE" | "FACT" | "DIMENSION" | "SUMMARY" | "APPLICATION";
 export const MODEL_SPEC_TARGET_LAYER_BY_TYPE: Readonly<Record<ModelSpecType, ModelSpecLayer>> = {
+	SOURCE: "ODS",
 	DIMENSION: "DWD",
 	FACT: "DWD",
 	SUMMARY: "DWS",
@@ -87,7 +88,7 @@ export const isModelSpecUpstreamAllowed = (
 	candidate: Pick<UpdateModelSpecCommand, "modelType" | "layer">,
 ): boolean => {
 	if (MODEL_SPEC_TARGET_LAYER_BY_TYPE[candidate.modelType] !== candidate.layer) return false;
-	if (targetType === "FACT") return candidate.modelType === "FACT" && candidate.layer === "DWD";
+	if (targetType === "FACT") return candidate.modelType === "SOURCE" || candidate.modelType === "FACT";
 	if (targetType === "SUMMARY") return candidate.layer === "DWD" || candidate.layer === "DWS";
 	if (targetType === "APPLICATION") return ["DWD", "DWS", "ADS"].includes(candidate.layer);
 	return false;
@@ -272,7 +273,7 @@ export const hasModelSpecTypeBoundaryMismatch = (
 	>,
 ): boolean => {
 	const acceptsPhysicalSources = model.modelType === "DIMENSION" || model.modelType === "FACT";
-	const acceptsModelDependencies = model.modelType !== "DIMENSION";
+	const acceptsModelDependencies = model.modelType !== "DIMENSION" && model.modelType !== "SOURCE";
 	return (
 		(!acceptsPhysicalSources && Boolean(model.sourceRefs?.length)) ||
 		(!acceptsModelDependencies && Boolean(model.dependsOn?.length)) ||
@@ -420,7 +421,7 @@ const MODEL_SPEC_NESTED_COLLECTION_ISSUE_CODES: Record<(typeof MODEL_SPEC_COLLEC
 };
 
 const MODEL_SPEC_LAYERS = new Set<ModelSpecLayer>(["ODS", "STG", "DWD", "DWS", "ADS"]);
-const MODEL_SPEC_TYPES = new Set<ModelSpecType>(["FACT", "DIMENSION", "SUMMARY", "APPLICATION"]);
+const MODEL_SPEC_TYPES = new Set<ModelSpecType>(["SOURCE", "FACT", "DIMENSION", "SUMMARY", "APPLICATION"]);
 const MODEL_SPEC_IMPLEMENTATION_MODES = new Set<ModelSpecImplementationMode>(["DESIGNER_GENERATED", "DBT_MANAGED"]);
 const MODEL_SPEC_FACT_SHAPES = new Set<ModelSpecFactShape>([
 	"TRANSACTION",
@@ -860,22 +861,23 @@ const validateModelSpecFull = (input: unknown): ModelSpecFieldIssue[] => {
 	const dependencies = Array.isArray(command.dependsOn) ? command.dependsOn : [];
 	const dimensionRefs = Array.isArray(command.dimensionRefs) ? command.dimensionRefs : [];
 	const metricRefs = Array.isArray(command.metricRefs) ? command.metricRefs : [];
+	if (command.modelType === "SOURCE" && metricRefs.length > 0) issues.push(issue("MODEL_SPEC_INPUT_KIND_NOT_ALLOWED", "metricRefs", "SOURCE does not accept metric references"));
 	const standardBindings = Array.isArray(command.standardBindings) ? command.standardBindings : [];
-	if ((command.modelType === "SUMMARY" || command.modelType === "APPLICATION") && sources.length > 0) {
+	if ((command.modelType === "SOURCE" || command.modelType === "SUMMARY" || command.modelType === "APPLICATION") && sources.length > 0) {
 		issues.push(
 			issue(
 				"MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
 				"sourceRefs",
-				"SUMMARY and APPLICATION models must use revision-pinned upstream models",
+				"Physical source references belong to DIMENSION and FACT models only",
 			),
 		);
 	}
-	if (command.modelType === "DIMENSION" && dependencies.length > 0) {
+	if ((command.modelType === "SOURCE" || command.modelType === "DIMENSION") && dependencies.length > 0) {
 		issues.push(
 			issue(
 				"MODEL_SPEC_INPUT_KIND_NOT_ALLOWED",
 				"dependsOn",
-				"DIMENSION uses physical sources or a generation strategy instead of model dependencies",
+				"SOURCE and DIMENSION do not accept model dependencies",
 			),
 		);
 	}

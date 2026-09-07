@@ -16,6 +16,7 @@
     },
     "modelType": {
       "enum": [
+        "SOURCE",
         "FACT",
         "DIMENSION",
         "SUMMARY",
@@ -1164,6 +1165,22 @@
               "subjectDomainId": {
                 "type": "null"
               }
+            }
+          }
+        }
+        ,{
+          "if": {"required": ["modelType"], "properties": {"modelType": {"const": "SOURCE"}}},
+          "then": {
+            "properties": {
+              "layer": {"const": "ODS"},
+              "sourceRefs": {"maxItems": 0},
+              "dependsOn": {"maxItems": 0},
+              "dimensionRefs": {"maxItems": 0},
+              "metricRefs": {"maxItems": 0},
+              "factShape": {"type": "null"},
+              "timeSemantics": {"type": "null"},
+              "generationStrategy": {"type": "null"},
+              "dimensionProfile": {"type": "null"}
             }
           }
         }
