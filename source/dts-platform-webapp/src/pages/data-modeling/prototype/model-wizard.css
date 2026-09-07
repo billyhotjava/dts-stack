@@ -57,3 +57,84 @@
 	padding: 14px 20px;
 	border-top: 1px solid #e2e8f0;
 }
+
+.dmx-target-quality {
+	margin: 0 20px 20px;
+	padding: 16px;
+	border: 1px solid #e2e8f0;
+	border-radius: 6px;
+	scroll-margin-top: 20px;
+}
+.dmx-target-quality h3 {
+	margin: 0 0 8px;
+	font-weight: 600;
+}
+.dmx-target-quality__hint {
+	margin-bottom: 12px;
+	color: #64748b;
+}
+.dmx-target-quality__asset > strong {
+	display: block;
+	overflow-wrap: anywhere;
+}
+.dmx-target-quality__rules {
+	margin: 12px 0;
+	padding: 0;
+	list-style: none;
+}
+.dmx-target-quality__rules li,
+.dmx-target-quality__actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+}
+.dmx-target-quality__editor {
+	border-top: 1px solid #e2e8f0;
+	padding-top: 12px;
+}
+.dmx-target-quality__editor summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+.dmx-target-quality__form {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	min-width: 0;
+	margin: 16px 0 0;
+	padding: 0;
+	border: 0;
+}
+.dmx-target-quality .dmx-target-quality__form label,
+.dmx-target-quality .dmx-target-quality__form label > span {
+	display: block;
+}
+.dmx-target-quality .dmx-target-quality__form label > span {
+	margin-bottom: 6px;
+}
+.dmx-target-quality__form input,
+.dmx-target-quality__form textarea {
+	box-sizing: border-box;
+	width: 100%;
+	padding: 9px 12px;
+	border: 1px solid #cbd5e1;
+	border-radius: 6px;
+	background: #fff;
+}
+.dmx-target-quality__form textarea {
+	min-height: 120px;
+	resize: vertical;
+	font-family: monospace;
+}
+.dmx-target-quality__form input:focus,
+.dmx-target-quality__form textarea:focus {
+	outline: 2px solid #93c5fd;
+	outline-offset: 1px;
+}
+@media (max-width: 640px) {
+	.dmx-target-quality {
+		margin: 0 12px 12px;
+		padding: 12px;
+	}
+}

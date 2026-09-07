@@ -30,11 +30,13 @@ type QualityContext = {
 export function ModelTargetQualityPanel({
 	delivery,
 	canMaintain,
+	openRequest = 0,
 	onChanged,
 	onNavigationGuardChange,
 }: {
 	delivery: ModelDeliveryStatus;
 	canMaintain: boolean;
+	openRequest?: number;
 	onChanged: () => void;
 	onNavigationGuardChange: (handle: UnsavedEditorHandle | null) => void;
 }) {
@@ -46,6 +48,10 @@ export function ModelTargetQualityPanel({
 		[refresh, setRefresh] = useState(0);
 	const identity = `${delivery.modelSpecId}:${delivery.modelRevision}:${delivery.candidate?.id}:${delivery.candidate?.version}`;
 	const loadedIdentity = useRef(identity);
+	const panelRef = useRef<HTMLElement>(null);
+	useEffect(() => {
+		if (openRequest > 0) panelRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+	}, [openRequest]);
 	// biome-ignore lint/correctness/useExhaustiveDependencies: refresh explicitly reloads the existing target context after rule edits.
 	useEffect(() => {
 		let active = true;
@@ -95,10 +101,11 @@ export function ModelTargetQualityPanel({
 		return `${rule ? qualityPath("rule-detail", { ruleId: rule.id }) + "/edit" : qualityPath("rule-editor")}?${params}`;
 	};
 	return (
-		<section id="model-target-quality" aria-label="目标表质量规则">
+		<section className="dmx-target-quality" id="model-target-quality" aria-label="目标表质量规则" ref={panelRef}>
 			<h3>目标表质量规则</h3>
+			<p className="dmx-target-quality__hint">为物化后的目标表配置检查规则，保存并发布后即可执行质量检查。</p>
 			{failure ? (
-				<div role="alert">
+				<div className="dmx-inline-error" role="alert">
 					{failure}
 					<Button
 						onClick={() => {
@@ -111,18 +118,21 @@ export function ModelTargetQualityPanel({
 				</div>
 			) : null}
 			{loading ? <span>读取中…</span> : null}
+			{!canMaintain ? (
+				<p className="dmx-target-quality__hint">规则当前只读，请确认维护权限并先保存模型和实现修改。</p>
+			) : null}
 			{!loading && !failure && !assets.length ? <span>完成物化后配置质量规则</span> : null}
 			{assets.map((asset) => (
-				<div key={asset.datasetId}>
+				<div className="dmx-target-quality__asset" key={asset.datasetId}>
 					<strong>{asset.qualifiedName}</strong>
 					{!asset.configurable ? (
 						<output>
-							{asset.configurationBlockerCode === "QUALITY_DATASET_NOT_IN_DEFAULT_LAKE"
+							{asset.configurationBlockerCode === "QUALITY_DATASET_NOT_DEFAULT_LAKE"
 								? "当前目标不在默认数仓，暂不支持质量检查"
 								: "当前目标暂不支持质量规则配置"}
 						</output>
 					) : null}
-					<ul>
+					<ul className="dmx-target-quality__rules">
 						{asset.rules.map((rule) => (
 							<li key={rule.id}>
 								{rule.name} · v{rule.latestVersion?.version || "—"}{" "}
@@ -142,6 +152,7 @@ export function ModelTargetQualityPanel({
 						<ModelTargetRuleForm
 							key={`${delivery.modelSpecId}:${asset.datasetId}`}
 							asset={asset}
+							openRequest={openRequest}
 							onSaved={() => {
 								setRefresh((value) => value + 1);
 								onChanged();
@@ -158,11 +169,13 @@ export function ModelTargetQualityPanel({
 
 function ModelTargetRuleForm({
 	asset,
+	openRequest,
 	onSaved,
 	onAdvanced,
 	onNavigationGuardChange,
 }: {
 	asset: QualityAsset;
+	openRequest: number;
 	onSaved: () => void;
 	onAdvanced: () => void;
 	onNavigationGuardChange: (handle: UnsavedEditorHandle | null) => void;
@@ -172,6 +185,14 @@ function ModelTargetRuleForm({
 		[failure, setFailure] = useState(""),
 		[saving, setSaving] = useState(false);
 	const pending = useRef(false);
+	const nameInput = useRef<HTMLInputElement>(null);
+	const [expanded, setExpanded] = useState(openRequest > 0);
+	useEffect(() => {
+		if (openRequest > 0) setExpanded(true);
+	}, [openRequest]);
+	useEffect(() => {
+		if (expanded && openRequest > 0) nameInput.current?.focus({ preventScroll: true });
+	}, [expanded, openRequest]);
 	const savedCallback = useRef(onSaved);
 	savedCallback.current = onSaved;
 	const save = useCallback(
@@ -216,22 +237,44 @@ function ModelTargetRuleForm({
 		return () => onNavigationGuardChange(null);
 	}, [name, sql, saveDraft, discard, onNavigationGuardChange]);
 	return (
-		<details>
+		<details
+			className="dmx-target-quality__editor"
+			open={expanded}
+			onToggle={(event) => setExpanded(event.currentTarget.open)}
+		>
 			<summary>新增完整性规则</summary>
-			<fieldset disabled={saving}>
+			<fieldset className="dmx-target-quality__form" disabled={saving}>
 				<label>
-					规则名称
-					<input aria-label="规则名称" value={name} onChange={(event) => setName(event.target.value)} />
+					<span>规则名称</span>
+					<input
+						ref={nameInput}
+						aria-label="规则名称"
+						placeholder="输入规则名称"
+						value={name}
+						onChange={(event) => setName(event.target.value)}
+					/>
 				</label>
 				<label>
-					检测 SQL
-					<textarea aria-label="检测 SQL" rows={5} value={sql} onChange={(event) => setSql(event.target.value)} />
+					<span>检测 SQL</span>
+					<textarea
+						aria-label="检测 SQL"
+						placeholder="输入用于检查目标表的 SQL"
+						rows={5}
+						value={sql}
+						onChange={(event) => setSql(event.target.value)}
+					/>
 				</label>
-				{failure ? <div role="alert">{failure}</div> : null}
-				<Button disabled={!name.trim() || !sql.trim() || saving} onClick={() => void save()}>
-					{saving ? "保存中…" : "保存并发布规则"}
-				</Button>
-				<Button onClick={onAdvanced}>更多规则配置</Button>
+				{failure ? (
+					<div className="dmx-inline-error" role="alert">
+						{failure}
+					</div>
+				) : null}
+				<div className="dmx-target-quality__actions">
+					<Button disabled={!name.trim() || !sql.trim() || saving} onClick={() => void save()}>
+						{saving ? "保存中…" : "保存并发布规则"}
+					</Button>
+					<Button onClick={onAdvanced}>更多规则配置</Button>
+				</div>
 			</fieldset>
 		</details>
 	);

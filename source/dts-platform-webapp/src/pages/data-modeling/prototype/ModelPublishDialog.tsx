@@ -36,6 +36,7 @@ import {
 import { CompactTable } from "@/components/table";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelAssetDeliveryResult } from "./ModelAssetDeliveryResult";
+import { type MaterializationBuildAction, ModelMaterializationActions } from "./ModelMaterializationActions";
 import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 import { Button, Modal, RequestState } from "./PrototypePrimitives";
 import { compileSelectedModels } from "./services/compileSelectedModels";
@@ -43,17 +44,6 @@ import { normalizeModelingRequestFailure } from "./services/planningProjectionSe
 import { useModelMaterializationColumns } from "./useModelMaterializationColumns";
 
 const MAX_MATERIALIZATION_MODELS = 64;
-
-type MaterializationBuildAction =
-	| "CREATE_CANDIDATE"
-	| "REFRESH_AND_CREATE"
-	| "CREATE_AFTER_TERMINAL"
-	| "CANCEL_AND_CREATE"
-	| "REFRESH_AND_REPLACE"
-	| "CREATE_REPLACEMENT"
-	| "REMATERIALIZE"
-	| "RETRY_BUILD"
-	| "START_BUILD";
 
 type ReleaseWorkflowAction = Extract<
 	ReleaseCandidateLifecycleAction,
@@ -97,6 +87,8 @@ export function ModelPublishDialog({
 	models,
 	onClose,
 	canMaintain,
+	canConfigureQuality = canMaintain,
+	onConfigureQuality,
 	step,
 	deliveryStatus,
 	initialEnvironment = "dev",
@@ -107,6 +99,8 @@ export function ModelPublishDialog({
 	models: ModelSpecView[];
 	onClose: () => void;
 	canMaintain: boolean;
+	canConfigureQuality?: boolean;
+	onConfigureQuality?: () => void;
 	step?: "verification" | "delivery";
 	deliveryStatus?: ModelDeliveryStatus | null;
 	initialEnvironment?: string;
@@ -663,67 +657,30 @@ export function ModelPublishDialog({
 							) : (
 								<p className="dmx-capability-note">当前候选尚无逐表执行证据。</p>
 							)}
-							<div className="dmx-dialog-actions">
-								<Button onClick={onClose}>{embedded ? "上一步" : "取消"}</Button>
-								<Button
-									disabled={!canMaintain || Boolean(busy) || (embedded ? !pageAction?.enabled : !canBuild)}
-									onClick={() => {
-										if (embedded && pageAction?.code === "RUN_QUALITY")
-											void runReleaseAction("RUN_QUALITY").then(onChanged);
-										else if (embedded && pageAction?.code === "NEXT") onNext?.();
-										else if (embedded && pageAction?.code === "RERUN_GOVERNANCE_QUALITY")
-											void rerunGovernanceQuality().then(onChanged);
-										else if (embedded && pageAction?.code === "CONFIGURE_QUALITY_RULES")
-											document.getElementById("model-target-quality")?.scrollIntoView({ block: "center" });
-										else void build().then(onChanged);
-									}}
-									primary
-									title={
-										canBuild
-											? undefined
-											: materializationPlan?.blockers[0]?.message ||
-												planFailure ||
-												workspace?.primaryBlocker?.message ||
-												"当前候选不允许启动构建"
-									}
-								>
-									{embedded
-										? busy
-											? "处理中…"
-											: pageAction?.code === "CONFIGURE_QUALITY_RULES"
-												? "配置质量规则"
-												: pageAction?.code === "RERUN_GOVERNANCE_QUALITY"
-													? "执行质量检查"
-													: pageAction?.code === "RUN_QUALITY"
-														? "执行检查"
-														: pageAction?.code === "NEXT"
-															? "下一步"
-															: pageAction?.code === "RETRY_BUILD"
-																? "重试构建"
-																: "开始物化"
-										: busy === "build" || busy === "run"
-											? "处理中…"
-											: operationalAction === "REPAIR_DEPLOYMENT"
-												? "修复部署"
-												: operationalAction === "RUN_NOW"
-													? "再次运行并核验"
-													: buildAction === "REFRESH_AND_REPLACE" || buildAction === "CREATE_REPLACEMENT"
-														? "按新修订重新物化"
-														: buildAction === "REFRESH_AND_CREATE" || buildAction === "CREATE_AFTER_TERMINAL"
-															? "按新范围重新物化"
-															: buildAction === "CANCEL_AND_CREATE"
-																? "替换候选并物化"
-																: buildAction === "REMATERIALIZE"
-																	? "重新物化"
-																	: buildAction === "RETRY_BUILD"
-																		? "重试构建"
-																		: buildAction === "START_BUILD"
-																			? "开始构建"
-																			: batch
-																				? `创建并运行 ${selection.length} 个模型`
-																				: "创建并运行"}
-								</Button>
-							</div>
+							<ModelMaterializationActions
+								embedded={embedded}
+								pageAction={pageAction}
+								canMaintain={canMaintain}
+								canConfigureQuality={canConfigureQuality}
+								busy={busy}
+								canBuild={canBuild}
+								buildAction={buildAction}
+								operationalAction={operationalAction}
+								modelCount={selection.length}
+								buildBlocker={
+									materializationPlan?.blockers[0]?.message || planFailure || workspace?.primaryBlocker?.message
+								}
+								onBack={onClose}
+								onConfigureQuality={onConfigureQuality}
+								onPrimaryAction={() => {
+									if (embedded && pageAction?.code === "RUN_QUALITY")
+										void runReleaseAction("RUN_QUALITY").then(onChanged);
+									else if (embedded && pageAction?.code === "NEXT") onNext?.();
+									else if (embedded && pageAction?.code === "RERUN_GOVERNANCE_QUALITY")
+										void rerunGovernanceQuality().then(onChanged);
+									else void build().then(onChanged);
+								}}
+							/>
 						</>
 					) : (
 						<>

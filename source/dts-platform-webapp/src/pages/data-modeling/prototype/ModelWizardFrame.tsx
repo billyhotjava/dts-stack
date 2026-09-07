@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
 	MODEL_WIZARD_STEPS,
@@ -7,9 +7,9 @@ import {
 	normalizeModelWizardStep,
 } from "@/api/modelDeliveryStatusApi";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
-import { type UnsavedEditorHandle } from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
-import { ModelCatalogDeliveryPanel } from "./ModelCatalogDeliveryPanel";
+import type { UnsavedEditorHandle } from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
 import { ModelAnalysisPreparationAction } from "./ModelAnalysisPreparationAction";
+import { ModelCatalogDeliveryPanel } from "./ModelCatalogDeliveryPanel";
 import { ModelPublishDialog } from "./ModelPublishDialog";
 import { ModelTargetQualityPanel } from "./ModelTargetQualityPanel";
 import { Button, RequestState, Status } from "./PrototypePrimitives";
@@ -66,6 +66,7 @@ export function ModelWizardFrame({
 	onAssetGuardChange: (handle: UnsavedEditorHandle | null) => void;
 }) {
 	const [params, setParams] = useSearchParams();
+	const [qualityOpenRequest, setQualityOpenRequest] = useState(0);
 	const requested = normalizeModelWizardStep(params.get("step"));
 	const step = requested || delivery?.recommendedStep || "definition";
 	const environment = params.get("environment") || delivery?.environment || "dev";
@@ -144,6 +145,8 @@ export function ModelWizardFrame({
 							deliveryStatus={delivery}
 							initialEnvironment={environment}
 							canMaintain={canMaintain && !commandsBlocked && Boolean(delivery)}
+							canConfigureQuality={canMaintain && !dirty && Boolean(delivery?.candidate?.matchesCurrentModel)}
+							onConfigureQuality={() => setQualityOpenRequest((value) => value + 1)}
 							onChanged={onRefresh}
 							onEnvironmentChange={(value) =>
 								setParams((current) => {
@@ -160,6 +163,7 @@ export function ModelWizardFrame({
 					{step === "verification" && delivery?.candidate?.matchesCurrentModel ? (
 						<ModelTargetQualityPanel
 							delivery={delivery}
+							openRequest={qualityOpenRequest}
 							canMaintain={canMaintain && !dirty}
 							onChanged={onRefresh}
 							onNavigationGuardChange={onAssetGuardChange}
