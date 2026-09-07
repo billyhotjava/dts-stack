@@ -86,3 +86,21 @@ it.each([
 	expect(container.querySelector('[data-model-kind]')?.getAttribute("data-model-kind")).toBe(kind);
 	expect(mocks.loadContext).toHaveBeenCalledOnce();
 });
+
+it("reloads an existing dimension deep link and clears it when returning to the list", async () => {
+	mocks.loadContext.mockResolvedValue({
+		...context,
+		dimensions: [{ id: "dimension-existing", domainId: "domain-existing", revision: 1,
+			name: "已有维度", definition: "维度定义", reuseScope: "DOMAIN", attributes: [], status: "DRAFT" }],
+	});
+	const router = createMemoryRouter([
+		{ path: "/model", element: <ModelingWorkbenchPage route={{ description: "模型测试" } as DataModelingRoute} /> },
+	], { initialEntries: ["/model"] });
+	await act(async () => root.render(<RouterProvider router={router} />));
+	await act(async () => router.navigate("/model?dimensionDefinitionId=dimension-existing"));
+	expect(container.querySelector('[data-model-kind="dimension"]')).not.toBeNull();
+	expect(container.textContent).toContain("已有维度");
+	await act(async () => router.navigate("/model"));
+	expect(container.querySelector('[data-model-kind]')).toBeNull();
+	expect(container.textContent).toContain("创建明细表");
+});
