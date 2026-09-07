@@ -398,7 +398,7 @@ public class ModelMaterializationRunArtifactService {
                             "Built candidate was not available for governance asset registration"
                         );
                     }
-                    qualityAssets.ensureRegistered(built.candidate());
+                    // Catalog registration is an independent data-module command; it must not roll back a verified model build.
                     auditRun(
                         group,
                         "finalized:succeeded",
@@ -1062,7 +1062,7 @@ public class ModelMaterializationRunArtifactService {
                     .trim()
                     .toLowerCase(Locale.ROOT)
         ) {
-            case "table", "incremental" ->
+            case "table", "incremental", "dts_schema_only" ->
                 ExpectedRelationType.TABLE;
             case "view" -> ExpectedRelationType.VIEW;
             case "materialized_view" ->

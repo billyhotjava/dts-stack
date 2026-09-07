@@ -189,7 +189,7 @@ export default function DataSearchPage() {
 			/>
 			{activeTab === "asset-directory" && searchParams.get("modelSpecId") ? <ModelDataOperationsPanel
 				key={`${searchParams.get("modelSpecId")}:${searchParams.get("environment") || "dev"}`}
-				modelSpecId={searchParams.get("modelSpecId")!} environment={searchParams.get("environment") || "dev"} /> : null}
+				modelSpecId={searchParams.get("modelSpecId")!} environment={searchParams.get("environment") || "dev"} candidateId={searchParams.get("candidateId") || undefined} /> : null}
 			{activeTab === "catalog-tags" ? <AssetTagsWorkspace /> : <DataAssetDirectoryPage />}
 		</div>
 	);

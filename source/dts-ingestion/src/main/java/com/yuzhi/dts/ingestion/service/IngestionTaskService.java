@@ -431,6 +431,10 @@ public class IngestionTaskService {
                         : snapshot(existingTask);
                 IngestionTask candidate = snapshot(basePlan);
                 taskMapper.partialUpdate(candidate, dto);
+                if (com.yuzhi.dts.ingestion.service.etl.ModelTargetGuard.isBound(basePlan) &&
+                    !com.yuzhi.dts.ingestion.service.etl.ModelTargetGuard.isBound(candidate)) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, "MODEL_INGESTION_TARGET_BINDING_REQUIRED：已有模型绑定不能通过普通任务更新移除");
+                }
                 preserveAbsentManagedSecrets(basePlan, candidate, dto);
                 if (dto.getSyncConfig() != null) {
                     candidate.setSyncConfig(dto.getSyncConfig());

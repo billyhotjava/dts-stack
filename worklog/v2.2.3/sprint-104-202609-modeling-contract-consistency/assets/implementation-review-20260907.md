@@ -66,3 +66,10 @@ dbt 默认 table materialization 在 pre-hook 前会清理中间/备份关系，
 - 目标由服务读取当前 ODS/SOURCE 物化证据和执行目标目录身份解析；客户端不得以自由表名替代。执行前经既有受信服务通道核对当前绑定，并在目标连接上只读核验字段。绑定目标禁止建表、加列、DROP、TRUNCATE 和自定义前后置 SQL；现有全量采集仅向该模型表追加，界面明确展示此差异。
 - 文件、数据库沿用当前字段及技术列生成；缺列、类型或技术列不兼容即拒绝。API 仅支持既有 raw_record/技术列结构，不新增展平能力。
 - 数据入口复用 catalog/search 的 modelSpecId/environment/candidateId 上下文及既有质量、Catalog CAS、发布和分析恢复组件；服务返回 dataPrimaryAction，旧建模 delivery 深链仅回看。人工治理字段仍由原 Catalog owner 保存。
+
+### 9f73ea4ab 正式检查与边界修正
+
+- 部署目录 Java：平台 54 项、接入 78 项通过，包含现有文件/API/Addax 执行与服务认证回归。前端 tsc 通过，接入/数据目录 31 项通过。
+- 追加检查发现旧 finalizer 在物化事务内调用 CandidateQualityAssetRegistrationService。现移至数据模块显式登记命令，复用原唯一 Catalog identity owner；登记失败不改物化运行状态。
+- dts_schema_only 运行结果探测增加普通表映射；旧宏/视图分支保持。该函数 GitNexus risk=HIGH（已告知），须执行物化运行完整定向回归。
+- 以上新增修正尚待正式测试、构建与页面验收。

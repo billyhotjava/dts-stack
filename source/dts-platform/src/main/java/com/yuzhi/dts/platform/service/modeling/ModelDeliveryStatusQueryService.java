@@ -87,7 +87,9 @@ public class ModelDeliveryStatusQueryService {
             selectedCandidate == null ? null : new CandidateSummary(selectedCandidate.id(), selectedCandidate.version(), selectedCandidate.status().name(), entry.revision(), entry.checksum(), current, selectedCandidate.lastModifiedAt()),
             Instant.now(), recommended(selectedCandidate, current), workspace, wizard(authoringContext, selectedCandidate, workspace, current, actions, qualityContext, model, entry), steps, actions,
             modelingResult(model, authoringContext, selectedCandidate, workspace, entry, current, environment),
-            current ? first(actions, "CONFIGURE_QUALITY_RULES", "RERUN_GOVERNANCE_QUALITY", "RUN_QUALITY", "SUBMIT_REVIEW", "APPROVE", "PUBLISH", "RETRY_PUBLICATION") : null);
+            current && canMaintainDelivery && qualityContext != null && qualityContext.assets().stream().anyMatch(asset -> model.id().equals(asset.modelSpecId()) && asset.datasetId() == null)
+                ? new ActionView("REGISTER_DATA_ASSETS", true, null, selectedCandidate.id(), selectedCandidate.version())
+                : current ? first(actions, "CONFIGURE_QUALITY_RULES", "RERUN_GOVERNANCE_QUALITY", "RUN_QUALITY", "SUBMIT_REVIEW", "APPROVE", "PUBLISH", "RETRY_PUBLICATION") : null);
     }
 
     private static String materialization(CandidateView candidate, boolean current) {

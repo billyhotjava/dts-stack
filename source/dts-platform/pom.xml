@@ -527,6 +527,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <testIncludes>
+                        <testInclude>**/ModelDataRegistrationServiceTest.java</testInclude>
                         <testInclude>**/ModelIngestionTargetServiceTest.java</testInclude>
                         <testInclude>**/ModelSchemaOnlySupportTest.java</testInclude>
                         <testInclude>**/IntegrationTest.java</testInclude>

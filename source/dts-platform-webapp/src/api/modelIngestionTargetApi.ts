@@ -10,3 +10,7 @@ export type ModelIngestionTarget = {
 export const getModelIngestionTarget = (id: string, environment: string) => api.get<ModelIngestionTarget>({
 	url: `/modeling/model-specs/${encodeURIComponent(id)}/ingestion-target`, params: { environment }, _skipErrorToast: true,
 } as any);
+
+export const registerModelData = (id: string, command: { candidateId: string; candidateVersion: number; modelRevision: number; modelChecksum: string }) => api.post<string[]>({
+	url: `/modeling/model-specs/${encodeURIComponent(id)}/data-registration`, data: command, _skipErrorToast: true,
+} as any);

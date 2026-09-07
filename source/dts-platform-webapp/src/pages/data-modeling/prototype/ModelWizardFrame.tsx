@@ -136,7 +136,7 @@ export function ModelWizardFrame({
 							<p>{completed ? `当前版本已物化到 ${delivery?.modelingResult?.targetRelation || "目标表"}。` : "此页保留交付结果回看，资产治理和发布请进入数据管理。"}</p>
 							<div className="dmx-dialog-actions">
 								<Button primary onClick={onBack}>返回模型列表</Button>
-								<Link to={`/catalog/search?view=table&modelSpecId=${encodeURIComponent(model.id)}&environment=${encodeURIComponent(environment)}`}>去数据管理</Link>
+								<Link to={`/catalog/search?view=table&modelSpecId=${encodeURIComponent(model.id)}&environment=${encodeURIComponent(environment)}${delivery?.candidate?.id ? `&candidateId=${encodeURIComponent(delivery.candidate.id)}` : ""}`}>去数据管理</Link>
 							</div>
 						</section>
 					) : loading && !delivery ? (

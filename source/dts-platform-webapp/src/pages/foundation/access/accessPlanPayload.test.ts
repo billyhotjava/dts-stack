@@ -376,3 +376,20 @@ describe("buildAccessPlanUpdateDTO", () => {
 		);
 	});
 });
+
+const boundTarget = {
+	schemaVersion: 1 as const, modelSpecId: "ods-model", modelRevision: 3, modelChecksum: "a".repeat(64), implementationRevision: 2,
+	implementationChecksum: "b".repeat(64), environment: "dev", candidateId: "candidate", runGroupId: "run", dataSourceId: "22222222-2222-2222-2222-222222222222",
+	databaseName: "warehouse", schemaName: "ods", tableName: "model_customer", columns: [{ name: "customer_id", dataType: "bigint", nullable: false, primaryKey: true }],
+};
+it("pins an existing model target for save and reopen without starting ingestion", () => {
+	const ctx = context("database", baseValues({ modelTarget: boundTarget }));
+	const created = buildAccessPlanCreateRequest(ctx);
+	expect(created.destination.config).toMatchObject({ modelTarget: boundTarget, table: ["ods.model_customer"] });
+	expect(created.runNow).toBe(false);
+	const updated = buildAccessPlanUpdateDTO({ id: 7 } as IngestionTaskDTO, ctx);
+	expect(updated.tableMapping).toEqual([{ source: "crm.customer", target: "ods.model_customer" }]);
+	expect(toAccessPlanFormValues(updated).modelTarget).toEqual(boundTarget);
+	expect(() => buildAccessPlanCreateRequest(context("database", baseValues({ modelTarget: boundTarget, selectedTables: ["a", "b"] })))).toThrow("一张来源表");
+	expect(() => buildAccessPlanCreateRequest(context("database", baseValues({ modelTarget: boundTarget, targetDataSourceId: "another" })))).toThrow("目标身份");
+});

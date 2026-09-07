@@ -168,6 +168,16 @@ class ModelMaterializationRunArtifactServiceTest {
     }
 
     @Test
+    void probesSchemaOnlyMaterializationAsAnOrdinaryTable() throws Exception {
+        writeArtifacts("success", "b".repeat(64));
+        Path manifest = project.resolve("target/manifest.json");
+        Files.writeString(manifest, Files.readString(manifest).replace("\"materialized\": \"table\"", "\"materialized\": \"dts_schema_only\""));
+        var result = service.syncAndProbe(GROUP_ID, new ModelMaterializationRunArtifactService.SyncProbeCommand("RELEASE_BUILD", BUNDLE));
+        assertThat(result.status()).isEqualTo("BUILT");
+        verify(qualityAssets, never()).ensureRegistered(any());
+    }
+
+    @Test
     void acceptsOnlyRevisionBoundManifestAndSuccessfulModelResult()
         throws Exception {
         writeArtifacts("success", "b".repeat(64));
@@ -944,24 +954,12 @@ class ModelMaterializationRunArtifactServiceTest {
     }
 
     @Test
-    void registrationFailurePreservesSpecificCodeAndFinalizerDoesNotOverwriteIt() {
-        String code = "MODEL_SPEC_GOVERNANCE_CLASSIFICATION_REQUIRED";
+    void verifiedMaterializationDoesNotDependOnCatalogRegistration() {
         when(runs.finalizeSucceeded(GROUP_ID, NOW)).thenReturn(1);
-        when(runs.finalizeFailed(GROUP_ID, code, NOW)).thenReturn(1);
-        when(qualityAssets.ensureRegistered(any())).thenThrow(new ModelReleaseCandidateException(
-            code, "Classification required", ModelReleaseCandidateException.Kind.UNPROCESSABLE
-        ));
-
-        assertThatThrownBy(() -> service.finalizeRun(
-            GROUP_ID, new ModelMaterializationRunArtifactService.FinalizeCommand("SUCCEEDED")
-        )).isInstanceOf(ModelMaterializationRuntimeException.class)
-            .extracting(error -> ((ModelMaterializationRuntimeException) error).code()).isEqualTo(code);
-
-        when(runs.findRunGroup(GROUP_ID)).thenReturn(java.util.Optional.of(runGroup(4, "BUILD_FAILED", "FAILED", code)));
-        var result = service.finalizeRun(GROUP_ID, new ModelMaterializationRunArtifactService.FinalizeCommand("FAILED"));
-        assertThat(result.status()).isEqualTo("FAILED");
-        verify(runs, org.mockito.Mockito.times(2)).finalizeFailed(GROUP_ID, code, NOW);
-        verify(candidates, org.mockito.Mockito.times(2)).transition(any(), any(), any(), any());
+        var result = service.finalizeRun(GROUP_ID, new ModelMaterializationRunArtifactService.FinalizeCommand("SUCCEEDED"));
+        assertThat(result.status()).isEqualTo("BUILT");
+        verify(qualityAssets, never()).ensureRegistered(any());
+        verify(runs, never()).finalizeFailed(any(), any(), any());
     }
 
     @Test
@@ -999,7 +997,7 @@ class ModelMaterializationRunArtifactServiceTest {
                 "dbt build and physical relation evidence verified"
             )
         );
-        order.verify(qualityAssets).ensureRegistered(any(ModelReleaseCandidateContract.CandidateView.class));
+        verify(qualityAssets, never()).ensureRegistered(any());
         verify(auditService).auditActionAsStrict(
             eq("airflow"),
             eq("model-materialization-run:" + GROUP_ID + ":finalized:succeeded"),
