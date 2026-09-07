@@ -1324,8 +1324,9 @@ class DbtImplementationDraftServiceSecurityTest {
         verify(repository, never()).claimCommit(any(), any(), any(), any(), any(), any(), any(), any(), any());
     }
 
-    @Test
-    void commitsTheFrozenBundleAsAnImmutableConfigArtifactAndBindsItIntoImplementationIdempotency() throws Exception {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void commitsTheFrozenBundleAsAnImmutableConfigArtifactAndBindsItIntoImplementationIdempotency(boolean unified) throws Exception {
         String targetSql = "select * from {{ ref('stg_orders') }}\n";
         String stagingSql = "{{ config(materialized='ephemeral') }}\nselect 1 as order_id\n";
         List<FileRow> files = List.of(
@@ -1336,6 +1337,7 @@ class DbtImplementationDraftServiceSecurityTest {
         ValidatedProject project = projectWithGeneratedStaging(targetSql);
         BundleSnapshot bundle = bundle(files, project);
         String dependencyChecksum = "9".repeat(64);
+        String validatedDependencyChecksum = unified ? "8".repeat(64) : dependencyChecksum;
         Snapshot dependencySnapshot = new Snapshot(
             MODEL_ID,
             3,
@@ -1372,7 +1374,7 @@ class DbtImplementationDraftServiceSecurityTest {
             "commit-83",
             VALIDATED_CHECKSUM,
             bundle.bundleChecksum(),
-            dependencyChecksum
+            validatedDependencyChecksum
         );
         DraftRow validated = withSourceBundle(
             row(
@@ -1413,14 +1415,24 @@ class DbtImplementationDraftServiceSecurityTest {
             derivedKey,
             IMPLEMENTATION_ID
         );
+        if (unified) {
+            validated = org.mockito.Mockito.spy(validated);
+            when(validated.modelSpecSnapshot()).thenReturn(objectMapper.writeValueAsString(versionedVisualSnapshot()));
+            when(validated.validationSummary()).thenReturn(objectMapper.writeValueAsString(Map.of(
+                "dependencyValidation", Map.of("dependencyChecksum", validatedDependencyChecksum)
+            )));
+        }
         when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(validated));
         when(repository.listFiles(DRAFT_ID)).thenReturn(files);
         when(validator.validate(any())).thenReturn(project);
         ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(model.id()).thenReturn(MODEL_ID);
         String synchronizedChecksum = "e".repeat(64);
         ModelSpecView synchronizedModel = model(4, synchronizedChecksum);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
         when(modelSpecs.synchronizeDbtManagedFields(eq(TENANT), eq(ACTOR), eq(MODEL_ID), any(), any()))
+            .thenReturn(synchronizedModel);
+        when(modelSpecs.synchronizeAuthoringDraft(eq(TENANT), eq(ACTOR), eq(MODEL_ID), any(), any()))
             .thenReturn(synchronizedModel);
         when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
         TimelineView timeline = org.mockito.Mockito.mock(TimelineView.class);
@@ -1442,8 +1454,10 @@ class DbtImplementationDraftServiceSecurityTest {
         ModelImplementationDependencyService dependencyService = org.mockito.Mockito.mock(
             ModelImplementationDependencyService.class
         );
+        Snapshot authoredDependencies = new Snapshot(MODEL_ID, 3, MODEL_CHECKSUM, 1, IMPLEMENTATION_CHECKSUM,
+            List.of(), List.of(), validatedDependencyChecksum);
         when(dependencyService.resolveForDraft(any(), any(), any(), any(), any()))
-            .thenReturn(new Resolution(dependencySnapshot, Map.of()));
+            .thenAnswer(call -> new Resolution(call.getArgument(1) == model ? dependencySnapshot : authoredDependencies, Map.of()));
         when(dependencyService.reconcile(any(), any())).thenReturn(new Reconciliation(List.of(), List.of(), List.of()));
         DbtImplementationDraftService dependencyAwareService = new DbtImplementationDraftService(
             repository,
@@ -1465,11 +1479,12 @@ class DbtImplementationDraftServiceSecurityTest {
             ACTOR,
             MODEL_ID,
             DRAFT_ID,
-            new CommitDraftRequest("etag", VALIDATED_CHECKSUM, dependencyChecksum, "commit-83")
+            new CommitDraftRequest("etag", VALIDATED_CHECKSUM, validatedDependencyChecksum, "commit-83")
         );
 
         assertThat(receipt.modelRevision()).isEqualTo(4);
         assertThat(receipt.modelChecksum()).isEqualTo(synchronizedChecksum);
+        assertThat(receipt.dependencyChecksum()).isEqualTo(validatedDependencyChecksum);
 
         ArgumentCaptor<SaveImplementationCommand> implementationCommand = ArgumentCaptor.forClass(
             SaveImplementationCommand.class
@@ -1498,11 +1513,24 @@ class DbtImplementationDraftServiceSecurityTest {
             .isInstanceOf(Map.class)
             .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
             .containsEntry("modelSpecId", MODEL_ID.toString())
-            .containsEntry("dependencyChecksum", dependencyChecksum);
+            .containsEntry("dependencyChecksum", validatedDependencyChecksum);
 
         ArgumentCaptor<ImportCommand> importCommand = ArgumentCaptor.forClass(ImportCommand.class);
         verify(artifactImports).importArtifacts(importCommand.capture());
         assertThat(importCommand.getValue().idempotencyKey()).isEqualTo(derivedKey);
+        if (unified) {
+            Snapshot changedDependencies = new Snapshot(MODEL_ID, 3, MODEL_CHECKSUM, 1, IMPLEMENTATION_CHECKSUM,
+                List.of(), List.of(), "7".repeat(64));
+            when(dependencyService.resolveForDraft(any(), any(), any(), any(), any()))
+                .thenAnswer(call -> new Resolution(call.getArgument(1) == model ? dependencySnapshot : changedDependencies, Map.of()));
+            DraftException changed = catchThrowableOfType(
+                () -> dependencyAwareService.commit(TENANT, ACTOR, MODEL_ID, DRAFT_ID,
+                    new CommitDraftRequest("etag", VALIDATED_CHECKSUM, validatedDependencyChecksum, "commit-83")),
+                DraftException.class
+            );
+            assertThat(changed.code()).isEqualTo("DBT_DRAFT_DEPENDENCY_PIN_STALE");
+            verify(repository).claimCommit(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        }
         assertThat(importCommand.getValue().artifacts())
             .filteredOn(artifact -> artifact.artifactType() == ArtifactType.CONFIG)
             .singleElement()
@@ -1789,6 +1817,82 @@ class DbtImplementationDraftServiceSecurityTest {
             DraftException.class
         );
         assertThat(stale.code()).isEqualTo("DBT_DRAFT_BASE_MODEL_CONFLICT");
+    }
+
+    @Test
+    void alignsOnlyAnExactlyPersistedDefinitionAndKeepsTheSqlSnapshot() throws Exception {
+        ModelSpecView previous = model(3, MODEL_CHECKSUM);
+        when(previous.id()).thenReturn(MODEL_ID);
+        var codec = new com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec(objectMapper);
+        ModelSpecView latest = codec.toUpdatedView(previous, modelUpdateSnapshot(), 4, NOW);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(latest);
+        when(modelSpecs.revision(eq(TENANT), any())).thenReturn(previous);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(designerImplementation(), List.of(), List.of()));
+        SourceBundleView source = sourceBundle("sprint83", List.of(
+            new FileInput("models/orders.sql", "select manual_business_rule from orders\n")
+        ));
+        DraftRow original = authoringRowWithSource(objectMapper.writeValueAsString(versionedVisualSnapshot()),
+            objectMapper.writeValueAsString(source), "{}");
+        DraftRow aligned = org.mockito.Mockito.spy(original);
+        when(aligned.baseModelRevision()).thenReturn(4);
+        when(aligned.baseModelChecksum()).thenReturn(latest.checksum());
+        when(aligned.etag()).thenReturn("aligned-etag");
+        when(repository.alignAuthoringBase(any(), any(), any(), any(), any(), anyInt(), any(), anyInt(), any(), any(), any(), any()))
+            .thenReturn(Optional.of(aligned));
+
+        DraftRow result = ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW);
+
+        assertThat(result.baseModelRevision()).isEqualTo(4);
+        verify(repository).alignAuthoringBase(eq(TENANT), eq(MODEL_ID), eq(DRAFT_ID), eq(ACTOR), eq("authoring-etag"),
+            eq(3), eq(MODEL_CHECKSUM), eq(4), eq(latest.checksum()), eq(original.sourceBundleSnapshot()), any(), eq(NOW));
+        assertThat(result.modelSpecSnapshot()).isEqualTo(original.modelSpecSnapshot());
+        verify(repository, never()).replaceFiles(any(), any(), any(), any(), any(), any(), any(), any());
+
+        org.mockito.Mockito.clearInvocations(repository);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model(4, "f".repeat(64)));
+        DraftException conflict = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW),
+            DraftException.class
+        );
+        assertThat(conflict.code()).isEqualTo("DBT_DRAFT_BASE_MODEL_CONFLICT");
+        org.mockito.Mockito.verifyNoInteractions(repository);
+
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(latest);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(null, List.of(), List.of()));
+        DraftException implementationConflict = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW),
+            DraftException.class
+        );
+        assertThat(implementationConflict.code()).isEqualTo("DBT_DRAFT_BASE_IMPLEMENTATION_CONFLICT");
+        org.mockito.Mockito.verifyNoInteractions(repository);
+    }
+
+    @Test
+    void recognizesUneditedGeneratedSqlAtThePreviousRevisionAfterBaseAlignment() throws Exception {
+        String oldPath = "models/dwd/orders/v3/i2/orders.sql";
+        String customPath = "models/dwd/orders/v3/i2/custom.sql";
+        SourceBundleView source = sourceBundle("sprint83", List.of(new FileInput("models/orders.sql", "select 1\n")));
+        DraftRow draft = authoringRowWithSource(objectMapper.writeValueAsString(versionedVisualSnapshot()),
+            objectMapper.writeValueAsString(source), "{}");
+        when(repository.listFiles(DRAFT_ID)).thenReturn(List.of(file(oldPath, "select record_id from orders\n"),
+            file(customPath, "select handwritten from orders\n")));
+        ModelSpecView current = model(4, "e".repeat(64));
+        when(current.id()).thenReturn(MODEL_ID);
+        ModelLifecycleCompilerPort compiler = org.mockito.Mockito.mock(ModelLifecycleCompilerPort.class);
+        ReflectionTestUtils.setField(service, "visualCompiler", compiler);
+        when(compiler.compile(eq(TENANT), any(), any())).thenAnswer(call -> {
+            ModelSpecView owner = call.getArgument(1);
+            return List.of(new ArtifactWrite("SQL", "models/dwd/orders/v" + owner.revision() + "/i2/orders.sql",
+                "1".repeat(64), "select record_id from orders\n", "MODEL", "table", null));
+        });
+        java.util.Set<String> owned = ReflectionTestUtils.invokeMethod(service, "compilerOwnedPaths",
+            TENANT, MODEL_ID, draft, current, designerImplementation());
+        assertThat(owned).contains(oldPath).doesNotContain(customPath);
+        when(repository.listFiles(DRAFT_ID)).thenReturn(List.of(file(oldPath, "select user_changed_expression from orders\n")));
+        java.util.Set<String> modified = ReflectionTestUtils.invokeMethod(service, "compilerOwnedPaths",
+            TENANT, MODEL_ID, draft, current, designerImplementation());
+        assertThat(modified).doesNotContain(oldPath);
     }
 
     private ModelSpecView model(int revision, String checksum) {

@@ -594,6 +594,7 @@ public class DbtImplementationDraftService {
                 );
             }
             String requiredEtag = expectedEtag(expectedEtag);
+            if (!Objects.equals(current.etag(), requiredEtag)) throw etagConflict(current, requiredEtag);
             List<FileInput> files = DbtImplementationDraftContract.normalizeFiles(requestedFiles);
             Instant now = clock.instant();
             requireNotExpired(current, now);
@@ -603,37 +604,38 @@ public class DbtImplementationDraftService {
                     "A committing or committed authoring draft cannot be edited"
                 );
             }
+            if (visualView) requireUnmanagedFilesUnchanged(current, files, projectionSummary);
+            DraftRow aligned = alignAuthoringBase(tenantId, actorId, modelSpecId, current, now);
             if (visualView) {
                 var decoded = snapshotDecoder.decode(modelSpecSnapshot);
                 boolean structuredVisual = decoded.valid() && decoded.visualImplementation() != null;
-                requireUnmanagedFilesUnchanged(current, files, projectionSummary);
                 if (structuredVisual) {
                     files = recompileVisualAuthoring(
                         tenantId,
                         actorId,
                         modelSpecId,
-                        current,
+                        aligned,
                         files,
                         decoded,
                         projectionSummary
                     );
                 }
             }
-            requireManagedFilesUnchanged(current, files);
+            requireManagedFilesUnchanged(aligned, files);
             DraftRow saved = repository
                 .replaceAuthoringContent(
                     tenantId,
                     modelSpecId,
                     draftId,
                     actorId,
-                    requiredEtag,
+                    aligned.etag(),
                     nextEtag(),
                     jsonSnapshot(modelSpecSnapshot, "ModelSpec authoring snapshot"),
                     projectionSummary == null ? null : jsonSnapshot(projectionSummary, "Model projection summary"),
                     files,
                     now
                 )
-                .orElseThrow(() -> etagConflict(current, requiredEtag));
+                .orElseThrow(() -> etagConflict(aligned, aligned.etag()));
             long totalBytes = files
                 .stream()
                 .mapToLong(file -> file.content().getBytes(java.nio.charset.StandardCharsets.UTF_8).length)
@@ -847,6 +849,29 @@ public class DbtImplementationDraftService {
         addMatchingFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
         addMatchingLegacyFrozenSchemaFiles(paths, persisted, draft, currentImplementation, savedCompilerFiles);
         addMatchingHistoricalFrozenCompilerFiles(paths, persisted, draft, savedCompilerFiles.keySet());
+        // A definition save can advance the base while the working files still carry the old
+        // revision path. Prove their ownership by recompiling the saved snapshot at that revision.
+        var decoded = snapshotDecoder.decode(jsonNode(draft.modelSpecSnapshot()));
+        if (decoded.valid() && decoded.visualImplementation() != null) {
+            java.util.Set<Integer> priorRevisions = new java.util.TreeSet<>();
+            Pattern revisionPath = Pattern.compile("/v([1-9][0-9]*)/i[1-9][0-9]*/");
+            for (String path : persisted.keySet()) {
+                if (compilerArtifactSignature(path) == null) continue;
+                Matcher match = revisionPath.matcher(path);
+                if (!match.find()) continue;
+                try {
+                    int revision = Integer.parseInt(match.group(1));
+                    if (revision < currentModel.revision()) priorRevisions.add(revision);
+                } catch (NumberFormatException ignored) {
+                    // An unrepresentable revision is not compiler ownership evidence.
+                }
+            }
+            for (int revision : priorRevisions) {
+                ModelSpecView historical = snapshotCodec.toUpdatedView(currentModel, decoded.modelSpec(), revision, clock.instant());
+                addMatchingCompilerFiles(paths, persisted,
+                    authoringCompilerEvidence(tenantId, modelSpecId, draft, historical, currentImplementation));
+            }
+        }
         return java.util.Set.copyOf(paths);
     }
 
@@ -1195,6 +1220,7 @@ public class DbtImplementationDraftService {
         }
         if (!Objects.equals(current.etag(), expectedEtag)) throw etagConflict(current, expectedEtag);
         requireValidModelSnapshot(current);
+        current = alignAuthoringBase(tenantId, actorId, modelSpecId, current, now);
         List<FileRow> files = repository.listFiles(draftId);
         if (files.isEmpty()) {
             throw DbtImplementationDraftContract.unprocessable(
@@ -1569,7 +1595,7 @@ public class DbtImplementationDraftService {
         SourceBundleView frozenSource = current.sourceBundleSnapshot() == null
             ? null
             : sourceBundleSnapshot(current.sourceBundleSnapshot());
-        String dependencyChecksum = frozenSource == null ? null : frozenSource.dependencyChecksum();
+        String dependencyChecksum = commitDependencyChecksum(current, frozenSource);
         if (dependencyChecksum != null) {
             String suppliedDependencyChecksum = DbtImplementationDraftContract.requiredChecksum(
                 request == null ? null : request.dependencyChecksum(),
@@ -1638,6 +1664,13 @@ public class DbtImplementationDraftService {
             current,
             validated
         );
+        if (dependencyChecksum != null && (dependencyValidation == null ||
+            !Objects.equals(dependencyChecksum, dependencyValidation.dependencyChecksum()))) {
+            throw DbtImplementationDraftContract.precondition(
+                "DBT_DRAFT_DEPENDENCY_PIN_STALE",
+                "Dependencies changed since validation; validate the draft again before committing"
+            );
+        }
         if (!Objects.equals(validated.validatedChecksum(), validatedChecksum)) {
             throw DbtImplementationDraftContract.precondition(
                 "DBT_DRAFT_VALIDATED_CONTENT_CONFLICT",
@@ -1986,6 +2019,68 @@ public class DbtImplementationDraftService {
             "DBT_DRAFT_BASE_IMPLEMENTATION_CONFLICT",
             "The implementation revision changed from the draft base"
         );
+    }
+
+    /**
+     * Saving the definition can persist the exact content already held by the authoring draft.
+     * Align that draft under CAS, retaining every source/working file. Different content remains
+     * a conflict; this is not a merge or permission to overwrite another editor's changes.
+     */
+    private DraftRow alignAuthoringBase(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        DraftRow draft,
+        Instant now
+    ) {
+        if (draft.modelSpecSnapshot() == null || draft.sourceBundleSnapshot() == null) return draft;
+        ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, draft.planId(), true);
+        if (model.revision() == draft.baseModelRevision() && Objects.equals(model.checksum(), draft.baseModelChecksum())) {
+            return draft;
+        }
+        UpdateModelSpecCommand snapshot = requireValidModelSnapshot(draft);
+        ModelSpecView originalModel = modelSpecs.revision(tenantId,
+            new com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef(modelSpecId, draft.baseModelRevision()));
+        requireModelPins(draft, originalModel);
+        if (snapshot == null || model.status() != ModelStatus.DRAFT || model.revision() <= draft.baseModelRevision() ||
+            !Objects.equals(model.checksum(), snapshotCodec.toUpdatedView(originalModel, snapshot, model.revision(), now).checksum())) {
+            throw DbtImplementationDraftContract.conflict(
+                "DBT_DRAFT_BASE_MODEL_CONFLICT",
+                "模型定义已变更，且与当前创作草稿不一致。草稿及 SQL 已保留，请核对模型设计后再提交。"
+            );
+        }
+        ImplementationView implementation = lifecycle.timeline(tenantId, modelSpecId).implementation();
+        requireImplementationPin(modelSpecId, implementation, draft.baseImplementationRevision(),
+            draft.baseImplementationChecksum(), true);
+        SourceBundleView frozen = sourceBundleSnapshot(draft.sourceBundleSnapshot());
+        Resolution resolution = dependencies == null ? null
+            : resolveDependencies(tenantId, model, null, frozen.projectKey(), null);
+        SourceBundleView alignedSource = resolution == null ? frozen
+            : withDependencies(frozen, resolution, frozen.managedDependencyAliases());
+        DraftRow aligned = repository.alignAuthoringBase(
+            tenantId, modelSpecId, draft.id(), actorId, draft.etag(),
+            draft.baseModelRevision(), draft.baseModelChecksum(), model.revision(), model.checksum(),
+            sourceBundleSnapshot(alignedSource), nextEtag(), now
+        ).orElseThrow(() -> etagConflict(draft, draft.etag()));
+        audit("MODELING_DBT_DRAFT_BASE_SYNC", aligned, 0, null, null, null, null,
+            DbtImplementationDraftCorrelation.currentOrCreate());
+        return aligned;
+    }
+
+    /** The immutable initialization dependency snapshot is a base pin, not the validated commit pin. */
+    private String commitDependencyChecksum(DraftRow draft, SourceBundleView frozen) {
+        if (draft.modelSpecSnapshot() == null) return frozen == null ? null : frozen.dependencyChecksum();
+        JsonNode summary = jsonNode(draft.validationSummary());
+        String validated = summary == null ? null
+            : summary.path("dependencyValidation").path("dependencyChecksum").asText(null);
+        if (validated != null) return DbtImplementationDraftContract.requiredChecksum(validated, "dependencyChecksum");
+        if (frozen != null && frozen.dependencySnapshot() != null) {
+            throw DbtImplementationDraftContract.precondition(
+                "DBT_DRAFT_VALIDATION_REQUIRED",
+                "请重新校验当前草稿后提交，实现提交需要本次校验的依赖版本。"
+            );
+        }
+        return null;
     }
 
     private static void requireModelPins(DraftRow draft, ModelSpecView model) {

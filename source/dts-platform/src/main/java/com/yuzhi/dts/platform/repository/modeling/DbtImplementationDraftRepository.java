@@ -325,6 +325,41 @@ public class DbtImplementationDraftRepository {
         return findForActor(tenantId, modelSpecId, draftId, actorId);
     }
 
+    /** Advances an equivalent authoring base without rewriting its frozen files or working SQL. */
+    public Optional<DraftRow> alignAuthoringBase(
+        String tenantId,
+        UUID modelSpecId,
+        UUID draftId,
+        String actorId,
+        String expectedEtag,
+        int expectedRevision,
+        String expectedChecksum,
+        int revision,
+        String checksum,
+        String sourceBundleSnapshot,
+        String nextEtag,
+        Instant now
+    ) {
+        int changed = jdbcTemplate.update(
+            """
+            update modeling_dbt_implementation_draft
+               set base_model_revision = ?, base_model_checksum = ?, source_bundle_snapshot = cast(? as jsonb),
+                   status = 'DRAFT', etag = ?, validated_checksum = null, validation_summary = null,
+                   project_checksum = null, bundle_checksum = null, bundle_manifest = null, last_modified_date = ?
+             where tenant_id = ? and model_spec_id = ? and id = ? and actor_id = ? and etag = ?
+               and base_model_revision = ? and base_model_checksum = ?
+               and model_spec_snapshot is not null and expires_at > ? and status in ('DRAFT', 'VALIDATED')
+               and exists (select 1 from modeling_model_spec spec
+                            where spec.tenant_id = ? and spec.id = ? and spec.status = 'DRAFT'
+                              and spec.revision = ? and spec.current_checksum = ?)
+            """,
+            revision, checksum, sourceBundleSnapshot, nextEtag, Timestamp.from(now),
+            tenantId, modelSpecId, draftId, actorId, expectedEtag, expectedRevision, expectedChecksum, Timestamp.from(now),
+            tenantId, modelSpecId, revision, checksum
+        );
+        return changed == 1 ? findForActor(tenantId, modelSpecId, draftId, actorId) : Optional.empty();
+    }
+
     private void replaceFileRows(UUID draftId, List<FileInput> files, Instant now) {
         jdbcTemplate.update("delete from modeling_dbt_implementation_draft_file where draft_id = ?", draftId);
         jdbcTemplate.batchUpdate(
