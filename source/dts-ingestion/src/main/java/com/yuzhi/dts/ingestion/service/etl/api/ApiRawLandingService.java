@@ -39,6 +39,7 @@ public class ApiRawLandingService {
     private final ObjectMapper objectMapper;
     private final CursorTracker cursorTracker = new CursorTracker();
     private final ApiProperties apiProperties;
+    private final com.yuzhi.dts.ingestion.service.etl.ModelTargetGuard modelTargets;
 
     public ApiRawLandingService(JdbcMetadataService metadataService, ObjectMapper objectMapper) {
         this(metadataService, null, objectMapper, new ApiProperties());
@@ -48,13 +49,19 @@ public class ApiRawLandingService {
         this(metadataService, null, objectMapper, apiProperties);
     }
 
-    @Autowired
     public ApiRawLandingService(
         JdbcMetadataService metadataService,
         IngestionSourceResolver sourceResolver,
         ObjectMapper objectMapper,
         ApiProperties apiProperties
     ) {
+        this(metadataService, sourceResolver, objectMapper, apiProperties, null);
+    }
+
+    @Autowired
+    public ApiRawLandingService(JdbcMetadataService metadataService, IngestionSourceResolver sourceResolver,
+        ObjectMapper objectMapper, ApiProperties apiProperties, com.yuzhi.dts.ingestion.service.etl.ModelTargetGuard modelTargets) {
+        this.modelTargets = modelTargets;
         this.metadataService = metadataService;
         this.sourceResolver = sourceResolver;
         this.objectMapper = objectMapper == null ? new ObjectMapper() : objectMapper;
@@ -86,7 +93,11 @@ public class ApiRawLandingService {
                 connection = metadataService.openConnection(targetInfo);
                 connection.setAutoCommit(false);
                 ensureCheckpointTable(connection);
-                ensureLandingTable(connection, resource.targetTable());
+                if (com.yuzhi.dts.ingestion.service.etl.ModelTargetGuard.isBound(task)) {
+                    if (modelTargets == null) throw new IllegalStateException("MODEL_INGESTION_TARGET_VALIDATOR_UNAVAILABLE");
+                    TableId table = TableId.parse(resource.targetTable());
+                    modelTargets.validate(task, connection, table.schema(), table.table(), modelWriteColumns());
+                } else ensureLandingTable(connection, resource.targetTable());
                 long resourceWritten = insertResourceRecords(connection, resource, sourceConfig, task, execution, entry.getValue());
                 writeCheckpointIfNeeded(connection, plan, task, execution, resource, entry.getValue());
                 connection.commit();
@@ -231,6 +242,16 @@ public class ApiRawLandingService {
                     + "updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), PRIMARY KEY (task_id, resource_id))"
             );
         }
+    }
+
+    private static List<JdbcMetadataService.ColumnMeta> modelWriteColumns() {
+        List<JdbcMetadataService.ColumnMeta> columns = new ArrayList<>();
+        columns.add(new JdbcMetadataService.ColumnMeta("_dts_raw_record", java.sql.Types.OTHER, "jsonb", null, null));
+        columns.add(new JdbcMetadataService.ColumnMeta("_dts_import_time", java.sql.Types.TIMESTAMP_WITH_TIMEZONE, "timestamptz", null, null));
+        for (String name : List.of("_dts_source_system", "_dts_source_resource", "_dts_endpoint", "_dts_batch_id", "_dts_execution_id", "_dts_cursor_value", "_dts_record_hash"))
+            columns.add(new JdbcMetadataService.ColumnMeta(name, java.sql.Types.VARCHAR, "text", Integer.MAX_VALUE, null));
+        for (String name : List.of("_dts_page_no", "_dts_record_no")) columns.add(new JdbcMetadataService.ColumnMeta(name, java.sql.Types.INTEGER, "integer", null, null));
+        return columns;
     }
 
     private void ensureLandingTable(Connection connection, String targetTable) throws Exception {

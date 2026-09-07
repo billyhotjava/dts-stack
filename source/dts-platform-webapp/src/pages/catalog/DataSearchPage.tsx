@@ -7,6 +7,7 @@ import { AssetTagFilter } from "@/components/catalog/tags/AssetTagFilter";
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { PageHeader } from "@/components/page-header";
 import { type AssetDirectoryRow, AssetLedgerView } from "./assets/AssetLedgerView";
+import { ModelDataOperationsPanel } from "./assets/ModelDataOperationsPanel";
 import { AssetTagsWorkspace } from "./assets/AssetTagsWorkspace";
 import { ASSET_PORTAL_V2_ENABLED, LEDGER_PAGE_SIZE } from "./assets/assetPageShared";
 import { buildAssetV2Query } from "./assets/assetV2Query";
@@ -186,6 +187,9 @@ export default function DataSearchPage() {
 					{ key: "catalog-tags", label: "数据标签" },
 				]}
 			/>
+			{activeTab === "asset-directory" && searchParams.get("modelSpecId") ? <ModelDataOperationsPanel
+				key={`${searchParams.get("modelSpecId")}:${searchParams.get("environment") || "dev"}`}
+				modelSpecId={searchParams.get("modelSpecId")!} environment={searchParams.get("environment") || "dev"} /> : null}
 			{activeTab === "catalog-tags" ? <AssetTagsWorkspace /> : <DataAssetDirectoryPage />}
 		</div>
 	);

@@ -1,3 +1,4 @@
+import { ModelTargetBindingPicker } from "./ModelTargetBindingPicker";
 import { Alert, Form, Input, InputNumber, Select, Space, Switch, Tag, Typography } from "antd";
 import type { FormInstance } from "antd/es/form";
 import type { DefaultDestinationStatus } from "@/api/ingestion";
@@ -13,6 +14,7 @@ type Props = {
 };
 
 export function LandingScheduleStep({ form, kind, targetDataSources, defaultDestination }: Props) {
+	const modelTarget = Form.useWatch("modelTarget", form);
 	const scheduleType = Form.useWatch("scheduleType", form) || "manual";
 	const syncMode = Form.useWatch("syncMode", form) || "full_refresh";
 	const available = Boolean(
@@ -35,6 +37,7 @@ export function LandingScheduleStep({ form, kind, targetDataSources, defaultDest
 					.filter(Boolean)
 					.join(" · ")}
 			/>
+			<ModelTargetBindingPicker form={form} />
 			{kind !== "file" ? (
 				<Form.Item
 					name="targetDataSourceId"
@@ -42,6 +45,7 @@ export function LandingScheduleStep({ form, kind, targetDataSources, defaultDest
 					rules={[{ required: true, message: "请选择目标数据源" }]}
 				>
 					<Select
+						disabled={Boolean(modelTarget)}
 						showSearch
 						optionFilterProp="label"
 						options={targetDataSources.map((item) => ({
@@ -54,7 +58,7 @@ export function LandingScheduleStep({ form, kind, targetDataSources, defaultDest
 			{kind === "file" ? (
 				<Space>
 					<Typography.Text>同步模式</Typography.Text>
-					<Tag color="blue">全量导入</Tag>
+					<Tag color="blue">{modelTarget ? "全量采集，追加写入模型表" : "全量导入"}</Tag>
 				</Space>
 			) : (
 				<Form.Item name="syncMode" label="同步模式">

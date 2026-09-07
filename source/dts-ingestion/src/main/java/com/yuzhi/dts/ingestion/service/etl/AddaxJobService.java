@@ -149,10 +149,11 @@ public class AddaxJobService {
         Map<String, Object> runtimeContext
     ) {
         Map<String, Object> resolvedJob = resolveJobConfig(readerType, readerConfig, writerType, writerConfig, jobConfig, runtimeContext);
-        if ("full_refresh".equalsIgnoreCase(syncMode)) {
+        if ("full_refresh".equalsIgnoreCase(syncMode) && !ModelTargetGuard.isBound(writerConfig)) {
             applyFullRefreshPreSql(resolvedJob, runtimeContext);
         }
         applyReaderRuntimeOverridesToJob(resolvedJob, runtimeReaderOverrides);
+        if (ModelTargetGuard.isBound(writerConfig)) stripBoundTargetJobMetadata(resolvedJob);
         String jobDir = resolveJobDir();
         String jobName = buildJobName(taskName);
         Path dir = Paths.get(jobDir);
@@ -311,6 +312,12 @@ public class AddaxJobService {
         Map<String, Object> jobConfig,
         Map<String, Object> runtimeContext
     ) {
+        if (ModelTargetGuard.isBound(writerConfig)) {
+            for (String sqlKey : List.of("preSql", "postSql")) {
+                Object sql = writerConfig.get(sqlKey);
+                if (sql != null && !sql.toString().isBlank() && !sql.toString().equals("[]")) throw new IllegalArgumentException("MODEL_INGESTION_CUSTOM_SQL_FORBIDDEN");
+            }
+        }
         if (jobConfig != null && !jobConfig.isEmpty()) {
             Map<String, Object> normalized = new LinkedHashMap<>(jobConfig);
             normalizeAddaxJobConfig(normalized);
@@ -344,7 +351,7 @@ public class AddaxJobService {
         }
         ensureWriterConnection(writerType, resolvedWriter);
         ensureDefaultExtraColumns(readerConfig, resolvedReader, resolvedWriter, readerType, writerType, runtimeContext);
-        if (isFileReaderType(readerType) && !fileColumns.isEmpty()) {
+        if (isFileReaderType(readerType) && !fileColumns.isEmpty() && !ModelTargetGuard.isBound(writerConfig)) {
             injectFileSourceCreateTablePreSql(
                 resolvedWriter,
                 fileColumns,
@@ -444,7 +451,7 @@ public class AddaxJobService {
                 continue;
             }
             String sourceTable = resolveSourceTableForExtra(readerParams, readerParams, writerParams);
-            injectExtraColumnsPostSql(writerParams, writerType, sourceTable);
+            if (!ModelTargetGuard.isBound(writerParams)) injectExtraColumnsPostSql(writerParams, writerType, sourceTable);
         }
     }
 
@@ -1426,6 +1433,7 @@ public class AddaxJobService {
             applyManagedFileLandingTarget(readerConfig, writerConfig, writerType);
             jobConfig = null;
         }
+        if (ModelTargetGuard.isBound(writerConfig)) jobConfig = null;
         return createJob(
             task.getName(),
             resolvedReaderType,
@@ -1437,6 +1445,20 @@ public class AddaxJobService {
             runtimeReaderOverrides,
             runtimeContext
         );
+    }
+
+    private void stripBoundTargetJobMetadata(Map<String, Object> job) {
+        Object root = job.get("job");
+        if (!(root instanceof Map<?, ?> body) || !(body.get("content") instanceof List<?> contents)) throw new IllegalStateException("MODEL_INGESTION_JOB_INVALID");
+        for (Object item : contents) {
+            if (!(item instanceof Map<?, ?> content) || !(content.get("writer") instanceof Map<?, ?> writer) ||
+                !(writer.get("parameter") instanceof Map<?, ?> parameters)) throw new IllegalStateException("MODEL_INGESTION_JOB_INVALID");
+            for (String key : List.of("preSql", "postSql")) {
+                Object sql = parameters.get(key);
+                if (sql != null && !sql.toString().isBlank() && !sql.toString().equals("[]")) throw new IllegalStateException("MODEL_INGESTION_CUSTOM_SQL_FORBIDDEN");
+            }
+            parameters.remove("modelTarget");
+        }
     }
 
     private Map<String, Object> resolveManagedDestinationConfig(Map<String, Object> config) {

@@ -44,6 +44,7 @@ export type ModelingResult = {
 };
 export type ModelDeliveryStatus = {
 	modelingResult?: ModelingResult;
+	dataPrimaryAction?: DeliveryAction | null;
 	workspace: ReleaseCandidateWorkbench | null;
 	modelSpecId: string;
 	modelRevision: number;

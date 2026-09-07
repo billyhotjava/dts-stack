@@ -123,6 +123,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         String service = serviceName.trim().toLowerCase(java.util.Locale.ROOT);
         if ("dts-ingestion".equals(service)) {
             return isGetRuntimeDetail(method, path)
+                || isPost(method, path, "/api/internal/modeling/ingestion-targets/validate")
                 || isPost(method, path, "/api/internal/rollback-invalidation/completions")
                 || isPost(method, path, "/api/governance/quality/pre-check")
                 || isPost(method, path, "/api/governance/quality/runs")

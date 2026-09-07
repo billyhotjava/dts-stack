@@ -57,6 +57,18 @@ public class PlatformInfraClient {
         this.schemaSnapshotRepository = schemaSnapshotRepository;
     }
 
+    public void validateModelIngestionTarget(JsonNode target) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        applyServiceHeaders(headers);
+        var response = restTemplate.exchange(buildUri("/internal/modeling/ingestion-targets/validate"), HttpMethod.POST,
+            new HttpEntity<>(target, headers), JsonNode.class);
+        JsonNode body = response.getBody();
+        if (!response.getStatusCode().is2xxSuccessful() || body == null || !target.equals(body.get("data"))) {
+            throw new IllegalStateException("MODEL_INGESTION_TARGET_STALE：模型目标已变化，请重新绑定");
+        }
+    }
+
     public DataSourceDetail fetchDataSourceDetail(UUID id) {
         if (id == null) {
             throw new IllegalArgumentException("dataSourceId不能为空");

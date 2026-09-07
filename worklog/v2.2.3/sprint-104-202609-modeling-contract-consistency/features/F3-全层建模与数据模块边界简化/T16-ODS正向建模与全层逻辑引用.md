@@ -1,7 +1,7 @@
 # T16：ODS 正向建模与全层逻辑引用
 
 **优先级**：P1  
-**状态**：DRAFT  
+**状态**：IN_PROGRESS
 **依赖**：T15 冻结 K31/K32、数据库/快照兼容、字段映射和引用状态。
 
 ## 目标
@@ -37,3 +37,7 @@ ModelWorkbenchCreateMenu、modelWorkbenchService、modelSpecV2Contract；ModelSp
 - [ ] 旧四类/真实来源/旧快照兼容；如有迁移，清洁库与升级库均验证。
 - [ ] 真实页面四态与身份/修订/依赖存储对应；Chrome 95 分项证据由 T20 汇总。
 - [ ] DoR：T15 的 K31/K32 及基线已冻结；DoD：上述契约、界面、竖切片通过。本次未实施。
+
+## 2026-09-07 实施进度
+
+代码与定向检查进行中，尚未完成正式部署或真实页面验收。逐项证据见 [实施审查记录](../../assets/implementation-review-20260907.md)。DoD 复选框待真实验收后关闭。

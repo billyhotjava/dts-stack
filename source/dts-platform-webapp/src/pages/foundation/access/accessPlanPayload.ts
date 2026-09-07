@@ -109,7 +109,7 @@ const buildDestination = (context: AccessPlanPayloadContext) => {
 	return {
 		usePlatformDefault: true as const,
 		type: resolveWriterType(context.selectedTarget, context.defaultDestination.writerType),
-		config: { targetDataSourceId },
+		config: { targetDataSourceId, ...(context.values.modelTarget ? { modelTarget: context.values.modelTarget, schema: context.values.modelTarget.schemaName, table: [`${context.values.modelTarget.schemaName}.${context.values.modelTarget.tableName}`] } : {}) },
 	};
 };
 
@@ -291,9 +291,16 @@ const buildFileRequest = (context: AccessPlanPayloadContext): AccessPlanCreateRe
 };
 
 export const buildAccessPlanCreateRequest = (context: AccessPlanPayloadContext): AccessPlanCreateRequest => {
-	if (context.kind === "api") return buildApiRequest(context);
-	if (context.kind === "file") return buildFileRequest(context);
-	return buildDatabaseRequest(context);
+	const target = context.values.modelTarget;
+	if (target && (target.dataSourceId !== context.values.targetDataSourceId || context.values.syncMode !== "full_refresh")) throw new Error("模型目标身份已变化或加载方式不支持，请重新绑定");
+	if (target && context.kind === "database" && (context.values.tableSelectionMode !== "manual" || context.values.selectedTables.length !== 1)) throw new Error("已有模型表一次只能绑定一张来源表");
+	const request = context.kind === "api" ? buildApiRequest(context) : context.kind === "file" ? buildFileRequest(context) : buildDatabaseRequest(context);
+	if (target && context.kind === "api") {
+		const resource = requireApiResource(request.source.config.resource);
+		const bound = { ...resource, targetTable: `${target.schemaName}.${target.tableName}` };
+		request.source.config = { ...request.source.config, resource: bound, resources: [bound] };
+	}
+	return request;
 };
 
 export const buildAccessPlanUpdateDTO = (
@@ -304,7 +311,7 @@ export const buildAccessPlanUpdateDTO = (
 	const request = buildAccessPlanCreateRequest(context);
 	const resource = context.kind === "api" ? requireApiResource(request.source.config.resource) : undefined;
 	const sourceTables = request.streams.include || [];
-	const targetTables =
+	const targetTables = context.values.modelTarget ? [`${context.values.modelTarget.schemaName}.${context.values.modelTarget.tableName}`] :
 		context.kind === "api"
 			? [normalizeText(resource?.targetTable) || `ods_api_${sourceTables[0] || "resource"}`]
 			: context.kind === "file"
@@ -369,6 +376,7 @@ export const toAccessPlanFormValues = (task: IngestionTaskDTO): Partial<AccessPl
 	const cursor = parseObject(legacy.apiCursorJson);
 	return {
 		...(legacy as Omit<Partial<AccessPlanFormValues>, "tableSelectionMode" | "selectedTables">),
+		modelTarget: task.destinationConfig?.modelTarget as AccessPlanFormValues["modelTarget"],
 		tableSelectionMode: legacy.tableSelectionMode === "manual" ? "manual" : "all",
 		selectedTables: parseTableEntries(legacy.selectedTables || legacy.readerTables),
 		apiPageParam: optionalText(pagination.pageParam),

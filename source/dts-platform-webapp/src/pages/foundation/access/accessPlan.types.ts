@@ -1,3 +1,4 @@
+import type { ModelIngestionTarget } from "@/api/modelIngestionTargetApi";
 import type {
 	ApiConnectionTestResultDTO,
 	ClassificationSealReference,
@@ -16,6 +17,7 @@ export type AccessScheduleType = "manual" | "interval" | "cron";
 export type AccessSyncMode = "full_refresh" | "incremental";
 
 export type AccessPlanFormValues = {
+	modelTarget?: ModelIngestionTarget;
 	name: string;
 	description?: string;
 	sourceSystem?: string;
@@ -84,7 +86,7 @@ export type AccessPlanCreateRequest = {
 	destination: {
 		usePlatformDefault: true;
 		type: string;
-		config: { targetDataSourceId: string };
+		config: { targetDataSourceId: string; modelTarget?: ModelIngestionTarget; schema?: string; table?: string[] };
 	};
 	sync: Record<string, unknown>;
 	streams: {

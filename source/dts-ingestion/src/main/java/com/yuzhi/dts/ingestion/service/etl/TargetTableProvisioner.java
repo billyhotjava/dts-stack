@@ -46,17 +46,17 @@ public class TargetTableProvisioner {
     private final ObjectMapper objectMapper;
     private final IngestionSchemaSnapshotService schemaSnapshotService;
     private final IngestionSourceResolver sourceResolver;
+    private final ModelTargetGuard modelTargets;
 
-    public TargetTableProvisioner(
-        JdbcMetadataService metadataService,
-        ObjectMapper objectMapper,
-        IngestionSchemaSnapshotService schemaSnapshotService,
-        IngestionSourceResolver sourceResolver
-    ) {
-        this.metadataService = metadataService;
-        this.objectMapper = objectMapper;
-        this.schemaSnapshotService = schemaSnapshotService;
-        this.sourceResolver = sourceResolver;
+    public TargetTableProvisioner(JdbcMetadataService metadataService, ObjectMapper objectMapper,
+        IngestionSchemaSnapshotService schemaSnapshotService, IngestionSourceResolver sourceResolver) {
+        this(metadataService, objectMapper, schemaSnapshotService, sourceResolver, null);
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public TargetTableProvisioner(JdbcMetadataService metadataService, ObjectMapper objectMapper,
+        IngestionSchemaSnapshotService schemaSnapshotService, IngestionSourceResolver sourceResolver, ModelTargetGuard modelTargets) {
+        this.metadataService = metadataService; this.objectMapper = objectMapper;
+        this.schemaSnapshotService = schemaSnapshotService; this.sourceResolver = sourceResolver; this.modelTargets = modelTargets;
     }
 
     public void ensureTargetTables(IngestionTask task) {
@@ -78,16 +78,18 @@ public class TargetTableProvisioner {
             ? jsonNodeToMap(task.getDestinationConfig())
             : Map.of();
         boolean fullRefresh = isFullRefreshMode(task.getSyncMode());
-        if (!fullRefresh && !shouldAutoCreate(writerConfig, task.getAddaxConfig())) {
+        if (!ModelTargetGuard.isBound(task) && !fullRefresh && !shouldAutoCreate(writerConfig, task.getAddaxConfig())) {
             return;
         }
         List<TableMapping> mappings = resolveMappings(task.getTableMapping(), readerConfig, writerConfig);
         if (mappings.isEmpty()) {
+            if (ModelTargetGuard.isBound(task)) throw new IllegalStateException("MODEL_INGESTION_TARGET_MAPPING_REQUIRED");
             return;
         }
         JdbcMetadataService.JdbcConnectionInfo sourceInfo = buildConnectionInfo(readerConfig);
         JdbcMetadataService.JdbcConnectionInfo targetInfo = resolveTargetConnectionInfo(writerConfig);
         if (!StringUtils.hasText(targetInfo.jdbcUrl())) {
+            if (ModelTargetGuard.isBound(task)) throw new IllegalStateException("MODEL_INGESTION_TARGET_CONNECTION_REQUIRED");
             LOG.warn("Target jdbcUrl missing, skip auto-create tables for task={}", task.getId());
             return;
         }
@@ -140,6 +142,11 @@ public class TargetTableProvisioner {
             }
             try {
                 for (ProvisioningPlan plan : plans) {
+                    if (ModelTargetGuard.isBound(task)) {
+                        if (modelTargets == null) throw new IllegalStateException("MODEL_INGESTION_TARGET_VALIDATOR_UNAVAILABLE");
+                        modelTargets.validate(task, connection, plan.target().schema(), plan.target().table(), plan.odsColumns());
+                        continue;
+                    }
                     createSchemaIfNeeded(connection, plan.target().schema());
                     boolean exists = tableExists(connection, plan.target());
                     if (fileLandingPolicy != null && exists && !transactionalDdl) {

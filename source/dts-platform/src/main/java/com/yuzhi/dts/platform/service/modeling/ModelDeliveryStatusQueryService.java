@@ -86,7 +86,8 @@ public class ModelDeliveryStatusQueryService {
         return new DeliveryStatusView(model.id(), model.revision(), model.checksum(), model.planId(), selectedCandidate == null ? null : selectedCandidate.environment(),
             selectedCandidate == null ? null : new CandidateSummary(selectedCandidate.id(), selectedCandidate.version(), selectedCandidate.status().name(), entry.revision(), entry.checksum(), current, selectedCandidate.lastModifiedAt()),
             Instant.now(), recommended(selectedCandidate, current), workspace, wizard(authoringContext, selectedCandidate, workspace, current, actions, qualityContext, model, entry), steps, actions,
-            modelingResult(model, authoringContext, selectedCandidate, workspace, entry, current, environment));
+            modelingResult(model, authoringContext, selectedCandidate, workspace, entry, current, environment),
+            current ? first(actions, "CONFIGURE_QUALITY_RULES", "RERUN_GOVERNANCE_QUALITY", "RUN_QUALITY", "SUBMIT_REVIEW", "APPROVE", "PUBLISH", "RETRY_PUBLICATION") : null);
     }
 
     private static String materialization(CandidateView candidate, boolean current) {
@@ -316,7 +317,7 @@ public class ModelDeliveryStatusQueryService {
         Integer implementationRevision, String implementationChecksum, String buildMode, String environment, UUID candidateId,
         UUID runGroupId, String targetRelation, boolean matchesCurrentTarget, Instant observedAt) {}
 
-    public record DeliveryStatusView(UUID modelSpecId, int modelRevision, String modelChecksum, UUID planId, String environment, CandidateSummary candidate, Instant observedAt, String recommendedStep, WorkbenchView workspace, List<WizardPageView> wizard, List<StepView> steps, List<ActionView> actions, ModelingResultView modelingResult) {}
+    public record DeliveryStatusView(UUID modelSpecId, int modelRevision, String modelChecksum, UUID planId, String environment, CandidateSummary candidate, Instant observedAt, String recommendedStep, WorkbenchView workspace, List<WizardPageView> wizard, List<StepView> steps, List<ActionView> actions, ModelingResultView modelingResult, ActionView dataPrimaryAction) {}
     public record CandidateSummary(UUID id, int version, String status, int entryRevision, String entryChecksum, boolean matchesCurrentModel, Instant updatedAt) {}
     public record WizardPageView(String key, boolean canView, boolean canEdit, String reasonCode, ActionView primaryAction) {}
     public record StepView(String key, String state, String reasonCode, String message, Integer evidenceRevision, boolean matchesCurrentTarget, String resourceId, Instant updatedAt, List<OutputView> outputs) { public StepView { outputs = List.copyOf(outputs == null ? List.of() : outputs); } }

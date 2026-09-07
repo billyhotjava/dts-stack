@@ -1205,7 +1205,7 @@ public class IngestionTaskService {
             // API tasks provision their ODS landing table inside the DAG (raw_record + technical columns),
             // and they don't have an Addax job to resolve writer columns from.
             boolean managedFileLanding = hasManagedFileLanding(task);
-            if ((!isFileSourceType(task.getSourceType()) || managedFileLanding) && !apiTask) {
+            if ((!isFileSourceType(task.getSourceType()) || managedFileLanding || com.yuzhi.dts.ingestion.service.etl.ModelTargetGuard.isBound(task)) && !apiTask) {
                 targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig(), execution);
             }
             if (!apiTask) {

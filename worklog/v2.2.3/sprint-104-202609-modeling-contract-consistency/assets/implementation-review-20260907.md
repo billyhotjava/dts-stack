@@ -59,3 +59,10 @@ dbt 默认 table materialization 在 pre-hook 前会清理中间/备份关系，
 - delivery-status 追加 modelingResult：当前模型/实现修订与校验值、环境、候选、运行组、目标表、观察时间；完成必须匹配当前不可变候选条目、实现修订、成功运行及 VERIFIED 关系证据。无证据为 UNKNOWN，不用质量/发布/分析状态推断建模完成。
 - 正常建模导航仅 definition/implementation/verification；verification 主动作只允许建模动作。完成主操作返回列表，次操作按 modelSpecId/environment 到数据管理。
 - delivery 旧深链继续显示历史只读结果和数据导航，禁止在旧页隐式执行发布。现有数据治理 owner 和命令权限保留。
+
+### K35/K36 冻结切片
+
+- 接入使用既有 destinationConfig JSON 的 modelTarget 对象保存版本绑定；字段为 schemaVersion=1、modelSpecId/modelRevision/modelChecksum、implementationRevision/implementationChecksum、environment/candidateId/runGroupId、dataSourceId/databaseName/schemaName/tableName 和声明 columns。不新增关系表、不复制 ModelSpec。
+- 目标由服务读取当前 ODS/SOURCE 物化证据和执行目标目录身份解析；客户端不得以自由表名替代。执行前经既有受信服务通道核对当前绑定，并在目标连接上只读核验字段。绑定目标禁止建表、加列、DROP、TRUNCATE 和自定义前后置 SQL；现有全量采集仅向该模型表追加，界面明确展示此差异。
+- 文件、数据库沿用当前字段及技术列生成；缺列、类型或技术列不兼容即拒绝。API 仅支持既有 raw_record/技术列结构，不新增展平能力。
+- 数据入口复用 catalog/search 的 modelSpecId/environment/candidateId 上下文及既有质量、Catalog CAS、发布和分析恢复组件；服务返回 dataPrimaryAction，旧建模 delivery 深链仅回看。人工治理字段仍由原 Catalog owner 保存。
