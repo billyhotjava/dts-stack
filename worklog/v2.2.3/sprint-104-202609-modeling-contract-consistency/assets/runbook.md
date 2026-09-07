@@ -48,3 +48,14 @@ docker run --rm --network host --entrypoint python3 \
 - 运行时诊断区分平台源缺失、分析关联缺失、目标/字段未就绪、连接失败、认证拒绝、查询投影失败。T13 固定结构化错误与有界重试后，T14 写入实际操作入口及停止条件。
 - 发生版本冲突先重读状态，保留用户输入；不得手工改状态表使其变绿。审计记录不含数据源凭据。
 - 以 IT-13/IT-14 真实证据补齐服务恢复和离线部署步骤后才能将本节标为已验证。
+
+## F3 分项运行诊断（2026-09-07）
+
+- 物化前记录模型及实现 revision/checksum、环境、SCHEMA_ONLY/DATA_BUILD、目标数据库/schema/table；物化后同时检查运行成功、关系 VERIFIED 和当前版本完成证据，不能只看零行或 BUILT 标签。
+- `MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS` / `MODEL_ACTIVE_BATCH_CANDIDATE_CONFLICT`：保留返回的 candidateId/status/version；当前规划唯一约束会阻断独立物化，不得删除候选或修改状态表。该契约冲突尚待正式结构迁移边界确认，不把取消原候选当作恢复步骤。
+- `DBT_DRAFT_DEPENDENCY_PIN_STALE`：在模型设计页核对上游当前修订，通过“更新引用”保存后重新提交实现；不替换旧版本证据或修改持久化快照。
+- `DBT_DRAFT_SOURCE_BUNDLE_UNAVAILABLE`：保留 correlationId，检查静态校验的依赖身份是否与冻结快照一致。badab50a8 修复受管上游占位节点被错误展开为空的缺陷，30 项专项测试通过；真实页面复验另见运行记录。
+- `MODEL_SCHEMA_TARGET_ALREADY_EXISTS`：停止结构物化，核对所选目标；不得 DROP/TRUNCATE 或借助接入重建现有表。需要修改结构时按独立版本演进处理。
+- 接入绑定失败：核对 modelTarget 当前模型/实现修订、候选、目标身份及声明字段/类型/主键；通过页面修复映射或模型，不删除绑定标记、不放开隐式建表。
+- 发布包校验必须等正式构建进程退出 0，再校验完整包、每个镜像归档、镜像 sourceRevision 和受管宏。浏览器部署后需真正重载文档，单独变更 hash 路由不会更新 JavaScript。
+- SOURCE 首次写入前已演练原镜像回滚并恢复正常登录；SOURCE 写入后旧程序无法保证兼容，应采用包含 SOURCE 能力的前向修复版本。不得复用首次写入前的回滚结论作为当前降级许可。
