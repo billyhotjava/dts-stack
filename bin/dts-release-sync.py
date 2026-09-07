@@ -202,8 +202,10 @@ def publish(c, state):
     if '"' in str(state) or '\n' in str(state):
         raise ValueError('Unsafe state path')
     batch = (f'put "{package}" {remote}/{payload["file"]}.part\n'
+             f'chmod 644 {remote}/{payload["file"]}.part\n'
              f'rename {remote}/{payload["file"]}.part {remote}/{payload["file"]}\n'
              f'put "{state / "latest.json"}" {remote}/latest.json.part\n'
+             f'chmod 644 {remote}/latest.json.part\n'
              f'rename {remote}/latest.json.part {remote}/latest.json\n')
     run(['sftp', '-q', '-i', c['sshKey'], '-oBatchMode=yes', '-oConnectTimeout=15',
          '-oStrictHostKeyChecking=yes', '-b', '-', c['sshHost']], input=batch.encode(), timeout=7200)
