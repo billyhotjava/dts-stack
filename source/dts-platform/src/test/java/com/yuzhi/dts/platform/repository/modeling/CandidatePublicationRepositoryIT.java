@@ -289,8 +289,8 @@ class CandidatePublicationRepositoryIT {
                 .isEqualTo("CONFIDENTIAL");
             assertThat(catalogDatasetValue(harvestedAssetId, "lifecycle_status"))
                 .isEqualTo("ACTIVE");
-            assertThat(catalogDatasetValue(harvestedAssetId, "owner")).isEqualTo("business-owner");
-            assertThat(catalogDatasetValue(harvestedAssetId, "description")).isEqualTo("manually maintained");
+            assertThat(jdbcTemplate.queryForObject("select owner from catalog_dataset where id = ?", String.class, harvestedAssetId)).isEqualTo("business-owner");
+            assertThat(jdbcTemplate.queryForObject("select description from catalog_dataset where id = ?", String.class, harvestedAssetId)).isEqualTo("manually maintained");
             assertThat(jdbcTemplate.queryForObject(
                 "select cast(tags as jsonb) ->> 'businessTag' from catalog_dataset where id = ?",
                 String.class, harvestedAssetId
@@ -310,8 +310,8 @@ class CandidatePublicationRepositoryIT {
             transaction.executeWithoutResult(status -> publications.registerModel(
                 candidate, target, observation, model, release, "another-operator", NOW.plusSeconds(2)
             ));
-            assertThat(catalogDatasetValue(harvestedAssetId, "owner")).isNull();
-            assertThat(catalogDatasetValue(harvestedAssetId, "description")).isNull();
+            assertThat(jdbcTemplate.queryForObject("select owner from catalog_dataset where id = ?", String.class, harvestedAssetId)).isNull();
+            assertThat(jdbcTemplate.queryForObject("select description from catalog_dataset where id = ?", String.class, harvestedAssetId)).isNull();
         } finally {
             transaction.executeWithoutResult(status -> cleanup(scope));
         }
@@ -724,9 +724,11 @@ class CandidatePublicationRepositoryIT {
                     """
                     update modeling_dbt_artifact
                        set ownership = 'DBT_MANAGED',
-                           content = 'select u.payment_id as payment_id from dim_upstream u'
+                           content = ?
                      where model_spec_id = ?
                     """,
+                    "select u.payment_id as payment_id from dim_upstream_" +
+                        scope.secondProdModelId().toString().replace("-", "").substring(0, 12) + " u",
                     scope.prodModelId()
                 );
                 jdbcTemplate.update(
@@ -2159,11 +2161,11 @@ class CandidatePublicationRepositoryIT {
                 select count(*)
                   from catalog_dataset
                  where source_id = ?
-                   and tags like ?
+                   and cast(tags as jsonb) ->> 'tenantId' = ?
                 """,
                 Integer.class,
                 SOURCE_ID,
-                "%\"tenantId\":\"" + scope.tenantId() + "\"%"
+                scope.tenantId()
             )
         ).isEqualTo(visibleCount);
         assertThat(
@@ -2442,11 +2444,11 @@ class CandidatePublicationRepositoryIT {
                   from catalog_table_schema table_schema
                   join catalog_dataset dataset
                      on dataset.id = table_schema.dataset_id
-                  where dataset.tags like ?
+                  where cast(dataset.tags as jsonb) ->> 'tenantId' = ?
                      or dataset.source_id = ?
              )
             """,
-            "%\"tenantId\":\"" + scope.tenantId() + "\"%",
+            scope.tenantId(),
             SOURCE_ID
         );
         jdbcTemplate.update(
@@ -2455,20 +2457,20 @@ class CandidatePublicationRepositoryIT {
              where dataset_id in (
                  select id
                    from catalog_dataset
-                  where tags like ?
+                  where cast(tags as jsonb) ->> 'tenantId' = ?
                      or source_id = ?
              )
             """,
-            "%\"tenantId\":\"" + scope.tenantId() + "\"%",
+            scope.tenantId(),
             SOURCE_ID
         );
         jdbcTemplate.update(
             """
             delete from catalog_dataset
-             where tags like ?
+             where cast(tags as jsonb) ->> 'tenantId' = ?
                 or source_id = ?
             """,
-            "%\"tenantId\":\"" + scope.tenantId() + "\"%",
+            scope.tenantId(),
             SOURCE_ID
         );
         jdbcTemplate.update(

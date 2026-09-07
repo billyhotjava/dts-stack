@@ -47,3 +47,7 @@ PUT /api/catalog/datasets/{id} 要求 If-Match: "catalog-dataset:{id}:{version}"
 - 分析旧连接归并新增内部 writer.adoptLegacy(id:Long,tenantId:String,platformDataSourceId:UUID,expectedDetails:String)，REQUIRES_NEW 内按 ID 悲观锁重读，确认旧 details 未漂移且未被其他租户接管后设置归属并 saveAndFlush；外层只传标量，不修改托管 legacy 实体。唯一冲突在内层回滚后重读赢家；现有错误码不变。真实 H2/JPA 事务测试覆盖外层持有 legacy、内层冲突、外层提交，PostgreSQL 唯一约束迁移沿用既有证据。
 - 标准 R 用字段索引找缺失，B 始终遍历全部声明引用；字段为空/不存在/重复的声明由专业适配边界判 STALE。NONE 仅令 R 为空，不跳过非空 B。新请求与历史数据的执行拒绝保持一致。
 - 授权端口新增 canReadPlan(UUID):boolean，默认兼容实现复用 listPlans；正式 adapter 对配置租户精确 get 一个计划并调用原 canReadPlan guard。候选读侧使用该方法，缺计划或不可读仍拒绝，其他读取异常不当作无权限吞掉。不增加全局缓存。
+
+## R05 存量只读画像（2026-09-08）
+
+在现有 dts_platform 的 READ ONLY 事务中按 ModelSpec 当前修订关联 revision.snapshot_json：当前12个修订、历史25个修订，grain.keys 与 fields[role=KEY].name 排序集合不一致数均0，重复 grain 键数均0。没有修改模型或数据，无需自动修复。catalog_dataset 非空 tags 中非 JSON object 数0。该结果关闭本环境画像缺口，不替代旧模型读取/暂存/提交/编译的行为回归，也不外推到其他客户环境。

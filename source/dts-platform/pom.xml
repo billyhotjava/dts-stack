@@ -678,6 +678,9 @@
                         <testInclude>**/service/modeling/ModelLifecycleServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/MetadataStandardSourceSystemPersistenceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelCandidateScopePolicyTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelSchemaCandidateScopePostgresTest.java</testInclude>
+                        <testInclude>**/service/modeling/GovernanceModelSpecStandardEvidenceAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationDispatchServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRunArtifactServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PlanOperationalRunArtifactServiceTest.java</testInclude>
