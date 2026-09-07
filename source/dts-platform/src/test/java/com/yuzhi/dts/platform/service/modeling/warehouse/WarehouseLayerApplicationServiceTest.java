@@ -148,6 +148,19 @@ class WarehouseLayerApplicationServiceTest {
     }
 
     @Test
+    void resolvesSourceModelsThroughExistingOdsPlanningLayers() {
+        assertThat(service.resolveSelection(null, Layer.ODS).code()).isEqualTo("ODS_RAW");
+        assertThat(service.resolveSelection("ODS", Layer.ODS).code()).isEqualTo("ODS_RAW");
+        for (String code : List.of("ODS_RAW", "ODS_STANDARDIZED")) {
+            assertThat(service.resolveSelection(code, Layer.ODS).canonicalLayer()).isEqualTo(Layer.ODS);
+            assertThat(WarehouseLayerContract.modelTypesOf(code)).containsExactly(com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType.SOURCE);
+        }
+        assertThatThrownBy(() -> service.resolveSelection("STG", Layer.ODS)).isInstanceOf(WarehouseLayerException.class);
+        when(repository.findByCode("SOURCE_CUSTOM")).thenReturn(Optional.of(active("SOURCE_CUSTOM", "ODS_RAW", null)));
+        assertThat(service.resolveSelection("SOURCE_CUSTOM", Layer.ODS).code()).isEqualTo("SOURCE_CUSTOM");
+    }
+
+    @Test
     void resolvesCustomSelectionToItsImmutableSystemLayer() {
         when(repository.findByCode("FIN_DETAIL")).thenReturn(Optional.of(active("FIN_DETAIL", "DWD", null)));
 

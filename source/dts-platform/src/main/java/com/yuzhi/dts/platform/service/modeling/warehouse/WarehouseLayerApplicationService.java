@@ -209,11 +209,13 @@ public class WarehouseLayerApplicationService {
         String effectiveCode = requestedCode == null || requestedCode.isBlank()
             ? expectedLayer.name()
             : normalizeCode(requestedCode);
+        if (expectedLayer == Layer.ODS && "ODS".equals(effectiveCode)) effectiveCode = "ODS_RAW";
+        final String selectedCode = effectiveCode;
         Optional<WarehouseLayerDto> builtin = Sprint64GovernanceContract.resolveLayer(effectiveCode);
         String systemCode = builtin
             .map(WarehouseLayerDto::code)
-            .orElseGet(() -> activeCustom(effectiveCode).systemLayerCode());
-        if (!systemCode.equals(expectedLayer.name())) {
+            .orElseGet(() -> activeCustom(selectedCode).systemLayerCode());
+        if (SYSTEM_TO_CANONICAL.get(systemCode) != expectedLayer) {
             throw error(
                 "MODEL_SPEC_WAREHOUSE_LAYER_TYPE_MISMATCH",
                 "分层 " + effectiveCode + " 的系统类型与模型目标层不匹配",

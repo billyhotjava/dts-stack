@@ -73,3 +73,16 @@ dbt 默认 table materialization 在 pre-hook 前会清理中间/备份关系，
 - 追加检查发现旧 finalizer 在物化事务内调用 CandidateQualityAssetRegistrationService。现移至数据模块显式登记命令，复用原唯一 Catalog identity owner；登记失败不改物化运行状态。
 - dts_schema_only 运行结果探测增加普通表映射；旧宏/视图分支保持。该函数 GitNexus risk=HIGH（已告知），须执行物化运行完整定向回归。
 - 以上新增修正尚待正式测试、构建与页面验收。
+
+
+## F3 coherent change set 聚焦复核（2026-09-07）
+
+单主代理审查，未逐文件启动 reviewer。检查编译/运行探测、目标身份/执行前字段核验、接入 DDL 路径、数据登记 owner、页面版本/未保存保护，以及正式交付资源链。
+
+- 已修正：物化事务与数据登记耦合；自定义结构 materialization 被探测为未知类型；SOURCE 无实现重开未选择生成器；接入技术字段不能显式声明；API 原始记录缺少 jsonb 类型；贴源表列表中文类型和 API 字段类型选项遗漏。
+- SOURCE 仅允许明确列出的既有 _dts_* 字段；不放开任意保留字段。生成器字段名称经 compiler identifier 白名单，类型经封闭类型表，拒绝任意 SQL 类型片段。
+- 绑定目标在 provision 分支首先完成平台当前版本校验和目标连接只读结构检查，然后跳过全部 DDL；Addax 重新生成作业、拒绝 pre/postSql、禁止 FULL 的 TRUNCATE，删除发给插件的 modelTarget 元数据；API 使用原写入语义。
+- 绑定服务校验租户/模型计划维护权；内部核验限 dts-ingestion 服务身份。数据登记复用原候选证据与唯一资产 owner，失败不修改建模运行成功状态。模型/候选漂移和旧深链仍须真实页面复验。
+- 18533ca3e：Java 57/57、前端 21/21。aa4d60357：门禁 43/43、Addax 41/41、模型服务 62/62、tsc 通过。2ad00dc52：编译/结构/运行 50/50。262859a23：字段编辑与列表 9/9。
+- 2ad00dc52 正式构建成功、包内三个镜像 SHA256 与 manifest 一致、结构宏一致；受控三服务启动健康/HTTP200。回退至记录旧镜像后三服务恢复、Chrome 重新登录进入工作台；等待脚本曾 60 秒超时，最终实际恢复检查通过。尚未生成 SOURCE 业务数据。
+- 262859a23 正式交付构建进行中；真实四层旅程、接入写入、Chrome95 与离线运行证据仍未通过，不关闭 T20/T08/T14。

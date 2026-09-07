@@ -435,7 +435,9 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						>
 							<option value="">请选择数仓分层</option>
 							{context.warehouseLayers
-								.filter((layer) => layer.systemLayerCode === config.layer)
+								.filter((layer) => config.layer === "ODS"
+									? layer.systemLayerCode === "ODS_RAW" || layer.systemLayerCode === "ODS_STANDARDIZED"
+									: layer.systemLayerCode === config.layer)
 								.map((layer) => (
 									<option key={layer.code} value={layer.code}>
 										{layer.name}（{layer.code}）{layer.builtin ? " · 系统" : " · 自定义"}

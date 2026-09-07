@@ -258,7 +258,7 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		reuseScope: "DOMAIN",
 		dimensionDefinitionId: "",
 		standardBindings: [],
-		warehouseLayerCode: config.layer,
+		warehouseLayerCode: kind === "source" ? "ODS_RAW" : config.layer,
 		implementationMode: "DESIGNER_GENERATED",
 		implementationBase: null,
 		implementationInputMode,

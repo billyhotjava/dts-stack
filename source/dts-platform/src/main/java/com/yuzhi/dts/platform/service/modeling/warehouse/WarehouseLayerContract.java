@@ -29,8 +29,8 @@ public final class WarehouseLayerContract {
     );
 
     private static final Map<String, List<ModelSpecContract.ModelType>> SYSTEM_TO_MODEL_TYPES = Map.of(
-        "ODS_RAW", List.of(),
-        "ODS_STANDARDIZED", List.of(),
+        "ODS_RAW", List.of(ModelSpecContract.ModelType.SOURCE),
+        "ODS_STANDARDIZED", List.of(ModelSpecContract.ModelType.SOURCE),
         "STG", List.of(),
         "DWD", List.of(ModelSpecContract.ModelType.DIMENSION, ModelSpecContract.ModelType.FACT),
         "DWS", List.of(ModelSpecContract.ModelType.SUMMARY),

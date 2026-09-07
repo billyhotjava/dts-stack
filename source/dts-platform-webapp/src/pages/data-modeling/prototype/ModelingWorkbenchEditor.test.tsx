@@ -1007,6 +1007,17 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(container.querySelector('[aria-label="数据来源方式"]')).toBeNull();
 	});
 
+	it("offers actual ODS planning layers for source definitions", async () => {
+        const props = makeProps({ definitionOnly: true, draft: makeDraft({ createKind: "source", warehouseLayerCode: "ODS_RAW" }) });
+        props.context.warehouseLayers = [
+            ...props.context.warehouseLayers,
+            ...["ODS_RAW", "ODS_STANDARDIZED"].map(code => ({ code, name: code, systemLayerCode: code, layerGroup: "STAGING", modelTypes: ["SOURCE"], kind: "SOURCE", responsibility: "source", namingPrefixes: [], optional: false, builtin: true, deletable: false } as any)),
+        ];
+        await render(props);
+        const select = [...container.querySelectorAll("select")].find(item => item.value === "ODS_RAW");
+        expect(Array.from(select?.options || []).map(option => option.value)).toEqual(["", "ODS_RAW", "ODS_STANDARDIZED"]);
+    });
+
 	it("lists only DWD-compatible layers for FACT drafts and excludes DWS custom layers", async () => {
 		const draft = makeDraft({ createKind: "fact", warehouseLayerCode: "DWD" });
 		await render(makeProps({ definitionOnly: true, draft }));
