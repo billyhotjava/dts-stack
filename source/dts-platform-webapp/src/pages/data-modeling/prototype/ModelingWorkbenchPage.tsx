@@ -76,6 +76,8 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const requestEpoch = useRef(0);
 	const savingRef = useRef(false);
 	const [searchParams, setSearchParams] = useSearchParams();
+	const setSearchParamsRef = useRef(setSearchParams);
+	setSearchParamsRef.current = setSearchParams;
 	const requestedModelId = searchParams.get("modelSpecId") || "";
 	const requestedDimensionId = searchParams.get("dimensionDefinitionId") || "";
 	const { view: requestedView, legacyAdvanced } = normalizeWorkbenchView(searchParams);
@@ -91,9 +93,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			mutate(normalized);
 			if (normalized.toString() === searchParamsRef.current.toString()) return;
 			searchParamsRef.current = normalized;
-			setSearchParams(normalized, { replace: true });
+			// The router setter changes with the query; keep the initial loader stable across wizard navigation.
+			setSearchParamsRef.current(normalized, { replace: true });
 		},
-		[setSearchParams],
+		[],
 	);
 	const [context, setContext] = useState<ModelWorkbenchContext | null>(null);
 	const [draft, setDraft] = useState<ModelDraft | null>(null);
