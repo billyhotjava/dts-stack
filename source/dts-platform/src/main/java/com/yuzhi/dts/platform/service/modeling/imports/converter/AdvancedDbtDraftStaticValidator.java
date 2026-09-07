@@ -584,6 +584,10 @@ public class AdvancedDbtDraftStaticValidator {
             : modelPackage.technicalNodes();
         for (TechnicalNode node : nodes) {
             if (node == null || node.dbtUniqueId() == null || node.dbtUniqueId().isBlank()) continue;
+			// These zero-row proxies stand for pinned upstream models, not compiler-only transforms.
+			// Keep their identity for reconciliation with the frozen dependency snapshot.
+			if ((node.dependencies() == null || node.dependencies().isEmpty()) && node.tags() != null &&
+				(node.tags().contains("dts-managed-dependency") || node.tags().contains("dts-source-evidence-placeholder"))) continue;
             result.put(node.dbtUniqueId(), node.dependencies() == null ? List.of() : node.dependencies());
         }
         return Map.copyOf(result);
