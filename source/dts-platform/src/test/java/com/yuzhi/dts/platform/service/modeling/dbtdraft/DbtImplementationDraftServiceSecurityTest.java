@@ -1801,7 +1801,7 @@ class DbtImplementationDraftServiceSecurityTest {
         var snapshot = objectMapper.valueToTree(modelUpdateSnapshot());
         ((com.fasterxml.jackson.databind.node.ObjectNode) snapshot).putArray("sourceRefs").addObject()
             .put("kind", "TABLE").put("role", "PRIMARY").put("layer", "ODS").put("ref", "public.orders")
-            .put("sourceBindingId", bindingId.toString()).put("resolvedVersion", "source-v1");
+            .put("sourceBindingId", bindingId.toString()).put("resolvedVersion", "source-v1").put("sortOrder", 0);
         DraftRow draft = org.mockito.Mockito.mock(DraftRow.class);
         when(draft.planId()).thenReturn(PLAN_ID);
         when(draft.baseModelRevision()).thenReturn(3);
@@ -1854,7 +1854,7 @@ class DbtImplementationDraftServiceSecurityTest {
         ReflectionTestUtils.setField(service, "dependencies", dependencyService);
         Snapshot base = dependencyService.resolveForDraft(TENANT, model, null, "sprint83", "orders").snapshot();
         var snapshot = versionedVisualSnapshot();
-        ((com.fasterxml.jackson.databind.node.ObjectNode) snapshot.get("modelSpec")).putArray("dependsOn").addObject()
+        ((com.fasterxml.jackson.databind.node.ObjectNode) snapshot.get("modelSpec")).put("modelType", "FACT").putArray("dependsOn").addObject()
             .put("modelSpecId", "30000000-0000-0000-0000-000000000099").put("revision", 2);
         var generated = ((com.fasterxml.jackson.databind.node.ObjectNode) snapshot.get("visualImplementation"))
             .putArray("inputs").addObject();
