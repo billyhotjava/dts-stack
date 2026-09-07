@@ -14,6 +14,8 @@ import com.yuzhi.dts.platform.domain.catalog.CatalogAssetResolutionFailure;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.OpenMetadataAssetCache;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.modeling.DataStandardRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -260,8 +262,8 @@ class CatalogAssetPortalResourceTest {
             mock(com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository.class),
             mock(com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository.class),
             mock(com.yuzhi.dts.platform.repository.catalog.CatalogMetadataChangeLogRepository.class),
-            mock(com.yuzhi.dts.platform.repository.catalog.DataStandardRepository.class),
-            mock(com.yuzhi.dts.platform.repository.infra.InfraDataSourceRepository.class),
+            mock(DataStandardRepository.class),
+            mock(InfraDataSourceRepository.class),
             mock(CatalogFeatureProperties.class),
             mock(OrganizationVisibilityService.class)
         );

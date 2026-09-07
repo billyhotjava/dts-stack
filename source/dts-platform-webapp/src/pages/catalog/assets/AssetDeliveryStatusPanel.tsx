@@ -9,6 +9,12 @@ export function AssetDeliveryStatusPanel({ dataset }: { dataset: Record<string, 
 	const eligibilityLabel =
 		eligibility === "ELIGIBLE" ? "可消费" : eligibility === "BLOCKED" ? "不可消费" : "有条件可消费";
 	const servingStatus = String(dataset.servingSync?.status || "NOT_APPLICABLE");
+	const analysisLabel = ({
+		SYNCED: "分析准备完成",
+		SYNC_FAILED: "分析准备失败",
+		SYNC_PENDING: "分析准备中",
+		NOT_APPLICABLE: "不适用",
+	} as Record<string, string>)[servingStatus] || "暂无当前证据";
 	const qualityStatus = String(dataset.qualityStatus || "UNKNOWN");
 	const axisEntries = Object.entries(dataset.statusAxes || {});
 
@@ -19,9 +25,9 @@ export function AssetDeliveryStatusPanel({ dataset }: { dataset: Record<string, 
 					{eligibilityLabel}
 				</Tag>
 			</Descriptions.Item>
-			<Descriptions.Item label="服务同步">
+			<Descriptions.Item label="分析准备">
 				<Tag color={servingStatus === "SYNCED" ? "green" : servingStatus === "SYNC_FAILED" ? "red" : "default"}>
-					{statusLabel(servingStatus)}
+					{analysisLabel}
 				</Tag>
 			</Descriptions.Item>
 			<Descriptions.Item label="质量状态">

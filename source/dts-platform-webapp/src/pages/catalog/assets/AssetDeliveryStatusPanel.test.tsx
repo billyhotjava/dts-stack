@@ -36,6 +36,19 @@ afterEach(async () => {
 });
 
 describe("asset delivery status panel", () => {
+	it.each([
+		["SYNCED", "分析准备完成"],
+		["SYNC_FAILED", "分析准备失败"],
+		["SYNC_PENDING", "分析准备中"],
+		["NOT_APPLICABLE", "不适用"],
+		["UNKNOWN", "暂无当前证据"],
+	])("keeps %s analysis preparation independent from healthy physical serving", async (status, label) => {
+		await act(async () => root.render(<AssetDeliveryStatusPanel dataset={{ servingSync: { status }, statusAxes: { serving: "HEALTHY" } }} />));
+		expect(container.textContent).toContain(label);
+		expect(container.textContent).not.toContain("服务同步");
+		if (status !== "SYNCED") expect(container.textContent).not.toContain("分析准备完成");
+	});
+
 	it("renders delivery evidence and returns to the canonical model workbench", async () => {
 		await act(async () =>
 			root.render(
