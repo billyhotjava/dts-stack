@@ -9,6 +9,8 @@
 
 `dts-dbt:1.10.0` 仅作为既有正式镜像运行 IT-04 专项测试，不属于本项构建或拟部署服务。不在本计划中创建额外常驻服务，也不以本地 workspace 或临时容器文件替代正式交付内容。
 
+当前交付已推进到 `e04a1fc34cb0b4ef1641a1d8cfe21a7b5ee32f63`：运营独立 DAG、旧绑定 repair 和服务端修复动作已完成正式测试、三镜像构建、离线包校验及受控部署。详细结果见 [当前证据页](../it/evidence/current-environment/formal-validation-and-delivery-evidence-20260907.md) 的 e04 节。Chrome 登录与离线安装目标未就绪，Sprint 验收未完成；以下按版本保留历史过程。
+
 ## 发布前记录
 
 `2161b2cda7b2782a0beed29158b9ca681c1a9d36` 是 F1 的历史部署基线，`bd0670acc` 是更早的验收基线；两者不能作为 F2/T10–T13 的构建或验收证据。当前正式证据入口为 [formal-validation-and-delivery-evidence-20260907.md](../it/evidence/current-environment/formal-validation-and-delivery-evidence-20260907.md)：`e83b51076e21` 的三服务镜像、隔离迁移和离线预检已有记录，`90d111280` 已完成三镜像构建、包校验与受控部署；运营任务路由问题仍待修复。

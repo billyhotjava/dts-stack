@@ -6,16 +6,18 @@
 
 | 字段 | 已记录事实 |
 |---|---|
-| 已完成构建/部署源码 | `e83b51076e216a2464d5b8703186a7cb93ac723c` |
+| 已完成构建/部署源码 | `e04a1fc34cb0b4ef1641a1d8cfe21a7b5ee32f63` |
 | 隔离迁移脚本源码 | `3aa077d0c49d48aa0600705a11c3676fb5bf95ce` |
-| 当前后续源码 | `90d111280` 已完成三服务正式构建及部署，日志 `/tmp/s104-release-90d111280.log` |
-| 已完成 release ID | `s104-e83b51076e21` |
-| 构建日志 | `/tmp/s104-release-build.log` |
+| 上一部署源码 | `90d111280`；保留不可变镜像和包作为历史证据 |
+| 已完成 release ID | `s104-e04a1fc34cb0` |
+| 构建日志 | `/tmp/s104-release-e04a1fc34.log` |
 | 运营 source pin 修复验证 | `90d111280`，44/44 PASS，`/tmp/s104-operational-source-final.log` |
 
 `90d111280` 的 image ID、archive SHA 与部署结果已登记于正式证据页。该版本恢复了运营源快照，随后暴露旧绑定错用候选构建 DAG；运营端到端验收尚未通过。
 
-## 构建和包完整性
+最新 e04 包 `dts-opmanager-upgrade-20260907-080229.tar.gz`，SHA-256 `7bbac852bab4905d3460bc85427d941fdc3bea78885d2361198572ccf4d852d1`。正式 Java 路由修复回归 25/25、Airflow 合约 32/32；三镜像和包校验、离线镜像加载及隔离 `plan` 均通过。最新 image ID、部署范围及原始证据见统一证据页的 e04 节。浏览器与离线安装仍为 GAP。
+
+## 构建和包完整性（保留 e83 历史记录）
 
 `e83b51076e21` 的构建器输出、archive hash、解包 manifest 和 image tar hash 已在正式证据页归档。`package-verification.log` 对已解包内容校验为 `OK`，并含 `release-manifest.json` 与 `rollback-manifest.json`。
 
@@ -49,6 +51,7 @@ docker image inspect "dts-platform:${RELEASE_ID}" "dts-analytics:${RELEASE_ID}" 
 | 线上两个 changeSet | 当前正式证据页：均为 EXECUTED | PASS（执行记录） |
 | `analytics_database` 唯一性/legacy-unresolved | 隔离脚本验证唯一约束和保留 legacy 行 | PASS（隔离范围） |
 | `e83` 三服务容器替换 | `pre-deployment.json`、`deployed-containers.json` | PASS；仅三个目标容器变化 |
+| e04 受控三服务替换 | 当前正式证据页 e04 节 | PASS；其余 19 个容器未变化 |
 | 当前容器运行状态 | platform、analytics healthy；webapp running、无 healthcheck | PASS（容器运行） |
 | 运营 source pin 修复 | `/tmp/s104-operational-source-final.log` | PASS，44/44 |
 | IT-08–IT-18、Chrome 95、真实登录模型路径 | 未执行 | GAP |

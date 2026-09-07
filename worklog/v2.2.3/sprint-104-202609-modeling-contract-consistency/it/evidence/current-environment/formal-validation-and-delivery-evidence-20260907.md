@@ -4,7 +4,8 @@
 
 ## 证据版本与边界
 
-- 当前已部署源码：`90d111280b89ebb780425c4212aacfc0f4d8ff30`。下文保留 `e83b51076e216a2464d5b8703186a7cb93ac723c` 的历史包、迁移和离线预检证据。
+- 当前已部署源码：`e04a1fc34cb0b4ef1641a1d8cfe21a7b5ee32f63`。下文保留 e83、90d 历史包、迁移、部署和故障观察证据。
+- 路由隔离修复正式构建、离线包校验和受控部署已完成（`/tmp/s104-release-e04a1fc34.log`）；当前三服务使用 `s104-e04a1fc34cb0` 标签。
 - 隔离迁移验证脚本提交：`3aa077d0c49d48aa0600705a11c3676fb5bf95ce`。
 - 执行目录：`/opt/prod/s10/deploy`；开发目录未用于编译、构建或测试。
 - 当前状态：三个镜像已由发布流程部署。Chrome 95 验收及 IT-08 至 IT-18 未执行，不能由本记录替代。
@@ -89,14 +90,47 @@ bin/dts-upgrade-lite plan \
 1. 原 dispatch `d727145f-2b91-3fb7-882e-37af67443cbc` 的 `MATERIALIZATION_SOURCE_MISSING` 已恢复：正常协调器在 01:09:01 将同一条记录提交到 Airflow，bundle checksum 为 `714fc3e4589b68e069eca2e1d3b346403621941475adc2fb25d86568041195e6`，没有重置数据库或更换幂等键。
 2. 随后暴露任务路由错误：旧 MANUAL_ONLY 绑定把运营运行分配给 `dts_release_build_postgres_primary`。Airflow 准备阶段拒绝运营参数 `bindingId, bindingVersion, triggerType`，因此 SQL 未执行；finalize 也误走候选接口并返回 409。这不能记作重新运行成功。
 3. 01:14:03 正常协调器将同一 dispatch 收敛为 `FAILED / MODEL_OPERATIONAL_AIRFLOW_RUN_FAILED`，并发占用自然解除；没有强制清理运行状态。旧失败记录应保留。
-4. 后续修复限定为独立运营 DAG、绑定部署校验和及旧绑定的正常 repair 入口；两类 DAG 必须禁止互相覆盖，不降低 Airflow 参数校验，不要求重新发布模型来修复调度配置。修复与后续验证另行登记。
+4. 后续修复限定为独立运营 DAG、绑定部署校验和及旧绑定的正常 repair 入口；两类 DAG 必须禁止互相覆盖，不降低 Airflow 参数校验，不要求重新发布模型来修复调度配置。源码修复、正式回归及部署已登记于下节；实际旧绑定 repair 和新的运营运行尚待登录后执行。
 
-原始运行观察：该 release 目录下 `operational-recovery-observation.json`（01:12 时点）及 Airflow prepare/finalize 日志；最终 FAILED 时点由业务库只读查询确认。
+原始运行观察：90d release 目录下 `operational-recovery-observation.json`（01:12 时点）、`operational-terminal-observation.json`（最终 FAILED）及 Airflow prepare/finalize 日志；均为只读观察。
+
+## 运营路由隔离修复的定向回归（e04a1fc34）
+
+`/tmp/s104-operational-routing-e04a1fc34.log` 记录平台模块定向 Maven 回归：25/25 通过，覆盖 6 个测试类，且 Maven 为 `BUILD SUCCESS`。其中包括隔离 PostgreSQL/Testcontainers 的旧 MANUAL_ONLY binding repair：它固定生成每 binding 的运营 DAG、重算 deployment checksum、CAS 版本加一；陈旧 ETag 与带活动运营 claim 的 binding 都拒绝修改并保持行不变。
+
+- 新发布 binding 不再引用 release-build DAG；旧 binding 通过既有 repair 命令在保留发布模型、资产和 scope 的前提下规范化为独立运营 DAG。
+- 手工运营提交不再写入 DAG 文件。双向文件类型保护拒绝运营流程覆盖 `dts_release_build_*`，也拒绝 release 流程覆盖 `dts_plan_*`。
+- Health 查询对旧错误 DAG 不读取共享 release DAG 的实际/最新运行证据；不可运行时仅给出 repair 动作。活动 `QUEUED`、`SUBMITTED`、`UNKNOWN` 运营状态不提供 repair 或重复运行。
+- `PlanDagDeploymentServiceTest` **未**包含在这次 25 项定向命令中，不能把该类写为通过。
+
+`/tmp/s104-operational-airflow-contract-901777dec.log` 记录 Airflow Python 合约 32/32 通过。该轮 Python 源码在相关提交中没有变化；结果仅复核现有 `_validate_operational_run_conf` 对 Java MANUAL conf 的接受，以及运营 prepare/finalize 使用 execution-bindings 内部端点。
+
+此前 `901` 的 Java 编译括号错误和 `81` 的 Mockito 歧义失败均已在本轮源代码中修正；它们不是本轮成功证据，也不计入上述通过数。
+
+## 路由修复正式交付与当前部署（e04a1fc34）
+
+- 构建源码 `e04a1fc34cb0b4ef1641a1d8cfe21a7b5ee32f63`，正式构建退出码 0；在开发目录 commit/push 后，由部署目录 ff-only 拉取、核对 SHA 再测试与构建。
+- 交付目录 `/opt/prod/s10/deploy/data/sprint104-release/s104-e04a1fc34cb0/`。
+- 包 `dts-opmanager-upgrade-20260907-080229.tar.gz`，SHA-256 `7bbac852bab4905d3460bc85427d941fdc3bea78885d2361198572ccf4d852d1`。包和发布环境文件限制为本机用户可读；不把其中连接配置复制到测试记录。
+- `package-verification.log`、`archive.sha256` 与 `validation-summary.json` 核对全包、文件、三项 image tar、实际镜像 ID、源码 revision 和 amd64 架构，全部通过。
+
+| 镜像 | 实际 image ID | image tar SHA-256 |
+|---|---|---|
+| `dts-analytics:s104-e04a1fc34cb0` | `sha256:33983e9be3aa31e255d503f9dccf46ce5b2d6ee11d5812da894868a32ce109bf` | `4c9e18483826d75958f11f2401f1dd0753b223aff3828bb47e7962f6ac4f94f6` |
+| `dts-platform-webapp:s104-e04a1fc34cb0` | `sha256:bd0c19ab1af0b5a37214da7fe09a015ec363cc1af61528c39348c7c27d808538` | `5f77bda04e0db50eb363111151b472b9e38a3d3468a3862c1fdeabc2c0f06ac8` |
+| `dts-platform:s104-e04a1fc34cb0` | `sha256:0468f10fa2ca8bbb9d965e9dcdede0e3e86fa205faee768333140e3469b4d46b` | `5f656ebc2219d7198dddd131d5976ef3a7d17325c6c2162d2519f8ad385f6768` |
+
+- 受控顺序 analytics → platform → webapp，日志 `/tmp/s104-deploy-e04-{analytics,platform,webapp}.log`。platform/analytics 为 healthy；webapp running，没有容器 healthcheck。
+- `pre-deployment.json` 与 `deployed-containers.json` 确认仅这三个容器 ID/启动时间改变，其余 19 个容器未改变。没有开发目录容器、容器补丁或热修复镜像。
+- 三份镜像归档经本地 `docker load` 加载，标签与 ID 再次核对一致；日志 `offline-image-load.log`，未拉取网络镜像。
+- `dts-upgrade-lite plan` 在 `/tmp/s104-offline-plan-e04-cwi8a51v/target` 退出 0（只复制上一包的部署配置作为基线）；`offline-plan-result.json` 与 `offline-plan.log` 为证据。未运行 `apply`、容器回滚或完整离线安装。
+- Chrome 再次访问模型工作台被转回 `#/auth/login`；账号和密码输入框为空。未操作业务数据、未调用 repair/立即运行，也未把容器健康写为页面验收通过。
+- 本记录的后续文档提交不改变产品镜像对应的 e04 源码；文档 HEAD 与镜像源码 SHA 分别追踪。
 
 ## 未执行或待确认
 
 - 仅三服务容器的替换与上述运行状态已有记录；未执行离线包 `apply`、回滚演练、dbt 运行或真实业务流程验证。
-- W4 已进入 90d 镜像，但当前浏览器登录尚未完成，页面验收仍待执行。
-- 源快照恢复已提交运行，任务类型路由仍待修复和正常业务入口复测；不能宣称运营运行通过。
+- W4 及运营路由修复已进入当前 e04 镜像，但浏览器登录尚未完成，页面验收仍待执行。
+- 源快照恢复已提交运行；e04 路由隔离修复已通过上述定向回归，但正式构建、部署以及用户通过浏览器正常“再次运行”的业务入口复测仍待完成，不能宣称运营运行通过。
 - Chrome 95、真实登录租户、四步 W1–W4 和 F2 IT-08 至 IT-18 的浏览器/运行时验收未执行。
 - 本文不把历史失败日志、构建成功或离线包校验表述为 Sprint DONE。
