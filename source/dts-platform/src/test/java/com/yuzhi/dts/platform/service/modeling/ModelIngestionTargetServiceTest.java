@@ -9,6 +9,19 @@ import org.junit.jupiter.api.Test;
 
 class ModelIngestionTargetServiceTest {
     @Test
+    void executionCannotResolveAcrossEnvironmentsWhenTheBindingOmitsItsEnvironment() {
+        var models = mock(ModelSpecApplicationService.class);
+        var candidates = mock(ModelReleaseCandidateRepository.class);
+        var service = new ModelIngestionTargetService(models, mock(ModelLifecycleRepository.class), candidates,
+            mock(CandidatePublicationEvidenceRepository.class), mock(ModelExecutionTargetCatalogResolver.class), mock(ModelSpecPlanWriteAccessPort.class));
+        var target = new ModelIngestionTargetService.Target(1, UUID.randomUUID(), 1, "model", 1, "implementation", null,
+            UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "warehouse", "ods", "orders", List.of());
+        assertThatThrownBy(() -> service.validateForExecution("tenant", target))
+            .isInstanceOfSatisfying(ModelReleaseCandidateException.class,
+                error -> assertThat(error.code()).isEqualTo("MODEL_INGESTION_TARGET_INVALID"));
+        verifyNoInteractions(models, candidates);
+    }
+    @Test
     void resolvesExactModelCandidateWithoutThePlanWorkbenchTwoRowLimit() {
         var models = mock(ModelSpecApplicationService.class);
         var model = mock(ModelSpecContract.ModelSpecView.class);

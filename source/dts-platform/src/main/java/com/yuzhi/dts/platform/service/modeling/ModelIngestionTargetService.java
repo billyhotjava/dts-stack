@@ -45,6 +45,7 @@ public class ModelIngestionTargetService {
     }
 
     private Target current(String tenant, UUID id, String environment) {
+        if (environment == null || environment.isBlank()) throw failure("MODEL_INGESTION_TARGET_INVALID", Kind.BAD_REQUEST);
         var model = models.get(tenant, id);
         if (model.modelType() != ModelSpecContract.ModelType.SOURCE || model.layer() != ModelSpecContract.Layer.ODS) {
             throw failure("MODEL_INGESTION_TARGET_REQUIRES_ODS", Kind.UNPROCESSABLE);
