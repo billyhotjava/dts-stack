@@ -327,6 +327,8 @@ describe("ModelingWorkbenchEditor", () => {
 		};
 		const props = makeProps({
 			dirty: false,
+			onViewChange: vi.fn(),
+			onNext: vi.fn(),
 			draft: makeDraft({
 				base: selectedModel,
 				implementationMode: "DBT_MANAGED",
@@ -359,6 +361,8 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(container.textContent).not.toContain("实现投影尚未生成");
 		expect(container.querySelector('select[aria-label="数据来源方式"]')).toBeNull();
 		expect(button("下一步").disabled).toBe(false);
+		await act(async () => button("下一步").click());
+		expect(props.onNext).toHaveBeenCalledOnce();
 		const edit = Array.from(container.querySelectorAll("button")).find((button) =>
 			button.textContent?.includes("编辑 SQL 实现"),
 		);
