@@ -1732,6 +1732,65 @@ class DbtImplementationDraftServiceSecurityTest {
         }
     }
 
+    @Test
+    void validatesNewSourcesFromSavedAuthoringWhileRejectingUndeclaredSql() throws Exception {
+        UUID bindingId = UUID.fromString("50000000-0000-0000-0000-000000000083");
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(model.id()).thenReturn(MODEL_ID);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(null, List.of(), List.of()));
+        ModelImplementationDependencyReadPort facts = org.mockito.Mockito.mock(ModelImplementationDependencyReadPort.class);
+        when(facts.readFacts(eq(TENANT), any())).thenReturn(new DependencyFacts(List.of(), List.of(
+            new com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver.PhysicalSourceFact(
+                bindingId, "source-v1", true, "CONNECTION_TABLE", "public.orders"
+            )
+        )));
+        ModelImplementationDependencyService dependencyService = new ModelImplementationDependencyService(facts);
+        ReflectionTestUtils.setField(service, "dependencies", dependencyService);
+        Snapshot base = dependencyService.resolveForDraft(TENANT, model, null, "sprint83", "orders").snapshot();
+        assertThat(base.physicalSources()).isEmpty();
+        var snapshot = objectMapper.valueToTree(modelUpdateSnapshot());
+        ((com.fasterxml.jackson.databind.node.ObjectNode) snapshot).putArray("sourceRefs").addObject()
+            .put("kind", "TABLE").put("role", "PRIMARY").put("layer", "ODS").put("ref", "public.orders")
+            .put("sourceBindingId", bindingId.toString()).put("resolvedVersion", "source-v1");
+        DraftRow draft = org.mockito.Mockito.mock(DraftRow.class);
+        when(draft.planId()).thenReturn(PLAN_ID);
+        when(draft.baseModelRevision()).thenReturn(3);
+        when(draft.baseModelChecksum()).thenReturn(MODEL_CHECKSUM);
+        when(draft.modelSpecSnapshot()).thenReturn(objectMapper.writeValueAsString(snapshot));
+        when(draft.sourceBundleSnapshot()).thenReturn(objectMapper.writeValueAsString(new SourceBundleView(
+            "sprint83", PROJECT_CHECKSUM, PROJECT_CHECKSUM, SourceBundleKind.CANONICAL_INITIALIZATION,
+            false, List.of(), base.dependencyChecksum(), base, Map.of()
+        )));
+        ValidatedProject project = new AdvancedDbtDraftStaticValidator().validate(Map.of(
+            "dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n",
+            "models/orders.sql", "{{ config(materialized='table') }}\nselect * from {{ source('public', 'orders') }}\n"
+        ));
+        DbtImplementationDraftContract.DependencyValidationView result = ReflectionTestUtils.invokeMethod(
+            service, "validateDependencies", TENANT, ACTOR, MODEL_ID, draft, project
+        );
+        assertThat(result.matched()).hasSize(1);
+        assertThat(result.undeclared()).isEmpty();
+        assertThat(result.dependencyChecksum()).isNotEqualTo(base.dependencyChecksum());
+
+        ValidatedProject undeclared = new AdvancedDbtDraftStaticValidator().validate(Map.of(
+            "dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n",
+            "models/orders.sql", "{{ config(materialized='table') }}\nselect * from {{ source('public', 'other_table') }}\n"
+        ));
+        DraftException failure = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "validateDependencies", TENANT, ACTOR, MODEL_ID, draft, undeclared),
+            DraftException.class
+        );
+        assertThat(failure.code()).isEqualTo("DBT_DRAFT_DEPENDENCY_UNDECLARED");
+        when(draft.baseModelChecksum()).thenReturn("0".repeat(64));
+        DraftException stale = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "validateDependencies", TENANT, ACTOR, MODEL_ID, draft, project),
+            DraftException.class
+        );
+        assertThat(stale.code()).isEqualTo("DBT_DRAFT_BASE_MODEL_CONFLICT");
+    }
+
     private ModelSpecView model(int revision, String checksum) {
         ModelSpecView model = org.mockito.Mockito.mock(ModelSpecView.class);
         when(model.planId()).thenReturn(PLAN_ID);

@@ -1399,6 +1399,16 @@ public class DbtImplementationDraftService {
                 )
             );
         }
+        if (unifiedAuthoring) {
+            // The base snapshot protects against external drift; SQL implements the saved authoring snapshot.
+            ModelSpecView authoredModel = snapshotCodec.toUpdatedView(
+                model,
+                requireValidModelSnapshot(draft),
+                model.revision(),
+                clock.instant()
+            );
+            current = resolveDependencies(tenantId, authoredModel, null, validated.projectKey(), ownedTarget.name());
+        }
         List<String> parsed = externalDependencies(
             validated,
             ownedTarget,
