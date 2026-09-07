@@ -235,7 +235,7 @@ public class ModelBuildIntentService {
 
     private CandidateView activeCandidate(String tenant, UUID planId, UUID modelId, String environment, boolean structure) {
         List<CandidateView> active = candidates
-            .listForWorkbench(tenant, planId)
+            .listActiveForPlan(tenant, planId)
             .stream()
             .filter(candidate -> ModelCandidateScopePolicy.conflicts(candidate,
                 structure ? CandidateOrigin.SCHEMA_ONLY_INTENT : CandidateOrigin.SINGLE_MODEL_INTENT,

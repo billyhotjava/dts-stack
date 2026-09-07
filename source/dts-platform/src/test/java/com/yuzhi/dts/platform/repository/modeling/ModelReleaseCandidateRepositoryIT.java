@@ -45,6 +45,35 @@ class ModelReleaseCandidateRepositoryIT {
 
     private static final Instant CREATED_AT = Instant.parse("2026-07-24T00:00:00Z");
 
+    @Test
+    void schemaCandidatesNeverHideOrdinaryWorkbenchOrOlderActiveModelClaims() {
+        String tenant = tenant("schema-scope");
+        UUID plan = UUID.randomUUID();
+        UUID normalModel = UUID.randomUUID();
+        UUID[] schemaModels = { UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID() };
+        seedPlanAndModels(tenant, plan, normalModel, schemaModels[0], schemaModels[1], schemaModels[2]);
+        UUID normalId = UUID.randomUUID();
+        var normal = candidate(tenant, normalId, plan, DeliveryStatus.BUILT, 1, createdAudit(), CREATED_AT,
+            List.of(entry(tenant, normalId, plan, normalModel, DeliveryStatus.BUILT, 1, checksum(normalModel), null, 0)));
+        repository.insert(normal);
+        UUID oldestSchema = null;
+        for (int i = 0; i < schemaModels.length; i++) {
+            UUID id = UUID.randomUUID();
+            if (i == 0) oldestSchema = id;
+            var schema = new CandidateView(id, tenant, plan, "TEST", DeliveryStatus.BUILT, 1,
+                "candidate-" + id, hash('1'), createdAudit(), "owner-1", CREATED_AT.plusSeconds(i + 1),
+                List.of(entry(tenant, id, plan, schemaModels[i], DeliveryStatus.BUILT, 1, checksum(schemaModels[i]), null, 0)),
+                com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateOrigin.SCHEMA_ONLY_INTENT,
+                null, null, null, null);
+            repository.insert(schema);
+        }
+        assertThat(repository.listForWorkbench(tenant, plan)).extracting(CandidateView::id).containsExactly(normalId);
+        assertThat(repository.listActiveForPlan(tenant, plan)).hasSize(4).extracting(CandidateView::id)
+            .contains(normalId, oldestSchema);
+        assertThat(repository.findLatestForModelCurrentRevision(tenant, plan, schemaModels[0], 1,
+            checksum(schemaModels[0]), "TEST")).get().extracting(CandidateView::id).isEqualTo(oldestSchema);
+    }
+
     @Autowired
     private ModelReleaseCandidateRepository repository;
 

@@ -283,7 +283,7 @@ public class ModelReleaseCandidateService {
             );
         }
         repository.lockPlanForCandidate(tenant, command.planId());
-        repository.listForWorkbench(tenant, command.planId()).stream()
+        repository.listActiveForPlan(tenant, command.planId()).stream()
             .filter(existing -> ModelCandidateScopePolicy.conflicts(existing, origin, command.environment(),
                 command.entries().stream().map(ScopeEntryCommand::modelSpecId).toList()))
             .findFirst().ifPresent(existing -> {

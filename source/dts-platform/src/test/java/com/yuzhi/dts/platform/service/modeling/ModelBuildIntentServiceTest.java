@@ -100,7 +100,7 @@ class ModelBuildIntentServiceTest {
         when(batch.environment()).thenReturn("DEV");
         when(batch.entries()).thenReturn(List.of(other));
         when(other.modelSpecId()).thenReturn(UUID.randomUUID());
-        when(candidates.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(batch));
+        when(candidates.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(batch));
         CandidateView draft = candidate(DeliveryStatus.DRAFT, CandidateOrigin.SCHEMA_ONLY_INTENT);
         CandidateView building = candidate(DeliveryStatus.BUILDING, CandidateOrigin.SCHEMA_ONLY_INTENT);
         when(candidateCommands.createSchemaOnlyIntent(eq(TENANT), eq(ACTOR), any()))
@@ -109,7 +109,7 @@ class ModelBuildIntentServiceTest {
             .thenReturn(new ModelMaterializationStartService.StartResult(new CommandResult(building, false, List.of()), group()));
         var command = new ModelBuildIntentService.BuildIntentCommand(PLAN_ID, "DEV", "schema-independent", "SCHEMA_ONLY");
         assertThat(service.start(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 3, CHECKSUM), command).candidate()).isSameAs(building);
-        when(candidates.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(batch, building));
+        when(candidates.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(batch, building));
         when(builds.requireQueuedBuild(building)).thenReturn(group());
         assertThat(service.start(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 3, CHECKSUM), command).replayed()).isTrue();
         verify(candidateCommands, org.mockito.Mockito.times(1)).createSchemaOnlyIntent(any(), any(), any());
@@ -141,7 +141,7 @@ class ModelBuildIntentServiceTest {
         );
         QueuedBuildGroup group = group();
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
-        when(candidates.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of());
+        when(candidates.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of());
         when(candidateCommands.createSingleModelIntent(eq(TENANT), eq(ACTOR), any()))
             .thenReturn(new CommandResult(draft, false, List.of()));
         when(
@@ -201,7 +201,7 @@ class ModelBuildIntentServiceTest {
         QueuedBuildGroup group = group();
         ModelSpecView model = model(ModelStatus.READY_TO_PUBLISH);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
-        when(candidates.listForWorkbench(TENANT, PLAN_ID))
+        when(candidates.listActiveForPlan(TENANT, PLAN_ID))
             .thenReturn(List.of(building));
         when(builds.requireQueuedBuild(building)).thenReturn(group);
 
@@ -242,7 +242,7 @@ class ModelBuildIntentServiceTest {
         QueuedBuildGroup group = group();
         ModelSpecView model = model(ModelStatus.READY_TO_PUBLISH);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
-        when(candidates.listForWorkbench(TENANT, PLAN_ID))
+        when(candidates.listActiveForPlan(TENANT, PLAN_ID))
             .thenReturn(List.of(cancelled));
         when(candidateCommands.createSingleModelIntent(eq(TENANT), eq(ACTOR), any()))
             .thenReturn(new CommandResult(draft, false, List.of()));
@@ -298,7 +298,7 @@ class ModelBuildIntentServiceTest {
         QueuedBuildGroup group = group();
         ModelSpecView model = model(ModelStatus.READY_TO_PUBLISH);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
-        when(candidates.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(published));
+        when(candidates.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(published));
         when(candidateCommands.createSingleModelIntent(eq(TENANT), eq(ACTOR), any()))
             .thenReturn(new CommandResult(draft, false, List.of()));
         when(
@@ -343,7 +343,7 @@ class ModelBuildIntentServiceTest {
         );
         ModelSpecView model = model(ModelStatus.READY_TO_PUBLISH);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
-        when(candidates.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(batch));
+        when(candidates.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(batch));
 
         assertThatThrownBy(() ->
             service.start(
@@ -389,7 +389,7 @@ class ModelBuildIntentServiceTest {
             .extracting(error -> ((ModelReleaseCandidateException) error).code())
             .isEqualTo("MODEL_OPERATIONAL_RUN_REQUIRED");
 
-        verify(candidates, never()).listForWorkbench(any(), any());
+        verify(candidates, never()).listActiveForPlan(any(), any());
     }
 
     private static ModelSpecView model(ModelStatus status) {

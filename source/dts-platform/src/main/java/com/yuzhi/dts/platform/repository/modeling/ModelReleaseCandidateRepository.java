@@ -488,7 +488,7 @@ public class ModelReleaseCandidateRepository {
         return queryCandidatesWithOrder(
             HEADER_SELECTION +
             """
-             where tenant_id = ? and plan_id = ?
+             where tenant_id = ? and plan_id = ? and origin <> 'SCHEMA_ONLY_INTENT'
              order by case
                         when status not in ('REJECTED', 'ROLLED_BACK', 'CANCELLED', 'STALE') then 0
                         else 1
@@ -507,6 +507,19 @@ public class ModelReleaseCandidateRepository {
             """,
             tenantId.trim(),
             planId
+        );
+    }
+
+    /** Active claims are bounded by the plan's models, never by a UI history page size. */
+    public List<CandidateView> listActiveForPlan(String tenantId, UUID planId) {
+        requireTenantAndId(tenantId, planId);
+        return queryCandidatesWithOrder(
+            HEADER_SELECTION + """
+             where tenant_id = ? and plan_id = ?
+               and status not in ('REJECTED', 'ROLLED_BACK', 'CANCELLED', 'STALE', 'PUBLISHED')
+             order by last_modified_date desc, id
+            """,
+            "c.last_modified_date desc, c.id", tenantId.trim(), planId
         );
     }
 
