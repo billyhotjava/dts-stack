@@ -65,6 +65,13 @@ class ModelReleaseCandidateRepositoryIT {
                 ) values (?, ?, ?, 'DWD', 'DWD', 'FACT', 'DESIGNER_GENERATED', ?, 'DRAFT', 1, 1,
                     current_timestamp, current_timestamp, 2, ?, ?, ?, ?, cast('{}' as jsonb))
                 """, model, tenant, plan, "Schema scope " + model, domain, checksum(model), "model-" + model, hash('b'));
+            jdbcTemplate.update("""
+                insert into modeling_model_spec_revision (
+                    id, model_spec_id, revision, status, content_checksum, created_date,
+                    last_modified_date, tenant_id, contract_version, snapshot_json, created_by
+                ) values (?, ?, 1, 'DRAFT', ?, current_timestamp, current_timestamp, ?, 2,
+                    cast('{}' as jsonb), 'owner-1')
+                """, UUID.randomUUID(), model, checksum(model), tenant);
         }
         UUID normalId = UUID.randomUUID();
         var normal = candidate(tenant, normalId, plan, DeliveryStatus.BUILT, 1, createdAudit(), CREATED_AT,
