@@ -59,6 +59,20 @@ it("failed save keeps editor and input context", async () => {
 	expect(router.state.location.search).toBe("?step=definition");
 	expect(discard).not.toHaveBeenCalled();
 	expect(document.body.textContent).toContain("有未保存的修改");
+	expect(document.querySelector('[role="alert"]')?.textContent).toContain("保存未成功，修改仍保留在当前页");
+});
+it("rejected save shows feedback and allows a successful retry", async () => {
+	const save = vi.fn().mockRejectedValueOnce(new Error("save failed")).mockResolvedValueOnce(true);
+	const { router, discard } = await setup(save);
+	await click("后续步骤");
+	await click("保存后离开");
+	expect(router.state.location.search).toBe("?step=definition");
+	expect(document.querySelector('[role="alert"]')?.textContent).toContain("保存未成功");
+	expect(discard).not.toHaveBeenCalled();
+	await click("保存后离开");
+	expect(router.state.location.search).toBe("?step=delivery");
+	expect(save).toHaveBeenCalledTimes(2);
+	expect(discard).not.toHaveBeenCalled();
 });
 it("successful save continues without discarding saved state", async () => {
 	const { router, discard } = await setup(vi.fn().mockResolvedValue(true));

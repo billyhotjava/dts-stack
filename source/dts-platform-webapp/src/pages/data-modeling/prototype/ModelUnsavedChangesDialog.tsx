@@ -13,11 +13,19 @@ export function ModelUnsavedChangesDialog({
 	onStay: () => void;
 }) {
 	const [saving, setSaving] = useState(false);
+	const [saveFailed, setSaveFailed] = useState(false);
 	const save = async () => {
 		if (saving) return;
 		setSaving(true);
+		setSaveFailed(false);
 		try {
-			if (await onSave()) onSaved();
+			if (await onSave()) {
+				onSaved();
+			} else {
+				setSaveFailed(true);
+			}
+		} catch {
+			setSaveFailed(true);
 		} finally {
 			setSaving(false);
 		}
@@ -29,6 +37,11 @@ export function ModelUnsavedChangesDialog({
 				if (!saving) onStay();
 			}}
 		>
+			{saveFailed && (
+				<div className="dmx-inline-error" role="alert">
+					保存未成功，修改仍保留在当前页。请点击“留在当前页”查看错误提示或检查必填项，处理后重试。
+				</div>
+			)}
 			<div className="dmx-dialog-actions">
 				<Button disabled={saving} onClick={onStay}>
 					留在当前页
