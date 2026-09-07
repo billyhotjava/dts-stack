@@ -12,6 +12,18 @@ import org.junit.jupiter.api.Test;
 
 class ModelSchemaOnlySupportTest {
     @Test
+    void recompilesPersistedTimestampTypesWithoutChangingTheirPhysicalType() {
+        var projection = org.mockito.Mockito.spy(projection("SOURCE", false));
+        org.mockito.Mockito.when(projection.typedFields()).thenReturn(List.of(
+            new ModelSpecCompilerProjection.CompilerField("record_id", "timestamp without time zone", false),
+            new ModelSpecCompilerProjection.CompilerField("amount", "timestamp with time zone", true)));
+        assertThat(ModelingDbtCompiler.compile(projection).files().get("schema_model.sql"))
+            .contains("'data_type':'timestamp without time zone'", "'data_type':'timestamp with time zone'");
+        assertThatThrownBy(() -> ModelFieldPhysicalTypeContract.requireSupported("timestamp without time zone; drop table records"))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void generatedStructureFilesPassTheRealAuthoringStaticValidator() {
         var artifacts = ModelingDbtCompiler.compile(projection("SOURCE", false));
         Map<String, String> files = new java.util.LinkedHashMap<>();
