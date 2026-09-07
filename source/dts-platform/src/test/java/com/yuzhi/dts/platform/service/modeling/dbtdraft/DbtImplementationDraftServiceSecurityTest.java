@@ -1754,7 +1754,9 @@ class DbtImplementationDraftServiceSecurityTest {
         String initialPath = "models/orders.sql";
         String compiledPath = "models/dwd/orders/v3/i1/orders.sql";
         String placeholder = "select 1 as _dts_placeholder where 1 = 0\n";
-        SourceBundleView canonical = sourceBundle("sprint83", List.of(new FileInput(initialPath, placeholder)));
+        SourceBundleView canonical = sourceBundle("sprint83", List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            new FileInput(initialPath, placeholder)));
         for (SourceBundleKind kind : SourceBundleKind.values()) {
             DraftRow draft = org.mockito.Mockito.mock(DraftRow.class);
             when(draft.sourceBundleSnapshot()).thenReturn(objectMapper.writeValueAsString(new SourceBundleView(
@@ -1807,7 +1809,8 @@ class DbtImplementationDraftServiceSecurityTest {
         when(draft.modelSpecSnapshot()).thenReturn(objectMapper.writeValueAsString(snapshot));
         when(draft.sourceBundleSnapshot()).thenReturn(objectMapper.writeValueAsString(new SourceBundleView(
             "sprint83", PROJECT_CHECKSUM, PROJECT_CHECKSUM, SourceBundleKind.CANONICAL_INITIALIZATION,
-            false, List.of(), base.dependencyChecksum(), base, Map.of()
+            false, sourceBundle("sprint83", List.of(new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"))).files(),
+            base.dependencyChecksum(), base, Map.of()
         )));
         ValidatedProject project = new AdvancedDbtDraftStaticValidator().validate(Map.of(
             "dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n",
@@ -1862,7 +1865,8 @@ class DbtImplementationDraftServiceSecurityTest {
         when(draft.modelSpecSnapshot()).thenReturn(objectMapper.writeValueAsString(snapshot));
         when(draft.sourceBundleSnapshot()).thenReturn(objectMapper.writeValueAsString(new SourceBundleView(
             "sprint83", PROJECT_CHECKSUM, PROJECT_CHECKSUM, SourceBundleKind.CANONICAL_INITIALIZATION,
-            false, List.of(), base.dependencyChecksum(), base, Map.of()
+            false, sourceBundle("sprint83", List.of(new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"))).files(),
+            base.dependencyChecksum(), base, Map.of()
         )));
         ValidatedProject project = new AdvancedDbtDraftStaticValidator().validate(Map.of(
             "dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n",
@@ -1894,7 +1898,8 @@ class DbtImplementationDraftServiceSecurityTest {
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(latest);
         when(modelSpecs.revision(eq(TENANT), any())).thenReturn(previous);
         when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
-        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(designerImplementation(), List.of(), List.of()));
+        ImplementationView currentImplementation = designerImplementation();
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(currentImplementation, List.of(), List.of()));
         SourceBundleView source = sourceBundle("sprint83", List.of(
             new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
             new FileInput("models/orders.sql", "select manual_business_rule from orders\n")
@@ -1919,7 +1924,8 @@ class DbtImplementationDraftServiceSecurityTest {
         verify(repository, never()).replaceFiles(any(), any(), any(), any(), any(), any(), any(), any());
 
         org.mockito.Mockito.clearInvocations(repository);
-        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model(4, "f".repeat(64)));
+        ModelSpecView conflictingModel = model(4, "f".repeat(64));
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(conflictingModel);
         DraftException conflict = catchThrowableOfType(
             () -> ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW),
             DraftException.class
@@ -1941,7 +1947,9 @@ class DbtImplementationDraftServiceSecurityTest {
     void recognizesUneditedGeneratedSqlAtThePreviousRevisionAfterBaseAlignment() throws Exception {
         String oldPath = "models/dwd/orders/v3/i2/orders.sql";
         String customPath = "models/dwd/orders/v3/i2/custom.sql";
-        SourceBundleView source = sourceBundle("sprint83", List.of(new FileInput("models/orders.sql", "select 1\n")));
+        SourceBundleView source = sourceBundle("sprint83", List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            new FileInput("models/orders.sql", "select 1\n")));
         DraftRow draft = authoringRowWithSource(objectMapper.writeValueAsString(versionedVisualSnapshot()),
             objectMapper.writeValueAsString(source), "{}");
         when(repository.listFiles(DRAFT_ID)).thenReturn(List.of(file(oldPath, "select record_id from orders\n"),
@@ -1992,7 +2000,8 @@ class DbtImplementationDraftServiceSecurityTest {
             "ACTIVE", 1, IMPLEMENTATION_CHECKSUM, command.inputMode(), command.inputs(), command.fieldMappings(),
             command.settings(), command.materialization());
         when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(implementation, List.of(), List.of()));
-        DraftRow aligned = org.mockito.Mockito.spy(original);
+        DraftRow aligned = org.mockito.Mockito.spy(authoringRowWithSource(objectMapper.writeValueAsString(snapshot),
+            objectMapper.writeValueAsString(source), "{}"));
         when(aligned.baseModelRevision()).thenReturn(current.revision());
         when(aligned.baseModelChecksum()).thenReturn(current.checksum());
         when(aligned.baseImplementationRevision()).thenReturn(1);
