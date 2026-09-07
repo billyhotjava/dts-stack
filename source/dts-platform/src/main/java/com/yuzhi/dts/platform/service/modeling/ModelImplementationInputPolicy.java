@@ -46,6 +46,14 @@ public class ModelImplementationInputPolicy {
     }
 
     public ValidationResult validate(String tenantId, ModelSpecView owner, SaveImplementationCommand command) {
+        if (command != null && ModelSchemaOnlySupport.isSchemaOnly(command.inputMode(), command.inputs())) {
+            return owner != null && !owner.fields().isEmpty() && ModelSchemaOnlySupport.valid(command)
+                ? ValidationResult.ok() : ValidationResult.invalid("MODEL_SCHEMA_ONLY_CONFIGURATION_INVALID");
+        }
+        if (command != null && command.inputMode() == InputMode.GENERATED &&
+            (owner == null || owner.modelType() != ModelType.DIMENSION)) {
+            return ValidationResult.invalid("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED");
+        }
         if (command == null || command.inputs() == null || command.inputs().isEmpty()) {
             return ValidationResult.invalid("MODEL_IMPLEMENTATION_INPUT_REQUIRED");
         }
@@ -203,10 +211,10 @@ public class ModelImplementationInputPolicy {
     private static boolean allows(ModelType type, InputMode mode) {
         if (type == null || mode == null) return false;
         return switch (type) {
-            case SOURCE -> false;
+            case SOURCE -> mode == InputMode.GENERATED;
             case DIMENSION -> mode == InputMode.PHYSICAL_ASSET || mode == InputMode.GENERATED;
-            case FACT -> mode == InputMode.PHYSICAL_ASSET || mode == InputMode.UPSTREAM_MODEL;
-            case SUMMARY, APPLICATION -> mode == InputMode.UPSTREAM_MODEL;
+            case FACT -> mode == InputMode.PHYSICAL_ASSET || mode == InputMode.UPSTREAM_MODEL || mode == InputMode.GENERATED;
+            case SUMMARY, APPLICATION -> mode == InputMode.UPSTREAM_MODEL || mode == InputMode.GENERATED;
         };
     }
 

@@ -47,6 +47,10 @@ public final class ModelImplementationDependencySnapshotResolver {
     ) {
         requireOwnerPins(owner, implementation);
         String normalizedProjectKey = normalizedProjectKey(projectKey);
+        if (ModelSchemaOnlySupport.isSchemaOnly(implementation)) {
+            return new Snapshot(owner.id(), owner.revision(), owner.checksum(), implementation.implementationRevision(),
+                implementation.implementationChecksum(), List.of(), List.of(), checksum(owner, List.of(), List.of()));
+        }
         DependencyFacts normalizedFacts = facts == null ? new DependencyFacts(List.of(), List.of()) : facts;
         Map<ModelRevisionRef, ModelFact> models = modelFacts(normalizedFacts.models());
         detectCycle(owner, models);

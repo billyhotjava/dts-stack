@@ -1113,7 +1113,7 @@ export const repairPlanExecutionBinding = (planId: string, bindingId: string, bi
 export const startModelBuildIntent = (
 	expected: ModelSpecCasToken,
 	idempotencyKey: string,
-	data: { planId: string; environment: string },
+	data: { planId: string; environment: string; buildMode?: "SCHEMA_ONLY" | "DATA_BUILD" },
 ) =>
 	api.post<ModelBuildIntentResult>({
 		url: `${MODEL_SPEC_RESOURCE}/${encodeURIComponent(expected.id)}/build-intents`,

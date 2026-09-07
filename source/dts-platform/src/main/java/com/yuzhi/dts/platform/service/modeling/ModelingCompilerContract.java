@@ -16,6 +16,7 @@ public final class ModelingCompilerContract {
     }
 
     public enum ModelType {
+        SOURCE,
         FACT,
         DIMENSION,
         SUMMARY,

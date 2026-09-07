@@ -62,7 +62,8 @@ public class ModelImplementationDependencyService {
 		String projectKey,
 		String targetName
 	) {
-        DependencyFacts facts = readPort.readFacts(tenantId, owner);
+        DependencyFacts facts = ModelSchemaOnlySupport.isSchemaOnly(implementation)
+            ? new DependencyFacts(List.of(), List.of()) : readPort.readFacts(tenantId, owner);
         ImplementationView effective = implementation == null
             ? provisionalImplementation(owner, projectKey, targetName)
             : implementation;

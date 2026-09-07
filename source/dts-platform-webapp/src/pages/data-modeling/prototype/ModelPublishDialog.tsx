@@ -6,6 +6,7 @@ import {
 	createReleaseCandidate,
 	createReplacementReleaseCandidate,
 	getModelMaterializationStatuses,
+	getModelLifecycle,
 	getPlanExecutionWorkspace,
 	getReleaseCandidateWorkbench,
 	lockReleaseCandidate,
@@ -434,7 +435,11 @@ export function ModelPublishDialog({
 			} else if (candidate?.origin === "BATCH_WORKBENCH") {
 				await lockReleaseCandidate(planId, candidate, crypto.randomUUID(), "从模型工作台启动构建");
 			} else {
-				await startModelBuildIntent(primary, crypto.randomUUID(), { planId, environment });
+				const lifecycle = await getModelLifecycle(primary.id);
+				const implementation = lifecycle.implementation;
+				const schemaOnly = implementation?.inputMode === "GENERATED" && implementation.inputs.length === 1 &&
+					"generatorType" in implementation.inputs[0] && implementation.inputs[0].generatorType === "SCHEMA_ONLY";
+				await startModelBuildIntent(primary, crypto.randomUUID(), { planId, environment, buildMode: schemaOnly ? "SCHEMA_ONLY" : "DATA_BUILD" });
 			}
 			await load();
 			if (!batch) setTab("publish");

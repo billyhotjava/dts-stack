@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.modeling;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.QueuedBuildGroup;
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelMaterializationStartService.StartResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateOrigin;
@@ -21,6 +22,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +45,7 @@ public class ModelBuildIntentService {
     private final ModelReleaseCandidateService candidateCommands;
     private final ModelMaterializationStartService materializationStarts;
     private final ModelMaterializationBuildRepository builds;
+    private final ModelLifecycleRepository implementations;
 
     public ModelBuildIntentService(
         ModelSpecApplicationService modelSpecs,
@@ -50,7 +53,8 @@ public class ModelBuildIntentService {
         ModelReleaseCandidateRepository candidates,
         ModelReleaseCandidateService candidateCommands,
         ModelMaterializationStartService materializationStarts,
-        ModelMaterializationBuildRepository builds
+        ModelMaterializationBuildRepository builds,
+        ModelLifecycleRepository implementations
     ) {
         this.modelSpecs = Objects.requireNonNull(modelSpecs, "modelSpecs is required");
         this.planAccess = Objects.requireNonNull(planAccess, "planAccess is required");
@@ -64,6 +68,7 @@ public class ModelBuildIntentService {
             "materializationStarts is required"
         );
         this.builds = Objects.requireNonNull(builds, "builds is required");
+        this.implementations = Objects.requireNonNull(implementations, "implementations is required");
     }
 
     @Transactional
@@ -94,6 +99,14 @@ public class ModelBuildIntentService {
 
         ModelSpecView model = modelSpecs.get(tenant, modelSpecId);
         requireCurrentModel(model, planId, expected);
+        var implementation = implementations.findImplementation(tenant, modelSpecId).orElse(null);
+        if (implementation != null && !implementations.lockImplementation(tenant, modelSpecId, implementation)) {
+            throw new ModelReleaseCandidateException("MODEL_IMPLEMENTATION_REVISION_CONFLICT", "Implementation changed before materialization", Kind.CONFLICT);
+        }
+        boolean structure = ModelSchemaOnlySupport.isSchemaOnly(implementation);
+        if (structure != "SCHEMA_ONLY".equals(command.buildMode())) {
+            throw new ModelReleaseCandidateException("MODEL_BUILD_MODE_MISMATCH", "Requested build mode does not match the current implementation", Kind.CONFLICT);
+        }
         if (model.status() == ModelStatus.PUBLISHED) {
             throw new ModelReleaseCandidateException(
                 "MODEL_OPERATIONAL_RUN_REQUIRED",
@@ -131,7 +144,7 @@ public class ModelBuildIntentService {
                     "single-model build intent"
                 )
             ),
-            createCommandKey(command.idempotencyKey()),
+            createCommandKey(command.executionKey()),
             REASON
         );
         CommandResult draft = candidateCommands.createSingleModelIntent(
@@ -154,7 +167,7 @@ public class ModelBuildIntentService {
             actor,
             draft.candidate().id(),
             draft.candidate().version(),
-            startCommandKey(command.idempotencyKey()),
+            startCommandKey(command.executionKey()),
             REASON
         );
         CandidateView current = candidates
@@ -196,7 +209,7 @@ public class ModelBuildIntentService {
                 actor,
                 active.id(),
                 active.version(),
-                startCommandKey(command.idempotencyKey()),
+                startCommandKey(command.executionKey()),
                 REASON
             );
             CandidateView current = candidates
@@ -208,11 +221,10 @@ public class ModelBuildIntentService {
                 started.command().replayed()
             );
         }
-        return new BuildIntentResult(
-            active,
-            builds.requireQueuedBuild(active),
-            true
-        );
+        if (!builds.detectForRead(active).isEmpty()) {
+            throw new ModelReleaseCandidateException("MODEL_BUILD_INTENT_SNAPSHOT_STALE", "The active build no longer matches the current implementation or target", Kind.CONFLICT);
+        }
+        return new BuildIntentResult(active, builds.requireQueuedBuild(active), true);
     }
 
     private CandidateView activeCandidate(String tenant, UUID planId) {
@@ -358,12 +370,21 @@ public class ModelBuildIntentService {
     public record BuildIntentCommand(
         UUID planId,
         String environment,
-        String idempotencyKey
+        String idempotencyKey,
+        String buildMode
     ) {
+        public BuildIntentCommand(UUID planId, String environment, String idempotencyKey) {
+            this(planId, environment, idempotencyKey, "DATA_BUILD");
+        }
+        String executionKey() {
+            return "SCHEMA_ONLY".equals(buildMode) ? sha256(idempotencyKey) + ":schema" : idempotencyKey;
+        }
         public BuildIntentCommand {
             if (planId == null) throw invalid("planId is required");
             environment = required(environment, "environment", 64);
             idempotencyKey = required(idempotencyKey, "idempotencyKey", 128);
+            if (buildMode == null) buildMode = "DATA_BUILD";
+            if (!Set.of("SCHEMA_ONLY", "DATA_BUILD").contains(buildMode)) throw invalid("buildMode is invalid");
         }
     }
 

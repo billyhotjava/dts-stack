@@ -41,7 +41,8 @@ public class ModelBuildIntentResource {
     );
     private static final Set<String> BODY_FIELDS = Set.of(
         "planId",
-        "environment"
+        "environment",
+        "buildMode"
     );
 
     private final ModelBuildIntentService service;
@@ -77,7 +78,8 @@ public class ModelBuildIntentResource {
             new BuildIntentCommand(
                 request.planId(),
                 request.environment(),
-                requiredIdempotencyKey(idempotencyKey)
+                requiredIdempotencyKey(idempotencyKey),
+                request.buildMode()
             )
         );
         HttpStatus status =
@@ -137,8 +139,10 @@ public class ModelBuildIntentResource {
             });
         String planId = text(body, "planId");
         String environment = text(body, "environment");
+        String buildMode = body.has("buildMode") ? text(body, "buildMode") : "DATA_BUILD";
+        if (!Set.of("SCHEMA_ONLY", "DATA_BUILD").contains(buildMode)) throw invalid("buildMode is invalid");
         try {
-            return new BuildIntentBody(UUID.fromString(planId), environment);
+            return new BuildIntentBody(UUID.fromString(planId), environment, buildMode);
         } catch (IllegalArgumentException invalidUuid) {
             throw invalid("planId must be a UUID");
         }
@@ -205,5 +209,5 @@ public class ModelBuildIntentResource {
         );
     }
 
-    private record BuildIntentBody(UUID planId, String environment) {}
+    private record BuildIntentBody(UUID planId, String environment, String buildMode) {}
 }

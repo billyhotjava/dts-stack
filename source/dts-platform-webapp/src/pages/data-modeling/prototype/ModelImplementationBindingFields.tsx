@@ -57,7 +57,7 @@ const MODEL_TYPE_LABELS: Record<ModelSpecType, string> = {
 const INPUT_MODE_LABELS: Record<ModelImplementationInputMode, string> = {
 	PHYSICAL_ASSET: "直接选择输入源表",
 	UPSTREAM_MODEL: "引用已有上游模型",
-	GENERATED: "系统生成标准日期维度",
+	GENERATED: "按模型生成",
 };
 
 const modeOptions = (
@@ -154,9 +154,9 @@ export function ModelImplementationBindingFields({
 	const changeMode = (mode: ModelImplementationInputMode | "") => {
 		patch({
 			implementationInputMode: mode,
-			generationStrategyType: mode === "GENERATED" ? "DATE_DIMENSION" : "",
+			generationStrategyType: mode === "GENERATED" ? (draft.createKind === "dimension-table" ? "DATE_DIMENSION" : "SCHEMA_ONLY") : "",
 			sourceRefs: mode === "PHYSICAL_ASSET" ? draft.sourceRefs : [],
-			dependsOn: mode === "UPSTREAM_MODEL" ? draft.dependsOn : [],
+			dependsOn: mode === "UPSTREAM_MODEL" || mode === "GENERATED" ? draft.dependsOn : [],
 		});
 	};
 
@@ -239,13 +239,13 @@ export function ModelImplementationBindingFields({
 						{draft.implementationInputMode === "GENERATED" ? (
 							<label>
 								<span>生成策略</span>
-								<input
-									disabled
-									value={draft.generationStrategyType === "DATE_DIMENSION" ? "系统生成标准日期维度" : "生成策略未配置"}
-								/>
-								{draft.generationStrategyType !== "DATE_DIMENSION" ? (
-									<small>请选择系统生成标准日期维度，或切换到代码模式维护原始实现。</small>
-								) : null}
+								<select aria-label="生成策略" value={draft.generationStrategyType}
+									onChange={(event) => patch({ generationStrategyType: event.target.value as ModelSpecDraft["generationStrategyType"] })}>
+									<option value="">请选择生成策略</option>
+									<option value="SCHEMA_ONLY">仅创建表结构（空表）</option>
+									{draft.createKind === "dimension-table" ? <option value="DATE_DIMENSION">生成标准日期数据</option> : null}
+								</select>
+								{draft.generationStrategyType === "SCHEMA_ONLY" ? <small>按当前字段、类型和主键创建空表，不读取数据；目标表已存在时会停止。</small> : null}
 							</label>
 						) : null}
 

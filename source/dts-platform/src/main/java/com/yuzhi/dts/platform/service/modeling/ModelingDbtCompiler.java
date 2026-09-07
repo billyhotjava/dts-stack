@@ -195,10 +195,13 @@ public final class ModelingDbtCompiler {
             .map(value -> "'" + jinjaString(value) + "'")
             .collect(Collectors.joining(",", "[", "]"));
         StringBuilder config = new StringBuilder("{{ config(materialized='")
-            .append(executionPlan.effectiveMaterialization())
+            .append(ModelSchemaOnlySupport.isSchemaOnly(projection.inputMode(), projection.inputs()) ? "dts_schema_only" : executionPlan.effectiveMaterialization())
             .append("', alias='")
             .append(jinjaString(executionPlan.targetIdentifier()))
             .append("'");
+        if (ModelSchemaOnlySupport.isSchemaOnly(projection.inputMode(), projection.inputs())) {
+            config.append(ModelSchemaOnlySupport.columnConfig(projection));
+        }
         if ("incremental".equals(executionPlan.effectiveMaterialization())) {
             config.append(", unique_key=").append(uniqueKey);
         }
@@ -231,6 +234,11 @@ public final class ModelingDbtCompiler {
     }
 
     private static String renderEphemeralStg(ModelSpecCompilerProjection.ImplementationProjection projection, List<String> columns) {
+        if (ModelSchemaOnlySupport.isSchemaOnly(projection.inputMode(), projection.inputs())) {
+            return "{{ config(materialized='ephemeral') }}\nselect " + projection.typedFields().stream()
+                .map(field -> "cast(null as " + ModelFieldPhysicalTypeContract.requireSupported(field.dataType()).postgresType() + ") as " + field.name())
+                .collect(Collectors.joining(", ")) + " where false\n";
+        }
         ModelingCompilerContract.CompilerModel model = projection.model();
         Map<String, String> mappings = mappingsByTarget(projection.fieldMappings());
         if (model.sourceRefs() != null && model.sourceRefs().size() > 1) {

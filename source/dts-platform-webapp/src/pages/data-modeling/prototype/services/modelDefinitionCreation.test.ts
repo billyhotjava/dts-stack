@@ -11,7 +11,7 @@ import {
 	saveModelDefinitionDraft,
 	validateModelDefinitionInput,
 } from "./modelDefinitionCreation";
-import type { ModelSpecDraft } from "./modelWorkbenchService";
+import { modelDraftToUpdateCommand, validateModelDraftInput, type ModelSpecDraft } from "./modelWorkbenchService";
 
 vi.mock("@/api/dimensionDefinitionApi", () => ({
 	confirmDimensionDefinition: vi.fn(),
@@ -189,4 +189,16 @@ it("existing definition uses the loaded canonical revision and does not write im
 	vi.mocked(api.put).mockRejectedValueOnce(new Error("conflict"));
 	await expect(saveExistingModelDefinition(draft, context)).rejects.toThrow("conflict");
 	expect(draft.base.revision).toBe(3);
+});
+
+it("accepts source-free structure generation without losing logical dependencies", () => {
+	const draft = makeDraft({ ...definition(), implementationInputMode: "GENERATED", generationStrategyType: "SCHEMA_ONLY", physicalName: "dws_schema_test", dependsOn: [{ modelSpecId: "60000000-0000-0000-0000-000000000001", revision: 2 }] });
+	expect(validateModelDraftInput(draft).implementationInputMode).toBeUndefined();
+	expect(modelDraftToUpdateCommand(draft).dependsOn).toEqual(draft.dependsOn);
+	expect(validateModelDraftInput({ ...draft, materialization: "view" }).implementationInputMode).toContain("普通表");
+	expect(validateModelDraftInput({ ...draft, fieldMappings: [{ sourceField: "id", targetField: "project_id" }] }).implementationInputMode).toContain("空的映射");
+});
+it("never serializes the structure generator as a dimension business generation strategy", () => {
+	const draft = makeDraft({ implementationInputMode: "GENERATED", generationStrategyType: "SCHEMA_ONLY" });
+	expect(modelDraftToUpdateCommand(draft).generationStrategy).toBeNull();
 });

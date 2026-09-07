@@ -329,6 +329,8 @@ public class ModelMaterializationSourceAvailabilityGuard {
         UUID boundaryId,
         Map<UUID, PhysicalSourceRequest> physicalSources
     ) {
+        JsonNode inputs = parseInputs(snapshot, boundaryId);
+        if (inputs.size() == 1 && ModelSchemaOnlySupport.GENERATOR.equals(inputs.get(0).path("generatorType").asText())) return;
         JsonNode sourceRefs = parseSourceRefs(snapshot, boundaryId);
         if (!sourceRefs.isEmpty()) {
             validatePhysicalInputs(snapshot, sourceRefs, boundaryId, physicalSources);

@@ -166,6 +166,15 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
                        coalesce(parent.snapshot_json -> 'dependsOn', '[]'::jsonb) ||
                        coalesce(parent.snapshot_json -> 'dimensionRefs', '[]'::jsonb)
                  ) edge(value)
+                 where not exists (
+                       select 1 from modeling_model_implementation structure
+                        where structure.tenant_id = parent.tenant_id
+                          and structure.model_spec_id = parent.model_spec_id
+                          and structure.model_revision = parent.revision
+                          and structure.model_checksum = parent.content_checksum
+                          and structure.status = 'ACTIVE' and structure.input_mode = 'GENERATED'
+                          and structure.inputs_json -> 0 ->> 'generatorType' = 'SCHEMA_ONLY'
+                 )
             ), exact_requests as (
                 select distinct model_spec_id, revision from requested
             )
@@ -233,7 +242,9 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
             ImplementationView implementation = implementation(row);
             if (implementation != null) implementations.put(row.modelSpecId(), implementation);
         }
-        List<ModelSpecView> modelViews = models.stream().map(ModelFact::model).toList();
+        List<ModelSpecView> modelViews = models.stream().map(ModelFact::model)
+            .filter(model -> !com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(implementations.get(model.id())))
+            .toList();
         return new PlanFacts(
             new DependencyFacts(models, readPhysicalSources(tenantId, modelViews)),
             implementations

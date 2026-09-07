@@ -66,6 +66,9 @@ class ModelBuildIntentServiceTest {
     @Mock
     private ModelMaterializationBuildRepository builds;
 
+    @Mock
+    private com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository implementations;
+
     private ModelBuildIntentService service;
 
     @BeforeEach
@@ -76,9 +79,21 @@ class ModelBuildIntentServiceTest {
             candidates,
             candidateCommands,
             materializationStarts,
-            builds
+            builds,
+            implementations
         );
         when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+    }
+
+    @Test
+    void refusesSchemaModeWithoutTheMatchingCurrentImplementation() {
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model(ModelStatus.READY_TO_PUBLISH));
+        assertThatThrownBy(() -> service.start(TENANT, ACTOR, MODEL_ID,
+            new ExpectedVersion(MODEL_ID, 3, CHECKSUM),
+            new ModelBuildIntentService.BuildIntentCommand(PLAN_ID, "dev", "schema-key", "SCHEMA_ONLY")))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .hasMessageContaining("Requested build mode");
+        verify(candidateCommands, never()).createSingleModelIntent(any(), any(), any());
     }
 
     @Test

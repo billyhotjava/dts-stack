@@ -36,3 +36,20 @@
 - DWD FACT 的 `dependsOn:[{modelSpecId:UUID,revision:positive integer}]` 允许准确 SOURCE/ODS 修订以及原 FACT/DWD；DWS/ADS 保持已有分层规则，通过 DWD→DWS→ADS 设计全链。不得将 SOURCE 当作已确认物理来源。
 - 同计划允许可读未发布上游，跨计划仍要求 PUBLISHED；既有应用服务负责引用存在性、读取权限和依赖环。不存在/不可读引用维持原错误，非法层级用 `MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED`；SOURCE 非 ODS 用 `MODEL_SPEC_TYPE_LAYER_MISMATCH`，专属字段非法用现有结构化类型错误。
 - 前后端类型矩阵与 JSON Schema 必须一致。验收先覆盖 SOURCE 创建/更新、SOURCE/STG 拒绝、ODS→DWD 允许、上游修订恢复和旧四类兼容。结构物化、完成聚合和接入绑定仍属 T17–T19，不能用此切片宣布就绪。
+
+## T16 已执行验证
+
+- `8cf1db576`：部署目录 Node 契约测试 44/44；TypeScript 检查暴露概览 SOURCE 标签缺失，随后在 `ac5820821` 修复，待重验。
+- `ac5820821`：部署目录 Java 定向回归 146/146，源码与测试编译成功；首次编译暴露旧 dbt 测试错误引用 ExpectedImplementationVersion，已修正 owner 为 ModelLifecycleService。
+- `ac5820821`：部署目录 ODS 定义保存与逻辑引用组件 Vitest 11/11，覆盖未物化引用、显式更新修订和跨计划未发布拒绝。
+- 尚无包含本轮源码的正式镜像/部署或真实 ODS 创建验收，不标 T16 DONE。
+
+## K33 执行方案冻结（T17 待实现）
+
+结构执行复用已持久化的 GENERATED 输入协议：`inputs:[{generatorType:"SCHEMA_ONLY",config:{}}]`、`fieldMappings:[]`、ownership=DESIGNER_GENERATED、materialization=table、settings.loadStrategy=FULL。不增加新的输入枚举/数据库台账；现有 payload 校验允许具名 generated 配置。模型层 generationStrategy 仍保留原 DIMENSION 专属规则。
+
+SCHEMA_ONLY 只消费当前模型字段、类型、非空与键声明；既有 ModelSpec 校验继续保护逻辑引用，执行依赖快照不要求逻辑上游先有实现。结构模式禁止 filters/casts/joins/聚合/去重、分区与增量策略，不忽略已声明但不支持的内容。
+
+dbt 默认 table materialization 在 pre-hook 前会清理中间/备份关系，不能用它配一个前置检查冒充无覆盖物化。采用正式包内独立 `dts_schema_only` materialization：只执行 CREATE TABLE 和事务提交，不执行 DROP/TRUNCATE/ALTER 原表/源查询；同名已有目标无论结构如何都返回冲突，不占用或覆盖旧表。请求重放继续返回原候选/运行。
+
+`build-intents.buildMode` 缺省 DATA_BUILD；显式 SCHEMA_ONLY 必须匹配当前实现的上述生成器，模式参与请求及运行版本判断，不能将普通运行降级为创建空表。编译产物/实现校验和包含生成器及声明结构，物化结果用原运行/目标核验派生。结构成功不生成质量通过、PUBLISHED 或分析就绪证据。

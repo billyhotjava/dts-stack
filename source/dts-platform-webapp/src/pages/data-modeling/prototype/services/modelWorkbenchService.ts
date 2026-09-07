@@ -132,7 +132,7 @@ export type ModelSpecDraft = {
 	implementationMode: ModelSpecImplementationMode;
 	implementationBase: ModelImplementationView | null;
 	implementationInputMode: ModelImplementationInputMode | "";
-	generationStrategyType: "" | "DATE_DIMENSION";
+	generationStrategyType: "" | "DATE_DIMENSION" | "SCHEMA_ONLY";
 	implementationIdempotencyKey: string;
 	creationOperationId: string;
 	fieldMappings: ModelImplementationFieldMapping[];
@@ -262,7 +262,7 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		implementationMode: "DESIGNER_GENERATED",
 		implementationBase: null,
 		implementationInputMode,
-		generationStrategyType: "",
+		generationStrategyType: kind === "source" ? "SCHEMA_ONLY" : "",
 		implementationIdempotencyKey: crypto.randomUUID(),
 		creationOperationId: crypto.randomUUID(),
 		fieldMappings: [],
@@ -486,7 +486,7 @@ export function modelDraftFromView(
 						: model.modelType === "SUMMARY" || model.modelType === "APPLICATION"
 							? "UPSTREAM_MODEL"
 							: ""),
-		generationStrategyType: generationStrategyType === "DATE_DIMENSION" ? "DATE_DIMENSION" : "",
+		generationStrategyType: generationStrategyType === "DATE_DIMENSION" || generationStrategyType === "SCHEMA_ONLY" ? generationStrategyType : "",
 		implementationIdempotencyKey: crypto.randomUUID(),
 		creationOperationId: crypto.randomUUID(),
 		fieldMappings: (structuredImplementation?.fieldMappings || []).map((mapping) => ({ ...mapping })),
@@ -821,9 +821,16 @@ export function validateModelDraftInput(
 		errors.implementationInputMode = "请至少选择一个当前修订的上游模型";
 	} else if (
 		draft.implementationInputMode === "GENERATED" &&
+		draft.generationStrategyType !== "SCHEMA_ONLY" &&
 		(draft.createKind !== "dimension-table" || draft.generationStrategyType !== "DATE_DIMENSION")
 	) {
 		errors.implementationInputMode = "当前模型不支持所选生成器";
+	}
+	if (draft.implementationInputMode === "GENERATED" && draft.generationStrategyType === "SCHEMA_ONLY" &&
+		(draft.materialization !== "table" || draft.loadStrategy !== "FULL" || draft.partitionFields.trim() ||
+		 draft.fieldMappings.length || Object.keys(draft.casts).length || draft.filters.length ||
+		 draft.deduplicateBy.length || draft.joins.length || draft.groupBy.length || draft.aggregations.length)) {
+		errors.implementationInputMode = "仅创建表结构需要普通表、全量策略和空的映射、转换及分区配置，请先清除不兼容配置";
 	}
 	const partitionFields = parsePartitionFields(draft.partitionFields);
 	const modelFields = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
@@ -1014,7 +1021,7 @@ export const modelDraftToUpdateCommand = (draft: ModelSpecDraft): UpdateModelSpe
 				? { type: draft.timeSemanticsType, fields: draft.timeSemanticsFields }
 				: null,
 		generationStrategy:
-			config.modelType === "DIMENSION" && draft.implementationInputMode === "GENERATED"
+			config.modelType === "DIMENSION" && draft.implementationInputMode === "GENERATED" && draft.generationStrategyType === "DATE_DIMENSION"
 				? draft.generationStrategyType
 					? { type: draft.generationStrategyType, reference: null }
 					: null
@@ -1072,10 +1079,10 @@ const implementationInputs = (
 	draft: ModelSpecDraft,
 	context: ModelSaveContext,
 ): ResolvedImplementationInputs | null => {
-	if (draft.implementationInputMode === "GENERATED" && draft.generationStrategyType === "DATE_DIMENSION") {
+	if (draft.implementationInputMode === "GENERATED" && (draft.generationStrategyType === "DATE_DIMENSION" || draft.generationStrategyType === "SCHEMA_ONLY")) {
 		return {
 			inputMode: "GENERATED",
-			inputs: [{ generatorType: "DATE_DIMENSION", config: {} }],
+			inputs: [{ generatorType: draft.generationStrategyType, config: {} }],
 		};
 	}
 	if (draft.implementationInputMode === "PHYSICAL_ASSET") {
