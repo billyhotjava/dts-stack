@@ -31,7 +31,8 @@ final class ModelFieldPhysicalTypeContract {
         Map.entry("timestamptz", "timestamp with time zone"),
         Map.entry("boolean", "boolean"),
         Map.entry("bool", "boolean"),
-        Map.entry("uuid", "uuid")
+        Map.entry("uuid", "uuid"),
+        Map.entry("jsonb", "jsonb")
     );
 
     private ModelFieldPhysicalTypeContract() {}

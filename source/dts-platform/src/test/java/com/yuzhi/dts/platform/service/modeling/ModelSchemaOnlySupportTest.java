@@ -12,6 +12,19 @@ import org.junit.jupiter.api.Test;
 
 class ModelSchemaOnlySupportTest {
     @Test
+    void supportsExplicitApiRawPayloadColumnsWithoutOpeningArbitrarySqlTypes() {
+        var projection = org.mockito.Mockito.spy(projection("SOURCE", false));
+        org.mockito.Mockito.when(projection.typedFields()).thenReturn(List.of(
+            new ModelSpecCompilerProjection.CompilerField("record_id", "bigint", false),
+            new ModelSpecCompilerProjection.CompilerField("amount", "jsonb", true)));
+        assertThat(ModelingDbtCompiler.compile(projection).files().get("schema_model.sql"))
+            .contains("'data_type':'jsonb'");
+        assertThat(ModelFieldPhysicalTypeContract.postgresTypesMatch("jsonb", "jsonb")).isTrue();
+        assertThatThrownBy(() -> ModelFieldPhysicalTypeContract.requireSupported("jsonb); drop table records; --"))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void compilesAllFourLayersWithoutAnUpstreamQueryAndPinsDeclaredStructure() {
         for (String type : List.of("SOURCE", "FACT", "SUMMARY", "APPLICATION")) {
             var projection = projection(type, false);
