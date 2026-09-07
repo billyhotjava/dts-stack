@@ -1325,11 +1325,12 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.CsvSource({"false, false", "true, false", "true, true"})
+    @org.junit.jupiter.params.provider.CsvSource({"false, false, false", "true, false, false", "true, true, false", "true, false, true", "true, true, true"})
     void commitsTheFrozenBundleAsAnImmutableConfigArtifactAndBindsItIntoImplementationIdempotency(
-        boolean unified, boolean recoveredInitial
+        boolean unified, boolean recoveredInitial, boolean schemaOnly
     ) throws Exception {
-        String targetSql = "select * from {{ ref('stg_orders') }}\n";
+        String targetSql = (schemaOnly ? "{{ config(materialized='dts_schema_only', dts_columns=[{'name':'record_id','data_type':'bigint','nullable':False}], dts_primary_keys=['record_id']) }}\n" : "")
+            + "select * from {{ ref('stg_orders') }}\n";
         String stagingSql = "{{ config(materialized='ephemeral') }}\nselect 1 as order_id\n";
         List<FileRow> files = List.of(
             file("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
@@ -1337,6 +1338,13 @@ class DbtImplementationDraftServiceSecurityTest {
             file("models/stg_orders.sql", stagingSql)
         );
         ValidatedProject project = projectWithGeneratedStaging(targetSql);
+        if (schemaOnly) {
+            project = new ValidatedProject(project.validatedChecksum(), project.packageChecksum(), project.projectKey(),
+                project.nodes().stream().map(node -> new ValidatedNode(node.dbtUniqueId(), node.name(), node.resourcePath(),
+                    node.name().equals("orders") ? "dts_schema_only" : node.materialization(), node.nodeKind(), node.sql(),
+                    node.sqlChecksum(), node.schema(), node.schemaChecksum(), node.dependencies(), node.reasonCodes())).toList(),
+                project.diagnostics());
+        }
         BundleSnapshot bundle = bundle(files, project);
         String dependencyChecksum = "9".repeat(64);
         String validatedDependencyChecksum = unified ? "8".repeat(64) : dependencyChecksum;
@@ -1420,7 +1428,13 @@ class DbtImplementationDraftServiceSecurityTest {
         );
         if (unified) {
             validated = org.mockito.Mockito.spy(validated);
-            when(validated.modelSpecSnapshot()).thenReturn(objectMapper.writeValueAsString(versionedVisualSnapshot()));
+            var visualSnapshot = versionedVisualSnapshot();
+            if (schemaOnly) {
+                var generator = ((com.fasterxml.jackson.databind.node.ObjectNode) visualSnapshot.get("visualImplementation"))
+                    .putArray("inputs").addObject();
+                generator.put("generatorType", "SCHEMA_ONLY").putObject("config");
+            }
+            when(validated.modelSpecSnapshot()).thenReturn(objectMapper.writeValueAsString(visualSnapshot));
             when(validated.validationSummary()).thenReturn(objectMapper.writeValueAsString(Map.of(
                 "dependencyValidation", Map.of("dependencyChecksum", validatedDependencyChecksum)
             )));
@@ -1524,6 +1538,7 @@ class DbtImplementationDraftServiceSecurityTest {
             .containsEntry("loadStrategy", "FULL")
             .containsEntry("partitionFields", List.of());
         GeneratedInput generated = (GeneratedInput) implementationCommand.getValue().inputs().getFirst();
+        assertThat(generated.config().get("buildMode")).isEqualTo(schemaOnly ? "SCHEMA_ONLY" : null);
         assertThat(generated.config())
             .containsEntry("bundleChecksum", bundle.bundleChecksum())
             .containsEntry("projectChecksum", bundle.projectChecksum());
@@ -1839,6 +1854,21 @@ class DbtImplementationDraftServiceSecurityTest {
             DraftException.class
         );
         assertThat(stale.code()).isEqualTo("DBT_DRAFT_BASE_MODEL_CONFLICT");
+    }
+
+    @Test
+    void acceptsStructureMaterializationOnlyForExplicitSchemaAuthoringOfATable() {
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        var target = org.mockito.Mockito.mock(ValidatedNode.class);
+        when(target.materialization()).thenReturn("dts_schema_only");
+        ReflectionTestUtils.invokeMethod(service, "requireMaterialization", model, target, true);
+        DraftException ordinary = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "requireMaterialization", model, target, false), DraftException.class);
+        assertThat(ordinary.code()).isEqualTo("DBT_DRAFT_MATERIALIZATION_UNSUPPORTED");
+        when(model.materialization()).thenReturn("view");
+        DraftException view = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "requireMaterialization", model, target, true), DraftException.class);
+        assertThat(view.code()).isEqualTo("DBT_DRAFT_MATERIALIZATION_UNSUPPORTED");
     }
 
     @Test

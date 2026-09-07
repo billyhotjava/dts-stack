@@ -1705,7 +1705,13 @@ public class DbtImplementationDraftService {
             unifiedAuthoring
         );
         ValidatedNode target = draftTarget(validated, current, baseImplementation);
-        requireMaterialization(model, target);
+        var committedSnapshot = unifiedAuthoring ? snapshotDecoder.decode(jsonNode(current.modelSpecSnapshot())) : null;
+        var visualCommand = committedSnapshot != null && committedSnapshot.valid() && committedSnapshot.visualImplementation() != null
+            ? committedSnapshot.visualImplementation().command() : null;
+        boolean schemaOnly = visualCommand != null &&
+            com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(visualCommand.inputMode(), visualCommand.inputs()) &&
+            "dts_schema_only".equals(target.materialization());
+        requireMaterialization(model, target, schemaOnly);
         UpdateModelSpecCommand authoringSnapshot = unifiedAuthoring ? requireValidModelSnapshot(current) : null;
         List<ModelField> projectedFields = DbtModelFieldProjector.project(
             objectMapper,
@@ -1763,11 +1769,8 @@ public class DbtImplementationDraftService {
                 projectedFields
             );
         }
-        var committedSnapshot = unifiedAuthoring ? snapshotDecoder.decode(jsonNode(current.modelSpecSnapshot())) : null;
         ImplementationView committedVisual = committedSnapshot != null && committedSnapshot.valid() && committedSnapshot.visualImplementation() != null
             ? visualImplementation(modelSpecId, model, null, committedSnapshot.visualImplementation()) : null;
-        boolean schemaOnly = com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(committedVisual) &&
-            "dts_schema_only".equals(target.materialization());
         Resolution committedDependencies = dependencyValidation == null
             ? null
             : resolveDependencies(
@@ -2210,7 +2213,8 @@ public class DbtImplementationDraftService {
         return normalized.contains("/.dts_dependencies/") || normalized.contains("/dts_dependencies/");
     }
 
-    private static void requireMaterialization(ModelSpecView model, ValidatedNode target) {
+    private static void requireMaterialization(ModelSpecView model, ValidatedNode target, boolean schemaOnly) {
+        if (schemaOnly && "table".equals(model.materialization()) && "dts_schema_only".equals(target.materialization())) return;
         if (
             model.materialization() == null ||
             model.materialization().isBlank() ||
