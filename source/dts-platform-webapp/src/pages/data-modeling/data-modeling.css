@@ -932,6 +932,7 @@
 }
 .dmx-table-tools {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 7px;
 	padding: 12px 16px 9px;
