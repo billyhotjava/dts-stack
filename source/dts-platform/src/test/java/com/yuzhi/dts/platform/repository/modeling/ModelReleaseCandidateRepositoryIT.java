@@ -51,7 +51,21 @@ class ModelReleaseCandidateRepositoryIT {
         UUID plan = UUID.randomUUID();
         UUID normalModel = UUID.randomUUID();
         UUID[] schemaModels = { UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID() };
-        seedPlanAndModels(tenant, plan, normalModel, schemaModels[0], schemaModels[1], schemaModels[2]);
+        seedPlanAndModels(tenant, plan);
+        UUID domain = UUID.randomUUID();
+        jdbcTemplate.update("insert into catalog_domain (id, name, code, lifecycle_status, access_policy) values (?, ?, ?, 'ACTIVE', 'PUBLIC')",
+            domain, "Schema scope domain", "scope_" + domain.toString().replace("-", ""));
+        for (UUID model : List.of(normalModel, schemaModels[0], schemaModels[1], schemaModels[2])) {
+            jdbcTemplate.update("""
+                insert into modeling_model_spec (
+                    id, tenant_id, plan_id, layer, warehouse_layer_code, model_type,
+                    implementation_mode, name, status, revision, version, created_date,
+                    last_modified_date, contract_version, domain_id, current_checksum,
+                    idempotency_key, idempotency_request_hash, idempotency_response_snapshot
+                ) values (?, ?, ?, 'DWD', 'DWD', 'FACT', 'DESIGNER_GENERATED', ?, 'DRAFT', 1, 1,
+                    current_timestamp, current_timestamp, 2, ?, ?, ?, ?, cast('{}' as jsonb))
+                """, model, tenant, plan, "Schema scope " + model, domain, checksum(model), "model-" + model, hash('b'));
+        }
         UUID normalId = UUID.randomUUID();
         var normal = candidate(tenant, normalId, plan, DeliveryStatus.BUILT, 1, createdAudit(), CREATED_AT,
             List.of(entry(tenant, normalId, plan, normalModel, DeliveryStatus.BUILT, 1, checksum(normalModel), null, 0)));
