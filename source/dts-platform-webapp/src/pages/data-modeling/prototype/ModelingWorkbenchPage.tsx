@@ -274,7 +274,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		return () => {
 			requestEpoch.current += 1;
 		};
-	}, [load]);
+	}, [load, requestedModelId, requestedDimensionId]);
 
 	useEffect(() => {
 		const activeModelId = selectedModelId;
