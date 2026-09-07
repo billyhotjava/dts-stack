@@ -299,6 +299,72 @@ afterEach(async () => {
 });
 
 describe("ModelingWorkbenchEditor", () => {
+	it("shows imported SQL configuration and allows continuing without an empty visual form", async () => {
+		const selectedModel = {
+			id: "imported-model",
+			status: "DRAFT",
+			revision: 1,
+			checksum: "a".repeat(64),
+			compatibilityMode: "CANONICAL",
+		} as ModelSpecView;
+		const implementation = {
+			id: "impl-1",
+			modelSpecId: selectedModel.id,
+			planId: "plan-1",
+			revision: 1,
+			modelChecksum: selectedModel.checksum,
+			ownership: "DBT_MANAGED" as const,
+			projectKey: "patent",
+			dbtUniqueId: "model.patent.dim_status",
+			status: "ACTIVE",
+			implementationRevision: 1,
+			implementationChecksum: "b".repeat(64),
+			inputMode: "GENERATED" as const,
+			inputs: [{ generatorType: "DBT", config: { resourcePath: "models/dim_status.sql" } }],
+			fieldMappings: [],
+			settings: { targetPhysicalName: "dim_status", loadStrategy: "FULL", partitionFields: [] },
+			materialization: "table",
+		};
+		const props = makeProps({
+			dirty: false,
+			draft: makeDraft({
+				base: selectedModel,
+				implementationMode: "DBT_MANAGED",
+				implementationBase: implementation,
+				implementationInputMode: "",
+				physicalName: "dim_status",
+			}),
+			selectedModel,
+			authoringContext: {
+				model: selectedModel,
+				implementation,
+				provenance: { origin: "DBT_ZIP_IMPORT", lossless: true },
+				projection: {
+					coverage: "UNKNOWN",
+					lossless: false,
+					managedPaths: [],
+					rawNodes: [],
+					reasons: ["MODEL_AUTHORING_PROJECTION_NOT_PREPARED"],
+				},
+				openDraft: null,
+				allowedActions: ["EDIT_MODEL", "EDIT_IMPLEMENTATION"],
+				publishedForkRequired: false,
+			},
+		});
+		await render(props);
+		expect(container.querySelector<HTMLInputElement>('[aria-label="产出表英文名"]')?.value).toBe("dim_status");
+		expect(container.querySelector<HTMLInputElement>('[aria-label="产出表英文名"]')?.readOnly).toBe(true);
+		expect(container.querySelector<HTMLInputElement>('[aria-label="加载策略"]')?.value).toBe("全量");
+		expect(container.textContent).toContain("models/dim_status.sql");
+		expect(container.textContent).not.toContain("实现投影尚未生成");
+		expect(container.querySelector('select[aria-label="数据来源方式"]')).toBeNull();
+		expect(button("下一步").disabled).toBe(false);
+		const edit = Array.from(container.querySelectorAll("button")).find((button) =>
+			button.textContent?.includes("编辑 SQL 实现"),
+		);
+		await act(async () => edit?.click());
+		expect(props.onViewChange).toHaveBeenCalledWith("code");
+	});
 	it("binds a manually created dimension table to a confirmed warehouse source", async () => {
 		const initial = await render();
 		const mode = container.querySelector<HTMLSelectElement>('select[aria-label="数据来源方式"]');

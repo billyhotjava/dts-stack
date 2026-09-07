@@ -439,7 +439,9 @@ export function modelDraftFromView(
 	implementation: ModelImplementationView | null = null,
 ): ModelSpecDraft {
 	const structuredImplementation = structuredImplementationView(model, implementation);
-	const configuration = implementationConfiguration(structuredImplementation, model.implementationPolicy);
+	// Restore execution metadata without treating imported SQL as a visual transformation.
+	const executionImplementation = structuredImplementation || implementation;
+	const configuration = implementationConfiguration(executionImplementation, model.implementationPolicy);
 	const generationStrategyType =
 		generatedInput(structuredImplementation)?.generatorType || model.generationStrategy?.type || "";
 	const logicalInputMode = model.sourceRefs.length
@@ -455,11 +457,11 @@ export function modelDraftFromView(
 		name: model.name,
 		description: model.description || "",
 		physicalName:
-			implementationText(structuredImplementation, "targetPhysicalName") ||
+			implementationText(executionImplementation, "targetPhysicalName") ||
 			model.implementationPolicy?.physicalName ||
 			"",
-		materialization: structuredImplementation
-			? structuredImplementation.materialization
+		materialization: executionImplementation
+			? executionImplementation.materialization
 			: model.materialization || "table",
 		grainStatement: model.grain?.statement || "",
 		businessProcessId: model.businessProcessId || "",

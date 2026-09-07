@@ -95,6 +95,11 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 	const effectiveReadOnly = readOnly;
 	const busy = saving || Boolean(authoringBusy);
 	const projection = authoringContext?.projection;
+	const importedSql =
+		!conceptDimension && draft.implementationBase?.ownership === "DBT_MANAGED" && !draft.implementationInputMode;
+	const projectionReasons = projection?.reasons.filter(
+		(reason) => !importedSql || reason !== "MODEL_AUTHORING_PROJECTION_NOT_PREPARED",
+	);
 	const currentAuthoringContext =
 		authoringContext?.model.id === selectedModel?.id &&
 		authoringContext?.model.revision === selectedModel?.revision &&
@@ -119,8 +124,8 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					</Button>
 				</div>
 			) : null}
-			{!published && projection?.reasons.length ? (
-				<div className="dmx-capability-note">{modelingCapabilityReasonsText(projection.reasons)}</div>
+			{!published && projectionReasons?.length ? (
+				<div className="dmx-capability-note">{modelingCapabilityReasonsText(projectionReasons)}</div>
 			) : null}
 
 			{displayedFailure ? (

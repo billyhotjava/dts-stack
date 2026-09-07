@@ -469,6 +469,37 @@ describe("model workbench draft preparation", () => {
 		});
 	});
 
+	it("restores imported SQL execution metadata without inventing a visual implementation", async () => {
+		const model = { ...canonicalFactView(), implementationMode: "DBT_MANAGED" as const };
+		const implementation = generatedImplementation(model, {
+			ownership: "DBT_MANAGED",
+			inputMode: "GENERATED",
+			inputs: [{ generatorType: "DBT", config: { resourcePath: "models/dim_patent_lifecycle_status.sql" } }],
+			settings: { targetPhysicalName: "dim_patent_lifecycle_status", loadStrategy: "FULL", partitionFields: [] },
+			materialization: "table",
+		});
+		vi.mocked(getModelLifecycle).mockResolvedValue({ implementation, artifacts: [], events: [] });
+		const draft = await loadModelWorkbenchDraft(model);
+		expect(draft).toMatchObject({
+			physicalName: "dim_patent_lifecycle_status",
+			loadStrategy: "FULL",
+			partitionFields: "",
+			materialization: "table",
+			implementationInputMode: "",
+			implementationBase: implementation,
+		});
+		const snapshot = modelDraftToAuthoringSnapshot(draft, {
+			ownerId: "owner-1",
+			dimensionDefinitions: [],
+			models: [model],
+		});
+		expect(snapshot.visualImplementation).toBeUndefined();
+		expect(implementation.inputs[0]).toEqual({
+			generatorType: "DBT",
+			config: { resourcePath: "models/dim_patent_lifecycle_status.sql" },
+		});
+	});
+
 	it("loads only the selected model lifecycle when opening a workbench draft", async () => {
 		const model = canonicalFactView();
 		const implementation = generatedImplementation(model);
