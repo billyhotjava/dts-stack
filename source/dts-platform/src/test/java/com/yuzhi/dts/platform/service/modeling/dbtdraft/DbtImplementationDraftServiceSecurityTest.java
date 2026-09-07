@@ -1805,6 +1805,7 @@ class DbtImplementationDraftServiceSecurityTest {
         DraftRow draft = org.mockito.Mockito.mock(DraftRow.class);
         when(draft.planId()).thenReturn(PLAN_ID);
         when(draft.baseModelRevision()).thenReturn(3);
+        when(draft.baseImplementationRevision()).thenReturn(null);
         when(draft.baseModelChecksum()).thenReturn(MODEL_CHECKSUM);
         when(draft.modelSpecSnapshot()).thenReturn(objectMapper.writeValueAsString(snapshot));
         when(draft.sourceBundleSnapshot()).thenReturn(objectMapper.writeValueAsString(new SourceBundleView(
@@ -1861,6 +1862,7 @@ class DbtImplementationDraftServiceSecurityTest {
         DraftRow draft = org.mockito.Mockito.mock(DraftRow.class);
         when(draft.planId()).thenReturn(PLAN_ID);
         when(draft.baseModelRevision()).thenReturn(3);
+        when(draft.baseImplementationRevision()).thenReturn(null);
         when(draft.baseModelChecksum()).thenReturn(MODEL_CHECKSUM);
         when(draft.modelSpecSnapshot()).thenReturn(objectMapper.writeValueAsString(snapshot));
         when(draft.sourceBundleSnapshot()).thenReturn(objectMapper.writeValueAsString(new SourceBundleView(
@@ -1868,19 +1870,29 @@ class DbtImplementationDraftServiceSecurityTest {
             false, sourceBundle("sprint83", List.of(new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"))).files(),
             base.dependencyChecksum(), base, Map.of()
         )));
+        String schemaConfig = "{{ config(materialized='dts_schema_only', dts_columns=[{'name':'record_id','data_type':'bigint','nullable':False}], dts_primary_keys=['record_id']) }}\n";
         ValidatedProject project = new AdvancedDbtDraftStaticValidator().validate(Map.of(
             "dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n",
-            "models/orders.sql", "{{ config(materialized='table') }}\nselect 1 where 1 = 0\n"
+            "models/orders.sql", schemaConfig + "select 1 where 1 = 0\n"
         ));
         DbtImplementationDraftContract.DependencyValidationView result = ReflectionTestUtils.invokeMethod(
             service, "validateDependencies", TENANT, ACTOR, MODEL_ID, draft, project
         );
+        ValidatedProject changedToData = new AdvancedDbtDraftStaticValidator().validate(Map.of(
+            "dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n",
+            "models/orders.sql", "{{ config(materialized='table') }}\nselect 1\n"
+        ));
+        DraftException changedMode = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "validateDependencies", TENANT, ACTOR, MODEL_ID, draft, changedToData),
+            DraftException.class
+        );
+        assertThat(changedMode.code()).isEqualTo("MODEL_SCHEMA_ONLY_SQL_MISMATCH");
         assertThat(result.matched()).isEmpty();
         assertThat(result.missing()).isEmpty();
         assertThat(result.undeclared()).isEmpty();
         ValidatedProject unexpectedRead = new AdvancedDbtDraftStaticValidator().validate(Map.of(
             "dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n",
-            "models/orders.sql", "{{ config(materialized='table') }}\nselect * from {{ source('public', 'orders') }}\n"
+            "models/orders.sql", schemaConfig + "select * from {{ source('public', 'orders') }}\n"
         ));
         DraftException failure = catchThrowableOfType(
             () -> ReflectionTestUtils.invokeMethod(service, "validateDependencies", TENANT, ACTOR, MODEL_ID, draft, unexpectedRead),
@@ -2014,10 +2026,13 @@ class DbtImplementationDraftServiceSecurityTest {
         assertThat(result.baseImplementationRevision()).isEqualTo(1);
         assertThat(result.modelSpecSnapshot()).isEqualTo(original.modelSpecSnapshot());
         assertThat(result.sourceBundleSnapshot()).isEqualTo(original.sourceBundleSnapshot());
-        verify(repository).alignAuthoringBase(eq(TENANT), eq(MODEL_ID), eq(DRAFT_ID), eq(ACTOR), eq(original.etag()),
-            eq(3), eq(original.baseModelChecksum()), eq(current.revision()), eq(current.checksum()),
+        String expectedEtag = original.etag();
+        String expectedModelChecksum = original.baseModelChecksum();
+        String expectedSource = original.sourceBundleSnapshot();
+        verify(repository).alignAuthoringBase(eq(TENANT), eq(MODEL_ID), eq(DRAFT_ID), eq(ACTOR), eq(expectedEtag),
+            eq(3), eq(expectedModelChecksum), eq(current.revision()), eq(current.checksum()),
             org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), eq(1), eq(IMPLEMENTATION_CHECKSUM),
-            eq(original.sourceBundleSnapshot()), any(), eq(NOW));
+            eq(expectedSource), any(), eq(NOW));
         verify(repository, never()).replaceFiles(any(), any(), any(), any(), any(), any(), any(), any());
 
         // A different configuration, later revision or imported ownership is a real concurrent edit.

@@ -315,10 +315,13 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).toContain("已有候选，请检查构建范围");
 	});
 
-	it("starts a first schema-only materialization through the single-model build intent", async () => {
+	it.each([
+        { generatorType: "SCHEMA_ONLY", config: {} },
+        { generatorType: "DBT", config: { buildMode: "SCHEMA_ONLY" } },
+    ])("starts a first schema-only materialization through the single-model build intent: %j", async (input) => {
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
 		apiMocks.getLifecycle.mockResolvedValue({
-			implementation: { ...implementation, inputMode: "GENERATED", inputs: [{ generatorType: "SCHEMA_ONLY", config: {} }] },
+			implementation: { ...implementation, ownership: "DBT_MANAGED", inputMode: "GENERATED", inputs: [input] },
 			artifacts: [], events: [],
 		});
 		await act(async () => root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />));

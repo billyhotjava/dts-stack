@@ -9,7 +9,7 @@ import java.util.Set;
 /** Full-consumption whitelist for source-only Jinja expressions; it never evaluates Jinja or SQL. */
 final class SourceOnlyJinjaGuard {
 
-    private static final Set<String> MATERIALIZATIONS = Set.of("table", "view", "incremental", "ephemeral");
+    private static final Set<String> MATERIALIZATIONS = Set.of("table", "view", "incremental", "ephemeral", "dts_schema_only");
     private static final int MAX_LITERAL_LENGTH = 256;
     private static final int MAX_TAGS = 64;
     private static final int MAX_METADATA_ENTRIES = 32;
@@ -189,6 +189,8 @@ final class SourceOnlyJinjaGuard {
                     case "tags" -> tags.addAll(tagValue());
                     case "alias" -> literal(128);
                     case "unique_key" -> tagValue();
+                    case "dts_columns" -> schemaColumns();
+                    case "dts_primary_keys" -> tagValue();
                     case "meta" -> metadataMap();
                     default -> throw unsafe();
                 }
@@ -204,10 +206,56 @@ final class SourceOnlyJinjaGuard {
             }
             require(')');
             requireEnd();
+            boolean schema = "dts_schema_only".equals(materialization);
+            if (schema != seen.contains("dts_columns") || schema != seen.contains("dts_primary_keys")) throw unsafe();
             if (tags.size() > MAX_TAGS) {
                 throw unsafe();
             }
             return new ExpressionResult(false, false, materialization, List.copyOf(tags));
+        }
+
+        private void schemaColumns() {
+            require('[');
+            Set<String> names = new LinkedHashSet<>();
+            do {
+                skipWhitespace();
+                require('{');
+                Set<String> keys = new LinkedHashSet<>();
+                do {
+                    skipWhitespace();
+                    String key = literal(128);
+                    if (!keys.add(key)) throw unsafe();
+                    skipWhitespace();
+                    require(':');
+                    skipWhitespace();
+                    switch (key) {
+                        case "name" -> {
+                            String name = literal(63);
+                            if (!name.matches("[A-Za-z_][A-Za-z0-9_]{0,62}") || !names.add(name)) throw unsafe();
+                        }
+                        case "data_type" -> {
+                            String type = literal(128);
+                            try {
+                                if (!type.equals(com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.requirePhysicalColumnType(type))) throw unsafe();
+                            } catch (IllegalArgumentException invalid) { throw unsafe(); }
+                        }
+                        case "nullable" -> {
+                            String bool = identifier(false);
+                            if (!"True".equals(bool) && !"False".equals(bool)) throw unsafe();
+                        }
+                        default -> throw unsafe();
+                    }
+                    skipWhitespace();
+                    if (peek('}')) break;
+                    require(',');
+                } while (true);
+                require('}');
+                if (!keys.equals(Set.of("name", "data_type", "nullable")) || names.size() > 1000) throw unsafe();
+                skipWhitespace();
+                if (peek(']')) break;
+                require(',');
+            } while (true);
+            require(']');
         }
 
         private List<String> tagValue() {

@@ -1437,6 +1437,11 @@ public class DbtImplementationDraftService {
             ImplementationView authoredImplementation = decoded.valid() && decoded.visualImplementation() != null
                 ? visualImplementation(modelSpecId, authoredModel, implementation, decoded.visualImplementation())
                 : null;
+            if (com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(authoredImplementation) &&
+                !"dts_schema_only".equals(ownedTarget.materialization())) {
+                throw DbtImplementationDraftContract.unprocessable("MODEL_SCHEMA_ONLY_SQL_MISMATCH",
+                    "Structure-only authoring must retain the registered empty-table materialization");
+            }
             current = resolveDependencies(
                 tenantId, authoredModel,
                 com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(authoredImplementation)
@@ -1758,12 +1763,17 @@ public class DbtImplementationDraftService {
                 projectedFields
             );
         }
+        var committedSnapshot = unifiedAuthoring ? snapshotDecoder.decode(jsonNode(current.modelSpecSnapshot())) : null;
+        ImplementationView committedVisual = committedSnapshot != null && committedSnapshot.valid() && committedSnapshot.visualImplementation() != null
+            ? visualImplementation(modelSpecId, model, null, committedSnapshot.visualImplementation()) : null;
+        boolean schemaOnly = com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(committedVisual) &&
+            "dts_schema_only".equals(target.materialization());
         Resolution committedDependencies = dependencyValidation == null
             ? null
             : resolveDependencies(
                 tenantId,
                 model,
-                null,
+                schemaOnly ? committedVisual : null,
                 validated.projectKey(),
                 target.name()
             );
@@ -1777,6 +1787,7 @@ public class DbtImplementationDraftService {
         generatedConfig.put("dbtUniqueId", target.dbtUniqueId());
         generatedConfig.put("projectChecksum", bundle.projectChecksum());
         generatedConfig.put("bundleChecksum", bundle.bundleChecksum());
+        if (schemaOnly) generatedConfig.put("buildMode", "SCHEMA_ONLY");
         Map<String, Object> visualImplementation = unifiedAuthoring
             ? visualImplementationConfig(current)
             : null;

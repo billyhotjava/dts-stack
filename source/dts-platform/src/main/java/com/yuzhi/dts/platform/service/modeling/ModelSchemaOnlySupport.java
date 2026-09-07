@@ -22,7 +22,12 @@ public final class ModelSchemaOnlySupport {
     }
 
     public static boolean isSchemaOnly(ImplementationView implementation) {
-        return implementation != null && isSchemaOnly(implementation.inputMode(), implementation.inputs());
+        if (implementation == null) return false;
+        if (isSchemaOnly(implementation.inputMode(), implementation.inputs())) return true;
+        return implementation.ownership() == ModelSpecContract.ImplementationMode.DBT_MANAGED &&
+            implementation.inputMode() == InputMode.GENERATED && implementation.inputs() != null && implementation.inputs().size() == 1 &&
+            implementation.inputs().getFirst() instanceof GeneratedInput input && "DBT".equals(input.generatorType()) &&
+            "SCHEMA_ONLY".equals(input.config().get("buildMode"));
     }
 
     public static boolean valid(SaveImplementationCommand command) {

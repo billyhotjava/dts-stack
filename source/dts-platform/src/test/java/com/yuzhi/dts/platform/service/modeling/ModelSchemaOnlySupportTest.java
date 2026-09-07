@@ -19,6 +19,26 @@ class ModelSchemaOnlySupportTest {
         artifacts.files().forEach((name, content) -> files.put("models/" + name, content));
         var validated = new com.yuzhi.dts.platform.service.modeling.imports.converter.AdvancedDbtDraftStaticValidator().validate(files);
         assertThat(validated.nodes()).isNotEmpty();
+        assertThat(validated.nodes()).filteredOn(node -> node.name().equals("schema_model"))
+            .extracting(node -> node.materialization()).containsExactly("dts_schema_only");
+        assertThat(validated.diagnostics()).extracting(diagnostic -> diagnostic.code())
+            .doesNotContain("SOURCE_DEPENDENCY_DYNAMIC");
+    }
+
+    @Test
+    void recognizesOnlyExplicitlyCommittedDbtSchemaMode() {
+        var implementation = org.mockito.Mockito.mock(ModelLifecycleContract.ImplementationView.class);
+        org.mockito.Mockito.when(implementation.inputMode()).thenReturn(InputMode.GENERATED);
+        org.mockito.Mockito.when(implementation.ownership()).thenReturn(ModelSpecContract.ImplementationMode.DBT_MANAGED);
+        org.mockito.Mockito.when(implementation.inputs()).thenReturn(List.of(new GeneratedInput("DBT", Map.of("buildMode", "SCHEMA_ONLY"))));
+        assertThat(ModelSchemaOnlySupport.isSchemaOnly(implementation)).isTrue();
+        org.mockito.Mockito.when(implementation.ownership()).thenReturn(ModelSpecContract.ImplementationMode.DESIGNER_GENERATED);
+        assertThat(ModelSchemaOnlySupport.isSchemaOnly(implementation)).isFalse();
+        org.mockito.Mockito.when(implementation.ownership()).thenReturn(ModelSpecContract.ImplementationMode.DBT_MANAGED);
+        org.mockito.Mockito.when(implementation.inputs()).thenReturn(List.of(new GeneratedInput("DBT", Map.of("buildMode", "DATA"))));
+        assertThat(ModelSchemaOnlySupport.isSchemaOnly(implementation)).isFalse();
+        org.mockito.Mockito.when(implementation.inputs()).thenReturn(List.of(new GeneratedInput("DBT", Map.of())));
+        assertThat(ModelSchemaOnlySupport.isSchemaOnly(implementation)).isFalse();
     }
 
     @Test
