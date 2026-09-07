@@ -17,6 +17,7 @@ import subprocess
 import tarfile
 import tempfile
 import time
+from datetime import datetime
 
 
 def run(args, **kwargs):
@@ -71,14 +72,43 @@ def image_info(path):
             raise ValueError('Not linux/amd64: ' + path.name)
         if len(tags) != 1 or not re.fullmatch(r'dts-[a-z0-9-]+:[A-Za-z0-9_.-]+', tags[0]):
             raise ValueError('Unexpected image tag: ' + path.name)
-        return {'tag': tags[0], 'imageId': 'sha256:' + hashlib.sha256(raw).hexdigest(),
+        config_id = 'sha256:' + hashlib.sha256(raw).hexdigest()
+        ids = {config_id}
+        if 'index.json' in tar.getnames():
+            pending = json.load(tar.extractfile('index.json'))['manifests']
+            visited = set()
+            while pending:
+                descriptor = pending.pop()
+                identifier = descriptor['digest']
+                if identifier in visited:
+                    continue
+                visited.add(identifier)
+                blob = tar.extractfile('blobs/sha256/' + identifier.split(':')[1]).read()
+                if 'sha256:' + hashlib.sha256(blob).hexdigest() != identifier:
+                    raise ValueError('OCI manifest checksum mismatch')
+                manifest_data = json.loads(blob)
+                pending.extend(manifest_data.get('manifests', []))
+                if manifest_data.get('config', {}).get('digest') == config_id:
+                    ids.add(identifier)
+        return {'tag': tags[0], 'imageId': config_id, 'runtimeIds': sorted(ids),
+                'layers': config['rootfs']['diff_ids'],
                 'created': config['created'], 'archive': path.name}
 
 
 def source_snapshot(repo):
     if output(['git', '-C', repo, 'status', '--porcelain', '--untracked-files=no']).strip():
         raise ValueError('Tracked deploy files are dirty; publish only committed runtime files')
-    tracked = output(['git', '-C', repo, 'ls-files', '-z'])
+    # Include the formal packer's generated static DAG and dbt dependencies too.
+    candidates = set()
+    for directory in ('bin', 'services/dts-airflow/extra', 'services/dts-airflow/plugins',
+                      'services/dts-dbt/macros', 'services/dts-dbt/dbt_model/models'):
+        candidates.update(p.relative_to(repo).as_posix() for p in (repo / directory).rglob('*') if p.is_file())
+    for pattern in ('*.sh', 'imgversion*.conf', 'services/dts-dbt/*.sh',
+                    'services/dts-dbt/dbt_project.yml', 'services/dts-airflow/dags/dts_release_build_*.py'):
+        candidates.update(p.relative_to(repo).as_posix() for p in repo.glob(pattern) if p.is_file())
+    # This host-level transport utility is installed independently of DTS application runtime.
+    candidates.discard('bin/dts-release-sync.py')
+    tracked = b'\0'.join(p.encode() for p in sorted(candidates)) + b'\0'
     script = 'source "$1/bin/lib/dts-runtime-files.sh"; while IFS= read -r -d "" p; do dts_managed_runtime_file "$p" && printf "%s\\0" "$p"; done; true'
     managed = output(['bash', '-c', script, 'managed', repo], input=tracked).split(b'\0')
     paths = [p.decode() for p in managed if p]
@@ -96,7 +126,7 @@ def source_snapshot(repo):
             raise ValueError('Image export still settling: ' + path.name)
         info = image_info(path)
         service = info['tag'].split(':')[0]
-        if service not in images or info['created'] > images[service]['created']:
+        if service not in images or datetime.fromisoformat(info['created']) > datetime.fromisoformat(images[service]['created']):
             info.update(size=stat.st_size, mtime=stat.st_mtime_ns)
             images[service] = info
     if not images:
@@ -220,7 +250,10 @@ def healthy(c, expected_services, expected_images, timeout=600):
                 bad.append(service)
         for tag, expected in expected_images.items():
             users = [v for v in current.values() if v['Config']['Image'] == tag]
-            if not users or any(v['Image'] != expected for v in users):
+            image = json.loads(output(['docker', 'image', 'inspect', tag]))[0]
+            if (not users or any(v['Image'] != image['Id'] for v in users)
+                    or image['Id'] not in expected['runtimeIds']
+                    or image['RootFS']['Layers'] != expected['layers']):
                 bad.append(tag)
         if not bad:
             print('HEALTHY: ' + ', '.join(sorted(expected_services)), flush=True)
@@ -230,7 +263,7 @@ def healthy(c, expected_services, expected_images, timeout=600):
         time.sleep(10)
 
 
-def consume(c, state, check_only):
+def consume(c, state, check_only, adopt=False):
     if (state / 'FAILED.json').exists():
         raise RuntimeError('Previous apply failed/interrupted; inspect FAILED.json and upgrade backup before removing it')
     raw = output(['curl', '-fsS', '--connect-timeout', '15', '--max-time', '60', '--max-filesize', '65536',
@@ -264,7 +297,7 @@ def consume(c, state, check_only):
     expected = {}
     for item in manifest['images']:
         info = image_info(release / 'images' / item['archive'])
-        expected[info['tag']] = info['imageId']
+        expected[info['tag']] = info
     if not expected:
         raise ValueError('Release contains no images')
     upgrader = release / 'dts-stack/bin/dts-upgrade-lite'
@@ -278,6 +311,18 @@ def consume(c, state, check_only):
     active = {v['Config']['Labels']['com.docker.compose.service'] for v in before if v['State']['Running']}
     if not active:
         raise ValueError('Refusing update without an existing running stack')
+    if adopt:
+        # Bootstrap only when the complete release is already installed. Never restart.
+        for line in (release / 'extra/files-checksums.txt').read_text().splitlines():
+            checksum, rel = line.split('  ', 1)
+            if rel.startswith('dts-stack/'):
+                installed = Path(c['target']) / rel[len('dts-stack/'):]
+                if not installed.is_file() or digest(installed) != checksum:
+                    raise ValueError('Cannot adopt: runtime differs: ' + rel)
+        healthy(c, active, expected, timeout=0)
+        atomic(applied_file, canonical(payload))
+        print('ADOPTED_ALREADY_INSTALLED ' + payload['id'], flush=True)
+        return
     # Query through Airflow's installed ORM; no credentials or files are copied out.
     schedulers = [v for v in before if v['Config']['Labels']['com.docker.compose.service'] == 'dts-airflow-scheduler']
     if schedulers:
@@ -300,7 +345,7 @@ def consume(c, state, check_only):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=('publish', 'consume', 'check'))
+    parser.add_argument('mode', choices=('publish', 'consume', 'check', 'adopt'))
     parser.add_argument('--config', required=True, type=Path)
     args = parser.parse_args()
     c = json.loads(args.config.read_text())
@@ -316,7 +361,7 @@ def main():
         if args.mode == 'publish':
             publish(c, state)
         else:
-            consume(c, state, args.mode == 'check')
+            consume(c, state, args.mode == 'check', args.mode == 'adopt')
 
 
 if __name__ == '__main__':

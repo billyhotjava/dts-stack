@@ -11,7 +11,8 @@ Windows 仅中转安装时的 SSH，镜像和运行文件不经过 Windows。
 
 打包复用 `builds/dts-build.sh --pack --no-images`，根据
 `bin/lib/dts-runtime-files.sh` 的产品文件规则裁剪，并加入已存在的 x86 镜像。
-不发布本地 `.env`、证书、现场配置、生成的业务 DAG、模型及未跟踪文件。
+不发布本地 `.env`、证书、现场配置、生成的业务 DAG 和业务模型。
+正式打包规则声明的静态发布 DAG、dbt 静态依赖和宏会收录，即使它们由正式构建生成、未被 Git 跟踪。
 运行文件的 Git SHA 与各镜像原始 `sourceRevision`、image ID、校验和分别记录；
 未声明来源提交的旧镜像会保留 null，不宣称所有镜像由当前提交重建。
 
@@ -26,6 +27,8 @@ Windows 仅中转安装时的 SSH，镜像和运行文件不经过 Windows。
 现场 `.env` 只更新本次所带镜像的键，现场 Compose 保留原样。
 产品 Airflow 脚本、静态发布 DAG、dbt 宏等按已有受管文件规则更新。
 原来运行的服务必须恢复 running/healthy，镜像 ID 必须匹配，才记录成功。
+Docker classic 与 containerd 可能分别显示 config ID 和 manifest ID；校验同时验证
+归档的 OCI manifest 到 config 的引用、内容摘要和 RootFS 层，不能只比较显示字符串。
 
 同一发布不重复重启；Airflow 有运行任务时推迟；失败或升级中断时保留
 `FAILED.json` 并停止后续自动应用，避免不断重启。修复或按升级报告回滚后，
@@ -49,5 +52,9 @@ openEuler：`systemctl status dts-release-update.timer`。
 ```bash
 python3 -B /usr/local/sbin/dts-release-sync.py check --config /etc/dts-release-sync/config.json
 ```
+
+首次接管已完成的人工升级，使用 `adopt` 替代 `check`：必须逐项验证已安装运行文件、
+镜像内容及健康状态完全匹配，才登记基线；此操作不会重启服务。
+传输工具本身部署到 `/usr/local/sbin`，不加入 DTS 应用运行文件包。
 
 所有密码均不写入脚本、文档、Git 或定时任务。

@@ -92,6 +92,43 @@ class ReleaseSyncTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'replayed'):
                 sync.consume({'baseUrl': 'http://test', 'publicKey': 'test'}, self.root, False)
 
+    def test_oci_manifest_id_maps_to_same_image_config(self):
+        config = {'architecture': 'amd64', 'os': 'linux', 'created': '2026-09-07T00:00:00Z',
+                  'rootfs': {'diff_ids': ['sha256:layer']}}
+        raw = sync.canonical(config)
+        config_id = 'sha256:' + sync.hashlib.sha256(raw).hexdigest()
+        manifest = sync.canonical({'config': {'digest': config_id}, 'layers': []})
+        manifest_id = 'sha256:' + sync.hashlib.sha256(manifest).hexdigest()
+        path = self.archive({'manifest.json': sync.canonical([{'Config': 'config', 'RepoTags': ['dts-platform:1.0.0']}]),
+                             'config': raw, 'index.json': sync.canonical({'manifests': [{'digest': manifest_id}]}),
+                             'blobs/sha256/' + manifest_id[7:]: manifest})
+        result = sync.image_info(path)
+        self.assertEqual(set(result['runtimeIds']), {config_id, manifest_id})
+        self.assertEqual(result['layers'], ['sha256:layer'])
+
+    def test_static_dag_and_generated_macro_are_in_snapshot(self):
+        repo = self.root
+        helper = repo / 'bin/lib/dts-runtime-files.sh'
+        helper.parent.mkdir(parents=True)
+        helper.write_bytes((Path(__file__).parents[1] / 'bin/lib/dts-runtime-files.sh').read_bytes())
+        dag = repo / 'services/dts-airflow/dags/dts_release_build_example.py'
+        dag.parent.mkdir(parents=True)
+        dag.write_text('# required generated static DAG\n')
+        macro = repo / 'services/dts-dbt/macros/example.sql'
+        macro.parent.mkdir(parents=True)
+        macro.write_text('-- required generated macro\n')
+        (repo / 'builds/dist').mkdir(parents=True)
+        (repo / 'builds/dist/app.tar').write_bytes(b'fixture')
+        sync.os.utime(repo / 'builds/dist/app.tar', (1, 1))
+        original_output = sync.output
+        def fake_output(args, **kwargs):
+            return b'' if args[0] == 'git' else original_output(args, **kwargs)
+        with patch.object(sync, 'output', side_effect=fake_output), patch.object(sync, 'image_info', return_value={
+                'tag': 'dts-platform:1.0.0', 'created': '2026-09-07T00:00:00Z'}):
+            files, _, _ = sync.source_snapshot(repo)
+        self.assertIn(dag.relative_to(repo).as_posix(), files)
+        self.assertIn(macro.relative_to(repo).as_posix(), files)
+
 
 if __name__ == '__main__':
     unittest.main()
