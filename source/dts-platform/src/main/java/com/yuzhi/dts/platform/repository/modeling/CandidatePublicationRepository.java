@@ -323,6 +323,7 @@ public class CandidatePublicationRepository {
             """
             update catalog_dataset
                set enabled = false,
+                   version = version + 1,
                    lifecycle_status = 'ARCHIVED',
                    last_modified_by = ?,
                    last_modified_date = ?
@@ -791,11 +792,10 @@ public class CandidatePublicationRepository {
                    type = 'jdbc',
                    source_id = ?,
                    classification = ?,
-                   owner = ?,
                    hive_database = ?,
                    hive_table = ?,
-                   tags = ?,
-                   description = ?,
+                   tags = (coalesce(cast(tags as jsonb), '{}'::jsonb) || cast(? as jsonb))::text,
+                   version = version + 1,
                    warehouse_layer = ?,
                    enabled = true,
                    exposed_by = 'VIEW',
@@ -809,11 +809,9 @@ public class CandidatePublicationRepository {
             model.domainId(),
             target.sourceId(),
             effectiveClassification,
-            actor,
             evidence.schemaName(),
             evidence.identifier(),
             tags,
-            model.description(),
             model.layer().name(),
             effectiveLifecycle,
             Timestamp.from(evidence.observedAt()),

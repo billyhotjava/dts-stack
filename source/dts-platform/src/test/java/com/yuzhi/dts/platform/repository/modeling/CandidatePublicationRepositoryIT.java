@@ -260,6 +260,13 @@ class CandidatePublicationRepositoryIT {
                 )
             ).isEqualTo(scope.domainId());
 
+            transaction.executeWithoutResult(status -> jdbcTemplate.update(
+                "update catalog_dataset set owner = ?, description = ?, tags = ?, version = version + 1 where id = ?",
+                "business-owner", "manually maintained", "{\"businessTag\":\"retained\"}", harvestedAssetId
+            ));
+            Long maintainedVersion = jdbcTemplate.queryForObject(
+                "select version from catalog_dataset where id = ?", Long.class, harvestedAssetId
+            );
             LifecycleEventView release = org.mockito.Mockito.mock(
                 LifecycleEventView.class
             );
@@ -282,6 +289,29 @@ class CandidatePublicationRepositoryIT {
                 .isEqualTo("CONFIDENTIAL");
             assertThat(catalogDatasetValue(harvestedAssetId, "lifecycle_status"))
                 .isEqualTo("ACTIVE");
+            assertThat(catalogDatasetValue(harvestedAssetId, "owner")).isEqualTo("business-owner");
+            assertThat(catalogDatasetValue(harvestedAssetId, "description")).isEqualTo("manually maintained");
+            assertThat(jdbcTemplate.queryForObject(
+                "select cast(tags as jsonb) ->> 'businessTag' from catalog_dataset where id = ?",
+                String.class, harvestedAssetId
+            )).isEqualTo("retained");
+            assertThat(jdbcTemplate.queryForObject(
+                "select version from catalog_dataset where id = ?", Long.class, harvestedAssetId
+            )).isEqualTo(maintainedVersion + 1);
+            // A stale editor must not be able to overwrite a publication's version.
+            assertThat(transaction.execute(status -> jdbcTemplate.update(
+                "update catalog_dataset set description = 'stale' where id = ? and version = ?",
+                harvestedAssetId, maintainedVersion
+            ))).isZero();
+            transaction.executeWithoutResult(status -> jdbcTemplate.update(
+                "update catalog_dataset set owner = null, description = null, version = version + 1 where id = ?",
+                harvestedAssetId
+            ));
+            transaction.executeWithoutResult(status -> publications.registerModel(
+                candidate, target, observation, model, release, "another-operator", NOW.plusSeconds(2)
+            ));
+            assertThat(catalogDatasetValue(harvestedAssetId, "owner")).isNull();
+            assertThat(catalogDatasetValue(harvestedAssetId, "description")).isNull();
         } finally {
             transaction.executeWithoutResult(status -> cleanup(scope));
         }
@@ -1357,6 +1387,9 @@ class CandidatePublicationRepositoryIT {
                 UUID.class,
                 scope.prodModelId()
             );
+            Long versionBeforeRollback = jdbcTemplate.queryForObject(
+                "select version from catalog_dataset where id = ?", Long.class, assetId
+            );
             LifecycleEventView rollback = org.mockito.Mockito.mock(
                 LifecycleEventView.class
             );
@@ -1374,6 +1407,9 @@ class CandidatePublicationRepositoryIT {
                 )
             );
 
+            assertThat(jdbcTemplate.queryForObject(
+                "select version from catalog_dataset where id = ?", Long.class, assetId
+            )).isEqualTo(versionBeforeRollback + 1);
             assertThat(
                 jdbcTemplate.queryForMap(
                     """

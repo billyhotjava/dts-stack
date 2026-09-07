@@ -10,12 +10,12 @@ API 前缀均为 `/api/modeling/model-specs`，复用 Sprint [账本 C07](../../
 
 | ID | 输入 / 输出契约 | 保持不变与整改点 |
 |---|---|---|
-| K1 模型 | POST 根路径 / PUT `/{id}`；UUID 身份和业务归属；modelType 四类；grain={statement:string,keys:string[]}；fields 含 name/dataType/nullable/role；返回 ApiResponse 包裹模型及 ETag | 当前 contractVersion=2；If-Match 及修订冲突；禁止未知字段，但不得拒绝合法业务过程/主题域 |
+| K1 模型 | POST 根路径 / PUT `/{id}`；UUID 身份和业务归属；modelType 五类（SOURCE/DIMENSION/FACT/SUMMARY/APPLICATION；SOURCE 固定 ODS，详见 K31）；grain={statement:string,keys:string[]}；fields 含 name/dataType/nullable/role；返回 ApiResponse 包裹模型及 ETag | 当前 contractVersion=2；If-Match 及修订冲突；禁止未知字段，但不得拒绝合法业务过程/主题域 |
 | K2 创作草稿 | authoring-context；authoring-drafts 的创建、保存、validate、commit；snapshot 的 modelSpec、visualImplementation 和 schemaVersion；dimensionProfile 完整对象 | 复用现有 Create/Save/Validate/Commit 请求类型及草稿 CAS，不编造新版本头；T01 冻结确切字段名/存储落点后 DoR 才通过 |
 | K3 阶段/标准 | GET `/{id}/stage-gates`；Stage=DRAFT_SAVE/DESIGNED/IMPLEMENTATION_READY/RELEASE_READY；策略 NONE/KEY_AND_MEASURE/ALL_FIELDS；版本化标准引用 | 输出阶段状态和 blockers(code,field,message,repairRoute)，缺失、失效、不可用分开 |
 | K4 编译/质量 | POST `/{id}/lifecycle/compile\|tests`；当前模型/实现身份；grain.keys[]、fields.KEY；输出确定性 SQL/YAML 与当前证据 | 完整键组合唯一，每个必要键非空；不新增业务唯一约束或假键 |
 | K5 实现/物化 | PUT `/{id}/implementation`，If-Match + If-Match-Implementation；settings.loadStrategy、partitionFields[]、materialization；POST `/{id}/build-intents` 的 planId/environment 和 Idempotency-Key | 既有 settings_json/实现修订；当前值优先，显式 FULL/[] 不回退；同键重放沿用现有协议 |
-| K6 能力 | GET `/implementation/capabilities`；四类表的 inputModes、loadStrategies、materializations 与增量键要求 | 页面/服务/编译一致；不支持项前置说明，不默认扩大执行能力 |
+| K6 能力 | GET `/implementation/capabilities`；原四类及 SOURCE 的 inputModes、loadStrategies、materializations 与增量键要求 | 页面/服务/编译一致；不支持项前置说明，不默认扩大执行能力 |
 
 **错误与并发共同约束**：沿用既有 ApiResponse、errorCode、关联 ID 和异常映射；格式/阶段错误按当前 4xx 契约返回，不转成 500；旧版本冲突不覆盖数据；无权操作保持 401/403 现有语义。每个入口的确切状态码由 T01 实测、T02 写入样例矩阵，不假定所有入口一致。
 **数据与迁移**：复用账本 C08 的模型与实现 JSON/修订；创作草稿落点由 T01 补录。无新增业务表计划，不修改已执行 changeSet。
