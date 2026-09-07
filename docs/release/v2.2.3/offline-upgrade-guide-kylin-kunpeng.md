@@ -16,9 +16,9 @@
 - 服务器为鲲鹏架构
 - 目标环境为内网离线环境
 - 旧版本运行目录为 `dts-stack`
-- 新版本源码目录为 `s10_stack`
-- 新版本代码已经在 `s10_stack` 中完成拉取
-- 新版本应用镜像已经在当前服务器本地重新编译完成
+- 新版本来源为构建环境生成的完整离线交付包，含 `dts-stack/`、`images/` 和 `extra/`
+- 代码在开发目录提交推送后，由部署与构建目录通过 Git 同步再正式制包
+- 现场不要求联网拉取代码、编译应用或补装运行依赖
 
 本文档只说明 **原目录就地升级**，不说明新机部署。
 
@@ -159,13 +159,7 @@ grep '^IMAGE_POSTGRES=' /data/s10_stack/.env /data/s10_stack/imgversion.conf 2>/
 
 ### 5.1 准备新版本 `.env`
 
-如果新目录中还没有 `.env`，先复制一份旧目录：
-
-```bash
-cp /data/dts-stack/.env /data/s10_stack/.env
-```
-
-然后根据新版本要求，确认新目录 `.env` 中包含：
+新包保留发布时生成的配置模板，不要用旧现场文件覆盖新包中的 `.env`。根据新版本要求，核对模板中的：
 
 - 新版本新增的环境变量
 - 正确的 `IMAGE_*` 镜像 tag
@@ -177,37 +171,23 @@ cp /data/dts-stack/.env /data/s10_stack/.env
 
 ### 5.2 选择升级包方式
 
-如果你已经在本机完成了镜像构建，并且这些镜像已经存在于本机 `docker images` 中，推荐使用：
+以下制包命令只在联网的正式构建机执行，现场接收完整交付包。开发目录提交并推送后，在 `/opt/prod/s10/deploy` 通过 Git 同步同一 SHA，完成正式构建，再制包。具体流程见 [正式发布与离线运行脚本更新](normal-release-and-runtime-update.md)。
+
+默认生成包含镜像和运行脚本的完整离线包：
 
 ```bash
-cd /data/s10_stack
-./builds/dts-build.sh --pack --no-images --output /tmp/dts-upgrade.tar.gz
-```
-
-这种方式的特点是：
-
-- 不再打包镜像 tar
-- 升级时直接使用本机已有镜像
-- 即使 `/tmp/dts-upgrade/images` 或 `/tmp/dts-upgrade/extra` 不存在，升级脚本也会自动创建目录并继续执行
-
-如果你希望生成完整离线包，包含镜像 tar，则使用：
-
-```bash
-cd /data/s10_stack
+cd /opt/prod/s10/deploy
 ./builds/dts-build.sh --pack --output /tmp/dts-upgrade.tar.gz
 ```
 
-补充说明：
+仅当同一发布批次、相同架构的镜像已另外交付并加载到现场时，可在正式构建机生成无镜像包：
 
-- 如果镜像已经手工 `docker load` 到本机，或本机已经通过 `docker build` 生成所需镜像，那么升级时允许：
-  - `images/` 目录不存在
-  - `images/` 目录为空
-  - `extra/` 目录不存在
-  - `extra/` 目录为空
-- 在这种情况下，升级器会自动进入“镜像已预装”模式：
-  - 跳过 `release-manifest.json` / `checksums.txt` 校验
-  - 跳过 `docker load`
-  - 仍会生成 `logs/upgrade-lite-*/summary.md`、`report.html` 和 `backup/`
+```bash
+cd /opt/prod/s10/deploy
+./builds/dts-build.sh --pack --no-images --output /tmp/dts-upgrade.tar.gz
+```
+
+无镜像包跳过 `docker load`，仍必须携带并通过 `extra/release-manifest.json` 和 `extra/files-checksums.txt` 的运行文件校验，不能删除 `extra/` 来绕过检查。现场不执行源码构建或联网安装依赖。
 
 ### 5.3 确认脚本兼容 `docker-compose`
 
@@ -322,7 +302,7 @@ lite 升级器会自动执行以下动作：
 8. 刷新 `.env` 中 `IMAGE_*`，追加新包新增 key，保留现场业务 key
 9. 保留现场 `docker-compose.legacy.yml`，只生成 diff 报告，不覆盖
 10. `config/` 已有文件不覆盖，差异另存到报告目录；缺失文件才补入
-11. 运行文件和脚本只补缺失文件，已有文件不覆盖
+11. 产品运行文件和脚本先备份再替换，现场配置保留；回滚恢复旧文件并移除本次新增文件
 12. 使用 `docker-compose -f docker-compose.legacy.yml up -d --force-recreate` 启动
 13. 执行 postcheck 并生成静态 HTML 报告
 
@@ -519,7 +499,7 @@ cd /tmp/dts-upgrade/dts-stack
 
 现场建议严格按下面顺序执行：
 
-1. 在 `s10_stack` 生成升级包
+1. 在正式构建目录生成升级包并记录 SHA256，将包交付到现场
 2. 解压升级包
 3. 确认 `dts-stack/.env` 中 `LEGACY_STACK` / `DEPLOY_MODE`
 4. 执行 `bin/dts-upgrade-lite plan`，打开 `report.html` 查看差异
@@ -534,7 +514,8 @@ cd /tmp/dts-upgrade/dts-stack
 
 ## 12. 相关文件
 
-- 新版本源码目录：`/data/s10_stack`
+- 正式构建目录：`/opt/prod/s10/deploy`
+- 现场新版本目录：`/data/s10_stack`（只用于解包，不构建源码）
 - 旧版本运行目录：`/data/dts-stack`
 - lite 升级脚本：`/tmp/dts-upgrade/dts-stack/bin/dts-upgrade-lite`
 - 兼容旧升级脚本：`/tmp/dts-upgrade/dts-stack/bin/dts-upgrade`

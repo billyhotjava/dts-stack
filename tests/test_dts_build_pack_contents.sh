@@ -28,6 +28,14 @@ mkdir -p \
   "${FAKE_BIN}"
 
 cp "${REPO_ROOT}/builds/dts-build.sh" "${TEST_REPO}/builds/dts-build.sh"
+cp "${REPO_ROOT}/builds/write-release-metadata.py" "${TEST_REPO}/builds/write-release-metadata.py"
+mkdir -p "${TEST_REPO}/services/dts-airflow/dags"
+cp "${REPO_ROOT}/services/dts-airflow/dags/dts_release_build_postgres_primary.py" \
+  "${TEST_REPO}/services/dts-airflow/dags/dts_release_build_postgres_primary.py"
+mkdir -p "${TEST_REPO}/services/dts-airflow/extra/dts_runtime"
+cp "${REPO_ROOT}/services/dts-airflow/extra/dts_runtime/dbt_task_factory.py" \
+  "${TEST_REPO}/services/dts-airflow/extra/dts_runtime/dbt_task_factory.py"
+cp "${REPO_ROOT}/bin/lib/dts-runtime-files.sh" "${TEST_REPO}/bin/lib/dts-runtime-files.sh"
 chmod +x "${TEST_REPO}/builds/dts-build.sh"
 
 cat > "${TEST_REPO}/init.sh" <<'EOF_FILE'
@@ -196,6 +204,25 @@ EOF_DISK
 EOF_DF
 chmod +x "${FAKE_BIN}/df"
 
+# Metadata must inspect actual Docker-save manifests, not placeholder text files.
+python3 - "${TEST_REPO}" <<'PY'
+import io, json, sys, tarfile
+from pathlib import Path
+for path in Path(sys.argv[1]).glob('builds/*dist/*.tar'):
+    with tarfile.open(path, 'w') as archive:
+        for name, value in {
+            'manifest.json': [{'Config': 'config.json', 'RepoTags': [path.stem.replace('_', ':', 1)], 'Layers': []}],
+            'config.json': {'architecture': 'amd64', 'os': 'linux', 'config': {'Labels': {}}},
+        }.items():
+            raw = json.dumps(value).encode()
+            entry = tarfile.TarInfo(name)
+            entry.size = len(raw)
+            archive.addfile(entry, io.BytesIO(raw))
+PY
+git -C "${TEST_REPO}" init -q
+git -C "${TEST_REPO}" add .
+git -C "${TEST_REPO}" -c core.hooksPath=/dev/null -c user.name=Fixture -c user.email=fixture@example.invalid commit -qm fixture
+
 PATH="${FAKE_BIN}:${PATH}" DTS_BUILD_TIMESTAMP=20260829210503 \
   "${TEST_REPO}/builds/dts-build.sh" --pack --no-images --output "${PACKAGE_PATH}" >/dev/null
 ARCHIVE_CONTENTS="$(tar -tzf "${PACKAGE_PATH}")"
@@ -216,23 +243,15 @@ if ! grep -Fqx 'IMAGE_DTS_ADMIN=dts-admin:2.2.3-20260829210503' "${PACKAGE_EXTRA
   exit 1
 fi
 
-if ! grep -Fq '"version": "2.2.3-20260829210503"' "${PACKAGE_EXTRACT}/extra/release-manifest.json"; then
-  echo "expected release manifest to contain the image version" >&2
-  cat "${PACKAGE_EXTRACT}/extra/release-manifest.json" >&2
-  exit 1
-fi
-
-if ! grep -Fq '"productVersion": "2.2.3"' "${PACKAGE_EXTRACT}/extra/release-manifest.json"; then
-  echo "expected release manifest to contain the product version" >&2
-  cat "${PACKAGE_EXTRACT}/extra/release-manifest.json" >&2
-  exit 1
-fi
-
-if ! grep -Fq '"buildTimestamp": "20260829210503"' "${PACKAGE_EXTRACT}/extra/release-manifest.json"; then
-  echo "expected release manifest to contain the build timestamp" >&2
-  cat "${PACKAGE_EXTRACT}/extra/release-manifest.json" >&2
-  exit 1
-fi
+python3 - "${PACKAGE_EXTRACT}/extra/release-manifest.json" "$(git -C "${TEST_REPO}" rev-parse HEAD)" <<'PY'
+import json, sys
+manifest = json.load(open(sys.argv[1]))
+assert manifest['sourceCommit'] == sys.argv[2]
+assert manifest['runtimeFilesRequired'] is True
+assert manifest['imagesIncluded'] is False
+PY
+(cd "${PACKAGE_EXTRACT}" && sha256sum -c extra/files-checksums.txt >/dev/null)
+test -f "${PACKAGE_EXTRACT}/dts-stack/services/dts-airflow/dags/dts_release_build_postgres_primary.py"
 
 if grep -qx 'dts-stack/services/dts-dbt/profiles/profiles.yml' <<<"${ARCHIVE_CONTENTS}"; then
   echo "deployment package leaked the local dbt profiles.yml" >&2
@@ -302,7 +321,7 @@ fi
 for metadata_file in \
   extra/release-manifest.json \
   extra/merge-rules.yml \
-  extra/checksums.txt \
+  extra/files-checksums.txt \
   extra/rollback-manifest.json
 do
   if ! grep -qx "${metadata_file}" <<<"${ARCHIVE_CONTENTS}"; then

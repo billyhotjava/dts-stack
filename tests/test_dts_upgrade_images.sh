@@ -151,7 +151,7 @@ prepare_manifest "${MISSING_EXTRA}" "one.tar"
 cat > "${MISSING_EXTRA}/checksums.txt" <<'EOF_SUM'
 deadbeef  one.tar
 EOF_SUM
-expect_failure "image tar referenced by manifest is missing" "${MISSING_TARGET}" "${MISSING_IMAGES}" "${MISSING_EXTRA}"
+expect_failure "checksums validation failed" "${MISSING_TARGET}" "${MISSING_IMAGES}" "${MISSING_EXTRA}"
 
 NO_PACKAGE_TARGET="${TMP_DIR}/no-package-target"
 NO_PACKAGE_IMAGES="${TMP_DIR}/no-package-images"
@@ -198,6 +198,9 @@ mkdir -p "${GOOD_IMAGES}" "${GOOD_EXTRA}"
 printf 'one' > "${GOOD_IMAGES}/one.tar"
 printf 'two' > "${GOOD_IMAGES}/two.tar"
 prepare_manifest "${GOOD_EXTRA}" "one.tar" "two.tar"
+cat > "${GOOD_EXTRA}/release-manifest.json" <<'EOF_OBJECT_MANIFEST'
+{"formatVersion":1,"images":[{"archive":"one.tar","images":[]},{"archive":"two.tar","images":[]}]}
+EOF_OBJECT_MANIFEST
 write_checksums "${GOOD_IMAGES}" "${GOOD_EXTRA}" one.tar two.tar
 expect_success "${GOOD_TARGET}" "${GOOD_IMAGES}" "${GOOD_EXTRA}"
 
@@ -205,3 +208,12 @@ if ! diff -u <(printf 'one.tar\ntwo.tar\n') "${TMP_DIR}/docker-load.log"; then
   echo "expected docker load to follow manifest order" >&2
   exit 1
 fi
+
+rm -f "${STATE_FILE}"
+prepare_manifest "${GOOD_EXTRA}" "one.tar" "two.tar"
+expect_success "${GOOD_TARGET}" "${GOOD_IMAGES}" "${GOOD_EXTRA}"
+diff -u <(printf 'one.tar\ntwo.tar\n') "${TMP_DIR}/docker-load.log"
+
+rm -f "${STATE_FILE}"
+printf '{"images":[{"archive":"../outside.tar"}]}' > "${GOOD_EXTRA}/release-manifest.json"
+expect_failure "invalid image manifest" "${GOOD_TARGET}" "${GOOD_IMAGES}" "${GOOD_EXTRA}"

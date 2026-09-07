@@ -152,4 +152,5 @@ with open(sys.argv[1], "r", encoding="utf-8") as fh:
     data = json.load(fh)
 
 assert "bin/existing-tool.sh" in data["backedUpFiles"], data
+assert "bin/new-tool.sh" in data["addedFiles"], data
 PY

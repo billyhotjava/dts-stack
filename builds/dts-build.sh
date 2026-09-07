@@ -1319,6 +1319,7 @@ pack_deployment() {
   mkdir -p "${pack_dir}/docs/release/v2.2.3"
   for doc_file in \
     "docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md" \
+    "docs/release/v2.2.3/normal-release-and-runtime-update.md" \
     "docs/release/v2.2.3/offline-upgrade-checklist-kylin-kunpeng.md" \
     "docs/release/v2.2.3/offline-upgrade-guide-kylin-kunpeng.md"
   do
@@ -1361,6 +1362,26 @@ pack_deployment() {
   mkdir -p "${pack_dir}/logs"
   mkdir -p "${pack_dir}/services/dts-pg/data"
   mkdir -p "${pack_dir}/services/dts-airflow/dags"
+  # Ship the static release-build DAG; site-generated DAGs remain site-owned.
+  local release_dag="services/dts-airflow/dags/dts_release_build_postgres_primary.py"
+  if [[ ! -f "${REPO_ROOT}/${release_dag}" ]]; then
+    echo "[dts-build] ERROR: required release-build DAG is missing: ${release_dag}" >&2
+    rm -rf "${tmp_dir}"
+    return 1
+  fi
+  cp "${REPO_ROOT}/${release_dag}" "${pack_dir}/${release_dag}"
+  local required_runtime_file
+  for required_runtime_file in \
+    services/dts-airflow/extra/dts_runtime/dbt_task_factory.py \
+    bin/lib/dts-runtime-files.sh
+  do
+    if [[ ! -f "${pack_dir}/${required_runtime_file}" ]]; then
+      echo "[dts-build] ERROR: required runtime file is missing from package: ${required_runtime_file}" >&2
+      rm -rf "${tmp_dir}"
+      return 1
+    fi
+  done
+  find "${pack_dir}" -type d -name __pycache__ -prune -exec rm -rf -- {} +
   mkdir -p "${pack_dir}/services/dts-airflow/logs"
   mkdir -p "${pack_dir}/services/dts-dbt/target"
   mkdir -p "${pack_dir}/services/dts-dbt/logs"

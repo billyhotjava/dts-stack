@@ -23,7 +23,8 @@
 - `.env` 中非 `IMAGE_*` 的现场业务配置默认保留。
 - `.env` 中 `IMAGE_*` 按新包刷新，避免镜像已导入但仍启动旧 tag。
 - `config/` 已有文件不覆盖，差异文件保存到报告目录。
-- 运行文件和脚本已有文件不覆盖，缺失文件才补入。
+- 产品运行文件（`bin/`、启动脚本、Airflow Python 运行库及静态构建 DAG、dbt 脚本和宏）有变更时先备份再替换，回滚恢复旧版本。现场配置冲突保留原值并生成 `.new` 文件。
+- 新版包声明 `runtimeFilesRequired=true`，必须携带并通过 `extra/files-checksums.txt` 校验。镜像校验与运行文件校验在加载镜像、停止容器前执行。
 - 数据库目录 `services/dts-pg/data` 只做整目录冷备；回滚数据库必须显式加 `--restore-db`。
 
 ## 1. 解压升级包
@@ -74,6 +75,7 @@ cat /data/dts-stack/logs/upgrade-lite-*/summary.md
 - `env-plan.tsv` 中 `IMAGE_*` 更新符合本次版本
 - `compose.diff` 仅作为差异展示，不会覆盖现场 compose
 - `risk-list.txt` 中没有无法接受的风险
+- `summary.md` 的 Runtime files 列出 `BACKUP_AND_UPDATE`、`ADD`、`KEEP_SITE`，确认包含本次变更的 Airflow 运行脚本。
 
 ## 3. 执行升级
 
@@ -90,12 +92,13 @@ cat /data/dts-stack/logs/upgrade-lite-*/summary.md
 
 脚本会自动：
 
-- 校验 checksums（如果提供）
+- 校验镜像 checksums 和完整运行文件 files-checksums；新版包缺少校验清单会停止升级
 - `docker load` 镜像 tar（如果提供）
 - `docker-compose -f docker-compose.legacy.yml down --remove-orphans`
 - 冷备 `services/dts-pg/data`
 - 更新 `.env` 中 `IMAGE_*`
 - 追加新包新增环境变量
+- 备份并替换产品运行脚本，保留现场配置；新增文件记录到回滚清单
 - 启动 `docker-compose -f docker-compose.legacy.yml up -d --force-recreate`
 
 ## 4. 升级后检查
@@ -113,6 +116,9 @@ cat logs/upgrade-lite-*/summary.md
 - `.env` 中 `IMAGE_*` 已更新
 - 现场域名、MDM、OIDC、代理、数据库密码等非镜像配置仍保留
 - `logs/upgrade-lite-*/backup` 已生成
+- Airflow 脚本与交付包一致；仅更新镜像不能证明绑定挂载脚本已更新
+
+开发、Git 同步、制包和现场升级的完整边界见 [normal-release-and-runtime-update.md](normal-release-and-runtime-update.md)。升级入口必须从新交付包执行，不能继续使用现场旧版本升级脚本。
 
 ## 5. 回滚
 

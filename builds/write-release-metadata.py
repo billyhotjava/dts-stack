@@ -72,6 +72,7 @@ def write_metadata(root, metadata_dir, revision):
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "images": images,
         "imagesIncluded": bool(images),
+        "runtimeFilesRequired": True,
     }
     (metadata / "release-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     checksum_file = metadata / "checksums.txt"

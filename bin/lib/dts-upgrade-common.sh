@@ -2,6 +2,7 @@
 
 [[ -n "${_DTS_UPGRADE_COMMON_LOADED:-}" ]] && return 0
 _DTS_UPGRADE_COMMON_LOADED=1
+source "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/dts-runtime-files.sh"
 
 upgrade_info() {
   echo "[dts-upgrade] $*"
@@ -121,11 +122,13 @@ upgrade_init_backup_state() {
 
   UPGRADE_BACKUP_DIR="${target_dir}/backups/upgrade-${timestamp}"
   UPGRADE_ROLLBACK_FILES_LIST="${UPGRADE_BACKUP_DIR}/.rollback-files.list"
+  UPGRADE_ADDED_FILES_LIST="${UPGRADE_BACKUP_DIR}/.added-files.list"
   UPGRADE_PROTECTED_DIRS_LIST="${UPGRADE_BACKUP_DIR}/.protected-dirs.list"
   UPGRADE_BACKED_UP_DATA_DIRS_LIST="${UPGRADE_BACKUP_DIR}/.backed-up-data-dirs.list"
 
   mkdir -p "${UPGRADE_BACKUP_DIR}"
   : > "${UPGRADE_ROLLBACK_FILES_LIST}"
+  : > "${UPGRADE_ADDED_FILES_LIST}"
   : > "${UPGRADE_PROTECTED_DIRS_LIST}"
   : > "${UPGRADE_BACKED_UP_DATA_DIRS_LIST}"
 
@@ -160,17 +163,20 @@ upgrade_write_rollback_manifests() {
   local extra_dir="$1"
   local backup_manifest="${UPGRADE_BACKUP_DIR}/rollback-manifest.json"
   local extra_manifest="${extra_dir}/rollback-manifest.json"
+  # A verified package remains immutable; receipts belong to the target backup.
+  [[ ! -f "${extra_dir}/files-checksums.txt" ]] || extra_manifest=""
 
   python3 - <<'PY' \
     "${UPGRADE_ROLLBACK_FILES_LIST}" \
     "${UPGRADE_PROTECTED_DIRS_LIST}" \
     "${UPGRADE_BACKED_UP_DATA_DIRS_LIST}" \
+    "${UPGRADE_ADDED_FILES_LIST}" \
     "${backup_manifest}" \
     "${extra_manifest}"
 import json
 import sys
 
-files_list, dirs_list, backed_up_dirs_list, backup_manifest, extra_manifest = sys.argv[1:6]
+files_list, dirs_list, backed_up_dirs_list, added_files_list, backup_manifest, extra_manifest = sys.argv[1:7]
 
 def read_lines(path):
     with open(path, "r", encoding="utf-8") as fh:
@@ -180,9 +186,12 @@ payload = {
     "backedUpFiles": read_lines(files_list),
     "protectedDataDirs": read_lines(dirs_list),
     "backedUpDataDirs": read_lines(backed_up_dirs_list),
+    "addedFiles": read_lines(added_files_list),
 }
 
 for output in (backup_manifest, extra_manifest):
+    if not output:
+        continue
     with open(output, "w", encoding="utf-8") as fh:
         json.dump(payload, fh, ensure_ascii=False, indent=2, sort_keys=True)
         fh.write("\n")
@@ -421,6 +430,7 @@ upgrade_restore_backed_up_files() {
 
   while IFS= read -r relative_path; do
     [[ -z "${relative_path}" ]] && continue
+    dts_no_symlink_path "${target_dir}" "${relative_path}" || upgrade_die "unsafe rollback path: ${relative_path}"
     source_file="${backup_dir}/${relative_path}"
     target_file="${target_dir}/${relative_path}"
     [[ -f "${source_file}" ]] || upgrade_die "backup file missing for rollback: ${relative_path}"
@@ -429,6 +439,13 @@ upgrade_restore_backed_up_files() {
     upgrade_append_log "rollback restored file ${relative_path}"
     upgrade_append_summary "- rollback restored file: ${relative_path}"
   done < <(upgrade_manifest_list_field "${manifest_file}" "backedUpFiles")
+  while IFS= read -r relative_path; do
+    [[ -z "${relative_path}" ]] && continue
+    dts_no_symlink_path "${target_dir}" "${relative_path}" || upgrade_die "unsafe rollback path: ${relative_path}"
+    [[ ! -d "${target_dir}/${relative_path}" ]] || upgrade_die "added file became a directory: ${relative_path}"
+    rm -f -- "${target_dir}/${relative_path}"
+    upgrade_append_summary "- rollback removed added file: ${relative_path}"
+  done < <(upgrade_manifest_list_field "${manifest_file}" "addedFiles")
 }
 
 upgrade_restore_backed_up_data_dirs() {
@@ -479,6 +496,7 @@ upgrade_manifest_images() {
   local manifest_file="$1"
   python3 -c '
 import json
+import re
 import sys
 
 with open(sys.argv[1], "r", encoding="utf-8") as fh:
@@ -488,8 +506,15 @@ images = data.get("images") or []
 if not isinstance(images, list):
     raise SystemExit("manifest images must be a list")
 
+names = []
 for image in images:
-    print(image)
+    name = image.get("archive") if isinstance(image, dict) else image
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:+-]*\.tar", name):
+        raise SystemExit("invalid image archive name")
+    if name in names:
+        raise SystemExit("duplicate image archive")
+    names.append(name)
+print("\n".join(names))
 ' "${manifest_file}" 2>/dev/null || upgrade_die "failed to parse release manifest: ${manifest_file}"
 }
 
@@ -535,21 +560,33 @@ upgrade_verify_image_package() {
   local manifest_file="${extra_dir}/release-manifest.json"
   local checksums_file="${extra_dir}/checksums.txt"
   local image_name
+  local image_names
+  local checksummed_images
+
+  dts_verify_package_files "${SOURCE_ROOT}" "${extra_dir}" || upgrade_die "runtime package verification failed"
+  if [[ -f "${extra_dir}/files-checksums.txt" ]]; then
+    upgrade_append_summary "- runtime file checksums: ok"
+  fi
+  dts_verify_image_files "${images_dir}" "${extra_dir}" || upgrade_die "image checksums validation failed"
+  dts_preflight_runtime_paths "${SOURCE_ROOT}" "${TARGET_DIR}" || upgrade_die "runtime path preflight failed"
 
   if ! upgrade_has_image_package "${images_dir}" "${extra_dir}"; then
     return 0
   fi
 
+  image_names="$(upgrade_manifest_images "${manifest_file}")" || upgrade_die "invalid image manifest"
+  checksummed_images="$(dts_image_archives "${checksums_file}")" || upgrade_die "invalid image checksums"
+  [[ -n "${image_names}" ]] || upgrade_die "image manifest has no archives"
   while IFS= read -r image_name; do
     [[ -z "${image_name}" ]] && continue
     if [[ ! -f "${images_dir}/${image_name}" ]]; then
       upgrade_die "image tar referenced by manifest is missing: ${image_name}"
     fi
-  done < <(upgrade_manifest_images "${manifest_file}")
+    if ! grep -Fxq -- "${image_name}" <<< "${checksummed_images}"; then
+      upgrade_die "manifest image has no checksum: ${image_name}"
+    fi
+  done <<< "${image_names}"
 
-  if ! (cd "${images_dir}" && sha256sum -c "${checksums_file}" >/dev/null); then
-    upgrade_die "checksums validation failed"
-  fi
 }
 
 upgrade_load_images() {
@@ -557,16 +594,18 @@ upgrade_load_images() {
   local extra_dir="$2"
   local manifest_file="${extra_dir}/release-manifest.json"
   local image_name
+  local image_names
 
   if ! upgrade_has_image_package "${images_dir}" "${extra_dir}"; then
     return 0
   fi
 
+  image_names="$(upgrade_manifest_images "${manifest_file}")" || upgrade_die "invalid image manifest"
   while IFS= read -r image_name; do
     [[ -z "${image_name}" ]] && continue
     upgrade_append_log "docker load -i ${images_dir}/${image_name}"
     docker load -i "${images_dir}/${image_name}" >/dev/null
-  done < <(upgrade_manifest_images "${manifest_file}")
+  done <<< "${image_names}"
 }
 
 upgrade_env_key_from_line() {
@@ -1168,12 +1207,22 @@ upgrade_sync_new_files() {
 
     mkdir -p "$(dirname "${target_file}")"
     if [[ -f "${target_file}" ]]; then
+      if cmp -s "${source_file}" "${target_file}"; then
+        continue
+      fi
+      if ! dts_managed_runtime_file "${relative_path}"; then
+        upgrade_backup_conflict_file "${target_dir}" "${UPGRADE_TIMESTAMP}" "${relative_path}" "${source_file}"
+        upgrade_append_summary "- site file preserved: ${relative_path}"
+        continue
+      fi
       upgrade_backup_target_file "${target_dir}" "${target_file}"
       updated_count=$((updated_count + 1))
     else
+      upgrade_append_unique_line "${UPGRADE_ADDED_FILES_LIST}" "${relative_path}"
       added_count=$((added_count + 1))
     fi
     cp -a "${source_file}" "${target_file}"
+    cmp -s "${source_file}" "${target_file}" || upgrade_die "runtime copy verification failed: ${relative_path}"
     synced_count=$((synced_count + 1))
     upgrade_append_log "synced runtime file ${relative_path}"
   done < <(find "${source_root}" -type f | sort)

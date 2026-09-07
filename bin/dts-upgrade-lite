@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/dts-runtime-files.sh"
 DEFAULT_SOURCE_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
 DEFAULT_TARGET_DIR="${DTS_UPGRADE_LITE_DEFAULT_TARGET:-/data/dts-stack}"
 
@@ -492,6 +493,26 @@ write_image_package_plan() {
   fi
 }
 
+write_runtime_file_plan() {
+  local source_file rel action
+  append_line "${SUMMARY_FILE}" ""
+  append_line "${SUMMARY_FILE}" "## Runtime files"
+  while IFS= read -r -d '' source_file; do
+    rel="${source_file#${SOURCE_ROOT}/}"
+    should_skip_source_file "${rel}" && continue
+    if [[ ! -e "${TARGET_DIR}/${rel}" ]]; then
+      action=ADD
+    elif cmp -s "${source_file}" "${TARGET_DIR}/${rel}"; then
+      continue
+    elif dts_managed_runtime_file "${rel}"; then
+      action=BACKUP_AND_UPDATE
+    else
+      action=KEEP_SITE
+    fi
+    append_line "${SUMMARY_FILE}" "- ${action}: ${rel}"
+  done < <(find "${SOURCE_ROOT}" -type f -print0)
+}
+
 write_html_report() {
   local report_html="${REPORT_DIR}/report.html"
   cat > "${report_html}" <<'EOF_HTML_HEAD'
@@ -544,6 +565,8 @@ run_plan() {
   snapshot_target_identity
   print_target_banner "plan"
   init_report "${TARGET_DIR}" "plan"
+  verify_checksums
+  dts_preflight_runtime_paths "${SOURCE_ROOT}" "${TARGET_DIR}" || die "runtime path preflight failed"
   load_source_env
   load_target_env
   detect_mode
@@ -552,6 +575,7 @@ run_plan() {
   write_env_plan
   write_diffs
   write_image_package_plan
+  write_runtime_file_plan
   assert_target_unchanged
   write_html_report
   info "plan written: ${REPORT_DIR}"
@@ -588,6 +612,11 @@ backup_postgres_data() {
 }
 
 verify_checksums() {
+  dts_verify_package_files "${SOURCE_ROOT}" "${EXTRA_DIR}" || die "runtime package verification failed"
+  dts_verify_image_files "${IMAGES_DIR}" "${EXTRA_DIR}" || die "image package verification failed"
+  if [[ -f "${EXTRA_DIR}/files-checksums.txt" ]]; then
+    append_line "${SUMMARY_FILE}" "- runtime file checksums: ok"
+  fi
   local checksums_file="${EXTRA_DIR}/checksums.txt"
   if [[ ! -d "${IMAGES_DIR}" || ! -e "${checksums_file}" ]]; then
     append_line "${SUMMARY_FILE}" "- checksums: skipped (assumed preloaded)"
@@ -596,20 +625,26 @@ verify_checksums() {
   if [[ ! -s "${checksums_file}" ]]; then
     die "checksums.txt is empty: ${checksums_file} (offline package likely corrupt)"
   fi
-  (cd "${IMAGES_DIR}" && sha256sum -c "${checksums_file}" >/dev/null)
   append_line "${SUMMARY_FILE}" "- checksums: ok"
 }
 
 load_images() {
+  local image_names image_tar
   if [[ ! -d "${IMAGES_DIR}" ]] || ! find "${IMAGES_DIR}" -maxdepth 1 -type f -name '*.tar' | grep -q .; then
     append_line "${SUMMARY_FILE}" "- docker load: skipped (no image tar)"
     return 0
   fi
   command -v docker >/dev/null 2>&1 || die "docker is required to load images"
-  find "${IMAGES_DIR}" -maxdepth 1 -type f -name '*.tar' | sort | while IFS= read -r image_tar; do
+  if [[ -f "${EXTRA_DIR}/checksums.txt" ]]; then
+    image_names="$(dts_image_archives "${EXTRA_DIR}/checksums.txt")" || die "invalid image checksums"
+  else
+    image_names="$(find "${IMAGES_DIR}" -maxdepth 1 -type f -name '*.tar' -printf '%f\n' | sort)"
+  fi
+  while IFS= read -r image_tar; do
+    image_tar="${IMAGES_DIR}/${image_tar}"
     append_line "${SUMMARY_FILE}" "- docker load: $(basename "${image_tar}")"
     docker load -i "${image_tar}" >/dev/null
-  done
+  done <<< "${image_names}"
 }
 
 write_updated_env() {
@@ -717,17 +752,26 @@ sync_new_runtime_files() {
     target_file="${TARGET_DIR}/${rel}"
     if [[ -f "${target_file}" ]]; then
       if ! cmp -s "${source_file}" "${target_file}"; then
-        conflict_file="${RUNTIME_CONFLICT_DIR}/${rel}.new"
-        mkdir -p "$(dirname "${conflict_file}")"
-        cp -p "${source_file}" "${conflict_file}"
+        if dts_managed_runtime_file "${rel}"; then
+          backup_file "${target_file}"
+          cp -p "${source_file}" "${target_file}"
+          cmp -s "${source_file}" "${target_file}" || die "runtime copy verification failed: ${rel}"
+          append_line "${SUMMARY_FILE}" "- runtime updated: ${rel}"
+        else
+          conflict_file="${RUNTIME_CONFLICT_DIR}/${rel}.new"
+          mkdir -p "$(dirname "${conflict_file}")"
+          cp -p "${source_file}" "${conflict_file}"
+          append_line "${SUMMARY_FILE}" "- site file preserved: ${rel}"
+        fi
       fi
       continue
     fi
     mkdir -p "$(dirname "${target_file}")"
-    cp -p "${source_file}" "${target_file}"
     record_added_file "${target_file}"
+    cp -p "${source_file}" "${target_file}"
+    cmp -s "${source_file}" "${target_file}" || die "runtime copy verification failed: ${rel}"
   done
-  append_line "${SUMMARY_FILE}" "- runtime sync: added missing files only; existing files preserved"
+  append_line "${SUMMARY_FILE}" "- runtime sync: managed code updated with backup; site files preserved"
 }
 
 stop_stack() {
@@ -735,7 +779,7 @@ stop_stack() {
   if [[ "${REMOVE_ORPHANS}" -eq 1 ]]; then
     args+=(--remove-orphans)
   fi
-  run_compose "${TARGET_DIR}" "${args[@]}" >/dev/null || true
+  run_compose "${TARGET_DIR}" "${args[@]}" >/dev/null || die "failed to stop stack; runtime files were not updated"
   append_line "${SUMMARY_FILE}" "- stack stopped (remove_orphans=${REMOVE_ORPHANS})"
 }
 
@@ -833,6 +877,8 @@ run_apply() {
   snapshot_target_identity
   print_target_banner "apply"
   init_report "${TARGET_DIR}" "apply"
+  verify_checksums
+  dts_preflight_runtime_paths "${SOURCE_ROOT}" "${TARGET_DIR}" || die "runtime path preflight failed"
   : > "${BACKUP_DIR}/.rollback-files.list"
   : > "${BACKUP_DIR}/.added-files.list"
   : > "${BACKUP_DIR}/.backed-up-data-dirs.list"
@@ -844,9 +890,9 @@ run_apply() {
   write_env_plan
   write_diffs
   write_image_package_plan
+  write_runtime_file_plan
   write_lock
   trap apply_failure_trap EXIT INT TERM
-  verify_checksums
   load_images
   stop_stack
   backup_postgres_data
@@ -872,6 +918,7 @@ restore_files() {
   [[ -f "${list_file}" ]] || return 0
   while IFS= read -r rel || [[ -n "${rel}" ]]; do
     [[ -n "${rel}" ]] || continue
+    dts_no_symlink_path "${TARGET_DIR}" "${rel}" || die "unsafe rollback path: ${rel}"
     source_file="${BACKUP_DIR}/${rel}"
     target_file="${TARGET_DIR}/${rel}"
     [[ -f "${source_file}" ]] || die "backup file missing: ${rel}"
@@ -887,6 +934,7 @@ remove_added_files() {
   [[ -f "${list_file}" ]] || return 0
   while IFS= read -r rel || [[ -n "${rel}" ]]; do
     [[ -n "${rel}" ]] || continue
+    dts_no_symlink_path "${TARGET_DIR}" "${rel}" || die "unsafe rollback path: ${rel}"
     target_file="${TARGET_DIR}/${rel}"
     if [[ -f "${target_file}" ]]; then
       rm -f "${target_file}"
