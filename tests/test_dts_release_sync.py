@@ -117,6 +117,7 @@ class ReleaseSyncTests(unittest.TestCase):
         macro = repo / 'services/dts-dbt/macros/example.sql'
         macro.parent.mkdir(parents=True)
         macro.write_text('-- required generated macro\n')
+        (repo / 'services/dts-dbt/run-model-build.sh').write_text('# source-only helper\n')
         (repo / 'builds/dist').mkdir(parents=True)
         (repo / 'builds/dist/app.tar').write_bytes(b'fixture')
         sync.os.utime(repo / 'builds/dist/app.tar', (1, 1))
@@ -128,6 +129,7 @@ class ReleaseSyncTests(unittest.TestCase):
             files, _, _ = sync.source_snapshot(repo)
         self.assertIn(dag.relative_to(repo).as_posix(), files)
         self.assertIn(macro.relative_to(repo).as_posix(), files)
+        self.assertNotIn('services/dts-dbt/run-model-build.sh', files)
 
 
 if __name__ == '__main__':

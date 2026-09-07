@@ -103,7 +103,7 @@ def source_snapshot(repo):
     for directory in ('bin', 'services/dts-airflow/extra', 'services/dts-airflow/plugins',
                       'services/dts-dbt/macros', 'services/dts-dbt/dbt_model/models'):
         candidates.update(p.relative_to(repo).as_posix() for p in (repo / directory).rglob('*') if p.is_file())
-    for pattern in ('*.sh', 'imgversion*.conf', 'services/dts-dbt/*.sh',
+    for pattern in ('*.sh', 'imgversion*.conf', 'services/dts-dbt/run-tests.sh',
                     'services/dts-dbt/dbt_project.yml', 'services/dts-airflow/dags/dts_release_build_*.py'):
         candidates.update(p.relative_to(repo).as_posix() for p in repo.glob(pattern) if p.is_file())
     # This host-level transport utility is installed independently of DTS application runtime.
