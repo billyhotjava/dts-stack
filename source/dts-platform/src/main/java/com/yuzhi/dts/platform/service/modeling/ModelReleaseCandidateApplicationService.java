@@ -1280,7 +1280,7 @@ public class ModelReleaseCandidateApplicationService {
             : List.copyOf(entryEvidence);
         GovernanceQualitySummaryView evaluated = governanceQuality == null
             ? null
-            : governanceQuality.evaluate(view.candidate());
+            : governanceQuality.evaluateForRead(view.candidate());
         GovernanceQualitySummaryView governance = evaluated == null
             ? GovernanceQualitySummaryView.notEvaluated()
             : evaluated;

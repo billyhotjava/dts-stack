@@ -1192,7 +1192,7 @@ class ModelReleaseCandidateApplicationServiceTest {
         when(dutyResolver.currentDuties())
             .thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER, DeliveryActorRole.RELEASE_OPERATOR));
         when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(qualityPassed));
-        when(governanceQuality.evaluate(qualityPassed))
+        when(governanceQuality.evaluateForRead(qualityPassed))
             .thenReturn(
                 new GovernanceQualitySummaryView(
                     true,

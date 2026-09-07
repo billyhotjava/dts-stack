@@ -26,6 +26,8 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /** Resolves and enforces governance quality independently from engineering build/test status. */
 @Service
@@ -111,6 +113,16 @@ public class CandidateGovernanceQualityEvidenceService {
             : objectMapper;
     }
 
+    /** Optional read projections must not poison the caller's transaction when evidence is unavailable. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public GovernanceQualitySummaryView evaluateForRead(CandidateView candidate) {
+        return evaluate(candidate);
+    }
+
+    static boolean supportsQualityEvidence(DeliveryStatus status) {
+        return status != null && EVIDENCE_READY_STATES.contains(status);
+    }
+
     public GovernanceQualitySummaryView evaluate(CandidateView candidate) {
         try {
             CandidateQualityEvidenceSnapshot pinned = pinnedSnapshot(candidate).orElse(null);
@@ -138,7 +150,7 @@ public class CandidateGovernanceQualityEvidenceService {
                 policy.qualityEvidenceMaxAgeSeconds()
             );
         }
-        if (candidate == null || !EVIDENCE_READY_STATES.contains(candidate.status())) {
+        if (candidate == null || !supportsQualityEvidence(candidate.status())) {
             return unavailable(
                 required,
                 "MODEL_SPEC_GOVERNANCE_QUALITY_BUILD_REQUIRED",

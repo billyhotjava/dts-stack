@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Read-only quality-rule projection for the exact verified outputs of one release candidate. */
@@ -50,9 +51,17 @@ public class CandidateQualityRuleContextService {
         this.governanceQuality = Objects.requireNonNull(governanceQuality, "governanceQuality is required");
     }
 
-    @Transactional(readOnly = true)
+    // Nested evidence reads can roll back their own transaction even when their exception is caught here.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public CandidateQualityContextView context(CandidateView candidate, String activeDeptHeader) {
         Objects.requireNonNull(candidate, "candidate is required");
+        if (!CandidateGovernanceQualityEvidenceService.supportsQualityEvidence(candidate.status())) {
+            return new CandidateQualityContextView(
+                candidate.id(), candidate.version(), candidate.status(), List.of(),
+                QualityActionView.none("MODEL_SPEC_GOVERNANCE_QUALITY_BUILD_REQUIRED"),
+                "MODEL_SPEC_GOVERNANCE_QUALITY_BUILD_REQUIRED", "完成物理构建后才能配置和核验治理数据质量"
+            );
+        }
         try {
             UUID defaultLakeSourceId = defaultLake.currentDefaultLakeSourceId().orElse(null);
             ModelExecutionTargetCatalogResolver.ResolvedCatalogTarget target = targets.resolve(candidate);
