@@ -1362,6 +1362,13 @@ public class IngestionTaskService {
         if (auditMeta == null || !hasManagedFileLanding(task)) {
             return;
         }
+        if (com.yuzhi.dts.ingestion.service.etl.ModelTargetGuard.isBound(task)) {
+            JsonNode target = task.getDestinationConfig().path("modelTarget");
+            auditMeta.put("landingMode", "append_existing_model");
+            auditMeta.put("targetTable", target.path("schemaName").asText() + "." + target.path("tableName").asText());
+            auditMeta.put("destructive", false);
+            return;
+        }
         JsonNode landing = task.getSourceConfig().path("_fileLanding");
         String landingMode = landing.path("landingMode").asText(null);
         String targetTable = landing.path("targetTable").asText(null);

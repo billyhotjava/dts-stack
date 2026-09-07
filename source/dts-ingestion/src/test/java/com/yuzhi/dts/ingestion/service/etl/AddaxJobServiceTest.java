@@ -752,6 +752,27 @@ class AddaxJobServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void boundFileKeepsExplicitWriterColumnsWithoutAnyTargetMutationSql() throws Exception {
+        var result = addaxJobService.createJob(
+            "bound-file-columns", "txtfilereader",
+            Map.of("path", java.util.List.of("/tmp/input.csv"), "_fileType", "csv",
+                "_fileColumns", java.util.List.of(Map.of("name", "record_id", "type", "string"), Map.of("name", "amount", "type", "string"))),
+            "postgresqlwriter",
+            Map.of("jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin", "username", "biadmin",
+                "password", "fixture-only-password", "table", "public.ods_existing", "modelTarget", Map.of("schemaVersion", 1)),
+            null, "full_refresh", null, Map.of("executionId", "903", "batchId", "batch-903", "taskId", "11")
+        );
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> parameters = (Map<String, Object>) writer.get("parameter");
+        assertThat((java.util.List<String>) parameters.get("column")).containsExactly("\"record_id\"", "\"amount\"");
+        assertThat(parameters).doesNotContainKeys("preSql", "postSql", "modelTarget");
+        assertThat(objectMapper.writeValueAsString(job)).doesNotContain("CREATE TABLE", "ALTER TABLE", "DELETE FROM", "TRUNCATE", "DROP TABLE");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void shouldKeepManagedFileLandingContractOutOfAddaxReaderAndDestructiveSql() throws Exception {
         Map<String, Object> readerConfig = Map.of(
             "_fileId", "file-landing-001",

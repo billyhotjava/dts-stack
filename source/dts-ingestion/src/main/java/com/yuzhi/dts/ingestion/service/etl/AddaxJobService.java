@@ -351,6 +351,19 @@ public class AddaxJobService {
         }
         ensureWriterConnection(writerType, resolvedWriter);
         ensureDefaultExtraColumns(readerConfig, resolvedReader, resolvedWriter, readerType, writerType, runtimeContext);
+        if (isFileReaderType(readerType) && ModelTargetGuard.isBound(writerConfig)) {
+            // Bound targets still need an explicit file-to-writer projection, independently of DDL.
+            String prefix = normalizeText(resolvedWriter.get("_columnPrefix"));
+            String suffix = normalizeText(resolvedWriter.get("_columnSuffix"));
+            List<String> columns = new java.util.ArrayList<>();
+            for (Map<String, Object> column : fileColumns) {
+                String name = FileSourceColumnNames.resolveName(column);
+                if (!StringUtils.hasText(name)) throw new IllegalArgumentException("MODEL_INGESTION_FILE_COLUMN_REQUIRED");
+                columns.add(quoteIdentifier((prefix == null ? "" : prefix) + name + (suffix == null ? "" : suffix)));
+            }
+            if (columns.isEmpty()) throw new IllegalArgumentException("MODEL_INGESTION_FILE_COLUMN_REQUIRED");
+            resolvedWriter.put("column", columns);
+        }
         if (isFileReaderType(readerType) && !fileColumns.isEmpty() && !ModelTargetGuard.isBound(writerConfig)) {
             injectFileSourceCreateTablePreSql(
                 resolvedWriter,

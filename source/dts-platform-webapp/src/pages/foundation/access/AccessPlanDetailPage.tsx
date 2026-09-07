@@ -20,6 +20,7 @@ import styles from "./AccessPlanDetailPage.module.css";
 import { type AccessPlanOperation, runAccessPlanOperation } from "./accessPlanOperations";
 import { inferAccessKind } from "./accessPlanPayload";
 import { resolveAccessRevisionView } from "./accessRevisionView";
+import { accessTargetMappings, isModelBoundAccess } from "./accessTargetSummary";
 import {
 	acquireOwnedSingleFlight,
 	ownsSingleFlight,
@@ -121,6 +122,7 @@ const WRITE_MODE_LABELS: Record<string, string> = {
 };
 
 const writeStrategyLabel = (task: IngestionTaskDTO) => {
+	if (isModelBoundAccess(task)) return "追加写入已有模型表（不清空、不重建）";
 	const writeMode = String(task.syncConfig?.writeMode || task.syncConfig?.replaceMode || "")
 		.trim()
 		.toLowerCase();
@@ -289,13 +291,8 @@ export default function AccessPlanDetailPage() {
 	}, [activeTab, changesLoaded, loadChanges, task]);
 
 	const tableMappings = useMemo<TableMappingRow[]>(
-		() =>
-			(task?.tableMapping || []).map((mapping, index) => ({
-				key: `${mapping.source || "source"}-${mapping.target || "target"}-${index}`,
-				source: mapping.source || "未记录",
-				target: mapping.target || "未记录",
-			})),
-		[task?.tableMapping],
+		() => accessTargetMappings(task),
+		[task],
 	);
 
 	const mappingColumns: ColumnsType<TableMappingRow> = [
@@ -507,7 +504,7 @@ export default function AccessPlanDetailPage() {
 				<Descriptions size="small" column={{ xs: 1, sm: 2, xl: 3 }}>
 					<Descriptions.Item label="任务编号">#{task.id || taskId}</Descriptions.Item>
 					<Descriptions.Item label="接入方式">{task.sourceType || "未记录"}</Descriptions.Item>
-					<Descriptions.Item label="同步模式">{syncModeLabel(task.syncMode)}</Descriptions.Item>
+					<Descriptions.Item label="同步模式">{writeStrategyLabel(task)}</Descriptions.Item>
 					<Descriptions.Item label="源数据源">{task.sourceDataSourceId || "未关联"}</Descriptions.Item>
 					<Descriptions.Item label="目标类型">{task.destinationType || "未记录"}</Descriptions.Item>
 					<Descriptions.Item label="调度表达式">{task.syncSchedule || "手动触发"}</Descriptions.Item>
