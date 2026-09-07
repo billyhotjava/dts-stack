@@ -65,7 +65,7 @@ class WarehouseLayerApplicationServiceTest {
         assertThat(views.get(5).layerGroup()).isEqualTo(WarehouseLayerContract.LayerGroup.APPLICATION);
         assertThat(views.get(3).modelTypes())
             .containsExactly(ModelSpecContract.ModelType.DIMENSION, ModelSpecContract.ModelType.FACT);
-        assertThat(views.get(0).modelTypes()).isEmpty();
+        assertThat(views.get(0).modelTypes()).containsExactly(ModelSpecContract.ModelType.SOURCE);
     }
 
     @Test

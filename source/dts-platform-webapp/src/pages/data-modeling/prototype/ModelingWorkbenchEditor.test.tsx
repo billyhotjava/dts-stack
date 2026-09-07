@@ -472,7 +472,7 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 		const source = container.querySelector<HTMLSelectElement>('select[aria-label="数据来源方式"]');
 		expect(source).not.toBeNull();
-		expect(Array.from(source?.options || []).map((option) => option.textContent)).toContain("系统生成标准日期维度");
+		expect(Array.from(source?.options || []).map((option) => option.textContent)).toContain("按模型生成");
 		expect(container.textContent).not.toContain("维度表可以从输入源表加工，日期维度也可以由系统生成。");
 
 		await act(async () => {
