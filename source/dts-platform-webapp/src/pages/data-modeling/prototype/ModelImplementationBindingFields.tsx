@@ -333,41 +333,42 @@ export function ModelImplementationBindingFields({
 							</div>
 						) : null}
 
-						{!implementationOnly && draft.createKind === "fact" ? (
-							<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
-								<strong>引用维度模型</strong>
-								{dimensionCandidates.map((model) => (
-									<label key={model.id}>
-										<input
-											aria-label={`引用维度模型 ${model.name}`}
-											checked={draft.dimensionRefs.some(
-												(item) => item.modelSpecId === model.id && item.revision === model.revision,
-											)}
-											onChange={(event) => toggleDimension(model.id, event.target.checked)}
-											type="checkbox"
-										/>
-										<span>{model.name}</span>
-										<small>DWD · 第 {model.revision} 版</small>
-									</label>
-								))}
-								{staleDimensionRefs.map((dimension) => (
-									<label key={`stale-dimension:${dimension.modelSpecId}:${dimension.revision}`}>
-										<input
-											aria-label={`取消不可用维度 ${dimension.modelSpecId}`}
-											checked
-											onChange={(event) => toggleDimension(dimension.modelSpecId, event.target.checked)}
-											type="checkbox"
-										/>
-										<span>{dimension.modelSpecId}</span>
-										<small>已绑定第 {dimension.revision} 版，当前不可用；请取消后重新选择。</small>
-									</label>
-								))}
-								{!dimensionCandidates.length && !staleDimensionRefs.length ? (
-									<small>当前数据域暂无可引用的维度模型。</small>
-								) : null}
-							</div>
-						) : null}
 					</>
+				) : null}
+
+				{!implementationOnly && draft.createKind === "fact" ? (
+					<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
+						<strong>引用维度模型</strong>
+						{dimensionCandidates.map((model) => (
+							<label key={model.id}>
+								<input
+									aria-label={`引用维度模型 ${model.name}`}
+									checked={draft.dimensionRefs.some(
+										(item) => item.modelSpecId === model.id && item.revision === model.revision,
+									)}
+									onChange={(event) => toggleDimension(model.id, event.target.checked)}
+									type="checkbox"
+								/>
+								<span>{model.name}</span>
+								<small>DWD · 第 {model.revision} 版</small>
+							</label>
+						))}
+						{staleDimensionRefs.map((dimension) => (
+							<label key={`stale-dimension:${dimension.modelSpecId}:${dimension.revision}`}>
+								<input
+									aria-label={`取消不可用维度 ${dimension.modelSpecId}`}
+									checked
+									onChange={(event) => toggleDimension(dimension.modelSpecId, event.target.checked)}
+									type="checkbox"
+								/>
+								<span>{dimension.modelSpecId}</span>
+								<small>已绑定第 {dimension.revision} 版，当前不可用；请取消后重新选择。</small>
+							</label>
+						))}
+						{!dimensionCandidates.length && !staleDimensionRefs.length ? (
+							<small>当前数据域暂无可引用的维度模型。</small>
+						) : null}
+					</div>
 				) : null}
 
 				{!implementationOnly && draft.createKind === "fact" ? (

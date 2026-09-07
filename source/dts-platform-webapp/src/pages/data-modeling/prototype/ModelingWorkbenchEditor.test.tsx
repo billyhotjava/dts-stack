@@ -561,6 +561,7 @@ describe("ModelingWorkbenchEditor", () => {
 
 		const checkbox = container.querySelector<HTMLInputElement>('input[aria-label="引用维度模型 风险等级维度表"]');
 		expect(checkbox).not.toBeNull();
+		expect(container.querySelector('[aria-label="数据来源方式"]')).toBeNull();
 		await act(async () => checkbox?.click());
 
 		expect(props.onChange).toHaveBeenLastCalledWith(
@@ -569,6 +570,10 @@ describe("ModelingWorkbenchEditor", () => {
 				dimensionRefs: [{ modelSpecId: dimension.id, revision: dimension.revision }],
 			}),
 		);
+
+		await render({ ...props, definitionOnly: false });
+		expect(container.querySelector('[aria-label="数据来源方式"]')).not.toBeNull();
+		expect(container.querySelector('[aria-label="引用维度模型 风险等级维度表"]')).toBeNull();
 	});
 
 	it("renders the concept-dimension form without dimension-table fields or lifecycle actions", async () => {
