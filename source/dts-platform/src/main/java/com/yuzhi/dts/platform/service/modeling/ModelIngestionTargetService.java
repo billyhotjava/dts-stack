@@ -4,7 +4,6 @@ import com.yuzhi.dts.platform.repository.modeling.CandidatePublicationEvidenceRe
 import com.yuzhi.dts.platform.repository.modeling.ModelLifecycleRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException.Kind;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -55,11 +54,10 @@ public class ModelIngestionTargetService {
         if (implementation.revision() != model.revision() || !Objects.equals(implementation.modelChecksum(), model.checksum())) {
             throw failure("MODEL_INGESTION_TARGET_STALE", Kind.CONFLICT);
         }
-        var candidate = candidates.listForWorkbench(tenant, model.planId()).stream()
-            .filter(item -> Objects.equals(environment, item.environment()))
+        var candidate = candidates.findLatestForModelCurrentRevision(tenant, model.planId(), id,
+                model.revision(), model.checksum(), environment)
             .filter(item -> item.entries().stream().anyMatch(entry -> id.equals(entry.modelSpecId()) && entry.revision() == model.revision() &&
                 Objects.equals(entry.checksum(), model.checksum()) && Objects.equals(entry.implementationId(), implementation.id())))
-            .max(Comparator.comparing(ModelReleaseCandidateContract.CandidateView::lastModifiedAt))
             .orElseThrow(() -> failure("MODEL_INGESTION_TARGET_NOT_MATERIALIZED", Kind.CONFLICT));
         var physical = evidence.requireCurrent(candidate, false).stream().filter(item -> id.equals(item.modelSpecId())).findFirst()
             .orElseThrow(() -> failure("MODEL_INGESTION_TARGET_NOT_MATERIALIZED", Kind.CONFLICT));
