@@ -3,6 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import type {
 	MaterializationPlanPreview,
 	ModelSpecStageGate,
@@ -75,6 +76,7 @@ const apiMocks = vi.hoisted(() => ({
 	startPublicationIntent: vi.fn(),
 	getStageGates: vi.fn(),
 	getLifecycle: vi.fn(),
+	getDeliveryStatus: vi.fn(),
 	compileLifecycle: vi.fn(),
 	getRepresentation: vi.fn(),
 	createDbtDraft: vi.fn(),
@@ -113,6 +115,11 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	getModelSpecStageGates: apiMocks.getStageGates,
 	getModelLifecycle: apiMocks.getLifecycle,
 	compileModelLifecycle: apiMocks.compileLifecycle,
+}));
+
+vi.mock("@/api/modelDeliveryStatusApi", async (importOriginal) => ({
+	...(await importOriginal<typeof import("@/api/modelDeliveryStatusApi")>()),
+	getModelDeliveryStatus: apiMocks.getDeliveryStatus,
 }));
 
 vi.mock("@/api/modelRepresentationApi", () => ({ getModelRepresentation: apiMocks.getRepresentation }));
@@ -175,7 +182,8 @@ const candidate = (origin: ReleaseCandidate["origin"], status = "DRAFT"): Releas
 		version: 4,
 		origin,
 		status,
-		entries: [{ modelSpecId: model.id }],
+		environment: "dev",
+		entries: [{ modelSpecId: model.id, revision: model.revision, checksum: model.checksum }],
 	}) as ReleaseCandidate;
 
 const workspace = (
@@ -192,6 +200,27 @@ const workspace = (
 		primaryBlocker: null,
 		etag: null,
 	}) as ReleaseCandidateWorkbench;
+
+const deliveryStatusFor = (current: ReleaseCandidateWorkbench | null, selected = model, environment = "dev") =>
+	({
+		modelSpecId: selected.id,
+		modelRevision: selected.revision,
+		modelChecksum: selected.checksum,
+		planId: selected.planId,
+		environment: current?.candidate ? environment : null,
+		candidate: current?.candidate
+			? {
+					id: current.candidate.id,
+					version: current.candidate.version,
+					status: current.candidate.status,
+					matchesCurrentModel: true,
+				}
+			: null,
+		workspace: current,
+		steps: [],
+		actions: [],
+		wizard: [],
+	}) as ModelDeliveryStatus;
 
 const materializationPreview = (requestedModelSpecIds: string[]): MaterializationPlanPreview => ({
 	planId: model.planId,
@@ -246,6 +275,11 @@ beforeEach(() => {
 		bindings: [],
 	} satisfies PlanExecutionWorkspace);
 	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
+	apiMocks.getDeliveryStatus.mockImplementation(async (id: string, environment: string) => {
+		const selected = id === secondModel.id ? secondModel : model;
+		const current = await apiMocks.getWorkbench(model.planId);
+		return deliveryStatusFor(current, selected, environment);
+	});
 	apiMocks.getServingSyncStatuses.mockResolvedValue([]);
 	routerPush.mockReset();
 	apiMocks.getModelSpec.mockImplementation((id: string) =>
@@ -507,7 +541,7 @@ describe("release and materialization dispatch", () => {
 		const foreign = {
 			...candidate("BATCH_WORKBENCH", "PUBLISHED"),
 			version: 7,
-			entries: [{ modelSpecId: secondModel.id }],
+			entries: [{ modelSpecId: secondModel.id, revision: model.revision, checksum: model.checksum }],
 		} as ReleaseCandidate;
 		apiMocks.getWorkbench.mockResolvedValue({
 			...workspace(["CREATE_CANDIDATE", "ROLLBACK"], foreign),
@@ -566,7 +600,9 @@ describe("release and materialization dispatch", () => {
 		async ({ matching, qualityState }) => {
 			const current = {
 				...candidate("BATCH_WORKBENCH", "PUBLISHED"),
-				entries: [{ modelSpecId: matching ? model.id : secondModel.id }],
+				entries: [
+					{ modelSpecId: matching ? model.id : secondModel.id, revision: model.revision, checksum: model.checksum },
+				],
 			} as ReleaseCandidate;
 			apiMocks.getWorkbench.mockResolvedValue({
 				...workspace(["ROLLBACK"], current),
@@ -631,7 +667,7 @@ describe("release and materialization dispatch", () => {
 		async (foreignStatus) => {
 			const foreign = {
 				...candidate("BATCH_WORKBENCH", foreignStatus),
-				entries: [{ modelSpecId: secondModel.id }],
+				entries: [{ modelSpecId: secondModel.id, revision: model.revision, checksum: model.checksum }],
 			} as ReleaseCandidate;
 			apiMocks.getWorkbench.mockResolvedValue(
 				workspace(foreignStatus === "PUBLISHED" ? ["CREATE_CANDIDATE", "ROLLBACK"] : [], foreign),
@@ -720,7 +756,7 @@ describe("release and materialization dispatch", () => {
 			...candidate("BATCH_WORKBENCH"),
 			id: "30000000-0000-0000-0000-000000000002",
 			version: 1,
-			entries: [{ modelSpecId: secondModel.id }],
+			entries: [{ modelSpecId: secondModel.id, revision: model.revision, checksum: model.checksum }],
 		} as ReleaseCandidate;
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["RUN_QUALITY", "CANCEL_CANDIDATE", "REMATERIALIZE"], built));
 		apiMocks.cancelCandidate.mockResolvedValue({ candidate: cancelled });
@@ -761,7 +797,7 @@ describe("release and materialization dispatch", () => {
 			...candidate("BATCH_WORKBENCH"),
 			id: "30000000-0000-0000-0000-000000000002",
 			version: 1,
-			entries: [{ modelSpecId: secondModel.id }],
+			entries: [{ modelSpecId: secondModel.id, revision: model.revision, checksum: model.checksum }],
 		} as ReleaseCandidate;
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["REFRESH_CANDIDATE"], reviewPending));
 		apiMocks.refreshCandidate.mockResolvedValue({ candidate: stale });
@@ -1563,5 +1599,138 @@ describe.skip("legacy advanced dbt draft lifecycle (replaced by the unified auth
 			model.id,
 			expect.objectContaining({ baseModelRevision: 4, baseModelChecksum: "model-4" }),
 		);
+	});
+});
+
+describe("model-scoped historical release workspace", () => {
+	it("uses the selected published model aggregate instead of the plan's other candidate", async () => {
+		const own = { ...candidate("BATCH_WORKBENCH", "PUBLISHED"), id: "own-candidate", version: 7 };
+		const foreign = {
+			...candidate("BATCH_WORKBENCH", "PUBLISHED"),
+			id: "foreign-candidate",
+			entries: [{ ...own.entries[0], modelSpecId: secondModel.id }],
+		};
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], foreign));
+		apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(workspace(["ROLLBACK"], own)));
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+		await flush();
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(model.id, "dev");
+		expect(apiMocks.getWorkbench).not.toHaveBeenCalled();
+		expect(container.textContent).toContain("PUBLISHED · v7");
+		await act(async () => button("发布模型")?.click());
+		expect(button("回滚发布")).toBeDefined();
+		expect(container.textContent).not.toContain("尚无候选");
+	});
+
+	it("does not let a late old-environment response replace the new candidate", async () => {
+		let resolveDev!: (status: ModelDeliveryStatus) => void;
+		const pendingDev = new Promise<ModelDeliveryStatus>((resolve) => {
+			resolveDev = resolve;
+		});
+		const current = {
+			...candidate("BATCH_WORKBENCH", "PUBLISHED"),
+			id: "test-current",
+			environment: "test",
+			version: 9,
+		};
+		apiMocks.getDeliveryStatus.mockImplementation((_id: string, env?: string) =>
+			env === "dev"
+				? pendingDev
+				: Promise.resolve(deliveryStatusFor(workspace(["ROLLBACK"], current), model, env || "test")),
+		);
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+		await flush();
+		await act(async () => {
+			const select = container.querySelector("select")!;
+			select.value = "test";
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		await flush();
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(model.id, "test");
+		expect(container.textContent).toContain("PUBLISHED · v9");
+		await act(async () =>
+			resolveDev(deliveryStatusFor(workspace(["PUBLISH"], candidate("BATCH_WORKBENCH", "APPROVED")))),
+		);
+		await flush();
+		expect(container.textContent).toContain("PUBLISHED · v9");
+		expect(container.textContent).not.toContain("APPROVED · v4");
+	});
+
+	it.each(["revision", "checksum", "environment"])(
+		"does not publish aggregate evidence with mismatched %s",
+		async (field) => {
+			const own = candidate("BATCH_WORKBENCH", "APPROVED");
+			if (field === "revision") own.entries[0] = { ...own.entries[0], revision: model.revision - 1 };
+			if (field === "checksum") own.entries[0] = { ...own.entries[0], checksum: "older-checksum" };
+			if (field === "environment") own.environment = "test";
+			apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(workspace(["PUBLISH"], own)));
+			await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+			await flush();
+			await act(async () => button("发布模型")?.click());
+			expect(button("确认发布")).toBeUndefined();
+			expect(apiMocks.publishCandidate).not.toHaveBeenCalled();
+		},
+	);
+
+	it("does not run a historical published binding from a different selected environment", async () => {
+		apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(workspace(["CREATE_CANDIDATE"], null)));
+		apiMocks.getMaterializationStatuses.mockResolvedValue([
+			{
+				modelSpecId: model.id,
+				environment: "test",
+				candidateStatus: "PUBLISHED",
+				candidateVersion: 7,
+				evidence: { modelSpecId: model.id, modelRevision: model.revision },
+			},
+		]);
+		apiMocks.getExecutionWorkspace.mockResolvedValue({
+			planId: model.planId,
+			state: "READY",
+			bindings: [
+				{
+					id: "test-binding",
+					environment: "test",
+					allowedActions: ["RUN_NOW"],
+					latestOperationalRun: {},
+					latestRelation: {},
+				},
+			],
+		});
+		await act(async () =>
+			root.render(
+				<ModelPublishDialog
+					canMaintain
+					models={[{ ...model, status: "PUBLISHED" } as ModelSpecView]}
+					onClose={vi.fn()}
+				/>,
+			),
+		);
+		await flush();
+		await act(async () => button("发布模型")?.click());
+		expect(button("立即运行并核验")).toBeUndefined();
+		expect(apiMocks.runExecutionNow).not.toHaveBeenCalled();
+	});
+
+	it("keeps a multi-model command scoped to its plan workspace", async () => {
+		const both = {
+			...candidate("BATCH_WORKBENCH", "APPROVED"),
+			entries: [
+				candidate("BATCH_WORKBENCH").entries[0],
+				{ ...candidate("BATCH_WORKBENCH").entries[0], modelSpecId: secondModel.id },
+			],
+		};
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["PUBLISH"], both));
+		apiMocks.getDeliveryStatus.mockResolvedValue(
+			deliveryStatusFor(workspace(["ROLLBACK"], candidate("BATCH_WORKBENCH", "PUBLISHED"))),
+		);
+		await act(async () =>
+			root.render(<ModelPublishDialog canMaintain models={[model, secondModel]} onClose={vi.fn()} />),
+		);
+		await flush();
+		expect(apiMocks.getWorkbench).toHaveBeenCalledWith(model.planId);
+		expect(apiMocks.getDeliveryStatus.mock.calls.every((args) => args.length === 1)).toBe(true);
+		await act(async () => button("发布模型")?.click());
+		expect(button("确认发布")).toBeDefined();
+		expect(button("回滚发布")).toBeUndefined();
 	});
 });

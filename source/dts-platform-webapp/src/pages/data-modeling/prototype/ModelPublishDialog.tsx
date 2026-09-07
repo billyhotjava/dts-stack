@@ -1,5 +1,5 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import type { ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import {
 	approveReleaseCandidateReview,
 	cancelReleaseCandidate,
@@ -128,6 +128,7 @@ export function ModelPublishDialog({
 	const [busy, setBusy] = useState<"load" | "build" | "release" | "governance-quality" | "run" | "">("load");
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
 	const [failure, setFailure] = useState<string>("");
+	const loadSequence = useRef(0);
 	const selection = useMemo(() => Array.from(new Map(models.map((model) => [model.id, model])).values()), [models]);
 	const selectedIds = useMemo(() => new Set(selection.map((model) => model.id)), [selection]);
 	const primary = selection[0] || null;
@@ -148,6 +149,10 @@ export function ModelPublishDialog({
 		selection.length && selection.every((model) => canonical(model) && model.status === "PUBLISHED"),
 	);
 	const load = useCallback(async () => {
+		const sequence = ++loadSequence.current;
+		setWorkspace(null);
+		setExecutionWorkspace(null);
+		setMaterializations([]);
 		if (!planId) {
 			setBusy("");
 			return;
@@ -155,34 +160,62 @@ export function ModelPublishDialog({
 		setBusy("load");
 		setFailure("");
 		try {
-			const [releaseWorkspace, selectedMaterializations] = await Promise.all([
-				step ? Promise.resolve(deliveryStatus?.workspace || null) : getReleaseCandidateWorkbench(planId),
+			const [releaseWorkspace, selectedMaterializations, status] = await Promise.all([
+				step
+					? Promise.resolve(deliveryStatus?.workspace || null)
+					: batch
+						? getReleaseCandidateWorkbench(planId)
+						: Promise.resolve(null),
 				getModelMaterializationStatuses(planId, Array.from(selectedIds)),
+				!step && !batch && primary ? getModelDeliveryStatus(primary.id, environment) : Promise.resolve(null),
 			]);
-			setWorkspace(releaseWorkspace);
-			setMaterializations(selectedMaterializations);
+			if (sequence !== loadSequence.current) return;
+			const identityMatches =
+				status &&
+				primary &&
+				status.modelSpecId === primary.id &&
+				status.planId === planId &&
+				status.modelRevision === primary.revision &&
+				status.modelChecksum === primary.checksum;
+			const aggregateMatches =
+				identityMatches &&
+				(status.candidate
+					? status.environment === environment &&
+						status.candidate.matchesCurrentModel &&
+						status.workspace?.candidate?.id === status.candidate.id &&
+						status.workspace.candidate.version === status.candidate.version
+					: !status.workspace?.candidate && (!status.environment || status.environment === environment));
+			const scopedWorkspace = !step && !batch ? (aggregateMatches ? status.workspace : null) : releaseWorkspace;
+			let nextExecutionWorkspace: PlanExecutionWorkspace | null = null;
 			if (
 				selectionIsPublished ||
-				releaseWorkspace?.candidate?.status === "PUBLISHED" ||
-				selectedMaterializations.some((item) => item.candidateStatus === "PUBLISHED")
+				scopedWorkspace?.candidate?.status === "PUBLISHED" ||
+				selectedMaterializations.some(
+					(item) => item.candidateStatus === "PUBLISHED" && item.environment === environment,
+				)
 			) {
 				try {
-					setExecutionWorkspace(await getPlanExecutionWorkspace(planId));
+					nextExecutionWorkspace = await getPlanExecutionWorkspace(planId);
 				} catch {
-					setExecutionWorkspace(null);
+					/* The candidate remains readable while execution state is unavailable. */
 				}
-			} else {
-				setExecutionWorkspace(null);
 			}
+			if (sequence !== loadSequence.current) return;
+			setWorkspace(scopedWorkspace);
+			setMaterializations(selectedMaterializations);
+			setExecutionWorkspace(nextExecutionWorkspace);
 		} catch (error) {
-			setMaterializations([]);
+			if (sequence !== loadSequence.current) return;
 			setFailure(normalizeModelingRequestFailure(error, "发布候选读取失败。").message);
 		} finally {
-			setBusy("");
+			if (sequence === loadSequence.current) setBusy("");
 		}
-	}, [planId, selectedIds, selectionIsPublished, step, deliveryStatus]);
+	}, [planId, selectedIds, selectionIsPublished, step, deliveryStatus, batch, primary, environment]);
 	useEffect(() => {
 		void load();
+		return () => {
+			++loadSequence.current;
+		};
 	}, [load]);
 	const candidate = workspace?.candidate || null;
 	const pageAction = deliveryStatus?.wizard.find((page) => page.key === step)?.primaryAction;
@@ -194,8 +227,12 @@ export function ModelPublishDialog({
 		: candidate?.entries.filter((entry) => entry.selectedReason !== "AUTO_DEPENDENCY") || [];
 	const candidateScopeMatches = Boolean(
 		candidate &&
+			candidate.environment === environment &&
 			candidateRootEntries.length === selectedIds.size &&
-			candidateRootEntries.every((entry) => selectedIds.has(entry.modelSpecId)),
+			candidateRootEntries.every((entry) => {
+				const model = selection.find((selected) => selected.id === entry.modelSpecId);
+				return model && model.revision === entry.revision && model.checksum === entry.checksum;
+			}),
 	);
 	const scopedCandidate = candidateScopeMatches ? candidate : null;
 	const selectedEvidence = candidateScopeMatches
@@ -238,15 +275,7 @@ export function ModelPublishDialog({
 	const releaseActions = RELEASE_WORKFLOW_ACTIONS.filter(
 		(action) => candidateScopeMatches && workspace?.allowedActions.includes(action),
 	);
-	const publishedMaterialization = materializations.find((item) => item.candidateStatus === "PUBLISHED") || null;
-	const executionEnvironment =
-		(scopedCandidate?.status === "PUBLISHED" ? scopedCandidate.environment : publishedMaterialization?.environment) ||
-		environment;
-	const executionBinding = executionWorkspace
-		? executionWorkspace.bindings.find((binding) => binding.environment === executionEnvironment) ||
-			executionWorkspace.bindings[0] ||
-			null
-		: null;
+	const executionBinding = executionWorkspace?.bindings.find((binding) => binding.environment === environment) || null;
 	const publishedSelection = Boolean(selectionIsPublished && executionBinding);
 	const operationalAction = publishedSelection
 		? executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT")
