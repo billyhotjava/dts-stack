@@ -82,9 +82,12 @@ test("keeps the topic registry within the local-content budget", () => {
 	}
 });
 
-test("keeps time-field guidance in the implementation topic and exposes model implementation from the center", () => {
+test("keeps time-field guidance in the definition topic and exposes model implementation from the center", () => {
 	const serializedTopics = HELP_TOPICS.map((topic) => ({ id: topic.id, content: JSON.stringify(topic) }));
+	const definition = getTopic("model-definition");
 	assert.equal(serializedTopics.filter((topic) => topic.content.includes("不转换字段类型或已有数据")).length, 1);
+	assert.ok(definition.steps.some((step) => step.includes("具有业务时间含义的字段")));
+	assert.ok(definition.steps.some((step) => step.includes("普通明细模型可以不选择时间字段")));
 	assert.ok(getTopic("model-center").relatedTopicIds.includes("model-implementation"));
 });
 

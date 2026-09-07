@@ -965,12 +965,18 @@ describe("ModelingWorkbenchEditor", () => {
 			draft: makeDraft({ base: selectedModel }),
 			selectedModel,
 			readOnly: true,
-			editorAccessMessage: "发布版本不可原地修改",
+			editorAccessMessage: "发布版本只读",
 			authoringContext: {
 				model: selectedModel,
 				implementation: null,
 				provenance: { origin: "SYSTEM_GENERATED", lossless: false },
-				projection: { coverage: "UNKNOWN", lossless: false, managedPaths: [], rawNodes: [], reasons: [] },
+				projection: {
+					coverage: "UNKNOWN",
+					lossless: false,
+					managedPaths: [],
+					rawNodes: [],
+					reasons: ["MODEL_AUTHORING_PROJECTION_NOT_PREPARED"],
+				},
 				openDraft: null,
 				allowedActions: ["OPEN_VISUAL", "OPEN_CODE", "FORK_DRAFT"],
 				publishedForkRequired: true,
@@ -979,7 +985,8 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(props);
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		expect(container.textContent).toContain("发布版本不可原地修改");
+		expect(container.textContent).toContain("发布版本只读");
+		expect(container.textContent).not.toContain("实现投影尚未生成");
 		act(() => button("创建新草稿版本").click());
 		expect(props.onForkPublished).toHaveBeenCalledTimes(1);
 	});

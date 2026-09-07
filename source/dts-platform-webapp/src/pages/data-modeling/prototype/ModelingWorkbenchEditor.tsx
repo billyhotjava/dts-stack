@@ -119,7 +119,7 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 					</Button>
 				</div>
 			) : null}
-			{projection?.reasons.length ? (
+			{!published && projection?.reasons.length ? (
 				<div className="dmx-capability-note">{modelingCapabilityReasonsText(projection.reasons)}</div>
 			) : null}
 
