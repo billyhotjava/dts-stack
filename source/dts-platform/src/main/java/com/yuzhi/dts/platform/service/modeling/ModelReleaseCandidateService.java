@@ -263,6 +263,9 @@ public class ModelReleaseCandidateService {
         String actor = requiredText(actorId, "actorId");
         if (command == null) throw invalid("create command is required");
         if (origin == null) throw invalid("candidate origin is required");
+        if (origin == CandidateOrigin.SCHEMA_ONLY_INTENT && command.entries().size() != 1) {
+            throw invalid("Structure candidate requires one model");
+        }
         String requestHash = requestHashOverride != null
             ? requestHashOverride
             : origin == CandidateOrigin.BATCH_WORKBENCH
