@@ -1,14 +1,16 @@
 # Sprint 104 正式验证与离线交付证据（2026-09-07）
 
+最新增量见 [编码收尾记录](coding-completion-20260907.md)：`32b7e1309` 定向回归和前端构建通过，尚未打包部署；运行仍为 `296`。下文各历史版本的测试、打包和部署边界分别保留。
+
 **状态：IN_PROGRESS。** 本记录归档部署目录的正式测试、构建、交付包、容器替换和隔离迁移结果；不证明 Chrome 95 或真实租户的页面旅程通过。
 
 ## 证据版本与边界
 
-- 当前已部署源码：`e04a1fc34cb0b4ef1641a1d8cfe21a7b5ee32f63`。下文保留 e83、90d 历史包、迁移、部署和故障观察证据。
+- 当前已部署源码：`296605b39f98816dd4992ff2cd89777e9c6b9e9e`；下文保留 e04、e83、90d 历史包、迁移、部署和故障观察证据。`c275e244b` 正在正式构建，不能写为已部署或业务复验通过。
 - 路由隔离修复正式构建、离线包校验和受控部署已完成（`/tmp/s104-release-e04a1fc34.log`）；当前三服务使用 `s104-e04a1fc34cb0` 标签。
 - 隔离迁移验证脚本提交：`3aa077d0c49d48aa0600705a11c3676fb5bf95ce`。
 - 执行目录：`/opt/prod/s10/deploy`；开发目录未用于编译、构建或测试。
-- 当前状态：三个镜像已由发布流程部署。Chrome 95 验收及 IT-08 至 IT-18 未执行，不能由本记录替代。
+- 当前状态：296 包的三个镜像已由发布流程部署；已完成部分 authenticated Chrome 走查，但 Chrome 95、离线安装和 IT-08 至 IT-18 的完整正反分支仍不能由本记录替代。
 
 ## 已执行的专项验证
 
@@ -124,13 +126,35 @@ bin/dts-upgrade-lite plan \
 - `pre-deployment.json` 与 `deployed-containers.json` 确认仅这三个容器 ID/启动时间改变，其余 19 个容器未改变。没有开发目录容器、容器补丁或热修复镜像。
 - 三份镜像归档经本地 `docker load` 加载，标签与 ID 再次核对一致；日志 `offline-image-load.log`，未拉取网络镜像。
 - `dts-upgrade-lite plan` 在 `/tmp/s104-offline-plan-e04-cwi8a51v/target` 退出 0（只复制上一包的部署配置作为基线）；`offline-plan-result.json` 与 `offline-plan.log` 为证据。未运行 `apply`、容器回滚或完整离线安装。
-- Chrome 再次访问模型工作台被转回 `#/auth/login`；账号和密码输入框为空。未操作业务数据、未调用 repair/立即运行，也未把容器健康写为页面验收通过。
+- 该 e04 时点曾被转回 `#/auth/login`，因此当时没有写入业务复验通过。随后 296 包已完成 authenticated Chrome 走查；其 PASS/FAIL 结果和仍待复验项记录在本文末尾，不能回写为 e04 结果。
 - 本记录的后续文档提交不改变产品镜像对应的 e04 源码；文档 HEAD 与镜像源码 SHA 分别追踪。
 
 ## 未执行或待确认
 
 - 仅三服务容器的替换与上述运行状态已有记录；未执行离线包 `apply`、回滚演练、dbt 运行或真实业务流程验证。
-- W4 及运营路由修复已进入当前 e04 镜像，但浏览器登录尚未完成，页面验收仍待执行。
-- 源快照恢复已提交运行；e04 路由隔离修复已通过上述定向回归，但正式构建、部署以及用户通过浏览器正常“再次运行”的业务入口复测仍待完成，不能宣称运营运行通过。
-- Chrome 95、真实登录租户、四步 W1–W4 和 F2 IT-08 至 IT-18 的浏览器/运行时验收未执行。
+- W4 的 owner/description 读取、保存和陈旧窗口冲突走查已在 authenticated Chrome 完成；目录入口的维护能力及分析失败状态仍有明确 FAIL，见本文末尾。
+- 运营源快照和 e04 路由隔离修复的用户正常“再次运行”已完成浏览器复验，IT-07 记录的 binding v2 新 dispatch 为 COMPLETED；该成功不替代 W1–W4、F2 全量验收。
+- Chrome 95、离线完整安装、四步 W1–W4 与 F2 IT-08 至 IT-18 的完整浏览器/运行时正反分支未执行。
 - 本文不把历史失败日志、构建成功或离线包校验表述为 Sprint DONE。
+
+## Chrome 运营再次运行复验（e04，2026-09-07）
+
+登录 Chrome 后，从模型 `e71715b7-ad1d-49b5-86e2-a91fa91e1b07` 的“物化历史 / 再次物化”按页面正常流程执行“立即运行并核验”。新运行成功，不通过重置旧记录、直接改库或容器补丁实现。
+
+- binding `69949db3-d42d-3870-ba0e-39e6e238e184` 已为版本 `2`、`ACTIVE`，使用独立 canonical DAG `dts_plan_69949db3d42d3870ba0e39e6e238e184`；desired 与 deployed checksum 都是 `61653755d6252cb25950223540fdb2d23a4b61d63fbcd3065007144d6def82d2`。
+- 新 dispatch `515966d1-4a91-33d1-90a1-a18a9b967e56` 为 `COMPLETED`，Airflow run `dts_plan_69949db3d42d3870ba0e39e6e238e184_5545299eb2c84e2cb88d`，bundle checksum `714fc3e4589b68e069eca2e1d3b346403621941475adc2fb25d86568041195e6`。
+- Airflow 四个任务 `prepare_runtime`、`dbt_build`、`sync_manifest_and_probe`、`finalize_run` 均为 `success`。pipeline `ce84126d-c67e-370e-b8b6-dd69ddbe2380` 为 `SUCCEEDED`；`public.dwd_s104_detail_retry` 关系存在并已核验。
+- 旧 dispatch `d727145f-2b91-3fb7-882e-37af67443cbc` 保留为 `FAILED / MODEL_OPERATIONAL_AIRFLOW_RUN_FAILED`（binding v1、旧 release-build DAG）；本轮没有重置或删除历史失败证据。
+
+W4 治理编辑 GET DTO `version` 与 legacy 单模型按模型聚合读取的修复已随 296 包完成对应浏览器分项复测。随后发现的目录 `canMaintain` contract 能力和 `servingRef` 掩盖 `SYNC_FAILED` 属于 c275 修复范围；其正式构建、部署和浏览器正常重试仍待完成。Sprint 保持 `IN_PROGRESS`。
+
+## 296 正式包、浏览器复测与遗留分析失败（2026-09-07）
+
+- 正式包源码为 `296605b39f98816dd4992ff2cd89777e9c6b9e9e`，包 `dts-opmanager-upgrade-20260907-082929.tar.gz`，SHA-256 `1813907a401984664a9a4d64db1d102fe0ad0d846f368823c4905f8a41bf4eb3`。`archive.sha256` 与 `validation-summary.json` 位于 `/opt/prod/s10/deploy/data/sprint104-release/s104-296605b39f98/`。
+- `validation-summary.json` 记录三项 image tar 与 amd64/source revision 一致；其包内定向结果为 catalog governance 5/5、ModelReleaseDialog 45 通过/5 跳过/0 失败、typecheck PASS。它不覆盖后续 Chrome FAIL 项，也不等于完整交付验收。
+- 发布流程仅替换 `dts-analytics`、`dts-platform`、`dts-platform-webapp` 三服务；`deployed-containers.json` 记录其余 19 个容器未改变。未采用容器补丁或开发目录挂载。
+- authenticated Chrome 复测结果以 `browser-catalog-and-dialog-retest.json` 为准：W4 治理读取、描述保存、陈旧窗口冲突拒绝且保留输入、目录读取已保存描述、单模型历史候选范围与 dev/test 执行隔离均为 PASS。目录维护按钮因 contract 尚未返回 `canMaintain` 为 FAIL；analysis 因物理 `servingRef` 被误视为成功为 FAIL。浏览器证据明确 `allSprintTasksAccepted=false`。
+- `browser-analysis-failure.json` 固定了旧失败的真实投影：模型 r2/test 候选的 revision/checksum/implementation pins 一致，但 serving projection version 3 为 `SYNC_FAILED`，attempts=1，错误 `ANALYTICS_SEMANTIC_PUBLISH_HTTP_400`，`nextSyncAt=null`。2026-09-06 23:04:01 的 Analytics 400 原因为当时未注册 platform data source `a0000000-0000-0000-0000-000000000001`；400 被归为永久失败，旧记录不会自动重试。当前 Analytics 已有 default tenant 的该数据源映射（database id 1、postgresql）；新版部署后仍须通过页面正常重试复验，不能以映射存在或旧 `servingRef` 宣称分析成功。
+- c275 后端定向正式测试 `/tmp/s104-status-permission-c275e244b.log` 为 35/35 通过、Maven `BUILD SUCCESS`，覆盖 `ModelDeliveryStatusQueryServiceTest` 25、`CatalogAssetPortalResourceTest` 6、`CatalogAssetPortalUnifiedResourceTest` 1、`CatalogDatasetGovernanceSummaryTest` 3。前端 `/tmp/s104-catalog-panel-c275e244b.log` 为 6/6 通过。c275 正式构建和包校验已完成（日志 `/tmp/s104-release-c275e244b.log`、`/tmp/s104-package-c275e244b.log`），包为 `s104-c275e244bfce/dts-opmanager-upgrade-20260907-084954.tar.gz`；为合并后续向导修复，未部署该包，也未写为浏览器重试或业务成功。
+
+Sprint 保持 **IN_PROGRESS**：未执行的 Chrome 95、离线完整安装、IT-08 至 IT-18 完整正反分支和分析重试仍不得标为通过。
