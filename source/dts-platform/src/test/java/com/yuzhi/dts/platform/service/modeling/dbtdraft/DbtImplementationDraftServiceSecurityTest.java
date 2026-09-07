@@ -1503,8 +1503,8 @@ class DbtImplementationDraftServiceSecurityTest {
         ArgumentCaptor<SaveImplementationCommand> implementationCommand = ArgumentCaptor.forClass(
             SaveImplementationCommand.class
         );
-        ArgumentCaptor<com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ExpectedImplementationVersion> implementationPin =
-            ArgumentCaptor.forClass(com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ExpectedImplementationVersion.class);
+        ArgumentCaptor<com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion> implementationPin =
+            ArgumentCaptor.forClass(com.yuzhi.dts.platform.service.modeling.ModelLifecycleService.ExpectedImplementationVersion.class);
         verify(lifecycle).saveImportedDbtImplementation(
             eq(TENANT),
             eq(ACTOR),

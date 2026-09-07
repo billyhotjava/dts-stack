@@ -4,6 +4,7 @@ import { ModelDimensionHistoryFields } from "./ModelDimensionHistoryFields";
 import { ModelFieldEditorTable } from "./ModelFieldEditorTable";
 import { ModelImplementationBindingFields } from "./ModelImplementationBindingFields";
 import { ModelImplementationExecutionFields } from "./ModelImplementationExecutionFields";
+import { ModelLogicalDependencies } from "./ModelLogicalDependencies";
 import type { ModelingWorkbenchEditorProps } from "./ModelingWorkbenchEditor";
 import { isDimensionTableDraft, resolveDimensionFormPresentation } from "./modelWorkbenchPresentation";
 import { MODEL_KIND_CONFIG, type ModelSpecDraft } from "./services/modelWorkbenchService";
@@ -483,6 +484,8 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 				</div>
 			</section>
 			<FieldsPanel {...props} dimensionMode={false} />
+			{props.definitionOnly ? <ModelLogicalDependencies draft={draft} modelType={MODEL_KIND_CONFIG[draft.createKind].modelType}
+				models={context.models} readOnly={props.readOnly} onChange={onChange} /> : null}
 			<ModelImplementationBindingFields
 				definitionOnly={props.definitionOnly}
 				context={context}

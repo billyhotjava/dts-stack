@@ -11,10 +11,9 @@ const LOGICAL_CREATE_ENTRIES: Array<{
 	title?: string;
 }> = [
 	{
-		kind: null,
-		label: "创建贴源表（尚未接入）",
-		disabled: true,
-		title: "当前 ModelSpec 契约不拥有 ODS/STG 贴源对象",
+		kind: "source",
+		label: "创建贴源表",
+		disabled: false,
 	},
 	{ kind: "dimension-table", label: "创建维度表", disabled: false },
 	{ kind: "fact", label: "创建明细表", disabled: false },

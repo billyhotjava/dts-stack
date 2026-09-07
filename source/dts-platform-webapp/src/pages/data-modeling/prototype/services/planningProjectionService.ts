@@ -157,7 +157,7 @@ export function normalizeModelingRequestFailure(error: unknown, fallback: string
 }
 
 const modelTypeLabel = (model: ModelSpecView): string =>
-	({ DIMENSION: "维度表", FACT: "明细表", SUMMARY: "汇总表", APPLICATION: "应用表" })[model.modelType];
+	({ SOURCE: "贴源表", DIMENSION: "维度表", FACT: "明细表", SUMMARY: "汇总表", APPLICATION: "应用表" })[model.modelType];
 
 const LAYER_GROUP_LABEL: Record<string, string> = {
 	STAGING: "贴源层",
@@ -166,6 +166,7 @@ const LAYER_GROUP_LABEL: Record<string, string> = {
 };
 
 const LAYER_MODEL_TYPE_LABEL: Record<string, string> = {
+	SOURCE: "贴源表",
 	DIMENSION: "维度",
 	FACT: "明细表",
 	SUMMARY: "汇总表",

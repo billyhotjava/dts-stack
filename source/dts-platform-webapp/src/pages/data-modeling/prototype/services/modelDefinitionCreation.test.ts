@@ -133,6 +133,18 @@ it("retains logical validation and never sends invalid fields", async () => {
 	await expect(saveModelDefinitionDraft(draft, context)).rejects.toThrow("至少添加一个字段");
 	expect(saveModelDraftOperation).not.toHaveBeenCalled();
 });
+it("saves an ODS definition without creating an ingestion or implementation", async () => {
+	const draft = { ...definition(), createKind: "source" as const, warehouseLayerCode: "ODS", dataMartId: "", subjectDomainId: "" };
+	expect(validateModelDefinitionInput(draft)).toEqual({});
+	await saveModelDefinitionDraft(draft, context);
+	expect(saveModelDraftOperation).toHaveBeenCalledWith(expect.objectContaining({
+		saveMode: "DEFINITION_ONLY",
+		implementation: null,
+		modelSpec: expect.objectContaining({ modelType: "SOURCE", layer: "ODS", sourceRefs: [], dependsOn: [] }),
+	}));
+	expect(saveModelImplementation).not.toHaveBeenCalled();
+	expect(validateModelImplementation).not.toHaveBeenCalled();
+});
 it("does not waive malformed upstream references", async () => {
 	await expect(
 		saveModelDefinitionDraft({ ...definition(), dependsOn: [{ modelSpecId: "bad", revision: 0 }] }, context),

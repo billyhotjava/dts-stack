@@ -69,13 +69,14 @@ import {
 } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { SubjectDomainView } from "@/features/modeling/contracts/subjectDomainContract";
 
-export type ModelCreateKind = "dimension" | "dimension-table" | "fact" | "summary" | "application";
+export type ModelCreateKind = "dimension" | "dimension-table" | "source" | "fact" | "summary" | "application";
 export type ModelSpecCreateKind = Exclude<ModelCreateKind, "dimension">;
 
 export const MODEL_KIND_CONFIG: Record<
 	ModelCreateKind,
 	{ label: string; modelType: ModelSpecType; layer: ModelSpecLayer }
 > = {
+	source: { label: "贴源表", modelType: "SOURCE", layer: "ODS" },
 	dimension: { label: "维度", modelType: "DIMENSION", layer: "DWD" },
 	"dimension-table": { label: "维度表", modelType: "DIMENSION", layer: "DWD" },
 	fact: { label: "明细表", modelType: "FACT", layer: "DWD" },
@@ -207,7 +208,7 @@ export type ModelDraftErrorKey =
 export type ModelDraftValidationErrors = Partial<Record<ModelDraftErrorKey, string>>;
 
 const modelKind = (model: ModelSpecView): ModelSpecCreateKind =>
-	model.modelType === "DIMENSION"
+	model.modelType === "SOURCE" ? "source" : model.modelType === "DIMENSION"
 		? "dimension-table"
 		: model.modelType === "FACT"
 			? "fact"
@@ -231,12 +232,12 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 	}
 	const config = MODEL_KIND_CONFIG[kind];
 	const defaultDomainId = context.domains.find((item) => Boolean(item.parentCode))?.id || "";
-	const implementationInputMode = context.implementationCapabilities.inputModesByModelType[config.modelType]?.[0];
+	const implementationInputMode = context.implementationCapabilities.inputModesByModelType[config.modelType]?.[0] || "";
 	const loadStrategy = context.implementationCapabilities.loadStrategies[0];
 	const materialization = loadStrategy
 		? context.implementationCapabilities.materializationsByLoadStrategy[loadStrategy]?.[0]
 		: undefined;
-	if (!implementationInputMode || !loadStrategy || !materialization) {
+	if ((!implementationInputMode && kind !== "source") || !loadStrategy || !materialization) {
 		throw new Error("服务端未提供可用的数据实现能力，请联系管理员检查建模配置");
 	}
 	return {
