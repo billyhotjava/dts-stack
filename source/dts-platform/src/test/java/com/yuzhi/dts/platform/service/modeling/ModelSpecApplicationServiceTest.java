@@ -2715,8 +2715,9 @@ class ModelSpecApplicationServiceTest {
             .withLayerSelection(Layer.DWD, "FIN_SUMMARY");
 
         assertThatThrownBy(() -> service.create(TENANT, ACTOR, command))
-            .isInstanceOf(WarehouseLayerException.class)
-            .extracting(error -> ((WarehouseLayerException) error).code())
+            .isInstanceOf(ModelSpecException.class)
+            .satisfies(error -> assertThat(((ModelSpecException) error).kind()).isEqualTo(ModelSpecException.Kind.UNPROCESSABLE))
+            .extracting(error -> ((ModelSpecException) error).code())
             .isEqualTo("MODEL_SPEC_WAREHOUSE_LAYER_TYPE_MISMATCH");
         verify(repository, never()).insertV2(any(), any(), any(), any(), any(), any());
     }

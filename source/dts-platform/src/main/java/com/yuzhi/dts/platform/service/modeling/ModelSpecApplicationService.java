@@ -2085,7 +2085,7 @@ public class ModelSpecApplicationService {
         if (canonicalLayer == null) {
             return command;
         }
-        WarehouseLayerContract.ResolvedWarehouseLayer selection = warehouseLayers.resolveSelection(
+        WarehouseLayerContract.ResolvedWarehouseLayer selection = resolveModelWarehouseLayer(
             command.warehouseLayerCode(),
             canonicalLayer
         );
@@ -2097,11 +2097,19 @@ public class ModelSpecApplicationService {
         if (canonicalLayer == null) {
             return command;
         }
-        WarehouseLayerContract.ResolvedWarehouseLayer selection = warehouseLayers.resolveSelection(
+        WarehouseLayerContract.ResolvedWarehouseLayer selection = resolveModelWarehouseLayer(
             command.warehouseLayerCode(),
             canonicalLayer
         );
         return command.withLayerSelection(command.layer(), selection.code());
+    }
+
+    private WarehouseLayerContract.ResolvedWarehouseLayer resolveModelWarehouseLayer(String code, Layer layer) {
+        try {
+            return warehouseLayers.resolveSelection(code, layer);
+        } catch (com.yuzhi.dts.platform.service.modeling.warehouse.WarehouseLayerException error) {
+            throw new ModelSpecException(error.code(), error.getMessage(), ModelSpecException.Kind.valueOf(error.kind().name()), error.details());
+        }
     }
 
     private static void requireServerContext(String tenantId, String actorId) {
