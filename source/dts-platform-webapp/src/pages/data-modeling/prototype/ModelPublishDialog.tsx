@@ -342,7 +342,7 @@ export function ModelPublishDialog({
 				const implementation = lifecycle.implementation;
 				const schemaOnly = implementation?.inputMode === "GENERATED" && implementation.inputs.length === 1 &&
 					"generatorType" in implementation.inputs[0] && (implementation.inputs[0].generatorType === "SCHEMA_ONLY" ||
-						(implementation.ownership === "DBT_MANAGED" && implementation.inputs[0].generatorType === "DBT" && implementation.inputs[0].config.buildMode === "SCHEMA_ONLY"));
+						(implementation.ownership === "DBT_MANAGED" && implementation.inputs[0].generatorType === "DBT" && implementation.inputs[0].config?.buildMode === "SCHEMA_ONLY"));
 				if (schemaOnly) {
 					await compileSelectedModels(selection);
 					await startModelBuildIntent(primary, crypto.randomUUID(), { planId, environment, buildMode: "SCHEMA_ONLY" });
@@ -451,7 +451,7 @@ export function ModelPublishDialog({
 				const implementation = lifecycle.implementation;
 				const schemaOnly = implementation?.inputMode === "GENERATED" && implementation.inputs.length === 1 &&
 					"generatorType" in implementation.inputs[0] && (implementation.inputs[0].generatorType === "SCHEMA_ONLY" ||
-						(implementation.ownership === "DBT_MANAGED" && implementation.inputs[0].generatorType === "DBT" && implementation.inputs[0].config.buildMode === "SCHEMA_ONLY"));
+						(implementation.ownership === "DBT_MANAGED" && implementation.inputs[0].generatorType === "DBT" && implementation.inputs[0].config?.buildMode === "SCHEMA_ONLY"));
 				await startModelBuildIntent(primary, crypto.randomUUID(), { planId, environment, buildMode: schemaOnly ? "SCHEMA_ONLY" : "DATA_BUILD" });
 			}
 			await load();
