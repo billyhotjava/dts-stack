@@ -20,6 +20,7 @@ import type { ModelCreateKind } from "./services/modelWorkbenchService";
 import "./modeling-workbench.css";
 
 const MODEL_TYPE_LABEL: Record<string, string> = {
+	SOURCE: "贴源表",
 	DIMENSION_DEFINITION: "维度",
 	DIMENSION: "维度表",
 	FACT: "明细表",

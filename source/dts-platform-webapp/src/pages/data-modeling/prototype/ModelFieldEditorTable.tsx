@@ -4,7 +4,7 @@ import type { ModelSpecField } from "@/features/modeling/contracts/modelSpecV2Co
 import { Button, RequestState } from "./PrototypePrimitives";
 import type { ModelSpecDraft, ModelWorkbenchContext } from "./services/modelWorkbenchService";
 
-const DATA_TYPES = ["STRING", "BOOLEAN", "INT", "BIGINT", "DECIMAL", "DATE", "TIMESTAMP"];
+const DATA_TYPES = ["STRING", "BOOLEAN", "INT", "BIGINT", "DECIMAL", "DATE", "TIMESTAMP", "TIMESTAMPTZ", "JSONB"];
 const SECURITY_LEVELS = [
 	{ value: "PUBLIC", label: "公开" },
 	{ value: "INTERNAL", label: "内部" },
