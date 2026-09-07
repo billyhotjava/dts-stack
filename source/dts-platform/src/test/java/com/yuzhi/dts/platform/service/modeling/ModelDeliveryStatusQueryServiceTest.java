@@ -291,8 +291,7 @@ class ModelDeliveryStatusQueryServiceTest {
         var result = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
 
         var primary = result.wizard().stream().filter(page -> page.key().equals("verification")).findFirst().orElseThrow().primaryAction();
-        assertThat(primary.code()).isEqualTo("CONFIGURE_QUALITY_RULES");
-        assertThat(primary.targetId()).isEqualTo(fixture.candidateId);
+        assertThat(primary).isNull();
         assertThat(result.actions()).extracting(ModelDeliveryStatusQueryService.ActionView::code).contains("CONFIGURE_QUALITY_RULES");
     }
 
@@ -311,7 +310,41 @@ class ModelDeliveryStatusQueryServiceTest {
         WorkbenchView review = fixture.workspace(reviewCandidate, java.util.List.of(com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction.APPROVE));
         fixture.selectDefault(null, review);
         var reviewResult = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
-        assertThat(reviewResult.wizard().stream().filter(page -> page.key().equals("delivery")).findFirst().orElseThrow().primaryAction().code()).isEqualTo("APPROVE");
+        assertThat(reviewResult.wizard().stream().filter(page -> page.key().equals("delivery")).findFirst().orElseThrow().primaryAction()).isNull();
+    }
+
+    @Test
+    void completedModelRemainsCompleteWhenDataQualityFailsButNeverWithoutCurrentRunEvidence() {
+        Fixture fixture = new Fixture();
+        UUID implementationId = UUID.randomUUID();
+        var implementation = mock(ModelLifecycleContract.ImplementationView.class);
+        when(implementation.id()).thenReturn(implementationId);
+        when(implementation.implementationRevision()).thenReturn(9);
+        when(implementation.implementationChecksum()).thenReturn("b".repeat(64));
+        when(fixture.authoringContext.implementation()).thenReturn(implementation);
+        var candidate = fixture.currentCandidate("prod", DeliveryStatus.QUALITY_FAILED, fixture.modelId, fixture.modelRevision, fixture.checksum, implementationId);
+        var workspace = fixture.workspace(candidate, java.util.List.of());
+        var evidence = mock(ModelReleaseCandidateContract.EntryEvidenceView.class);
+        when(evidence.candidateEntryId()).thenReturn(fixture.entryId);
+        when(evidence.modelSpecId()).thenReturn(fixture.modelId);
+        when(evidence.modelRevision()).thenReturn(fixture.modelRevision);
+        when(evidence.implementationRevision()).thenReturn(9);
+        when(evidence.runStatus()).thenReturn("BUILT");
+        when(evidence.relationState()).thenReturn(ModelReleaseCandidateContract.RelationEvidenceState.VERIFIED);
+        when(evidence.pipelineRunGroupId()).thenReturn(UUID.randomUUID());
+        when(evidence.targetRelation()).thenReturn("warehouse.ods.orders");
+        when(workspace.entryEvidence()).thenReturn(java.util.List.of(evidence));
+        fixture.selectDefault(null, workspace);
+        var result = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
+        assertThat(result.modelingResult().state()).isEqualTo("SUCCEEDED");
+        assertThat(result.modelingResult().implementationChecksum()).isEqualTo("b".repeat(64));
+        assertThat(result.recommendedStep()).isEqualTo("verification");
+        assertThat(result.wizard().get(2).primaryAction().code()).isEqualTo("RETURN_TO_MODELS");
+        when(evidence.implementationRevision()).thenReturn(8);
+        assertThat(fixture.service.get("tenant", "actor", fixture.modelId, null, null).modelingResult().state()).isEqualTo("UNKNOWN");
+        when(evidence.implementationRevision()).thenReturn(9);
+        when(evidence.relationState()).thenReturn(ModelReleaseCandidateContract.RelationEvidenceState.PROBING);
+        assertThat(fixture.service.get("tenant", "actor", fixture.modelId, null, null).modelingResult().state()).isEqualTo("UNKNOWN");
     }
 
     private static final class Fixture {

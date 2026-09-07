@@ -87,7 +87,10 @@ class ModelBuildIntentServiceTest {
 
     @Test
     void refusesSchemaModeWithoutTheMatchingCurrentImplementation() {
-        var current = model(ModelStatus.READY_TO_PUBLISH);
+        var current = org.mockito.Mockito.mock(ModelSpecView.class);
+        when(current.planId()).thenReturn(PLAN_ID);
+        when(current.revision()).thenReturn(3);
+        when(current.checksum()).thenReturn(CHECKSUM);
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(current);
         assertThatThrownBy(() -> service.start(TENANT, ACTOR, MODEL_ID,
             new ExpectedVersion(MODEL_ID, 3, CHECKSUM),

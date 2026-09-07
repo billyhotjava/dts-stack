@@ -16,12 +16,12 @@ describe("model quality entry contract", () => {
 		expect(dialog).toContain('quality: "质量门禁"');
 		expect(dialog).toContain("<ModelQualityConstraintPanel");
 	});
-	it("opens the inline target editor without blocking on its own unsaved rule draft", () => {
+	it("keeps governed quality editing outside the modeling steps", () => {
 		const wizard = read("ModelWizardFrame.tsx");
 		const actions = read("ModelMaterializationActions.tsx");
 		const panel = read("ModelTargetQualityPanel.tsx");
-		expect(wizard).toContain("canConfigureQuality={canMaintain && !dirty");
-		expect(wizard).toContain("openRequest={qualityOpenRequest}");
+		expect(wizard).toContain("canConfigureQuality={false}");
+		expect(wizard).not.toContain("<ModelTargetQualityPanel");
 		expect(actions).toContain("configureQuality ? onConfigureQuality : onPrimaryAction");
 		expect(read("ModelPublishDialog.tsx")).not.toContain('document.getElementById("model-target-quality")');
 		expect(panel).toContain("open={expanded}");

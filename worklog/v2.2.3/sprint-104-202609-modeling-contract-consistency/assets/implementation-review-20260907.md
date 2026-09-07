@@ -53,3 +53,9 @@ SCHEMA_ONLY 只消费当前模型字段、类型、非空与键声明；既有 M
 dbt 默认 table materialization 在 pre-hook 前会清理中间/备份关系，不能用它配一个前置检查冒充无覆盖物化。采用正式包内独立 `dts_schema_only` materialization：只执行 CREATE TABLE 和事务提交，不执行 DROP/TRUNCATE/ALTER 原表/源查询；同名已有目标无论结构如何都返回冲突，不占用或覆盖旧表。请求重放继续返回原候选/运行。
 
 `build-intents.buildMode` 缺省 DATA_BUILD；显式 SCHEMA_ONLY 必须匹配当前实现的上述生成器，模式参与请求及运行版本判断，不能将普通运行降级为创建空表。编译产物/实现校验和包含生成器及声明结构，物化结果用原运行/目标核验派生。结构成功不生成质量通过、PUBLISHED 或分析就绪证据。
+
+### K34 与 T18 冻结切片
+
+- delivery-status 追加 modelingResult：当前模型/实现修订与校验值、环境、候选、运行组、目标表、观察时间；完成必须匹配当前不可变候选条目、实现修订、成功运行及 VERIFIED 关系证据。无证据为 UNKNOWN，不用质量/发布/分析状态推断建模完成。
+- 正常建模导航仅 definition/implementation/verification；verification 主动作只允许建模动作。完成主操作返回列表，次操作按 modelSpecId/environment 到数据管理。
+- delivery 旧深链继续显示历史只读结果和数据导航，禁止在旧页隐式执行发布。现有数据治理 owner 和命令权限保留。

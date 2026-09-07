@@ -1,5 +1,5 @@
-import { type ReactNode, useEffect, useState } from "react";
-import { useSearchParams } from "react-router";
+import { type ReactNode, useEffect } from "react";
+import { Link, useSearchParams } from "react-router";
 import {
 	MODEL_WIZARD_STEPS,
 	type ModelDeliveryStatus,
@@ -8,17 +8,14 @@ import {
 } from "@/api/modelDeliveryStatusApi";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { UnsavedEditorHandle } from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
-import { ModelAnalysisPreparationAction } from "./ModelAnalysisPreparationAction";
-import { ModelCatalogDeliveryPanel } from "./ModelCatalogDeliveryPanel";
 import { ModelPublishDialog } from "./ModelPublishDialog";
-import { ModelTargetQualityPanel } from "./ModelTargetQualityPanel";
 import { Button, RequestState, Status } from "./PrototypePrimitives";
 import "./model-wizard.css";
 
 const STEP_LABELS: Record<ModelWizardStep, string> = {
 	definition: "模型设计",
 	implementation: "实现配置",
-	verification: "构建与检查",
+	verification: "物化",
 	delivery: "发布与交付",
 };
 const RESULT_LABELS = {
@@ -48,8 +45,6 @@ export function ModelWizardFrame({
 	onRefresh,
 	canMaintain,
 	onBack,
-	dirty,
-	onAssetGuardChange,
 	commandsBlocked,
 }: {
 	model: ModelSpecView | null;
@@ -66,9 +61,9 @@ export function ModelWizardFrame({
 	onAssetGuardChange: (handle: UnsavedEditorHandle | null) => void;
 }) {
 	const [params, setParams] = useSearchParams();
-	const [qualityOpenRequest, setQualityOpenRequest] = useState(0);
 	const requested = normalizeModelWizardStep(params.get("step"));
 	const step = requested || delivery?.recommendedStep || "definition";
+	const completed = delivery?.modelingResult?.state === "SUCCEEDED" && delivery.modelingResult.matchesCurrentTarget;
 	const environment = params.get("environment") || delivery?.environment || "dev";
 	const navigateStep = (next: ModelWizardStep) =>
 		setParams((current) => {
@@ -123,7 +118,7 @@ export function ModelWizardFrame({
 			) : !model ? null : (
 				<>
 					<section className="dmx-wizard-results" aria-label="当前版本交付状态">
-						{delivery?.steps.map((item) => (
+						{delivery?.steps.filter(item => step === "delivery" || item.key === "materialization").map((item) => (
 							<div key={item.key}>
 								<strong>{RESULT_LABELS[item.key]}</strong>
 								<Status tone={item.state === "SUCCEEDED" ? "success" : item.state === "FAILED" ? "danger" : "neutral"}>
@@ -135,56 +130,30 @@ export function ModelWizardFrame({
 							</div>
 						))}
 					</section>
-					{loading && !delivery ? (
-						<RequestState kind="loading" title="正在读取交付状态" description="" />
+					{step === "delivery" || completed ? (
+						<section aria-label={completed ? "建模完成" : "历史交付结果"}>
+							<h3>{completed ? "建模已完成" : "历史交付结果"}</h3>
+							<p>{completed ? `当前版本已物化到 ${delivery?.modelingResult?.targetRelation || "目标表"}。` : "此页保留交付结果回看，资产治理和发布请进入数据管理。"}</p>
+							<div className="dmx-dialog-actions">
+								<Button primary onClick={onBack}>返回模型列表</Button>
+								<Link to={`/catalog/search?view=table&modelSpecId=${encodeURIComponent(model.id)}&environment=${encodeURIComponent(environment)}`}>去数据管理</Link>
+							</div>
+						</section>
+					) : loading && !delivery ? (
+						<RequestState kind="loading" title="正在读取物化结果" description="" />
 					) : (
 						<ModelPublishDialog
 							key={`${model.id}:${model.revision}:${environment}:${step}`}
-							models={[model]}
-							step={step}
-							deliveryStatus={delivery}
-							initialEnvironment={environment}
-							canMaintain={canMaintain && !commandsBlocked && Boolean(delivery)}
-							canConfigureQuality={canMaintain && !dirty && Boolean(delivery?.candidate?.matchesCurrentModel)}
-							onConfigureQuality={() => setQualityOpenRequest((value) => value + 1)}
+							models={[model]} step="verification" deliveryStatus={delivery} initialEnvironment={environment}
+							canMaintain={canMaintain && !commandsBlocked && Boolean(delivery)} canConfigureQuality={false}
 							onChanged={onRefresh}
-							onEnvironmentChange={(value) =>
-								setParams((current) => {
-									const changed = new URLSearchParams(current);
-									changed.set("environment", value);
-									changed.delete("candidateId");
-									return changed;
-								})
-							}
-							onNext={() => navigateStep("delivery")}
-							onClose={step === "verification" ? () => navigateStep("implementation") : onBack}
+							onEnvironmentChange={(value) => setParams((current) => {
+								const changed = new URLSearchParams(current);
+								changed.set("environment", value); changed.delete("candidateId"); return changed;
+							})}
+							onNext={onBack} onClose={() => navigateStep("implementation")}
 						/>
 					)}
-					{step === "verification" && delivery?.candidate?.matchesCurrentModel ? (
-						<ModelTargetQualityPanel
-							delivery={delivery}
-							openRequest={qualityOpenRequest}
-							canMaintain={canMaintain && !dirty}
-							onChanged={onRefresh}
-							onNavigationGuardChange={onAssetGuardChange}
-						/>
-					) : null}
-					{step === "delivery" && delivery ? (
-						<ModelAnalysisPreparationAction
-							delivery={delivery}
-							canMaintain={canMaintain && !commandsBlocked}
-							onChanged={onRefresh}
-						/>
-					) : null}
-					{step === "delivery" ? (
-						<ModelCatalogDeliveryPanel
-							delivery={delivery}
-							modelName={model.name}
-							canMaintain={canMaintain}
-							onSaved={onRefresh}
-							onNavigationGuardChange={onAssetGuardChange}
-						/>
-					) : null}
 				</>
 			)}
 		</section>

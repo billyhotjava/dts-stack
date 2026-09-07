@@ -85,7 +85,8 @@ public class ModelDeliveryStatusQueryService {
         );
         return new DeliveryStatusView(model.id(), model.revision(), model.checksum(), model.planId(), selectedCandidate == null ? null : selectedCandidate.environment(),
             selectedCandidate == null ? null : new CandidateSummary(selectedCandidate.id(), selectedCandidate.version(), selectedCandidate.status().name(), entry.revision(), entry.checksum(), current, selectedCandidate.lastModifiedAt()),
-            Instant.now(), recommended(selectedCandidate, current), workspace, wizard(authoringContext, selectedCandidate, workspace, current, actions, qualityContext), steps, actions);
+            Instant.now(), recommended(selectedCandidate, current), workspace, wizard(authoringContext, selectedCandidate, workspace, current, actions, qualityContext, model, entry), steps, actions,
+            modelingResult(model, authoringContext, selectedCandidate, workspace, entry, current, environment));
     }
 
     private static String materialization(CandidateView candidate, boolean current) {
@@ -195,9 +196,9 @@ public class ModelDeliveryStatusQueryService {
     }
     private static String recommended(CandidateView candidate, boolean current) {
         if (candidate == null || !current) return "implementation";
-        return switch (candidate.status()) { case DRAFT, BUILDING, BUILD_FAILED, BUILT, QUALITY_RUNNING, QUALITY_FAILED -> "verification"; default -> "delivery"; };
+        return "verification";
     }
-    private static List<WizardPageView> wizard(AuthoringContextView context, CandidateView candidate, WorkbenchView workspace, boolean current, List<ActionView> actions, CandidateQualityRuleContextService.CandidateQualityContextView qualityContext) {
+    private static List<WizardPageView> wizard(AuthoringContextView context, CandidateView candidate, WorkbenchView workspace, boolean current, List<ActionView> actions, CandidateQualityRuleContextService.CandidateQualityContextView qualityContext, ModelSpecView model, EntryView entry) {
         boolean editModel = nullSafe(context.allowedActions()).stream().anyMatch(action -> action.name().equals("EDIT_MODEL") || action.name().equals("FORK_DRAFT"));
         boolean editImplementation = nullSafe(context.allowedActions()).stream().anyMatch(action -> action.name().equals("EDIT_IMPLEMENTATION") || action.name().equals("SAVE") || action.name().equals("VALIDATE") || action.name().equals("COMMIT"));
         boolean forkRequired = context.publishedForkRequired() && nullSafe(context.allowedActions()).stream().anyMatch(action -> action.name().equals("FORK_DRAFT"));
@@ -205,22 +206,18 @@ public class ModelDeliveryStatusQueryService {
         ActionView implementation = context.implementation() != null && context.openDraft() == null
             ? new ActionView("NEXT", true, null, null, null)
             : first(actions, "COMMIT", "VALIDATE", "EDIT_IMPLEMENTATION", "SAVE");
-        ActionView verification = candidate == null
-            ? first(actions, "CREATE_CANDIDATE")
+        ModelingResultView result = modelingResult(model, context, candidate, workspace, entry, current, null);
+        ActionView verification = "SUCCEEDED".equals(result.state())
+            ? new ActionView("RETURN_TO_MODELS", true, null, null, null)
+            : candidate == null ? first(actions, "CREATE_CANDIDATE")
             : !current ? first(actions, "REFRESH_CANDIDATE", "CREATE_REPLACEMENT_CANDIDATE", "REMATERIALIZE")
-            : qualityPrimary(qualityContext, actions, candidate);
-        if (verification == null && current && candidate != null) verification = verificationAction(candidate, actions);
+            : verificationAction(candidate, actions);
         boolean verificationEditable = current || verification != null;
-        if (verification == null && current && selectedQualityPassed(candidate) && "SUCCEEDED".equals(governanceState(workspace))) {
-            verification = new ActionView("NEXT", true, null, null, null);
-        }
-        ActionView delivery = !current ? null : first(actions,
-            "SUBMIT_REVIEW", "APPROVE", "REJECT", "PUBLISH", "RETRY_PUBLICATION", "CREATE_REPLACEMENT_CANDIDATE", "ROLLBACK");
         return List.of(
             new WizardPageView("definition", true, editModel, editModel ? null : "MODEL_AUTHORING_READONLY", definition),
             new WizardPageView("implementation", true, editImplementation, editImplementation ? null : "MODEL_AUTHORING_READONLY", implementation),
             new WizardPageView("verification", true, verificationEditable, current ? null : "MODEL_DELIVERY_EVIDENCE_STALE", verification),
-            new WizardPageView("delivery", true, current, current ? null : "MODEL_DELIVERY_EVIDENCE_STALE", delivery)
+            new WizardPageView("delivery", true, false, "MODEL_DATA_MODULE_REQUIRED", null)
         );
     }
 
@@ -256,8 +253,7 @@ public class ModelDeliveryStatusQueryService {
         return switch (candidate.status()) {
             case DRAFT -> first(actions, "START_BUILD", "REFRESH_CANDIDATE");
             case BUILD_FAILED -> first(actions, "RETRY_BUILD", "REFRESH_CANDIDATE");
-            case BUILT, QUALITY_FAILED -> first(actions, "RUN_QUALITY", "REMATERIALIZE", "START_BUILD", "REFRESH_CANDIDATE");
-            default -> first(actions, "REFRESH_CANDIDATE", "REMATERIALIZE", "START_BUILD", "RETRY_BUILD", "RUN_QUALITY");
+            default -> null;
         };
     }
 
@@ -296,7 +292,31 @@ public class ModelDeliveryStatusQueryService {
     }
 
     private static boolean selectedQualityPassed(CandidateView candidate) { return candidate != null && candidate.status() == DeliveryStatus.QUALITY_PASSED; }
-    public record DeliveryStatusView(UUID modelSpecId, int modelRevision, String modelChecksum, UUID planId, String environment, CandidateSummary candidate, Instant observedAt, String recommendedStep, WorkbenchView workspace, List<WizardPageView> wizard, List<StepView> steps, List<ActionView> actions) {}
+    static ModelingResultView modelingResult(ModelSpecView model, AuthoringContextView context, CandidateView candidate,
+        WorkbenchView workspace, EntryView entry, boolean current, String requestedEnvironment) {
+        var implementation = context.implementation();
+        var evidence = nullSafe(workspace == null ? null : workspace.entryEvidence()).stream()
+            .filter(item -> model.id().equals(item.modelSpecId()) && entry != null && entry.id().equals(item.candidateEntryId()))
+            .findFirst().orElse(null);
+        boolean matches = current && implementation != null && evidence != null &&
+            evidence.modelRevision() == model.revision() && evidence.implementationRevision() != null &&
+            evidence.implementationRevision() == implementation.implementationRevision();
+        boolean verified = matches && evidence.relationState() == ModelReleaseCandidateContract.RelationEvidenceState.VERIFIED &&
+            "BUILT".equals(evidence.runStatus()) && evidence.pipelineRunGroupId() != null && evidence.targetRelation() != null;
+        String state = verified ? "SUCCEEDED" : candidate == null ? "NOT_STARTED" : !current ? "UNKNOWN" :
+            candidate.status() == DeliveryStatus.BUILDING ? "RUNNING" : candidate.status() == DeliveryStatus.BUILD_FAILED ? "FAILED" : "UNKNOWN";
+        boolean schemaOnly = ModelSchemaOnlySupport.isSchemaOnly(implementation);
+        return new ModelingResultView(state, verified ? null : "MODEL_MATERIALIZATION_EVIDENCE_REQUIRED", model.id(), model.revision(), model.checksum(),
+            implementation == null ? null : implementation.implementationRevision(), implementation == null ? null : implementation.implementationChecksum(),
+            schemaOnly ? "SCHEMA_ONLY" : "DATA_BUILD", candidate == null ? requestedEnvironment : candidate.environment(),
+            candidate == null ? null : candidate.id(), evidence == null ? null : evidence.pipelineRunGroupId(),
+            evidence == null ? null : evidence.targetRelation(), matches, evidence == null ? null : evidence.observedAt());
+    }
+    public record ModelingResultView(String state, String reasonCode, UUID modelSpecId, int modelRevision, String modelChecksum,
+        Integer implementationRevision, String implementationChecksum, String buildMode, String environment, UUID candidateId,
+        UUID runGroupId, String targetRelation, boolean matchesCurrentTarget, Instant observedAt) {}
+
+    public record DeliveryStatusView(UUID modelSpecId, int modelRevision, String modelChecksum, UUID planId, String environment, CandidateSummary candidate, Instant observedAt, String recommendedStep, WorkbenchView workspace, List<WizardPageView> wizard, List<StepView> steps, List<ActionView> actions, ModelingResultView modelingResult) {}
     public record CandidateSummary(UUID id, int version, String status, int entryRevision, String entryChecksum, boolean matchesCurrentModel, Instant updatedAt) {}
     public record WizardPageView(String key, boolean canView, boolean canEdit, String reasonCode, ActionView primaryAction) {}
     public record StepView(String key, String state, String reasonCode, String message, Integer evidenceRevision, boolean matchesCurrentTarget, String resourceId, Instant updatedAt, List<OutputView> outputs) { public StepView { outputs = List.copyOf(outputs == null ? List.of() : outputs); } }

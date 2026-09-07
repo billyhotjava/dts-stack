@@ -1,8 +1,8 @@
 import api from "@/api/apiClient";
 import type { ReleaseCandidateWorkbench } from "./modelSpecApi";
 
-export const MODEL_WIZARD_STEPS = ["definition", "implementation", "verification", "delivery"] as const;
-export type ModelWizardStep = (typeof MODEL_WIZARD_STEPS)[number];
+export const MODEL_WIZARD_STEPS = ["definition", "implementation", "verification"] as const;
+export type ModelWizardStep = (typeof MODEL_WIZARD_STEPS)[number] | "delivery";
 export type DeliveryStepState =
 	| "NOT_STARTED"
 	| "WAITING_INPUT"
@@ -26,7 +26,24 @@ export type DeliveryOutput = {
 	matchesCurrentTarget: boolean;
 	updatedAt: string | null;
 };
+export type ModelingResult = {
+	state: DeliveryStepState;
+	reasonCode: string | null;
+	modelSpecId: string;
+	modelRevision: number;
+	modelChecksum: string;
+	implementationRevision: number | null;
+	implementationChecksum: string | null;
+	buildMode: "SCHEMA_ONLY" | "DATA_BUILD";
+	environment: string | null;
+	candidateId: string | null;
+	runGroupId: string | null;
+	targetRelation: string | null;
+	matchesCurrentTarget: boolean;
+	observedAt: string | null;
+};
 export type ModelDeliveryStatus = {
+	modelingResult?: ModelingResult;
 	workspace: ReleaseCandidateWorkbench | null;
 	modelSpecId: string;
 	modelRevision: number;
@@ -72,5 +89,5 @@ export const getModelDeliveryStatus = (id: string, environment?: string, candida
 	} as any);
 
 export function normalizeModelWizardStep(value: string | null): ModelWizardStep | null {
-	return MODEL_WIZARD_STEPS.includes(value as ModelWizardStep) ? (value as ModelWizardStep) : null;
+	return value === "delivery" || MODEL_WIZARD_STEPS.some(step => step === value) ? (value as ModelWizardStep) : null;
 }
