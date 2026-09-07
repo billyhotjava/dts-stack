@@ -28,6 +28,18 @@ public class WarehousePlanOperationsReadAdapter implements WarehousePlanOperatio
     }
 
     @Override
+    public boolean canReadPlan(java.util.UUID planId) {
+        if (planId == null) return false;
+        WarehousePlanActor actor = actorProvider.currentActor();
+        try {
+            return authorizationGuard.canReadPlan(plans.get(serverTenantId, planId), actor);
+        } catch (WarehousePlanApplicationService.WarehousePlanException exception) {
+            if ("WAREHOUSE_PLAN_NOT_FOUND".equals(exception.code())) return false;
+            throw exception;
+        }
+    }
+
+    @Override
     public List<WarehousePlanProjection> listPlans() {
         WarehousePlanActor actor = actorProvider.currentActor();
         return plans

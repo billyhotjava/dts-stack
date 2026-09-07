@@ -221,3 +221,9 @@ docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml ps dts-platfo
 正式构建、包摘要、镜像 ID 和 Chrome 95 分项结果见 [运行记录](../it/evidence/current-environment/f3-runtime-20260907.md)。首次 SOURCE 写入前已使用原镜像演练回滚并验证服务健康与登录，再前向更新；SOURCE 写入后不得直接回滚至不识别 SOURCE 的旧程序。原 Compose 项目与挂载保持不变，未执行手工数据库修复。
 
 当前规划活动候选唯一索引与独立完成模型的新边界存在冲突；尚未编写或执行绕过约束的迁移，正式结构迁移是否属于允许范围待用户明确。离线目标待指定，同包离线安装未执行。不得据此关闭 G3/G4 全部验收。
+
+## 2026-09-08 整改兼容性增量（待最终交付验证）
+
+资产 PUT 新前置：If-Match 为当前 catalog-dataset:{id}:{version}（带双引号）；缺头428、旧版本409，PATCH 共享同一 version。消费者升级需读取新版本后保存，冲突须重读后确认；不可移除 CAS 迁就旧脚本。调用方核查与实际请求证据另入整改记录，未核查的外部消费者不认定兼容。
+
+候选 origin 新增 SCHEMA_ONLY_INTENT，具体范围与前向迁移见 review-remediation-20260908.md。新候选写入后旧枚举应用不能直接回退；数据库 rollback 明确拒绝丢失结构候选历史，必须前向修复。有分析事务修复时正式范围包含 analytics，不能仅部署原 F3 三镜像冒充四服务同版。

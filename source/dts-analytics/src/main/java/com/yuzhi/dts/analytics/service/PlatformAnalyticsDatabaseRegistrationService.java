@@ -169,10 +169,8 @@ public class PlatformAnalyticsDatabaseRegistrationService {
             if (!platformDataSourceId.toString().equals(extractLegacyPlatformId(candidate))) {
                 continue;
             }
-            candidate.setTenantId(defaultTenantId);
-            candidate.setPlatformDataSourceId(platformDataSourceId);
             try {
-                return bindingWriter.insert(candidate);
+                return bindingWriter.adoptLegacy(candidate.getId(), defaultTenantId, platformDataSourceId, candidate.getDetailsJson());
             } catch (DataIntegrityViolationException collision) {
                 return databaseRepository.findByTenantIdAndPlatformDataSourceId(defaultTenantId, platformDataSourceId)
                     .orElseThrow(() -> new AnalysisRegistrationException("ANALYSIS_REGISTRATION_CONFLICT", collision));

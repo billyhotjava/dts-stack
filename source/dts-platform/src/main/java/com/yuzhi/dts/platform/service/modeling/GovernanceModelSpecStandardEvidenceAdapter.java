@@ -19,9 +19,12 @@ public class GovernanceModelSpecStandardEvidenceAdapter implements ModelSpecStan
     @Override
     public StandardEvidence evaluate(String tenantId, ModelSpecView modelSpec) {
         if (modelSpec == null) return StandardEvidence.STALE;
+        java.util.Set<String> declaredFields = new java.util.HashSet<>();
         for (StandardBinding binding : modelSpec.standardBindings()) {
             if (!hasDeclaredReference(binding)) continue;
-            if (!hasCompleteReference(binding)) return StandardEvidence.STALE;
+            if (binding.fieldName() == null || binding.fieldName().isBlank() || !declaredFields.add(binding.fieldName()) ||
+                modelSpec.fields().stream().noneMatch(field -> binding.fieldName().equals(field.name())) ||
+                !hasCompleteReference(binding)) return StandardEvidence.STALE;
 
             EvidenceState state = currentOwnerState(binding);
             if (state == EvidenceState.UNKNOWN) return StandardEvidence.UNKNOWN;

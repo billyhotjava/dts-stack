@@ -276,7 +276,7 @@ public class ModelSpecStageGateService {
                 )
             );
         }
-        if (bindings.values().stream().noneMatch(ModelSpecStageGateService::hasDeclaredStandard)) return;
+        if (view.standardBindings().stream().noneMatch(ModelSpecStageGateService::hasDeclaredStandard)) return;
         StandardEvidence ownerEvidence;
         try {
             ownerEvidence = standardEvidence.evaluate(tenantId, view);

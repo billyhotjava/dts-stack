@@ -85,13 +85,20 @@ class PlatformAnalyticsDatabaseRegistrationServiceTest {
         legacyDataLake.setId(11L);
         legacyDataLake.setDetailsJson("{\"source\":\"data-lake\",\"system\":true,\"platformDataSourceId\":\"" + sourceId + "\"}");
         when(databases.findAll()).thenReturn(List.of(legacyDataLake));
-        when(bindingWriter.insert(legacyDataLake)).thenReturn(legacyDataLake);
-        when(databases.save(legacyDataLake)).thenReturn(legacyDataLake);
+        AnalyticsDatabase adopted = new AnalyticsDatabase();
+        adopted.setId(11L);
+        adopted.setTenantId("default");
+        adopted.setPlatformDataSourceId(sourceId);
+        adopted.setDetailsJson(legacyDataLake.getDetailsJson());
+        when(bindingWriter.adoptLegacy(11L, "default", sourceId, legacyDataLake.getDetailsJson())).thenReturn(adopted);
+        when(databases.save(adopted)).thenReturn(adopted);
 
         AnalyticsDatabase result = service.ensureDataLakeDatabase(sourceId);
 
         assertThat(result.getTenantId()).isEqualTo("default");
         assertThat(result.getPlatformDataSourceId()).isEqualTo(sourceId);
+        assertThat(legacyDataLake.getTenantId()).isNull();
+        assertThat(legacyDataLake.getPlatformDataSourceId()).isNull();
         verifyNoInteractions(platform, jdbcDetailsResolver);
     }
 

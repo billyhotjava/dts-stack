@@ -139,6 +139,18 @@ class GovernanceModelSpecStandardEvidenceAdapterTest {
         return model;
     }
 
+    @Test
+    void malformedDeclaredBindingsCannotBecomeCurrentEvidence() {
+        var owner = mock(com.yuzhi.dts.platform.service.governance.GovernanceStandardEvidenceReadPort.class);
+        var adapter = new GovernanceModelSpecStandardEvidenceAdapter(owner);
+        for (String field : new String[] {null, "", "unknown"}) {
+            assertThat(adapter.evaluate("tenant", modelWithBinding(
+                new StandardBinding(field, ELEMENT_ID, 1, null, null, null, null, "INTERNAL"))))
+                .isEqualTo(ModelSpecStandardEvidencePort.StandardEvidence.STALE);
+        }
+        org.mockito.Mockito.verifyNoInteractions(owner);
+    }
+
     private static ModelSpecView modelWithElementVersion(int version) {
         return modelWithBinding(new StandardBinding("amount", ELEMENT_ID, version, null, null, null, null, "INTERNAL"));
     }

@@ -26,6 +26,24 @@ class WarehousePlanOperationsReadAdapterTest {
     }
 
     @Test
+    void authorizesOnePlanWithoutListingAllPlans() {
+        UUID planId = UUID.randomUUID();
+        var plans = mock(WarehousePlanApplicationService.class);
+        var actors = mock(WarehousePlanActorProvider.class);
+        var guard = mock(WarehousePlanAuthorizationGuard.class);
+        var actor = new WarehousePlanActor("reader", null);
+        var header = mock(WarehousePlanHeader.class);
+        when(actors.currentActor()).thenReturn(actor);
+        when(plans.get("tenant-a", planId)).thenReturn(header);
+        when(guard.canReadPlan(header, actor)).thenReturn(true);
+        var adapter = new WarehousePlanOperationsReadAdapter(plans, actors, guard, "tenant-a");
+        assertThat(adapter.canReadPlan(planId)).isTrue();
+        when(guard.canReadPlan(header, actor)).thenReturn(false);
+        assertThat(adapter.canReadPlan(planId)).isFalse();
+        org.mockito.Mockito.verify(plans, org.mockito.Mockito.never()).list(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void readsOnlyTheConfiguredServerTenantAndMapsOperationsFields() {
         authenticate(AuthoritiesConstants.INST_LEADER);
         UUID planId = UUID.fromString("10000000-0000-0000-0000-000000000001");

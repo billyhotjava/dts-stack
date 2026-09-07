@@ -40,3 +40,10 @@ PUT /api/catalog/datasets/{id} 要求 If-Match: "catalog-dataset:{id}:{version}"
 - 只读基线：当前候选7条（批量 BUILT1/PUBLISHED2/STALE1/CANCELLED3），模型12条（SOURCE1/FACT7/DIMENSION2/SUMMARY1/APPLICATION1）；分析绑定1条、无缺 tenant/source 的 legacy 行。当前没有结构 origin 数据，迁移不需要数据清洗。
 
 验收：两种创建顺序的跨用途范围冲突；同请求重放与模式错配；同模型环境竞争；不同模型连续 BUILT；目标重叠拒绝且不产生新运行；旧 batch 独占；规划工作台不报结构候选歧义；隔离空库/升级库迁移和回退保护。当前未执行，不标 PASS。
+
+## R03–R07 实施切片（FROZEN）
+
+- 目录无输出且当前候选有效：NOT_STARTED / MODEL_DELIVERY_CATALOG_NOT_REGISTERED，不要求先发布；候选已过期才 UNKNOWN / MODEL_DELIVERY_EVIDENCE_STALE。分析无发布引用：NOT_STARTED / MODEL_DELIVERY_PUBLICATION_REQUIRED；旧发布不匹配仍 STALE。读取失败保留既有独立错误分支。verification 可执行恢复动作时不附禁用原因。
+- 分析旧连接归并新增内部 writer.adoptLegacy(id:Long,tenantId:String,platformDataSourceId:UUID,expectedDetails:String)，REQUIRES_NEW 内按 ID 悲观锁重读，确认旧 details 未漂移且未被其他租户接管后设置归属并 saveAndFlush；外层只传标量，不修改托管 legacy 实体。唯一冲突在内层回滚后重读赢家；现有错误码不变。真实 H2/JPA 事务测试覆盖外层持有 legacy、内层冲突、外层提交，PostgreSQL 唯一约束迁移沿用既有证据。
+- 标准 R 用字段索引找缺失，B 始终遍历全部声明引用；字段为空/不存在/重复的声明由专业适配边界判 STALE。NONE 仅令 R 为空，不跳过非空 B。新请求与历史数据的执行拒绝保持一致。
+- 授权端口新增 canReadPlan(UUID):boolean，默认兼容实现复用 listPlans；正式 adapter 对配置租户精确 get 一个计划并调用原 canReadPlan guard。候选读侧使用该方法，缺计划或不可读仍拒绝，其他读取异常不当作无权限吞掉。不增加全局缓存。

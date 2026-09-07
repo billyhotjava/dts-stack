@@ -1590,7 +1590,7 @@ public class ModelReleaseCandidateApplicationService {
     private Access authorizeRead(String tenantId, String actorId, UUID planId) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
-        if (planId == null || !planReadAccess.listPlans().stream().anyMatch(plan -> planId.equals(plan.id()))) {
+        if (planId == null || !planReadAccess.canReadPlan(planId)) {
             throw planForbidden();
         }
         Set<DeliveryActorRole> duties = dutyResolver.currentDuties();

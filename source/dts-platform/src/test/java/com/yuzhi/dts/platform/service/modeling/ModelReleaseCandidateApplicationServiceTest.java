@@ -135,7 +135,7 @@ class ModelReleaseCandidateApplicationServiceTest {
             governanceQuality
         );
         lenient().when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
-        lenient().when(planReadAccess.listPlans()).thenReturn(List.of(new WarehousePlanOperationsReadPort.WarehousePlanProjection(PLAN_ID, "plan", null, "ACTIVE")));
+        lenient().when(planReadAccess.canReadPlan(PLAN_ID)).thenReturn(true);
         lenient()
             .when(dutyResolver.currentDuties())
             .thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER));
@@ -571,7 +571,7 @@ class ModelReleaseCandidateApplicationServiceTest {
 
     @Test
     void planReadAuthorizationFailsBeforeCandidateStateIsRead() {
-        when(planReadAccess.listPlans()).thenReturn(List.of());
+        when(planReadAccess.canReadPlan(PLAN_ID)).thenReturn(false);
 
         assertThatThrownBy(() -> service.workspace(TENANT, ACTOR, PLAN_ID))
             .isInstanceOf(ModelReleaseCandidateException.class)

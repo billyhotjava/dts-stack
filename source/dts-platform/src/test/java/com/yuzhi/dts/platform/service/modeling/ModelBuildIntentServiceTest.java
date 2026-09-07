@@ -106,7 +106,7 @@ class ModelBuildIntentServiceTest {
         when(candidateCommands.createSchemaOnlyIntent(eq(TENANT), eq(ACTOR), any()))
             .thenReturn(new CommandResult(draft, false, List.of()));
         when(materializationStarts.startWithBuild(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), eq(1), any(), any()))
-            .thenReturn(new StartResult(new CommandResult(building, false, List.of()), group()));
+            .thenReturn(new ModelMaterializationStartService.StartResult(new CommandResult(building, false, List.of()), group()));
         var command = new ModelBuildIntentService.BuildIntentCommand(PLAN_ID, "DEV", "schema-independent", "SCHEMA_ONLY");
         assertThat(service.start(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 3, CHECKSUM), command).candidate()).isSameAs(building);
         when(candidates.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(batch, building));

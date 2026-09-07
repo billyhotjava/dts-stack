@@ -144,8 +144,9 @@ public class ModelDeliveryStatusQueryService {
         }
         boolean matched = current && (!outputs.isEmpty());
         boolean registered = matched && outputs.stream().allMatch(output -> "SUCCEEDED".equals(output.state()));
-        String state = !matched ? "UNKNOWN" : registered ? "SUCCEEDED" : "NOT_STARTED";
-        String code = !matched ? "MODEL_DELIVERY_EVIDENCE_STALE" : registered ? null : outputs.stream().map(OutputView::reasonCode).filter(java.util.Objects::nonNull).findFirst().orElse("MODEL_DELIVERY_CATALOG_NOT_REGISTERED");
+        boolean stale = candidate != null && !current;
+        String state = stale ? "UNKNOWN" : registered ? "SUCCEEDED" : "NOT_STARTED";
+        String code = stale ? "MODEL_DELIVERY_EVIDENCE_STALE" : registered ? null : outputs.stream().map(OutputView::reasonCode).filter(java.util.Objects::nonNull).findFirst().orElse("MODEL_DELIVERY_CATALOG_NOT_REGISTERED");
         String datasetId = outputs.isEmpty() ? null : outputs.get(0).resourceId();
         return new StepView("catalog", state, code, registered ? "资产已登记" : "资产尚未登记", null, matched, datasetId, published ? serving.updatedAt() : null, outputs);
     }
@@ -161,14 +162,15 @@ public class ModelDeliveryStatusQueryService {
             && physical.implementationChecksum().equals(published.implementationChecksum())
             && physical.candidateId().equals(published.candidateId());
         // A serving relation is physical evidence; only a completed semantic sync proves analysis readiness.
-        String state = !matched ? "UNKNOWN" : switch (java.util.Objects.toString(serving.syncStatus(), "")) {
+        boolean stale = !matched && (published != null || (candidate != null && !current));
+        String state = !matched ? (stale ? "UNKNOWN" : "NOT_STARTED") : switch (java.util.Objects.toString(serving.syncStatus(), "")) {
             case "SYNCED" -> ready ? "SUCCEEDED" : "WAITING_INPUT";
             case "SYNC_FAILED" -> "FAILED";
             case "SYNC_PENDING" -> "RUNNING";
             case "NOT_REGISTERED" -> "NOT_STARTED";
             default -> "UNKNOWN";
         };
-        String code = !matched ? "MODEL_DELIVERY_EVIDENCE_STALE"
+        String code = !matched ? (stale ? "MODEL_DELIVERY_EVIDENCE_STALE" : "MODEL_DELIVERY_PUBLICATION_REQUIRED")
             : "SUCCEEDED".equals(state) ? null
             : "WAITING_INPUT".equals(state) ? "MODEL_DELIVERY_SERVING_RELATION_NOT_READY"
             : "UNKNOWN".equals(state) ? "MODEL_DELIVERY_ANALYSIS_STATUS_UNKNOWN"
@@ -219,7 +221,7 @@ public class ModelDeliveryStatusQueryService {
         return List.of(
             new WizardPageView("definition", true, editModel, editModel ? null : "MODEL_AUTHORING_READONLY", definition),
             new WizardPageView("implementation", true, editImplementation, editImplementation ? null : "MODEL_AUTHORING_READONLY", implementation),
-            new WizardPageView("verification", true, verificationEditable, current ? null : "MODEL_DELIVERY_EVIDENCE_STALE", verification),
+            new WizardPageView("verification", true, verificationEditable, verificationEditable ? null : candidate == null ? "MODEL_DELIVERY_CANDIDATE_REQUIRED" : "MODEL_DELIVERY_EVIDENCE_STALE", verification),
             new WizardPageView("delivery", true, false, "MODEL_DATA_MODULE_REQUIRED", null)
         );
     }

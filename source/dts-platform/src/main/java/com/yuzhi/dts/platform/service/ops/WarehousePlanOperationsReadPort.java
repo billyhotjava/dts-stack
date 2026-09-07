@@ -7,5 +7,9 @@ import java.util.UUID;
 public interface WarehousePlanOperationsReadPort {
     List<WarehousePlanProjection> listPlans();
 
+    default boolean canReadPlan(UUID planId) {
+        return planId != null && listPlans().stream().anyMatch(plan -> planId.equals(plan.id()));
+    }
+
     record WarehousePlanProjection(UUID id, String name, String ownerDepartmentId, String lifecycleStatus) {}
 }

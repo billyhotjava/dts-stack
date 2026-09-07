@@ -347,6 +347,20 @@ class ModelDeliveryStatusQueryServiceTest {
         assertThat(fixture.service.get("tenant", "actor", fixture.modelId, null, null).modelingResult().state()).isEqualTo("UNKNOWN");
     }
 
+    @Test
+    void currentUnpublishedCandidateIsNotStartedRatherThanStale() {
+        Fixture fixture = new Fixture();
+        var candidate = fixture.currentCandidate("prod", DeliveryStatus.BUILT, fixture.modelId, fixture.modelRevision, fixture.checksum, null);
+        fixture.selectDefault(null, fixture.workspace(candidate, java.util.List.of()));
+        var result = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
+        var catalog = result.steps().stream().filter(step -> "catalog".equals(step.key())).findFirst().orElseThrow();
+        var analysis = result.steps().stream().filter(step -> "analysis".equals(step.key())).findFirst().orElseThrow();
+        assertThat(catalog.state()).isEqualTo("NOT_STARTED");
+        assertThat(catalog.reasonCode()).isEqualTo("MODEL_DELIVERY_CATALOG_NOT_REGISTERED");
+        assertThat(analysis.state()).isEqualTo("NOT_STARTED");
+        assertThat(analysis.reasonCode()).isEqualTo("MODEL_DELIVERY_PUBLICATION_REQUIRED");
+    }
+
     private static final class Fixture {
         final ModelSpecApplicationService models = mock(ModelSpecApplicationService.class);
         final ModelReleaseCandidateApplicationService candidates = mock(ModelReleaseCandidateApplicationService.class);
