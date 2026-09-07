@@ -65,7 +65,9 @@ it("committed implementation advances without a write", async () => {
 		definition: false,
 		persisted: true,
 		dirty: false,
-		context: { implementation: {}, openDraft: null, allowedActions: [] } as any,
+		context: { model: { id: "model", revision: 2, checksum: "current" },
+			implementation: { modelSpecId: "model", revision: 2, modelChecksum: "current" },
+			openDraft: null, allowedActions: [] } as any,
 	});
 	await render(p);
 	expect(main().textContent).toBe("下一步");
@@ -81,6 +83,17 @@ it("latest permissions and busy state stop commands", async () => {
 	await render({ ...p, canMaintain: false });
 	act(() => main().click());
 	expect(p.onSave).not.toHaveBeenCalled();
+});
+it("a prior model revision must submit its implementation before advancing", async () => {
+	const p = props({ definition: false, persisted: true, dirty: false,
+		context: { model: { id: "model", revision: 3, checksum: "new" },
+			implementation: { modelSpecId: "model", revision: 2, modelChecksum: "old" },
+			openDraft: null, allowedActions: ["EDIT_IMPLEMENTATION"] } as any });
+	await render(p);
+	expect(main().textContent).toBe("提交实现并继续");
+	act(() => main().click());
+	expect(p.onSubmit).toHaveBeenCalledOnce();
+	expect(p.onNext).not.toHaveBeenCalled();
 });
 it("published content requires an authorized fork", async () => {
 	const p = props({ published: true, context: { allowedActions: [] } as any });

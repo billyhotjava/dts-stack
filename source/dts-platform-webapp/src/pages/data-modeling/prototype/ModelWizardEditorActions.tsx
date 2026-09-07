@@ -33,7 +33,11 @@ export function ModelWizardEditorActions({
 	onStash: () => void;
 }) {
 	const pending = context?.openDraft && context.openDraft.state !== "COMMITTED";
-	const canProceed = !definition && !dirty && context?.implementation && !pending;
+	const implementationCurrent = context?.model && context.implementation &&
+		context.implementation.modelSpecId === context.model.id &&
+		context.implementation.revision === context.model.revision &&
+		context.implementation.modelChecksum === context.model.checksum;
+	const canProceed = !definition && !dirty && implementationCurrent && !pending;
 	const allowed = context?.allowedActions || [];
 	const enabled = published
 		? allowed.includes("FORK_DRAFT")

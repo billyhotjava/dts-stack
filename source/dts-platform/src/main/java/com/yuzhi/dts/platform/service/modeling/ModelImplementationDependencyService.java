@@ -78,7 +78,7 @@ public class ModelImplementationDependencyService {
     }
 
     /** Resolves all requested roots and their transitive pins from one bounded repository snapshot. */
-    @Transactional(readOnly = true)
+    @Transactional(readOnly = true, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public PlanResolution resolvePlan(String tenantId, UUID planId, List<UUID> requestedModelSpecIds) {
         List<UUID> requested = requestedModelSpecIds == null
             ? List.of()

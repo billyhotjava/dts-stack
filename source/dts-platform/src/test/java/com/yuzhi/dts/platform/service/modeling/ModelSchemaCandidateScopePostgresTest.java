@@ -63,4 +63,34 @@ class ModelSchemaCandidateScopePostgresTest {
             else liquibase.update(new Contexts(), new LabelExpression());
         }
     }
+
+    @Test
+    void previewReturnsBusinessBlockerWithoutPoisoningCallerTransaction() {
+        var dataSource = new DriverManagerDataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        var manager = new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource);
+        var readPort = org.mockito.Mockito.mock(ModelImplementationDependencyReadPort.class);
+        var planId = java.util.UUID.randomUUID();
+        var modelId = java.util.UUID.randomUUID();
+        org.mockito.Mockito.when(readPort.readPlanFacts("default", planId, java.util.List.of(modelId)))
+            .thenThrow(new ModelSpecException("MODEL_IMPLEMENTATION_REQUIRED", "Implementation is missing",
+                ModelSpecException.Kind.UNPROCESSABLE));
+        var target = new ModelImplementationDependencyService(readPort);
+        var proxy = new org.springframework.aop.framework.ProxyFactory(target);
+        proxy.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(manager,
+            new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        var properties = new com.yuzhi.dts.platform.config.ModelMaterializationProperties();
+        properties.setExecutionTargetKey("postgres-primary");
+        properties.setAdapter("postgres");
+        var service = new ModelMaterializationPlanService((ModelImplementationDependencyService) proxy.getProxy(),
+            org.mockito.Mockito.mock(ModelMaterializationPlanRelationPort.class), properties);
+        var command = new ModelMaterializationPlanContract.PreviewCommand(planId, "dev", java.util.List.of(modelId),
+            ModelMaterializationPlanContract.Strategy.WITH_MISSING_UPSTREAMS);
+        new org.springframework.transaction.support.TransactionTemplate(manager).executeWithoutResult(status -> {
+            var preview = service.preview("default", command);
+            assertThat(preview.canStart()).isFalse();
+            assertThat(preview.blockers()).extracting(ModelMaterializationPlanContract.Blocker::code)
+                .containsExactly("MODEL_IMPLEMENTATION_REQUIRED");
+            assertThat(status.isRollbackOnly()).isFalse();
+        });
+    }
 }
