@@ -306,10 +306,12 @@ describe("release and materialization dispatch", () => {
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
 		apiMocks.createCandidate.mockRejectedValue(new Error("已有候选，请检查构建范围"));
 		const onClose = vi.fn();
-		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={onClose} />));
+		const onChanged = vi.fn();
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={onClose} onChanged={onChanged} />));
 		await flush();
 		await act(async () => button("创建并运行")?.click());
 		expect(container.textContent).toContain("已有候选，请检查构建范围");
+		expect(onChanged).not.toHaveBeenCalled();
 		await act(async () => root.render(<ModelPublishDialog canMaintain models={[{ ...model }]} onClose={onClose} />));
 		await flush();
 		expect(container.textContent).toContain("已有候选，请检查构建范围");

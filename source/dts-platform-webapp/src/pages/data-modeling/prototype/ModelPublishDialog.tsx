@@ -328,11 +328,11 @@ export function ModelPublishDialog({
 		if (!canMaintain || !canBuild || !planId || !primary || !selection.every(canonical)) return;
 		if (operationalAction === "REPAIR_DEPLOYMENT") {
 			await repairOperationalBinding();
-			return;
+			return true;
 		}
 		if (operationalAction === "RUN_NOW") {
 			await runOperationalBinding();
-			return;
+			return true;
 		}
 		setBusy("build");
 		setFailure("");
@@ -347,7 +347,7 @@ export function ModelPublishDialog({
 					await compileSelectedModels(selection);
 					await startModelBuildIntent(primary, crypto.randomUUID(), { planId, environment, buildMode: "SCHEMA_ONLY" });
 					await load();
-					return;
+					return true;
 				}
 			}
 			const requireCurrentMaterializationPlan = async (fallback: string) => {
@@ -456,6 +456,7 @@ export function ModelPublishDialog({
 			}
 			await load();
 			if (!batch) setTab("publish");
+			return true;
 		} catch (error) {
 			const normalized = normalizeModelingRequestFailure(error, "物化构建未能启动。");
 			await Promise.all([load(), refreshMaterializationPlan()]);
@@ -466,6 +467,7 @@ export function ModelPublishDialog({
 						? "候选状态已发生变化，页面已自动刷新，请确认后重试。"
 						: normalized.message,
 			);
+			return false;
 		} finally {
 			setBusy("");
 		}
@@ -696,7 +698,7 @@ export function ModelPublishDialog({
 									else if (embedded && pageAction?.code === "NEXT") onNext?.();
 									else if (embedded && pageAction?.code === "RERUN_GOVERNANCE_QUALITY")
 										void rerunGovernanceQuality().then(onChanged);
-									else void build().then(onChanged);
+									else void build().then((completed) => { if (completed) onChanged?.(); });
 								}}
 							/>
 						</>
