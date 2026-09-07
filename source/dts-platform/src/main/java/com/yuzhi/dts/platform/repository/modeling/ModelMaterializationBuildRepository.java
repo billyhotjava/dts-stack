@@ -1394,6 +1394,19 @@ public class ModelMaterializationBuildRepository
         if (scope == null || scope.entries().isEmpty()) {
             throw new IllegalArgumentException("candidate build scope is required");
         }
+        // Schema-only implementations were validated when their immutable build entries
+        // were queued. Logical lineage does not require an upstream physical relation.
+        Boolean schemaOnly = jdbcTemplate.queryForObject(
+            """
+            select origin = 'SCHEMA_ONLY_INTENT'
+              from modeling_model_release_candidate
+             where tenant_id = ? and id = ? and version = ?
+               and execution_target_key = ?
+            """,
+            Boolean.class,
+            scope.tenantId(), scope.candidateId(), scope.candidateVersion(), scope.executionTargetKey()
+        );
+        if (Boolean.TRUE.equals(schemaOnly)) return List.of();
         Map<UUID, CandidateBuildEntry> selected = new LinkedHashMap<>();
         Map<String, UUID> selectorOwners = new LinkedHashMap<>();
         for (CandidateBuildEntry entry : scope.entries()) {
