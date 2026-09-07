@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.web.rest.catalog;
 import com.fasterxml.jackson.annotation.JsonUnwrapped;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogAssetResolutionFailure;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetContract;
@@ -52,6 +53,7 @@ public class CatalogAssetPortalResource {
     private final CatalogResourceHelper helper;
     private final CatalogAssetTagWriteGuard assetTagWriteGuard;
     private final CatalogUnifiedAssetDirectoryService unifiedAssetDirectoryService;
+    private final CatalogDatasetRepository datasetRepository;
 
     public CatalogAssetPortalResource(
         CatalogAssetPortalService assetPortalService,
@@ -70,6 +72,7 @@ public class CatalogAssetPortalResource {
             audit,
             helper,
             assetTagWriteGuard,
+            null,
             null
         );
     }
@@ -83,7 +86,8 @@ public class CatalogAssetPortalResource {
         AuditService audit,
         CatalogResourceHelper helper,
         CatalogAssetTagWriteGuard assetTagWriteGuard,
-        CatalogUnifiedAssetDirectoryService unifiedAssetDirectoryService
+        CatalogUnifiedAssetDirectoryService unifiedAssetDirectoryService,
+        CatalogDatasetRepository datasetRepository
     ) {
         this.assetPortalService = assetPortalService;
         this.mappingReportService = mappingReportService;
@@ -93,6 +97,7 @@ public class CatalogAssetPortalResource {
         this.helper = helper;
         this.assetTagWriteGuard = assetTagWriteGuard;
         this.unifiedAssetDirectoryService = unifiedAssetDirectoryService;
+        this.datasetRepository = datasetRepository;
     }
 
     @GetMapping
@@ -396,7 +401,19 @@ public class CatalogAssetPortalResource {
         boolean canTag = assetTagWriteGuard.canTag(
             new AssetRef(result.grantAssetType(), result.assetKey())
         );
-        return ApiResponses.ok(new AssetContractResponse(result, canTag));
+        return ApiResponses.ok(new AssetContractResponse(result, canTag, canMaintainLegacyDataset(result)));
+    }
+
+    private boolean canMaintainLegacyDataset(CatalogAssetContract contract) {
+        if (
+            contract == null ||
+            contract.legacyDatasetId() == null ||
+            datasetRepository == null ||
+            !SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.CATALOG_MAINTAINERS)
+        ) {
+            return false;
+        }
+        return datasetRepository.findById(contract.legacyDatasetId()).map(helper::canEditDataset).orElse(false);
     }
 
     @GetMapping("/{id}/schema-contract")
@@ -559,6 +576,7 @@ public class CatalogAssetPortalResource {
 
     public record AssetContractResponse(
         @JsonUnwrapped CatalogAssetContract contract,
-        boolean canTag
+        boolean canTag,
+        boolean canMaintain
     ) {}
 }

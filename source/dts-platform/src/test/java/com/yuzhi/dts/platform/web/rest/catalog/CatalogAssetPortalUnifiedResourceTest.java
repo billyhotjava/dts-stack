@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetIdentityResolutionAuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetMappingReportService;
@@ -47,7 +48,8 @@ class CatalogAssetPortalUnifiedResourceTest {
             mock(AuditService.class),
             mock(CatalogResourceHelper.class),
             mock(CatalogAssetTagWriteGuard.class),
-            unifiedService
+            unifiedService,
+            mock(CatalogDatasetRepository.class)
         );
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(resource).build();
 

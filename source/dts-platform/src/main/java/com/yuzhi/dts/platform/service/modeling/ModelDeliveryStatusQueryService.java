@@ -147,9 +147,36 @@ public class ModelDeliveryStatusQueryService {
     }
     private static StepView analysis(ServingSyncView serving, ModelSpecView model, CandidateView candidate, boolean current) {
         boolean matched = current && matchesPublication(serving, model, candidate);
-        String state = !matched ? "UNKNOWN" : serving.servingReady() ? "SUCCEEDED" : "NOT_REGISTERED".equals(serving.syncStatus()) ? "NOT_STARTED" : "SYNC_FAILED".equals(serving.syncStatus()) ? "FAILED" : "RUNNING";
-        String code = !matched ? "MODEL_DELIVERY_EVIDENCE_STALE" : serving.lastSyncError();
-        String message = serving.servingReady() ? "分析准备已完成" : serving.lastSyncError() == null ? "分析准备处理中" : "分析准备失败";
+        var physical = serving.servingRef();
+        var published = serving.latestPublishedRef();
+        boolean ready = serving.servingReady() && physical != null && published != null
+            && physical.modelSpecId().equals(published.modelSpecId())
+            && physical.modelRevision() == published.modelRevision()
+            && physical.modelChecksum().equals(published.modelChecksum())
+            && physical.implementationRevision() == published.implementationRevision()
+            && physical.implementationChecksum().equals(published.implementationChecksum())
+            && physical.candidateId().equals(published.candidateId());
+        // A serving relation is physical evidence; only a completed semantic sync proves analysis readiness.
+        String state = !matched ? "UNKNOWN" : switch (java.util.Objects.toString(serving.syncStatus(), "")) {
+            case "SYNCED" -> ready ? "SUCCEEDED" : "WAITING_INPUT";
+            case "SYNC_FAILED" -> "FAILED";
+            case "SYNC_PENDING" -> "RUNNING";
+            case "NOT_REGISTERED" -> "NOT_STARTED";
+            default -> "UNKNOWN";
+        };
+        String code = !matched ? "MODEL_DELIVERY_EVIDENCE_STALE"
+            : "SUCCEEDED".equals(state) ? null
+            : "WAITING_INPUT".equals(state) ? "MODEL_DELIVERY_SERVING_RELATION_NOT_READY"
+            : "UNKNOWN".equals(state) ? "MODEL_DELIVERY_ANALYSIS_STATUS_UNKNOWN"
+            : serving.lastSyncError();
+        String message = switch (state) {
+            case "SUCCEEDED" -> "分析准备已完成";
+            case "FAILED" -> "分析准备失败";
+            case "RUNNING" -> "分析准备处理中";
+            case "WAITING_INPUT" -> "等待物理关系就绪";
+            case "NOT_STARTED" -> "尚未开始分析准备";
+            default -> "暂无当前分析准备证据";
+        };
         String datasetId = physicalAssetId(serving);
         return new StepView("analysis", state, code, message, null, matched, datasetId, serving.updatedAt(), List.of(new OutputView(datasetId, state, code, message, matched, serving.updatedAt())));
     }

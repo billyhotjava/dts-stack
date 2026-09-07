@@ -18,6 +18,8 @@ import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContra
 import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class ModelDeliveryStatusQueryServiceTest {
     @Test
@@ -200,6 +202,37 @@ class ModelDeliveryStatusQueryServiceTest {
         var analysis = result.steps().stream().filter(step -> step.key().equals("analysis")).findFirst().orElseThrow();
         assertThat(analysis.state()).isEqualTo("FAILED");
         assertThat(analysis.matchesCurrentTarget()).isTrue();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "SYNC_FAILED,true,FAILED,true", "SYNC_FAILED,false,FAILED,true",
+        "SYNC_PENDING,true,RUNNING,true", "SYNC_PENDING,false,RUNNING,true",
+        "SYNCED,true,SUCCEEDED,true", "SYNCED,false,WAITING_INPUT,true",
+        "NOT_REGISTERED,false,NOT_STARTED,true", "UNRECOGNIZED,true,UNKNOWN,true", "SYNCED,true,WAITING_INPUT,false"
+    })
+    void requiresSuccessfulAnalysisSyncInsteadOfOnlyPhysicalServingEvidence(String syncStatus, boolean servingReady, String expected, boolean currentPhysicalRevision) {
+        Fixture fixture = new Fixture();
+        CandidateView candidate = fixture.currentCandidate("prod", DeliveryStatus.PUBLISHED, fixture.modelId, fixture.modelRevision, fixture.checksum, null);
+        fixture.selectDefault(null, fixture.workspace(candidate, java.util.List.of()));
+        UUID assetId = UUID.randomUUID();
+        PublishedRef published = new PublishedRef(fixture.modelId, fixture.modelRevision, fixture.checksum, 1, "b".repeat(64), fixture.candidateId, 3, 2, assetId, Instant.now());
+        var physical = servingReady ? new com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContract.ServingRef(
+            fixture.modelId, currentPhysicalRevision ? fixture.modelRevision : fixture.modelRevision - 1, fixture.checksum, 1, "b".repeat(64), fixture.candidateId, 2, 1,
+            UUID.randomUUID(), 1, UUID.randomUUID(), "c".repeat(64), assetId, UUID.randomUUID(), "postgres", "warehouse", "public", "detail", Instant.now()
+        ) : null;
+        ServingSyncView sync = new ServingSyncView(fixture.modelId, "dataset-key", syncStatus, 1, "ANALYTICS_SYNC_ERROR", null, Instant.now(), 7, servingReady, published, physical);
+        when(fixture.serving.get("tenant", fixture.modelId)).thenReturn(sync);
+
+        var result = fixture.service.get("tenant", "actor", fixture.modelId, null, null);
+        var analysis = result.steps().stream().filter(step -> step.key().equals("analysis")).findFirst().orElseThrow();
+        assertThat(analysis.state()).isEqualTo(expected);
+        assertThat(analysis.matchesCurrentTarget()).isTrue();
+        assertThat(analysis.outputs()).allMatch(output -> output.state().equals(expected));
+        if ("SUCCEEDED".equals(expected)) assertThat(analysis.reasonCode()).isNull();
+        if ("FAILED".equals(expected)) assertThat(analysis.reasonCode()).isEqualTo("ANALYTICS_SYNC_ERROR");
+        if (!"SUCCEEDED".equals(expected)) assertThat(analysis.message()).doesNotContain("已完成");
+        assertThat(result.steps().stream().filter(step -> step.key().equals("publication")).findFirst().orElseThrow().state()).isEqualTo("SUCCEEDED");
     }
 
     @Test
