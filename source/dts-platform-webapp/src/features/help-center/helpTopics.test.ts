@@ -89,6 +89,8 @@ test("keeps time-field guidance in the definition topic and exposes model implem
 	assert.ok(definition.steps.some((step) => step.includes("具有业务时间含义的字段")));
 	assert.ok(definition.steps.some((step) => step.includes("普通明细模型可以不选择时间字段")));
 	assert.ok(getTopic("model-center").relatedTopicIds.includes("model-implementation"));
+	assert.ok(getTopic("model-implementation").steps.some((step) => step.includes("结构化白名单")));
+	assert.ok(getTopic("model-implementation").steps.some((step) => step.includes("服务端安全转义")));
 });
 
 function getTopic(topicId: string) {

@@ -418,6 +418,7 @@ describe("ModelingWorkbenchEditor", () => {
 	it("shows FACT semantics and APPLICATION consumption scenario in the unified form", async () => {
 		await render(
 			makeProps({
+				definitionOnly: true,
 				draft: makeDraft({
 					createKind: "fact",
 					grainStatement: "一条预算执行明细一行",
@@ -430,12 +431,13 @@ describe("ModelingWorkbenchEditor", () => {
 			}),
 		);
 
-		for (const label of ["数据来源方式", "事实类型", "时间语义", "时间字段"])
+		for (const label of ["事实类型", "时间语义", "时间字段"])
 			expect(container.textContent).toContain(label);
-		expect(container.textContent).not.toContain("实现输入方式");
+		expect(container.textContent).not.toContain("数据来源方式");
 
 		await render(
 			makeProps({
+				definitionOnly: true,
 				draft: makeDraft({
 					createKind: "application",
 					warehouseLayerCode: "ADS",
@@ -507,6 +509,7 @@ describe("ModelingWorkbenchEditor", () => {
 	it("lets an APPLICATION bind a current data mart and subject domain", async () => {
 		await render(
 			makeProps({
+				definitionOnly: true,
 				draft: makeDraft({
 					createKind: "application",
 					warehouseLayerCode: "ADS",
@@ -552,7 +555,9 @@ describe("ModelingWorkbenchEditor", () => {
 			],
 		});
 		const baseProps = makeProps();
-		const props = await render(makeProps({ draft, context: { ...baseProps.context, models: [dimension] } }));
+		const props = await render(
+			makeProps({ definitionOnly: true, draft, context: { ...baseProps.context, models: [dimension] } }),
+		);
 
 		const checkbox = container.querySelector<HTMLInputElement>('input[aria-label="引用维度模型 风险等级维度表"]');
 		expect(checkbox).not.toBeNull();
@@ -592,7 +597,7 @@ describe("ModelingWorkbenchEditor", () => {
 			expect(container.textContent).not.toContain(label);
 
 		expect(container.querySelectorAll(".dmx-editor-toolbar button")).toHaveLength(1);
-		expect(button("保存")).toBeDefined();
+		expect(button("保存草稿")).toBeDefined();
 		expect(container.querySelector<HTMLInputElement>('input[aria-label="系统编码"]')).toHaveProperty(
 			"value",
 			"保存后生成",
@@ -633,7 +638,7 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 
 		expect(container.querySelector("fieldset")).not.toHaveProperty("disabled", true);
-		expect(button("保存")).toHaveProperty("disabled", false);
+		expect(button("保存草稿")).toHaveProperty("disabled", false);
 	});
 
 	it("shows the returned system code for a confirmed concept dimension", async () => {
@@ -651,43 +656,14 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 	});
 
-	it("renders the approved dimension form and toolbar without compatibility-only controls", async () => {
-		await render();
-		for (const label of [
-			"数仓分层",
-			"数据域",
-			"存储策略",
-			"维度",
-			"表名规则",
-			"表名",
-			"表中文名",
-			"生命周期",
-			"负责人",
-			"描述",
-		])
+	it("renders the W1 dimension definition without W2 implementation controls", async () => {
+		await render(makeProps({ definitionOnly: true }));
+		for (const label of ["数仓分层", "数据域", "维度", "表中文名", "描述"])
 			expect(container.textContent).toContain(label);
-
-		for (const label of [
-			"模型类型",
-			"目标分层",
-			"业务定义",
-			"模型粒度",
-			"物化方式",
-			"加载策略",
-			"分区字段",
-			"SCD 策略",
-			"复用范围",
-		])
+		for (const label of ["产出表英文名", "数据来源方式", "加载策略", "分区字段"])
 			expect(container.textContent).not.toContain(label);
-
-		for (const label of ["保存", "构建与交付", "准入详情", "刷新状态", "关联关系", "运行日志", "质量门禁"])
-			expect(button(label)).toBeDefined();
-		expect(container.querySelectorAll('[aria-label="模型主流程操作"] button')).toHaveLength(1);
-		expect(container.textContent).not.toContain("下一步：保存草稿");
-		expect(container.textContent).not.toContain("导出");
-		// Sprint-91：工具栏的「高级 dbt 工作区」入口已下线，可视化/代码切换只在选中模型时出现。
-		expect(container.textContent).not.toContain("高级 dbt 工作区");
-		expect(container.textContent).not.toContain("物理预览");
+		expect(container.querySelectorAll('[aria-label="当前步骤操作"] .ant-btn-primary')).toHaveLength(1);
+		expect(button("保存并继续")).toBeDefined();
 	});
 
 	it("disables the fieldset in read-only mode and shows table-name validation beside its field", async () => {
@@ -703,7 +679,7 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(tableName?.closest("label")?.textContent).toContain("产出表英文名只能使用小写字母、数字和下划线");
 	});
 
-	it("keeps a missing persisted table name editable and explains the required backfill", async () => {
+	it("keeps a missing persisted table name editable in the implementation step", async () => {
 		await render(
 			makeProps({
 				draft: makeDraft({ base: { status: "DRAFT" } as ModelSpecView, physicalName: "" }),
@@ -712,7 +688,6 @@ describe("ModelingWorkbenchEditor", () => {
 
 		const tableName = container.querySelector<HTMLInputElement>('input[aria-label="产出表英文名"]');
 		expect(tableName).toHaveProperty("disabled", false);
-		expect(tableName?.closest("label")?.textContent).toContain("历史草稿尚未保存产出表英文名，请补录后保存");
 	});
 
 	it("shows the reason for a read-only editor instead of a silent disabled form", async () => {
@@ -754,32 +729,17 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(makeProps({ saving: true, selectedModel }));
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
-		for (const label of ["保存中…", "构建与交付", "准入详情", "刷新状态", "关联关系", "运行日志", "质量门禁"])
-			expect(button(label)).toHaveProperty("disabled", true);
+		for (const action of container.querySelectorAll('[aria-label="当前步骤操作"] button'))
+			expect(action).toHaveProperty("disabled", true);
 	});
 
-	it("keeps dimension draft selects editable and authority inputs disabled", async () => {
-		await render();
-
-		for (const label of ["数仓分层", "数据域", "存储策略", "维度"])
-			expect(container.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)).toHaveProperty(
-				"disabled",
-				false,
-			);
-		for (const label of ["表名规则", "生命周期", "负责人"])
-			expect(container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)).toHaveProperty(
-				"disabled",
-				true,
-			);
-		for (const label of ["产出表英文名", "表中文名"])
-			expect(container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)).toHaveProperty(
-				"disabled",
-				false,
-			);
-		expect(container.querySelector<HTMLTextAreaElement>('textarea[aria-label="描述"]')).toHaveProperty(
-			"disabled",
-			false,
-		);
+	it("keeps W1 dimension selectors editable", async () => {
+		await render(makeProps({ definitionOnly: true }));
+		for (const label of ["数据域", "维度"])
+			expect(container.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)).toHaveProperty("disabled", false);
+		expect(container.querySelector<HTMLInputElement>('input[aria-label="表中文名"]')).toHaveProperty("disabled", false);
+		expect(container.querySelector<HTMLTextAreaElement>('textarea[aria-label="描述"]')).toHaveProperty("disabled", false);
+		expect(container.querySelector('[aria-label="产出表英文名"]')).toBeNull();
 	});
 
 	it("locks persisted dimension contract selectors and preserves missing references", async () => {
@@ -790,6 +750,7 @@ describe("ModelingWorkbenchEditor", () => {
 		});
 		await render(
 			makeProps({
+				definitionOnly: true,
 				draft,
 				context: {
 					planId: "plan-1",
@@ -816,50 +777,21 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(definitionSelect?.querySelector('option[value="retired-dimension"]')).toHaveProperty("disabled", true);
 	});
 
-	it("disables unpublished actions and maps every supported toolbar dialog", async () => {
+	it("keeps W2 actions separate from delivery dialogs", async () => {
 		const unpublished = await render();
-		for (const label of ["准入详情", "关联关系", "构建与交付", "运行日志", "质量门禁"]) {
-			expect(button(label)).toHaveProperty("disabled", true);
-			act(() => button(label).click());
-		}
-		expect(container.textContent).not.toContain("导出");
+		expect(button("提交实现并继续")).toHaveProperty("disabled", false);
+		expect(button("暂存草稿")).toBeDefined();
 		expect(unpublished.onDialog).not.toHaveBeenCalled();
 
 		const selectedModel = { id: "model-1", compatibilityMode: "CANONICAL" } as ModelSpecView;
-		const published = makeProps({
+		const persisted = makeProps({
 			dirty: false,
 			selectedModel: { ...selectedModel, status: "DRAFT", revision: 1, checksum: "a".repeat(64) },
 		});
-		await render(published);
-		for (const [label, dialog] of [
-			["准入详情", "gates"],
-			["关联关系", "association"],
-			["运行日志", "logs"],
-			["质量门禁", "quality"],
-		] as const) {
-			act(() => button(label).click());
-			expect(published.onDialog).toHaveBeenLastCalledWith(dialog);
-		}
-		expect(container.textContent).not.toContain("导出");
-		expect(button("构建与交付")).toHaveProperty("disabled", true);
-		// 选中模型时才出现的可视化/代码双模切换
+		await render(persisted);
+		expect(button("提交实现并继续")).toHaveProperty("disabled", true);
 		expect(button("可视化模式")).toBeDefined();
 		expect(button("代码模式")).toBeDefined();
-
-		const codeManaged = makeProps({
-			dirty: true,
-			selectedModel: {
-				id: "model-2",
-				compatibilityMode: "CANONICAL",
-				implementationMode: "DBT_MANAGED",
-				status: "DRAFT",
-			} as ModelSpecView,
-		});
-		await render(codeManaged);
-		expect(button("保存草稿")).toHaveProperty("disabled", true);
-		expect(button("构建与交付")).toHaveProperty("disabled", true);
-		act(() => button("构建与交付").click());
-		expect(codeManaged.onDialog).not.toHaveBeenCalled();
 	});
 
 	it("renders an authoring request failure only once", async () => {
@@ -909,7 +841,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(props);
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", false);
-		expect(container.textContent).toContain("来源 dbt ZIP 导入");
+		expect(container.textContent).not.toContain("来源 dbt ZIP 导入");
 		expect(container.textContent).not.toContain("当前由代码维护");
 		act(() => button("在代码视图定位").click());
 		expect(props.onOpenRawNode).toHaveBeenCalledWith(rawNode);
@@ -992,18 +924,17 @@ describe("ModelingWorkbenchEditor", () => {
 	});
 
 	it("keeps fact drafts on the explicit compatibility form", async () => {
-		await render(makeProps({ draft: makeDraft({ createKind: "fact" }) }));
+		await render(makeProps({ definitionOnly: true, draft: makeDraft({ createKind: "fact" }) }));
 
 		expect(container.textContent).toContain("模型粒度");
-		expect(container.textContent).toContain("加载策略");
-		expect(container.textContent).toContain("postgres 执行目标不支持分区配置");
-		expect(Array.from(container.querySelectorAll("option")).some((option) => option.value === "SNAPSHOT")).toBe(false);
-		expect(Array.from(container.querySelectorAll("option")).some((option) => option.value === "ephemeral")).toBe(false);
+		expect(container.textContent).toContain("事实类型");
+		expect(container.textContent).not.toContain("加载策略");
+		expect(container.querySelector('[aria-label="数据来源方式"]')).toBeNull();
 	});
 
 	it("lists only DWD-compatible layers for FACT drafts and excludes DWS custom layers", async () => {
 		const draft = makeDraft({ createKind: "fact", warehouseLayerCode: "DWD" });
-		await render(makeProps({ draft }));
+		await render(makeProps({ definitionOnly: true, draft }));
 
 		const select = [...container.querySelectorAll("select")].find((item) =>
 			[...item.options].some((option) => option.textContent?.includes("数仓分层") || item.value === "DWD"),
@@ -1020,7 +951,7 @@ describe("ModelingWorkbenchEditor", () => {
 			base: { id: "model-1" } as ModelSpecView,
 			warehouseLayerCode: "GONE_LAYER",
 		});
-		await render(makeProps({ draft }));
+		await render(makeProps({ definitionOnly: true, draft }));
 
 		const option = Array.from(container.querySelectorAll("option")).find((item) => item.value === "GONE_LAYER");
 		expect(option).toBeDefined();
@@ -1045,6 +976,7 @@ describe("ModelingWorkbenchEditor", () => {
 		});
 		await render(
 			makeProps({
+				definitionOnly: true,
 				draft,
 				context: {
 					planId: "plan-1",
@@ -1130,8 +1062,8 @@ describe("initial definition save", () => {
 		expect(container.querySelector('[aria-label="产出表英文名"]')).toBeNull();
 		expect(container.querySelector('[aria-label="数据来源方式"]')).toBeNull();
 		expect(container.querySelector('[aria-label="表中文名"]')).not.toBeNull();
-		expect(container.querySelectorAll('[role="toolbar"] button').length).toBe(1);
-		await act(async () => button("保存设计并继续").click());
+		expect(container.querySelectorAll('[aria-label="当前步骤操作"] .ant-btn-primary')).toHaveLength(1);
+		await act(async () => button("保存并继续").click());
 		expect(props.onSave).toHaveBeenCalledOnce();
 		expect(props.onValidateAuthoring).not.toHaveBeenCalled();
 		expect(props.onCommitAuthoring).not.toHaveBeenCalled();
@@ -1145,6 +1077,6 @@ describe("initial definition save", () => {
 		await render(makeProps({ definitionOnly: true, saving: true, draft: makeDraft({ createKind: "fact" }) }));
 		expect(container.querySelector('[aria-label="事实类型"]')).not.toBeNull();
 		expect(container.querySelector('[aria-label="时间语义"]')).not.toBeNull();
-		expect(button("保存中…").disabled).toBe(true);
+		expect(button("处理中…").disabled).toBe(true);
 	});
 });

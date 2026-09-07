@@ -155,7 +155,7 @@ describe("ModelVisualTransformationFields", () => {
 		);
 
 		expect(container.querySelector('[aria-label="来源字段 record_id"]')).not.toBeNull();
-		expect(container.textContent).toContain("不接收自由 SQL");
+		expect(container.textContent).not.toContain("不接收自由 SQL");
 		expect(container.querySelector('[aria-label*="SQL"]')).toBeNull();
 		const autoMap = Array.from(container.querySelectorAll("button")).find((button) =>
 			button.textContent?.includes("按名称一一映射"),

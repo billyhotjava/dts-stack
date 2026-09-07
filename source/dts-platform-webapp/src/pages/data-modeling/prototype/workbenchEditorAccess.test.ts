@@ -41,7 +41,7 @@ describe("workbench editor access", () => {
 		expect(resolveWorkbenchEditorAccess(true, modelDraft("PUBLISHED"))).toMatchObject({
 			mode: "VIEW_VERSION",
 			readOnly: true,
-			message: expect.stringContaining("创建新草稿版本"),
+			message: "发布版本只读",
 		});
 		expect(resolveWorkbenchEditorAccess(true, modelDraft("DRAFT", "LEGACY_READONLY"))).toMatchObject({
 			mode: "LEGACY_READONLY",

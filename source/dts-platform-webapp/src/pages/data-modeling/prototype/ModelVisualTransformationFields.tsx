@@ -210,7 +210,6 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 			<div className="dmx-visual-transform__heading">
 				<div>
 					<strong>可视化转换</strong>
-					<small>仅支持结构化白名单；不接收自由 SQL。复杂逻辑请切换到代码模式维护。</small>
 				</div>
 				<Button
 					disabled={!aliases.length || !namedFields.length}
@@ -396,7 +395,6 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 				<div className="dmx-visual-transform__heading">
 					<div>
 						<strong>过滤条件</strong>
-						<small>值按指定类型转换并由服务端安全转义。</small>
 					</div>
 					<Button
 						disabled={!draft.fields.length}

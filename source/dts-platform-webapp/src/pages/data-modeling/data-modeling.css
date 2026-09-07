@@ -731,8 +731,20 @@
 	overflow: hidden;
 }
 
-.dmx-model-workbench--editor-only {
-	grid-template-columns: minmax(650px, 1fr) 52px;
+.dmx-model-workbench.dmx-model-workbench--editor-only {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.dmx-model-workbench--editor-only .dmx-editor-tab {
+	height: auto;
+	min-height: 42px;
+	flex-wrap: wrap;
+	padding: 8px 14px;
+}
+
+.dmx-model-workbench--editor-only .dmx-editor-tab strong {
+	min-width: 0;
+	overflow-wrap: anywhere;
 }
 
 .dmx-model-workbench--editor-only .dmx-editor-tab__back {
@@ -2167,9 +2179,6 @@
 	}
 	.dmx-model-workbench {
 		grid-template-columns: 270px minmax(620px, 1fr) 48px;
-	}
-	.dmx-model-workbench--editor-only {
-		grid-template-columns: minmax(560px, 1fr);
 	}
 }
 
