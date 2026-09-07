@@ -1433,7 +1433,16 @@ public class DbtImplementationDraftService {
                 model.revision(),
                 clock.instant()
             );
-            current = resolveDependencies(tenantId, authoredModel, null, validated.projectKey(), ownedTarget.name());
+            var decoded = snapshotDecoder.decode(jsonNode(draft.modelSpecSnapshot()));
+            ImplementationView authoredImplementation = decoded.valid() && decoded.visualImplementation() != null
+                ? visualImplementation(modelSpecId, authoredModel, implementation, decoded.visualImplementation())
+                : null;
+            current = resolveDependencies(
+                tenantId, authoredModel,
+                com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(authoredImplementation)
+                    ? authoredImplementation : null,
+                validated.projectKey(), ownedTarget.name()
+            );
         }
         List<String> parsed = externalDependencies(
             validated,

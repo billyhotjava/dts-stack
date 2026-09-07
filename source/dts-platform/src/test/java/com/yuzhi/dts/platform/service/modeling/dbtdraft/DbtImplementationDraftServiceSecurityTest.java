@@ -1838,6 +1838,54 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     @Test
+    void schemaOnlyAuthoringKeepsLogicalReferencesWithoutRequiringSqlReads() throws Exception {
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(model.id()).thenReturn(MODEL_ID);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(null, List.of(), List.of()));
+        ModelImplementationDependencyReadPort facts = org.mockito.Mockito.mock(ModelImplementationDependencyReadPort.class);
+        when(facts.readFacts(eq(TENANT), any())).thenReturn(new DependencyFacts(List.of(), List.of()));
+        var dependencyService = new ModelImplementationDependencyService(facts);
+        ReflectionTestUtils.setField(service, "dependencies", dependencyService);
+        Snapshot base = dependencyService.resolveForDraft(TENANT, model, null, "sprint83", "orders").snapshot();
+        var snapshot = versionedVisualSnapshot();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) snapshot.get("modelSpec")).putArray("dependsOn").addObject()
+            .put("modelSpecId", "30000000-0000-0000-0000-000000000099").put("revision", 2);
+        var generated = ((com.fasterxml.jackson.databind.node.ObjectNode) snapshot.get("visualImplementation"))
+            .putArray("inputs").addObject();
+        generated.put("generatorType", "SCHEMA_ONLY").putObject("config");
+        DraftRow draft = org.mockito.Mockito.mock(DraftRow.class);
+        when(draft.planId()).thenReturn(PLAN_ID);
+        when(draft.baseModelRevision()).thenReturn(3);
+        when(draft.baseModelChecksum()).thenReturn(MODEL_CHECKSUM);
+        when(draft.modelSpecSnapshot()).thenReturn(objectMapper.writeValueAsString(snapshot));
+        when(draft.sourceBundleSnapshot()).thenReturn(objectMapper.writeValueAsString(new SourceBundleView(
+            "sprint83", PROJECT_CHECKSUM, PROJECT_CHECKSUM, SourceBundleKind.CANONICAL_INITIALIZATION,
+            false, List.of(), base.dependencyChecksum(), base, Map.of()
+        )));
+        ValidatedProject project = new AdvancedDbtDraftStaticValidator().validate(Map.of(
+            "dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n",
+            "models/orders.sql", "{{ config(materialized='table') }}\nselect 1 where 1 = 0\n"
+        ));
+        DbtImplementationDraftContract.DependencyValidationView result = ReflectionTestUtils.invokeMethod(
+            service, "validateDependencies", TENANT, ACTOR, MODEL_ID, draft, project
+        );
+        assertThat(result.matched()).isEmpty();
+        assertThat(result.missing()).isEmpty();
+        assertThat(result.undeclared()).isEmpty();
+        ValidatedProject unexpectedRead = new AdvancedDbtDraftStaticValidator().validate(Map.of(
+            "dbt_project.yml", "name: sprint83\nversion: 1.0\nmodel-paths: [models]\n",
+            "models/orders.sql", "{{ config(materialized='table') }}\nselect * from {{ source('public', 'orders') }}\n"
+        ));
+        DraftException failure = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "validateDependencies", TENANT, ACTOR, MODEL_ID, draft, unexpectedRead),
+            DraftException.class
+        );
+        assertThat(failure.code()).isEqualTo("DBT_DRAFT_DEPENDENCY_UNDECLARED");
+    }
+
+    @Test
     void alignsOnlyAnExactlyPersistedDefinitionAndKeepsTheSqlSnapshot() throws Exception {
         ModelSpecView previous = model(3, MODEL_CHECKSUM);
         when(previous.id()).thenReturn(MODEL_ID);
