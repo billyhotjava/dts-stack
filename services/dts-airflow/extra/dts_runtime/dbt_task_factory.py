@@ -493,8 +493,22 @@ def _platform_request(
         with urllib_request.urlopen(request, timeout=30) as response:
             content = response.read()
     except urllib_error.HTTPError as failure:
+        # Keep diagnostic identities, never echo response messages, URLs or credentials.
+        details = []
+        try:
+            error_body = json.loads(failure.read(8192).decode("utf-8"))
+            if isinstance(error_body, dict):
+                code = error_body.get("code")
+                if isinstance(code, str) and re.fullmatch(r"[A-Z][A-Z0-9_]{0,127}", code):
+                    details.append(f"code={code}")
+                correlation_id = error_body.get("correlationId")
+                if isinstance(correlation_id, str):
+                    details.append(f"correlationId={UUID(correlation_id)}")
+        except (ValueError, OSError, AttributeError):
+            pass
+        diagnostic = f" ({', '.join(details)})" if details else ""
         raise RuntimeError(
-            f"platform internal API rejected {method}: HTTP {failure.code}"
+            f"platform internal API rejected {method}: HTTP {failure.code}{diagnostic}"
         ) from failure
     except urllib_error.URLError as failure:
         raise RuntimeError(

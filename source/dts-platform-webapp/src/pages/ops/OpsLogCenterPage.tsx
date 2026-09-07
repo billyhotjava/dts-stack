@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
 import { Button, Card, Input, Select, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
-import opsService, { type ExternalRun } from "@/api/services/opsService";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router";
 import { getDbtRunLog } from "@/api/platformApi";
+import opsService, { type ExternalRun } from "@/api/services/opsService";
 import { PageHeader } from "@/components/page-header";
 import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
 import { statusLabel } from "@/utils/customerDisplayLabels";
@@ -32,6 +32,14 @@ const STATUS_OPTIONS = [
 	{ label: "失败", value: "FAILED" },
 ];
 
+const TASK_OPTIONS = [
+	{ label: "准备执行环境", value: "prepare_runtime" },
+	{ label: "执行模型构建", value: "dbt_build" },
+	{ label: "同步结果与核验物理表", value: "sync_manifest_and_probe" },
+	{ label: "完成构建与资产登记", value: "finalize_run" },
+	{ label: "常规任务执行", value: "dbt_run" },
+];
+
 export default function OpsLogCenterPage() {
 	const [searchParams] = useSearchParams();
 	const [records, setRecords] = useState<ExternalRun[]>([]);
@@ -43,6 +51,11 @@ export default function OpsLogCenterPage() {
 	const [logContent, setLogContent] = useState<Record<string, string>>({});
 	const [logLoading, setLogLoading] = useState<Record<string, boolean>>({});
 	const [logTryNumber, setLogTryNumber] = useState<Record<string, number>>({});
+	const [logTaskId, setLogTaskId] = useState<Record<string, string>>(() => {
+		const runId = searchParams.get("runId");
+		const taskId = searchParams.get("taskId");
+		return runId && taskId ? { [runId]: taskId } : {};
+	});
 	const [detailRow, setDetailRow] = useState<ExternalRun | null>(null);
 	const logRef = useRef<HTMLPreElement>(null);
 
@@ -68,35 +81,48 @@ export default function OpsLogCenterPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [entryKey, status]);
 
-	const loadLog = async (record: ExternalRun) => {
-		const runId = record.externalRunId ?? record.id;
-		const tryNum = logTryNumber[runId] ?? 1;
-		setLogLoading((prev) => ({ ...prev, [runId]: true }));
-		try {
-			let logText = "";
-			if (record.entryKey === "AIRFLOW_DAG" || record.entryKey === "DBT_RUN") {
-				const result = await getDbtRunLog(runId, {
-					dagId: record.dagId,
-					taskId: "dbt_run",
-					tryNumber: tryNum,
-				});
-				logText = typeof result === "string" ? result : ((result as any)?.log ?? "");
-			} else {
-				logText = "（该类型日志暂不支持直接查看，请前往对应任务详情页）";
+	const loadLog = useCallback(
+		async (record: ExternalRun, selectedTaskId?: string) => {
+			const runId = record.externalRunId ?? record.id;
+			const tryNum = logTryNumber[runId] ?? 1;
+			const taskId =
+				selectedTaskId ??
+				logTaskId[runId] ??
+				(record.dagId?.startsWith("dts_release_build_") ? "dbt_build" : "dbt_run");
+			setLogLoading((prev) => ({ ...prev, [runId]: true }));
+			try {
+				let logText = "";
+				if (record.entryKey === "AIRFLOW_DAG" || record.entryKey === "DBT_RUN") {
+					const result = await getDbtRunLog(runId, {
+						dagId: record.dagId,
+						taskId,
+						tryNumber: tryNum,
+					});
+					logText = typeof result === "string" ? result : ((result as any)?.log ?? "");
+				} else {
+					logText = "（该类型日志暂不支持直接查看，请前往对应任务详情页）";
+				}
+				setLogContent((prev) => ({ ...prev, [runId]: logText }));
+				setTimeout(() => {
+					if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+				}, 50);
+			} catch (e: unknown) {
+				setLogContent((prev) => ({
+					...prev,
+					[runId]: `[错误] ${(e as { message?: string })?.message ?? "日志加载失败"}`,
+				}));
+			} finally {
+				setLogLoading((prev) => ({ ...prev, [runId]: false }));
 			}
-			setLogContent((prev) => ({ ...prev, [runId]: logText }));
-			setTimeout(() => {
-				if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-			}, 50);
-		} catch (e: unknown) {
-			setLogContent((prev) => ({
-				...prev,
-				[runId]: `[错误] ${(e as { message?: string })?.message ?? "日志加载失败"}`,
-			}));
-		} finally {
-			setLogLoading((prev) => ({ ...prev, [runId]: false }));
-		}
-	};
+		},
+		[logTaskId, logTryNumber],
+	);
+
+	useEffect(() => {
+		if (!expandedRunId || logContent[expandedRunId] !== undefined || logLoading[expandedRunId]) return;
+		const record = records.find((item) => (item.externalRunId ?? item.id) === expandedRunId);
+		if (record) void loadLog(record);
+	}, [expandedRunId, records, loadLog, logContent, logLoading]);
 
 	const baseColumns: ColumnsType<ExternalRun> = [
 		{ title: "任务名称", dataIndex: "artifactName", render: (v) => v || "-" },
@@ -166,11 +192,7 @@ export default function OpsLogCenterPage() {
 		),
 	];
 
-	const columns = useMemo(
-		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[expandedRunId, logLoading, logContent],
-	);
+	const columns = appendDetailAction(baseColumns, (row) => setDetailRow(row));
 
 	return (
 		<div className="space-y-6 px-6 py-6">
@@ -205,9 +227,23 @@ export default function OpsLogCenterPage() {
 							const runId = record.externalRunId ?? record.id;
 							const content = logContent[runId];
 							const tryNum = logTryNumber[runId] ?? 1;
+							const taskId =
+								logTaskId[runId] ?? (record.dagId?.startsWith("dts_release_build_") ? "dbt_build" : "dbt_run");
 							return (
 								<div style={{ padding: "8px 0" }}>
-									<Space style={{ marginBottom: 8 }}>
+									<Space wrap style={{ marginBottom: 8 }}>
+										<Text type="secondary">执行步骤:</Text>
+										<Select
+											aria-label="执行步骤"
+											value={taskId}
+											options={TASK_OPTIONS}
+											style={{ width: 210 }}
+											disabled={logLoading[runId]}
+											onChange={(value) => {
+												setLogTaskId((prev) => ({ ...prev, [runId]: value }));
+												void loadLog(record, value);
+											}}
+										/>
 										<Text type="secondary">尝试次数:</Text>
 										<Input
 											type="number"

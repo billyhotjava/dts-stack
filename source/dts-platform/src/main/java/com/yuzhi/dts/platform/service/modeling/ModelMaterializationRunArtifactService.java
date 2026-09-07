@@ -41,6 +41,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -50,12 +52,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * Synchronizes dbt runtime artifacts into durable pipeline truth.
  *
- * <p>dbt success and append-only probe evidence are persisted first. Pipeline rows and the
- * candidate are then promoted to BUILT in one transaction only when every current warehouse
- * relation is independently verified.
+ * <p>dbt success and append-only probe evidence are persisted first. Verified pipeline rows
+ * become BUILT during sync. Finalization completes the dispatch, promotes the candidate and
+ * registers quality assets in one transaction, so registration can require completed evidence.
  */
 @Service
 public class ModelMaterializationRunArtifactService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ModelMaterializationRunArtifactService.class);
 
     private static final long MAX_DBT_ARTIFACT_BYTES =
         25L * 1024L * 1024L;
@@ -174,6 +178,7 @@ public class ModelMaterializationRunArtifactService {
         RunGroupRecord group = requireGroup(groupId);
         rejectPersistedAvailabilityStale(group);
         boolean terminalStatePersisted = false;
+        boolean dbtResultsPersisted = false;
         Map<UUID, String> perModelRunResults = Map.of();
         UUID runInvocationId = null;
         try {
@@ -253,6 +258,7 @@ public class ModelMaterializationRunArtifactService {
                 terminalStatePersisted = true;
                 throw staleFailure();
             }
+            dbtResultsPersisted = true;
             ObservationWrite failed = evidence
                 .stream()
                 .filter(observation ->
@@ -277,19 +283,6 @@ public class ModelMaterializationRunArtifactService {
                     scope.entries().size(),
                     now
                 );
-                CommandResult built = transitionCandidate(
-                    group,
-                    DeliveryStatus.BUILT,
-                    "materialization-built-" + groupId,
-                    "dbt build and physical relation evidence verified"
-                );
-                if (built == null || built.candidate() == null) {
-                    throw failure(
-                        "MODEL_SPEC_GOVERNANCE_ASSET_REGISTRATION_FAILED",
-                        "Built candidate was not available for governance asset registration"
-                    );
-                }
-                qualityAssets.ensureRegistered(built.candidate());
                 auditRun(
                     group,
                     "relations-verified:" + invocationId,
@@ -319,10 +312,11 @@ public class ModelMaterializationRunArtifactService {
         } catch (RuntimeException failure) {
             ModelMaterializationRuntimeException stable =
                 stableFailure(failure);
+            LOG.warn("Materialization sync failed: runGroup={}, code={}", groupId, stable.code(), failure);
             if (!terminalStatePersisted) {
                 try {
                     Instant failedAt = clock.instant();
-                    Map<UUID, String> itemResults = perModelRunResults;
+                    Map<UUID, String> itemResults = dbtResultsPersisted ? Map.of() : perModelRunResults;
                     UUID failedInvocationId = runInvocationId;
                     transactions.executeWithoutResult(status -> {
                         if (!itemResults.isEmpty()) {
@@ -389,6 +383,22 @@ public class ModelMaterializationRunArtifactService {
                         groupId,
                         now
                     );
+                    if ("COMPLETED".equals(group.dispatchStatus())) {
+                        return new SuccessBoundary(true, finalized);
+                    }
+                    CommandResult built = transitionCandidate(
+                        group,
+                        DeliveryStatus.BUILT,
+                        "materialization-built-" + groupId,
+                        "dbt build and physical relation evidence verified"
+                    );
+                    if (built == null || built.candidate() == null) {
+                        throw failure(
+                            "MODEL_SPEC_GOVERNANCE_ASSET_REGISTRATION_FAILED",
+                            "Built candidate was not available for governance asset registration"
+                        );
+                    }
+                    qualityAssets.ensureRegistered(built.candidate());
                     auditRun(
                         group,
                         "finalized:succeeded",
@@ -408,19 +418,37 @@ public class ModelMaterializationRunArtifactService {
                 modelCount = success.modelCount();
             } catch (MachineAuditPersistenceException failure) {
                 throw failure;
-            } catch (ModelMaterializationRuntimeException stable) {
-                throw stable;
             } catch (RuntimeException inconsistent) {
-                throw failure(
-                    "MODEL_DBT_FINALIZE_PRECONDITION_FAILED",
-                    "Run group cannot be finalized as successful"
-                );
+                ModelMaterializationRuntimeException stable = inconsistent instanceof ModelMaterializationRuntimeException ||
+                    inconsistent instanceof ModelReleaseCandidateException
+                    ? stableFailure(inconsistent)
+                    : failure("MODEL_DBT_FINALIZE_PRECONDITION_FAILED", "Run group cannot be finalized as successful");
+                LOG.warn("Materialization finalize failed: runGroup={}, code={}", groupId, stable.code(), inconsistent);
+                if (!isAvailabilityStaleReason(stable.code())) {
+                    try {
+                        transactions.executeWithoutResult(status -> {
+                            runs.finalizeFailed(groupId, stable.code(), now);
+                            transitionCandidate(
+                                group, DeliveryStatus.BUILD_FAILED, "materialization-failed-" + groupId, stable.code()
+                            );
+                            auditRun(
+                                group, "failed:" + stable.code(), "MODEL_MATERIALIZATION_RUN_FAILED",
+                                AuditStage.FAIL, "FAILED", null, null, stable.code(), now
+                            );
+                        });
+                    } catch (RuntimeException failurePersistence) {
+                        stable.addSuppressed(failurePersistence);
+                    }
+                }
+                throw stable;
             }
         } else if ("FAILED".equals(outcome)) {
+            String errorCode = group.lastErrorCode() == null || group.lastErrorCode().isBlank()
+                ? "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED" : group.lastErrorCode();
             modelCount = transactions.execute(status -> {
                 int failed = runs.finalizeFailed(
                     groupId,
-                    "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
+                    errorCode,
                     now
                 );
                 if (failed < 1) {
@@ -429,12 +457,9 @@ public class ModelMaterializationRunArtifactService {
                         "Run group cannot be finalized as failed"
                     );
                 }
-                transitionCandidate(
-                    group,
-                    DeliveryStatus.BUILD_FAILED,
-                    "materialization-failed-" + groupId,
-                    "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED"
-                );
+                if (!"BUILD_FAILED".equals(group.candidateCurrentStatus())) {
+                    transitionCandidate(group, DeliveryStatus.BUILD_FAILED, "materialization-failed-" + groupId, errorCode);
+                }
                 auditRun(
                     group,
                     "finalized:failed",
@@ -443,7 +468,7 @@ public class ModelMaterializationRunArtifactService {
                     "FAILED",
                     null,
                     failed,
-                    "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED",
+                    errorCode,
                     now
                 );
                 return failed;
@@ -1266,6 +1291,9 @@ public class ModelMaterializationRunArtifactService {
                 scoped.code(),
                 "Candidate dbt project verification failed"
             );
+        }
+        if (failure instanceof ModelReleaseCandidateException candidate) {
+            return failure(candidate.code(), candidate.getMessage());
         }
         if (
             failure instanceof PhysicalRelationInspectionException inspection

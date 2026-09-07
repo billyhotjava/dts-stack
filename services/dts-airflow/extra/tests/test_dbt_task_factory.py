@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -59,6 +60,34 @@ class FakeProcess:
 
 
 class DbtTaskFactoryTest(unittest.TestCase):
+    def test_platform_error_logs_only_safe_diagnostic_identities(self):
+        correlation = "711387e4-faa4-4e23-82c3-8b3221e8929c"
+        cases = [
+            ({"code": "MODEL_RELEASE_CURRENT_PHYSICAL_OBSERVATION_REQUIRED",
+              "correlationId": correlation, "message": "secret-token dynamic-path"}, True),
+            ({"code": "secret-token\nforged-log", "correlationId": "secret-token"}, False),
+            (["secret-token"], False),
+        ]
+        for body, valid in cases:
+            with self.subTest(body=body), mock.patch.dict(os.environ, {
+                "DTS_PLATFORM_INTERNAL_BASE_URL": "http://dts-platform:8080",
+                "DTS_AIRFLOW_TO_PLATFORM_TOKEN": "secret-token",
+            }), mock.patch.object(self.factory.urllib_request, "urlopen", side_effect=
+                self.factory.urllib_error.HTTPError("http://internal/dynamic-path", 422, "Rejected", None,
+                    io.BytesIO(json.dumps(body).encode("utf-8")))
+            ):
+                with self.assertRaises(RuntimeError) as raised:
+                    self.factory._platform_request("/dynamic-path")
+                message = str(raised.exception)
+                self.assertIn("HTTP 422", message)
+                self.assertNotIn("secret-token", message)
+                self.assertNotIn("dynamic-path", message)
+                if valid:
+                    self.assertIn("code=MODEL_RELEASE_CURRENT_PHYSICAL_OBSERVATION_REQUIRED", message)
+                    self.assertIn(f"correlationId={correlation}", message)
+                else:
+                    self.assertNotIn("code=", message)
+
     @classmethod
     def setUpClass(cls):
         cls.factory = load_factory()

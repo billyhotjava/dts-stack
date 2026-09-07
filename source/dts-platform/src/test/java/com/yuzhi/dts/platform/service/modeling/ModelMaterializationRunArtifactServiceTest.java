@@ -183,7 +183,7 @@ class ModelMaterializationRunArtifactServiceTest {
         assertThat(result.status()).isEqualTo("BUILT");
         assertThat(result.dbtInvocationId()).isEqualTo(INVOCATION_ID);
         assertThat(result.modelCount()).isEqualTo(1);
-        verify(qualityAssets).ensureRegistered(any(ModelReleaseCandidateContract.CandidateView.class));
+        verify(qualityAssets, never()).ensureRegistered(any());
         verify(runs).markDbtSucceeded(
             GROUP_ID,
             INVOCATION_ID,
@@ -218,17 +218,7 @@ class ModelMaterializationRunArtifactServiceTest {
             1,
             NOW
         );
-        verify(candidates).transition(
-            "tenant-a",
-            "service:dts-airflow",
-            CANDIDATE_ID,
-            new ModelReleaseCandidateContract.TransitionCommand(
-                3,
-                ModelLifecycleContract.DeliveryStatus.BUILT,
-                "materialization-built-" + GROUP_ID,
-                "dbt build and physical relation evidence verified"
-            )
-        );
+        verify(candidates, never()).transition(any(), any(), any(), any());
         verify(runs, never()).markFailed(
             GROUP_ID,
             "MODEL_DBT_ARTIFACT_INVALID",
@@ -891,7 +881,7 @@ class ModelMaterializationRunArtifactServiceTest {
     @Test
     void candidateCompletionFailureCannotLeavePartialBuiltTruth()
         throws Exception {
-        writeArtifacts("success", "b".repeat(64));
+        when(runs.finalizeSucceeded(GROUP_ID, NOW)).thenReturn(1);
         doThrow(new IllegalStateException("candidate conflict"))
             .when(candidates)
             .transition(
@@ -907,12 +897,9 @@ class ModelMaterializationRunArtifactServiceTest {
             );
 
         assertThatThrownBy(() ->
-            service.syncAndProbe(
+            service.finalizeRun(
                 GROUP_ID,
-                new ModelMaterializationRunArtifactService.SyncProbeCommand(
-                    "RELEASE_BUILD",
-                    BUNDLE
-                )
+                new ModelMaterializationRunArtifactService.FinalizeCommand("SUCCEEDED")
             )
         )
             .isInstanceOf(
@@ -923,10 +910,10 @@ class ModelMaterializationRunArtifactServiceTest {
                     (ModelMaterializationRuntimeException) error
                 ).code()
             )
-            .isEqualTo("MODEL_DBT_ARTIFACT_SYNC_FAILED");
-        verify(runs).markFailed(
+            .isEqualTo("MODEL_DBT_FINALIZE_PRECONDITION_FAILED");
+        verify(runs).finalizeFailed(
             GROUP_ID,
-            "MODEL_DBT_ARTIFACT_SYNC_FAILED",
+            "MODEL_DBT_FINALIZE_PRECONDITION_FAILED",
             NOW
         );
         verify(candidates).transition(
@@ -937,9 +924,56 @@ class ModelMaterializationRunArtifactServiceTest {
                 3,
                 ModelLifecycleContract.DeliveryStatus.BUILD_FAILED,
                 "materialization-failed-" + GROUP_ID,
-                "MODEL_DBT_ARTIFACT_SYNC_FAILED"
+                "MODEL_DBT_FINALIZE_PRECONDITION_FAILED"
             )
         );
+    }
+
+    @Test
+    void postSyncFailureDoesNotRewriteAlreadyPersistedDbtResults() throws Exception {
+        writeArtifacts("success", "b".repeat(64));
+        doThrow(new IllegalStateException("relation persistence failed"))
+            .when(runs).markRelationsVerified(GROUP_ID, 1, NOW);
+
+        assertThatThrownBy(() -> service.syncAndProbe(
+            GROUP_ID, new ModelMaterializationRunArtifactService.SyncProbeCommand("RELEASE_BUILD", BUNDLE)
+        )).isInstanceOf(ModelMaterializationRuntimeException.class);
+
+        verify(runs, never()).recordDbtResults(any(), any(), any(), any());
+        verify(runs).markFailed(GROUP_ID, "MODEL_DBT_ARTIFACT_SYNC_FAILED", NOW);
+    }
+
+    @Test
+    void registrationFailurePreservesSpecificCodeAndFinalizerDoesNotOverwriteIt() {
+        String code = "MODEL_SPEC_GOVERNANCE_CLASSIFICATION_REQUIRED";
+        when(runs.finalizeSucceeded(GROUP_ID, NOW)).thenReturn(1);
+        when(runs.finalizeFailed(GROUP_ID, code, NOW)).thenReturn(1);
+        when(qualityAssets.ensureRegistered(any())).thenThrow(new ModelReleaseCandidateException(
+            code, "Classification required", ModelReleaseCandidateException.Kind.UNPROCESSABLE
+        ));
+
+        assertThatThrownBy(() -> service.finalizeRun(
+            GROUP_ID, new ModelMaterializationRunArtifactService.FinalizeCommand("SUCCEEDED")
+        )).isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error -> ((ModelMaterializationRuntimeException) error).code()).isEqualTo(code);
+
+        when(runs.findRunGroup(GROUP_ID)).thenReturn(java.util.Optional.of(runGroup(4, "BUILD_FAILED", "FAILED", code)));
+        var result = service.finalizeRun(GROUP_ID, new ModelMaterializationRunArtifactService.FinalizeCommand("FAILED"));
+        assertThat(result.status()).isEqualTo("FAILED");
+        verify(runs, org.mockito.Mockito.times(2)).finalizeFailed(GROUP_ID, code, NOW);
+        verify(candidates, org.mockito.Mockito.times(2)).transition(any(), any(), any(), any());
+    }
+
+    @Test
+    void completedFinalizeCanBeRepeatedWithoutAnotherCandidateTransition() {
+        when(runs.findRunGroup(GROUP_ID)).thenReturn(java.util.Optional.of(runGroup(4, "BUILT", "COMPLETED", null)));
+        when(runs.finalizeSucceeded(GROUP_ID, NOW)).thenReturn(1);
+
+        var result = service.finalizeRun(GROUP_ID, new ModelMaterializationRunArtifactService.FinalizeCommand("SUCCEEDED"));
+
+        assertThat(result.status()).isEqualTo("BUILT");
+        verify(candidates, never()).transition(any(), any(), any(), any());
+        verify(qualityAssets, never()).ensureRegistered(any());
     }
 
     @Test
@@ -955,7 +989,17 @@ class ModelMaterializationRunArtifactServiceTest {
 
         assertThat(result.status()).isEqualTo("BUILT");
         assertThat(result.modelCount()).isEqualTo(1);
-        verify(runs).finalizeSucceeded(GROUP_ID, NOW);
+        var order = org.mockito.Mockito.inOrder(runs, candidates, qualityAssets);
+        order.verify(runs).finalizeSucceeded(GROUP_ID, NOW);
+        order.verify(candidates).transition(
+            "tenant-a", "service:dts-airflow", CANDIDATE_ID,
+            new ModelReleaseCandidateContract.TransitionCommand(
+                3, ModelLifecycleContract.DeliveryStatus.BUILT,
+                "materialization-built-" + GROUP_ID,
+                "dbt build and physical relation evidence verified"
+            )
+        );
+        order.verify(qualityAssets).ensureRegistered(any(ModelReleaseCandidateContract.CandidateView.class));
         verify(auditService).auditActionAsStrict(
             eq("airflow"),
             eq("model-materialization-run:" + GROUP_ID + ":finalized:succeeded"),

@@ -1399,7 +1399,7 @@ class F4StrictAuditRollbackPostgresIT {
         );
         assertThat(pipelineStatus(build.pipelineRunGroupId()))
             .isEqualTo("BUILT");
-        assertThat(candidateStatus(current)).isEqualTo("BUILT");
+        assertThat(candidateStatus(current)).isEqualTo("BUILDING");
         assertThat(
             sourceAvailability
                 .checkPinnedCurrentForUpdate(build.pipelineRunGroupId())
