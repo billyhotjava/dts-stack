@@ -302,6 +302,35 @@ afterEach(async () => {
 });
 
 describe("release and materialization dispatch", () => {
+	it("keeps a build failure visible when the same model status refreshes", async () => {
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
+		apiMocks.createCandidate.mockRejectedValue(new Error("已有候选，请检查构建范围"));
+		const onClose = vi.fn();
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={onClose} />));
+		await flush();
+		await act(async () => button("创建并运行")?.click());
+		expect(container.textContent).toContain("已有候选，请检查构建范围");
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[{ ...model }]} onClose={onClose} />));
+		await flush();
+		expect(container.textContent).toContain("已有候选，请检查构建范围");
+	});
+
+	it("starts a first schema-only materialization through the single-model build intent", async () => {
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
+		apiMocks.getLifecycle.mockResolvedValue({
+			implementation: { ...implementation, inputMode: "GENERATED", inputs: [{ generatorType: "SCHEMA_ONLY", config: {} }] },
+			artifacts: [], events: [],
+		});
+		await act(async () => root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />));
+		await flush();
+		await act(async () => button("创建并运行")?.click());
+		expect(apiMocks.startBuildIntent).toHaveBeenCalledWith(model, "idem-1", {
+			planId: model.planId, environment: "dev", buildMode: "SCHEMA_ONLY",
+		});
+		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
+		expect(apiMocks.lockCandidate).not.toHaveBeenCalled();
+	});
+
 	it("creates and locks a plan-owned candidate with the selected model UUID", async () => {
 		const created = candidate("BATCH_WORKBENCH");
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));

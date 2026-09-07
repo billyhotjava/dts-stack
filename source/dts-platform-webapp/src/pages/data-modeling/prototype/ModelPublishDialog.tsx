@@ -153,7 +153,6 @@ export function ModelPublishDialog({
 			return;
 		}
 		setBusy("load");
-		setFailure("");
 		try {
 			const [releaseWorkspace, selectedMaterializations, status] = await Promise.all([
 				step
@@ -338,6 +337,18 @@ export function ModelPublishDialog({
 		setBusy("build");
 		setFailure("");
 		try {
+			if (!batch && buildAction === "CREATE_CANDIDATE") {
+				const lifecycle = await getModelLifecycle(primary.id);
+				const implementation = lifecycle.implementation;
+				const schemaOnly = implementation?.inputMode === "GENERATED" && implementation.inputs.length === 1 &&
+					"generatorType" in implementation.inputs[0] && implementation.inputs[0].generatorType === "SCHEMA_ONLY";
+				if (schemaOnly) {
+					await compileSelectedModels(selection);
+					await startModelBuildIntent(primary, crypto.randomUUID(), { planId, environment, buildMode: "SCHEMA_ONLY" });
+					await load();
+					return;
+				}
+			}
 			const requireCurrentMaterializationPlan = async (fallback: string) => {
 				const preview = await previewMaterializationPlan(planId, {
 					environment,
