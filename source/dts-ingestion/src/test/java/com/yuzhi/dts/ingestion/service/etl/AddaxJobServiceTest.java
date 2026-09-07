@@ -99,6 +99,22 @@ class AddaxJobServiceTest {
     }
 
     @Test
+    void boundModelFullRefreshProducesInsertJobWithoutDestructiveSql() throws Exception {
+        Map<String, Object> reader = Map.of("jdbcUrl", "jdbc:mysql://localhost:3306/source", "username", "test", "password", "test", "table", "orders", "column", java.util.List.of("id"));
+        Map<String, Object> writer = Map.of("jdbcUrl", "jdbc:postgresql://localhost:5432/warehouse", "username", "test", "password", "test", "table", "ods.orders", "column", java.util.List.of("id"), "modelTarget", Map.of("schemaVersion", 1));
+        var result = addaxJobService.createJob("bound-model", "mysqlreader", reader, "postgresqlwriter", writer, null, "full_refresh");
+        String json = objectMapper.writeValueAsString(result.jobConfig());
+        assertThat(json).contains("ods.orders").doesNotContain("TRUNCATE", "DROP TABLE", "CREATE TABLE", "ALTER TABLE", "modelTarget");
+    }
+
+    @Test
+    void boundModelRejectsCustomWriterSql() {
+        Map<String, Object> writer = Map.of("modelTarget", Map.of("schemaVersion", 1), "preSql", java.util.List.of("truncate table ods.orders"));
+        assertThatThrownBy(() -> addaxJobService.createJob("bound-model", "mysqlreader", Map.of(), "postgresqlwriter", writer, null, "full_refresh"))
+            .hasMessageContaining("MODEL_INGESTION_CUSTOM_SQL_FORBIDDEN");
+    }
+
+    @Test
     void shouldGenerateMySQLToPostgresJob() throws Exception {
         // Given
         String taskName = "test-mysql-sync";

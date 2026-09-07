@@ -481,12 +481,12 @@ export function modelDraftFromView(
 				? ""
 				: structuredImplementation?.inputMode ||
 					logicalInputMode ||
-					(generationStrategyType === "DATE_DIMENSION"
+					(generationStrategyType === "DATE_DIMENSION" || model.modelType === "SOURCE"
 						? "GENERATED"
 						: model.modelType === "SUMMARY" || model.modelType === "APPLICATION"
 							? "UPSTREAM_MODEL"
 							: ""),
-		generationStrategyType: generationStrategyType === "DATE_DIMENSION" || generationStrategyType === "SCHEMA_ONLY" ? generationStrategyType : "",
+		generationStrategyType: generationStrategyType === "DATE_DIMENSION" || generationStrategyType === "SCHEMA_ONLY" ? generationStrategyType : model.modelType === "SOURCE" ? "SCHEMA_ONLY" : "",
 		implementationIdempotencyKey: crypto.randomUUID(),
 		creationOperationId: crypto.randomUUID(),
 		fieldMappings: (structuredImplementation?.fieldMappings || []).map((mapping) => ({ ...mapping })),

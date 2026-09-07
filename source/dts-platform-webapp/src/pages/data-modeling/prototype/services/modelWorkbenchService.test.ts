@@ -355,6 +355,13 @@ describe("concept dimension draft", () => {
 });
 
 describe("model workbench draft preparation", () => {
+    it("reopens an unimplemented source model with the structure generator selected", () => {
+        const model = { ...canonicalFactView(), modelType: "SOURCE" as const, layer: "ODS" as const };
+        expect(modelDraftFromView(model, null)).toMatchObject({
+            implementationInputMode: "GENERATED", generationStrategyType: "SCHEMA_ONLY",
+        });
+    });
+
 	it("recognizes a saved generated model whose implementation save must be retried", () => {
 		const model = {
 			...canonicalFactView(),

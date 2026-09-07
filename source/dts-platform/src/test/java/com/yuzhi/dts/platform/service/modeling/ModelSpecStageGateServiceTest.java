@@ -36,6 +36,25 @@ class ModelSpecStageGateServiceTest {
     private static final UUID MODEL_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
 
     @Test
+    void onlySourceModelsAllowKnownIngestionTechnicalFields() {
+        for (ModelType type : List.of(ModelType.SOURCE, ModelType.FACT)) {
+            for (String name : List.of("_dts_record_hash", "_dts_unknown")) {
+                ModelSpecView model = spy(releaseReadyFact());
+                when(model.modelType()).thenReturn(type);
+                when(model.fields()).thenReturn(List.of(new ModelField(name, "varchar", false, null, FieldRole.KEY, "INTERNAL")));
+                when(model.grain()).thenReturn(new Grain("record", List.of(name)));
+                var codes = ModelSpecStageGateService.evaluate(model, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(model))
+                    .blockers().stream().map(ModelSpecStageGateService.GateBlocker::code).toList();
+                if (type == ModelType.SOURCE && name.equals("_dts_record_hash")) {
+                    assertThat(codes).doesNotContain("MODEL_SPEC_FIELD_CODE_INVALID", "MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID", "MODEL_IMPLEMENTATION_KEY_FIELD_INVALID");
+                } else {
+                    assertThat(codes).contains("MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID", "MODEL_IMPLEMENTATION_KEY_FIELD_INVALID");
+                }
+            }
+        }
+    }
+
+    @Test
     void fullRefreshOutputsMayHaveNoKeyButIncrementalOutputsStillRequireOne() {
         for (ModelType type : List.of(ModelType.FACT, ModelType.SUMMARY, ModelType.APPLICATION)) {
             ModelSpecView model = spy(view(type, null, null, null,

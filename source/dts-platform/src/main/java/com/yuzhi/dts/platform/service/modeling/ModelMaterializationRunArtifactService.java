@@ -53,8 +53,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Synchronizes dbt runtime artifacts into durable pipeline truth.
  *
  * <p>dbt success and append-only probe evidence are persisted first. Verified pipeline rows
- * become BUILT during sync. Finalization completes the dispatch, promotes the candidate and
- * registers quality assets in one transaction, so registration can require completed evidence.
+ * become BUILT during sync. Finalization completes the dispatch and promotes the candidate.
+ * Data registration is an independent command that consumes this completed evidence.
  */
 @Service
 public class ModelMaterializationRunArtifactService {

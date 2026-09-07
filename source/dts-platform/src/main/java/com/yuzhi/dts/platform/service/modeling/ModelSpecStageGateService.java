@@ -43,6 +43,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class ModelSpecStageGateService {
 
     private static final Pattern FIELD_CODE = Pattern.compile("^[a-z][a-z0-9_]{0,62}$");
+    // Existing ingestion writer columns must be explicit fields, never added during ingestion.
+    private static final Set<String> SOURCE_TECHNICAL_FIELDS = Set.of(
+        "_dts_source_system", "_dts_source_table", "_dts_source_file", "_dts_source_sheet",
+        "_dts_file_hash", "_dts_row_number", "_dts_import_time", "_dts_batch_id",
+        "_dts_execution_id", "_dts_task_id", "_dts_raw_record", "_dts_source_resource",
+        "_dts_endpoint", "_dts_page_no", "_dts_record_no", "_dts_cursor_value", "_dts_record_hash"
+    );
+
+    private static boolean validFieldCode(ModelSpecView view, String name) {
+        return name != null && (FIELD_CODE.matcher(name).matches() ||
+            view.modelType() == ModelType.SOURCE && SOURCE_TECHNICAL_FIELDS.contains(name));
+    }
+
 
     private final ModelSpecApplicationService modelSpecs;
     private final ModelSpecRepository repository;
@@ -702,11 +715,11 @@ public class ModelSpecStageGateService {
             .map(ModelField::name)
             .filter(Objects::nonNull)
             .collect(java.util.stream.Collectors.toSet());
-        if (grainKeys.stream().anyMatch(key -> key == null || !FIELD_CODE.matcher(key).matches()) ||
+        if (grainKeys.stream().anyMatch(key -> !validFieldCode(view, key)) ||
             new HashSet<>(grainKeys).size() != grainKeys.size()) {
             add(blockers, blocker(view, "MODEL_IMPLEMENTATION_GRAIN_KEY_INVALID", "grain.keys", "粒度键必须是唯一有效的字段编码", "fields"));
         }
-        if (keyFields.stream().anyMatch(key -> key == null || !FIELD_CODE.matcher(key).matches()) ||
+        if (keyFields.stream().anyMatch(key -> !validFieldCode(view, key)) ||
             new HashSet<>(keyFields).size() != keyFields.size()) {
             add(blockers, blocker(view, "MODEL_IMPLEMENTATION_KEY_FIELD_INVALID", "fields", "KEY 字段必须是唯一有效的字段编码", "fields"));
         }
@@ -832,7 +845,7 @@ public class ModelSpecStageGateService {
         LinkedHashMap<String, GateBlocker> blockers
     ) {
         boolean legacyCode = view.fields().stream().anyMatch(field ->
-            field != null && field.name() != null && !FIELD_CODE.matcher(field.name()).matches()
+            field != null && field.name() != null && !validFieldCode(view, field.name())
         );
         if (legacyCode) {
             add(blockers, blocker(view, "MODEL_SPEC_FIELD_CODE_INVALID", "fields", "字段技术编码必须使用小写英文、数字和下划线", "fields"));
