@@ -3,19 +3,22 @@
 ## Sprint-104: 通用建模契约与物化一致性整改 (202609)
 
 **目录**: [sprint-104-202609-modeling-contract-consistency](sprint-104-202609-modeling-contract-consistency/README.md)
-**状态**: IN_PROGRESS（F1/T01–T08 在推进；F2/T09 契约核验中，T10-A 已开工，T10-B 及 T11–T14 为 DRAFT，契约/基线冻结后实施）
-**目标**: 模型编辑至发布、资产治理和分析交付遵循同一业务/界面契约；常见阻断在模型页处理，不需假字段或重复配置。
+**状态**: IN_PROGRESS（按当前任务文件：F1/T01–T08、F2/T09–T14 均 IN_PROGRESS；新增 F3/T15–T20 为 DRAFT，尚未实施）
+**目标**: ODS→DWD→DWS→ADS 可先共同设计；设计→实现配置→物化完成建模，接入写数、资产形成/治理与分析准备归数据模块，约束按阶段出现。
 **依赖**: 延续 Sprint-91/92/93 的建模、创作草稿和治理控制面，以及 fefea6844/a33ba6b0a 已有修复；不重复计算历史完成项。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---|---|---:|---|
 | F1-通用建模契约与物化一致性 | P1（能力边界 T07 为 P2） | 8 | IN_PROGRESS |
-| [F2-模型交付与资产治理贯通](sprint-104-202609-modeling-contract-consistency/features/F2-模型交付与资产治理贯通/README.md) | P1 | 6 | IN_PROGRESS（T09 契约核验） |
+| [F2-模型交付与资产治理贯通](sprint-104-202609-modeling-contract-consistency/features/F2-模型交付与资产治理贯通/README.md) | P1 | 6 | IN_PROGRESS（保留已有切片及证据，边界由 F3 接续） |
+| [F3-全层建模与数据模块边界简化](sprint-104-202609-modeling-contract-consistency/features/F3-全层建模与数据模块边界简化/README.md) | P1 | 6 | DRAFT（仅规划） |
 
-**统计**: DRAFT=4，READY=0，IN_PROGRESS=10，DONE=0，BLOCKED=0。
+**统计**: DRAFT=6，READY=0，IN_PROGRESS=14，DONE=0，BLOCKED=0；3 个 Feature、20 个 Task。按当前任务文件校正旧队列统计，不升级任何任务为 DONE。
 **执行顺序**: T01 归因 → T07 保存/执行边界冻结 → T02 契约 → T05/T06/T03/T04 → T07 一致性验证 → T08 集成验收。
 **F2 执行顺序**: T09 契约/基线 → T10 四步向导与统一交付状态 → T11 质量闭环、T12 资产维护、T13 分析恢复 → T14 端到端与离线交付。
-**关键决策**: F1 原进度保留；新增 F2 共 6 个竖切片任务。前后端共享状态/动作/导航/失效契约；四步向导每页一个主动作；跨步查看不越过生命周期门禁；资产登记与分析准备分开；复用 owner，复杂编辑保留上下文返回；稳定说明移入右上角步骤帮助，实际错误就地显示。
+**F3 执行顺序**: T15 契约/副作用冻结 → T16 ODS 与逻辑引用 → T17 结构物化/完成判定 → T18 三步页面 → T19 接入绑定与数据接手 → T20 集成验收。
+**关键决策**: F1/F2 已有实现和证据保留。F3 只补 ODS 正向建模、结构物化和模块边界；F2 四步及模型页治理条件为历史基线，新页面以 [F3 契约](sprint-104-202609-modeling-contract-consistency/assets/F3-modeling-data-boundary.md) 为准。每页一个主动作，完成建模不等于资产发布/分析可用；版本、安全、CAS、帮助和原 owner 继续复用。
+**F3 开工缺口**: SOURCE/逻辑引用兼容、物化与发布副作用、API/文件目标绑定、资产登记身份/深链由 T15 冻结；空目标与真实页面基线未执行，新增任务保持 DRAFT。只覆盖既有 PostgreSQL 普通表/接入/目录，不新增菜单或全链批量调度。
 **当前证据与风险**: `bd0670acc89e7dd1be82e0d12961ba7744f63ca2` 的部署目录 Java 专项已 99/99，工作台 Vitest 日志已 92/92；首轮 Java 失败仅为测试夹具/断言滞后，修正后通过。IT-04 ephemeral 已通过，但目标环境、Chrome 95、其余 UI、正式交付/部署、真实样本、物化和离线验收仍未核验；T08 不得标 DONE。证据见 [源码专项归档](sprint-104-202609-modeling-contract-consistency/it/evidence/source-test-summary-20260906.md)。
 
 **F2 风险/证据**: T10-A 帮助/说明迁移15项专项已通过；T10-B1 单主动作与创作门禁已提交，65项专项通过；两者尚未部署，完整四步页面与其余切片仍待实施。共享契约的精确写协议、字段归属/并发与分析源唯一性由 T09/T13 冻结。IT-18 当前组件/契约部分通过，IT-08–IT-18 的真实页面端到端验收仍待执行；F1 历史双镜像证据不证明 F2 分析端交付。
