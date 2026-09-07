@@ -50,7 +50,6 @@ import {
 	prepareModelDraftForSave,
 	reconcileModelDraftSources,
 	saveDimensionDefinitionDraft,
-	saveModelDraft,
 	validateConceptDimensionDraftInput,
 	validateModelDraftInput,
 } from "./services/modelWorkbenchService";
@@ -400,21 +399,13 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				: validateModelDraftInput(preparedDraft, context.implementationCapabilities);
 		setValidationErrors(nextValidationErrors);
 		if (Object.keys(nextValidationErrors).length) return false;
-		if (
-			wizardStep !== "definition" &&
-			preparedDraft.base &&
-			!modelDraftNeedsImplementationRecovery(preparedDraft, context.implementationCapabilities)
-		) {
+		if (wizardStep !== "definition" && preparedDraft.base) {
 			return await authoring.save("VISUAL");
 		}
 		savingRef.current = true;
 		setSaving(true);
 		try {
-			const persistDraft = !preparedDraft.base
-				? saveModelDefinitionDraft
-				: wizardStep === "definition"
-					? saveExistingModelDefinition
-					: saveModelDraft;
+			const persistDraft = !preparedDraft.base ? saveModelDefinitionDraft : saveExistingModelDefinition;
 			const saved = await persistDraft(preparedDraft, {
 				ownerId: ownerIdOf(userInfo),
 				dimensionDefinitions,

@@ -1405,7 +1405,7 @@ public class DbtImplementationDraftService {
             draft.baseImplementationChecksum(),
             unifiedAuthoring
         );
-        ValidatedNode ownedTarget = target(validated, implementation);
+        ValidatedNode ownedTarget = draftTarget(validated, draft, implementation);
         Resolution current = resolveDependencies(
             tenantId,
             model,
@@ -1690,7 +1690,7 @@ public class DbtImplementationDraftService {
             current.baseImplementationChecksum(),
             unifiedAuthoring
         );
-        ValidatedNode target = target(validated, baseImplementation);
+        ValidatedNode target = draftTarget(validated, current, baseImplementation);
         requireMaterialization(model, target);
         UpdateModelSpecCommand authoringSnapshot = unifiedAuthoring ? requireValidModelSnapshot(current) : null;
         List<ModelField> projectedFields = DbtModelFieldProjector.project(
@@ -2023,8 +2023,9 @@ public class DbtImplementationDraftService {
 
     /**
      * Saving the definition can persist the exact content already held by the authoring draft.
-     * Align that draft under CAS, retaining every source/working file. Different content remains
-     * a conflict; this is not a merge or permission to overwrite another editor's changes.
+     * A legacy save could also create the first designer implementation outside this draft.
+     * Align equivalent persisted content under CAS, retaining every source/working file.
+     * Different content remains a conflict, including a second implementation revision.
      */
     private DraftRow alignAuthoringBase(
         String tenantId,
@@ -2035,36 +2036,90 @@ public class DbtImplementationDraftService {
     ) {
         if (draft.modelSpecSnapshot() == null || draft.sourceBundleSnapshot() == null) return draft;
         ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, draft.planId(), true);
-        if (model.revision() == draft.baseModelRevision() && Objects.equals(model.checksum(), draft.baseModelChecksum())) {
-            return draft;
-        }
-        UpdateModelSpecCommand snapshot = requireValidModelSnapshot(draft);
-        ModelSpecView originalModel = modelSpecs.revision(tenantId,
-            new com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef(modelSpecId, draft.baseModelRevision()));
-        requireModelPins(draft, originalModel);
-        if (snapshot == null || model.status() != ModelStatus.DRAFT || model.revision() <= draft.baseModelRevision() ||
-            !Objects.equals(model.checksum(), snapshotCodec.toUpdatedView(originalModel, snapshot, model.revision(), now).checksum())) {
-            throw DbtImplementationDraftContract.conflict(
-                "DBT_DRAFT_BASE_MODEL_CONFLICT",
-                "模型定义已变更，且与当前创作草稿不一致。草稿及 SQL 已保留，请核对模型设计后再提交。"
-            );
+        boolean modelChanged = model.revision() != draft.baseModelRevision() ||
+            !Objects.equals(model.checksum(), draft.baseModelChecksum());
+        if (modelChanged) {
+            UpdateModelSpecCommand snapshot = requireValidModelSnapshot(draft);
+            ModelSpecView originalModel = modelSpecs.revision(tenantId,
+                new com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef(modelSpecId, draft.baseModelRevision()));
+            requireModelPins(draft, originalModel);
+            if (snapshot == null || model.status() != ModelStatus.DRAFT || model.revision() <= draft.baseModelRevision() ||
+                !Objects.equals(model.checksum(), snapshotCodec.toUpdatedView(originalModel, snapshot, model.revision(), now).checksum())) {
+                throw DbtImplementationDraftContract.conflict(
+                    "DBT_DRAFT_BASE_MODEL_CONFLICT",
+                    "模型定义已变更，且与当前创作草稿不一致。草稿及 SQL 已保留，请核对模型设计后再提交。"
+                );
+            }
         }
         ImplementationView implementation = lifecycle.timeline(tenantId, modelSpecId).implementation();
-        requireImplementationPin(modelSpecId, implementation, draft.baseImplementationRevision(),
-            draft.baseImplementationChecksum(), true);
+        Integer implementationRevision = implementation == null ? null : implementation.implementationRevision();
+        String implementationChecksum = implementation == null ? null : implementation.implementationChecksum();
+        boolean implementationChanged = !Objects.equals(draft.baseImplementationRevision(), implementationRevision) ||
+            !Objects.equals(draft.baseImplementationChecksum(), implementationChecksum);
+        if (!implementationChanged || !equivalentInitialImplementation(draft, model, implementation)) {
+            requireImplementationPin(modelSpecId, implementation, draft.baseImplementationRevision(),
+                draft.baseImplementationChecksum(), true);
+        }
+        if (!modelChanged && !implementationChanged) return draft;
         SourceBundleView frozen = sourceBundleSnapshot(draft.sourceBundleSnapshot());
         Resolution resolution = dependencies == null ? null
-            : resolveDependencies(tenantId, model, null, frozen.projectKey(), null);
+            : resolveDependencies(tenantId, model, implementation, frozen.projectKey(), null);
         SourceBundleView alignedSource = resolution == null ? frozen
             : withDependencies(frozen, resolution, frozen.managedDependencyAliases());
         DraftRow aligned = repository.alignAuthoringBase(
             tenantId, modelSpecId, draft.id(), actorId, draft.etag(),
             draft.baseModelRevision(), draft.baseModelChecksum(), model.revision(), model.checksum(),
+            draft.baseImplementationRevision(), draft.baseImplementationChecksum(), implementationRevision, implementationChecksum,
             sourceBundleSnapshot(alignedSource), nextEtag(), now
         ).orElseThrow(() -> etagConflict(draft, draft.etag()));
         audit("MODELING_DBT_DRAFT_BASE_SYNC", aligned, 0, null, null, null, null,
             DbtImplementationDraftCorrelation.currentOrCreate());
         return aligned;
+    }
+
+    /** Compare the saved snapshot, never newly submitted edits, before accepting a legacy first save. */
+    private boolean equivalentInitialImplementation(DraftRow draft, ModelSpecView model, ImplementationView implementation) {
+        if (draft.baseImplementationRevision() != null || draft.baseImplementationChecksum() != null ||
+            implementation == null || implementation.implementationRevision() != 1 ||
+            implementation.ownership() != ImplementationMode.DESIGNER_GENERATED ||
+            !"ACTIVE".equals(implementation.status()) || model.status() != ModelStatus.DRAFT ||
+            !Objects.equals(model.id(), implementation.modelSpecId()) || !Objects.equals(model.planId(), implementation.planId()) ||
+            model.revision() != implementation.revision() || !Objects.equals(model.checksum(), implementation.modelChecksum()) ||
+            sourceBundleSnapshot(draft.sourceBundleSnapshot()).sourceKind() != SourceBundleKind.CANONICAL_INITIALIZATION) return false;
+        var decoded = snapshotDecoder.decode(jsonNode(draft.modelSpecSnapshot()));
+        if (!decoded.valid() || decoded.visualImplementation() == null) return false;
+        SaveImplementationCommand saved = decoded.visualImplementation().command();
+        // Legacy and authoring saves assign different SQL identities to the same configuration.
+        // The frozen authoring project is retained; lifecycle transition still uses strict CAS.
+        return saved.ownership() == implementation.ownership() && saved.inputMode() == implementation.inputMode() &&
+            Objects.equals(saved.inputs(), implementation.inputs()) &&
+            Objects.equals(saved.fieldMappings(), implementation.fieldMappings()) &&
+            Objects.equals(saved.settings(), implementation.settings()) &&
+            Objects.equals(saved.materialization(), implementation.materialization());
+    }
+
+    private ValidatedNode draftTarget(ValidatedProject validated, DraftRow draft, ImplementationView implementation) {
+        if (draft.modelSpecSnapshot() != null && draft.sourceBundleSnapshot() != null && implementation != null &&
+            implementation.ownership() == ImplementationMode.DESIGNER_GENERATED) {
+            SourceBundleView frozen = sourceBundleSnapshot(draft.sourceBundleSnapshot());
+            if (frozen.sourceKind() == SourceBundleKind.CANONICAL_INITIALIZATION) {
+                if (!Objects.equals(frozen.projectKey(), validated.projectKey())) {
+                    throw DbtImplementationDraftContract.unprocessable("DBT_DRAFT_PROJECT_IDENTITY_UNSUPPORTED",
+                        "The initialized authoring project identity cannot be changed");
+                }
+                List<String> initialTargets = frozen.files().stream().map(BundleFileView::path)
+                    .filter(path -> path.matches("models/[a-z][a-z0-9_]{0,62}\\.sql"))
+                    .map(path -> "model." + frozen.projectKey() + "." + path.substring(7, path.length() - 4)).toList();
+                if (initialTargets.size() == 1) {
+                    return validated.nodes().stream().filter(node -> "MODEL".equals(node.nodeKind()) &&
+                        Objects.equals(initialTargets.get(0), node.dbtUniqueId())).findFirst().orElseThrow(() ->
+                        DbtImplementationDraftContract.unprocessable("DBT_DRAFT_NODE_IDENTITY_UNSUPPORTED",
+                            "The initialized authoring model cannot be removed or renamed"));
+                }
+                throw sourceBundleUnavailable();
+            }
+        }
+        return target(validated, implementation);
     }
 
     /** The immutable initialization dependency snapshot is a base pin, not the validated commit pin. */

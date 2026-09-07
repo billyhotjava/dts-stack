@@ -325,7 +325,7 @@ public class DbtImplementationDraftRepository {
         return findForActor(tenantId, modelSpecId, draftId, actorId);
     }
 
-    /** Advances an equivalent authoring base without rewriting its frozen files or working SQL. */
+    /** Advances equivalent model/implementation pins without rewriting frozen files or working SQL. */
     public Optional<DraftRow> alignAuthoringBase(
         String tenantId,
         UUID modelSpecId,
@@ -336,6 +336,10 @@ public class DbtImplementationDraftRepository {
         String expectedChecksum,
         int revision,
         String checksum,
+        Integer expectedImplementationRevision,
+        String expectedImplementationChecksum,
+        Integer implementationRevision,
+        String implementationChecksum,
         String sourceBundleSnapshot,
         String nextEtag,
         Instant now
@@ -344,18 +348,28 @@ public class DbtImplementationDraftRepository {
             """
             update modeling_dbt_implementation_draft
                set base_model_revision = ?, base_model_checksum = ?, source_bundle_snapshot = cast(? as jsonb),
+                   base_implementation_revision = ?, base_implementation_checksum = ?,
                    status = 'DRAFT', etag = ?, validated_checksum = null, validation_summary = null,
                    project_checksum = null, bundle_checksum = null, bundle_manifest = null, last_modified_date = ?
              where tenant_id = ? and model_spec_id = ? and id = ? and actor_id = ? and etag = ?
                and base_model_revision = ? and base_model_checksum = ?
+               and base_implementation_revision is not distinct from cast(? as integer)
+               and base_implementation_checksum is not distinct from cast(? as varchar)
                and model_spec_snapshot is not null and expires_at > ? and status in ('DRAFT', 'VALIDATED')
                and exists (select 1 from modeling_model_spec spec
                             where spec.tenant_id = ? and spec.id = ? and spec.status = 'DRAFT'
                               and spec.revision = ? and spec.current_checksum = ?)
+               and ((cast(? as integer) is null and not exists
+                        (select 1 from modeling_model_implementation impl where impl.tenant_id = ? and impl.model_spec_id = ?))
+                    or exists (select 1 from modeling_model_implementation impl
+                                where impl.tenant_id = ? and impl.model_spec_id = ?
+                                  and impl.implementation_revision = ? and impl.current_implementation_checksum = ?))
             """,
-            revision, checksum, sourceBundleSnapshot, nextEtag, Timestamp.from(now),
-            tenantId, modelSpecId, draftId, actorId, expectedEtag, expectedRevision, expectedChecksum, Timestamp.from(now),
-            tenantId, modelSpecId, revision, checksum
+            revision, checksum, sourceBundleSnapshot, implementationRevision, implementationChecksum, nextEtag, Timestamp.from(now),
+            tenantId, modelSpecId, draftId, actorId, expectedEtag, expectedRevision, expectedChecksum,
+            expectedImplementationRevision, expectedImplementationChecksum, Timestamp.from(now),
+            tenantId, modelSpecId, revision, checksum,
+            implementationRevision, tenantId, modelSpecId, tenantId, modelSpecId, implementationRevision, implementationChecksum
         );
         return changed == 1 ? findForActor(tenantId, modelSpecId, draftId, actorId) : Optional.empty();
     }

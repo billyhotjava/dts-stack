@@ -1325,8 +1325,10 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-    void commitsTheFrozenBundleAsAnImmutableConfigArtifactAndBindsItIntoImplementationIdempotency(boolean unified) throws Exception {
+    @org.junit.jupiter.params.provider.CsvSource({"false, false", "true, false", "true, true"})
+    void commitsTheFrozenBundleAsAnImmutableConfigArtifactAndBindsItIntoImplementationIdempotency(
+        boolean unified, boolean recoveredInitial
+    ) throws Exception {
         String targetSql = "select * from {{ ref('stg_orders') }}\n";
         String stagingSql = "{{ config(materialized='ephemeral') }}\nselect 1 as order_id\n";
         List<FileRow> files = List.of(
@@ -1352,10 +1354,11 @@ class DbtImplementationDraftServiceSecurityTest {
             "sprint83",
             bundle.projectChecksum(),
             bundle.bundleChecksum(),
-            SourceBundleKind.FROZEN_SOURCE_BUNDLE,
+            recoveredInitial ? SourceBundleKind.CANONICAL_INITIALIZATION : SourceBundleKind.FROZEN_SOURCE_BUNDLE,
             true,
             files
                 .stream()
+                .filter(file -> !recoveredInitial || !file.path().equals("models/stg_orders.sql"))
                 .map(file ->
                     new DbtImplementationDraftContract.BundleFileView(
                         file.path(),
@@ -1422,6 +1425,10 @@ class DbtImplementationDraftServiceSecurityTest {
                 "dependencyValidation", Map.of("dependencyChecksum", validatedDependencyChecksum)
             )));
         }
+        if (recoveredInitial) {
+            when(validated.baseImplementationRevision()).thenReturn(1);
+            when(validated.baseImplementationChecksum()).thenReturn(IMPLEMENTATION_CHECKSUM);
+        }
         when(repository.findForActor(TENANT, MODEL_ID, DRAFT_ID, ACTOR)).thenReturn(Optional.of(validated));
         when(repository.listFiles(DRAFT_ID)).thenReturn(files);
         when(validator.validate(any())).thenReturn(project);
@@ -1438,6 +1445,13 @@ class DbtImplementationDraftServiceSecurityTest {
         TimelineView timeline = org.mockito.Mockito.mock(TimelineView.class);
         when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(timeline);
         when(timeline.implementation()).thenReturn(null);
+        if (recoveredInitial) {
+            ImplementationView legacy = designerImplementation();
+            when(legacy.implementationRevision()).thenReturn(1);
+            when(legacy.projectKey()).thenReturn("dts");
+            when(legacy.dbtUniqueId()).thenReturn("model.dts.legacy_owner");
+            when(timeline.implementation()).thenReturn(legacy);
+        }
         when(repository.claimCommit(any(), any(), any(), any(), any(), any(), eq(derivedKey), any(), any()))
             .thenReturn(Optional.of(claimed));
         ImplementationView implementation = org.mockito.Mockito.mock(ImplementationView.class);
@@ -1489,17 +1503,21 @@ class DbtImplementationDraftServiceSecurityTest {
         ArgumentCaptor<SaveImplementationCommand> implementationCommand = ArgumentCaptor.forClass(
             SaveImplementationCommand.class
         );
+        ArgumentCaptor<com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ExpectedImplementationVersion> implementationPin =
+            ArgumentCaptor.forClass(com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ExpectedImplementationVersion.class);
         verify(lifecycle).saveImportedDbtImplementation(
             eq(TENANT),
             eq(ACTOR),
             eq(MODEL_ID),
             any(),
             any(),
-            any(),
+            implementationPin.capture(),
             eq("sprint83"),
             eq("model.sprint83.orders"),
             implementationCommand.capture()
         );
+        assertThat(implementationPin.getValue().revision()).isEqualTo(recoveredInitial ? 1 : 0);
+        assertThat(implementationPin.getValue().checksum()).isEqualTo(recoveredInitial ? IMPLEMENTATION_CHECKSUM : null);
         assertThat(implementationCommand.getValue().idempotencyKey()).isEqualTo(derivedKey);
         assertThat(implementationCommand.getValue().settings())
             .containsEntry("targetPhysicalName", "orders")
@@ -1830,6 +1848,7 @@ class DbtImplementationDraftServiceSecurityTest {
         when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
         when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(designerImplementation(), List.of(), List.of()));
         SourceBundleView source = sourceBundle("sprint83", List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
             new FileInput("models/orders.sql", "select manual_business_rule from orders\n")
         ));
         DraftRow original = authoringRowWithSource(objectMapper.writeValueAsString(versionedVisualSnapshot()),
@@ -1838,14 +1857,16 @@ class DbtImplementationDraftServiceSecurityTest {
         when(aligned.baseModelRevision()).thenReturn(4);
         when(aligned.baseModelChecksum()).thenReturn(latest.checksum());
         when(aligned.etag()).thenReturn("aligned-etag");
-        when(repository.alignAuthoringBase(any(), any(), any(), any(), any(), anyInt(), any(), anyInt(), any(), any(), any(), any()))
+        when(repository.alignAuthoringBase(any(), any(), any(), any(), any(), anyInt(), any(), anyInt(), any(),
+            any(), any(), any(), any(), any(), any(), any()))
             .thenReturn(Optional.of(aligned));
 
         DraftRow result = ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW);
 
         assertThat(result.baseModelRevision()).isEqualTo(4);
         verify(repository).alignAuthoringBase(eq(TENANT), eq(MODEL_ID), eq(DRAFT_ID), eq(ACTOR), eq("authoring-etag"),
-            eq(3), eq(MODEL_CHECKSUM), eq(4), eq(latest.checksum()), eq(original.sourceBundleSnapshot()), any(), eq(NOW));
+            eq(3), eq(MODEL_CHECKSUM), eq(4), eq(latest.checksum()), eq(2), eq(IMPLEMENTATION_CHECKSUM),
+            eq(2), eq(IMPLEMENTATION_CHECKSUM), eq(original.sourceBundleSnapshot()), any(), eq(NOW));
         assertThat(result.modelSpecSnapshot()).isEqualTo(original.modelSpecSnapshot());
         verify(repository, never()).replaceFiles(any(), any(), any(), any(), any(), any(), any(), any());
 
@@ -1893,6 +1914,113 @@ class DbtImplementationDraftServiceSecurityTest {
         java.util.Set<String> modified = ReflectionTestUtils.invokeMethod(service, "compilerOwnedPaths",
             TENANT, MODEL_ID, draft, current, designerImplementation());
         assertThat(modified).doesNotContain(oldPath);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = { false, true })
+    void alignsEquivalentFirstImplementationWithOrWithoutADefinitionSave(boolean modelAdvanced) throws Exception {
+        var snapshot = versionedVisualSnapshot();
+        var decoded = new com.yuzhi.dts.platform.service.modeling.authoring.ModelAuthoringSnapshotDecoder(objectMapper).decode(snapshot);
+        ModelSpecView previous = model(3, MODEL_CHECKSUM);
+        when(previous.id()).thenReturn(MODEL_ID);
+        var codec = new com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec(objectMapper);
+        ModelSpecView current = codec.toUpdatedView(previous, decoded.modelSpec(), modelAdvanced ? 4 : 3, NOW);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(current);
+        when(modelSpecs.revision(eq(TENANT), any())).thenReturn(previous);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        SourceBundleView source = sourceBundle("sprint83", List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            new FileInput("models/orders.sql", "select 1\n")));
+        source = new SourceBundleView(source.projectKey(), source.projectChecksum(), source.bundleChecksum(),
+            SourceBundleKind.CANONICAL_INITIALIZATION, true, source.files());
+        DraftRow original = org.mockito.Mockito.spy(authoringRowWithSource(objectMapper.writeValueAsString(snapshot),
+            objectMapper.writeValueAsString(source), "{}"));
+        when(original.baseImplementationRevision()).thenReturn(null);
+        when(original.baseImplementationChecksum()).thenReturn(null);
+        if (!modelAdvanced) when(original.baseModelChecksum()).thenReturn(current.checksum());
+        var command = decoded.visualImplementation().command();
+        ImplementationView implementation = new ImplementationView(IMPLEMENTATION_ID, MODEL_ID, PLAN_ID,
+            current.revision(), current.checksum(), ImplementationMode.DESIGNER_GENERATED, "dts", "model.dts.legacy_owner",
+            "ACTIVE", 1, IMPLEMENTATION_CHECKSUM, command.inputMode(), command.inputs(), command.fieldMappings(),
+            command.settings(), command.materialization());
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(implementation, List.of(), List.of()));
+        DraftRow aligned = org.mockito.Mockito.spy(original);
+        when(aligned.baseModelRevision()).thenReturn(current.revision());
+        when(aligned.baseModelChecksum()).thenReturn(current.checksum());
+        when(aligned.baseImplementationRevision()).thenReturn(1);
+        when(aligned.baseImplementationChecksum()).thenReturn(IMPLEMENTATION_CHECKSUM);
+        when(repository.alignAuthoringBase(any(), any(), any(), any(), any(), anyInt(), any(), anyInt(), any(),
+            any(), any(), any(), any(), any(), any(), any())).thenReturn(Optional.of(aligned));
+
+        DraftRow result = ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW);
+
+        assertThat(result.baseImplementationRevision()).isEqualTo(1);
+        assertThat(result.modelSpecSnapshot()).isEqualTo(original.modelSpecSnapshot());
+        assertThat(result.sourceBundleSnapshot()).isEqualTo(original.sourceBundleSnapshot());
+        verify(repository).alignAuthoringBase(eq(TENANT), eq(MODEL_ID), eq(DRAFT_ID), eq(ACTOR), eq(original.etag()),
+            eq(3), eq(original.baseModelChecksum()), eq(current.revision()), eq(current.checksum()),
+            org.mockito.ArgumentMatchers.isNull(), org.mockito.ArgumentMatchers.isNull(), eq(1), eq(IMPLEMENTATION_CHECKSUM),
+            eq(original.sourceBundleSnapshot()), any(), eq(NOW));
+        verify(repository, never()).replaceFiles(any(), any(), any(), any(), any(), any(), any(), any());
+
+        // A different configuration, later revision or imported ownership is a real concurrent edit.
+        for (String difference : List.of("settings", "inputs", "mappings", "revision", "ownership", "status")) {
+            ImplementationView changed = org.mockito.Mockito.spy(implementation);
+            switch (difference) {
+                case "settings" -> when(changed.settings()).thenReturn(Map.of("targetPhysicalName", "other_table"));
+                case "inputs" -> when(changed.inputs()).thenReturn(List.of(new GeneratedInput("OTHER", Map.of())));
+                case "mappings" -> when(changed.fieldMappings()).thenReturn(List.of(
+                    new com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.FieldMapping("other", "record_id")));
+                case "revision" -> when(changed.implementationRevision()).thenReturn(2);
+                case "ownership" -> when(changed.ownership()).thenReturn(ImplementationMode.DBT_MANAGED);
+                case "status" -> when(changed.status()).thenReturn("STALE");
+            }
+            when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(changed, List.of(), List.of()));
+            org.mockito.Mockito.clearInvocations(repository);
+            DraftException conflict = catchThrowableOfType(
+                () -> ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW),
+                DraftException.class);
+            assertThat(conflict.code()).as(difference).isEqualTo("DBT_DRAFT_BASE_IMPLEMENTATION_CONFLICT");
+            org.mockito.Mockito.verifyNoInteractions(repository);
+        }
+    }
+
+    @Test
+    void selectsTheFrozenInitializationTargetAcrossTheDesignerOwnershipTransition() throws Exception {
+        SourceBundleView source = sourceBundle("sprint83", List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            new FileInput("models/orders.sql", "select 1\n")));
+        SourceBundleView initial = new SourceBundleView(source.projectKey(), source.projectChecksum(), source.bundleChecksum(),
+            SourceBundleKind.CANONICAL_INITIALIZATION, true, source.files());
+        DraftRow draft = authoringRowWithSource(objectMapper.writeValueAsString(versionedVisualSnapshot()),
+            objectMapper.writeValueAsString(initial), "{}");
+        ImplementationView legacy = designerImplementation();
+        when(legacy.projectKey()).thenReturn("dts");
+        when(legacy.dbtUniqueId()).thenReturn("model.dts.legacy_owner");
+        ValidatedProject validated = new AdvancedDbtDraftStaticValidator().validate(Map.of(
+            "dbt_project.yml", "name: sprint83\nversion: '1.0'\nconfig-version: 2\n",
+            "models/orders.sql", "select * from {{ ref('stg_orders') }}\n",
+            "models/stg_orders.sql", "select 1 as record_id\n"
+        ));
+
+        ValidatedNode target = ReflectionTestUtils.invokeMethod(service, "draftTarget", validated, draft, legacy);
+        assertThat(target.dbtUniqueId()).isEqualTo("model.sprint83.orders");
+
+        DraftException projectConflict = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "draftTarget", initialProject("orders"), draft, legacy), DraftException.class);
+        assertThat(projectConflict.code()).isEqualTo("DBT_DRAFT_PROJECT_IDENTITY_UNSUPPORTED");
+        ValidatedProject renamed = new AdvancedDbtDraftStaticValidator().validate(Map.of(
+            "dbt_project.yml", "name: sprint83\nversion: '1.0'\nconfig-version: 2\n",
+            "models/renamed.sql", "select 1 as record_id\n"
+        ));
+        DraftException nodeConflict = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "draftTarget", renamed, draft, legacy), DraftException.class);
+        assertThat(nodeConflict.code()).isEqualTo("DBT_DRAFT_NODE_IDENTITY_UNSUPPORTED");
+
+        when(legacy.ownership()).thenReturn(ImplementationMode.DBT_MANAGED);
+        DraftException importedConflict = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "draftTarget", validated, draft, legacy), DraftException.class);
+        assertThat(importedConflict.code()).isEqualTo("DBT_DRAFT_PROJECT_IDENTITY_UNSUPPORTED");
     }
 
     private ModelSpecView model(int revision, String checksum) {
