@@ -275,8 +275,9 @@ beforeEach(() => {
 		bindings: [],
 	} satisfies PlanExecutionWorkspace);
 	apiMocks.getMaterializationStatuses.mockResolvedValue([]);
-	apiMocks.getDeliveryStatus.mockImplementation(async (id: string, environment: string) => {
+	apiMocks.getDeliveryStatus.mockImplementation(async (id: string, environment?: string) => {
 		const selected = id === secondModel.id ? secondModel : model;
+		if (!environment) return deliveryStatusFor(null, selected);
 		const current = await apiMocks.getWorkbench(model.planId);
 		return deliveryStatusFor(current, selected, environment);
 	});
@@ -509,8 +510,18 @@ describe("release and materialization dispatch", () => {
 		const built = {
 			...candidate("BATCH_WORKBENCH", "BUILT"),
 			entries: [
-				{ modelSpecId: secondModel.id, selectedReason: "AUTO_DEPENDENCY" },
-				{ modelSpecId: model.id, selectedReason: "MATERIALIZATION_ROOT" },
+				{
+					modelSpecId: secondModel.id,
+					revision: secondModel.revision,
+					checksum: secondModel.checksum,
+					selectedReason: "AUTO_DEPENDENCY",
+				},
+				{
+					modelSpecId: model.id,
+					revision: model.revision,
+					checksum: model.checksum,
+					selectedReason: "MATERIALIZATION_ROOT",
+				},
 			],
 		} as ReleaseCandidate;
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["RUN_QUALITY", "REMATERIALIZE"], built));
@@ -917,7 +928,7 @@ describe("release and materialization dispatch", () => {
 		);
 		await flush();
 		await act(async () => button("发布模型")?.click());
-		await act(async () => button("发布上线")?.click());
+		await act(async () => button("确认发布")?.click());
 
 		expect(apiMocks.publishCandidate).toHaveBeenCalledWith(model.planId, approved, "idem-1", "从模型工作台发布");
 		expect(apiMocks.startPublicationIntent).not.toHaveBeenCalled();
@@ -926,17 +937,20 @@ describe("release and materialization dispatch", () => {
 	it("shows the published asset registration result and opens the governed asset detail", async () => {
 		const published = candidate("BATCH_WORKBENCH", "PUBLISHED");
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], published));
-		apiMocks.getServingSyncStatuses.mockResolvedValue([
-			{
-				modelSpecId: model.id,
-				catalogAssetKey: `semantic-model:${model.id}`,
-				syncStatus: "SYNCED",
-				syncAttempts: 0,
-				version: 8,
-				servingReady: true,
-				servingRef: { physicalAssetId: "33333333-3333-3333-3333-333333333333" },
-			},
-		]);
+		apiMocks.getDeliveryStatus.mockResolvedValue({
+			...deliveryStatusFor(workspace(["ROLLBACK"], published)),
+			steps: ["catalog", "analysis"].map((key) => ({
+				key,
+				state: "SUCCEEDED",
+				reasonCode: null,
+				message: "",
+				evidenceRevision: model.revision,
+				matchesCurrentTarget: true,
+				resourceId: key === "catalog" ? "33333333-3333-3333-3333-333333333333" : null,
+				updatedAt: null,
+				outputs: [],
+			})),
+		});
 
 		await act(async () =>
 			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
@@ -945,7 +959,7 @@ describe("release and materialization dispatch", () => {
 		await act(async () => button("发布模型")?.click());
 
 		expect(container.textContent).toContain("资产登记结果");
-		expect(container.textContent).toContain("目录同步成功");
+		expect(container.textContent).toContain("资产已登记");
 		await act(async () => button("查看资产")?.click());
 		expect(routerPush).toHaveBeenCalledWith("/catalog/datasets/33333333-3333-3333-3333-333333333333");
 	});
@@ -996,7 +1010,7 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).toContain("无需另行审批");
 		expect(container.textContent).not.toContain("发布评审");
 		expect(container.textContent).toContain("提交人：model-owner");
-		expect(button("发布上线")?.disabled).toBe(false);
+		expect(button("确认发布")?.disabled).toBe(false);
 	});
 
 	it("does not present a published candidate as online while its plan binding is deploying", async () => {
@@ -1729,7 +1743,7 @@ describe("model-scoped historical release workspace", () => {
 		await flush();
 		expect(apiMocks.getWorkbench).toHaveBeenCalledWith(model.planId);
 		expect(apiMocks.getDeliveryStatus.mock.calls.every((args) => args.length === 1)).toBe(true);
-		await act(async () => button("发布模型")?.click());
+		await act(async () => button("批量发布流程")?.click());
 		expect(button("确认发布")).toBeDefined();
 		expect(button("回滚发布")).toBeUndefined();
 	});

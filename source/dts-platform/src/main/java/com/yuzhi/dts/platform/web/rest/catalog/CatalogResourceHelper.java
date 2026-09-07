@@ -205,6 +205,7 @@ public class CatalogResourceHelper {
         UUID domainId = d.getDomain() != null ? d.getDomain().getId() : null;
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", d.getId());
+        m.put("version", d.getVersion());
         m.put("name", d.getName());
         m.put("domainId", domainId);
         m.put("domainName", d.getDomain() != null ? d.getDomain().getName() : null);

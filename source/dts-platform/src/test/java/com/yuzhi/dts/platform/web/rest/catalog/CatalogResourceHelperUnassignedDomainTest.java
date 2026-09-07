@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -20,8 +21,30 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class CatalogResourceHelperUnassignedDomainTest {
+
+    @Test
+    void detailDtoExposesEntityVersionWithExistingGovernanceFields() {
+        CatalogResourceHelper helper = helper();
+        CatalogDataset dataset = new CatalogDataset();
+        ReflectionTestUtils.setField(dataset, "id", java.util.UUID.randomUUID());
+        ReflectionTestUtils.setField(dataset, "version", 7L);
+        dataset.setOwner("owner");
+        dataset.setDescription("description");
+        var dto = helper.toDatasetDto(dataset);
+        assertThat(dto).containsEntry("id", dataset.getId()).containsEntry("version", 7L).containsEntry("owner", "owner").containsEntry("description", "description");
+    }
+
+    private static CatalogResourceHelper helper() {
+        return new CatalogResourceHelper(
+            mock(CatalogDatasetRepository.class), mock(CatalogTableSchemaRepository.class),
+            mock(CatalogColumnSchemaRepository.class), mock(CatalogMetadataChangeLogRepository.class),
+            mock(DataStandardRepository.class), mock(InfraDataSourceRepository.class),
+            mock(CatalogFeatureProperties.class), mock(OrganizationVisibilityService.class)
+        );
+    }
 
     @Test
     @SuppressWarnings("unchecked")

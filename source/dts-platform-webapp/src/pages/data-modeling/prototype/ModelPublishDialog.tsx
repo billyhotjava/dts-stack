@@ -786,7 +786,7 @@ export function ModelPublishDialog({
 									.map((action, index) => (
 										<Button
 											danger={action === "REJECT" || action === "ROLLBACK"}
-											disabled={!canMaintain || Boolean(busy) || (embedded && !pageAction?.enabled)}
+											disabled={Boolean(busy) || (embedded && !pageAction?.enabled)}
 											key={action}
 											onClick={() => void runReleaseAction(action).then(onChanged)}
 											primary={index === 0 && action !== "REJECT" && action !== "ROLLBACK"}

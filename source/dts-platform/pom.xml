@@ -881,6 +881,7 @@
                         <testInclude>**/web/rest/catalog/CatalogDomainResourceWebMvcTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogGovernanceResourceTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogDatasetGovernanceSummaryTest.java</testInclude>
+                        <testInclude>**/web/rest/catalog/CatalogResourceHelperUnassignedDomainTest.java</testInclude>
                         <testInclude>**/web/rest/catalog/CatalogTag*.java</testInclude>
                         <testInclude>**/web/rest/internal/CatalogExternalAssetIdentity*.java</testInclude>
                         <testInclude>**/web/rest/internal/DbtRuntimeProfile*.java</testInclude>
