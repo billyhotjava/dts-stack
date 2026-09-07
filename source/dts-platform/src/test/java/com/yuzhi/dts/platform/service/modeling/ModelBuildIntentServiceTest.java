@@ -87,7 +87,8 @@ class ModelBuildIntentServiceTest {
 
     @Test
     void refusesSchemaModeWithoutTheMatchingCurrentImplementation() {
-        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model(ModelStatus.READY_TO_PUBLISH));
+        var current = model(ModelStatus.READY_TO_PUBLISH);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(current);
         assertThatThrownBy(() -> service.start(TENANT, ACTOR, MODEL_ID,
             new ExpectedVersion(MODEL_ID, 3, CHECKSUM),
             new ModelBuildIntentService.BuildIntentCommand(PLAN_ID, "dev", "schema-key", "SCHEMA_ONLY")))
