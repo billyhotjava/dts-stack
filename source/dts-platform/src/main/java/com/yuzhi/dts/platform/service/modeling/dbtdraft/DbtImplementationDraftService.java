@@ -1118,7 +1118,8 @@ public class DbtImplementationDraftService {
             ImplementationMode.DESIGNER_GENERATED,
             snapshot.projectKey(),
             snapshot.dbtUniqueId(),
-            current == null || current.status() == null ? "DRAFT" : current.status(),
+            // This is an in-memory compilation candidate, not the persisted draft lifecycle state.
+            current == null || current.status() == null ? "ACTIVE" : current.status(),
             implementationRevision,
             checksum,
             command.inputMode(),
