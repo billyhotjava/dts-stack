@@ -1664,6 +1664,45 @@ class DbtImplementationDraftServiceSecurityTest {
         return new SaveFilesRequest("etag", List.of(new FileInput("models/orders.sql", content)));
     }
 
+    @Test
+    void firstVisualImplementationResolvesDependenciesWithoutPersistingAnImplementation() {
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(model.id()).thenReturn(MODEL_ID);
+        var decoded = new com.yuzhi.dts.platform.service.modeling.authoring.ModelAuthoringSnapshotDecoder(objectMapper)
+            .decode(versionedVisualSnapshot());
+        assertThat(decoded.valid()).isTrue();
+        ImplementationView candidate = ReflectionTestUtils.invokeMethod(
+            service, "visualImplementation", MODEL_ID, model, null, decoded.visualImplementation()
+        );
+        var resolver = new com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver();
+
+        Snapshot resolved = resolver.resolve(model, candidate, "sprint83", new DependencyFacts(List.of(), List.of()));
+
+        assertThat(resolved.modelSpecId()).isEqualTo(MODEL_ID);
+        assertThat(resolved.implementationRevision()).isEqualTo(1);
+        assertThat(model.status()).isEqualTo(ModelStatus.DRAFT);
+        org.mockito.Mockito.verifyNoInteractions(repository, lifecycle);
+    }
+
+    @Test
+    void visualCompilationDoesNotReactivateAnExistingStaleImplementation() {
+        ModelSpecView model = model(3, MODEL_CHECKSUM);
+        when(model.id()).thenReturn(MODEL_ID);
+        ImplementationView current = designerImplementation();
+        when(current.status()).thenReturn("STALE");
+        var decoded = new com.yuzhi.dts.platform.service.modeling.authoring.ModelAuthoringSnapshotDecoder(objectMapper)
+            .decode(versionedVisualSnapshot());
+        ImplementationView candidate = ReflectionTestUtils.invokeMethod(
+            service, "visualImplementation", MODEL_ID, model, current, decoded.visualImplementation()
+        );
+        var resolver = new com.yuzhi.dts.platform.service.modeling.ModelImplementationDependencySnapshotResolver();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> resolver.resolve(model, candidate, "sprint83", new DependencyFacts(List.of(), List.of()))
+        ).isInstanceOf(com.yuzhi.dts.platform.service.modeling.ModelSpecException.class)
+            .hasMessage("The owning implementation pin is unavailable");
+    }
+
     private ModelSpecView model(int revision, String checksum) {
         ModelSpecView model = org.mockito.Mockito.mock(ModelSpecView.class);
         when(model.planId()).thenReturn(PLAN_ID);
