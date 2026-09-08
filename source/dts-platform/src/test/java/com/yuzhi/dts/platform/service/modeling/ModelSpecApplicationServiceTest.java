@@ -1370,6 +1370,73 @@ class ModelSpecApplicationServiceTest {
     }
 
     @Test
+    void rejectsCreatingAModelUnderABusinessCategory() {
+        when(domainResolution.resolve(DOMAIN_ID)).thenReturn(new DomainResolution(DOMAIN_ID,
+            CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE, "分类", "CATEGORY", "owner", null, true, null));
+        assertThatThrownBy(() -> service.create(TENANT, ACTOR, command("root-create", "invalid_domain")))
+            .isInstanceOf(ModelSpecException.class)
+            .extracting(error -> ((ModelSpecException) error).code()).isEqualTo("MODEL_SPEC_DATA_DOMAIN_REQUIRED");
+    }
+
+    @Test
+    void correctsOnlyAnUnusedDraftCategoryToItsOwnChildDomain() {
+        assertDomainCorrection("allowed", null);
+    }
+
+    @Test
+    void refusesDomainCorrectionWithLifecycleEvidence() {
+        assertDomainCorrection("evidence", "MODEL_SPEC_DOMAIN_CORRECTION_IN_USE");
+    }
+
+    @Test
+    void refusesDomainCorrectionWithActiveReferences() {
+        assertDomainCorrection("referenced", "MODEL_SPEC_DOMAIN_CORRECTION_IN_USE");
+    }
+
+    @Test
+    void refusesDomainCorrectionToAnotherCategory() {
+        assertDomainCorrection("other-category", "MODEL_SPEC_DOMAIN_CORRECTION_INVALID");
+    }
+
+    @Test
+    void requiresWritePermissionOnTheCorrectionTarget() {
+        assertDomainCorrection("forbidden", "MODEL_SPEC_DOMAIN_FORBIDDEN");
+    }
+
+    private void assertDomainCorrection(String scenario, String errorCode) {
+        var create = command("create-correction", "domain_correction");
+        var current = codec.toCreatedView(MODEL_ID, create, NOW);
+        when(repository.findCurrent(TENANT, MODEL_ID)).thenReturn(Optional.of(stored(current, null, null)));
+        when(compatibilityReader.read(any())).thenReturn(current);
+        when(domainResolution.resolve(DOMAIN_ID)).thenReturn(new DomainResolution(DOMAIN_ID,
+            CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE, "分类", "CATEGORY", "owner", null, true, null));
+        UUID targetId = UUID.fromString("20000000-0000-0000-0000-000000000002");
+        when(domainResolution.resolve(targetId)).thenReturn(new DomainResolution(targetId,
+            CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE, "数据域", "CHILD", "owner", null, false,
+            scenario.equals("other-category") ? UUID.randomUUID() : DOMAIN_ID));
+        when(domainWriteAccess.canMaintain(targetId)).thenReturn(!scenario.equals("forbidden"));
+        if (scenario.equals("evidence")) when(repository.hasDomainCorrectionEvidence(TENANT, MODEL_ID)).thenReturn(true);
+        if (scenario.equals("referenced")) when(repository.hasActiveModelReferences(TENANT, MODEL_ID)).thenReturn(true);
+        var base = update(create);
+        var moved = new UpdateModelSpecCommand(base.planId(), targetId, base.modelType(), base.layer(), base.name(), base.description(),
+            base.implementationMode(), base.materialization(), base.businessActivityRef(), base.consumptionScenario(), base.grain(),
+            base.factShape(), base.timeSemantics(), base.fields(), base.sourceRefs(), base.dependsOn(), base.dimensionRefs(),
+            base.metricRefs(), base.standardBindings(), base.generationStrategy());
+        if (errorCode != null) {
+            assertThatThrownBy(() -> service.updateDefinition(TENANT, ACTOR, MODEL_ID,
+                new ExpectedVersion(MODEL_ID, current.revision(), current.checksum()), moved))
+                .isInstanceOf(ModelSpecException.class).extracting(error -> ((ModelSpecException) error).code()).isEqualTo(errorCode);
+        } else {
+            when(repository.compareAndSetV2(eq(TENANT), eq(ACTOR), eq(current.revision()), eq(current.checksum()), any(), any())).thenReturn(1);
+            var result = service.updateDefinition(TENANT, ACTOR, MODEL_ID,
+                new ExpectedVersion(MODEL_ID, current.revision(), current.checksum()), moved);
+            assertThat(result.domainId()).isEqualTo(targetId);
+            assertThat(result.revision()).isEqualTo(current.revision() + 1);
+            verify(repository).insertV2Revision(eq(TENANT), eq(ACTOR), eq(result), any());
+        }
+    }
+
+    @Test
     void rejectsMovingAModelToAnotherDomain() {
         CreateModelSpecCommand create = command("create-1", "customer_detail");
         ModelSpecView current = codec.toCreatedView(MODEL_ID, create, NOW);

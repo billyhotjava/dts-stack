@@ -103,7 +103,10 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 		definition,
 		currentOwnerId,
 	});
-	const domainOptions = context.domains.filter((item) => Boolean(item.parentCode));
+	const invalidCategory = draft.base?.status === "DRAFT"
+		? context.domains.find((item) => item.id === draft.base?.domainId && !item.parentCode) : undefined;
+	const domainOptions = context.domains.filter((item) => Boolean(item.parentCode) &&
+		(!invalidCategory || item.parentCode === invalidCategory.code));
 	const missingPersistedDomain = Boolean(draft.domainId && !domainOptions.some((item) => item.id === draft.domainId));
 	const missingPersistedDefinition = Boolean(
 		draft.base &&
@@ -131,7 +134,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 						<span className="required">数据域</span>
 						<select
 							aria-label="数据域"
-							disabled={Boolean(draft.base)}
+							disabled={Boolean(draft.base) && !invalidCategory}
 							onChange={(event) => patch({ domainId: event.target.value })}
 							value={draft.domainId}
 						>
@@ -143,11 +146,12 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							))}
 							{missingPersistedDomain ? (
 								<option disabled value={draft.domainId}>
-									已保存数据域 · {draft.domainId}
+									{invalidCategory && draft.domainId === invalidCategory.id ? `误绑定业务分类：${invalidCategory.name}` : `已保存数据域 · ${draft.domainId}`}
 								</option>
 							) : null}
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
+						{invalidCategory ? <small role="alert">原模型误绑定了业务分类，请选择该分类下的数据域并保存设计，再重新保存实现配置；已有执行或候选记录的模型不能直接修正。</small> : null}
 						{!missingPersistedDomain && !domainOptions.length ? (
 							<small>当前规划暂无数据域，请先在数仓规划中创建数据域。</small>
 						) : null}
@@ -309,9 +313,11 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 	]);
 	const missingProcess = Boolean(processLoaded && !processFailure && draft.businessProcessId &&
 		!processBinding.processes.some((item) => item.id === draft.businessProcessId));
-	const missingPersistedDomain = Boolean(
-		draft.base && draft.domainId && !context.domains.some((item) => item.id === draft.domainId),
-	);
+	const invalidCategory = draft.base?.status === "DRAFT"
+		? context.domains.find((item) => item.id === draft.base?.domainId && !item.parentCode) : undefined;
+	const domainOptions = context.domains.filter((item) => Boolean(item.parentCode) &&
+		(!invalidCategory || item.parentCode === invalidCategory.code));
+	const missingPersistedDomain = Boolean(draft.domainId && !domainOptions.some((item) => item.id === draft.domainId));
 	const dataMartOptions = context.dataMarts || [];
 	const subjectDomainOptions = (context.subjectDomains || []).filter((item) => item.martId === draft.dataMartId);
 	const missingPersistedDataMart = Boolean(
@@ -329,25 +335,24 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						<span className="required">数据域</span>
 						<select
 							aria-label="数据域"
-							disabled={Boolean(draft.base)}
+							disabled={Boolean(draft.base) && !invalidCategory}
 							onChange={(event) => patch({ domainId: event.target.value, businessProcessId: "" })}
 							value={draft.domainId}
 						>
 							<option value="">请选择数据域</option>
-							{context.domains
-								.filter((item) => Boolean(item.parentCode))
-								.map((item) => (
+							{domainOptions.map((item) => (
 									<option key={item.id} value={item.id}>
 										{item.name} · {item.code}
 									</option>
 								))}
 							{missingPersistedDomain ? (
 								<option disabled value={draft.domainId}>
-									已保存数据域 · {draft.domainId}
+									{invalidCategory && draft.domainId === invalidCategory.id ? `误绑定业务分类：${invalidCategory.name}` : `已保存数据域 · ${draft.domainId}`}
 								</option>
 							) : null}
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
+						{invalidCategory ? <small role="alert">原模型误绑定了业务分类，请选择该分类下的数据域并保存设计，再重新保存实现配置；已有执行或候选记录的模型不能直接修正。</small> : null}
 					</label>
 					{factMode ? (
 						// biome-ignore lint/a11y/noLabelWithoutControl: the select is conditional while its status text stays in the same labeled field.

@@ -19,6 +19,12 @@ public interface CatalogDomainResolutionPort {
         String name,
         String code,
         String owner,
-        String description
-    ) {}
+        String description,
+        boolean businessCategory,
+        UUID parentId
+    ) {
+        public DomainResolution(UUID domainId, ResolutionStatus status, String name, String code, String owner, String description) {
+            this(domainId, status, name, code, owner, description, false, null);
+        }
+    }
 }

@@ -63,7 +63,8 @@ public class JpaCatalogDomainAccessReadAdapter implements CatalogDomainAccessRea
             domain.getName(),
             domain.getCode(),
             domain.getOwner(),
-            domain.getDescription()
+            domain.getDescription(),
+            domain.getParent() == null ? null : domain.getParent().getId()
         );
     }
 }

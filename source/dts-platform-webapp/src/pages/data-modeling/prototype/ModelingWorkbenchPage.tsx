@@ -332,7 +332,11 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const createModel = (kind: ModelCreateKind, categoryId = "") => {
 		if (savingRef.current || !context || !confirmDiscard()) return;
 		const next = emptyModelDraft(kind, context);
-		if (categoryId) next.domainId = categoryId;
+		if (categoryId) {
+			const category = context.domains.find((item) => item.id === categoryId && !item.parentCode);
+			const domains = category ? context.domains.filter((item) => item.parentCode === category.code) : [];
+			next.domainId = domains.length === 1 ? domains[0].id : "";
+		}
 		replaceDraft(next);
 		setSelectedModelId("");
 		setSelectedDimensionId("");

@@ -27,14 +27,18 @@ public interface CatalogDomainAccessReadPort {
         String name,
         String code,
         String owner,
-        String description
+        String description,
+        UUID parentId
     ) {
+        public DomainSnapshot(UUID id, DomainStatus status, String name, String code, String owner, String description) {
+            this(id, status, name, code, owner, description, null);
+        }
         public DomainSnapshot {
             if (status == null) {
                 throw new IllegalArgumentException("status is required");
             }
             if ((status == DomainStatus.FORBIDDEN || status == DomainStatus.MISSING) &&
-                (name != null || code != null || owner != null || description != null)) {
+                (name != null || code != null || owner != null || description != null || parentId != null)) {
                 throw new IllegalArgumentException("redacted domain snapshots cannot expose metadata");
             }
         }

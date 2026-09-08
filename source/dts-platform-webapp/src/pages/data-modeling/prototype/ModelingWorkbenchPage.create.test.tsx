@@ -104,3 +104,16 @@ it("reloads an existing dimension deep link and clears it when returning to the 
 	expect(container.querySelector('[data-model-kind]')).toBeNull();
 	expect(container.textContent).toContain("创建明细表");
 });
+
+
+it.each([1, 0, 2])("uses a child domain, never the selected category id (%s children)", async (count) => {
+	const domains = [{ id: "category-id", code: "CATEGORY", name: "业务分类", parentCode: null },
+		...Array.from({ length: count }, (_, i) => ({ id: `domain-${i}`, code: `DOMAIN_${i}`, name: `数据域${i}`, parentCode: "CATEGORY" }))];
+	mocks.loadContext.mockResolvedValue({ ...context, domains });
+	const router = createMemoryRouter([{ path: "/model", element: <ModelingWorkbenchPage route={{ description: "测试" } as DataModelingRoute} /> }], { initialEntries: ["/model"] });
+	await act(async () => root.render(<RouterProvider router={router} />));
+	const category = container.querySelector<HTMLSelectElement>('select[aria-label="请选择业务分类"]')!;
+	await act(async () => { category.value = "category-id"; category.dispatchEvent(new Event("change", { bubbles: true })); });
+	await act(async () => Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "创建明细表")!.click());
+	expect(container.querySelector('[data-model-kind]')?.textContent).toBe(count === 1 ? "domain-0" : "");
+});

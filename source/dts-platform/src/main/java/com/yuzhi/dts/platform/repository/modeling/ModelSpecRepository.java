@@ -91,6 +91,19 @@ public class ModelSpecRepository {
         return Boolean.TRUE.equals(referenced);
     }
 
+    /** Saved implementation drafts may be rebound; executed or candidate-bound models may not. */
+    public boolean hasDomainCorrectionEvidence(String tenantId, UUID modelSpecId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            """
+            select exists (
+                select 1 from modeling_model_lifecycle_event where tenant_id = ? and model_spec_id = ?
+                union all
+                select 1 from modeling_model_release_candidate_entry where tenant_id = ? and model_spec_id = ?
+            )
+            """, Boolean.class, tenantId, modelSpecId, tenantId, modelSpecId
+        ));
+    }
+
     public boolean hasReclassificationEvidence(String tenantId, UUID modelSpecId) {
         Boolean exists = jdbcTemplate.queryForObject(
             """
@@ -585,7 +598,7 @@ public class ModelSpecRepository {
         return jdbcTemplate.update(
             """
             update modeling_model_spec
-               set layer = ?, warehouse_layer_code = ?, model_type = ?, implementation_mode = ?, name = ?,
+               set domain_id = ?, layer = ?, warehouse_layer_code = ?, model_type = ?, implementation_mode = ?, name = ?,
                    grain_statement = ?, materialization = ?, business_activity_ref = ?, description = ?,
                    consumption_scenario = ?, fact_shape = ?, grain_json = cast(? as jsonb),
                    time_semantics = cast(? as jsonb), fields = cast(? as jsonb), source_refs = cast(? as jsonb),
@@ -598,6 +611,7 @@ public class ModelSpecRepository {
                and revision = ? and current_checksum = ?
                and status = 'DRAFT'
             """,
+            replacement.domainId(),
             replacement.layer().name(),
             replacement.warehouseLayerCode(),
             replacement.modelType().name(),

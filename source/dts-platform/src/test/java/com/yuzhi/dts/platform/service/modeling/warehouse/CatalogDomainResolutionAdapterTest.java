@@ -44,6 +44,22 @@ class CatalogDomainResolutionAdapterTest {
     }
 
     @Test
+    void distinguishesCategoryFromDataDomainAndRedactsParentWhenForbidden() {
+        CatalogDomain category = domain(ACTIVE, PUBLIC);
+        CatalogDomain child = domain(ACTIVE, PUBLIC);
+        child.setParent(category);
+        when(domainRepository.findById(child.getId())).thenReturn(Optional.of(child));
+        when(visibilityService.canRead(child)).thenReturn(true);
+        assertThat(adapter.resolve(child.getId()).businessCategory()).isFalse();
+        assertThat(adapter.resolve(child.getId()).parentId()).isEqualTo(category.getId());
+        child.setParent(null);
+        assertThat(adapter.resolve(child.getId()).businessCategory()).isTrue();
+        child.setParent(category);
+        when(visibilityService.canRead(child)).thenReturn(false);
+        assertThat(adapter.resolve(child.getId()).parentId()).isNull();
+    }
+
+    @Test
     void resolvesActivePublicDomainWithoutObjectAuthorization() {
         CatalogDomain domain = domain(ACTIVE, PUBLIC);
         when(domainRepository.findById(domain.getId())).thenReturn(Optional.of(domain));

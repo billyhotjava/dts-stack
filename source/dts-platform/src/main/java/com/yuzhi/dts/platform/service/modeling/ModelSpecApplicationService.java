@@ -287,6 +287,7 @@ public class ModelSpecApplicationService {
 
         requireCanonicalWriteEnabled();
         validateWriteContext(serverTenantId, actorId, command.planId(), command.domainId());
+        requireDataDomain(command.domainId());
         validateDataMartContext(serverTenantId, command.domainId(), command.dataMartId());
         validateBusinessContext(
             serverTenantId,
@@ -434,13 +435,9 @@ public class ModelSpecApplicationService {
             );
         }
         if (!Objects.equals(current.domainId(), command.domainId())) {
-            throw new ModelSpecException(
-                "MODEL_SPEC_DOMAIN_IMMUTABLE",
-                "ModelSpec cannot be moved to another business category",
-                ModelSpecException.Kind.UNPROCESSABLE,
-                List.of(fieldIssue("domainId", "Business category is immutable after creation"))
-            );
+            requireDomainCorrection(serverTenantId, actorId, current, command.domainId(), definitionOnly);
         }
+        requireDataDomain(command.domainId());
         if (current.status() != ModelStatus.DRAFT) {
             throw new ModelSpecException(
                 "MODEL_SPEC_STATUS_READONLY",
@@ -1888,6 +1885,35 @@ public class ModelSpecApplicationService {
             );
         }
         return new CreateResult(response, true);
+    }
+
+    private void requireDataDomain(UUID domainId) {
+        DomainResolution domain = domainResolution.resolve(domainId);
+        if (domain == null || domain.status() != CatalogDomainResolutionPort.ResolutionStatus.AVAILABLE || domain.businessCategory()) {
+            throw new ModelSpecException("MODEL_SPEC_DATA_DOMAIN_REQUIRED",
+                "请选择业务分类下的数据域，不能将业务分类直接作为模型的数据域。",
+                ModelSpecException.Kind.UNPROCESSABLE, List.of(fieldIssue("domainId", "请选择有效数据域")));
+        }
+    }
+
+    private void requireDomainCorrection(String tenantId, String actorId, ModelSpecView current, UUID targetId, boolean definitionOnly) {
+        DomainResolution source = domainResolution.resolve(current.domainId());
+        if (!definitionOnly || current.status() != ModelStatus.DRAFT || source == null || !source.businessCategory()) {
+            throw new ModelSpecException("MODEL_SPEC_DOMAIN_IMMUTABLE", "已保存模型的数据域不可变更；仅允许修正误绑定业务分类的草稿。",
+                ModelSpecException.Kind.UNPROCESSABLE, List.of(fieldIssue("domainId", "数据域不可变更")));
+        }
+        validateWriteContext(tenantId, actorId, current.planId(), targetId);
+        requireDataDomain(targetId);
+        DomainResolution target = domainResolution.resolve(targetId);
+        if (!Objects.equals(target.parentId(), current.domainId())) {
+            throw new ModelSpecException("MODEL_SPEC_DOMAIN_CORRECTION_INVALID", "只能修正到原业务分类直属的数据域。",
+                ModelSpecException.Kind.UNPROCESSABLE);
+        }
+        // validateWriteContext holds the plan lock used by lifecycle and candidate creation.
+        if (repository.hasDomainCorrectionEvidence(tenantId, current.id()) || repository.hasActiveModelReferences(tenantId, current.id())) {
+            throw new ModelSpecException("MODEL_SPEC_DOMAIN_CORRECTION_IN_USE", "模型已有执行、候选或引用记录，请在正确数据域下新建模型。",
+                ModelSpecException.Kind.CONFLICT);
+        }
     }
 
     private void validateWriteContext(String tenantId, String actorId, UUID planId, UUID domainId) {

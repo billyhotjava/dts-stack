@@ -38,7 +38,9 @@ public class CatalogDomainResolutionAdapter implements CatalogDomainResolutionPo
             snapshot.name(),
             snapshot.code(),
             snapshot.owner(),
-            snapshot.description()
+            snapshot.description(),
+            snapshot.parentId() == null,
+            snapshot.parentId()
         );
     }
 

@@ -299,6 +299,22 @@ afterEach(async () => {
 });
 
 describe("ModelingWorkbenchEditor", () => {
+	it("shows the wrongly bound category and lets a draft choose only its child domains", async () => {
+		const categoryId = "10000000-0000-0000-0000-000000000001";
+		const childId = "20000000-0000-0000-0000-000000000001";
+		const props = makeProps({ definitionOnly: true, draft: makeDraft({ createKind: "fact", domainId: categoryId,
+			base: { id: "model", domainId: categoryId, status: "DRAFT", compatibilityMode: "CANONICAL" } as ModelSpecView,
+		}) });
+		await render(props);
+		const select = container.querySelector<HTMLSelectElement>('select[aria-label="数据域"]')!;
+		expect(select.disabled).toBe(false);
+		expect(select.value).toBe(categoryId);
+		expect(select.selectedOptions[0].textContent).toContain("误绑定业务分类");
+		expect(Array.from(select.options).filter((option) => !option.disabled && option.value).map((option) => option.value)).toEqual([childId]);
+		await act(async () => { select.value = childId; select.dispatchEvent(new Event("change", { bubbles: true })); });
+		expect(props.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ domainId: childId, businessProcessId: "" }));
+	});
+
 	it("preserves the saved business process when the lookup fails", async () => {
 		mocks.listBusinessProcessesApi.mockRejectedValueOnce(new Error("forbidden"));
 		const props = makeProps({ definitionOnly: true, draft: makeDraft({ createKind: "fact", businessProcessId: "saved-process" }) });
