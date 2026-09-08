@@ -1101,6 +1101,10 @@ public class CandidatePublicationRepository {
             Timestamp.from(now),
             downstreamAssetId
         );
+        // Structure creation consumes no upstream data. Model lineage is retained separately.
+        if (candidate.origin() == com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateOrigin.SCHEMA_ONLY_INTENT) {
+            return List.of();
+        }
         Map<UUID, Boolean> upstreams = new LinkedHashMap<>();
         for (var dependency : model.dependsOn()) {
             UUID upstreamAssetId = requirePublishedAssetId(

@@ -43,6 +43,8 @@ PUT /api/catalog/datasets/{id} 要求 If-Match: "catalog-dataset:{id}:{version}"
 
 ## R03–R07 实施切片（FROZEN）
 
+补充结构物化的发布血缘规则（2026-09-08，运行证据驱动）：SCHEMA_ONLY_INTENT 未读取上游数据，保留 ModelSpec 的逻辑模型依赖，但不得将它强制投影为已发布物理表血缘；资产登记、字段密级、质量及候选版本门禁仍保留。普通 DATA_BUILD 的精确物理依赖要求不变。验收：结构候选正常发布不索取逻辑上游的物理资产，逻辑边保留、物理输入为空；普通候选路径继续验证既有物理资产。
+
 - 目录无输出且当前候选有效：NOT_STARTED / MODEL_DELIVERY_CATALOG_NOT_REGISTERED，不要求先发布；候选已过期才 UNKNOWN / MODEL_DELIVERY_EVIDENCE_STALE。分析无发布引用：NOT_STARTED / MODEL_DELIVERY_PUBLICATION_REQUIRED；旧发布不匹配仍 STALE。读取失败保留既有独立错误分支。verification 可执行恢复动作时不附禁用原因。
 - 分析旧连接归并新增内部 writer.adoptLegacy(id:Long,tenantId:String,platformDataSourceId:UUID,expectedDetails:String)，REQUIRES_NEW 内按 ID 悲观锁重读，确认旧 details 未漂移且未被其他租户接管后设置归属并 saveAndFlush；外层只传标量，不修改托管 legacy 实体。唯一冲突在内层回滚后重读赢家；现有错误码不变。真实 H2/JPA 事务测试覆盖外层持有 legacy、内层冲突、外层提交，PostgreSQL 唯一约束迁移沿用既有证据。
 - 标准 R 用字段索引找缺失，B 始终遍历全部声明引用；字段为空/不存在/重复的声明由专业适配边界判 STALE。NONE 仅令 R 为空，不跳过非空 B。新请求与历史数据的执行拒绝保持一致。
@@ -51,3 +53,7 @@ PUT /api/catalog/datasets/{id} 要求 If-Match: "catalog-dataset:{id}:{version}"
 ## R05 存量只读画像（2026-09-08）
 
 在现有 dts_platform 的 READ ONLY 事务中按 ModelSpec 当前修订关联 revision.snapshot_json：当前12个修订、历史25个修订，grain.keys 与 fields[role=KEY].name 排序集合不一致数均0，重复 grain 键数均0。没有修改模型或数据，无需自动修复。catalog_dataset 非空 tags 中非 JSON object 数0。该结果关闭本环境画像缺口，不替代旧模型读取/暂存/提交/编译的行为回归，也不外推到其他客户环境。
+
+## R02 调用方核查与本轮兼容边界
+
+仓内平台/管理前端搜索 updateDataset：完整 PUT 仅在 platformApi.ts 声明，没有发现使用方；实际资产简表编辑使用 updateDatasetGovernanceSummary 的 PATCH。不能据此认定外部脚本不存在。本轮继续沿用已经部署的 If-Match 要求，不再次改变 PUT 请求格式；已补升级/错误说明和共享 ETag 单测。外部调用方升级指引为读取当前 version 后携带精确 ETag，冲突后由调用方重新核对输入；不自动合并覆盖人工值。

@@ -626,6 +626,7 @@
                         <testInclude>**/service/governance/QualityRunServiceExecutableDefinitionTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServicePinnedTriggerTest.java</testInclude>
                         <testInclude>**/service/governance/QualityRunServiceWorkflowTest.java</testInclude>
+                        <testInclude>**/service/governance/QualityRunAuditTest.java</testInclude>
                         <testInclude>**/service/governance/QualityIssueIdentityTest.java</testInclude>
                         <testInclude>**/service/governance/IssueTicketServiceAutomaticAuditTest.java</testInclude>
                         <testInclude>**/service/governance/QualityWorkflowLiquibaseTest.java</testInclude>
@@ -680,6 +681,7 @@
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelCandidateScopePolicyTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSchemaCandidateScopePostgresTest.java</testInclude>
+                        <testInclude>**/repository/modeling/CandidateSchemaOnlyLineageTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelSchemaDependencyArtifactsTest.java</testInclude>
                         <testInclude>**/service/modeling/GovernanceModelSpecStandardEvidenceAdapterTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationDispatchServiceTest.java</testInclude>
