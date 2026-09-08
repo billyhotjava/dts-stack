@@ -483,7 +483,7 @@ public class AirflowDagService {
             return safeBase;
         }
         String suffix = "_task_" + taskId;
-        if (safeBase.endsWith(suffix)) {
+        if (safeBase.endsWith(suffix) || safeBase.replaceFirst("_revision_[0-9]+$", "").endsWith(suffix)) {
             return safeBase;
         }
         return requireSafeDagId(limitLength(safeBase, 200 - suffix.length()) + suffix);
