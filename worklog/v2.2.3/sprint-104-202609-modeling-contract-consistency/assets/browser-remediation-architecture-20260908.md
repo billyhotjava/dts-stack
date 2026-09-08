@@ -69,3 +69,12 @@ Q01 续验：可见 Chrome 标签 1761048184，在旧部署打开 b4650e13… �
 正式包与运行镜像证据见 [package-proof](../it/evidence/current-environment/browser-remediation-081bc098a-package-proof.json)。最终包清单、归档 SHA、镜像源码版本与运行镜像一致。初次校验误选 builds/dist 中间归档，改为按包内 SHA 对应的 builds/legacy-dist 正式归档后通过，运行配置与文件层一致。早先 2c8 包因打包阶段再次拉取导致清单与镜像源码不一致而弃用，未部署。
 
 本轮不将 Sprint 或全部 task 标为完成：候选完整状态矩阵、提交失败提示负例、新文件封存负例、字段命名合同仍有未验收项；离线同包验收及回滚演练也未执行。当前外部 Chrome 版本未核实，不能替代 Chrome 95 专项认证。
+
+
+## B08 正式发布与外部 Chrome 复验结果
+
+- 代码 `9a86c805858cfbbf15d51d0e01e6cd2e774f9f5c`，开发目录静态 TypeScript 检查通过；部署目录正式构建 platform/webapp 及 409M 交付包成功。未新增或执行代码级测试。Git 提交成功，但 lefthook 不在 PATH，不能宣称 hook 通过。
+- 包清单、归档校验和、运行镜像源码版本/文件层一致；按现有 Compose 更新两个服务。证据：[包及运行身份](../it/evidence/current-environment/authoring-recovery-9a86c8058-package-proof.json)。ingestion 保持上一轮 081bc098a；无数据库人工修改、无迁移、未清理其他候选。
+- 外部可见 Chrome 标签 1761048294：刷新原失败草稿，仍显示增量；提交成功进入物化页，模型 r3→r4。返回实现配置，切 FULL 再提交成功进入物化页，r4→r5。再次进入实现并刷新：物化方式=表、加载策略=全量、postgres 不支持分区提示正确；s104_project_month 仍选中，project_id/month_id 两列同名映射保持。
+- 本轮确认策略往返与已有失败草稿恢复通过；没有伪造一次“新版本提交失败后重试”的额外负例。旧增量带分区夹具、历史 TYPE2、并发冲突及 DATA_BUILD 尚不能由该路径替代。
+- T03 标准管理入口返回治理中心的问题已记录，尚未修复。活动候选仍限制复合键 DATA_BUILD；独立离线目标已向用户询问，尚未取得答复。

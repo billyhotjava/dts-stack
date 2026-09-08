@@ -75,3 +75,17 @@
 根因与最小整改：后端 commitInternal 已验证基线版本，但物化一致性比较仍使用旧模型，改为使用已验证 authoringSnapshot 的内存投影；非统一创作继续使用当前模型。前端 submitImplementation 在校验后更新上下文时同步服务端工作文件，防止失败后下次保存携带旧文件。保留版本/CAS、校验和、冻结包及非托管文件保护。GitNexus：后端 HIGH，直接调用 commit，影响高级/统一创作入口；前端 LOW，直接调用 ModelingWorkbenchPage。已向用户说明。
 
 验收：正式发布后通过 Chrome 恢复当前草稿，再验证 FULL→INCREMENTAL→FULL 提交及刷新；保持源表、复合键映射不变。源码修复不等于通过验收。
+
+
+### T03 标准样例入口续验
+
+外部 Chrome 标签 1761048297，通过全局搜索“字段标准 /data-modeling/standards/fields”进入治理中心，再点字段标准“进入”，URL 为 #/governance/standards/elements，页面仍为“数据治理中心 / 发布门禁”，未出现字段标准列表。没有可用样例管理入口证据，T03 有效/失效标准对照仍阻塞；未用数据库补建样例。
+
+
+## B08 正式发布与外部 Chrome 复验结果
+
+- 代码 `9a86c805858cfbbf15d51d0e01e6cd2e774f9f5c`，开发目录静态 TypeScript 检查通过；部署目录正式构建 platform/webapp 及 409M 交付包成功。未新增或执行代码级测试。Git 提交成功，但 lefthook 不在 PATH，不能宣称 hook 通过。
+- 包清单、归档校验和、运行镜像源码版本/文件层一致；按现有 Compose 更新两个服务。证据：[包及运行身份](../it/evidence/current-environment/authoring-recovery-9a86c8058-package-proof.json)。ingestion 保持上一轮 081bc098a；无数据库人工修改、无迁移、未清理其他候选。
+- 外部可见 Chrome 标签 1761048294：刷新原失败草稿，仍显示增量；提交成功进入物化页，模型 r3→r4。返回实现配置，切 FULL 再提交成功进入物化页，r4→r5。再次进入实现并刷新：物化方式=表、加载策略=全量、postgres 不支持分区提示正确；s104_project_month 仍选中，project_id/month_id 两列同名映射保持。
+- 本轮确认策略往返与已有失败草稿恢复通过；没有伪造一次“新版本提交失败后重试”的额外负例。旧增量带分区夹具、历史 TYPE2、并发冲突及 DATA_BUILD 尚不能由该路径替代。
+- T03 标准管理入口返回治理中心的问题已记录，尚未修复。活动候选仍限制复合键 DATA_BUILD；独立离线目标已向用户询问，尚未取得答复。
