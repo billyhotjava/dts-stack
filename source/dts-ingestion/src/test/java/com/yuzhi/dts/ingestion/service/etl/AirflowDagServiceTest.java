@@ -363,6 +363,29 @@ class AirflowDagServiceTest {
         assertThat(dag).doesNotContain("${table}");
     }
 
+    @Test
+    void shouldNeverGenerateBootstrapDdlForBoundModelFileTarget() throws Exception {
+        IngestionTask task = new IngestionTask();
+        task.setName("bound-model-file-target");
+        task.setSourceType("txtfilereader");
+        task.setSyncSchedule("manual");
+        task.setAirflowDagId("bound_model_file_target");
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        task.setSourceConfig(mapper.readTree("""
+            {"_autoId":true,"_fileColumns":[{"name":"record_id","type":"string"}],
+             "_fileLanding":{"landingMode":"create_new","targetTable":"public.model_owned"}}
+            """));
+        task.setDestinationConfig(mapper.readTree("""
+            {"table":["public.model_owned"],"modelTarget":{"tableName":"model_owned"}}
+            """));
+
+        dagService.rebuildDagForTask(task);
+
+        String dag = readDag("bound_model_file_target");
+        assertThat(dag).contains("addax_run");
+        assertThat(dag).doesNotContain("init_target_table", "CREATE TABLE", "ALTER TABLE", "DROP TABLE", "TRUNCATE");
+    }
+
     private IngestionTask task(String syncSchedule, String dagId) {
         IngestionTask task = new IngestionTask();
         task.setName("dm8test");

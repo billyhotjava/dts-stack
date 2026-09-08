@@ -1346,6 +1346,9 @@ public class AirflowDagService {
      */
     private String buildCreateTableDdl(IngestionTask task) {
         if (task == null) return null;
+        // The model owns the complete schema. Even additive file bootstrap DDL
+        // would invalidate its physical contract (for example an automatic id).
+        if (ModelTargetGuard.isBound(task)) return null;
         JsonNode sourceConfig = task.getSourceConfig();
         if (sourceConfig == null || sourceConfig.isNull()) return null;
 
