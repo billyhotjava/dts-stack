@@ -272,7 +272,7 @@ class PortalMenuSeedDefaultsContractTest {
         assertEquals("/foundation/data-sources/files", children.get(3).get("externalLink"));
         assertEquals("/foundation/data-sources/defaults", children.get(4).get("externalLink"));
         assertEquals(
-            List.of("connectors", "jdbcDrivers"),
+            List.of("connections", "connectors", "jdbcDrivers"),
             listOfMaps(children.get(5).get("children")).stream().map(node -> String.valueOf(node.get("key"))).toList()
         );
 
