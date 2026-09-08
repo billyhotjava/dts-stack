@@ -77,7 +77,7 @@ Upsert 已核实字段：`code/name/type/category/description/owner/ownerDept/se
 
 W4 简化维护第一版只包含 `owner:string|null`、`description:string|null`；复用目录 owner，修改不重物化。source/schema/table、名称/模型业务域/分层不在该表单编辑；ownerDept、classification、tags 等高级治理仍从已有治理页面维护并按上下文返回。帮助解释字段含义，页面保留当前保存/冲突结果。
 
-当前 PUT `/api/catalog/datasets/{id}` 是多字段赋值，CatalogDataset 未声明 @Version；不能安全地把旧对象读出、合并两个字段后全量 PUT。目标需要同一治理 owner 的局部更新及并发保护，不在模型服务另写资产表。
+原2026-09-06基线的 PUT `/api/catalog/datasets/{id}` 是多字段赋值，CatalogDataset 当时未声明 @Version（后续 T12 已新增）；不能安全地把旧对象读出、合并两个字段后全量 PUT。目标需要同一治理 owner 的局部更新及并发保护，不在模型服务另写资产表。
 
 | 未冻结项 | 具体风险/所需交付 | 归属 |
 |---|---|---|
@@ -87,4 +87,4 @@ W4 简化维护第一版只包含 `owner:string|null`、`description:string|null
 | 分析关联唯一性 | 租户/平台源 ID 唯一键与旧数据重复预检、元数据准备及租约；必要前向迁移 | T13 开工契约 |
 | 真实验证基线 | 登录/Chrome95、实际治理/分析数据源、失效样例及当前接口错误码实测 | T09/T14 |
 
-上述 GAP 尚在，T09 为 IN_PROGRESS，T10–T14 保持 DRAFT。已完成核验项可复用，不重复源码勘察；下一次只针对末表缺口推进。
+上述为2026-09-06开工时的 GAP 记录；当前 T09–T14 均 IN_PROGRESS，已实施契约分别见 T10/T12/T13 与2026-09-08审查整改契约。已完成核验项可复用，不重复源码勘察；下一次只针对末表缺口推进。

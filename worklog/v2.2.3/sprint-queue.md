@@ -3,7 +3,7 @@
 ## Sprint-104: 通用建模契约与物化一致性整改 (202609)
 
 **目录**: [sprint-104-202609-modeling-contract-consistency](sprint-104-202609-modeling-contract-consistency/README.md)
-**状态**: IN_PROGRESS（按当前任务文件：F1/T01–T08、F2/T09–T14 均 IN_PROGRESS；F3/T15–T20 已进入实施及分项运行验收）
+**状态**: IN_PROGRESS（按当前任务文件：F1/T01–T08、F2/T09–T14 均 IN_PROGRESS；F3/T15 DONE，T16–T20 实施及分项运行验收）
 **目标**: ODS→DWD→DWS→ADS 可先共同设计；设计→实现配置→物化完成建模，接入写数、资产形成/治理与分析准备归数据模块，约束按阶段出现。
 **依赖**: 延续 Sprint-91/92/93 的建模、创作草稿和治理控制面，以及 fefea6844/a33ba6b0a 已有修复；不重复计算历史完成项。
 
@@ -13,14 +13,14 @@
 | [F2-模型交付与资产治理贯通](sprint-104-202609-modeling-contract-consistency/features/F2-模型交付与资产治理贯通/README.md) | P1 | 6 | IN_PROGRESS（保留已有切片及证据，边界由 F3 接续） |
 | [F3-全层建模与数据模块边界简化](sprint-104-202609-modeling-contract-consistency/features/F3-全层建模与数据模块边界简化/README.md) | P1 | 6 | IN_PROGRESS（实现及 Chrome 95 分项验收） |
 
-**统计**: DRAFT=0，READY=0，IN_PROGRESS=20，DONE=0，BLOCKED=0；3 个 Feature、20 个 Task。按当前任务文件校正旧队列统计，不升级任何任务为 DONE。
+**统计**: DRAFT=0，READY=0，IN_PROGRESS=19，DONE=1，BLOCKED=0；3 个 Feature、20 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成。
 **执行顺序**: T01 归因 → T07 保存/执行边界冻结 → T02 契约 → T05/T06/T03/T04 → T07 一致性验证 → T08 集成验收。
 **F2 执行顺序**: T09 契约/基线 → T10 四步向导与统一交付状态 → T11 质量闭环、T12 资产维护、T13 分析恢复 → T14 端到端与离线交付。
 **F3 执行顺序**: T15 契约/副作用冻结 → T16 ODS 与逻辑引用 → T17 结构物化/完成判定 → T18 三步页面 → T19 接入绑定与数据接手 → T20 集成验收。
 **关键决策**: F1/F2 已有实现和证据保留。F3 只补 ODS 正向建模、结构物化和模块边界；F2 四步及模型页治理条件为历史基线，新页面以 [F3 契约](sprint-104-202609-modeling-contract-consistency/assets/F3-modeling-data-boundary.md) 为准。每页一个主动作，完成建模不等于资产发布/分析可用；版本、安全、CAS、帮助和原 owner 继续复用。
-**F3 当前证据/阻断**: 四层定义已在真实 Chrome 95 保存；结构物化实现、接入目标绑定、三步页面已编码并正式交付分项测试。规划的活动候选唯一约束阻断连续物化，未修改旧候选或数据库；正式结构迁移边界及离线目标待确认。详见 [运行记录](sprint-104-202609-modeling-contract-consistency/it/evidence/current-environment/f3-runtime-20260907.md)。
+**F3 当前证据/阻断**: 2026-09-08已修复活动候选范围，Chrome95四层结构物化与实表字段/主键/零行核验通过；数据页登记、质量规则创建/编辑/执行通过。接入writer列映射、受控封装预览、质量审计actor与结构发布血缘修复已提交并专项验证，最终正式镜像/页面复验进行中。独立离线目标仍待指定。见 [整改运行记录](sprint-104-202609-modeling-contract-consistency/it/evidence/current-environment/remediation-runtime-20260908.md)。
 **F3 原开工缺口（历史）**: SOURCE/逻辑引用兼容、物化与发布副作用、API/文件目标绑定、资产登记身份/深链由 T15 冻结；空目标与真实页面基线未执行，新增任务保持 DRAFT。只覆盖既有 PostgreSQL 普通表/接入/目录，不新增菜单或全链批量调度。
-**当前证据与风险**: `bd0670acc89e7dd1be82e0d12961ba7744f63ca2` 的部署目录 Java 专项已 99/99，工作台 Vitest 日志已 92/92；首轮 Java 失败仅为测试夹具/断言滞后，修正后通过。IT-04 ephemeral 已通过，但目标环境、Chrome 95、其余 UI、正式交付/部署、真实样本、物化和离线验收仍未核验；T08 不得标 DONE。证据见 [源码专项归档](sprint-104-202609-modeling-contract-consistency/it/evidence/source-test-summary-20260906.md)。
+**历史源码证据（2026-09-06）**: `bd0670acc89e7dd1be82e0d12961ba7744f63ca2` 的部署目录 Java 专项已 99/99，工作台 Vitest 日志已 92/92；首轮 Java 失败仅为测试夹具/断言滞后，修正后通过。IT-04 ephemeral 已通过，但目标环境、Chrome 95、其余 UI、正式交付/部署、真实样本、物化和离线验收仍未核验；T08 不得标 DONE。证据见 [源码专项归档](sprint-104-202609-modeling-contract-consistency/it/evidence/source-test-summary-20260906.md)。
 
 **F2 风险/证据**: T10-A 帮助/说明迁移15项专项已通过；T10-B1 单主动作与创作门禁已提交，65项专项通过；两者尚未部署，完整四步页面与其余切片仍待实施。共享契约的精确写协议、字段归属/并发与分析源唯一性由 T09/T13 冻结。IT-18 当前组件/契约部分通过，IT-08–IT-18 的真实页面端到端验收仍待执行；F1 历史双镜像证据不证明 F2 分析端交付。
 

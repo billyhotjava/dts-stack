@@ -4,7 +4,7 @@
 
 `PATCH /api/catalog/datasets/{id}/governance-summary`
 
-请求为 `{ "owner": string|null, "description": string|null }`，必须携带 `If-Match: "catalog-dataset:{id}:{version}"`。成功返回 `ApiResponse<CatalogDataset>` 与新的 ETag；缺失 precondition 为 428，格式/资产不匹配为400，旧 version 为409，隐蔽或无权限资产继续使用既有 not-found/permission 边界。
+请求为 `{ "owner": string|null, "description": string|null }`，必须携带 `If-Match: "catalog-dataset:{id}:{version}"`。成功返回 `ApiResponse<CatalogDataset>` 与新的 ETag；缺失 precondition 为 428，ETag 格式/资产身份/旧 version 不匹配均为409，非法 PATCH 字段或值类型为400，隐蔽或无权限资产继续使用既有 not-found/permission 边界。
 
 端点只修改 `owner`、规范化后的 `description` 和审计字段。它不得接收或修改分类、标签、ownerDept、名称、domain、source/schema/table、lifecycle 或模型身份。读取和写入均复用 `CatalogDatasetResource` 的 `ensureDatasetEditPermission` 与 `AssetAction.UPDATE`；不创建模型服务中的资产副本或关系表。
 

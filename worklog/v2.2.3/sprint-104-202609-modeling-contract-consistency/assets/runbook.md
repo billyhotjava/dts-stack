@@ -59,3 +59,17 @@ docker run --rm --network host --entrypoint python3 \
 - 接入绑定失败：核对 modelTarget 当前模型/实现修订、候选、目标身份及声明字段/类型/主键；通过页面修复映射或模型，不删除绑定标记、不放开隐式建表。
 - 发布包校验必须等正式构建进程退出 0，再校验完整包、每个镜像归档、镜像 sourceRevision 和受管宏。浏览器部署后需真正重载文档，单独变更 hash 路由不会更新 JavaScript。
 - SOURCE 首次写入前已演练原镜像回滚并恢复正常登录；SOURCE 写入后旧程序无法保证兼容，应采用包含 SOURCE 能力的前向修复版本。不得复用首次写入前的回滚结论作为当前降级许可。
+
+## 2026-09-08 结构物化占用恢复
+
+SCHEMA_ONLY_INTENT 为独立结构候选，BUILT 不是需要强制发布的错误状态。MODEL_ACTIVE_CANDIDATE_CLAIM_CONFLICT 表示同模型占用；MODEL_MATERIALIZATION_TARGET_CLAIM_CONFLICT 表示目标与其他活动构建重叠。先核对当前模型/修订/环境/目标和允许的动作，再通过正常页面的明确失效/替换/重试处理。禁止改库清候选、手工删除占用键或伪造发布。
+
+新 origin 数据存在时，旧枚举程序及旧 schema 不可直接回退；迁移 rollback 会给出 ROLLBACK_BLOCKED_SCHEMA_CANDIDATE_HISTORY_EXISTS。此时前向代码修复并重新正式交付，保持历史。发布前保存四服务原镜像及持久挂载证据；不重建其他服务或卷。
+
+
+### 2026-09-08 结构物化后接管排查补充
+
+- `MODEL_INGESTION_TARGET_NOT_MATERIALIZED`：先比对模型/实现修订、环境与物理核验身份；读取应使用精确模型查询，不使用规划工作台最近两条历史。不得修改候选状态或删表使接入通过。
+- 结构候选的逻辑上游可尚未物化；派发只对 `SCHEMA_ONLY_INTENT` 跳过实表代理依赖解析，普通数据构建保留上游证据校验。
+- `MODEL_SPEC_GOVERNANCE_CLASSIFICATION_REQUIRED`：建模结果仍可完成，登记/治理受原定密规则限制。测试的汇总模型通过“字段显示设置”显式设置字段密级，再提交该修订的实现；不能用默认降密或恒通过替代定密。
+- 修改模型定义后，实现必须匹配同一模型ID、修订与校验和才可直接下一步；旧实现应“提交实现并继续”。预览应返回具体业务阻断，不能变成 rollback-only HTTP500。

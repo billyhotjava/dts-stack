@@ -1,0 +1,75 @@
+{
+  "manifest": {
+    "formatVersion": 1,
+    "version": "f1be305c4309",
+    "sourceCommit": "f1be305c43094447ab518c7016721ca611434dad",
+    "generatedAt": "2026-09-08T00:43:32.718161+00:00",
+    "images": [
+      {
+        "archive": "dts-analytics_s104-f1be305c4-20260908-083906.tar",
+        "sha256": "9d18ae4999269c2ec56f46500ddc88dc2840fa5aa12497878f8a0402fa3eb0fa",
+        "images": [
+          {
+            "imageId": "sha256:992c976e5f509994bb3d76b82cd1aafe01220390059fe5b11c86e7363963a6ad",
+            "tags": [
+              "dts-analytics:s104-f1be305c4"
+            ],
+            "architecture": "amd64",
+            "os": "linux",
+            "sourceRevision": "f1be305c43094447ab518c7016721ca611434dad"
+          }
+        ]
+      },
+      {
+        "archive": "dts-ingestion_s104-f1be305c4-20260908-083906.tar",
+        "sha256": "a6874a593a8f9635b3556e901b878936f01ac3ae3e24158944c2c55b70f9860c",
+        "images": [
+          {
+            "imageId": "sha256:42981b9b3591813edbb19b0f596f16c2c7918958aff03786963e08ae5cce6a8a",
+            "tags": [
+              "dts-ingestion:s104-f1be305c4"
+            ],
+            "architecture": "amd64",
+            "os": "linux",
+            "sourceRevision": "f1be305c43094447ab518c7016721ca611434dad"
+          }
+        ]
+      },
+      {
+        "archive": "dts-platform-webapp_s104-f1be305c4-20260908-083906.tar",
+        "sha256": "60242bb75984b9bf7c262e7215f34cc3de9f5d67e4f99bfe04f0e09fa0d974fb",
+        "images": [
+          {
+            "imageId": "sha256:0e064997d033affaef34c61ad8d1b3f47627c5a10f9487c72fd4c1f0241f7c58",
+            "tags": [
+              "dts-platform-webapp:s104-f1be305c4"
+            ],
+            "architecture": "amd64",
+            "os": "linux",
+            "sourceRevision": "f1be305c43094447ab518c7016721ca611434dad"
+          }
+        ]
+      },
+      {
+        "archive": "dts-platform_s104-f1be305c4-20260908-083906.tar",
+        "sha256": "0ef1ca99cabfe78c1011f6c4954cbde8a2339ad4db86526deacf0e820b97077f",
+        "images": [
+          {
+            "imageId": "sha256:a85e3e317d823f060d221f683939450d8c47a6f9ebcc39b2e556497732c59c80",
+            "tags": [
+              "dts-platform:s104-f1be305c4"
+            ],
+            "architecture": "amd64",
+            "os": "linux",
+            "sourceRevision": "f1be305c43094447ab518c7016721ca611434dad"
+          }
+        ]
+      }
+    ],
+    "imagesIncluded": true,
+    "runtimeFilesRequired": true
+  },
+  "archiveSha256": "d1bc6793e5e965f86d949a6473fb8f2a7bbb6d007163a7c6f1375cc28574540e",
+  "macroSha256": "f9cfe250b55ff74234954ad42c93e6eac069e532b1b93f374db126fd1f995a3e",
+  "verified": true
+}

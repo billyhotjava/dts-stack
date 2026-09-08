@@ -20,7 +20,7 @@
 
 PUT /api/catalog/datasets/{id} 要求 If-Match: "catalog-dataset:{id}:{version}"。缺失428，过期409；客户端先读取当前对象/版本，冲突后重新读取并由用户决定重提，不盲目自动覆盖。发布前核查仓内调用和实际外部使用证据；仓内无调用不等于外部无调用。
 
-## 当前验收基线
+## 开始整改时的验收基线（历史）
 
 4e30da13d 对应正式三镜像、后端75 PASS（未变后端沿用8dc3a6261）、前端48 PASS/5原有SKIP及 Chrome 分项记录已存在。IT-20 被活动批量候选 BUILT 阻断；IT-22 写数未执行；独立离线环境待指定。不得把历史成功转填本次整改 PASS。
 
@@ -28,7 +28,7 @@ PUT /api/catalog/datasets/{id} 要求 If-Match: "catalog-dataset:{id}:{version}"
 
 开发目录仅源码、静态检查、commit/push；部署目录拉取同 SHA 后执行编译测试和正式构建。正常业务测试及正式版本化迁移可验证，禁止手改业务数据/候选状态绕过缺陷。原始他人 review 保持不变。
 
-## R14 / K33 候选占用增量（FROZEN，待实现/验证）
+## R14 / K33 候选占用增量（FROZEN，已实现并分项验证）
 
 复用现有不可变 origin varchar(32)，新增 SCHEMA_ONLY_INTENT；该枚举是结构单模型命令的持久化用途，不新增候选表或执行器。外部请求仍为 build-intents.buildMode=SCHEMA_ONLY，只有与当前实现的结构生成器匹配时服务端可创建此 origin；旧请求缺省 DATA_BUILD 和旧 origin 保持不变。前端候选 DTO 同步枚举。
 
@@ -39,7 +39,7 @@ PUT /api/catalog/datasets/{id} 要求 If-Match: "catalog-dataset:{id}:{version}"
 - 前向 Liquibase 20260908_01_model_schema_candidate_scope.xml 扩展 origin CHECK 并将原 uk_model_release_candidate_active_plan 的规划唯一范围限定为非 SCHEMA_ONLY_INTENT 活动候选；旧状态与数据不回填、不改写。保留原模型占用唯一索引。迁移失败整体回滚；若已有新 origin 行则拒绝旧 schema rollback。上线后旧应用不能识别新 origin，因此有新候选时必须前向修复，不能盲目回退旧镜像。
 - 只读基线：当前候选7条（批量 BUILT1/PUBLISHED2/STALE1/CANCELLED3），模型12条（SOURCE1/FACT7/DIMENSION2/SUMMARY1/APPLICATION1）；分析绑定1条、无缺 tenant/source 的 legacy 行。当前没有结构 origin 数据，迁移不需要数据清洗。
 
-验收：两种创建顺序的跨用途范围冲突；同请求重放与模式错配；同模型环境竞争；不同模型连续 BUILT；目标重叠拒绝且不产生新运行；旧 batch 独占；规划工作台不报结构候选歧义；隔离空库/升级库迁移和回退保护。当前未执行，不标 PASS。
+验收：两种创建顺序的跨用途范围冲突；同请求重放与模式错配；同模型环境竞争；不同模型连续 BUILT；目标重叠拒绝且不产生新运行；旧 batch 独占；规划工作台不报结构候选歧义；隔离空库/升级库迁移和回退保护。上述专项测试、真实迁移、四层连续物化已执行；各分项提交与结果见整改运行记录，不将未执行的独立离线验收记为PASS。
 
 ## R03–R07 实施切片（FROZEN）
 
@@ -57,3 +57,9 @@ PUT /api/catalog/datasets/{id} 要求 If-Match: "catalog-dataset:{id}:{version}"
 ## R02 调用方核查与本轮兼容边界
 
 仓内平台/管理前端搜索 updateDataset：完整 PUT 仅在 platformApi.ts 声明，没有发现使用方；实际资产简表编辑使用 updateDatasetGovernanceSummary 的 PATCH。不能据此认定外部脚本不存在。本轮继续沿用已经部署的 If-Match 要求，不再次改变 PUT 请求格式；已补升级/错误说明和共享 ETag 单测。外部调用方升级指引为读取当前 version 后携带精确 ETag，冲突后由调用方重新核对输入；不自动合并覆盖人工值。
+
+## 2026-09-08 执行证据入口
+
+运行增量契约：文件绑定模型目标时，TargetTableProvisioner、Addax配置和Airflow文件预任务三处均禁止DDL，不能只过滤writer.preSql。目录观察的warehouseLayer使用ModelSpec.layer标准层级（例如ODS），模型的warehouseLayerCode保留ODS_RAW/ODS_STANDARDIZED等细分配置；仅无标准层级的兼容对象沿用原code回退。质量前登记与发布登记必须使用同一映射，不扩目录层级枚举、不修改存量业务数据。
+
+各条整改源码、正式测试/包/容器与Chrome95结果见 [本轮整改运行记录](../it/evidence/current-environment/remediation-runtime-20260908.md)。R14原活动候选阻断已解除，四层空表创建成功；后续接入列映射、预览封装识别、质量审计及结构发布血缘修复按同一Git交付链继续验证。原他人review仍保留未修改。

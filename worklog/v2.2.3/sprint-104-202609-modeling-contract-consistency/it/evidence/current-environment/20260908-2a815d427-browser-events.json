@@ -1,0 +1,135 @@
+{
+  "revision": "2a815d4271b5d410771f4951fe38274c740bd402",
+  "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/95.0.4638.0 Safari/537.36",
+  "adsPreview": {
+    "status": 200,
+    "body": {
+      "status": 200,
+      "message": "OK",
+      "code": null,
+      "data": {
+        "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+        "environment": "dev",
+        "strategy": "WITH_MISSING_UPSTREAMS",
+        "planChecksum": "f5dbfe158878f9854c6dfa52c1a9dcf25b54791d2432fa1c4d800ba94f8bea7b",
+        "canStart": true,
+        "requestedModelSpecIds": [
+          "406d5588-8fc0-4824-a7e8-0fa7c95c422c"
+        ],
+        "orderedEntries": [
+          {
+            "modelSpecId": "406d5588-8fc0-4824-a7e8-0fa7c95c422c",
+            "modelName": "S104 F3 应用验收 2300",
+            "modelRevision": 4,
+            "modelChecksum": "0f741bcaf2e60fedb05840f7a9e6a526c40b7dcb0fed2e1ba3da5836378ac8e1",
+            "implementationRevision": 1,
+            "implementationChecksum": "979a74089d80cc7564b3ce3acf7172dcfb6dcc7ea1adcb57f2f9841a678f0239",
+            "dependencyChecksum": "fb707da55756e9ce216d8b83161e426d6b5f9283243255c58c811d7a17fccfe8",
+            "layer": "ADS",
+            "dependencyRole": "ROOT",
+            "topologyLevel": 0,
+            "action": "BUILD",
+            "reasonCode": "REQUESTED_MODEL",
+            "relationEvidenceId": null,
+            "targetRelation": null
+          }
+        ],
+        "blockers": []
+      }
+    }
+  },
+  "errors": [],
+  "requests": [
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/release-candidates/23530616-daad-4272-b731-c24018cea1a3/publication/retry",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"candidate\":{\"id\":\"23530616-daad-4272-b731-c24018cea1a3\",\"tenantId\":\"default\",\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"status\":\"PUBLISHED\",\"version\":8,\"idempotencyKey\":\"build-intent-create:c3ceca5d87d9e8bd9986773bb5c3332a92ba9b8a571dfe402a804dc6684776be\",\"requestHash\":\"cd69ca85d1f9c415882b2de8bb31bb66d886be3eedcd467432850536f7f74ada\",\"audit\":{\"createdBy\":\"xiezm\",\"createdAt\":\"2026-09-07T23:54:46.372025Z\",\"submittedBy\":null,\"submittedAt\":null,\"approvedBy\":null,\"approvedAt\":null,\"publishedBy\":\"xiezm\",\"publishedAt\":\"2026-09-08T00:06:38.524111Z\"},\"lastModifiedBy\":\"xiezm\",\"lastModifiedAt\":\"2026-09-08T00:26:15.146665309Z\",\"entries\":[{\"id\":\"49e7cbc7-1f38-4af8-a63a-3e6ef260a876\",\"tenantId\":\"default\",\"candidateId\":\"23530616-daad-4272-b731-c24018cea1a3\",\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"revision\":7,\"checksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationId\":\"3f2856f0-1ea2-463e-9959-0aea3a5bc5f8\",\"implementationMode\":\"DBT_MANAGED\",\"status\":\"PUBLISHED\",\"sortOrder\":0,\"selectedReason\":\"single-model build intent\"}],\"origin\":\"SCHEMA_ONLY_INTENT\",\"executionTargetKey\":\"postgres-primary\",\"adapter\":\"postgres\",\"profileKey\":\"dts\",\"targetName\":\"dev\"},\"replayed\":false,\"driftReasons\":[],\"allowedActions\":[\"ROLLBACK\"]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"cedee90602d6ce0de13124390c795ffc08796a60ebfc236c47d9e368d821ea10\",\"canStart\":true,\"requestedModelSpecIds\":[\"cab6861d-035e-4c33-897c-24a9827d5cff\"],\"orderedEntries\":[{\"modelSpecId\":\"cab6861d-035e-4c33-897c-24a9827d5cff\",\"modelName\":\"S104 F3 汇总验收 2300\",\"modelRevision\":7,\"modelChecksum\":\"e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd\",\"implementationRevision\":2,\"implementationChecksum\":\"b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7\",\"dependencyChecksum\":\"54ee313df327ecf59209d4ef8a2c957e05fef0f5493a9449f3a4dbd4500f086c\",\"layer\":\"DWS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"f5dbfe158878f9854c6dfa52c1a9dcf25b54791d2432fa1c4d800ba94f8bea7b\",\"canStart\":true,\"requestedModelSpecIds\":[\"406d5588-8fc0-4824-a7e8-0fa7c95c422c\"],\"orderedEntries\":[{\"modelSpecId\":\"406d5588-8fc0-4824-a7e8-0fa7c95c422c\",\"modelName\":\"S104 F3 应用验收 2300\",\"modelRevision\":4,\"modelChecksum\":\"0f741bcaf2e60fedb05840f7a9e6a526c40b7dcb0fed2e1ba3da5836378ac8e1\",\"implementationRevision\":1,\"implementationChecksum\":\"979a74089d80cc7564b3ce3acf7172dcfb6dcc7ea1adcb57f2f9841a678f0239\",\"dependencyChecksum\":\"fb707da55756e9ce216d8b83161e426d6b5f9283243255c58c811d7a17fccfe8\",\"layer\":\"ADS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/model-specs/0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb/ingestion-target?environment=dev",
+      "status": 200,
+      "method": "GET",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"schemaVersion\":1,\"modelSpecId\":\"0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb\",\"modelRevision\":3,\"modelChecksum\":\"81b71830991e00f7f6e726f8f08e04c1114ab1d02ebb5427377c450217c64472\",\"implementationRevision\":1,\"implementationChecksum\":\"346f2f24e853431ed71222c156c169d6f8714ad6b7aef531d21f62bb945ea30f\",\"environment\":\"dev\",\"candidateId\":\"aa1a3d1e-f4c0-4d77-954b-25a52a07e92a\",\"runGroupId\":\"ebe5064f-c322-3edc-a225-bd1f50b7dbda\",\"dataSourceId\":\"a0000000-0000-0000-0000-000000000001\",\"databaseName\":\"biadmin\",\"schemaName\":\"public\",\"tableName\":\"ods_raw_s104_file_guard_0830\",\"columns\":[{\"name\":\"record_id\",\"dataType\":\"text\",\"nullable\":false,\"primaryKey\":true},{\"name\":\"amount\",\"dataType\":\"text\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_source_system\",\"dataType\":\"text\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_source_table\",\"dataType\":\"text\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_import_time\",\"dataType\":\"timestamp without time zone\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_batch_id\",\"dataType\":\"text\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_execution_id\",\"dataType\":\"text\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_task_id\",\"dataType\":\"text\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_source_file\",\"dataType\":\"text\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_source_sheet\",\"dataType\":\"text\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_file_hash\",\"dataType\":\"text\",\"nullable\":true,\"primaryKey\":false},{\"name\":\"_dts_row_number\",\"dataType\":\"integer\",\"nullable\":true,\"primaryKey\":false}]}}"
+    }
+  ],
+  "fileRequests": [
+    {
+      "url": "https://bi.yuzhicloud.com/api/ingestion/tasks/6/execute/async",
+      "status": 200,
+      "method": "POST"
+    }
+  ]
+}

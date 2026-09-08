@@ -42,7 +42,7 @@
 
 ## 3. 契约链与扩展草案
 
-下表区分现有接口与拟扩展内容。后者在 T15 完成 JSON 样例、错误码、数据库约束及 fixtures 前不得视为 FROZEN，也不得直接用于开工。
+下表保留最初设计草案用于追溯；实施时以其后的“已实施契约冻结”和审查整改增量为准，不能继续按草案中的拟定DTO开发。
 
 | 编号 | 既有 owner/接口 | F3 输入、输出及边界 |
 |---|---|---|
@@ -52,6 +52,19 @@
 | K34 | `GET .../{id}/delivery-status`、ModelDeliveryStatusResource 与既有只读聚合 | 拟增 `modelingResult:{state:NOT_MATERIALIZED|RUNNING|SUCCEEDED|FAILED|STALE,modelRevision:number,modelChecksum:string,implementationRevision:number|null,environment:string,runId:string|null,buildMode:string|null,outputs:array}`。outputs 必须沿用真实目标定位及结构核验证据；完整 shape 由 T15 对齐当前 DTO。结果由运行/当前快照派生，不新增持久化总进度状态机，不把 SUCCEEDED 写成 PUBLISHED |
 | K35 | IngestionTaskProxyResource、IngestionTaskService、TargetTableProvisioner、API landing；既有接入创建/更新/执行命令 | 接入目标绑定需携带模型 ID/修订和精确目标身份；服务解析源/目标字段、差异并验证。新增绑定字段的嵌入位置、类型、版本并发和各接入适配器由 T15 冻结。没有物理表时提示先物化；模型型目标禁止继承文件接入的隐式 DROP/重建行为 |
 | K36 | CatalogAssetType/CatalogAssetKey、catalog_dataset、目录/质量/发布/serving owner | 数据模块使用既有 dataset 身份；`PATCH /api/catalog/datasets/{id}/governance-summary` 继续使用 owner/description、If-Match 和目录 CAS。接手数据/治理不新建同表第二资产；自动技术投影和用户维护字段分别由原 owner 管理 |
+
+### 已实施契约冻结（2026-09-08，FROZEN）
+
+| 契约 | 当前实现与准确边界 |
+|---|---|
+| K31 | 创建POST `/api/modeling/model-specs` 只传planId/domainId/modelType/name/warehouseLayerCode/idempotencyKey等身份字段；定义更新是PUT `/{id}`及强ETag，非草案中的`/{id}/definition`。SOURCE固定ODS，字段和引用沿用现有ModelSpec/修订快照；当前库已保存并读回SOURCE，无第二台账。 |
+| K32 | dependsOn固定模型ID/修订，逻辑引用与sourceRefs物理来源分开；SCHEMA_ONLY派发及预览不解析逻辑上游实表，DATA_BUILD保持原精确物理依赖门禁。原始SCHEMA_ONLY及DBT_MANAGED/GENERATED的DBT config.buildMode封装采用同一识别。 |
+| K33 | build-intents保留模型ETag和幂等协议，buildMode缺省DATA_BUILD，结构命令明确SCHEMA_ONLY。结构候选origin=SCHEMA_ONLY_INTENT，单模型、模型/环境和物理目标互斥；普通工作台与完整活动占用集分开。迁移、锁、错误、回退保护详见[冻结增量](review-remediation-20260908.md#r14--k33-候选占用增量frozen已实现并分项验证)。复用dts_schema_only普通PostgreSQL表宏，不新建DDL引擎。 |
+| K34 | 实际modelingResult字段为state/reasonCode/modelSpecId/modelRevision/modelChecksum/implementationRevision/implementationChecksum/buildMode/environment/candidateId/runGroupId/targetRelation/matchesCurrentTarget/observedAt；没有草案的runId/outputs。state为NOT_STARTED/RUNNING/SUCCEEDED/FAILED/UNKNOWN，失配以UNKNOWN及证据原因表示。ModelDeliveryStatusQueryService按当前模型、实现、运行和关系核验派生；后续质量/发布失败不撤销已验证物化。 |
+| K35 | GET `/{id}/ingestion-target?environment=dev`返回schemaVersion=1、模型/实现双修订与checksum、environment、candidateId/runGroupId、dataSourceId/databaseName/schemaName/tableName以及columns(name/dataType/nullable/primaryKey)。保存于现有destinationConfig.modelTarget，执行重新校验。TargetTableProvisioner、Addax配置及Airflow预任务均禁止绑定目标DDL；API保留raw_record适配，文件仅现有可表达映射。身份/结构/字段差异分别拒绝，不改目标。托管文件的临时路径和落地配置不是来源身份，文件哈希/字段证据变化仍使旧封存失效。 |
+| K36 | POST `/{id}/data-registration`传candidateId/candidateVersion/modelRevision/modelChecksum，返回现有dataset UUID数组。当前数据深链为`/catalog/search?view=table&modelSpecId=...&environment=...&candidateId=...`。目录人工字段PATCH继续强ETag；登记/发布保留原owner/description及人工tags。目录观察使用标准layer，保留模型细分warehouseLayerCode；结构候选仅保留逻辑模型血缘，不伪造物理输入。 |
+
+错误与可执行样例：ModelTargetGuardTest、ModelIngestionTargetServiceTest、ModelSchemaCandidateScopePostgresTest、CandidateQualityAssetRegistrationServiceTest、ModelPublicationAssetObservationAdapterTest，以及本次[真实运行记录](../it/evidence/current-environment/remediation-runtime-20260908.md)。SOURCE创建/暂存、四层空表、旧普通候选保持、ODS写数及同资产维护已有实际输入/响应/身份；独立离线和完整反例矩阵属于T20，不由契约冻结替代。
 
 ### 当前完成证据
 
@@ -104,7 +117,7 @@
 3. **接入对已有表的行为**：API 的 raw_record 及技术列、文件重建策略与声明结构如何匹配；T15 固定支持范围和差异拒绝行为，T19 落地。仅支持现有适配器可表达的映射，不新增通用 API 展平引擎。
 4. **资产接手身份**：无目录记录时如何复用现有登记命令，已有记录如何精确定位；T15 固定 URI/DTO/唯一性，T19 验证幂等，不以同名猜测匹配。
 
-上述四项为原始开工问题，已实施部分见冻结章节。新增第 5 项为规划级活动候选与独立结构物化的占用冲突，按审查整改契约关闭。T15–T20 当前均 IN_PROGRESS；需要超出普通表、现有接入和现有目录范围时另报问题，不静默扩展。
+上述四项及新增的候选占用问题已按实际接口、迁移和运行证据冻结，T15完成。T16–T20的完整验收仍按各自DoD推进；超出普通表、现有接入和现有目录范围时另报问题，不静默扩展。
 
 ## 7. 范围内非功能与交付约束
 
