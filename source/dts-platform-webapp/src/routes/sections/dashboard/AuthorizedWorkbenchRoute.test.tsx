@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeAll, expect, it, vi } from "vitest";
 import type { MenuTree } from "#/entity";
+import { PermissionType } from "#/enum";
 import { useMenuStore } from "@/store/menuStore";
 import { AuthorizedWorkbenchRoute, permittedLandingPath } from "./AuthorizedWorkbenchRoute";
 
@@ -15,7 +16,7 @@ beforeAll(() => {
 afterEach(() => {
 	useMenuStore.getState().clearMenus();
 });
-const menu = (path: string): MenuTree => ({ id: path, name: path, path, type: 1 }) as MenuTree;
+const menu = (path: string): MenuTree => ({ id: path, name: path, path, type: PermissionType.MENU }) as MenuTree;
 
 it("selects the authorized menu instead of the ungranted default", () => {
 	expect(permittedLandingPath([menu("/bi/screens")], "/workbench")).toBe("/bi/screens");
