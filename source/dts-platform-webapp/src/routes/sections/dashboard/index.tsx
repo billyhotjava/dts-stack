@@ -1,10 +1,9 @@
-import { lazy, Suspense, useEffect } from "react";
-import { Navigate, type RouteObject, useLocation } from "react-router";
-import { GLOBAL_CONFIG } from "@/global-config";
+import { lazy, Suspense } from "react";
+import { Navigate, type RouteObject } from "react-router";
 import { LineLoading } from "@/components/loading";
 import DashboardLayout from "@/layouts/dashboard";
 import LoginAuthGuard from "@/routes/components/login-auth-guard";
-import { useRouter } from "@/routes/hooks";
+import { AuthorizedWorkbenchRoute } from "./AuthorizedWorkbenchRoute";
 import { DynamicMenuResolver } from "./dynamic-resolver";
 import { STATIC_DASHBOARD_ROUTES } from "./static-routes";
 
@@ -18,12 +17,14 @@ export const dashboardRoutes: RouteObject[] = [
 			</LoginAuthGuard>
 		),
 		children: [
-			{ index: true, element: <FallbackDashboardIndex /> },
+			{ index: true, element: <AuthorizedWorkbenchRoute /> },
 			{
 				path: "workbench",
 				element: (
 					<Suspense fallback={<LineLoading />}>
-						<WorkbenchPage />
+						<AuthorizedWorkbenchRoute>
+							<WorkbenchPage />
+						</AuthorizedWorkbenchRoute>
 					</Suspense>
 				),
 			},
@@ -35,7 +36,9 @@ export const dashboardRoutes: RouteObject[] = [
 						path: "workbench",
 						element: (
 							<Suspense fallback={<LineLoading />}>
-								<WorkbenchPage />
+								<AuthorizedWorkbenchRoute>
+									<WorkbenchPage />
+								</AuthorizedWorkbenchRoute>
 							</Suspense>
 						),
 					},
@@ -46,17 +49,3 @@ export const dashboardRoutes: RouteObject[] = [
 		],
 	},
 ];
-
-function FallbackDashboardIndex() {
-	const router = useRouter();
-	const location = useLocation();
-	const fallbackPath = GLOBAL_CONFIG.defaultRoute || "/workbench";
-
-	useEffect(() => {
-		if (fallbackPath && location.pathname !== fallbackPath) {
-			router.replace(fallbackPath);
-		}
-	}, [fallbackPath, router, location.pathname]);
-
-	return null;
-}

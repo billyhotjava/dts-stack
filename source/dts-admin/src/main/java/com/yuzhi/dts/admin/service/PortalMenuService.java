@@ -972,9 +972,8 @@ public class PortalMenuService {
                     existing.setMetadata(freshMetadata);
                     dirty = true;
                 }
-                if (inheritVisibilityIfUnbound(existing, parent, existingChildren)) {
-                    dirty = true;
-                }
+                // An existing empty binding is an administrator's authorization decision.
+                // Seed reads must not re-grant it from a parent or a sibling.
                 // Recurse to ensure deeper nodes exist.
                 ensureChildrenFromSeed(existing, child.children(), 1, nextCompositeKey, sectionKey);
                 // Keep seed-managed leaf components aligned with the current route mapping.

@@ -40,6 +40,33 @@ class PortalMenuSeedDefaultsContractTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Test
+    void existingUnboundMenuDoesNotAcquireParentOrSiblingRolesOnRead() throws Exception {
+        PortalMenuRepository repository = mock(PortalMenuRepository.class);
+        PortalMenuService service = new PortalMenuService(repository, null, mock(SystemConfigRepository.class), objectMapper, noOpTransactionManager());
+        PortalMenu parent = menuWithVisibility(10L, "{\"key\":\"workbench\",\"sectionKey\":\"workbench\"}");
+        parent.setPath("workbench");
+        PortalMenu unbound = new PortalMenu();
+        unbound.setId(11L);
+        unbound.setPath("workbench/todo");
+        unbound.setMetadata("{\"key\":\"todo\",\"sectionKey\":\"workbench\",\"entryKey\":\"todo\"}");
+        unbound.setParent(parent);
+        unbound.setChildren(new ArrayList<>());
+        unbound.setVisibilities(new ArrayList<>());
+        PortalMenu sibling = menuWithVisibility(12L, "{\"key\":\"overview\",\"sectionKey\":\"workbench\",\"entryKey\":\"overview\"}");
+        sibling.setParent(parent);
+        when(repository.findByParentIdOrderBySortOrderAscIdAsc(10L)).thenReturn(List.of(unbound, sibling));
+        Method synchronize = PortalMenuService.class.getDeclaredMethod("ensureChildrenFromSeed", PortalMenu.class, List.class, int.class, String.class, String.class);
+        synchronize.setAccessible(true);
+        Object seed = menuNode("todo", "todo", "list", "sys.nav.portal.workbenchTodo", "待办事项", "/workbench/todo", List.of());
+        synchronize.invoke(service, parent, List.of(seed), 1, "workbench", "workbench");
+        assertTrue(unbound.getVisibilities().isEmpty(), "parent authorization must not expand to an existing child");
+        parent.setVisibilities(new ArrayList<>());
+        synchronize.invoke(service, parent, List.of(seed), 1, "workbench", "workbench");
+        assertTrue(unbound.getVisibilities().isEmpty(), "sibling authorization must not expand on subsequent reads");
+        assertEquals(1, sibling.getVisibilities().size(), "explicit sibling authorization must remain unchanged");
+    }
+
+    @Test
     void roleMenuDefaultsDoNotBindAnyRoles() throws Exception {
         ClassPathResource resource = new ClassPathResource("config/data/role-menu-defaults.json");
         assertTrue(resource.exists(), "role-menu-defaults.json must exist");

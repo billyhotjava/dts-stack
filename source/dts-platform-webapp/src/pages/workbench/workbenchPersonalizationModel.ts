@@ -16,7 +16,7 @@ export function normalizeWorkbenchPreferenceItems(
 			const current = byKey.get(component.key);
 			return {
 				key: component.key,
-				visible: current?.visible ?? defaultVisible,
+				visible: component.enabled !== false && (current?.visible ?? defaultVisible),
 				order: current?.order ?? (defaultVisible ? (index + 1) * 10 : maxSavedOrder + (index + 1) * 10),
 			};
 		})

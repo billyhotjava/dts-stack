@@ -35,7 +35,7 @@ const CUSTOMIZE_QUERY_VALUE = CUSTOMIZE_QUERY.slice(CUSTOMIZE_QUERY_INDEX + 1);
 function normalizeAvailableComponents(
 	components: WorkbenchComponentDescriptor[] | undefined,
 ): WorkbenchComponentDescriptor[] {
-	const source = components?.length
+	const source = components !== undefined
 		? components
 		: WORKBENCH_COMPONENT_REGISTRY.map((component) => ({
 				key: component.key,
