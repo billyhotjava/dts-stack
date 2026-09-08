@@ -1711,8 +1711,12 @@ public class DbtImplementationDraftService {
         boolean schemaOnly = visualCommand != null &&
             com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(visualCommand.inputMode(), visualCommand.inputs()) &&
             "dts_schema_only".equals(target.materialization());
-        requireMaterialization(model, target, schemaOnly);
         UpdateModelSpecCommand authoringSnapshot = unifiedAuthoring ? requireValidModelSnapshot(current) : null;
+        // Pins above guard external changes; the validated bundle implements this saved draft definition.
+        ModelSpecView authoredModel = authoringSnapshot == null
+            ? model
+            : snapshotCodec.toUpdatedView(model, authoringSnapshot, model.revision(), now);
+        requireMaterialization(authoredModel, target, schemaOnly);
         List<ModelField> projectedFields = DbtModelFieldProjector.project(
             objectMapper,
             target.schema(),

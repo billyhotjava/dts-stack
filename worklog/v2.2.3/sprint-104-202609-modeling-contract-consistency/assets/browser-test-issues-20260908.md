@@ -64,3 +64,14 @@
 正式包与运行镜像证据见 [package-proof](../it/evidence/current-environment/browser-remediation-081bc098a-package-proof.json)。最终包清单、归档 SHA、镜像源码版本与运行镜像一致。初次校验误选 builds/dist 中间归档，改为按包内 SHA 对应的 builds/legacy-dist 正式归档后通过，运行配置与文件层一致。早先 2c8 包因打包阶段再次拉取导致清单与镜像源码不一致而弃用，未部署。
 
 本轮不将 Sprint 或全部 task 标为完成：候选完整状态矩阵、提交失败提示负例、新文件封存负例、字段命名合同仍有未验收项；离线同包验收及回滚演练也未执行。当前外部 Chrome 版本未核实，不能替代 Chrome 95 专项认证。
+
+
+## 续测：实现配置恢复阻断（B08 / T05、T06）
+
+外部 Chrome 标签 1761048294，模型 97418fad… r3：test 环境启动物化仍被 MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS 拒绝，未取消其他候选。无候选页面正确显示“所选模型尚无”，没有显示其他模型的执行证据。
+
+实现步骤 FULL → INCREMENTAL → 提交，报 DBT_DRAFT_MATERIALIZATION_UNSUPPORTED（关联 a887df75-ee95-408c-b7a5-d060da924425）；再改回 FULL 提交，报 MODEL_AUTHORING_UNMANAGED_FILE_CHANGED（关联 99be9c30-da90-4b19-946d-119b60831364）。首次保存/校验已生成草稿，不能靠删除数据库草稿恢复。
+
+根因与最小整改：后端 commitInternal 已验证基线版本，但物化一致性比较仍使用旧模型，改为使用已验证 authoringSnapshot 的内存投影；非统一创作继续使用当前模型。前端 submitImplementation 在校验后更新上下文时同步服务端工作文件，防止失败后下次保存携带旧文件。保留版本/CAS、校验和、冻结包及非托管文件保护。GitNexus：后端 HIGH，直接调用 commit，影响高级/统一创作入口；前端 LOW，直接调用 ModelingWorkbenchPage。已向用户说明。
+
+验收：正式发布后通过 Chrome 恢复当前草稿，再验证 FULL→INCREMENTAL→FULL 提交及刷新；保持源表、复合键映射不变。源码修复不等于通过验收。

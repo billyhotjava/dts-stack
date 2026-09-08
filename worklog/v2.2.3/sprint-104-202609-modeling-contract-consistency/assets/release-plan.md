@@ -236,3 +236,8 @@ docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml ps dts-platfo
 ### 浏览器整改发布实际结果（2026-09-08 10:53）
 
 081bc098a 正式构建成功，交付包一致性通过；现有 deploy Compose 定向更新 platform、ingestion、webapp。页面实测结果与未验证项见 [整改回归记录](browser-remediation-architecture-20260908.md#2026-09-08-1053-整改部署后可见-chrome-回归)。无数据库手工修正；未执行离线验收或回滚演练。
+
+
+### B08 创作恢复修复
+
+仅 platform 与 webapp 两个源码文件变更。无迁移或回填；沿用正式构建/包/Compose 发布，保留 081bc098a 镜像回退。发布后外部 Chrome 验证策略往返及失败后恢复；不新增代码级测试。高级编辑保持原模型物化约束，统一创作使用本次已验证定义，版本及文件保护不变。回滚演练仍未执行。

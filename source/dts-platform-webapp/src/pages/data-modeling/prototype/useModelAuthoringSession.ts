@@ -344,6 +344,7 @@ export function useModelAuthoringSession({
 			setValidation(checked);
 			const current = await getModelAuthoringContext(selectedModelId);
 			setAuthoringContext(current);
+			setFiles(authoringFilesOf(current.openDraft));
 			if (
 				!current.allowedActions.includes("COMMIT") ||
 				!hasCurrentAuthoringValidation(current, checked) ||
