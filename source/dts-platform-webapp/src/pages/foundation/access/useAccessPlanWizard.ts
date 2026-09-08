@@ -34,6 +34,7 @@ import {
 	toAccessPlanFormValues,
 } from "./accessPlanPayload";
 import { buildFileBaseName, isApiDataSource, isJdbcSource, normalizeTableName } from "./shared/ingestionFormHelpers";
+import { validateFileTargetColumns } from "./shared/fileTargetSchemaMapping";
 import { resolveCreatedTaskId } from "./shared/transformCreateAsyncRun.helpers";
 import { uploadTransformFileWithAdmission } from "./shared/transformCreateFileFlow.helpers";
 
@@ -122,6 +123,10 @@ const SAFE_ACCESS_PLAN_MESSAGES = new Set([
 
 export const safeAccessPlanErrorMessage = (error: unknown, fallback: string) => {
 	const message = error instanceof Error ? normalizeText(error.message) : "";
+	const detail = (error as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail;
+	if (/\bCLASSIFICATION_SEAL_STALE\b/.test(message) || (typeof detail === "string" && /\bCLASSIFICATION_SEAL_STALE\b/.test(detail))) {
+		return "文件密级证据已变化，本次配置尚未生效。请重新进入编辑页核对配置；如更换文件或调整字段密级，请重新上传并确认封存后保存。";
+	}
 	const knownTaskKindMessage = /^任务类型为(?:数据库|API|离线文件)，请从对应入口编辑$/.test(message);
 	return message && (SAFE_ACCESS_PLAN_MESSAGES.has(message) || knownTaskKindMessage) ? message : fallback;
 };
@@ -514,12 +519,36 @@ export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardI
 		[editId, form, state.fileUploadResult],
 	);
 
+	// Keep the last valid name-to-column identity at wizard scope so back/next
+	// navigation cannot discard it while a field name is temporarily invalid.
+	const classificationFileRef = useRef<ManagedFileUploadResult | null>(null);
+	useEffect(() => {
+		const file = state.fileUploadResult;
+		if (!file || !validateFileTargetColumns(file.columns).length) classificationFileRef.current = file;
+	}, [state.fileUploadResult]);
+
 	const setFileUploadResult = useCallback((fileUploadResult: ManagedFileUploadResult | null) => {
 		if (fileUploadResult === null) fileUploadRequestIdRef.current += 1;
+		const baseline = classificationFileRef.current;
+		let nextFile = fileUploadResult;
+		if (fileUploadResult && baseline?.fileId === fileUploadResult.fileId &&
+			!validateFileTargetColumns(fileUploadResult.columns).length &&
+			baseline.columns.some((column, index) => column.name !== fileUploadResult.columns[index]?.name)) {
+			// Read every level from the immutable baseline before assigning any new
+			// keys. This also handles swaps without overwriting another column.
+			const fields = { ...baseline.fieldClassifications };
+			baseline.columns.forEach((column) => { delete fields[column.name]; });
+			baseline.columns.forEach((column, index) => {
+				const next = fileUploadResult.columns[index];
+				const level = baseline.fieldClassifications?.[column.name];
+				if (next && level) fields[next.name] = level;
+			});
+			nextFile = { ...fileUploadResult, fieldClassifications: fields };
+		}
 		setState((previous) => ({
 			...previous,
-			fileUploadResult,
-			uploadingFile: fileUploadResult === null ? false : previous.uploadingFile,
+			fileUploadResult: nextFile,
+			uploadingFile: nextFile === null ? false : previous.uploadingFile,
 		}));
 	}, []);
 

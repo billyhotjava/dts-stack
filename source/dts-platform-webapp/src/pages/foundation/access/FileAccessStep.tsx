@@ -24,7 +24,7 @@ import { toAdmissionFile, toManagedFile } from "./accessManagedFile";
 import type { AccessPlanFormValues } from "./accessPlan.types";
 import { FileFieldMappingEditor } from "./FileFieldMappingEditor";
 import { FileFieldClassificationSelect } from "./shared/FileClassificationIntake";
-import { applyTargetSchemaTemplate, type TargetSchemaColumn } from "./shared/fileTargetSchemaMapping";
+import { applyTargetSchemaTemplate, type TargetSchemaColumn, validateFileTargetColumns } from "./shared/fileTargetSchemaMapping";
 
 type Props = {
 	form: FormInstance<AccessPlanFormValues>;
@@ -87,6 +87,7 @@ export function FileAccessStep({
 	const [targetColumns, setTargetColumns] = useState<TargetSchemaColumn[]>([]);
 	const [searchingTables, setSearchingTables] = useState(false);
 	const [loadingColumns, setLoadingColumns] = useState(false);
+	const invalidColumnNames = Boolean(fileUploadResult && validateFileTargetColumns(fileUploadResult.columns).length);
 	useEffect(() => {
 		if (modelTarget)
 			_form.setFieldsValue({
@@ -129,15 +130,7 @@ export function FileAccessStep({
 	}, [phase, structureMode, tableKeyword, targetDataSourceId]);
 
 	const updateFileColumns = (columns: ManagedFileColumn[]) => {
-		if (!fileUploadResult) return;
-		const nextClassifications = { ...(fileUploadResult.fieldClassifications || {}) };
-		fileUploadResult.columns.forEach((previous, index) => {
-			const next = columns[index];
-			if (!next || previous.name === next.name || !nextClassifications[previous.name]) return;
-			nextClassifications[next.name] = nextClassifications[previous.name];
-			delete nextClassifications[previous.name];
-		});
-		onFileUploadResultChange({ ...fileUploadResult, columns, fieldClassifications: nextClassifications });
+		if (fileUploadResult) onFileUploadResultChange({ ...fileUploadResult, columns });
 	};
 
 	const selectReferenceTable = async (qualifiedTable: string) => {
@@ -328,7 +321,9 @@ export function FileAccessStep({
 							targetColumns={targetColumns}
 							preview={fileUploadResult.preview}
 							onChange={updateFileColumns}
-							renderClassification={(row) => (
+							renderClassification={(row) => invalidColumnNames ? (
+								<Typography.Text type="secondary">请先修正字段名称，原密级已保留</Typography.Text>
+							) : (
 								<FileFieldClassificationSelect
 									file={toAdmissionFile(fileUploadResult)}
 									fieldName={row.name}

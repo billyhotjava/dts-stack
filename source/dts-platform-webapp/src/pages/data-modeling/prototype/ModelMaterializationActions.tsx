@@ -62,10 +62,12 @@ export function ModelMaterializationActions({
 	const configureQuality = embedded && pageAction?.code === "CONFIGURE_QUALITY_RULES";
 	// Opening the editor preserves its draft and does not submit a lifecycle command.
 	const blockedByBusy = Boolean(busy) && !(configureQuality && busy === "load");
+	const invokesBuild = !embedded || !["CONFIGURE_QUALITY_RULES", "RUN_QUALITY", "NEXT", "RERUN_GOVERNANCE_QUALITY"].includes(pageAction?.code || "");
 	const disabled =
 		(configureQuality ? !canConfigureQuality || !onConfigureQuality : !canMaintain) ||
 		blockedByBusy ||
-		(embedded ? !pageAction?.enabled : !canBuild);
+		(embedded && !pageAction?.enabled) ||
+		(invokesBuild && !canBuild);
 	const label = embedded
 		? blockedByBusy
 			? "处理中…"

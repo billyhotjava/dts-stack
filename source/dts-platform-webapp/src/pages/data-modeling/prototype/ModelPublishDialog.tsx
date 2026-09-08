@@ -315,6 +315,17 @@ export function ModelPublishDialog({
 		void refreshMaterializationPlan();
 	}, [refreshMaterializationPlan]);
 	const requiresPlan = Boolean(buildAction && PLAN_BOUND_BUILD_ACTIONS.has(buildAction));
+	const materializationBlocker = planState === "loading"
+		? "正在核对物化计划"
+		: planState === "error"
+			? planFailure || "物化计划加载失败，请刷新计划后重试"
+			: materializationPlan?.blockers[0]
+				? `${materializationPlan.blockers[0].code}：${materializationPlan.blockers[0].message}`
+				: planState === "blocked"
+					? "当前物化计划不允许开始，请刷新计划并核对实现配置"
+					: candidateScopeMatches && workspace?.primaryBlocker
+						? `${workspace.primaryBlocker.code}：${workspace.primaryBlocker.message}`
+						: planState === "idle" ? "物化计划尚未核对" : "无";
 	const currentOnlyAvailable = Boolean(
 		materializationPlan?.canStart &&
 			materializationPlan.orderedEntries.every((entry) => entry.dependencyRole === "ROOT" || entry.action === "REUSE"),
@@ -657,9 +668,7 @@ export function ModelPublishDialog({
 								<dd>{selectedCandidateSummary}</dd>
 								<dt>主要阻断</dt>
 								<dd>
-									{candidateScopeMatches && workspace?.primaryBlocker
-										? `${workspace.primaryBlocker.code}：${workspace.primaryBlocker.message}`
-										: "无"}
+									{materializationBlocker}
 								</dd>
 							</dl>
 							{selectedEvidence.length && evidenceIsHistorical ? (
@@ -688,7 +697,7 @@ export function ModelPublishDialog({
 								operationalAction={operationalAction}
 								modelCount={selection.length}
 								buildBlocker={
-									materializationPlan?.blockers[0]?.message || planFailure || workspace?.primaryBlocker?.message
+									materializationBlocker === "无" ? undefined : materializationBlocker
 								}
 								onBack={onClose}
 								onConfigureQuality={onConfigureQuality}
