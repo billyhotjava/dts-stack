@@ -1,5 +1,9 @@
 # Sprint-104 建模契约交付记录
 
+## 2026-09-08 Chrome 问题整改追加
+
+本次根因、兼容边界、发布顺序和页面回归矩阵见 [架构整改记录](browser-remediation-architecture-20260908.md)。覆盖 platform、ingestion、platform-webapp；无数据库迁移、回填和人工改数。静态 TypeScript 检查 `pnpm exec tsc --noEmit` 退出 0；没有新增或执行代码级测试。正式构建、部署及 Chrome 回归仍待记录，回滚演练为 GAP。
+
 ## 交付范围
 
 以下历史记录为 F1 交付，涉及两项正式服务范围：

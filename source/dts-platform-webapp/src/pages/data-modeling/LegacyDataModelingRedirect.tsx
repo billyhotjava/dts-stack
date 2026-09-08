@@ -12,6 +12,12 @@ const LEGACY_WORKSPACE_MODULES: Record<string, string> = {
 };
 
 export function legacyDataModelingTarget(pathname: string, search: string, hash = "") {
+	const modelDetail = pathname.match(/^\/modeling\/models\/([^/]+)\/?$/);
+	if (pathname === "/modeling/models" || modelDetail) {
+		const params = new URLSearchParams(search);
+		if (modelDetail) params.set("modelSpecId", decodeURIComponent(modelDetail[1]));
+		return `/data-modeling/dimensions/workbench${params.toString() ? `?${params}` : ""}${hash}`;
+	}
 	if (pathname === "/modeling/workbench") {
 		const module = new URLSearchParams(search).get("module") || "home";
 		return LEGACY_WORKSPACE_MODULES[module] || LEGACY_WORKSPACE_MODULES.home;

@@ -4639,7 +4639,7 @@ public class IngestionTaskService {
             // Managed file identity is sealed by id/hash; runtime paths are resolved
             // by the server and landing settings describe the destination only.
             com.fasterxml.jackson.databind.node.ObjectNode identity = config.deepCopy();
-            identity.remove(java.util.List.of("_filePath", "_containerPath", "_fileLanding"));
+            identity.remove(java.util.List.of("_filePath", "_containerPath", "_fileLanding", "_autoId"));
             return identity;
         }
         return config;

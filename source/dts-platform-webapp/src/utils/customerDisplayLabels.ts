@@ -4,6 +4,9 @@ const normalize = (value: unknown): string =>
 		.toUpperCase();
 
 const STATUS_LABELS: Readonly<Record<string, string>> = {
+	VERIFIED: "已核实",
+	MISSING: "物理对象缺失",
+	DTS_NATIVE: "平台原生资产（未合并外部目录）",
 	ACTIVE: "生效",
 	APPROVED: "已通过",
 	APPLIED: "已应用",
@@ -173,6 +176,7 @@ const GRANULARITY_LABELS: Readonly<Record<string, string>> = {
 };
 
 const STATUS_AXIS_LABELS: Readonly<Record<string, string>> = {
+	DISCOVERY: "发现状态",
 	GOVERNANCE: "治理状态",
 	LIFECYCLE: "生命周期状态",
 	PUBLICATION: "发布状态",

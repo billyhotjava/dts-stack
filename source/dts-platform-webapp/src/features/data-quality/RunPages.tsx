@@ -219,7 +219,13 @@ export function RunListPage() {
 			width: 110,
 			render: (value) => (value == null ? "-" : `${Number(value).toLocaleString()} 毫秒`),
 		},
-		{ title: "失败行数", dataIndex: "failingRowCount", width: 110, render: (value) => value ?? "-" },
+		{
+			title: "失败行数",
+			dataIndex: "failingRowCount",
+			width: 110,
+			render: (_value, run) =>
+				getQualityRunCounts(run).hasStatistics ? getQualityRunCounts(run).failed.toLocaleString() : "暂无统计",
+		},
 	];
 	const workflowColumns: ColumnsType<QualityWorkflowRun> = [
 		{ title: "触发方式", dataIndex: "triggerType", width: 150, render: workflowTriggerLabel },

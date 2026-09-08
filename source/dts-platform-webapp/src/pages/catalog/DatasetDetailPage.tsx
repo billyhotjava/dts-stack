@@ -49,7 +49,7 @@ const toDatasetFromAssetV2Detail = (id: string, detail: any) => {
 	return {
 		id: asset.id || id,
 		name: asset.displayName || asset.table || asset.fqn || "-",
-		type: asset.type || "-",
+		type: asset.assetType || asset.type || "-",
 		warehouseLayer: asset.warehouseLayer,
 		classification: asset.classification,
 		owner: asset.owner,

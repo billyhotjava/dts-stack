@@ -51,6 +51,7 @@ export default function AccessPlanWizardPage() {
 	const kind = useMemo(() => normalizeAccessKind(searchParams.get("kind")), [searchParams]);
 	const editId = useMemo(() => parseEditId(searchParams.get("editId")), [searchParams]);
 	const [currentStep, setCurrentStep] = useState<AccessPlanStep>(0);
+	const [submitError, setSubmitError] = useState("");
 	const [form] = Form.useForm<AccessPlanFormValues>();
 	const submitLockRef = useRef(false);
 	const wizard = useAccessPlanWizard({ kind, editId, form });
@@ -116,6 +117,7 @@ export default function AccessPlanWizardPage() {
 
 	const submit = async () => {
 		if (!acquireSingleFlight(submitLockRef)) return;
+		setSubmitError("");
 		try {
 			await validateCurrentStep();
 			const result = await wizard.submit();
@@ -123,7 +125,9 @@ export default function AccessPlanWizardPage() {
 			if (result.taskId) router.push(`/foundation/data-sources/access/${result.taskId}`);
 			else router.push(listPath);
 		} catch (error: unknown) {
-			toast.error(safeAccessPlanErrorMessage(error, "接入任务保存失败"));
+			const message = safeAccessPlanErrorMessage(error, "接入任务保存或生效失败，请核对配置后重试；当前输入已保留。");
+			setSubmitError(message);
+			toast.error(message);
 		} finally {
 			releaseSingleFlight(submitLockRef);
 		}
@@ -254,6 +258,9 @@ export default function AccessPlanWizardPage() {
 				) : null}
 				{wizard.editError ? (
 					<Alert className="mb-4" type="error" showIcon message="无法编辑当前任务" description={wizard.editError} />
+				) : null}
+				{submitError ? (
+					<Alert className="mb-4" type="error" showIcon message="接入计划未完成生效" description={submitError} />
 				) : null}
 				<div className={styles.stepsPanel}>
 					<Steps current={currentStep} items={STEP_ITEMS} responsive />

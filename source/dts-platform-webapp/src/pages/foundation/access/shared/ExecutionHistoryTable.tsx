@@ -726,7 +726,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 			dataIndex: "rowsWritten",
 			key: "rowsWritten",
 			width: 120,
-			render: formatNumber,
+			render: (value: number | null) => (value == null ? "执行器未提供" : formatNumber(value)),
 		},
 		{
 			title: "API资源",

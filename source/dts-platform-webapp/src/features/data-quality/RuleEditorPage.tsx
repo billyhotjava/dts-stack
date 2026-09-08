@@ -430,8 +430,15 @@ export function RuleEditorPage() {
 						<Form.Item name="owner" label="负责人" style={{ width: 200 }}>
 							<Input />
 						</Form.Item>
-						<Form.Item name="executor" label="执行器" style={{ width: 200 }}>
-							<Input placeholder="留空使用系统默认" />
+						<Form.Item
+							label="执行方式"
+							extra="按检测资产绑定的数据源执行只读检查；历史执行器标记不决定数据库类型。"
+							style={{ width: 260 }}
+						>
+							<Input value="使用检测资产的数据源" disabled />
+						</Form.Item>
+						<Form.Item name="executor" hidden>
+							<Input />
 						</Form.Item>
 						<Form.Item name="frequencyCron" label="调度表达式" style={{ width: 200 }}>
 							<Input placeholder="可选，例如每天凌晨执行" />

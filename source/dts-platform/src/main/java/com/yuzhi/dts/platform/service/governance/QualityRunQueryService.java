@@ -225,7 +225,17 @@ final class QualityRunQueryService {
             case "RUNNING" -> "正在执行质量检测";
             case "SUCCEEDED" -> "质量检测执行成功";
             case "SKIPPED" -> "质量检测已跳过";
-            case "FAILED" -> "质量检测执行失败";
+            case "FAILED" -> switch (StringUtils.trimToEmpty(run.getErrorCategory()).toUpperCase(Locale.ROOT)) {
+                case "QUALITY_VIOLATION" -> "检测已完成，存在不符合规则的数据，请查看失败样本。";
+                case "DATASET_SCOPE_BLOCKED" -> "检测 SQL 未通过绑定资产校验。请检查语法及函数是否受支持，并使用 schema.table 完整表名，仅引用当前检测资产。";
+                case "WRITE_BLOCKED" -> "检测 SQL 未通过只读安全校验，请使用只读查询并移除写入或结构修改语句。";
+                case "SQL_SYNTAX" -> "检测 SQL 语法错误，请检查语句、表达式和数据源方言。";
+                case "OBJECT_NOT_FOUND" -> "检测引用的表或字段不存在，请核对当前资产字段及 schema.table 完整表名。";
+                case "PERMISSION_DENIED" -> "检测数据源访问被拒绝，请联系管理员核对绑定数据源的读取权限。";
+                case "TIMEOUT" -> "检测执行超时，请检查查询范围和数据源负载后重试。";
+                case "CONNECTION_ERROR" -> "检测数据源连接失败，请检查数据源连接状态后重试。";
+                default -> "质量检测未能完成，暂无有效统计。请核对检测配置和数据源状态，并使用运行编号定位原因。";
+            };
             default -> "质量检测状态未知";
         };
     }

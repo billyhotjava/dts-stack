@@ -542,7 +542,9 @@ export default function AccessPlanDetailPage() {
 						</div>
 						<div>
 							<span>写入行数</span>
-							<strong>{formatNumber(latestExecution.rowsWritten) || "-"}</strong>
+							<strong title="仅展示执行器回传的写入统计，不以任务成功或源文件行数推算。">
+								{latestExecution.rowsWritten == null ? "执行器未提供" : formatNumber(latestExecution.rowsWritten)}
+							</strong>
 						</div>
 					</div>
 				) : (

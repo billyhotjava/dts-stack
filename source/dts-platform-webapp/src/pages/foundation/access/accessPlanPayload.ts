@@ -268,8 +268,23 @@ const buildFileLandingSpec = (
 const buildFileRequest = (context: AccessPlanPayloadContext): AccessPlanCreateRequest => {
 	const { values, fileUploadResult } = context;
 	if (!fileUploadResult) throw new Error("请先上传并解析文件");
-	const table = resolveFileTable(values, fileUploadResult);
-	const landing = buildFileLandingSpec(values, fileUploadResult, table);
+	const target = values.modelTarget;
+	const table = target ? `${target.schemaName}.${target.tableName}` : resolveFileTable(values, fileUploadResult);
+	// The model contract owns DDL. Keep legacy landing metadata neutral; the server's
+	// ModelTargetGuard validates the bound table and enforces append-only execution.
+	const landing = buildFileLandingSpec(
+		target
+			? {
+					...values,
+					fileStructureMode: "manual",
+					fileLandingMode: "create_new",
+					fileRecreateConfirmed: false,
+					fileReferenceTable: undefined,
+				}
+			: values,
+		fileUploadResult,
+		table,
+	);
 	const admission = buildManagedFileAdmissionFields(fileUploadResult);
 	return {
 		name: requireText(values.name, "请输入任务名称"),
@@ -277,7 +292,7 @@ const buildFileRequest = (context: AccessPlanPayloadContext): AccessPlanCreateRe
 		owner: context.owner,
 		source: {
 			type: "txtfilereader",
-			config: buildManagedFileSourceConfig(fileUploadResult, values.fileAutoId, landing),
+			config: buildManagedFileSourceConfig(fileUploadResult, target ? false : values.fileAutoId, landing),
 		},
 		destination: buildDestination(context),
 		sync: buildSync(values, true),
@@ -371,12 +386,14 @@ const optionalText = (value: unknown) => normalizeText(typeof value === "string"
 
 export const toAccessPlanFormValues = (task: IngestionTaskDTO): Partial<AccessPlanFormValues> => {
 	const legacy = mapTaskToForm(task);
+	const modelTarget = task.destinationConfig?.modelTarget as AccessPlanFormValues["modelTarget"];
 	const fileLanding = extractFileLandingFromTask(task);
 	const pagination = parseObject(legacy.apiPaginationJson);
 	const cursor = parseObject(legacy.apiCursorJson);
 	return {
 		...(legacy as Omit<Partial<AccessPlanFormValues>, "tableSelectionMode" | "selectedTables">),
-		modelTarget: task.destinationConfig?.modelTarget as AccessPlanFormValues["modelTarget"],
+		modelTarget,
+		fileAutoId: modelTarget ? false : legacy.fileAutoId,
 		tableSelectionMode: legacy.tableSelectionMode === "manual" ? "manual" : "all",
 		selectedTables: parseTableEntries(legacy.selectedTables || legacy.readerTables),
 		apiPageParam: optionalText(pagination.pageParam),
@@ -384,7 +401,9 @@ export const toAccessPlanFormValues = (task: IngestionTaskDTO): Partial<AccessPl
 		apiPageSize: Number(pagination.pageSize) > 0 ? Number(pagination.pageSize) : undefined,
 		apiCursorField: optionalText(cursor.field),
 		apiCursorParam: optionalText(cursor.parameterName),
-		fileTargetTable: fileLanding?.targetTable || normalizeText(legacy.fileTableName) || undefined,
+		fileTargetTable: modelTarget
+			? `${modelTarget.schemaName}.${modelTarget.tableName}`
+			: fileLanding?.targetTable || normalizeText(legacy.fileTableName) || undefined,
 		fileStructureMode: fileLanding?.structureMode || "manual",
 		fileLandingMode: fileLanding?.landingMode || "create_new",
 		fileReferenceTable: fileLanding?.referenceTable,

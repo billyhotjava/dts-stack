@@ -78,11 +78,24 @@ export function FileAccessStep({
 	const targetDataSourceId = Form.useWatch("targetDataSourceId", _form);
 	const structureMode = Form.useWatch("fileStructureMode", _form) || "manual";
 	const landingMode = Form.useWatch("fileLandingMode", _form) || "create_new";
+	const modelTarget = Form.useWatch("modelTarget", {
+		form: _form,
+		preserve: true,
+	}) as AccessPlanFormValues["modelTarget"];
 	const [tableKeyword, setTableKeyword] = useState("");
 	const [tableResults, setTableResults] = useState<TableInfo[]>([]);
 	const [targetColumns, setTargetColumns] = useState<TargetSchemaColumn[]>([]);
 	const [searchingTables, setSearchingTables] = useState(false);
 	const [loadingColumns, setLoadingColumns] = useState(false);
+	useEffect(() => {
+		if (modelTarget)
+			_form.setFieldsValue({
+				fileTargetTable: `${modelTarget.schemaName}.${modelTarget.tableName}`,
+				fileAutoId: false,
+				fileLandingMode: "create_new",
+				fileRecreateConfirmed: false,
+			});
+	}, [_form, modelTarget]);
 
 	useEffect(() => {
 		if (phase !== "resource" || structureMode !== "reference_existing" || !targetDataSourceId) return;
@@ -169,7 +182,11 @@ export function FileAccessStep({
 			<div className="space-y-5">
 				<div>
 					<Typography.Title level={4}>定义文件落地资源</Typography.Title>
-					<Typography.Text type="secondary">可直接编辑字段，也可以引用目标数据库已有表的结构模板。</Typography.Text>
+					<Typography.Text type="secondary">
+						{modelTarget
+							? "匹配来源字段到已绑定模型表，目标结构由模型管理。"
+							: "可直接编辑字段，也可以引用目标数据库已有表的结构模板。"}
+					</Typography.Text>
 				</div>
 				<Alert
 					showIcon
@@ -240,30 +257,46 @@ export function FileAccessStep({
 						/>
 					</Form.Item>
 				) : null}
-				<Form.Item name="fileLandingMode" label="落地方式">
-					<Radio.Group
-						onChange={(event) => {
-							_form.setFieldValue("fileRecreateConfirmed", false);
-							if (event.target.value === "recreate_existing") {
-								const reference = _form.getFieldValue("fileReferenceTable");
-								if (reference) _form.setFieldValue("fileTargetTable", reference);
-							}
-						}}
-						options={[
-							{ label: "新建目标表", value: "create_new" },
-							{ label: "全量重建原表", value: "recreate_existing", disabled: structureMode !== "reference_existing" },
-						]}
+				{modelTarget ? (
+					<Alert
+						type="info"
+						showIcon
+						message="追加写入已绑定模型表"
+						description="保留模型已有字段和主键，不新建、不重建目标表，也不自动增加主键。"
 					/>
-				</Form.Item>
+				) : (
+					<Form.Item name="fileLandingMode" label="落地方式">
+						<Radio.Group
+							onChange={(event) => {
+								_form.setFieldValue("fileRecreateConfirmed", false);
+								if (event.target.value === "recreate_existing") {
+									const reference = _form.getFieldValue("fileReferenceTable");
+									if (reference) _form.setFieldValue("fileTargetTable", reference);
+								}
+							}}
+							options={[
+								{ label: "新建目标表", value: "create_new" },
+								{ label: "全量重建原表", value: "recreate_existing", disabled: structureMode !== "reference_existing" },
+							]}
+						/>
+					</Form.Item>
+				)}
 				<Form.Item
 					name="fileTargetTable"
 					label="完整目标表名"
 					rules={[{ required: true, message: "请输入完整目标表名" }]}
-					extra="可使用 table 或 schema.table；新建模式下不能与已有目标表重名。"
+					extra={
+						modelTarget
+							? "目标身份来自已绑定的模型版本。"
+							: "可使用 table 或 schema.table；新建模式下不能与已有目标表重名。"
+					}
 				>
-					<Input disabled={landingMode === "recreate_existing"} placeholder="例如：public.ods_customer" />
+					<Input
+						disabled={Boolean(modelTarget) || landingMode === "recreate_existing"}
+						placeholder="例如：public.ods_customer"
+					/>
 				</Form.Item>
-				{landingMode === "recreate_existing" ? (
+				{!modelTarget && landingMode === "recreate_existing" ? (
 					<Alert
 						type="error"
 						showIcon
@@ -276,9 +309,11 @@ export function FileAccessStep({
 						}
 					/>
 				) : null}
-				<Form.Item name="fileAutoId" label="自动增加主键" valuePropName="checked">
-					<Switch />
-				</Form.Item>
+				{!modelTarget ? (
+					<Form.Item name="fileAutoId" label="自动增加主键" valuePropName="checked">
+						<Switch />
+					</Form.Item>
+				) : null}
 				{fileUploadResult ? (
 					<>
 						<Alert

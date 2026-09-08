@@ -724,7 +724,13 @@ export function ModelPublishDialog({
 							</label>
 							<dl className="dmx-summary-list dmx-summary-list--compact">
 								<dt>候选状态</dt>
-								<dd>{scopedCandidate?.status || "当前计划候选不包含所选模型"}</dd>
+								<dd>
+									{busy === "load"
+										? "正在读取候选状态…"
+										: failure
+											? "候选状态读取失败"
+											: scopedCandidate?.status || (candidate ? "当前计划候选不包含所选模型" : "当前模型暂无发布候选")}
+								</dd>
 								<dt>允许动作</dt>
 								<dd>
 									{releaseActions.map((action) => RELEASE_ACTION_LABELS[action]).join("、") ||

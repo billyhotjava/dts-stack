@@ -368,7 +368,7 @@ export function RuleDetailPage() {
 					<Descriptions.Item label="类型">{displayName(rule?.type)}</Descriptions.Item>
 					<Descriptions.Item label="严重性">{displayName(rule?.severity)}</Descriptions.Item>
 					<Descriptions.Item label="数据资产">{displayName(datasetName)}</Descriptions.Item>
-					<Descriptions.Item label="执行器">{displayName(rule?.executor)}</Descriptions.Item>
+					<Descriptions.Item label="执行方式">使用检测资产的数据源</Descriptions.Item>
 					<Descriptions.Item label="规则分类">{displayName(rule?.category)}</Descriptions.Item>
 					<Descriptions.Item label="当前版本">
 						<Space>
