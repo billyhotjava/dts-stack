@@ -173,7 +173,13 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
                           and structure.model_revision = parent.revision
                           and structure.model_checksum = parent.content_checksum
                           and structure.status = 'ACTIVE' and structure.input_mode = 'GENERATED'
-                          and structure.inputs_json -> 0 ->> 'generatorType' = 'SCHEMA_ONLY'
+                          and jsonb_array_length(structure.inputs_json) = 1
+                          and (
+                              structure.inputs_json -> 0 ->> 'generatorType' = 'SCHEMA_ONLY'
+                              or (structure.ownership = 'DBT_MANAGED'
+                                  and structure.inputs_json -> 0 ->> 'generatorType' = 'DBT'
+                                  and structure.inputs_json -> 0 -> 'config' ->> 'buildMode' = 'SCHEMA_ONLY')
+                          )
                  )
             ), exact_requests as (
                 select distinct model_spec_id, revision from requested

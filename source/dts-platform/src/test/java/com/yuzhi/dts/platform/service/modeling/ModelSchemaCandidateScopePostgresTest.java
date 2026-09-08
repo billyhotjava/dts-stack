@@ -65,6 +65,52 @@ class ModelSchemaCandidateScopePostgresTest {
     }
 
     @Test
+    void compiledSchemaPlanDoesNotRequireAnImplementationForLogicalUpstream() {
+        var jdbc = new JdbcTemplate(new DriverManagerDataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
+        jdbc.execute("""
+            create table modeling_model_spec (id uuid, tenant_id text, plan_id uuid, revision int, contract_version int, status text);
+            create table modeling_model_spec_revision (model_spec_id uuid, tenant_id text, revision int, contract_version int, content_checksum text, snapshot_json jsonb);
+            create table modeling_model_implementation (id uuid, tenant_id text, model_spec_id uuid, plan_id uuid, model_revision int,
+                model_checksum text, implementation_revision int, current_implementation_checksum text, dbt_unique_id text,
+                status text, ownership text, project_key text, input_mode text, inputs_json jsonb, field_mappings_json jsonb,
+                settings_json jsonb, materialization text);
+            """);
+        var root = java.util.UUID.randomUUID();
+        var upstream = java.util.UUID.randomUUID();
+        var plan = java.util.UUID.randomUUID();
+        String checksum = "a".repeat(64);
+        String snapshot = "{\"dependsOn\":[{\"modelSpecId\":\"" + upstream + "\",\"revision\":1}]}";
+        for (var id : java.util.List.of(root, upstream)) {
+            jdbc.update("insert into modeling_model_spec values (?,'default',?,1,2,'DRAFT')", id, plan);
+            jdbc.update("insert into modeling_model_spec_revision values (?,'default',1,2,?,?::jsonb)", id, checksum, id.equals(root) ? snapshot : "{}");
+        }
+        jdbc.update("""
+            insert into modeling_model_implementation values (?,'default',?,?,1,?,1,?,'model.test.root','ACTIVE','DBT_MANAGED',
+                'test','GENERATED','[{"generatorType":"DBT","config":{"buildMode":"SCHEMA_ONLY"}}]'::jsonb,'[]'::jsonb,'{}'::jsonb,'table')
+            """, java.util.UUID.randomUUID(), root, plan, checksum, checksum);
+        var codec = org.mockito.Mockito.mock(ModelSpecSnapshotCodec.class);
+        for (var id : java.util.List.of(root, upstream)) {
+            var model = org.mockito.Mockito.mock(ModelSpecContract.ModelSpecView.class);
+            org.mockito.Mockito.when(model.id()).thenReturn(id);
+            org.mockito.Mockito.when(model.revision()).thenReturn(1);
+            org.mockito.Mockito.when(model.checksum()).thenReturn(checksum);
+            org.mockito.Mockito.when(model.sourceRefs()).thenReturn(java.util.List.of());
+            // PostgreSQL normalizes JSON whitespace; identity is determined by the stored dependency key.
+            org.mockito.Mockito.when(codec.readView(org.mockito.ArgumentMatchers.argThat(value -> value != null && value.contains("dependsOn") == id.equals(root))))
+                .thenReturn(model);
+        }
+        org.mockito.Mockito.when(codec.matchesStoredContentChecksum(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(checksum))).thenReturn(true);
+        var adapter = new com.yuzhi.dts.platform.repository.modeling.ModelImplementationDependencyReadAdapter(jdbc, codec, new com.fasterxml.jackson.databind.ObjectMapper());
+        var facts = adapter.readPlanFacts("default", plan, java.util.List.of(root));
+        assertThat(facts.dependencies().models()).extracting(fact -> fact.model().id()).containsExactly(root);
+        assertThat(ModelSchemaOnlySupport.isSchemaOnly(facts.implementations().get(root))).isTrue();
+        jdbc.update("update modeling_model_implementation set inputs_json='[{\"generatorType\":\"DBT\",\"config\":{}}]'::jsonb");
+        var dataFacts = adapter.readPlanFacts("default", plan, java.util.List.of(root));
+        assertThat(dataFacts.dependencies().models()).extracting(fact -> fact.model().id()).containsExactlyInAnyOrder(root, upstream);
+        assertThat(dataFacts.implementations()).doesNotContainKey(upstream);
+    }
+
+    @Test
     void previewReturnsBusinessBlockerWithoutPoisoningCallerTransaction() {
         var dataSource = new DriverManagerDataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
         var manager = new org.springframework.jdbc.datasource.DataSourceTransactionManager(dataSource);
