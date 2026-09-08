@@ -56,3 +56,40 @@ it("does not treat an ancestor retained for a child as a workbench grant", () =>
 	const tree = [{ ...menu("/workbench"), type: 0, children: [menu("/workbench/todo")] }] as MenuTree[];
 	expect(permittedLandingPath(tree, "/workbench")).toBe("/workbench/todo");
 });
+
+it("renders a granted overview when its folder shares the same route", () => {
+	const overview = { ...menu("overview"), metadata: { externalLink: "/workbench" } };
+	const tree = [{ ...menu("/workbench"), type: PermissionType.GROUP, children: [overview] }] as MenuTree[];
+	useMenuStore.getState().setMenus(tree);
+	const container = document.createElement("div");
+	const root = createRoot(container);
+	try {
+		act(() =>
+			root.render(
+				<AuthorizedWorkbenchRoute>
+					<div>authorized overview</div>
+				</AuthorizedWorkbenchRoute>,
+			),
+		);
+		expect(container.textContent).toBe("authorized overview");
+		expect(container.querySelector("[data-target]")).toBeNull();
+	} finally {
+		act(() => root.unmount());
+	}
+});
+
+it("does not grant a hidden or disabled overview sharing its folder route", () => {
+	for (const metadata of [
+		{ externalLink: "/workbench", hidden: true },
+		{ externalLink: "/workbench", disabled: true },
+	]) {
+		const tree = [
+			{
+				...menu("/workbench"),
+				type: PermissionType.GROUP,
+				children: [{ ...menu("overview"), metadata }, menu("/workbench/todo")],
+			},
+		] as MenuTree[];
+		expect(permittedLandingPath(tree, "/workbench")).toBe("/workbench/todo");
+	}
+});
