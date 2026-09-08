@@ -4629,7 +4629,20 @@ public class IngestionTaskService {
         }
         return !java.util.Objects.equals(before.getSourceDataSourceId(), after.getSourceDataSourceId())
             || !java.util.Objects.equals(before.getSourceType(), after.getSourceType())
-            || !java.util.Objects.equals(before.getSourceConfig(), after.getSourceConfig());
+            || !java.util.Objects.equals(classificationSourceIdentity(before), classificationSourceIdentity(after));
+    }
+
+    private JsonNode classificationSourceIdentity(IngestionTask task) {
+        JsonNode config = task.getSourceConfig();
+        if (isFileSourceType(task.getSourceType()) && config != null && config.isObject()
+            && config.hasNonNull("_fileId") && config.hasNonNull("_fileHash")) {
+            // Managed file identity is sealed by id/hash; runtime paths are resolved
+            // by the server and landing settings describe the destination only.
+            com.fasterxml.jackson.databind.node.ObjectNode identity = config.deepCopy();
+            identity.remove(java.util.List.of("_filePath", "_containerPath", "_fileLanding"));
+            return identity;
+        }
+        return config;
     }
 
     private void recordTaskRevision(

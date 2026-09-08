@@ -606,6 +606,59 @@ class IngestionTaskServiceTest {
         assertThat(draft.getValue().getSourceConfig().path("auth").path("clientId").asText()).isEqualTo("new");
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = { "target", "file", "fields" })
+    void managedFileDraftPreservesSealOnlyWhenSourceEvidenceIsUnchanged(String change) {
+        IngestionTask active = createTestTaskEntity();
+        active.setId(2L);
+        active.setStatus("active");
+        active.setSourceType("txtfilereader");
+        active.setSourceDataSourceId(null);
+        var source = objectMapper.createObjectNode().put("_fileId", "file-1").put("_fileHash", "hash-1")
+            .put("_filePath", "/managed/file-1").put("_containerPath", "/container/file-1");
+        source.set("_fileLanding", objectMapper.createObjectNode().put("targetTable", "old_target"));
+        var columns = objectMapper.createArrayNode();
+        columns.addObject().put("name", "record_id");
+        source.set("_fileColumns", columns);
+        active.setSourceConfig(source);
+        active.setClassificationSeal(createValidClassificationSeal());
+        active.setFieldClassifications(objectMapper.createObjectNode().put("record_id", "INTERNAL"));
+        var updated = source.deepCopy();
+        updated.remove(java.util.List.of("_filePath", "_containerPath"));
+        updated.set("_fileLanding", objectMapper.createObjectNode().put("targetTable", "model_target"));
+        if ("file".equals(change)) updated.put("_fileHash", "hash-2");
+        if ("fields".equals(change)) updated.set("_fileColumns", objectMapper.createArrayNode());
+        IngestionTaskDTO incoming = createTestTaskDTO();
+        incoming.setId(2L);
+        incoming.setStatus("draft");
+        incoming.setSourceConfig(updated);
+        ingestionTaskService.setAccessContractService(accessContractService);
+        when(taskRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(active));
+        when(accessContractService.findLatestDraftRevision(2L)).thenReturn(Optional.empty());
+        doAnswer(invocation -> {
+            IngestionTask target = invocation.getArgument(0);
+            target.setSourceConfig(updated);
+            target.setStatus("draft");
+            return null;
+        }).when(taskMapper).partialUpdate(any(IngestionTask.class), eq(incoming));
+        when(accessContractService.recordDraftRevision(any(IngestionTask.class), isNull(), anyBoolean()))
+            .thenReturn(new IngestionTaskRevision());
+        when(taskMapper.toDto(any(IngestionTask.class))).thenReturn(incoming);
+        when(accessContractService.enrichTaskDto(incoming)).thenReturn(incoming);
+
+        ingestionTaskService.update(2L, incoming);
+
+        ArgumentCaptor<IngestionTask> draft = ArgumentCaptor.forClass(IngestionTask.class);
+        verify(accessContractService).recordDraftRevision(draft.capture(), isNull(), anyBoolean());
+        if ("target".equals(change)) {
+            assertThat(draft.getValue().getClassificationSeal()).isEqualTo(active.getClassificationSeal());
+            assertThat(draft.getValue().getFieldClassifications()).isEqualTo(active.getFieldClassifications());
+        } else {
+            assertThat(draft.getValue().getClassificationSeal()).isNull();
+            assertThat(draft.getValue().getFieldClassifications()).isNull();
+        }
+    }
+
     @Test
     void update_shouldRejectDraftToActiveBypass() {
         Long taskId = 1L;
