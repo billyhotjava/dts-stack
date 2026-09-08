@@ -191,13 +191,24 @@ export function ModelFieldEditorTable({
 							binding?.standardElementId && binding.standardElementVersion
 								? `${binding.standardElementId}@${binding.standardElementVersion}`
 								: "";
+						const currentStandard = standards.find((standard) => standard.id === binding?.standardElementId);
+						const bindingUnavailable = standardValue && !standards.some(
+							(standard) => `${standard.id}@${standard.version}` === standardValue,
+						);
 						return (
 							<select
+								aria-label={`字段 ${index + 1} 标准`}
 								disabled={readOnly || !field.name.trim()}
 								onChange={(event) => onStandardChange(index, event.target.value)}
 								value={standardValue}
 							>
 								<option value="">不绑定</option>
+								{bindingUnavailable ? (
+									<option value={standardValue} disabled>
+										{currentStandard?.name || "已绑定标准"} · v{binding?.standardElementVersion}
+										{currentStandard ? `（当前 v${currentStandard.version}，请核对）` : "（当前列表未找到，请核对）"}
+									</option>
+								) : null}
 								{standards.map((standard) => (
 									<option key={`${standard.id}@${standard.version}`} value={`${standard.id}@${standard.version}`}>
 										{standard.name} · {standard.code} · v{standard.version}

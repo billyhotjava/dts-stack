@@ -94,3 +94,10 @@
 ## B09 / T03 标准入口被父页面覆盖
 
 当前版本 9a86c8058 外部 Chrome 标签 1761048314 再次确认：直接 #/governance/standards/elements 显示“数据治理中心 / 发布门禁”。根因 DynamicMenuResolver 使用 findBestMenuMatch 的父菜单页面覆盖精确标准页面。复用 directOverrideParentPath，将已有 glossary/elements/reference 标准页面挂到 /governance 父入口，保持精确子菜单隐藏/禁用检查和页面自身权限；不新增页面、菜单、后台角色绑定或数据库补丁。GitNexus LOW，直接调用 DynamicMenuResolver。规范路由仍为 /governance/standards/{glossary,elements,reference}，旧 /data-modeling/standards/fields 保留跳转。验收需验证标准列表、旧链接和治理首页各自正确。
+
+
+### B09 已发布；B10 / T03 版本漂移显示问题
+
+B09 源码 eaade32f9 正式构建、包快速一致性校验、webapp Compose 更新均完成。Chrome 1761048314：规范字段标准路由显示数据元列表，旧 /data-modeling/standards/fields 跳转到同一列表。通过页面新增“S104验收项目编号”/s104_acceptance_project_id/STRING；模型 97418fad… 的 project_id 可选 v1，暂存成功至 r6。
+
+随后正常编辑标准说明生成 v2，模型刷新后标准下拉错误显示“不绑定”，仅提供 v2。B10 根因：ModelFieldEditorTable 的受控值保留旧绑定，但 options 只含当前版本，原生 select 缺值时显示首项。修复给已保存但不在当前列表的引用补只读选项，展示旧版本、当前版本或“当前列表未找到”；不自动改 ID/version，不把不可用判成无绑定，不放松后端 STALE/UNKNOWN 门禁。GitNexus LOW；仅字段编辑表变更。验证需覆盖旧 v1 可见、主动切 v2 保存刷新及未绑定字段仍为不绑定。
