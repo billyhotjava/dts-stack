@@ -700,6 +700,7 @@
                         <testInclude>**/service/modeling/PostgresPhysicalRelationInspectorTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelDeliveryStatusQueryServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelDeliveryStatusTransactionTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateGovernanceQualityEvidenceServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateGovernanceQualityRerunServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateQualityAssetRegistrationServiceTest.java</testInclude>
