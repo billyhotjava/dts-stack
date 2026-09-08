@@ -26,8 +26,8 @@
 |---|---|---|---|
 | T21 交付聚合事务边界 | P0 | IN_PROGRESS | 现有契约/现场账本 |
 | T22 列表状态限流与逐行隔离 | P0 | IN_PROGRESS | 现有 delivery-status 契约 |
-| T23 首屏与编辑辅助加载分离 | P1 | READY | T22；原 loadModelWorkbenchContext 契约 |
-| T24 正式验证与运行性能验收 | P0 | READY | T21–T23 源码进入 Git |
+| T23 首屏与编辑辅助加载分离 | P1 | IN_PROGRESS | T22；原 loadModelWorkbenchContext 契约 |
+| T24 正式验证与运行性能验收 | P0 | IN_PROGRESS | T21–T23 源码进入 Git |
 
 ## DoR 与 Gate
 - [x] 契约、页面入口、复用 owner、错误路径、依赖及测试目标固定。
@@ -46,6 +46,6 @@
 | 权限与身份 | 既有 ModelDeliveryStatusQueryServiceTest 回归，跨模型/旧revision不得误判成功 |
 
 ## DoD
-- [ ] 事务与UI回归通过；正式构建/包/镜像身份归档。
+- [ ] 事务与UI回归通过；正式构建/镜像身份归档（用户要求直接替换，不出补丁包）。
 - [ ] IT-25–IT-28 真实证据，Chrome95及窄视口四态走查。
 - [ ] 每阶段分开报告，未测不标 DONE；无迁移所以迁移验收N/A。

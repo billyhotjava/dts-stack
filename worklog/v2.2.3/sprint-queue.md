@@ -15,11 +15,13 @@
 
 | [F4-模型工作台性能与交付状态稳定性](sprint-104-202609-modeling-contract-consistency/features/F4-模型工作台性能与交付状态稳定性/README.md) | P0 | 4 | IN_PROGRESS |
 
-**统计**: DRAFT=0，READY=2，IN_PROGRESS=21，DONE=1，BLOCKED=0；4 个 Feature、24 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成。
+**统计**: DRAFT=0，READY=0，IN_PROGRESS=23，DONE=1，BLOCKED=0；4 个 Feature、24 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成。
 **执行顺序**: T01 归因 → T07 保存/执行边界冻结 → T02 契约 → T05/T06/T03/T04 → T07 一致性验证 → T08 集成验收。
 **F2 执行顺序**: T09 契约/基线 → T10 四步向导与统一交付状态 → T11 质量闭环、T12 资产维护、T13 分析恢复 → T14 端到端与离线交付。
 **F3 执行顺序**: T15 契约/副作用冻结 → T16 ODS 与逻辑引用 → T17 结构物化/完成判定 → T18 三步页面 → T19 接入绑定与数据接手 → T20 集成验收。
 **关键决策**: F1/F2 已有实现和证据保留。F3 只补 ODS 正向建模、结构物化和模块边界；F2 四步及模型页治理条件为历史基线，新页面以 [F3 契约](sprint-104-202609-modeling-contract-consistency/assets/F3-modeling-data-boundary.md) 为准。每页一个主动作，完成建模不等于资产发布/分析可用；版本、安全、CAS、帮助和原 owner 继续复用。
+**F4 当前证据**: 73697f73a已正式构建并直接替换原platform/webapp；前端83项、后端30项通过，实际36个交付请求全部200/P95约0.522s。刷新/分页/详情正常；Chrome95与固定并发验收由T24继续跟踪，不出补丁包。
+
 **F3 当前证据/阻断**: 2026-09-08已修复活动候选范围，Chrome95四层结构物化与实表字段/主键/零行核验通过；数据页登记、质量规则创建/编辑/执行通过。接入writer列映射、受控封装预览、质量审计actor与结构发布血缘修复已提交并专项验证，最终正式镜像/页面复验进行中。独立离线目标仍待指定。见 [整改运行记录](sprint-104-202609-modeling-contract-consistency/it/evidence/current-environment/remediation-runtime-20260908.md)。
 **F3 原开工缺口（历史）**: SOURCE/逻辑引用兼容、物化与发布副作用、API/文件目标绑定、资产登记身份/深链由 T15 冻结；空目标与真实页面基线未执行，新增任务保持 DRAFT。只覆盖既有 PostgreSQL 普通表/接入/目录，不新增菜单或全链批量调度。
 **历史源码证据（2026-09-06）**: `bd0670acc89e7dd1be82e0d12961ba7744f63ca2` 的部署目录 Java 专项已 99/99，工作台 Vitest 日志已 92/92；首轮 Java 失败仅为测试夹具/断言滞后，修正后通过。IT-04 ephemeral 已通过，但目标环境、Chrome 95、其余 UI、正式交付/部署、真实样本、物化和离线验收仍未核验；T08 不得标 DONE。证据见 [源码专项归档](sprint-104-202609-modeling-contract-consistency/it/evidence/source-test-summary-20260906.md)。
