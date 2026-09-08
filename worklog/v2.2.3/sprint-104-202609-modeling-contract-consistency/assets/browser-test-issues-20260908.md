@@ -130,3 +130,8 @@ B12：运行 ingestion 日志确认 2026-09-08 16:12:37 返回 CLASSIFICATION_SE
 B11：ModelMaterializationActions 的 embedded 分支仅判断 pageAction.enabled，没有同时检查实际 build 路径的 canBuild；主要阻断摘要只看候选而忽略计划。调整实际构建动作同时受计划资格限制，摘要与按钮提示采用当前计划加载/失败/阻断状态；质量配置、质量执行和下一步仍走原资格。
 
 影响分析 LOW；向导 hook 的直接调用方为 AccessPlanWizardPage，其余组件索引没有识别调用边，已结合源码核对文件接入和物化面板范围。无后端/数据库变更。验收重点：重复名→恢复→保存、非法名→上一步→返回恢复→保存、合法交换不串密级、物化计划阻断时摘要与按钮一致；不将代码修改视为验收通过。
+
+
+### B11/B12 发布后结论：已复现问题通过复验
+
+5215f1ab0 已正式构建、包快速校验并更新现有前端容器。外部 Chrome：B12 重复名恢复保存成功，非法名跨步骤返回后恢复保存也成功，追加目标与最近运行保持；B11 计划阻断时摘要同因且开始物化禁用，正常提交 r10 实现后计划 BUILD、摘要无阻断且按钮恢复可用。未启动物化、未重复执行文件数据、未改数据库。详见 [复验记录](browser-acceptance-followup-20260908.md) 与 [正式包证据](../it/evidence/current-environment/remediation-5215f1ab0-package-proof.json)。B11/B12 已复现问题关闭，不等于关联 task 的完整验收完成；剩余分支在复验记录中逐项保留。
