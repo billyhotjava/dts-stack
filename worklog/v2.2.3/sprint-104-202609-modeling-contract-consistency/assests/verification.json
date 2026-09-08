@@ -1,0 +1,120 @@
+{
+  "recordedAt": "2026-09-08T11:43:23.929931+00:00",
+  "sourceRevision": "2592732fd3f7d77b08773c1b2408e46b02cbd384",
+  "java": {
+    "tests": 25,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "frontend": {
+    "routeAndMenuService": {
+      "passed": 5,
+      "failed": 0
+    },
+    "preferences": {
+      "passed": 4,
+      "failed": 0
+    },
+    "menuPaths": {
+      "passed": 5,
+      "failed": 0
+    }
+  },
+  "extendedSourceContract": {
+    "passed": 6,
+    "failed": 1,
+    "failure": "WorkbenchPersonalization.source-contract.test.ts expected ModelingWorkbenchPage in workbench/index.tsx; pre-existing source contract drift, unchanged by this fix"
+  },
+  "before": [
+    {
+      "name": "/deploy-dts-admin-1",
+      "image": "sha256:22b26b634afbce126d874780d661916dc4f57ce094696802a51d9ce13a98d688",
+      "project": "deploy",
+      "mounts": [
+        {
+          "source": "/opt/prod/s10/deploy/data",
+          "destination": "/data",
+          "rw": true
+        },
+        {
+          "source": "/opt/prod/s10/deploy/services/certs/truststore.p12",
+          "destination": "/etc/dts/truststore.p12",
+          "rw": false
+        },
+        {
+          "source": "/opt/prod/s10/deploy/logs/dts-admin",
+          "destination": "/logs/dts-admin",
+          "rw": true
+        },
+        {
+          "source": "/opt/prod/s10/deploy/config",
+          "destination": "/opt/dts/config",
+          "rw": false
+        },
+        {
+          "source": "/opt/prod/s10/deploy/services/dts-platform/drivers",
+          "destination": "/opt/dts/drivers",
+          "rw": true
+        },
+        {
+          "source": "/opt/prod/s10/deploy/services/dts-admin/vendor",
+          "destination": "/opt/dts/vendor",
+          "rw": false
+        }
+      ]
+    },
+    {
+      "name": "/deploy-dts-platform-webapp-1",
+      "image": "sha256:0b4c2572ce6edfa088ac9ebb20689844695946e96d367063926405946be919f0",
+      "project": "deploy",
+      "mounts": []
+    }
+  ],
+  "browser": {
+    "S10DC-42": "Data type STRING and domain s104_acceptance selected, saved, reopened successfully",
+    "S10DC-45": "S104_JIRA45_ACCEPTANCE saved as published and reopened showing published",
+    "testRecordArchive": "confirm dialog opened; automation timed out while accepting; final archive state unconfirmed",
+    "jiraTransitions": "none performed",
+    "blocker": "Chrome CUA/CDP Emulation.setFocusEmulationEnabled timeout after confirm dialog; reattachment also timed out"
+  },
+  "after": [
+    {
+      "name": "/deploy-dts-admin-1",
+      "image": "sha256:341dd18ed0bc47a5345da95101d9a5f28e24957ca16e7d43a6b77b019ec8ad4d",
+      "revision": "2592732fd3f7d77b08773c1b2408e46b02cbd384",
+      "status": "running",
+      "health": "healthy",
+      "startedAt": "2026-09-08T11:44:59.141030308Z",
+      "mountsUnchanged": true
+    },
+    {
+      "name": "/deploy-dts-platform-webapp-1",
+      "image": "sha256:6e307a9627965d6e9ddfa2d7da8c91ab643f76276f6de0282d1876bc9436d8c6",
+      "revision": "2592732fd3f7d77b08773c1b2408e46b02cbd384",
+      "status": "running",
+      "health": null,
+      "startedAt": "2026-09-08T11:45:24.792335468Z",
+      "mountsUnchanged": true
+    }
+  ],
+  "build": {
+    "success": true,
+    "command": "bash builds/dts-build.sh --image dts-admin dts-platform-webapp --no-save",
+    "patchPackageProduced": false,
+    "chrome95LegacyBuild": true
+  },
+  "deployment": {
+    "success": true,
+    "project": "deploy",
+    "config": "/opt/prod/s10/deploy/docker-compose-app.yml",
+    "services": [
+      "dts-admin",
+      "dts-platform-webapp"
+    ],
+    "otherServicesRecreated": false,
+    "webHttp": 200,
+    "nginxConfig": "passed",
+    "checkedAt": "2026-09-08T11:46:18.702983+00:00"
+  }
+}

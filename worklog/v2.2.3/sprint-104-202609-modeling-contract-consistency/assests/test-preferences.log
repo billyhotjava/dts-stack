@@ -1,0 +1,12 @@
+✔ disabled components cannot be restored by defaults or saved preferences (5.058727ms)
+✔ normalizeWorkbenchPreferenceItems defaults all available components to visible (0.745077ms)
+✔ normalizeWorkbenchPreferenceItems preserves saved visibility and normalizes order (0.47993ms)
+✔ moveWorkbenchPreferenceItem swaps adjacent items and reassigns stable order numbers (0.582482ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 282.537016
