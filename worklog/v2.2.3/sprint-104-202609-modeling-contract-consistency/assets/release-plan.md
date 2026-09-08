@@ -231,3 +231,8 @@ docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml ps dts-platfo
 资产 PUT 新前置：If-Match 为当前 catalog-dataset:{id}:{version}（带双引号）；缺头428、旧版本409，PATCH 共享同一 version。消费者升级需读取新版本后保存，冲突须重读后确认；不可移除 CAS 迁就旧脚本。调用方核查与实际请求证据另入整改记录，未核查的外部消费者不认定兼容。
 
 候选 origin 新增 SCHEMA_ONLY_INTENT，具体范围与前向迁移见 review-remediation-20260908.md。新候选写入后旧枚举应用不能直接回退；数据库 rollback 明确拒绝丢失结构候选历史，必须前向修复。有分析事务修复时正式范围包含 analytics，不能仅部署原 F3 三镜像冒充四服务同版。
+
+
+### 浏览器整改发布实际结果（2026-09-08 10:53）
+
+081bc098a 正式构建成功，交付包一致性通过；现有 deploy Compose 定向更新 platform、ingestion、webapp。页面实测结果与未验证项见 [整改回归记录](browser-remediation-architecture-20260908.md#2026-09-08-1053-整改部署后可见-chrome-回归)。无数据库手工修正；未执行离线验收或回滚演练。
