@@ -101,3 +101,13 @@
 B09 源码 eaade32f9 正式构建、包快速一致性校验、webapp Compose 更新均完成。Chrome 1761048314：规范字段标准路由显示数据元列表，旧 /data-modeling/standards/fields 跳转到同一列表。通过页面新增“S104验收项目编号”/s104_acceptance_project_id/STRING；模型 97418fad… 的 project_id 可选 v1，暂存成功至 r6。
 
 随后正常编辑标准说明生成 v2，模型刷新后标准下拉错误显示“不绑定”，仅提供 v2。B10 根因：ModelFieldEditorTable 的受控值保留旧绑定，但 options 只含当前版本，原生 select 缺值时显示首项。修复给已保存但不在当前列表的引用补只读选项，展示旧版本、当前版本或“当前列表未找到”；不自动改 ID/version，不把不可用判成无绑定，不放松后端 STALE/UNKNOWN 门禁。GitNexus LOW；仅字段编辑表变更。验证需覆盖旧 v1 可见、主动切 v2 保存刷新及未绑定字段仍为不绑定。
+
+
+## B09/B10 最终正式发布与 Chrome 结果
+
+- B09 源码 eaade32f9，B10 源码 a89427a5ed6a5e8a1923e4b52ea8f2325b363127；两次静态类型检查与正式前端构建均通过，未新增或运行代码级测试。提交时 lefthook 不在 PATH，不能算 hook 验证通过。
+- 两个正式包均通过清单/归档 SHA/源码版本/镜像文件层快速一致性检查。现有 Compose 前端已更新到 a89427a5e，其他服务保持原镜像。证据：[入口包](../it/evidence/current-environment/standard-route-eaade32f9-package-proof.json)、[最终包及运行身份](../it/evidence/current-environment/standard-binding-a89427a5e-package-proof.json)。
+- 外部可见 Chrome 标签 1761048314：规范字段标准、术语、公共码表分别加载数据元列表、新增术语、码表目录；旧字段标准路径仍跳转规范页；/governance 仍为治理首页。
+- 正常页面新增 S104验收项目编号 / s104_acceptance_project_id / STRING，并编辑说明形成 v2。模型 97418fad… project_id 在 v1 时绑定并暂存至 r6，版本更新后出现 B10，发布修复后显示“v1（当前 v2，请核对）”；month_id 仍“不绑定”。
+- Chrome 1761048317：保留旧 v1，修改临时业务说明后暂存成功至 r7，旧版本没有被清除或升级。主动选择当前 v2，并把业务说明恢复为空，再暂存至 r8；刷新展开标准列仍显示 v2，month_id 仍不绑定。确认了旧版本可暂存、主动更新和刷新保持。
+- T03 的有效/版本漂移样例条件已解除，但 NONE/KEY_AND_MEASURE/ALL_FIELDS、策略外绑定、发布 STALE/UNKNOWN 及证据不可用完整门禁矩阵尚未通过；活动候选保护仍在，未取消他人候选。未手工修改数据库；测试标准和模型定义变更均通过正常页面。

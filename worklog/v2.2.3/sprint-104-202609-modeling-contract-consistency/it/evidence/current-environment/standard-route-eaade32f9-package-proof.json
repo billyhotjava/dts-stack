@@ -1,0 +1,16 @@
+{
+  "package": "/opt/prod/s10/deploy/data/sprint104-release/standard-route-eaade32f9.tar.gz",
+  "sha256": "4655bac1d7e162c1b9f3c5135cae491bb7656cabd80faa01cd65288561470f3c",
+  "sourceCommit": "eaade32f95099ff642986f32bc48c2dd71c8b7b3",
+  "archiveChecksumsVerified": {
+    "dts-platform-webapp_s104-eaade32f9-20260908-152746.tar": "f0fa546e9e40659be876e220cb5ec1e434627f14abfe875b470ea7aec75765f7"
+  },
+  "images": [
+    {
+      "tag": "dts-platform-webapp:s104-eaade32f9",
+      "localImageId": "sha256:6fce7830ffa7116d6090994cd2aa8aaf984e10638eae7eb97b57558933af5280",
+      "configImageId": "sha256:6fce7830ffa7116d6090994cd2aa8aaf984e10638eae7eb97b57558933af5280",
+      "sourceRevision": "eaade32f95099ff642986f32bc48c2dd71c8b7b3"
+    }
+  ]
+}

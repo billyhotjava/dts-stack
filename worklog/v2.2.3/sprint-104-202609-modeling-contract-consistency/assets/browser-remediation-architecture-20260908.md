@@ -78,3 +78,13 @@ Q01 续验：可见 Chrome 标签 1761048184，在旧部署打开 b4650e13… �
 - 外部可见 Chrome 标签 1761048294：刷新原失败草稿，仍显示增量；提交成功进入物化页，模型 r3→r4。返回实现配置，切 FULL 再提交成功进入物化页，r4→r5。再次进入实现并刷新：物化方式=表、加载策略=全量、postgres 不支持分区提示正确；s104_project_month 仍选中，project_id/month_id 两列同名映射保持。
 - 本轮确认策略往返与已有失败草稿恢复通过；没有伪造一次“新版本提交失败后重试”的额外负例。旧增量带分区夹具、历史 TYPE2、并发冲突及 DATA_BUILD 尚不能由该路径替代。
 - T03 标准管理入口返回治理中心的问题已记录，尚未修复。活动候选仍限制复合键 DATA_BUILD；独立离线目标已向用户询问，尚未取得答复。
+
+
+## B09/B10 最终正式发布与 Chrome 结果
+
+- B09 源码 eaade32f9，B10 源码 a89427a5ed6a5e8a1923e4b52ea8f2325b363127；两次静态类型检查与正式前端构建均通过，未新增或运行代码级测试。提交时 lefthook 不在 PATH，不能算 hook 验证通过。
+- 两个正式包均通过清单/归档 SHA/源码版本/镜像文件层快速一致性检查。现有 Compose 前端已更新到 a89427a5e，其他服务保持原镜像。证据：[入口包](../it/evidence/current-environment/standard-route-eaade32f9-package-proof.json)、[最终包及运行身份](../it/evidence/current-environment/standard-binding-a89427a5e-package-proof.json)。
+- 外部可见 Chrome 标签 1761048314：规范字段标准、术语、公共码表分别加载数据元列表、新增术语、码表目录；旧字段标准路径仍跳转规范页；/governance 仍为治理首页。
+- 正常页面新增 S104验收项目编号 / s104_acceptance_project_id / STRING，并编辑说明形成 v2。模型 97418fad… project_id 在 v1 时绑定并暂存至 r6，版本更新后出现 B10，发布修复后显示“v1（当前 v2，请核对）”；month_id 仍“不绑定”。
+- Chrome 1761048317：保留旧 v1，修改临时业务说明后暂存成功至 r7，旧版本没有被清除或升级。主动选择当前 v2，并把业务说明恢复为空，再暂存至 r8；刷新展开标准列仍显示 v2，month_id 仍不绑定。确认了旧版本可暂存、主动更新和刷新保持。
+- T03 的有效/版本漂移样例条件已解除，但 NONE/KEY_AND_MEASURE/ALL_FIELDS、策略外绑定、发布 STALE/UNKNOWN 及证据不可用完整门禁矩阵尚未通过；活动候选保护仍在，未取消他人候选。未手工修改数据库；测试标准和模型定义变更均通过正常页面。
