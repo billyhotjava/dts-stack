@@ -565,39 +565,52 @@ export async function loadModelWorkbenchDraft(model: ModelSpecView): Promise<Mod
 	return modelDraftFromView(model, lifecycle.implementation);
 }
 
-export async function loadModelWorkbenchContext(): Promise<ModelWorkbenchContext> {
-	const planId = await resolveDefaultModelingContextId();
+export type ModelWorkbenchCatalogContext = Pick<ModelWorkbenchContext, "domains" | "models" | "dimensions">;
+
+export async function loadModelWorkbenchContext(
+	onCatalogReady?: (catalog: ModelWorkbenchCatalogContext) => void,
+): Promise<ModelWorkbenchContext> {
+	const catalog = Promise.all([
+		catalogDomainService.list(),
+		listModelSpecs(),
+		listDimensionDefinitions({ offset: 0, limit: 100 }),
+	]).then(([domains, models, dimensions]) => {
+		const result = {
+			domains,
+			models: models.filter((model) => model.status !== "ARCHIVED"),
+			dimensions: dimensions.filter((definition) => definition.status !== "RETIRED"),
+		};
+		onCatalogReady?.(result);
+		return result;
+	});
+	const sourcesWithPlan = resolveDefaultModelingContextId().then(async (planId) => ({
+		planId,
+		sources: planId ? await collectCurrentWarehousePlanSources(planId) : [],
+	}));
 	const [
-		domains,
-		models,
-		dimensions,
+		catalogContext,
+		sourceContext,
 		standards,
 		dataMarts,
 		subjectDomains,
 		warehouseLayers,
-		sources,
 		implementationCapabilities,
 	] = await Promise.all([
-		catalogDomainService.list(),
-		listModelSpecs(),
-		listDimensionDefinitions({ offset: 0, limit: 100 }),
+		catalog,
+		sourcesWithPlan,
 		listModelFieldStandardOptions(),
 		listDataMarts({ status: "CURRENT", offset: 0, limit: 100 }),
 		listSubjectDomains({ status: "CURRENT", offset: 0, limit: 100 }),
 		listWarehouseLayers(),
-		planId ? collectCurrentWarehousePlanSources(planId) : Promise.resolve([]),
 		getModelImplementationCapabilities(),
 	]);
 	return {
-		planId,
-		domains,
-		models: models.filter((model) => model.status !== "ARCHIVED"),
-		dimensions: dimensions.filter((definition) => definition.status !== "RETIRED"),
+		...catalogContext,
+		...sourceContext,
 		standards,
 		dataMarts,
 		subjectDomains,
 		warehouseLayers,
-		sources,
 		implementationCapabilities,
 	};
 }

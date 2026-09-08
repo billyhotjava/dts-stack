@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 /** Read-only, identity-bound projection for the modeling delivery wizard. */
 @Service
@@ -41,7 +42,9 @@ public class ModelDeliveryStatusQueryService {
         this.qualityContexts = qualityContexts;
     }
 
-    @Transactional(readOnly = true)
+    // Readers own their short transactions. Holding one here while quality/default-lake
+    // reads suspend it and acquire another connection can exhaust the pool per page.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public DeliveryStatusView get(String tenantId, String actorId, UUID modelSpecId, String environment, UUID candidateId) {
         ModelSpecView model = models.get(tenantId, modelSpecId);
         AuthoringContextView authoringContext = authoring.context(tenantId, actorId, modelSpecId, null, null, true);

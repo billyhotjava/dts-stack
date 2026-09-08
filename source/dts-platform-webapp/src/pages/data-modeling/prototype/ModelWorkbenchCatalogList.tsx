@@ -49,6 +49,7 @@ type CatalogRow = {
 
 export type ModelWorkbenchCatalogListProps = {
 	busy: boolean;
+	detailsReady?: boolean;
 	canMaintain: boolean;
 	dimensions: DimensionDefinitionView[];
 	domains: CatalogDomain[];
@@ -70,6 +71,7 @@ export type ModelWorkbenchCatalogListProps = {
 
 export function ModelWorkbenchCatalogList({
 	busy,
+	detailsReady = true,
 	canMaintain,
 	dimensions,
 	domains,
@@ -101,9 +103,12 @@ export function ModelWorkbenchCatalogList({
 	const [catalogLoading, setCatalogLoading] = useState(true);
 	const [compatibilityFallback, setCompatibilityFallback] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-	const [deliveryByModel, setDeliveryByModel] = useState<Map<string, ModelDeliveryStatus>>(() => new Map());
-	const [deliveryLoading, setDeliveryLoading] = useState(false);
-	const [deliveryFailure, setDeliveryFailure] = useState(false);
+	const [deliveryResult, setDeliveryResult] = useState<{
+		identity: string;
+		data: Map<string, ModelDeliveryStatus>;
+		failed: Set<string>;
+		pending: Set<string>;
+	}>({ identity: "", data: new Map(), failed: new Set(), pending: new Set() });
 	const domainById = useMemo(() => new Map(domains.map((domain) => [domain.id, domain.name])), [domains]);
 	const modelById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models]);
 	const dimensionById = useMemo(() => new Map(dimensions.map((dimension) => [dimension.id, dimension])), [dimensions]);
@@ -252,40 +257,60 @@ export function ModelWorkbenchCatalogList({
 		? filteredLocalRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 		: serverRows;
 	const pageModelIdsKey = pageRows
-		.map((row) => (row.model ? `${row.model.id}:${row.model.revision}` : ""))
+		.map((row) => (row.model ? `${row.model.id}:${row.model.revision}:${row.model.checksum}` : ""))
 		.filter(Boolean)
 		.join(",");
+	const deliveryByModel =
+		deliveryResult.identity === pageModelIdsKey ? deliveryResult.data : new Map<string, ModelDeliveryStatus>();
+	const deliveryFailure = deliveryResult.identity === pageModelIdsKey ? deliveryResult.failed : new Set<string>();
+	const deliveryLoading =
+		deliveryResult.identity === pageModelIdsKey
+			? deliveryResult.pending
+			: new Set(pageRows.flatMap((row) => (row.model ? [row.model.id] : [])));
 	useEffect(() => {
 		const modelSpecIds = pageModelIdsKey
 			.split(",")
 			.map((item) => item.split(":")[0])
 			.filter(Boolean);
-		if (!modelSpecIds.length) {
-			setDeliveryByModel(new Map());
-			setDeliveryLoading(false);
-			setDeliveryFailure(false);
-			return;
-		}
+		const controller = new AbortController();
 		let active = true;
-		setDeliveryLoading(true);
-		setDeliveryFailure(false);
-		void Promise.all(modelSpecIds.map(async (id) => [id, await getModelDeliveryStatus(id)] as const))
-			.then((results) => {
-				if (active) setDeliveryByModel(new Map(results));
-			})
-			.catch(() => {
-				if (active) {
-					setDeliveryByModel(new Map());
-					setDeliveryFailure(true);
+		let next = 0;
+		setDeliveryResult({
+			identity: pageModelIdsKey,
+			data: new Map(),
+			failed: new Set(),
+			pending: new Set(modelSpecIds),
+		});
+		const worker = async () => {
+			while (active && next < modelSpecIds.length) {
+				const id = modelSpecIds[next++];
+				let status: ModelDeliveryStatus | undefined;
+				try {
+					status = await getModelDeliveryStatus(id, undefined, undefined, controller.signal);
+				} catch {
+					// Failure belongs to this row only; successful rows remain usable.
 				}
-			})
-			.finally(() => {
-				if (active) setDeliveryLoading(false);
-			});
+				if (!active) return;
+				const resolved = status;
+				setDeliveryResult((previous) => {
+					if (previous.identity !== pageModelIdsKey) return previous;
+					const data = new Map(previous.data);
+					const failed = new Set(previous.failed);
+					const pending = new Set(previous.pending);
+					pending.delete(id);
+					if (resolved) data.set(id, resolved);
+					else failed.add(id);
+					return { identity: pageModelIdsKey, data, failed, pending };
+				});
+			}
+		};
+		void worker();
+		void worker();
 		return () => {
 			active = false;
+			controller.abort();
 		};
-	}, [pageModelIdsKey]);
+	}, [pageModelIdsKey, models]);
 
 	const totalElements = compatibilityFallback ? filteredLocalRows.length : catalogPage?.totalElements || 0;
 	const pageCount = Math.max(1, compatibilityFallback ? localPageCount : catalogPage?.totalPages || 0);
@@ -389,8 +414,8 @@ export function ModelWorkbenchCatalogList({
 							model={row.model}
 							status={deliveryByModel.get(row.model.id)}
 							kind="materialization"
-							loading={deliveryLoading}
-							failed={deliveryFailure}
+							loading={deliveryLoading.has(row.model.id)}
+							failed={deliveryFailure.has(row.model.id)}
 						/>
 					) : (
 						"不适用"
@@ -409,8 +434,8 @@ export function ModelWorkbenchCatalogList({
 								model={row.model}
 								status={delivery}
 								kind="catalog"
-								loading={deliveryLoading}
-								failed={deliveryFailure}
+								loading={deliveryLoading.has(row.model.id)}
+								failed={deliveryFailure.has(row.model.id)}
 							/>
 							{assetId ? (
 								<Button onClick={() => router.push(`/catalog/datasets/${encodeURIComponent(assetId)}`)} type="text">
@@ -430,8 +455,8 @@ export function ModelWorkbenchCatalogList({
 							model={row.model}
 							status={deliveryByModel.get(row.model.id)}
 							kind="analysis"
-							loading={deliveryLoading}
-							failed={deliveryFailure}
+							loading={deliveryLoading.has(row.model.id)}
+							failed={deliveryFailure.has(row.model.id)}
 						/>
 					) : (
 						"不适用"
@@ -442,56 +467,56 @@ export function ModelWorkbenchCatalogList({
 					{
 						key: "open",
 						label: row.open ? (row.editable ? "编辑" : "查看") : "详情未加载",
-						disabled: busy || !row.open,
+						disabled: busy || !detailsReady || !row.open,
 						onClick: row.open || undefined,
 					},
 					{
 						key: "model-graph",
 						label: "关系图",
 						hidden: !row.model,
-						disabled: busy,
+						disabled: busy || !detailsReady,
 						onClick: () => onGoToGraphModel(row.model as ModelSpecView),
 					},
 					{
 						key: "materialize",
 						label: row.model && deliveryByModel.has(row.model.id) ? "物化历史 / 再次物化" : "物化详情",
 						hidden: !row.model,
-						disabled: busy || !canMaintain || row.model?.status === "ARCHIVED",
+						disabled: busy || !detailsReady || !canMaintain || row.model?.status === "ARCHIVED",
 						onClick: () => onMaterialize([row.model as ModelSpecView]),
 					},
 					{
 						key: "model-remove",
 						label: "删除",
 						hidden: !row.model || row.model.status !== "DRAFT",
-						disabled: busy || !canMaintain || row.model?.compatibilityMode !== "CANONICAL",
+						disabled: busy || !detailsReady || !canMaintain || row.model?.compatibilityMode !== "CANONICAL",
 						onClick: () => onRemoveModel(row.model as ModelSpecView),
 					},
 					{
 						key: "model-archive",
 						label: "归档",
 						hidden: !row.model || row.model.status === "DRAFT" || row.model.status === "ARCHIVED",
-						disabled: busy || !canMaintain || row.model?.compatibilityMode !== "CANONICAL",
+						disabled: busy || !detailsReady || !canMaintain || row.model?.compatibilityMode !== "CANONICAL",
 						onClick: () => onArchiveModel(row.model as ModelSpecView),
 					},
 					{
 						key: "dimension-graph",
 						label: "关系图",
 						hidden: !!row.model || !row.dimension,
-						disabled: busy,
+						disabled: busy || !detailsReady,
 						onClick: () => onGoToGraphDimension(row.dimension as DimensionDefinitionView),
 					},
 					{
 						key: "dimension-clone",
 						label: "克隆",
 						hidden: !!row.model || !row.dimension,
-						disabled: busy || !canMaintain,
+						disabled: busy || !detailsReady || !canMaintain,
 						onClick: () => onCloneDimension(row.dimension as DimensionDefinitionView),
 					},
 					{
 						key: "dimension-remove",
 						label: row.dimension?.status === "DRAFT" ? "删除" : "退役",
 						hidden: !!row.model || !row.dimension,
-						disabled: busy || !canMaintain,
+						disabled: busy || !detailsReady || !canMaintain,
 						onClick: () => onRemoveDimension(row.dimension as DimensionDefinitionView),
 					},
 				],
@@ -500,6 +525,7 @@ export function ModelWorkbenchCatalogList({
 		],
 		[
 			busy,
+			detailsReady,
 			canMaintain,
 			domainById,
 			deliveryByModel,
@@ -534,7 +560,7 @@ export function ModelWorkbenchCatalogList({
 						逆向建模
 					</Button>
 					<Button
-						disabled={busy || !canMaintain}
+						disabled={busy || !detailsReady || !canMaintain}
 						onClick={() => setCreateOpen((open) => !open)}
 						primary
 						title={canMaintain ? "新建模型" : "当前账号无建模维护权限"}
@@ -550,9 +576,10 @@ export function ModelWorkbenchCatalogList({
 						setCreateOpen(false);
 						onCreate(kind, categoryId);
 					}}
-					saving={busy}
+					saving={busy || !detailsReady}
 				/>
 			) : null}
+			{!detailsReady && !failureMessage && <p role="status">正在准备编辑资料，模型列表可先浏览。</p>}
 			{failureMessage ? <output className="dmx-inline-error">{failureMessage}</output> : null}
 			<div className="dmx-model-list-toolbar">
 				<label>
@@ -570,7 +597,7 @@ export function ModelWorkbenchCatalogList({
 					</span>
 					{selectedModels.length ? <Button onClick={() => setSelectedIds(new Set())}>清空已选</Button> : null}
 					<Button
-						disabled={!canMaintain || !selectedModels.length}
+						disabled={busy || !detailsReady || !canMaintain || !selectedModels.length}
 						onClick={() => onMaterialize(selectedModels)}
 						primary
 					>

@@ -32,8 +32,8 @@ vi.mock("./ModelingWorkbenchEditor", () => ({
 vi.mock("./ModelWorkbenchCatalogList", async () => {
 	const { ModelWorkbenchCreateMenu } = await import("./ModelWorkbenchCreateMenu");
 	return {
-		ModelWorkbenchCatalogList: ({ onCreate, domains }: ModelWorkbenchCatalogListProps) => (
-			<ModelWorkbenchCreateMenu categoryRoots={domains} saving={false} onCreate={onCreate} />
+		ModelWorkbenchCatalogList: ({ onCreate, domains, detailsReady = true }: ModelWorkbenchCatalogListProps) => (
+			<ModelWorkbenchCreateMenu categoryRoots={domains} saving={!detailsReady} onCreate={onCreate} />
 		),
 	};
 });
@@ -113,7 +113,35 @@ it.each([1, 0, 2])("uses a child domain, never the selected category id (%s chil
 	const router = createMemoryRouter([{ path: "/model", element: <ModelingWorkbenchPage route={{ description: "测试" } as DataModelingRoute} /> }], { initialEntries: ["/model"] });
 	await act(async () => root.render(<RouterProvider router={router} />));
 	const category = container.querySelector<HTMLSelectElement>('select[aria-label="请选择业务分类"]')!;
-	await act(async () => { category.value = "category-id"; category.dispatchEvent(new Event("change", { bubbles: true })); });
-	await act(async () => Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "创建明细表")!.click());
-	expect(container.querySelector('[data-model-kind]')?.textContent).toBe(count === 1 ? "domain-0" : "");
+	await act(async () => {
+		category.value = "category-id";
+		category.dispatchEvent(new Event("change", { bubbles: true }));
+	});
+	await act(async () =>
+		Array.from(container.querySelectorAll("button"))
+			.find((button) => button.textContent === "创建明细表")!
+			.click(),
+	);
+	expect(container.querySelector("[data-model-kind]")?.textContent).toBe(count === 1 ? "domain-0" : "");
+});
+
+it("shows the catalog before editor options arrive and then enables creation", async () => {
+	let finish!: (value: ModelWorkbenchContext) => void;
+	mocks.loadContext.mockImplementation((ready) => {
+		ready({ domains: [], models: [], dimensions: [] });
+		return new Promise((resolve) => {
+			finish = resolve;
+		});
+	});
+	const router = createMemoryRouter(
+		[{ path: "/model", element: <ModelingWorkbenchPage route={{ description: "模型测试" } as DataModelingRoute} /> }],
+		{ initialEntries: ["/model"] },
+	);
+	await act(async () => root.render(<RouterProvider router={router} />));
+	const button = () =>
+		Array.from(container.querySelectorAll("button")).find((item) => item.textContent === "创建明细表");
+	expect(button()).toBeDefined();
+	expect(button()?.disabled).toBe(true);
+	await act(async () => finish(context));
+	expect(button()?.disabled).toBe(false);
 });

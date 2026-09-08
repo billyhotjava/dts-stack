@@ -335,7 +335,7 @@ describe("ModelWorkbenchCatalogList", () => {
 		await act(async () => Promise.resolve());
 
 		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(2);
-		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(publishedModel.id);
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(publishedModel.id, undefined, undefined, expect.any(AbortSignal));
 		const row = Array.from(container.querySelectorAll("tr")).find((item) => item.textContent?.includes("订单明细表"));
 		expect(row?.textContent).toContain("资产已登记");
 		expect(row?.textContent).toContain("分析准备失败");
@@ -429,19 +429,126 @@ describe("ModelWorkbenchCatalogList", () => {
 
 // F4: one failing delivery request must not discard successful rows.
 it("keeps successful delivery rows when another model fails", async () => {
-    apiMocks.getDeliveryStatus.mockImplementation(async (id: string) => {
-        if (id === draftModel.id) throw new Error("timeout");
-        return emptyDeliveryStatus;
-    });
-    await act(async () => root.render(
-        <ModelWorkbenchCatalogList busy={false} canMaintain dimensions={[]}
-            domains={[]} failureMessage="" models={[draftModel, publishedModel]}
-            onArchiveModel={vi.fn()} onCloneDimension={vi.fn()} onChooseDimension={vi.fn()}
-            onChooseModel={vi.fn()} onCreate={vi.fn()} onGoToGraphDimension={vi.fn()}
-            onGoToGraphModel={vi.fn()} onImport={vi.fn()} onMaterialize={vi.fn()}
-            onRefresh={vi.fn()} onRemoveDimension={vi.fn()} onRemoveModel={vi.fn()} />
-    ));
-    const rows = Array.from(container.querySelectorAll("tr"));
-    expect(rows.find(row => row.textContent?.includes(draftModel.name))?.textContent).toContain("交付状态读取失败");
-    expect(rows.find(row => row.textContent?.includes(publishedModel.name))?.textContent).not.toContain("交付状态读取失败");
+	apiMocks.getDeliveryStatus.mockImplementation(async (id: string) => {
+		if (id === draftModel.id) throw new Error("timeout");
+		return emptyDeliveryStatus;
+	});
+	await act(async () =>
+		root.render(
+			<ModelWorkbenchCatalogList
+				busy={false}
+				canMaintain
+				dimensions={[]}
+				domains={[]}
+				failureMessage=""
+				models={[draftModel, publishedModel]}
+				onArchiveModel={vi.fn()}
+				onCloneDimension={vi.fn()}
+				onChooseDimension={vi.fn()}
+				onChooseModel={vi.fn()}
+				onCreate={vi.fn()}
+				onGoToGraphDimension={vi.fn()}
+				onGoToGraphModel={vi.fn()}
+				onImport={vi.fn()}
+				onMaterialize={vi.fn()}
+				onRefresh={vi.fn()}
+				onRemoveDimension={vi.fn()}
+				onRemoveModel={vi.fn()}
+			/>,
+		),
+	);
+	const rows = Array.from(container.querySelectorAll("tr"));
+	expect(rows.find((row) => row.textContent?.includes(draftModel.name))?.textContent).toContain("交付状态读取失败");
+	expect(rows.find((row) => row.textContent?.includes(publishedModel.name))?.textContent).not.toContain(
+		"交付状态读取失败",
+	);
+});
+
+async function renderPerformanceList(models: ModelSpecView[], detailsReady = true) {
+	await act(async () =>
+		root.render(
+			<ModelWorkbenchCatalogList
+				busy={false}
+				detailsReady={detailsReady}
+				canMaintain
+				dimensions={[]}
+				domains={[]}
+				failureMessage=""
+				models={models}
+				onArchiveModel={vi.fn()}
+				onCloneDimension={vi.fn()}
+				onChooseDimension={vi.fn()}
+				onChooseModel={vi.fn()}
+				onCreate={vi.fn()}
+				onGoToGraphDimension={vi.fn()}
+				onGoToGraphModel={vi.fn()}
+				onImport={vi.fn()}
+				onMaterialize={vi.fn()}
+				onRefresh={vi.fn()}
+				onRemoveDimension={vi.fn()}
+				onRemoveModel={vi.fn()}
+			/>,
+		),
+	);
+}
+
+it("limits delivery reads to two and renders results before the slow row finishes", async () => {
+	const models = [draftModel, publishedModel, { ...draftModel, id: "third", name: "第三模型" }];
+	apiMocks.listWorkbenchCatalogPage.mockRejectedValue({ response: { status: 404 } });
+	const completions: Array<() => void> = [];
+	apiMocks.getDeliveryStatus.mockImplementation(
+		() =>
+			new Promise((resolve) => {
+				completions.push(() => resolve(emptyDeliveryStatus));
+			}),
+	);
+	await renderPerformanceList(models);
+	expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(2);
+	await act(async () => completions[0]());
+	expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(3);
+	const firstRow = Array.from(container.querySelectorAll("tr")).find((row) =>
+		row.textContent?.includes(draftModel.name),
+	);
+	expect(firstRow?.textContent).not.toContain("读取交付状态中");
+	await act(async () => {
+		completions[1]();
+		completions[2]();
+	});
+});
+
+it("aborts stale delivery requests on refresh and retries the same model revision", async () => {
+	const signals: AbortSignal[] = [];
+	const completions: Array<() => void> = [];
+	apiMocks.getDeliveryStatus.mockImplementation(
+		(_id, _env, _candidate, signal: AbortSignal) =>
+			new Promise((resolve) => {
+				signals.push(signal);
+				completions.push(() => resolve(emptyDeliveryStatus));
+			}),
+	);
+	await renderPerformanceList([draftModel, publishedModel]);
+	expect(signals).toHaveLength(2);
+	await renderPerformanceList([draftModel, publishedModel]);
+	expect(signals[0].aborted).toBe(true);
+	expect(signals).toHaveLength(4);
+	await act(async () => {
+		completions[0]();
+		completions[1]();
+	});
+	// Old requests cannot complete the new generation.
+	expect(container.textContent).toContain("读取交付状态中");
+	await act(async () => {
+		completions[2]();
+		completions[3]();
+	});
+	expect(container.textContent).not.toContain("读取交付状态中");
+});
+
+it("keeps refresh available while editor options are unavailable", async () => {
+	await renderPerformanceList([draftModel, publishedModel], false);
+	const buttons = Array.from(container.querySelectorAll("button"));
+	const label = (button: HTMLButtonElement) => button.textContent?.replace(/\s/g, "");
+	expect(buttons.find((button) => label(button) === "新建模型")?.disabled).toBe(true);
+	expect(buttons.find((button) => label(button) === "刷新")?.disabled).toBe(false);
+	expect(buttons.find((button) => label(button) === "编辑")?.disabled).toBe(true);
 });

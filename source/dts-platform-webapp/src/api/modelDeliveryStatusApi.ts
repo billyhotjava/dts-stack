@@ -82,10 +82,11 @@ export type ModelDeliveryStatus = {
 	}>;
 	actions: DeliveryAction[];
 };
-export const getModelDeliveryStatus = (id: string, environment?: string, candidateId?: string) =>
+export const getModelDeliveryStatus = (id: string, environment?: string, candidateId?: string, signal?: AbortSignal) =>
 	api.get<ModelDeliveryStatus>({
 		url: `/modeling/model-specs/${encodeURIComponent(id)}/delivery-status`,
 		params: { environment: environment || undefined, candidateId: candidateId || undefined },
+		signal,
 		_skipErrorToast: true,
 	} as any);
 

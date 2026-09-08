@@ -892,6 +892,33 @@ describe("model workbench draft validation", () => {
 		expect(listSubjectDomains).toHaveBeenCalledWith({ status: "CURRENT", offset: 0, limit: 100 });
 	});
 
+	it("publishes catalog data before slow editor options resolve", async () => {
+		vi.mocked(resolveDefaultModelingContextId).mockResolvedValue("plan-1");
+		vi.mocked(collectCurrentWarehousePlanSources).mockResolvedValue([]);
+		vi.mocked(listWarehouseLayers).mockResolvedValue([]);
+		vi.mocked(catalogDomainService.list).mockResolvedValue([]);
+		vi.mocked(listModelSpecs).mockResolvedValue([]);
+		vi.mocked(listDimensionDefinitions).mockResolvedValue([]);
+		vi.mocked(listDataMarts).mockResolvedValue([]);
+		vi.mocked(listSubjectDomains).mockResolvedValue([]);
+		let finish!: (value: never[]) => void;
+		vi.mocked(listModelFieldStandardOptions).mockReturnValue(
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+		);
+		const ready = vi.fn();
+		let completed = false;
+		const pending = loadModelWorkbenchContext(ready).then((result) => {
+			completed = true;
+			return result;
+		});
+		await vi.waitFor(() => expect(ready).toHaveBeenCalledWith({ domains: [], models: [], dimensions: [] }));
+		expect(completed).toBe(false);
+		finish([]);
+		expect((await pending).standards).toEqual([]);
+	});
+
 	it("carries the custom selection into the update command", async () => {
 		const base = canonicalFactView();
 		vi.mocked(updateModelSpec).mockResolvedValue(base);

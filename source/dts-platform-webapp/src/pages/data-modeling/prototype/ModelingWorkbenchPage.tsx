@@ -44,6 +44,7 @@ import {
 	ModelDraftPartialSaveError,
 	type ModelDraftValidationErrors,
 	type ModelWorkbenchContext,
+	type ModelWorkbenchCatalogContext,
 	modelDraftFromView,
 	modelDraftNeedsImplementationRecovery,
 	normalizeModelDraftImplementation,
@@ -86,18 +87,16 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	requestedModelIdRef.current = requestedModelId;
 	requestedDimensionIdRef.current = requestedDimensionId;
 	searchParamsRef.current = searchParams;
-	const syncWorkbenchUrl = useCallback(
-		(mutate: (params: URLSearchParams) => void) => {
-			const normalized = new URLSearchParams(searchParamsRef.current);
-			mutate(normalized);
-			if (normalized.toString() === searchParamsRef.current.toString()) return;
-			searchParamsRef.current = normalized;
-			// The router setter changes with the query; keep the initial loader stable across wizard navigation.
-			setSearchParamsRef.current(normalized, { replace: true });
-		},
-		[],
-	);
+	const syncWorkbenchUrl = useCallback((mutate: (params: URLSearchParams) => void) => {
+		const normalized = new URLSearchParams(searchParamsRef.current);
+		mutate(normalized);
+		if (normalized.toString() === searchParamsRef.current.toString()) return;
+		searchParamsRef.current = normalized;
+		// The router setter changes with the query; keep the initial loader stable across wizard navigation.
+		setSearchParamsRef.current(normalized, { replace: true });
+	}, []);
 	const [context, setContext] = useState<ModelWorkbenchContext | null>(null);
+	const [catalogContext, setCatalogContext] = useState<ModelWorkbenchCatalogContext | null>(null);
 	const [draft, setDraft] = useState<ModelDraft | null>(null);
 	const cleanDraftRef = useRef<ModelDraft | null>(null);
 	const [cleanFingerprint, setCleanFingerprint] = useState<string | null>(null);
@@ -111,6 +110,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [batchMaterializationModels, setBatchMaterializationModels] = useState<ModelSpecView[]>([]);
 	const [materializationRefreshKey, setMaterializationRefreshKey] = useState(0);
 	const [loading, setLoading] = useState(true);
+	const [contextReady, setContextReady] = useState(false);
 	const [editorLoading, setEditorLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
@@ -160,12 +160,16 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		async (preferredModelId?: string) => {
 			const epoch = ++requestEpoch.current;
 			setLoading(true);
+			setContextReady(false);
 			setEditorLoading(false);
 			setFailure(null);
 			try {
-				const next = await loadModelWorkbenchContext();
+				const next = await loadModelWorkbenchContext((catalog) => {
+					if (requestEpoch.current === epoch) setCatalogContext(catalog);
+				});
 				if (requestEpoch.current !== epoch) return null;
 				setContext(next);
+				setContextReady(true);
 				if (!preferredModelId && requestedDimensionIdRef.current) {
 					const dimension = next.dimensions.find((item) => item.id === requestedDimensionIdRef.current);
 					if (dimension) {
@@ -545,22 +549,25 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 			show,
 			syncWorkbenchUrl,
 		});
+	const listContext = contextReady ? context : catalogContext;
+	const showEarlyList = Boolean(listContext && !draft && !editorLoading && !requestedModelId && !requestedDimensionId);
 	return (
 		<main className="dmx-workbench-page">
 			<PageHeader description={route.description} title="维度建模" trail="数据建模 / 维度建模" />
-			{loading ? (
-				<RequestState description="正在读取模型列表、数据域和标准。" kind="loading" title="正在加载模型工作台" />
+			{loading && !showEarlyList ? (
+				<RequestState description="正在读取模型列表和数据域。" kind="loading" title="正在加载模型工作台" />
 			) : failure?.kind === "permission" ? (
 				<RequestState description={failure.message} kind="permission" title="无权访问模型工作台" />
-			) : context && !draft && !editorLoading ? (
+			) : listContext && !draft && !editorLoading ? (
 				<ModelWorkbenchCatalogList
 					busy={saving}
+					detailsReady={contextReady}
 					canMaintain={canMaintain}
-					dimensions={context.dimensions}
-					domains={context.domains}
+					dimensions={listContext.dimensions}
+					domains={listContext.domains}
 					failureMessage={failure?.message || ""}
 					key={`model-list:${materializationRefreshKey}`}
-					models={context.models}
+					models={listContext.models}
 					onArchiveModel={(item) => void archiveModel(item)}
 					onCloneDimension={(item) => void cloneDimension(item)}
 					onChooseDimension={chooseDimension}
@@ -574,7 +581,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					onRemoveDimension={(item) => void removeDimension(item)}
 					onRemoveModel={(item) => void removeModel(item)}
 				/>
-			) : context ? (
+			) : context && contextReady ? (
 				<div className="dmx-model-workbench dmx-model-workbench--editor-only">
 					<section className="dmx-model-editor">
 						<div className="dmx-editor-tab">
