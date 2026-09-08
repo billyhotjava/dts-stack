@@ -249,6 +249,8 @@ public class CandidateQualityAssetRegistrationService {
     }
 
     private static String warehouseLayer(ModelSpecView model) {
+        // Catalog semantics use the canonical layer, not a plan-specific sublayer.
+        if (model.layer() != null) return model.layer().name();
         if (model.warehouseLayerCode() != null && !model.warehouseLayerCode().isBlank()) {
             return model.warehouseLayerCode();
         }

@@ -141,6 +141,27 @@ class ModelPublicationAssetObservationAdapterTest {
         assertThat(command.getValue().statusAxes().serving()).isEqualTo(ServingHealth.HEALTHY);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = { "ODS_RAW", "ODS_STANDARDIZED" })
+    void publishesOdsSublayersUsingCanonicalCatalogLayer(String sublayer) {
+        when(model.layer()).thenReturn(ModelSpecContract.Layer.ODS);
+        when(model.modelType()).thenReturn(ModelType.SOURCE);
+        lenient().when(model.warehouseLayerCode()).thenReturn(sublayer);
+        when(assets.find(CatalogAssetType.DATASET, ASSET_KEY)).thenReturn(Optional.empty());
+        when(assets.observe(any())).thenReturn(new CatalogAssetRegistrationService.ObservationResult(
+            true, false, null,
+            new RegistrationReceipt(true, true, 1, NOW, CatalogAssetType.DATASET, ASSET_KEY, PHYSICAL_ASSET_ID)
+        ));
+
+        adapter.observePublishedAsset(candidate, target, observation, model, binding, NOW);
+
+        ArgumentCaptor<ObservationCommand> command = ArgumentCaptor.forClass(ObservationCommand.class);
+        verify(assets).observe(command.capture());
+        assertThat(command.getValue().warehouseLayer()).isEqualTo("ODS");
+        assertThat(command.getValue().assetRole()).isEqualTo(AssetRole.RELATION);
+        assertThat(command.getValue().resourceId()).isEqualTo(PHYSICAL_ASSET_ID);
+    }
+
     @Test
     void promotesAnExistingIncompleteAssetWhenPublicationProvidesCompleteGovernanceFacts() {
         when(assets.find(CatalogAssetType.DATASET, ASSET_KEY))

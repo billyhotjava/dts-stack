@@ -86,8 +86,9 @@ class CandidateQualityAssetRegistrationServiceTest {
         );
     }
 
-    @Test
-    void preparesVerifiedUnpublishedPhysicalAssetForGovernanceQuality() {
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"DWD,DWD", "ODS_RAW,ODS", "ODS_STANDARDIZED,ODS"})
+    void preparesVerifiedUnpublishedPhysicalAssetForGovernanceQuality(String sublayer, String canonicalLayer) {
         CandidateView candidate = mock(CandidateView.class);
         PublicationEntryEvidence physical = physicalEvidence();
         ModelSpecView model = mock(ModelSpecView.class);
@@ -105,7 +106,8 @@ class CandidateQualityAssetRegistrationServiceTest {
         when(model.revision()).thenReturn(3);
         when(model.checksum()).thenReturn("a".repeat(64));
         when(model.domainId()).thenReturn(DOMAIN_ID);
-        when(model.warehouseLayerCode()).thenReturn("DWD");
+        org.mockito.Mockito.lenient().when(model.warehouseLayerCode()).thenReturn(sublayer);
+        when(model.layer()).thenReturn(ModelSpecContract.Layer.valueOf(canonicalLayer));
         when(model.modelType()).thenReturn(ModelType.FACT);
         when(classifications.evaluate(TENANT, MODEL_ID, 3, "a".repeat(64)))
             .thenReturn(
@@ -149,7 +151,7 @@ class CandidateQualityAssetRegistrationServiceTest {
         ArgumentCaptor<DatasetObservation> observation = ArgumentCaptor.forClass(DatasetObservation.class);
         verify(observations).observe(eq(dataset), observation.capture());
         assertThat(observation.getValue().publication()).isEqualTo(PublicationState.UNPUBLISHED);
-        assertThat(observation.getValue().warehouseLayer()).isEqualTo("DWD");
+        assertThat(observation.getValue().warehouseLayer()).isEqualTo(canonicalLayer);
         assertThat(observation.getValue().domainId()).isEqualTo(DOMAIN_ID);
     }
 
