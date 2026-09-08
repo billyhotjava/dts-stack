@@ -111,6 +111,18 @@ class QualityRunAuditTest {
     }
 
     @Test
+    void modelCorrelationKeyIsNeverUsedAsIssueActor() {
+        var coordinator = new QualityRunAuditCoordinator(qualityAuditRecorder, issueTicketService);
+        GovQualityRun run = executableRun("MANUAL", "mcq:" + UUID.randomUUID() + ":" + "a".repeat(64) + ":");
+        run.setCreatedBy("xiezm");
+        assertThat(coordinator.resolveRunActor(run)).isEqualTo("xiezm");
+        run.setCreatedBy(null);
+        assertThat(coordinator.resolveRunActor(run)).isNull();
+        run.setTriggerRef("alice");
+        assertThat(coordinator.resolveRunActor(run)).isEqualTo("alice");
+    }
+
+    @Test
     void manualCompletionKeepsTheExplicitTriggerActorAndCatalogCode() {
         GovQualityRun run = executableRun("MANUAL", "alice");
         when(runRepository.findById(RUN_ID)).thenReturn(Optional.of(run));

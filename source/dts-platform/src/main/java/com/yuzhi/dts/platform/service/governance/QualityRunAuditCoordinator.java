@@ -246,14 +246,16 @@ final class QualityRunAuditCoordinator {
         if ("SCHEDULED".equalsIgnoreCase(StringUtils.trimToEmpty(run.getTriggerType()))) {
             return "scheduler";
         }
-        if (StringUtils.isNotBlank(run.getTriggerRef())) {
-            return run.getTriggerRef();
-        }
         if (StringUtils.isNotBlank(run.getCreatedBy())) {
             return run.getCreatedBy();
         }
         if (StringUtils.isNotBlank(run.getLastModifiedBy())) {
             return run.getLastModifiedBy();
+        }
+        // Legacy manual runs stored the actor here; current workflows store correlation keys.
+        String triggerRef = StringUtils.trimToNull(run.getTriggerRef());
+        if (triggerRef != null && triggerRef.length() <= 64 && !triggerRef.startsWith("mcq:")) {
+            return triggerRef;
         }
         return null;
     }
