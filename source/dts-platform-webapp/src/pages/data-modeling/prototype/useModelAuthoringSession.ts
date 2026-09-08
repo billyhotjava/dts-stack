@@ -397,13 +397,19 @@ export function useModelAuthoringSession({
 				if (loadEpoch.current !== epoch) return false;
 				setAuthoringContext(value);
 				setFiles(authoringFilesOf(value.openDraft));
-				if (value.openDraft?.modelSpecSnapshot) {
+				const open = value.openDraft;
+				const matchesCurrentDefinition =
+					open?.modelSpecId === value.model.id &&
+					open.baseModelRevision === value.model.revision &&
+					open.baseModelChecksum === value.model.checksum;
+				if (open?.modelSpecSnapshot && matchesCurrentDefinition) {
 					replaceDraft(
-						modelDraftFromAuthoringSnapshot(
-							value.model,
-							value.implementation || null,
-							value.openDraft.modelSpecSnapshot,
-						),
+						modelDraftFromAuthoringSnapshot(value.model, value.implementation || null, open.modelSpecSnapshot),
+					);
+				} else if (open && !matchesCurrentDefinition) {
+					setConflict(true);
+					setAuthoringFailure(
+						"实现草稿基于旧模型版本，已保留当前模型设计。请核对旧草稿后重新开始编辑，不可直接提交旧版本实现。",
 					);
 				}
 				return true;

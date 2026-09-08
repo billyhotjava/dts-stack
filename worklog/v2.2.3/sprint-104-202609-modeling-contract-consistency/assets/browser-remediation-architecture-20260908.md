@@ -17,7 +17,7 @@
 | Q03 | 历史 executor 标记默认 hive，但实际 QualityRunService 使用绑定资产的 QualityDatasetStatementExecutor | 编辑和详情统一表达“使用检测资产的数据源”；旧字段保留隐藏传回以兼容，不修改运行路由 |
 | Q04 | dataset.type 可能装有 dbt 的目标数据库类型；DTS_NATIVE 和 discovery 状态缺标签 | 详情优先使用统一合同 assetType；既有标签表补原生资产映射及 discovery/VERIFIED/MISSING，保留数据库字段的存量值，不做数据清洗 |
 
-Q01：字段名称和失败后草稿恢复仍为待复验，不能从后台一次现象直接修改三端契约。源码确认定义保存和创作快照保存是不同操作，需要可见 Chrome 明确步骤、成功提示与刷新对象后再判断。Q02：错误 SQL 已在执行时被拒绝；本次保持发布与执行分离，不另造 SQL 解析器。
+Q01 续验：可见 Chrome 标签 1761048184，在旧部署打开 b4650e13… 的 definition 步，字段 bad field → project_id → 暂存草稿；暂存按钮消失且显示 project_id，刷新又出现 bad field，r4。根因是 useModelAuthoringSession.reload 无条件将旧实现草稿 snapshot 覆盖当前模型。补充修复以模型 ID、baseModelRevision、baseModelChecksum 全部匹配为恢复条件；不匹配保留当前模型并提示旧实现草稿冲突，服务端提交版本校验保持不变。impact LOW，直接影响 ModelingWorkbenchPage；未删除或自动重写旧实现文件。字段名的逻辑/物理兼容规则仍需单独核实，未凭此收紧三端契约。Q02：错误 SQL 已在执行时被拒绝；本次保持发布与执行分离，不另造 SQL 解析器。
 
 ## 影响分析与风险
 
