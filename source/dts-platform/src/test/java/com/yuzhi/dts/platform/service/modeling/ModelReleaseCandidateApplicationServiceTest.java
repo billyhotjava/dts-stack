@@ -618,15 +618,15 @@ class ModelReleaseCandidateApplicationServiceTest {
 
     @Test
     void ordinaryCreateCannotOpenASecondActiveCandidateForThePlan() {
-        CandidateView active = candidate(DeliveryStatus.DRAFT, List.of());
-        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(active));
+        CandidateView active = candidate(DeliveryStatus.DRAFT, List.of(entry(DeliveryStatus.DRAFT)));
+        when(repository.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(active));
 
         assertThatThrownBy(() ->
             service.create(
                 TENANT,
                 ACTOR,
                 PLAN_ID,
-                new CreateCandidateCommand(PLAN_ID, "prod", List.of(), "second-key", "second active candidate")
+                new CreateCandidateCommand(PLAN_ID, active.environment(), List.of(new ScopeEntryCommand(MODEL_ID, 0, "overlap")), "second-key", "second active candidate")
             )
         )
             .isInstanceOf(ModelReleaseCandidateException.class)
@@ -641,6 +641,42 @@ class ModelReleaseCandidateApplicationServiceTest {
             org.mockito.ArgumentMatchers.any(),
             org.mockito.ArgumentMatchers.anyList()
         );
+    }
+
+    @Test
+    void createsAnIndependentModelWithoutCancellingAnExistingOrdinaryCandidate() {
+        CandidateView active = candidate(DeliveryStatus.BUILT, List.of(entry(DeliveryStatus.BUILT)));
+        UUID otherModel = UUID.randomUUID();
+        CreateCandidateCommand command = new CreateCandidateCommand(PLAN_ID, active.environment(),
+            List.of(new ScopeEntryCommand(otherModel, 0, "independent model using the same source")), "independent", "build independently");
+        CandidateView created = candidate(DeliveryStatus.DRAFT, List.of());
+        when(repository.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(active));
+        when(commands.createBatchWithExpandedScope(TENANT, ACTOR, command, command.entries()))
+            .thenReturn(new CommandResult(created, false, List.of()));
+
+        assertThat(service.create(TENANT, ACTOR, PLAN_ID, command).candidate()).isSameAs(created);
+        verify(repository).lockPlanForCandidate(TENANT, PLAN_ID);
+        verify(commands, never()).transition(any(), any(), any(), any());
+    }
+
+    @Test
+    void scopedWorkspaceDoesNotFallBackToThePlanWideCandidate() {
+        when(repository.listForModelScope(TENANT, PLAN_ID, "prod", List.of(MODEL_ID))).thenReturn(List.of());
+        assertThat(service.workspaceForScope(TENANT, ACTOR, PLAN_ID, "prod", List.of(MODEL_ID)).candidate()).isNull();
+        verify(repository, never()).listForWorkbench(any(), any());
+        CandidateView own = candidate(DeliveryStatus.DRAFT, List.of(entry(DeliveryStatus.DRAFT)));
+        when(repository.listForModelScope(TENANT, PLAN_ID, "prod", List.of(MODEL_ID))).thenReturn(List.of(own));
+        assertThat(service.workspaceForScope(TENANT, ACTOR, PLAN_ID, "prod", List.of(MODEL_ID)).candidate()).isSameAs(own);
+    }
+
+    @Test
+    void scopedWorkspaceRequiresSeparateHandlingForMultipleExistingCandidates() {
+        CandidateView first = candidate(DeliveryStatus.DRAFT, List.of(entry(DeliveryStatus.DRAFT)));
+        CandidateView second = candidate(DeliveryStatus.BUILT, List.of(entry(DeliveryStatus.BUILT)));
+        when(repository.listForModelScope(TENANT, PLAN_ID, "prod", List.of(MODEL_ID))).thenReturn(List.of(first, second));
+        assertThatThrownBy(() -> service.workspaceForScope(TENANT, ACTOR, PLAN_ID, "prod", List.of(MODEL_ID)))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .hasMessageContaining("多个活动候选");
     }
 
     @Test

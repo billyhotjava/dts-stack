@@ -117,6 +117,30 @@ class ModelBuildIntentServiceTest {
     }
 
     @Test
+    void buildsDataModelAlongsideAnUnrelatedOrdinaryCandidateAndReusesOnlyItsOwn() {
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model(ModelStatus.READY_TO_PUBLISH));
+        var unrelated = org.mockito.Mockito.mock(CandidateView.class);
+        var otherEntry = org.mockito.Mockito.mock(EntryView.class);
+        when(unrelated.status()).thenReturn(DeliveryStatus.BUILT);
+        when(unrelated.environment()).thenReturn("DEV");
+        when(unrelated.entries()).thenReturn(List.of(otherEntry));
+        when(otherEntry.modelSpecId()).thenReturn(UUID.randomUUID());
+        when(candidates.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(unrelated));
+        CandidateView draft = candidate(DeliveryStatus.DRAFT, CandidateOrigin.SINGLE_MODEL_INTENT);
+        CandidateView building = candidate(DeliveryStatus.BUILDING, CandidateOrigin.SINGLE_MODEL_INTENT);
+        when(candidateCommands.createSingleModelIntent(eq(TENANT), eq(ACTOR), any()))
+            .thenReturn(new CommandResult(draft, false, List.of()));
+        when(materializationStarts.startWithBuild(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), eq(1), any(), any()))
+            .thenReturn(new ModelMaterializationStartService.StartResult(new CommandResult(building, false, List.of()), group()));
+        var command = new ModelBuildIntentService.BuildIntentCommand(PLAN_ID, "DEV", "data-independent", "DATA_BUILD");
+        assertThat(service.start(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 3, CHECKSUM), command).candidate()).isSameAs(building);
+        when(candidates.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(unrelated, building));
+        when(builds.requireQueuedBuild(building)).thenReturn(group());
+        assertThat(service.start(TENANT, ACTOR, MODEL_ID, new ExpectedVersion(MODEL_ID, 3, CHECKSUM), command).replayed()).isTrue();
+        verify(candidateCommands, org.mockito.Mockito.times(1)).createSingleModelIntent(any(), any(), any());
+    }
+
+    @Test
     void refusesSchemaModeWithoutTheMatchingCurrentImplementation() {
         var current = org.mockito.Mockito.mock(ModelSpecView.class);
         when(current.planId()).thenReturn(PLAN_ID);

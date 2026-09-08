@@ -55,8 +55,8 @@ public class ModelReleaseCandidateRepository {
     /**
      * Serializes active-candidate decisions on the canonical warehouse-plan row.
      *
-     * <p>The row lock is transaction-scoped. Callers still rely on the active-candidate unique
-     * constraint as the final database invariant.
+     * <p>The row lock serializes DRAFT scope admission and replacement. At build time the
+     * model/environment active-claim unique index additionally protects executable reservations.
      */
     public void lockPlanForCandidate(String tenantId, UUID planId) {
         requireTenantAndId(tenantId, planId);
@@ -507,6 +507,25 @@ public class ModelReleaseCandidateRepository {
             """,
             tenantId.trim(),
             planId
+        );
+    }
+
+    /** Filter before limiting: unrelated candidates must not hide a model's own history. */
+    public List<CandidateView> listForModelScope(String tenantId, UUID planId, String environment, List<UUID> modelIds) {
+        requireTenantAndId(tenantId, planId);
+        if (modelIds == null || modelIds.isEmpty()) return List.of();
+        String placeholders = String.join(",", java.util.Collections.nCopies(modelIds.size(), "?"));
+        List<Object> args = new ArrayList<>();
+        args.add(tenantId.trim());
+        args.add(planId);
+        args.add(environment);
+        args.addAll(modelIds);
+        String priority = "case when status not in ('PUBLISHED','REJECTED','ROLLED_BACK','CANCELLED','STALE') then 0 when status = 'PUBLISHED' then 1 else 2 end";
+        return queryCandidatesWithOrder(
+            HEADER_SELECTION + " where tenant_id = ? and plan_id = ? and environment = ? and id in (" +
+                "select candidate_id from modeling_model_release_candidate_entry where model_spec_id in (" + placeholders + "))" +
+                " order by " + priority + ", last_modified_date desc, id limit 2",
+            priority.replace("status", "c.status") + ", c.last_modified_date desc, c.id", args.toArray()
         );
     }
 

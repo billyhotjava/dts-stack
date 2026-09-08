@@ -530,6 +530,7 @@ public class ModelReleaseCandidateService {
         rejectCreateKeyReuse(tenant, command.idempotencyKey());
 
         CandidateView current = repository.find(tenant, candidateId).orElseThrow(() -> notFound(candidateId));
+        repository.lockPlanForCandidate(tenant, current.planId());
         requireExpectedVersion(current, command.expectedVersion());
         if (current.status() != DeliveryStatus.DRAFT) {
             throw new ModelReleaseCandidateException(
@@ -539,6 +540,15 @@ public class ModelReleaseCandidateService {
                 Map.of("candidateId", current.id(), "status", current.status(), "currentVersion", current.version())
             );
         }
+        repository.listActiveForPlan(tenant, current.planId()).stream()
+            .filter(existing -> !existing.id().equals(candidateId))
+            .filter(existing -> ModelCandidateScopePolicy.conflicts(existing, current.origin(), current.environment(),
+                command.entries().stream().map(ScopeEntryCommand::modelSpecId).toList()))
+            .findFirst().ifPresent(existing -> {
+                throw new ModelReleaseCandidateException("MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS",
+                    "An active candidate already reserves the requested scope", Kind.CONFLICT,
+                    Map.of("candidateId", existing.id(), "planId", current.planId()));
+            });
         Map<UUID, CurrentModelReference> currentReferences = resolveCurrentScope(
             tenant,
             current.planId(),

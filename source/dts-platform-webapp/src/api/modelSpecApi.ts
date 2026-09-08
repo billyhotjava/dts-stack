@@ -1067,9 +1067,10 @@ const releaseCandidateWriteHeaders = (idempotencyKey: string, expected?: Release
 	...(expected ? { "If-Match": toReleaseCandidateEtag(expected) } : {}),
 });
 
-export const getReleaseCandidateWorkbench = (planId: string) =>
+export const getReleaseCandidateWorkbench = (planId: string, scope?: { environment: string; modelSpecIds: string[] }) =>
 	api.get<ReleaseCandidateWorkbench>({
-		url: `${releaseCandidateResource(planId)}/workspace`,
+		url: `${releaseCandidateResource(planId)}/workspace${scope ? "/scope" : ""}`,
+		...(scope ? { params: { environment: scope.environment, modelSpecIds: scope.modelSpecIds.join(",") } } : {}),
 		_skipErrorToast: true,
 	} as any);
 

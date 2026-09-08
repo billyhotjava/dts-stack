@@ -80,6 +80,17 @@ public class ModelReleaseCandidateResource {
         return response.body(ApiResponses.ok(view));
     }
 
+    @GetMapping("/workspace/scope")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<WorkbenchView>> workspaceForScope(
+        @PathVariable UUID planId, @RequestParam String environment, @RequestParam List<UUID> modelSpecIds
+    ) {
+        WorkbenchView view = service.workspaceForScope(serverTenantId, actorId(), planId, environment, modelSpecIds);
+        ResponseEntity.BodyBuilder response = ResponseEntity.ok();
+        if (view.etag() != null) response.eTag(view.etag());
+        return response.body(ApiResponses.ok(view));
+    }
+
     @GetMapping("/{candidateId}")
     @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CandidateView>> get(

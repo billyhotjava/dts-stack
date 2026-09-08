@@ -19,9 +19,6 @@ public final class ModelCandidateScopePolicy {
     public static boolean conflicts(CandidateView existing, CandidateOrigin requestedOrigin,
         String environment, Collection<UUID> modelIds) {
         if (!isActive(existing)) return false;
-        if (existing.origin() != CandidateOrigin.SCHEMA_ONLY_INTENT && requestedOrigin != CandidateOrigin.SCHEMA_ONLY_INTENT) {
-            return true;
-        }
         return existing.environment().equals(environment) && existing.entries().stream()
             .anyMatch(entry -> modelIds.contains(entry.modelSpecId()));
     }

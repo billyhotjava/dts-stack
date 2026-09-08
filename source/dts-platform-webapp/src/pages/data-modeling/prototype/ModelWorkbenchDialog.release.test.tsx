@@ -305,7 +305,7 @@ describe("release and materialization dispatch", () => {
 	it.each([true, false])("recovers a plan occupancy conflict only through explicit permitted cancellation: %s", async (canCancel) => {
 		const empty = workspace(["CREATE_CANDIDATE"], null);
 		apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(empty));
-		const occupied = { ...candidate("BATCH_WORKBENCH", "BUILT"), entries: [{ ...candidate("BATCH_WORKBENCH").entries[0], modelSpecId: secondModel.id }] };
+		const occupied = candidate("BATCH_WORKBENCH", "BUILT");
 		apiMocks.getWorkbench.mockResolvedValue(workspace(canCancel ? ["CANCEL_CANDIDATE"] : [], occupied));
 		apiMocks.createCandidate.mockRejectedValue({ response: { status: 409, data: {
 			code: "MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS", message: "The plan already has an active release candidate",
@@ -314,8 +314,8 @@ describe("release and materialization dispatch", () => {
 		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
 		await flush();
 		await act(async () => button("创建并运行")?.click());
-		expect(container.textContent).toContain("当前规划已有未结束的物化候选");
-		expect(container.textContent).toContain(secondModel.id);
+		expect(container.textContent).toContain("所选模型在当前环境已有未结束的物化候选");
+		expect(container.textContent).toContain(model.id);
 		expect(apiMocks.cancelCandidate).not.toHaveBeenCalled();
 		expect(button("创建并运行")?.disabled).toBe(true);
 		if (canCancel) {
@@ -1805,7 +1805,7 @@ describe("model-scoped historical release workspace", () => {
 			root.render(<ModelPublishDialog canMaintain models={[model, secondModel]} onClose={vi.fn()} />),
 		);
 		await flush();
-		expect(apiMocks.getWorkbench).toHaveBeenCalledWith(model.planId);
+		expect(apiMocks.getWorkbench).toHaveBeenCalledWith(model.planId, { environment: "dev", modelSpecIds: [model.id, secondModel.id] });
 		expect(apiMocks.getDeliveryStatus.mock.calls.every((args) => args.length === 1)).toBe(true);
 		await act(async () => button("批量发布流程")?.click());
 		expect(button("确认发布")).toBeDefined();

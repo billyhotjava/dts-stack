@@ -163,7 +163,7 @@ export function ModelPublishDialog({
 				step
 					? Promise.resolve(deliveryStatus?.workspace || null)
 					: batch
-						? getReleaseCandidateWorkbench(planId)
+						? getReleaseCandidateWorkbench(planId, { environment, modelSpecIds: Array.from(selectedIds) })
 						: Promise.resolve(null),
 				getModelMaterializationStatuses(planId, Array.from(selectedIds)),
 				!step && !batch && primary ? getModelDeliveryStatus(primary.id, environment) : Promise.resolve(null),
@@ -479,15 +479,19 @@ export function ModelPublishDialog({
 			if (normalized.code === "MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS") {
 				const sequence = loadSequence.current;
 				try {
-					const occupied = await getReleaseCandidateWorkbench(planId);
+					const buildIds = materializationPlan?.orderedEntries.filter((entry) => entry.action === "BUILD").map((entry) => entry.modelSpecId);
+					const modelSpecIds = buildIds?.length ? buildIds : Array.from(selectedIds);
+					const occupied = await getReleaseCandidateWorkbench(planId, { environment, modelSpecIds });
 					if (sequence !== loadSequence.current) return false;
-					if (occupied.candidate && !["PUBLISHED", "REJECTED", "ROLLED_BACK", "CANCELLED", "STALE"].includes(occupied.candidate.status)) {
+					if (occupied.candidate?.planId === planId && occupied.candidate.environment === environment &&
+						occupied.candidate.entries.some((entry) => modelSpecIds.includes(entry.modelSpecId)) &&
+						!["PUBLISHED", "REJECTED", "ROLLED_BACK", "CANCELLED", "STALE"].includes(occupied.candidate.status)) {
 						setBlockingWorkspace(occupied);
 					}
 				} catch {
 					// Keep the original conflict visible if the recovery projection cannot be read.
 				}
-				setFailure("当前规划已有未结束的物化候选。请先处理占用候选，再开始当前模型的物化。（错误码 MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS）");
+				setFailure("所选模型在当前环境已有未结束的物化候选。请先处理占用候选，再开始当前模型的物化。（错误码 MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS）");
 				return false;
 			}
 			setFailure(
@@ -621,7 +625,7 @@ export function ModelPublishDialog({
 					) : null}
 					{blockingWorkspace?.candidate ? (
 						<div role="alert" className="dmx-request-state">
-							<p>规划被候选 {blockingWorkspace.candidate.id} 占用（{blockingWorkspace.candidate.status}）。涉及模型：{blockingWorkspace.candidate.entries.map((entry) => blockingWorkspace.entryEvidence?.find((evidence) => evidence.modelSpecId === entry.modelSpecId)?.modelName || entry.modelSpecId).join("、")}。</p>
+							<p>所选模型范围被候选 {blockingWorkspace.candidate.id} 占用（{blockingWorkspace.candidate.status}）。涉及模型：{blockingWorkspace.candidate.entries.map((entry) => blockingWorkspace.entryEvidence?.find((evidence) => evidence.modelSpecId === entry.modelSpecId)?.modelName || entry.modelSpecId).join("、")}。</p>
 							<p>关闭会结束该候选的后续发布流程，保留已有物化结果。确认不再继续该候选后，再关闭并重新开始物化。</p>
 							{blockingWorkspace.allowedActions.includes("CANCEL_CANDIDATE") ? (
 								<Button disabled={!canMaintain || Boolean(busy)} onClick={() => void closeBlockingCandidate()}>确认关闭占用候选</Button>

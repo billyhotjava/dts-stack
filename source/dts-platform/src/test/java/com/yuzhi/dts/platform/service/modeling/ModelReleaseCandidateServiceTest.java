@@ -326,6 +326,46 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
+    void refusesToExpandADraftIntoAnotherCandidatesReservedModel() {
+        CandidateView current = candidate(DeliveryStatus.DRAFT, 1, createdAudit(), List.of());
+        var occupied = org.mockito.Mockito.mock(CandidateView.class);
+        var occupiedEntry = org.mockito.Mockito.mock(EntryView.class);
+        when(occupied.id()).thenReturn(UUID.randomUUID());
+        when(occupied.status()).thenReturn(DeliveryStatus.DRAFT);
+        when(occupied.environment()).thenReturn(current.environment());
+        when(occupied.entries()).thenReturn(List.of(occupiedEntry));
+        when(occupiedEntry.modelSpecId()).thenReturn(MODEL_ID);
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(current));
+        when(repository.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(current, occupied));
+        assertThatThrownBy(() -> service.replaceScope(TENANT, ACTOR, CANDIDATE_ID,
+            new ReplaceScopeCommand(1, List.of(new ScopeEntryCommand(MODEL_ID, 0, "overlap")), "overlap-key", "expand scope")))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error -> assertThat(((ModelReleaseCandidateException) error).code()).isEqualTo("MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS"));
+        verify(repository).lockPlanForCandidate(TENANT, PLAN_ID);
+        verify(repository, never()).replaceDraftScope(any(), anyInt(), anyList(), anyString(), any(), any());
+    }
+
+    @Test
+    void expandedBatchScopeCannotReserveAnUpstreamAlreadyOwnedByAnotherCandidate() {
+        var upstream = org.mockito.Mockito.mock(CandidateView.class);
+        var entry = org.mockito.Mockito.mock(EntryView.class);
+        var upstreamId = UUID.randomUUID();
+        var command = createCommand("expanded-key", "build root and missing upstream");
+        when(upstream.id()).thenReturn(UUID.randomUUID());
+        when(upstream.status()).thenReturn(DeliveryStatus.BUILDING);
+        when(upstream.environment()).thenReturn(command.environment());
+        when(upstream.entries()).thenReturn(List.of(entry));
+        when(entry.modelSpecId()).thenReturn(upstreamId);
+        when(repository.listActiveForPlan(TENANT, PLAN_ID)).thenReturn(List.of(upstream));
+        assertThatThrownBy(() -> service.createBatchWithExpandedScope(TENANT, ACTOR, command,
+            List.of(new ScopeEntryCommand(MODEL_ID, 0, "MATERIALIZATION_ROOT"),
+                new ScopeEntryCommand(upstreamId, 1, "AUTO_DEPENDENCY"))))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error -> assertThat(((ModelReleaseCandidateException) error).code()).isEqualTo("MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS"));
+        verify(repository, never()).insert(any());
+    }
+
+    @Test
     void atomicallyMarksTheCandidateAndEntriesStaleWhenTheModelRevisionDrifts() {
         EntryView locked = entry(DeliveryStatus.DRAFT, 1, CHECKSUM);
         CandidateView current = candidate(DeliveryStatus.DRAFT, 1, createdAudit(), List.of(locked));

@@ -34,6 +34,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -102,13 +103,12 @@ public class ModelReleaseCandidateApplicationService {
         Access access = authorizeRead(tenantId, actorId, planId);
         List<CandidateView> candidates = repository.listForWorkbench(access.tenantId(), access.planId()).stream()
             .filter(candidate -> candidate.origin() != ModelReleaseCandidateContract.CandidateOrigin.SCHEMA_ONLY_INTENT).toList();
-        if (candidates.size() > 1 && isActive(candidates.get(0)) && isActive(candidates.get(1))) {
-            throw new ModelReleaseCandidateException(
-                "MODEL_RELEASE_CANDIDATE_CURRENT_AMBIGUOUS",
-                "More than one active release candidate exists for the plan",
-                Kind.CONFLICT,
-                Map.of("planId", access.planId())
-            );
+        // Legacy plan overview shows the latest candidate; model actions use scoped reads.
+        if (candidates.size() > 1 && isActive(candidates.get(1)) && ModelCandidateScopePolicy.conflicts(
+            candidates.get(0), candidates.get(1).origin(), candidates.get(1).environment(),
+            candidates.get(1).entries().stream().map(ModelReleaseCandidateContract.EntryView::modelSpecId).toList())) {
+            throw new ModelReleaseCandidateException("MODEL_RELEASE_CANDIDATE_CURRENT_AMBIGUOUS",
+                "Multiple active candidates reserve the same model scope", Kind.CONFLICT);
         }
         CandidateView candidate = candidates.isEmpty() ? null : candidates.get(0);
         WorkbenchView view = candidate == null
@@ -126,6 +126,23 @@ public class ModelReleaseCandidateApplicationService {
     public CandidateView get(String tenantId, String actorId, UUID planId, UUID candidateId) {
         Access access = authorizeRead(tenantId, actorId, planId);
         return candidateForPlan(access.tenantId(), access.planId(), candidateId);
+    }
+
+    @Transactional(readOnly = true)
+    public WorkbenchView workspaceForScope(String tenantId, String actorId, UUID planId, String environment, List<UUID> modelIds) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        if (environment == null || environment.isBlank() || modelIds == null || modelIds.isEmpty() ||
+            modelIds.size() > ModelReleaseCandidateContract.MAX_ROOT_ENTRIES || modelIds.stream().anyMatch(Objects::isNull)) {
+            throw badRequest("MODEL_RELEASE_CANDIDATE_SCOPE_INVALID", "Environment and a bounded model scope are required");
+        }
+        List<CandidateView> matches = repository.listForModelScope(access.tenantId(), planId, environment.trim(), modelIds);
+        if (matches.size() > 1 && isActive(matches.get(0)) && isActive(matches.get(1))) {
+            throw new ModelReleaseCandidateException("MODEL_RELEASE_CANDIDATE_SCOPE_SPLIT",
+                "所选模型分别属于多个活动候选，请分别处理已有候选后再进行批量操作", Kind.CONFLICT);
+        }
+        if (matches.isEmpty()) return empty(planId, access.duties());
+        CandidateView selected = matches.getFirst();
+        return withPersistedEvidence(project(selected, access.actorId(), access.duties()), workbenchEvidence.findCurrent(selected));
     }
 
     /** Server-authorized command projection for a read-only delivery consumer. */
@@ -271,7 +288,7 @@ public class ModelReleaseCandidateApplicationService {
         }
         repository.lockPlanForCandidate(access.tenantId(), access.planId());
         CandidateView current = repository
-            .listForWorkbench(access.tenantId(), access.planId())
+            .listActiveForPlan(access.tenantId(), access.planId())
             .stream()
             .filter(candidate -> ModelCandidateScopePolicy.conflicts(candidate,
                 ModelReleaseCandidateContract.CandidateOrigin.BATCH_WORKBENCH, command.environment(),
@@ -281,7 +298,7 @@ public class ModelReleaseCandidateApplicationService {
         if (current != null) {
             throw new ModelReleaseCandidateException(
                 "MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS",
-                "The plan already has an active release candidate",
+                "所选模型在当前环境已有活动候选，请处理该模型的已有候选",
                 Kind.CONFLICT,
                 Map.of(
                     "planId",

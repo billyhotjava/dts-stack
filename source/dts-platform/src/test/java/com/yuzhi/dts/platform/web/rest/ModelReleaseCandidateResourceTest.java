@@ -274,6 +274,18 @@ class ModelReleaseCandidateResourceTest {
     }
 
     @Test
+    void scopedWorkspaceUsesServerTenantAndRequestedEnvironmentAndModels() throws Exception {
+        UUID modelId = UUID.randomUUID();
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
+        when(service.workspaceForScope("server-tenant", "alice", PLAN_ID, "dev", List.of(modelId))).thenReturn(workbench());
+        mockMvc.perform(get("/api/modeling/plans/{planId}/release-candidates/workspace/scope", PLAN_ID)
+                .param("environment", "dev").param("modelSpecIds", modelId.toString())
+                .header("X-Tenant-Id", "untrusted"))
+            .andExpect(status().isOk()).andExpect(header().string("ETag", ETAG));
+        verify(service).workspaceForScope("server-tenant", "alice", PLAN_ID, "dev", List.of(modelId));
+    }
+
+    @Test
     void candidateLocationIsResolvableWithinTheSamePlanBoundary() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
         when(service.get("server-tenant", "alice", PLAN_ID, CANDIDATE_ID)).thenReturn(candidate());
