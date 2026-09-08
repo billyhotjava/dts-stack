@@ -2,7 +2,11 @@
 
 用户指定目录名为 `assests`。本目录集中保留不能直接解决的解释、待决策项以及修复验收证据；不保存账号密码。
 
-本次用 Chrome 的谢志民（xiezm）登录会话读取 Jira，查询 `project = S10DC AND resolution = Unresolved ORDER BY priority DESC, updated DESC`，共 35 项，当前均为开放、缺陷。逐项读取标题、描述、附件列表和已加载评论；附件中 S10DC-70、52 已查看大图。Jira 日期存在时区显示差异，以问题编号和原附件文件名定位。
+本次用 Chrome 的谢志民（xiezm）登录会话读取 Jira，查询 `project = S10DC AND resolution = Unresolved ORDER BY priority DESC, updated DESC`，初次盘点共 35 项，当时均为开放、缺陷。逐项读取标题、描述、附件列表和已加载评论；附件中 S10DC-70、52 已查看大图。Jira 日期存在时区显示差异，以问题编号和原附件文件名定位。
+
+## 最新进展（2026-09-08 23:30）
+
+Chrome 已恢复；S10DC-42、45、70 已完成对应页面验收并在 Jira 标记为“已解决 / 完成”。工作台同路径目录遮蔽页面授权导致的空白已修复，正式前端镜像已替换并通过当前登录账号页面检查。详情见 [本轮跟进记录](followup-20260908.md)。下文首轮测试、镜像和浏览器阻塞记录保留为历史证据，以本节和跟进记录为最新状态。
 
 ## 当前修复范围
 
@@ -12,7 +16,7 @@
 
 本段是源码处理范围，测试、镜像、页面结果将在验收记录中单独填写。未满足原场景验收的 Jira 不标为解决。
 
-## 已验证结果与当前限制
+## 首轮已验证结果与当时限制
 
 - 源码提交：`01c0a61e1`；测试修订后的交付提交：`2592732fd3f7d77b08773c1b2408e46b02cbd384`。均先从开发目录提交推送，再由 `/opt/prod/s10/deploy` 快进取得。
 - 针对性测试 39 项通过：Java 菜单 25、路由/菜单服务 5、个性化偏好 4、菜单路径 5。摘要见本目录 `test-*.log` 和 `verification.json`。
@@ -55,7 +59,7 @@
 | [54](https://jira.yuzhicloud.com/browse/S10DC-54) | 领导与业务用户待办区分，缺少具体待办规则 | 需各岗位可见事项、负责范围和办理动作；现有 useWorkbenchRole 已区分员工/部门/机构领导，不能据此宣称满足需求 |
 | [53](https://jira.yuzhicloud.com/browse/S10DC-53) | 个性化恢复禁用组件的确定性缺陷本轮修复 | 还需完整岗位组件矩阵和原账号验收；本地回退组件清单不等于业务授权 |
 | [67](https://jira.yuzhicloud.com/browse/S10DC-67) | 主子菜单和操作顺序合理性，属于总体设计 | 提供最终认可的业务操作顺序，与 55、65 一次收敛 |
-| [70](https://jira.yuzhicloud.com/browse/S10DC-70) | 附件：项目任务快照明细_v3 r3；MODEL_LIFECYCLE_GATE_BLOCKED，FACT 缺少稳定业务过程引用 | 当前源码已有中文指引、业务过程绑定和数据域修复；须为该模型选择并保存真实业务过程，再验证物化，不能绕过门禁 |
+| [70](https://jira.yuzhicloud.com/browse/S10DC-70) | 已解决；原模型当前 r4 重新物化 BUILT，候选 v5，关系已核验 | 23:26 本次运行成功；工程验证及治理质量尚未完成，不等于发布成功 |
 | [69](https://jira.yuzhicloud.com/browse/S10DC-69) | 来源字段当前是文本框；希望真实字段下拉和同名映射 | 与 49 合并；来源 binding 视图不含字段，需按来源类型/版本读取受权限保护的字段元数据，不能用目标字段冒充来源字段 |
 | [68](https://jira.yuzhicloud.com/browse/S10DC-68) | 无工作台菜单仍跳转工作台，本轮修复 | 验收：仅 BI 菜单账号不挂载工作台；空菜单给出提示；授权账号保持可用 |
 | [52](https://jira.yuzhicloud.com/browse/S10DC-52) | 附件显示保存时没有可写建模上下文 | 当前 saveModelDraft 会尝试 resolveDefaultModelingContextId；仍需原失败草稿与可写规划记录核对，不为消除报错伪造规划 |
@@ -70,10 +74,10 @@
 | [36](https://jira.yuzhicloud.com/browse/S10DC-36) | 未归域跳数据查询，已有 _UNASSIGNED_ 参数转换修复 | 待登录页面点击核对 domainUnassigned 查询 |
 | [40](https://jira.yuzhicloud.com/browse/S10DC-40) | 资产详情“密级与生命周期”，无文字步骤 | 需对照附件、原资产和账号复现；不能从标题推断期望行为 |
 | [41](https://jira.yuzhicloud.com/browse/S10DC-41) | 历史发布 BUILD_FAILED | 须当前目标模型运行、构建日志与实表结果；PUBLISHED 历史状态不代表本次成功 |
-| [42](https://jira.yuzhicloud.com/browse/S10DC-42) | 数据类型、数据域下拉已有实现 | 待当前标准代码编辑器页面验收 |
+| [42](https://jira.yuzhicloud.com/browse/S10DC-42) | 数据类型、数据域下拉已有实现 | 页面新建、保存、重开通过；Jira 已解决 / 完成 |
 | [43](https://jira.yuzhicloud.com/browse/S10DC-43) | 治理中心七个入口已有路由修复 | 待当前角色逐个点击，不以路由存在代替授权和页面验收 |
 | [44](https://jira.yuzhicloud.com/browse/S10DC-44) | 字段标准来自 /modeling/metadata-standards，非标准代码 | 需原账号真实接口和下拉结果；库中有记录不等于有权限读到 |
-| [45](https://jira.yuzhicloud.com/browse/S10DC-45) | 标准代码已有草稿/已发布/已废弃选择 | 待真实保存、重开确认状态；不把归档当发布 |
+| [45](https://jira.yuzhicloud.com/browse/S10DC-45) | 标准代码已有草稿/已发布/已废弃选择 | 已发布保存、重开通过；Jira 已解决 / 完成；验收代码集已改为已废弃 |
 | [46](https://jira.yuzhicloud.com/browse/S10DC-46) | 来源绑定失效已有中文指引与版本校验 | 需原失败草稿重新确认来源后保存；不放宽绑定版本检查 |
 | [66](https://jira.yuzhicloud.com/browse/S10DC-66) | 现场旧版升级保留数据、看板 | 必须有源版本、数据库/附件/配置完整备份与恢复演练、映射清单；现场资料未提供，不能保证无损迁移或直接覆盖数据库 |
 | [64](https://jira.yuzhicloud.com/browse/S10DC-64) | 选择数据源表显示别名，只有概述 | 需明确哪个选择器和别名来源（表注释、资产名称或人工别名）；物理标识仍保持稳定 |
