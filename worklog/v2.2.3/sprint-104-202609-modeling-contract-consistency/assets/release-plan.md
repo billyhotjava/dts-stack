@@ -243,3 +243,8 @@ docker compose --env-file "$RELEASE_ENV" -f docker-compose-app.yml ps dts-platfo
 仅 platform 与 webapp 两个源码文件变更。无迁移或回填；沿用正式构建/包/Compose 发布，保留 081bc098a 镜像回退。发布后外部 Chrome 验证策略往返及失败后恢复；不新增代码级测试。高级编辑保持原模型物化约束，统一创作使用本次已验证定义，版本及文件保护不变。回滚演练仍未执行。
 
 B08 发布已完成：9a86c8058 正式包与运行镜像一致，platform 健康、webapp 运行；外部 Chrome 增量→FULL 与刷新验收通过，证据见 browser-remediation-architecture-20260908.md。离线及回滚演练未执行。
+
+
+### B09 标准入口发布
+
+仅 webapp 动态路由父子页面解析修复，无数据/权限配置迁移。正式构建发布单个 webapp，保留 9a86c8058 前端镜像用于回退；Chrome 验证规范路径、旧链接和治理首页。

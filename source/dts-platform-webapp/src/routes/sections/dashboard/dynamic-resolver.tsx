@@ -177,6 +177,7 @@ const isWithinBase = (pathname: string, normalizedBase?: string) => {
 
 const directOverrideParentPath = (pathname: string) => {
 	if (pathname.startsWith("/catalog/datasets/")) return "/catalog/assets";
+	if (STANDARD_PACKAGE_SOURCE_BY_PATH[pathname]) return "/governance";
 	return "";
 };
 

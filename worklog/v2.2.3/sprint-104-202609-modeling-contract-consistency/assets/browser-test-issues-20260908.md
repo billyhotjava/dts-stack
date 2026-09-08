@@ -89,3 +89,8 @@
 - 外部可见 Chrome 标签 1761048294：刷新原失败草稿，仍显示增量；提交成功进入物化页，模型 r3→r4。返回实现配置，切 FULL 再提交成功进入物化页，r4→r5。再次进入实现并刷新：物化方式=表、加载策略=全量、postgres 不支持分区提示正确；s104_project_month 仍选中，project_id/month_id 两列同名映射保持。
 - 本轮确认策略往返与已有失败草稿恢复通过；没有伪造一次“新版本提交失败后重试”的额外负例。旧增量带分区夹具、历史 TYPE2、并发冲突及 DATA_BUILD 尚不能由该路径替代。
 - T03 标准管理入口返回治理中心的问题已记录，尚未修复。活动候选仍限制复合键 DATA_BUILD；独立离线目标已向用户询问，尚未取得答复。
+
+
+## B09 / T03 标准入口被父页面覆盖
+
+当前版本 9a86c8058 外部 Chrome 标签 1761048314 再次确认：直接 #/governance/standards/elements 显示“数据治理中心 / 发布门禁”。根因 DynamicMenuResolver 使用 findBestMenuMatch 的父菜单页面覆盖精确标准页面。复用 directOverrideParentPath，将已有 glossary/elements/reference 标准页面挂到 /governance 父入口，保持精确子菜单隐藏/禁用检查和页面自身权限；不新增页面、菜单、后台角色绑定或数据库补丁。GitNexus LOW，直接调用 DynamicMenuResolver。规范路由仍为 /governance/standards/{glossary,elements,reference}，旧 /data-modeling/standards/fields 保留跳转。验收需验证标准列表、旧链接和治理首页各自正确。
