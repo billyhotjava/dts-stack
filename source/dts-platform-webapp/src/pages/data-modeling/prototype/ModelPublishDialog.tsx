@@ -123,6 +123,7 @@ export function ModelPublishDialog({
 	const [busy, setBusy] = useState<"load" | "build" | "release" | "governance-quality" | "run" | "">("load");
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
 	const [failure, setFailure] = useState<string>("");
+	const [blockingWorkspace, setBlockingWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
 	const loadSequence = useRef(0);
 	const selection = useMemo(() => Array.from(new Map(models.map((model) => [model.id, model])).values()), [models]);
 	const selectedIds = useMemo(() => new Set(selection.map((model) => model.id)), [selection]);
@@ -140,6 +141,10 @@ export function ModelPublishDialog({
 						? "批量物化只能选择同一规划下的模型。"
 						: "";
 	const planId = selectionProblem ? "" : primary?.planId || "";
+	const selectionIdentity = selection.map((model) => `${model.id}:${model.revision}:${model.checksum}`).join(",");
+	useEffect(() => {
+		setBlockingWorkspace(null);
+	}, [planId, selectionIdentity, environment]);
 	const selectionIsPublished = Boolean(
 		selection.length && selection.every((model) => canonical(model) && model.status === "PUBLISHED"),
 	);
@@ -331,7 +336,7 @@ export function ModelPublishDialog({
 			materializationPlan.orderedEntries.every((entry) => entry.dependencyRole === "ROOT" || entry.action === "REUSE"),
 	);
 	const canBuild = Boolean(
-		!selectionProblem &&
+		!selectionProblem && !blockingWorkspace?.candidate &&
 			(operationalAction ||
 				(buildAction && (!requiresPlan || (planState === "ready" && materializationPlan?.canStart)))),
 	);
@@ -471,6 +476,20 @@ export function ModelPublishDialog({
 		} catch (error) {
 			const normalized = normalizeModelingRequestFailure(error, "物化构建未能启动。");
 			await Promise.all([load(), refreshMaterializationPlan()]);
+			if (normalized.code === "MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS") {
+				const sequence = loadSequence.current;
+				try {
+					const occupied = await getReleaseCandidateWorkbench(planId);
+					if (sequence !== loadSequence.current) return false;
+					if (occupied.candidate && !["PUBLISHED", "REJECTED", "ROLLED_BACK", "CANCELLED", "STALE"].includes(occupied.candidate.status)) {
+						setBlockingWorkspace(occupied);
+					}
+				} catch {
+					// Keep the original conflict visible if the recovery projection cannot be read.
+				}
+				setFailure("当前规划已有未结束的物化候选。请先处理占用候选，再开始当前模型的物化。（错误码 MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS）");
+				return false;
+			}
 			setFailure(
 				normalized.code === "MODEL_MATERIALIZATION_PLAN_STALE"
 					? "依赖计划已自动刷新，请确认后重试。"
@@ -479,6 +498,21 @@ export function ModelPublishDialog({
 						: normalized.message,
 			);
 			return false;
+		} finally {
+			setBusy("");
+		}
+	};
+	const closeBlockingCandidate = async () => {
+		const occupied = blockingWorkspace?.candidate;
+		if (busy || !canMaintain || !occupied || occupied.planId !== planId || !blockingWorkspace?.allowedActions.includes("CANCEL_CANDIDATE")) return;
+		setBusy("build");
+		try {
+			await cancelReleaseCandidate(planId, occupied, crypto.randomUUID(), "用户确认关闭占用规划的旧候选，保留现有物化结果");
+			setBlockingWorkspace(null);
+			await Promise.all([load(), refreshMaterializationPlan()]);
+			setFailure("旧候选已关闭。请点击开始物化，为当前模型创建新的候选。");
+		} catch (error) {
+			setFailure(normalizeModelingRequestFailure(error, "关闭占用候选失败，请刷新页面后核对状态。").message);
 		} finally {
 			setBusy("");
 		}
@@ -583,6 +617,15 @@ export function ModelPublishDialog({
 					{failure ? (
 						<div className="dmx-inline-error" role="alert">
 							{failure}
+						</div>
+					) : null}
+					{blockingWorkspace?.candidate ? (
+						<div role="alert" className="dmx-request-state">
+							<p>规划被候选 {blockingWorkspace.candidate.id} 占用（{blockingWorkspace.candidate.status}）。涉及模型：{blockingWorkspace.candidate.entries.map((entry) => blockingWorkspace.entryEvidence?.find((evidence) => evidence.modelSpecId === entry.modelSpecId)?.modelName || entry.modelSpecId).join("、")}。</p>
+							<p>关闭会结束该候选的后续发布流程，保留已有物化结果。确认不再继续该候选后，再关闭并重新开始物化。</p>
+							{blockingWorkspace.allowedActions.includes("CANCEL_CANDIDATE") ? (
+								<Button disabled={!canMaintain || Boolean(busy)} onClick={() => void closeBlockingCandidate()}>确认关闭占用候选</Button>
+							) : <p>该候选当前不能关闭，请先在原模型中处理正在进行的构建或发布流程。</p>}
 						</div>
 					) : null}
 					{!embedded && !selectionProblem ? (

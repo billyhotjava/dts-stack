@@ -302,6 +302,36 @@ afterEach(async () => {
 });
 
 describe("release and materialization dispatch", () => {
+	it.each([true, false])("recovers a plan occupancy conflict only through explicit permitted cancellation: %s", async (canCancel) => {
+		const empty = workspace(["CREATE_CANDIDATE"], null);
+		apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(empty));
+		const occupied = { ...candidate("BATCH_WORKBENCH", "BUILT"), entries: [{ ...candidate("BATCH_WORKBENCH").entries[0], modelSpecId: secondModel.id }] };
+		apiMocks.getWorkbench.mockResolvedValue(workspace(canCancel ? ["CANCEL_CANDIDATE"] : [], occupied));
+		apiMocks.createCandidate.mockRejectedValue({ response: { status: 409, data: {
+			code: "MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS", message: "The plan already has an active release candidate",
+		} } });
+		apiMocks.cancelCandidate.mockResolvedValue({ candidate: { ...occupied, status: "CANCELLED" } });
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+		await flush();
+		await act(async () => button("创建并运行")?.click());
+		expect(container.textContent).toContain("当前规划已有未结束的物化候选");
+		expect(container.textContent).toContain(secondModel.id);
+		expect(apiMocks.cancelCandidate).not.toHaveBeenCalled();
+		expect(button("创建并运行")?.disabled).toBe(true);
+		if (canCancel) {
+			await act(async () => button("确认关闭占用候选")?.click());
+			expect(apiMocks.cancelCandidate).toHaveBeenCalledWith(model.planId, occupied, "idem-1", expect.any(String));
+			expect(container.textContent).toContain("旧候选已关闭");
+			expect(button("创建并运行")?.disabled).toBe(false);
+			// Cancellation does not automatically create or start another build.
+			expect(apiMocks.createCandidate).toHaveBeenCalledTimes(1);
+			expect(apiMocks.lockCandidate).not.toHaveBeenCalled();
+		} else {
+			expect(button("确认关闭占用候选")).toBeUndefined();
+			expect(container.textContent).toContain("该候选当前不能关闭");
+		}
+	});
+
 	it("keeps a build failure visible when the same model status refreshes", async () => {
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
 		apiMocks.createCandidate.mockRejectedValue(new Error("已有候选，请检查构建范围"));
