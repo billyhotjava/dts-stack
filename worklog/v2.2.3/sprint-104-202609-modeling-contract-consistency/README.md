@@ -190,3 +190,26 @@ T10-B2 已接入首次“保存设计并继续”：业务定义与实现配置�
 ## 2026-09-08 整改执行基线
 
 当前整改按 [审查整改契约](assets/review-remediation-20260908.md) 执行。F3 三步建模是现行规则，历史四步记录不作为模型完成前置。20 项任务均在实施/验收中，未达到 DONE；当前运行受测版本及未通过分支以 IT 记录为准。
+
+## F4 性能稳定性扩展（2026-09-08）
+
+| Feature | Task数 | 优先级 | 状态 |
+|---|---:|---|---|
+| [F4-模型工作台性能与交付状态稳定性](features/F4-模型工作台性能与交付状态稳定性/README.md) | 4 | P0 | IN_PROGRESS |
+
+### 现状勘察账本 F4 增量
+| # | 事实 | 证据 |
+|---|---|---|
+| F4-1 | 页面10行并发状态请求且任一失败清空整页 | ModelWorkbenchCatalogList.tsx:272 |
+| F4-2 | 聚合持有只读事务、质量上下文挂起再申请新事务 | ModelDeliveryStatusQueryService.java:43；CandidateQualityRuleContextService.java:55；DefaultDestinationSyncService.java:164 |
+| F4-3 | 首屏等待9组列表/编辑辅助数据 | modelWorkbenchService.ts:568 |
+| F4-4 | 现场10连接占满/30s超时、8个闲置事务、浏览器17条首屏全部状态失败 | it/evidence/F4-performance-20260908.md |
+
+| 需求 | Task | 证据 |
+|---|---|---|
+| 消除连接饥饿 | F4/T21 | IT-25 |
+| 单行隔离/限制并发 | F4/T22 | IT-26 |
+| 首屏不等辅助数据 | F4/T23 | IT-27 |
+| 真实运行与交付验证 | F4/T24 | IT-28 |
+
+F4 Gate：G0=PASS_WITH_GAPS（既有正式环境和登录已实证，新制品性能待测）；G1=PASS（F4契约和非功能预算）；G2/G3/G4=PENDING，由T21–T24跟踪。顺序：T21/T22 → T23 → T24，单代理执行。

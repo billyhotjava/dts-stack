@@ -426,3 +426,22 @@ describe("ModelWorkbenchCatalogList", () => {
 		expect(onMaterialize).toHaveBeenCalledWith(models);
 	});
 });
+
+// F4: one failing delivery request must not discard successful rows.
+it("keeps successful delivery rows when another model fails", async () => {
+    apiMocks.getDeliveryStatus.mockImplementation(async (id: string) => {
+        if (id === draftModel.id) throw new Error("timeout");
+        return emptyDeliveryStatus;
+    });
+    await act(async () => root.render(
+        <ModelWorkbenchCatalogList busy={false} canMaintain dimensions={[]}
+            domains={[]} failureMessage="" models={[draftModel, publishedModel]}
+            onArchiveModel={vi.fn()} onCloneDimension={vi.fn()} onChooseDimension={vi.fn()}
+            onChooseModel={vi.fn()} onCreate={vi.fn()} onGoToGraphDimension={vi.fn()}
+            onGoToGraphModel={vi.fn()} onImport={vi.fn()} onMaterialize={vi.fn()}
+            onRefresh={vi.fn()} onRemoveDimension={vi.fn()} onRemoveModel={vi.fn()} />
+    ));
+    const rows = Array.from(container.querySelectorAll("tr"));
+    expect(rows.find(row => row.textContent?.includes(draftModel.name))?.textContent).toContain("交付状态读取失败");
+    expect(rows.find(row => row.textContent?.includes(publishedModel.name))?.textContent).not.toContain("交付状态读取失败");
+});
