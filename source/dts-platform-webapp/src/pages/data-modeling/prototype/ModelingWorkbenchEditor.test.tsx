@@ -301,7 +301,7 @@ afterEach(async () => {
 describe("ModelingWorkbenchEditor", () => {
 	it("preserves the saved business process when the lookup fails", async () => {
 		mocks.listBusinessProcessesApi.mockRejectedValueOnce(new Error("forbidden"));
-		const props = makeProps({ draft: makeDraft({ createKind: "fact", businessProcessId: "saved-process" }) });
+		const props = makeProps({ definitionOnly: true, draft: makeDraft({ createKind: "fact", businessProcessId: "saved-process" }) });
 		await render(props);
 		expect(props.onChange).not.toHaveBeenCalled();
 		expect(container.textContent).toContain("业务过程读取失败");
@@ -310,7 +310,7 @@ describe("ModelingWorkbenchEditor", () => {
 	});
 
 	it("requires an explicit replacement when a saved business process is absent from the list", async () => {
-		const props = makeProps({ draft: makeDraft({ createKind: "fact", businessProcessId: "saved-process" }) });
+		const props = makeProps({ definitionOnly: true, draft: makeDraft({ createKind: "fact", businessProcessId: "saved-process" }) });
 		await render(props);
 		expect(props.onChange).not.toHaveBeenCalled();
 		expect(container.querySelector<HTMLSelectElement>('select[aria-label="业务过程"]')?.value).toBe("saved-process");
@@ -318,13 +318,13 @@ describe("ModelingWorkbenchEditor", () => {
 	});
 
 	it("does not auto-bind a business process in read-only mode", async () => {
-		const props = makeProps({ readOnly: true, draft: makeDraft({ createKind: "fact", businessProcessId: "" }) });
+		const props = makeProps({ definitionOnly: true, readOnly: true, draft: makeDraft({ createKind: "fact", businessProcessId: "" }) });
 		await render(props);
 		expect(props.onChange).not.toHaveBeenCalled();
 	});
 
 	it("waits for the new domain lookup before auto-binding its business process", async () => {
-		const props = makeProps({ draft: makeDraft({ createKind: "fact", businessProcessId: "process-row-1" }) });
+		const props = makeProps({ definitionOnly: true, draft: makeDraft({ createKind: "fact", businessProcessId: "process-row-1" }) });
 		await render(props);
 		let resolveLookup!: (items: unknown[]) => void;
 		mocks.listBusinessProcessesApi.mockImplementationOnce(() => new Promise((resolve) => { resolveLookup = resolve; }));
