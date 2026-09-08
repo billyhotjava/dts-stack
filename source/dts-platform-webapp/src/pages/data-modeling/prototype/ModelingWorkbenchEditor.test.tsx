@@ -299,6 +299,41 @@ afterEach(async () => {
 });
 
 describe("ModelingWorkbenchEditor", () => {
+	it("preserves the saved business process when the lookup fails", async () => {
+		mocks.listBusinessProcessesApi.mockRejectedValueOnce(new Error("forbidden"));
+		const props = makeProps({ draft: makeDraft({ createKind: "fact", businessProcessId: "saved-process" }) });
+		await render(props);
+		expect(props.onChange).not.toHaveBeenCalled();
+		expect(container.textContent).toContain("业务过程读取失败");
+		expect(container.textContent).toContain("已保留原绑定");
+		expect(container.textContent).not.toContain("已自动绑定业务过程");
+	});
+
+	it("requires an explicit replacement when a saved business process is absent from the list", async () => {
+		const props = makeProps({ draft: makeDraft({ createKind: "fact", businessProcessId: "saved-process" }) });
+		await render(props);
+		expect(props.onChange).not.toHaveBeenCalled();
+		expect(container.querySelector<HTMLSelectElement>('select[aria-label="业务过程"]')?.value).toBe("saved-process");
+		expect(container.textContent).toContain("请核对数仓规划或重新选择后保存");
+	});
+
+	it("does not auto-bind a business process in read-only mode", async () => {
+		const props = makeProps({ readOnly: true, draft: makeDraft({ createKind: "fact", businessProcessId: "" }) });
+		await render(props);
+		expect(props.onChange).not.toHaveBeenCalled();
+	});
+
+	it("waits for the new domain lookup before auto-binding its business process", async () => {
+		const props = makeProps({ draft: makeDraft({ createKind: "fact", businessProcessId: "process-row-1" }) });
+		await render(props);
+		let resolveLookup!: (items: unknown[]) => void;
+		mocks.listBusinessProcessesApi.mockImplementationOnce(() => new Promise((resolve) => { resolveLookup = resolve; }));
+		await render({ ...props, draft: makeDraft({ createKind: "fact", domainId: "new-domain", businessProcessId: "" }) });
+		expect(props.onChange).not.toHaveBeenCalled();
+		await act(async () => resolveLookup([{ id: "new-process", name: "新业务过程", confirmed: true, lifecycleStatus: "ACTIVE" }]));
+		expect(props.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ domainId: "new-domain", businessProcessId: "new-process" }));
+	});
+
 	it("shows imported SQL configuration and allows continuing without an empty visual form", async () => {
 		const selectedModel = {
 			id: "imported-model",

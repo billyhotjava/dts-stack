@@ -129,7 +129,9 @@ export function normalizeModelingRequestFailure(error: unknown, fallback: string
 						const messages = Array.isArray(blockers)
 							? blockers
 									.slice(0, 6)
-									.map((blocker) => safeServerMessage(recordValue(blocker, "message")))
+									.map((blocker) => recordValue(blocker, "code") === "MODEL_SPEC_BUSINESS_PROCESS_REQUIRED"
+										? "明细事实模型尚未绑定业务过程。请回到“模型设计”选择业务过程并保存模型，再保存实现配置后重试；若无可选项，请先在数仓规划中创建并确认本数据域的业务过程。"
+										: safeServerMessage(recordValue(blocker, "message")))
 									.filter(Boolean)
 							: [];
 						return messages.length

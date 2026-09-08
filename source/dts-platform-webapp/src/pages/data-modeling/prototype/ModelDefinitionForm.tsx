@@ -257,16 +257,17 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 	const factMode = draft.createKind === "fact";
 	const applicationMode = draft.createKind === "application";
 	const [processes, setProcesses] = useState<Sprint64BusinessProcess[]>([]);
-	const [processLoaded, setProcessLoaded] = useState(false);
+	const [processLoadedDomain, setProcessLoadedDomain] = useState<string | null>(null);
+	const processLoaded = processLoadedDomain === draft.domainId;
 	const [processFailure, setProcessFailure] = useState("");
 	useEffect(() => {
 		if (!factMode || !draft.domainId) {
 			setProcesses([]);
-			setProcessLoaded(!factMode);
+			setProcessLoadedDomain(null);
 			return;
 		}
 		let active = true;
-		setProcessLoaded(false);
+		setProcessLoadedDomain(null);
 		setProcessFailure("");
 		void listBusinessProcessesApi(draft.domainId)
 			.then((items) => {
@@ -279,7 +280,7 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 				}
 			})
 			.finally(() => {
-				if (active) setProcessLoaded(true);
+				if (active) setProcessLoadedDomain(draft.domainId);
 			});
 		return () => {
 			active = false;
@@ -290,17 +291,9 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 		[draft.businessProcessId, processes],
 	);
 	useEffect(() => {
-		if (!factMode || !processLoaded) return;
-		const currentIsValid = processBinding.processes.some((item) => item.id === draft.businessProcessId);
-		if (draft.businessProcessId && !currentIsValid) {
-			onChange({ ...draft, businessProcessId: "" });
-			return;
-		}
-		if (
-			!processBinding.showSelector &&
-			processBinding.selectedId &&
-			draft.businessProcessId !== processBinding.selectedId
-		) {
+		// A failed or filtered lookup must never erase or replace a persisted business reference.
+		if (!factMode || !processLoaded || processFailure || props.readOnly || draft.businessProcessId) return;
+		if (processBinding.selectedId) {
 			onChange({ ...draft, businessProcessId: processBinding.selectedId });
 		}
 	}, [
@@ -311,7 +304,11 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 		processBinding.selectedId,
 		processBinding.showSelector,
 		processLoaded,
+		processFailure,
+		props.readOnly,
 	]);
+	const missingProcess = Boolean(processLoaded && !processFailure && draft.businessProcessId &&
+		!processBinding.processes.some((item) => item.id === draft.businessProcessId));
 	const missingPersistedDomain = Boolean(
 		draft.base && draft.domainId && !context.domains.some((item) => item.id === draft.domainId),
 	);
@@ -356,13 +353,15 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 						// biome-ignore lint/a11y/noLabelWithoutControl: the select is conditional while its status text stays in the same labeled field.
 						<label>
 							<span className="required">业务过程</span>
-							{processBinding.showSelector ? (
+							{processLoaded && !processFailure && (processBinding.showSelector || missingProcess) ? (
 								<select
 									aria-label="业务过程"
+									disabled={props.readOnly}
 									onChange={(event) => patch({ businessProcessId: event.target.value })}
 									value={draft.businessProcessId || ""}
 								>
 									<option value="">请选择业务过程</option>
+									{missingProcess ? <option disabled value={draft.businessProcessId}>已保存业务过程（当前不可用）</option> : null}
 									{processBinding.processes.map((item) => (
 										<option key={item.id} value={item.id}>
 											{item.name} · {item.processId}
@@ -370,9 +369,11 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 									))}
 								</select>
 							) : (
-								<small>{processLoaded ? processBinding.message : "正在读取业务过程…"}</small>
+								<small>{processFailure ? "暂时无法核验业务过程，已保留原绑定。" : processLoaded ? (props.readOnly && !draft.businessProcessId ? "尚未绑定业务过程" : processBinding.message) : "正在读取业务过程…"}</small>
 							)}
 							<ValidationMessage message={validationErrors.businessProcessId} />
+							{missingProcess ? <ValidationMessage message="已保存的业务过程不在当前可选列表中，请核对数仓规划或重新选择后保存。" /> : null}
+							{!draft.businessProcessId ? <small>草稿可暂不选择；物化前请在数仓规划中确认本数据域的业务过程，再在此选择并保存模型。</small> : null}
 							{processFailure ? <ValidationMessage message={processFailure} /> : null}
 						</label>
 					) : null}

@@ -3,6 +3,19 @@ import { describe, expect, it } from "vitest";
 import { normalizeModelingRequestFailure } from "./planningProjectionService";
 
 describe("normalizeModelingRequestFailure", () => {
+	it("guides a missing FACT business process back to design while retaining diagnostic evidence", () => {
+		const failure = normalizeModelingRequestFailure({ response: { status: 422, data: {
+			errorCode: "MODEL_LIFECYCLE_GATE_BLOCKED", correlationId: "req-fact-1",
+			data: { blockers: [{ code: "MODEL_SPEC_BUSINESS_PROCESS_REQUIRED", message: "FACT requires a stable business process reference" }] },
+		} } }, "物化构建未能启动。");
+		expect(failure.message).toContain("模型设计");
+		expect(failure.message).toContain("选择业务过程并保存模型");
+		expect(failure.message).toContain("数仓规划");
+		expect(failure.message).toContain("MODEL_LIFECYCLE_GATE_BLOCKED");
+		expect(failure.message).toContain("req-fact-1");
+		expect(failure.message).not.toContain("FACT requires");
+	});
+
 	it("shows actionable lifecycle blockers instead of the generic English gate message", () => {
 		const failure = normalizeModelingRequestFailure(
 			{
