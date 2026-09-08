@@ -118,7 +118,8 @@ class ModelBuildIntentServiceTest {
 
     @Test
     void buildsDataModelAlongsideAnUnrelatedOrdinaryCandidateAndReusesOnlyItsOwn() {
-        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(model(ModelStatus.READY_TO_PUBLISH));
+        ModelSpecView current = model(ModelStatus.READY_TO_PUBLISH);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(current);
         var unrelated = org.mockito.Mockito.mock(CandidateView.class);
         var otherEntry = org.mockito.Mockito.mock(EntryView.class);
         when(unrelated.status()).thenReturn(DeliveryStatus.BUILT);

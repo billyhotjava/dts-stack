@@ -78,6 +78,9 @@ class ModelReleaseCandidateResourceTest {
     private ModelReleaseCandidateApplicationService service;
 
     @MockBean
+    private com.yuzhi.dts.platform.service.modeling.CandidateQualityRuleContextService qualityContext;
+
+    @MockBean
     private CandidateGovernanceQualityRerunService governanceQualityReruns;
 
     @MockBean

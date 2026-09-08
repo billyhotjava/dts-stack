@@ -680,6 +680,7 @@
                         <testInclude>**/service/modeling/MetadataStandardSourceSystemPersistenceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelBuildIntentServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelCandidateScopePolicyTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelCandidateModelScopePostgresTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelSchemaCandidateScopePostgresTest.java</testInclude>
                         <testInclude>**/repository/modeling/CandidateSchemaOnlyLineageTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelSchemaDependencyArtifactsTest.java</testInclude>
