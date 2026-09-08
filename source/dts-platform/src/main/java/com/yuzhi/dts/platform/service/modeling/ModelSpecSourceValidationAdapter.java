@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.PhysicalSourceProjection;
 import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.SourceBindingState;
-import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceKind;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRef;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.SourceRole;
@@ -35,17 +34,20 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
     private final SourceReferenceResolver resolver;
     private final WarehousePlanActorProvider actorProvider;
     private final ObjectMapper objectMapper;
+    private final ModelSpecPlanWriteAccessPort planWriteAccess;
 
     public ModelSpecSourceValidationAdapter(
         ModelSpecRepository repository,
         SourceReferenceResolver resolver,
         WarehousePlanActorProvider actorProvider,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        ModelSpecPlanWriteAccessPort planWriteAccess
     ) {
         this.repository = repository;
         this.resolver = resolver;
         this.actorProvider = actorProvider;
         this.objectMapper = objectMapper;
+        this.planWriteAccess = planWriteAccess;
     }
 
     @Override
@@ -56,6 +58,9 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
 
         WarehousePlanActor actor = currentActor();
         if (actor == null || isBlank(actor.ownerId()) || !Objects.equals(actorId, actor.ownerId())) return false;
+        // Temporary alignment with the canonical writer until the authorization refactor:
+        // authorized maintainers need not own the plan; source access still uses the actual actor.
+        if (!planWriteAccess.canMaintain(tenantId, planId, actorId)) return false;
 
         SourceBindingState binding = repository
             .lockSourceBinding(tenantId, planId, sourceRef.sourceBindingId())
@@ -237,8 +242,6 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
     ) {
         if (
             binding == null ||
-            !Objects.equals(ownerId, binding.planOwnerId()) ||
-            !sameDepartment(ownerDepartmentId, binding.planOwnerDepartmentId()) ||
             !"CONFIRMED".equals(binding.confirmationStatus()) ||
             !sourceKindMatches(sourceRef.kind(), binding.sourceType()) ||
             !Objects.equals(sourceRef.ref(), binding.sourceId()) ||
@@ -365,12 +368,4 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
         return value == null || value.isBlank();
     }
 
-    private static boolean sameDepartment(String left, String right) {
-        String canonicalLeft = DepartmentUtils.normalize(left);
-        String canonicalRight = DepartmentUtils.normalize(right);
-        if (isBlank(canonicalLeft) || isBlank(canonicalRight)) {
-            return isBlank(canonicalLeft) && isBlank(canonicalRight);
-        }
-        return canonicalLeft.equals(canonicalRight);
-    }
 }

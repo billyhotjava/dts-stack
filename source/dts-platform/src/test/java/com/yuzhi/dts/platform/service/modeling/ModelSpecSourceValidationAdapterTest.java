@@ -22,6 +22,8 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvi
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType;
 import java.util.Optional;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 @ExtendWith(MockitoExtension.class)
 class ModelSpecSourceValidationAdapterTest {
@@ -50,12 +58,60 @@ class ModelSpecSourceValidationAdapterTest {
     @Mock
     private WarehousePlanActorProvider actorProvider;
 
+    @Mock
+    private ModelSpecPlanWriteAccessPort planWriteAccess;
+
     private ModelSpecSourceValidationAdapter validation;
+
+    @ParameterizedTest
+    @CsvSource({
+        "ROLE_INST_DATA_OWNER, dept-b, AVAILABLE, v1, CONFIRMED, true",
+        "ROLE_DEPT_DATA_OWNER, dept-a, AVAILABLE, v1, CONFIRMED, true",
+        "ROLE_DEPT_DATA_OWNER, dept-b, AVAILABLE, v1, CONFIRMED, false",
+        "ROLE_USER, dept-a, AVAILABLE, v1, CONFIRMED, false",
+        "ROLE_INST_DATA_OWNER, dept-b, FORBIDDEN, v1, CONFIRMED, false",
+        "ROLE_INST_DATA_OWNER, dept-b, AVAILABLE, v2, CONFIRMED, false",
+        "ROLE_INST_DATA_OWNER, dept-b, AVAILABLE, v1, CANDIDATE, false"
+    })
+    void validatesNonOwnerWithRealPlanAuthorizationAndActualSourceContext(
+        String role, String planDepartment, String sourceStatus, String liveVersion, String confirmation, boolean expected
+    ) {
+        JdbcTemplate jdbc = org.mockito.Mockito.mock(JdbcTemplate.class);
+        when(jdbc.queryForList(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.eq(TENANT), org.mockito.ArgumentMatchers.eq(PLAN_ID)))
+            .thenReturn(List.of(Map.of("owner_id", "another-owner", "owner_department_id", planDepartment)));
+        Jwt jwt = Jwt.withTokenValue("test-token").header("alg", "none").subject(ACTOR)
+            .claim("preferred_username", ACTOR).claim("dept_code", DEPARTMENT).claim("roles", List.of(role)).build();
+        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+        try {
+            ModelSpecPlanWriteAccessAdapter authorization = new ModelSpecPlanWriteAccessAdapter(jdbc);
+            ModelSpecSourceValidationAdapter adapter = new ModelSpecSourceValidationAdapter(
+                repository, resolver, actorProvider, new ObjectMapper(), authorization
+            );
+            SourceBindingState binding = new SourceBindingState(
+                BINDING_ID, "CATALOG_TABLE", ASSET_ID.toString(), "v1", confirmation, LOCATOR_JSON, "another-owner", planDepartment
+            );
+            lenient().when(repository.lockSourceBinding(TENANT, PLAN_ID, BINDING_ID)).thenReturn(Optional.of(binding));
+            SourceLocator locator = new SourceLocator(ASSET_ID, null, null, null, null, null, null);
+            AccessContext context = new AccessContext(TENANT, ACTOR, DEPARTMENT);
+            lenient().when(resolver.resolve(SourceType.CATALOG_TABLE, locator, context))
+                .thenReturn("FORBIDDEN".equals(sourceStatus) ? ResolvedSource.forbidden() : ResolvedSource.available("客户表", liveVersion));
+
+            assertThat(adapter.isCurrentBinding(TENANT, PLAN_ID, ACTOR, source(ASSET_ID.toString(), "v1"))).isEqualTo(expected);
+            if (authorization.canMaintain(TENANT, PLAN_ID, ACTOR) && "CONFIRMED".equals(confirmation)) {
+                verify(resolver).resolve(SourceType.CATALOG_TABLE, locator, context);
+            } else {
+                verify(resolver, never()).resolve(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+            }
+        } finally {
+            SecurityContextHolder.clearContext();
+        }
+    }
 
     @BeforeEach
     void setUp() {
-        validation = new ModelSpecSourceValidationAdapter(repository, resolver, actorProvider, new ObjectMapper().findAndRegisterModules());
+        validation = new ModelSpecSourceValidationAdapter(repository, resolver, actorProvider, new ObjectMapper().findAndRegisterModules(), planWriteAccess);
         lenient().when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor(ACTOR, DEPARTMENT));
+        lenient().when(planWriteAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
     }
 
     @Test
@@ -240,7 +296,7 @@ class ModelSpecSourceValidationAdapterTest {
     @Test
     void rejectsAPlanOwnerWhoseAuthenticatedDepartmentHasChanged() {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor(ACTOR, "dept-b"));
-        when(repository.lockSourceBinding(TENANT, PLAN_ID, BINDING_ID)).thenReturn(Optional.of(confirmedBinding("v1", LOCATOR_JSON)));
+        when(planWriteAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(false);
 
         assertThat(validation.isCurrentBinding(TENANT, PLAN_ID, ACTOR, source(ASSET_ID.toString(), "v1"))).isFalse();
         verify(resolver, never()).resolve(
