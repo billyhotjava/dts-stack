@@ -170,7 +170,8 @@ public class ModelLifecycleService {
         return ModelImplementationExecutionPlanner.capabilities();
     }
 
-    @Transactional(readOnly = true)
+    // A caller may retain an incomplete authoring draft after this read-only pin check fails.
+    @Transactional(readOnly = true, noRollbackFor = ModelSpecException.class)
     public SaveImplementationCommand prepareAuthoringInputs(
         String tenantId,
         String actorId,

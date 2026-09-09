@@ -39,3 +39,9 @@
 749a58795 部署后首次创建返回 201，但随后 PUT 保存返回 409 MODEL_IMPLEMENTATION_DEPENDENCY_MISSING，关联 ID `7179e9fe-f3cb-48cb-a393-edc44f59fa78`。请求明确含上游 r3/i1，而 readFacts 从数据库中使用方旧 r2 设计的 dependsOn 递归，读到上游 r2，解析器因查不到 r3 拒绝。修复读取器根节点使用传入候选设计的 dependsOn/dimensionRefs，后续节点仍按不可变历史修订展开；租户、方案/发布过滤和有界查询保持，物化计划 readPlanFacts 不变。
 
 同时修复首次 createSession 成功后回填旧设计覆盖用户输入的问题：保存路径创建容器仅对齐 base，保留用户选择与字段；最终以成功保存的响应回填。失败不丢输入。该补充需最终镜像复验。
+
+## F5-B05：预期诊断把草稿事务标成 rollback-only
+
+a3a8260e4 上游 r3/i1→r3/i2 实际升级后，页面保留旧 i1；取消更新亦保留。旧 pin 下编辑并提交，创建草稿 201，但保存 500，关联 ID `4cfb7cca-6ac7-4269-b83d-9a83f2a1ee08`，响应 `Transaction silently rolled back because it has been marked as rollback-only`。用户输入保留，未新增实现。
+
+根因：只读 resolveCurrent 抛出预期领域校验异常后，参与外层事务的 Spring 拦截器先标记回滚；saveAuthoring 即使按暂存契约捕获并保留编辑也无法提交事务。修复仅为 prepareAuthoringInputs、resolveForDraft、resolveCurrent 的只读 ModelSpecException 声明 noRollbackFor；数据库/系统异常仍回滚，未捕获的领域异常仍由外层写事务阻断。共享 resolveCurrent GitNexus HIGH，直接调用方 2、传递影响 17，已检查纯读取且没有写副作用；须复验旧 pin 拒绝及有效 pin 提交/物化。

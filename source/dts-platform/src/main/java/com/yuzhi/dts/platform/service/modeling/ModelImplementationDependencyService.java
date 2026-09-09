@@ -43,7 +43,9 @@ public class ModelImplementationDependencyService {
         this.resolver = resolver;
     }
 
-    @Transactional(readOnly = true)
+    // Domain diagnostics from a pure read must not poison a caller that intentionally saves
+    // an editable draft. Unhandled failures still roll back the caller's write transaction.
+    @Transactional(readOnly = true, noRollbackFor = ModelSpecException.class)
     public Resolution resolveForDraft(
         String tenantId,
         ModelSpecView owner,
@@ -54,7 +56,7 @@ public class ModelImplementationDependencyService {
 		return resolveCurrent(tenantId, owner, implementation, projectKey, targetName);
 	}
 
-	@Transactional(readOnly = true)
+	@Transactional(readOnly = true, noRollbackFor = ModelSpecException.class)
 	public Resolution resolveCurrent(
 		String tenantId,
 		ModelSpecView owner,
