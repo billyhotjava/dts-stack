@@ -1466,9 +1466,7 @@ public class DbtImplementationDraftService {
                     "Structure-only authoring must retain the registered empty-table materialization");
             }
             current = resolveDependencies(
-                tenantId, authoredModel,
-                com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(authoredImplementation)
-                    ? authoredImplementation : null,
+                tenantId, authoredModel, authoredImplementation,
                 validated.projectKey(), ownedTarget.name()
             );
         }
@@ -1510,6 +1508,13 @@ public class DbtImplementationDraftService {
         if (dependencies == null || dependencies.snapshot() == null) return Map.copyOf(aliases);
 
         String normalizedProject = dbtSegment(projectKey);
+        for (var input : dependencies.snapshot().modelInputs()) {
+            String[] identity = input.dbtUniqueId().split("\\.", -1);
+            if (identity.length != 3 || !"model".equals(identity[0])) throw sourceBundleUnavailable();
+            // The visual compiler emits ref(modelName); the parser qualifies it with this project.
+            // Reconcile that local spelling to the same immutable upstream pin as the proxy alias.
+            addDependencyAlias(aliases, "model." + normalizedProject + "." + dbtSegment(identity[2]), input.dbtUniqueId());
+        }
         for (PhysicalSource source : dependencies.snapshot().physicalSources()) {
             PhysicalSourceFact fact = dependencies.physicalSourceFacts().get(source.sourceBindingId());
             if (
@@ -1803,7 +1808,7 @@ public class DbtImplementationDraftService {
             : resolveDependencies(
                 tenantId,
                 model,
-                schemaOnly ? committedVisual : null,
+                committedVisual,
                 validated.projectKey(),
                 target.name()
             );
@@ -1833,7 +1838,8 @@ public class DbtImplementationDraftService {
             );
             generatedConfig.put(
                 "managedDependencyAliases",
-                frozenSource == null ? Map.of() : frozenSource.managedDependencyAliases()
+                dependencyAliases(validated.projectKey(), committedDependencies,
+                    frozenSource == null ? Map.of() : frozenSource.managedDependencyAliases())
             );
         }
         SaveImplementationCommand command = new SaveImplementationCommand(

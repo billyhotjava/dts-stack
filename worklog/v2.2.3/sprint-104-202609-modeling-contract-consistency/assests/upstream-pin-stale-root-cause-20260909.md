@@ -29,6 +29,8 @@ e711880ef3b7 正式部署后，原模型首次 PUT 保存 200，响应补齐上�
 
 整改：复用 ModelImplementationChecksumCodec 的规范化内容校验（排序 Map、排除幂等键）。旧产物兼容仅允许编译器保留路径中的生成 SQL 的 implementationChecksum 元数据值不同，其余字节须与重建结果完全一致；不允许覆盖其他 SQL 编辑。
 
+提交链路补充：同模型 Chrome 点击提交返回 DBT_DRAFT_DEPENDENCY_MISSING（9b1fd505-0a70-4c5f-9c1b-40516f217a25）。编译器 ref('dwd_test_prj') 被解析为当前项目局部标识，原别名转换只处理物理源和代理节点，未映射到已锁定上游的完整标识。补齐现有 dependencyAliases 的模型输入分支，重名仍经 addDependencyAlias 拒绝；提交产物保留同一别名映射。统一校验及提交继续使用保存的 visualImplementation 锁定，避免仅保存时校验而提交时重新绑定当前上游。
+
 RAW_SQL 和四项投影提示来自初始化骨架；本轮未证明其为独立缺陷。初次打开直接提交另返回 DBT_DRAFT_FILES_REQUIRED（422）；填写截图目标表后才产生上述 PUT，记录但不扩大本轮修复结论。保存通过后仍需检查用户的字段映射和聚合配置，不能宣称汇总模型已完整可交付。
 
 未修改数据库、上游模型或字段映射；保留汇总页面未保存输入，取消了离开页面的放弃修改确认。登录提示同账号其他会话下线。
