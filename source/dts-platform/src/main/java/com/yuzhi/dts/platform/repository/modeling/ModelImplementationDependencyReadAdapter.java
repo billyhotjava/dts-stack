@@ -61,6 +61,11 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
         if (tenantId == null || tenantId.isBlank() || owner == null || owner.id() == null || owner.planId() == null) {
             throw stale("Dependency graph identity is incomplete", null);
         }
+        // The root may be an in-memory authoring candidate whose references have not been saved
+        // yet. Traverse its supplied references, then immutable stored revisions for descendants.
+        var rootReferences = objectMapper.createArrayNode();
+        if (owner.dependsOn() != null) owner.dependsOn().forEach(ref -> rootReferences.add(objectMapper.valueToTree(ref)));
+        if (owner.dimensionRefs() != null) owner.dimensionRefs().forEach(ref -> rootReferences.add(objectMapper.valueToTree(ref)));
         List<ModelRow> rows = jdbcTemplate.query(
             """
             with recursive requested(model_spec_id, revision) as (
@@ -75,8 +80,11 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
                    and parent.revision = requested.revision
                    and parent.contract_version = 2
                  cross join lateral jsonb_array_elements(
-                       coalesce(parent.snapshot_json -> 'dependsOn', '[]'::jsonb) ||
-                       coalesce(parent.snapshot_json -> 'dimensionRefs', '[]'::jsonb)
+                       case when parent.model_spec_id = cast(? as uuid) and parent.revision = ?
+                            then cast(? as jsonb)
+                            else coalesce(parent.snapshot_json -> 'dependsOn', '[]'::jsonb) ||
+                                 coalesce(parent.snapshot_json -> 'dimensionRefs', '[]'::jsonb)
+                       end
                  ) edge(value)
             ), exact_requests as (
                 select distinct model_spec_id, revision from requested
@@ -122,6 +130,9 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
             owner.id(),
             owner.revision(),
             tenantId,
+            owner.id(),
+            owner.revision(),
+            rootReferences.toString(),
             tenantId,
             owner.planId(),
             MAX_GRAPH_NODES + 1
@@ -129,7 +140,10 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
         if (rows.size() > MAX_GRAPH_NODES) {
             throw stale("The dependency graph exceeds the supported bounded size", MAX_GRAPH_NODES);
         }
-        List<ModelFact> models = rows.stream().map(this::modelFact).toList();
+        List<ModelFact> models = rows.stream().map(this::modelFact).map(fact ->
+            owner.id().equals(fact.model().id()) && owner.revision() == fact.model().revision()
+                ? new ModelFact(owner, fact.implementation()) : fact
+        ).toList();
         boolean ownerPresent = models
             .stream()
             .map(ModelFact::model)

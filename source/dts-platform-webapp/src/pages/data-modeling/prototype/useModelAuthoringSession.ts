@@ -116,7 +116,7 @@ export function useModelAuthoringSession({
 		setAuthoringFailure("");
 	}, []);
 
-	const createSession = async (targetPhysicalName = ""): Promise<AuthoringSession> => {
+	const createSession = async (targetPhysicalName = "", preserveEdits = false): Promise<AuthoringSession> => {
 		if (!draft || !isModelSpecDraft(draft) || !draft.base || !authoringContext) {
 			throw new Error("请先打开已保存的模型");
 		}
@@ -160,7 +160,10 @@ export function useModelAuthoringSession({
 			created.draft.modelSpecSnapshot ||
 				modelDraftToUpdateCommand(prepareModelDraftForSave(draft, dimensionDefinitions)),
 		);
-		replaceDraft({ ...hydrated, physicalName: normalizedTarget || hydrated.physicalName });
+		replaceDraft({
+			...(preserveEdits ? { ...draft, base: created.model } : hydrated),
+			physicalName: normalizedTarget || hydrated.physicalName,
+		});
 		show(
 			authoringContext.publishedForkRequired ? `已创建新草稿版本：r${created.model.revision}` : "模型创作草稿已创建",
 		);
@@ -172,7 +175,7 @@ export function useModelAuthoringSession({
 		if (authoringContext && open && (open.state === "DRAFT" || open.state === "VALIDATED")) {
 			return { context: authoringContext, draft: open, files };
 		}
-		return createSession(targetPhysicalName);
+		return createSession(targetPhysicalName, true);
 	};
 
 	const persist = async (
