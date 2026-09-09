@@ -1,6 +1,0 @@
-[INFO] Rule 0: org.apache.maven.enforcer.rules.version.RequireMavenVersion passed
-[INFO] Rule 1: org.apache.maven.enforcer.rules.version.RequireJavaVersion passed
-[INFO] Rule 0: org.apache.maven.enforcer.rules.dependency.DependencyConvergence passed
-[INFO] Tests run: 25, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.945 s -- in com.yuzhi.dts.admin.service.PortalMenuSeedDefaultsContractTest
-[INFO] Tests run: 25, Failures: 0, Errors: 0, Skipped: 0
-[INFO] BUILD SUCCESS

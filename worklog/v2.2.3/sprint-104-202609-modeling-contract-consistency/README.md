@@ -6,7 +6,7 @@
 **类型**：缺陷整改与通用场景完善  
 **目标**：用户能先设计 ODS→DWD→DWS→ADS，以“设计→实现配置→物化”完成建模；数据接入、资产形成与治理、分析准备在数据模块办理。各模块复用同一模型/资产身份和版本证据，不把所有约束堆在模型页。
 
-**当前产品边界（2026-09-07）**：新增 [F3-全层建模与数据模块边界简化](features/F3-全层建模与数据模块边界简化/README.md)，以 [F3 契约](assets/F3-modeling-data-boundary.md) 为本轮增量规范。物化完成即完成本次建模；F2 中强制继续质量配置、发布交付及模型页治理的界面条件被替代，已有服务/版本/安全规则和历史证据保留。T15–T20 已进入实施及真实 Chrome 95 分项验收，尚未满足全部 DoD。
+**当前产品边界（2026-09-07）**：新增 [F3-全层建模与数据模块边界简化](features/F3-全层建模与数据模块边界简化/README.md)，以 [F3 契约](assests/F3-modeling-data-boundary.md) 为本轮增量规范。物化完成即完成本次建模；F2 中强制继续质量配置、发布交付及模型页治理的界面条件被替代，已有服务/版本/安全规则和历史证据保留。T15–T20 已进入实施及真实 Chrome 95 分项验收，尚未满足全部 DoD。
 
 **手工测试入口**：[IT-01～IT-18 操作步骤、版本前提与结果填写表](it/手工验收用例-20260907.md)。2026-09-07 起由用户手工操作；研发补验分支单列，不以清单代替通过证据。
 
@@ -38,7 +38,7 @@
 
 ## 端到端契约链
 
-F1 字段与错误约束见 [Feature 契约](features/F1-通用建模契约与物化一致性/README.md)；本轮 ODS、结构物化、完成判定和数据交接的增量链见 [F3 K31–K36](assets/F3-modeling-data-boundary.md#3-契约链与扩展草案)。下表保留既有入口，不表示旧阶段必填全部继续前置。
+F1 字段与错误约束见 [Feature 契约](features/F1-通用建模契约与物化一致性/README.md)；本轮 ODS、结构物化、完成判定和数据交接的增量链见 [F3 K31–K36](assests/F3-modeling-data-boundary.md#3-契约链与扩展草案)。下表保留既有入口，不表示旧阶段必填全部继续前置。
 
 | 层 | 现有落点 | 本 sprint 约束 |
 |---|---|---|
@@ -60,31 +60,31 @@ F1 字段与错误约束见 [Feature 契约](features/F1-通用建模契约与�
 |---|---|---|
 | C01 | Java 草稿更新过滤部分完整上下文要求；前端更新使用完整模型校验；Schema 缺业务过程/主题域字段 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelSpecContract.java:1470`；`source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.ts:1025`；`source/dts-platform/src/main/resources/config/modeling/model-spec-v2.schema.json:1446` |
 | C02 | 按策略选必绑字段后，专业证据适配器又遍历全字段要求绑定 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelSpecStageGateService.java:250`；`source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/GovernanceModelSpecStandardEvidenceAdapter.java:29` |
-| C03 | 复合键编译为首列 unique；已用当前编译类复现 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelingDbtCompiler.java:831`、`:872`；[复审证据](assets/review-evidence.md) |
+| C03 | 复合键编译为首列 unique；已用当前编译类复现 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelingDbtCompiler.java:831`、`:872`；[复审证据](assests/review-evidence.md) |
 | C04 | 草稿恢复只取 scdType，保存从基线取绑定/层级 | `source/dts-platform-webapp/src/pages/data-modeling/prototype/services/modelWorkbenchService.ts:523`、`:1041` |
 | C05 | FULL 和显式空分区可能触发旧 policy 回退 | 同文件 `:459`–`:468` |
-| C06 | 完整 Node 契约测试 37 项，24 通过、13 失败；不等于 13 个独立缺陷 | [复审证据](assets/review-evidence.md)，本次规划未重新运行 |
+| C06 | 完整 Node 契约测试 37 项，24 通过、13 失败；不等于 13 个独立缺陷 | [复审证据](assests/review-evidence.md)，本次规划未重新运行 |
 | C07 | 现有模型、草稿、实现、阶段接口可复用 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/ModelSpecResource.java:44`、`:135`、`:200`；`ModelLifecycleResource.java:75`、`:116`、`:171`；`ModelAuthoringDraftResource.java:43`、`:81`、`:118` |
 | C08 | 当前实现以 settings_json 保存且有修订；模型台账已存在 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/repository/modeling/ModelLifecycleRepository.java:196`；`ModelSpecRepository.java:65` |
 | C09 | 历史专项回归和构建不能代替当前部署/浏览器/迁移证明 | [基线](it/baseline.md) |
 | C10 | 输入方式按类型固定；执行计划明确不支持 SNAPSHOT，配置历史元数据不等于运行支持 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelImplementationInputPolicy.java:203`；`ModelImplementationExecutionPlanner.java:146` |
 
-F2 账本 C11–C18 见 [原交付契约](assets/delivery-workflow-contract.md)；2026-09-07 新增 [C19–C26](assets/F3-modeling-data-boundary.md#5-context-ledger-c19c26)，记录 ODS 禁建、接入建表、真实来源校验、发布耦合和数据目录落点。T15–T20 复用账本，仅对受影响变化补充证据。
+F2 账本 C11–C18 见 [原交付契约](assests/delivery-workflow-contract.md)；2026-09-07 新增 [C19–C26](assests/F3-modeling-data-boundary.md#5-context-ledger-c19c26)，记录 ODS 禁建、接入建表、真实来源校验、发布耦合和数据目录落点。T15–T20 复用账本，仅对受影响变化补充证据。
 
 ## Gate Registry
 
 | Gate | 项目 | 状态 | 证据/待交付位置 | 未过对应 Task |
 |---|---|---|---|---|
 | G0 | 交付与登录/迁移基线 | GAP | [baseline](it/baseline.md)，尚未探测当前目标 | T01 |
-| G0 | 领域与真实数据画像 | GAP | [domain-profile](assets/domain-profile.md)，数量和样本待实测 | T01 |
+| G0 | 领域与真实数据画像 | GAP | [domain-profile](assests/domain-profile.md)，数量和样本待实测 | T01 |
 | G0 | 领域不变量 | PASS | 本文 ADR，计划不新增 owner/菜单/业务表；不代表代码验收 | — |
 | G1 | 契约与 DoR | GAP | Feature K1–K6；阶段矩阵、草稿 CAS/存储细节待固定 | T01、T02 |
-| G1 | 非功能预算 | GAP | [nfr-budget](assets/nfr-budget.md)，检查目标已列、未执行 | T01、T08 |
+| G1 | 非功能预算 | GAP | [nfr-budget](assests/nfr-budget.md)，检查目标已列、未执行 | T01、T08 |
 | G2 | F1 实现及单次聚焦 review | PASS（源码） | T02–T07 源码与专项测试归档；见 [source-test-summary](it/evidence/source-test-summary-20260906.md)。仅代表源码实现/review，不替代页面或运行验收 | T08 页面、部署与真实竖切片 |
 | G3 | F1 发布安全 | PENDING | 历史交付已部署；本轮含 platform/analytics/ingestion/webapp 四镜像，版本与阶段以整改验证为准 | T08 |
 | G4 | F1 可运维性与 DoD | PENDING | [IT](it/README.md)；T08 产出 runbook | T08 |
 | G0 | F3 空目标/无来源/接入与数据接手基线 | PASS | 登录、无来源四层设计、连续空表和文件写数已实际验证；独立离线仍由T20跟踪 | T15 |
-| G1 | F3 边界、精确契约与兼容方案 | PASS | [F3 K31–K36、四项技术缺口与非功能检查](assets/F3-modeling-data-boundary.md)；已实施 DTO 见冻结章节；2026-09-08 候选用途/占用/迁移增量已冻结并通过隔离验证 | T15 |
+| G1 | F3 边界、精确契约与兼容方案 | PASS | [F3 K31–K36、四项技术缺口与非功能检查](assests/F3-modeling-data-boundary.md)；已实施 DTO 见冻结章节；2026-09-08 候选用途/占用/迁移增量已冻结并通过隔离验证 | T15 |
 | G2 | F3 实现与聚焦 review | PENDING | T16–T19 已实施，整改源码与178项专项测试通过；真实主线待部署复验 | T16–T19 |
 | G3 | F3 正式交付与安全恢复 | PENDING | 复用 F1/T08、F2/T14 机制，只补本次差异 | T20 |
 | G4 | F3 模块边界与全层真实验收 | PENDING | IT-19/21/23 有分项证据，IT-20/22 完整主线及 IT-24 独立离线待完成 | T20 |
@@ -149,9 +149,9 @@ T01–T08 均在推进中：源码专项、IT-04真实dbt、历史草稿主要�
 
 ## F2 扩展决策与开工门槛（2026-09-06 历史基线）
 
-本节记录既有实现来由。2026-09-07 后与模块分工/建模结束条件冲突的规则由 [F3 契约](assets/F3-modeling-data-boundary.md) 替代；原四步及模型页治理要求不再作为 F3 验收标准。版本、安全、单主动作、帮助、身份和原服务复用约束继续有效。
+本节记录既有实现来由。2026-09-07 后与模块分工/建模结束条件冲突的规则由 [F3 契约](assests/F3-modeling-data-boundary.md) 替代；原四步及模型页治理要求不再作为 F3 验收标准。版本、安全、单主动作、帮助、身份和原服务复用约束继续有效。
 
-唯一详细规范为 [模型交付与资产治理统一契约](assets/delivery-workflow-contract.md)，包含 Context Ledger C11–C18 与 S01–S10 状态/操作矩阵；下游只查账本中与变更相关的差异。
+唯一详细规范为 [模型交付与资产治理统一契约](assests/delivery-workflow-contract.md)，包含 Context Ledger C11–C18 与 S01–S10 状态/操作矩阵；下游只查账本中与变更相关的差异。
 
 | 决策 | 业务与界面必须同时遵循的约束 |
 |---|---|
@@ -189,7 +189,7 @@ T10-B2 已接入首次“保存设计并继续”：业务定义与实现配置�
 
 ## 2026-09-08 整改执行基线
 
-当前整改按 [审查整改契约](assets/review-remediation-20260908.md) 执行。F3 三步建模是现行规则，历史四步记录不作为模型完成前置。20 项任务均在实施/验收中，未达到 DONE；当前运行受测版本及未通过分支以 IT 记录为准。
+当前整改按 [审查整改契约](assests/review-remediation-20260908.md) 执行。F3 三步建模是现行规则，历史四步记录不作为模型完成前置。20 项任务均在实施/验收中，未达到 DONE；当前运行受测版本及未通过分支以 IT 记录为准。
 
 ## F4 性能稳定性扩展（2026-09-08）
 

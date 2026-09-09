@@ -33,4 +33,4 @@
 
 ## T09 定向核验增量
 
-本轮只读核验：开发 HEAD ac3c1c961、部署 HEAD 5e00e914f；平台和分析容器 healthy、webapp running。未改变运行状态，未核对本轮登录/质量/发布/Chrome95，相关 GAP 保留。具体契约证据见 [T09 核验记录](../assets/T09-contract-freeze.md)，不将源码默认配置当作现网实测。
+本轮只读核验：开发 HEAD ac3c1c961、部署 HEAD 5e00e914f；平台和分析容器 healthy、webapp running。未改变运行状态，未核对本轮登录/质量/发布/Chrome95，相关 GAP 保留。具体契约证据见 [T09 核验记录](../assests/T09-contract-freeze.md)，不将源码默认配置当作现网实测。

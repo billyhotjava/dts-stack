@@ -10,7 +10,7 @@
 
 ## 技术设计
 
-唯一规则见 [F3 K31/K32 与阶段矩阵](../../assets/F3-modeling-data-boundary.md)，复用 C19–C21。
+唯一规则见 [F3 K31/K32 与阶段矩阵](../../assests/F3-modeling-data-boundary.md)，复用 C19–C21。
 
 - 输入：现有模型/定义/草稿命令，拟增贴源类型 SOURCE、layer=ODS；字段定义、已有 planId/domainId 等上下文；下游使用 `{modelSpecId,revision}` 与已冻结字段映射，不要求 sourceBindingId。
 - 输出：同一 ModelSpec 身份、修订/ETag、可恢复 snapshot、逻辑依赖和字段来源；不写接入任务、物理表或新资产。已选择的真实 sourceRefs 继续严格核验，不伪造 CONFIRMED。
