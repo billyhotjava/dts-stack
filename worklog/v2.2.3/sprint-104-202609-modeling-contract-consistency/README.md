@@ -215,3 +215,49 @@ T10-B2 已接入首次“保存设计并继续”：业务定义与实现配置�
 F4 Gate：G0=PASS_WITH_GAPS（既有正式环境和登录已实证，新制品性能待测）；G1=PASS（F4契约和非功能预算）；G2/G3/G4=PENDING，由T21–T24跟踪。顺序：T21/T22 → T23 → T24，单代理执行。
 
 F4当前进度：73697f73a源码与83项前端/30项后端专项通过；已按用户要求直接替换原platform/webapp镜像，不使用补丁包。真实浏览器36个交付请求全部200、P95约0.522s，刷新/分页/详情成功；固定并发与Chrome95完整验收仍由T24跟踪。
+
+## F5 建模状态语义与上游引用准入收敛（2026-09-09）
+
+| Feature | Task数 | 优先级 | 状态 |
+|---|---:|---|---|
+| [F5-建模状态语义与上游引用准入收敛](features/F5-建模状态语义与上游引用准入收敛/README.md) | 6 | P0 | DRAFT |
+
+来源为 2026-09-09 建模版本与引用关系源码复审。分阶段准入规则本身存在且方向正确，缺陷集中在状态表达与拒绝信息，不是校验时机排错。设计阶段引用同规划未发布上游的能力保持不变，不因收紧校验阻断 DWD/DWS 联合开发。
+
+### 现状勘察账本 F5 增量
+
+| # | 事实 | 证据 |
+|---|---|---|
+| C27 | ModelStatus 六值中 DESIGNING/VALIDATING/READY_TO_PUBLISH 在 dts-platform/src/main 内零写入点，DRAFT 独自承载全部中间语义 | ModelSpecContract.java:373 |
+| C28 | 实现状态是裸 String，全仓 27 处 "ACTIVE".equals 硬编码比较 | ModelLifecycleContract.java:771 |
+| C29 | validateUpstream 的 12 个失败分支共用一个错误码；ValidationResult 只有 boolean+String，结构上装不下上游标识 | ModelImplementationInputPolicy.java:132、:249 |
+| C30 | 同语义错误码分散三处，仅物化计划期携带 modelSpecId 明细 | ModelImplementationDependencyService.java:366；ModelReleaseCandidatePreflightService.java:326 |
+| C31 | 上游候选来自 listModelSpecs，仅过滤 ARCHIVED；实现步骤过滤只判兼容模式与分层，无实现信息 | modelWorkbenchService.ts:578、:583；ModelImplementationBindingFields.tsx:116 |
+| C32 | 前端上游输入回退分支只发三字段，库层 CHECK 要求六字段，靠后端保存期补齐 | modelWorkbenchService.ts:1120；20260724_08_upstream_model_pin_contract.xml |
+| C33 | ModelSpecView 被 111 个文件引用，ImplementationView 31 个，DependencyNode 仅 4 处消费 | 引用计数，2026-09-09 |
+| C34 | 发布预检只在修订漂移分支检查上游状态，被钉修订为 ARCHIVED 且未漂移时不拦 | ModelReleaseCandidatePreflightService.java:305、:323 |
+| C35 | 发布预检的 upstream.status 取自被钉修订快照而非模型当前状态，该语义正确 | ModelSpecApplicationService.java:1521 |
+| C36 | 依赖图端点已返回 pinnedRevision/currentRevision/state/status，是可扩展的既有 seam | ModelSpecResource.java:154；ModelSpecApplicationService.java:2216 |
+
+### F5 架构决策
+
+| 决策 | 选择与理由 |
+|---|---|
+| 不动 ModelSpecView | 111 文件引用，加实现字段爆炸半径过大；可用性走独立只读投影端点 |
+| 扩展既有 seam | 已选上游状态扩展 DependencyNode（4 处消费）；候选可用性新增批量投影，形状对齐 getModelServingSyncStatuses，读取 owner 仍为 ModelLifecycleRepository |
+| 准入强度不变 | 三阶段规则维持现状，只改状态表达、可用性投影与拒绝信息精度 |
+| 规则单一来源 | 投影的 selectable 直接调用准入判定，禁止复写；两处分叉会让"显示可用但保存被拒"以新形态复现 |
+| 兼容层保留 | pinCurrentUpstreamImplementations 保留为降级与旧客户端兜底，不随前端六字段直发而删除 |
+| 零写入枚举处置 | 由 T25 二选一（保留并说明启用场景 / 确认无历史数据后删除），不允许悬置 |
+
+| 需求 | Task | 证据 |
+|---|---|---|
+| 联合建模不被收紧 | F5/T25、T28 | IT-29 |
+| 选择上游时即知可用性 | F5/T26、T28 | IT-30 |
+| 拒绝时指明上游与缺失条件 | F5/T27 | IT-31 |
+| 契约漂移收口与归档上游补洞 | F5/T29 | IT-32 |
+| 正式构建与三维验收 | F5/T30 | IT-29–IT-32 |
+
+F5 Gate：G0 复用 Sprint-104 既有基线与登录证据，不新增环境前提；G1=GAP，待 T25 冻结实现状态取值集合与零写入枚举处置后转 PASS，在此之前 T27 保持 DRAFT 不得开工；G2/G3/G4=PENDING，由 T30 跟踪。顺序：T25 → T26/T27 并行 → T28 → T29 → T30，单代理执行。
+
+F5 全部 Task 为 DRAFT，尚未开工，不计入任何已完成范围。

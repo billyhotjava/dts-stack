@@ -14,12 +14,16 @@
 | [F3-全层建模与数据模块边界简化](sprint-104-202609-modeling-contract-consistency/features/F3-全层建模与数据模块边界简化/README.md) | P1 | 6 | IN_PROGRESS（实现及 Chrome 95 分项验收） |
 
 | [F4-模型工作台性能与交付状态稳定性](sprint-104-202609-modeling-contract-consistency/features/F4-模型工作台性能与交付状态稳定性/README.md) | P0 | 4 | IN_PROGRESS |
+| [F5-建模状态语义与上游引用准入收敛](sprint-104-202609-modeling-contract-consistency/features/F5-建模状态语义与上游引用准入收敛/README.md) | P0 | 6 | DRAFT |
 
-**统计**: DRAFT=0，READY=0，IN_PROGRESS=23，DONE=1，BLOCKED=0；4 个 Feature、24 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成。
+**统计**: DRAFT=6，READY=0，IN_PROGRESS=23，DONE=1，BLOCKED=0；5 个 Feature、30 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成；F5/T25–T30 为新增规划，尚未开工。
 **执行顺序**: T01 归因 → T07 保存/执行边界冻结 → T02 契约 → T05/T06/T03/T04 → T07 一致性验证 → T08 集成验收。
 **F2 执行顺序**: T09 契约/基线 → T10 四步向导与统一交付状态 → T11 质量闭环、T12 资产维护、T13 分析恢复 → T14 端到端与离线交付。
 **F3 执行顺序**: T15 契约/副作用冻结 → T16 ODS 与逻辑引用 → T17 结构物化/完成判定 → T18 三步页面 → T19 接入绑定与数据接手 → T20 集成验收。
 **关键决策**: F1/F2 已有实现和证据保留。F3 只补 ODS 正向建模、结构物化和模块边界；F2 四步及模型页治理条件为历史基线，新页面以 [F3 契约](sprint-104-202609-modeling-contract-consistency/assests/F3-modeling-data-boundary.md) 为准。每页一个主动作，完成建模不等于资产发布/分析可用；版本、安全、CAS、帮助和原 owner 继续复用。
+**F5 执行顺序**: T25 状态语义与准入矩阵冻结 → T26 上游可用性投影、T27 实现状态枚举化与准入结果结构化（并行） → T28 选择器可用性展示 → T29 六元组直发与归档上游补洞 → T30 正式验证。G1 未过前 T27 不得开工。
+**F5 来源与边界**: 2026-09-09 建模版本与引用关系源码复审。三阶段准入强度不变，只改状态表达、可用性投影与拒绝信息精度；设计阶段引用同规划未发布上游的能力保持不变。不动 ModelSpecView（111 文件引用），可用性走独立只读投影，读取 owner 仍为 ModelLifecycleRepository。
+
 **F4 当前证据**: 73697f73a已正式构建并直接替换原platform/webapp；前端83项、后端30项通过，实际36个交付请求全部200/P95约0.522s。刷新/分页/详情正常；Chrome95与固定并发验收由T24继续跟踪，不出补丁包。
 
 **F3 当前证据/阻断**: 2026-09-08已修复活动候选范围，Chrome95四层结构物化与实表字段/主键/零行核验通过；数据页登记、质量规则创建/编辑/执行通过。接入writer列映射、受控封装预览、质量审计actor与结构发布血缘修复已提交并专项验证，最终正式镜像/页面复验进行中。独立离线目标仍待指定。见 [整改运行记录](sprint-104-202609-modeling-contract-consistency/it/evidence/current-environment/remediation-runtime-20260908.md)。
