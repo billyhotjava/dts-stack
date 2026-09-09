@@ -21,6 +21,14 @@
 
 前端同时保留快照中的 authoringImplementationInputs，后续保存优先使用这份输入锁定；implementationBase 仍指向已提交实现，用于既有版本并发检查。这样既避免首次保存后丢失锁定，也不把未提交快照冒充为已提交实现。
 
+## 连续保存补充取证
+
+e711880ef3b7 正式部署后，原模型首次 PUT 保存 200，响应补齐上游实现锁定；第二次请求正确保留锁定，但返回 MODEL_AUTHORING_UNMANAGED_FILE_CHANGED（cb6dea49-1e71-4626-ba6f-b3d761aaa48a）。
+
+原因：旧 visualImplementation 按普通 JSON 序列化生成哈希，JSONB 往返改变 settings 键序。实际首存值 7a48c27570498c18cb05566d575fd8c99584b6b521594e9e38ebcb2e9c8b371b 与 [targetPhysicalName, loadStrategy, partitionFields] 顺序一致；保存后 [loadStrategy, partitionFields, targetPhysicalName] 重建为 9df3a31d340a7982f427ce4490d715c59c06140e09c3fd1b923ab98ad0f7e537，SQL 元数据不同，导致已有编译文件失去归属证明。
+
+整改：复用 ModelImplementationChecksumCodec 的规范化内容校验（排序 Map、排除幂等键）。旧产物兼容仅允许编译器保留路径中的生成 SQL 的 implementationChecksum 元数据值不同，其余字节须与重建结果完全一致；不允许覆盖其他 SQL 编辑。
+
 RAW_SQL 和四项投影提示来自初始化骨架；本轮未证明其为独立缺陷。初次打开直接提交另返回 DBT_DRAFT_FILES_REQUIRED（422）；填写截图目标表后才产生上述 PUT，记录但不扩大本轮修复结论。保存通过后仍需检查用户的字段映射和聚合配置，不能宣称汇总模型已完整可交付。
 
 未修改数据库、上游模型或字段映射；保留汇总页面未保存输入，取消了离开页面的放弃修改确认。登录提示同账号其他会话下线。
