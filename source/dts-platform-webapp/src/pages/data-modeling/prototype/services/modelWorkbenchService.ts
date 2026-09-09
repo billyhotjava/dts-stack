@@ -481,6 +481,7 @@ export function modelDraftFromView(
 		warehouseLayerCode: model.warehouseLayerCode || model.layer,
 		implementationMode: model.implementationMode,
 		implementationBase: implementation,
+		authoringImplementationInputs: structuredImplementation?.inputs.map((input) => ({ ...input })),
 		implementationInputMode:
 			implementation?.ownership === "DBT_MANAGED" && !structuredImplementation
 				? ""
@@ -566,7 +567,8 @@ export function modelDraftFromAuthoringSnapshot(
 		dataMartId: modelSnapshot.dataMartId || "",
 		subjectDomainId: modelSnapshot.subjectDomainId || "",
 		implementationBase: implementation,
-		authoringImplementationInputs: visualSnapshot?.inputs.map((input) => ({ ...input })),
+		authoringImplementationInputs:
+			visualSnapshot?.inputs.map((input) => ({ ...input })) ?? base.authoringImplementationInputs,
 		implementationIdempotencyKey: crypto.randomUUID(),
 	};
 }

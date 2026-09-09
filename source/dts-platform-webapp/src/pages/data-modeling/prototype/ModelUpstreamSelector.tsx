@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
 import {
 	getModelUpstreamAvailability,
 	type ModelInputAvailability,
@@ -6,6 +7,7 @@ import {
 } from "@/api/modelInputInspectionApi";
 import { isUpstreamModelImplementationPinned } from "@/features/modeling/contracts/modelImplementationContract";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { Button } from "./PrototypePrimitives";
 import { reconcileModelInputIdentity } from "./services/modelInputIdentity";
 import { implementationInputs, type ModelSpecDraft } from "./services/modelWorkbenchService";
 
@@ -185,9 +187,9 @@ export function ModelUpstreamSelector({ draft, candidates, onChange }: Props) {
 	};
 	const currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / 10) - 1));
 	return (
-		<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
+		<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list dmx-upstream-selector">
 			<strong>上游模型</strong>
-			<div>
+			<div className="dmx-upstream-selector__toolbar">
 				<input
 					aria-label="搜索上游模型"
 					placeholder="搜索模型名称"
@@ -209,9 +211,7 @@ export function ModelUpstreamSelector({ draft, candidates, onChange }: Props) {
 					<option value="available">可引用</option>
 					<option value="selected">已选</option>
 				</select>
-				<button type="button" onClick={() => setRefresh((value) => value + 1)}>
-					刷新上游状态
-				</button>
+				<Button onClick={() => setRefresh((value) => value + 1)}>刷新上游状态</Button>
 			</div>
 			{state.loading && <output>正在检查上游版本…</output>}
 			{state.error && <small role="alert">{state.error}。已保留当前选择，可刷新后重试。</small>}
@@ -220,8 +220,8 @@ export function ModelUpstreamSelector({ draft, candidates, onChange }: Props) {
 				const selected = draft.dependsOn.some((ref) => ref.modelSpecId === model.id);
 				const readable = item?.blockReason !== "NOT_AVAILABLE" && Boolean(model.checksum);
 				return (
-					<div key={model.id}>
-						<label>
+					<div key={model.id} className="dmx-upstream-selector__row">
+						<label className="dmx-upstream-selector__choice">
 							<input
 								type="checkbox"
 								aria-label={`选择上游 ${readable ? model.name : "不可读取来源"}`}
@@ -244,29 +244,25 @@ export function ModelUpstreamSelector({ draft, candidates, onChange }: Props) {
 								当前引用：设计 r{item.selectedPin.revision} / 实现 i{item.selectedPin.implementationRevision}
 							</small>
 						)}
-						{selected && item?.referenceReason && item.selectable && (
-							<button type="button" onClick={() => setPendingUpdate(model.id)}>
-								更新引用
-							</button>
+						{selected && item?.selectable && (item.referenceReason || !item.selectedPin) && (
+							<Button onClick={() => setPendingUpdate(model.id)}>
+								{item.selectedPin ? "更新引用" : "选择实现版本"}
+							</Button>
 						)}
 						{readable && (
-							<a
-								href={`/data-modeling/dimensions/workbench?modelSpecId=${encodeURIComponent(model.id)}`}
+							<Link
+								to={`/data-modeling/dimensions/workbench?modelSpecId=${encodeURIComponent(model.id)}`}
 								target="_blank"
 								rel="noreferrer"
 							>
 								打开上游完善
-							</a>
+							</Link>
 						)}
 						{pendingUpdate === model.id && (
-							<div role="alert">
+							<div role="alert" className="dmx-upstream-selector__confirm">
 								更新后将重新检查字段映射，其他编辑内容保留。
-								<button type="button" onClick={() => change(model, true, true)}>
-									确认更新引用
-								</button>
-								<button type="button" onClick={() => setPendingUpdate(null)}>
-									取消
-								</button>
+								<Button onClick={() => change(model, true, true)}>确认更新引用</Button>
+								<Button onClick={() => setPendingUpdate(null)}>取消</Button>
 							</div>
 						)}
 					</div>
@@ -274,20 +270,16 @@ export function ModelUpstreamSelector({ draft, candidates, onChange }: Props) {
 			})}
 			{!rows.length && <small>没有符合当前筛选条件的上游模型。</small>}
 			{rows.length > 10 && (
-				<div>
-					<button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
+				<div className="dmx-upstream-selector__toolbar">
+					<Button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
 						上一页
-					</button>
+					</Button>
 					<span>
 						第 {currentPage + 1} 页 / 共 {Math.ceil(rows.length / 10)} 页
 					</span>
-					<button
-						type="button"
-						disabled={(currentPage + 1) * 10 >= rows.length}
-						onClick={() => setPage(currentPage + 1)}
-					>
+					<Button disabled={(currentPage + 1) * 10 >= rows.length} onClick={() => setPage(currentPage + 1)}>
 						下一页
-					</button>
+					</Button>
 				</div>
 			)}
 		</div>
