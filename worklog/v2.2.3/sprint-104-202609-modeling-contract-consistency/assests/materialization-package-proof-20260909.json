@@ -1,0 +1,24 @@
+{
+  "package": "/opt/prod/s10/deploy/data/sprint104-release/materialization-fa920a05ba10/release.tar.gz",
+  "sha256": "f0eb623017f9ee0dcc0bac35e432882c019bbc58d11d3538c54e209de2b7ec53",
+  "sourceCommit": "fa920a05ba1086072fd61bcd9cc873d3fe80f530",
+  "airflowRuntimeSha256": "d134094e4f2b610efd0d82b36a52d2a63b3e6cc1a8edce1cf4075768a3cd043b",
+  "archiveChecksumsVerified": {
+    "dts-platform-webapp_s104-mat-fa920a05ba10-20260909-160247.tar": "a7c7882b72725364b88186a5cd14468ee6b1426726ef226c6b2577a91896e739",
+    "dts-platform_s104-mat-fa920a05ba10-20260909-160247.tar": "bc0a06bd2cd6bcf2516861c747e51955848e225bfd533c7ba5f8d628469b19f0"
+  },
+  "images": [
+    {
+      "tag": "dts-platform-webapp:s104-mat-fa920a05ba10",
+      "localImageId": "sha256:389b549114d9d2fa04f1f8556dd1f0acc2d1485c2c67802d21ccc0a44fcbcb85",
+      "configImageId": "sha256:389b549114d9d2fa04f1f8556dd1f0acc2d1485c2c67802d21ccc0a44fcbcb85",
+      "sourceRevision": "fa920a05ba1086072fd61bcd9cc873d3fe80f530"
+    },
+    {
+      "tag": "dts-platform:s104-mat-fa920a05ba10",
+      "localImageId": "sha256:354a84251381119e9946989dc8222a4aaae033be882d0f484e5ee9dc118847c6",
+      "configImageId": "sha256:354a84251381119e9946989dc8222a4aaae033be882d0f484e5ee9dc118847c6",
+      "sourceRevision": "fa920a05ba1086072fd61bcd9cc873d3fe80f530"
+    }
+  ]
+}
