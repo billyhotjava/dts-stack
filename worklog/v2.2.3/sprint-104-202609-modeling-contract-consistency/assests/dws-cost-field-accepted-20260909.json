@@ -1,0 +1,376 @@
+{
+  "status": 200,
+  "message": "OK",
+  "code": null,
+  "data": {
+    "modelSpecId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+    "modelRevision": 3,
+    "modelChecksum": "32c03e627dc7fab5c8d4ee0b5a89ff6c8f8e49fe7120e1afc51f2143a70c196f",
+    "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+    "environment": "dev",
+    "candidate": {
+      "id": "9d98120c-3bad-4c99-affa-912e946ce111",
+      "version": 3,
+      "status": "BUILT",
+      "entryRevision": 3,
+      "entryChecksum": "32c03e627dc7fab5c8d4ee0b5a89ff6c8f8e49fe7120e1afc51f2143a70c196f",
+      "matchesCurrentModel": true,
+      "updatedAt": "2026-09-09T08:29:59.935243Z"
+    },
+    "observedAt": "2026-09-09T08:30:04.568447398Z",
+    "recommendedStep": "verification",
+    "workspace": {
+      "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+      "state": "READY",
+      "candidate": {
+        "id": "9d98120c-3bad-4c99-affa-912e946ce111",
+        "tenantId": "default",
+        "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+        "environment": "dev",
+        "status": "BUILT",
+        "version": 3,
+        "idempotencyKey": "7c420fe5-c9bf-4a6b-9820-ecea20b6b0b0",
+        "requestHash": "266c9ae99212003058e797ba37b48f352e936aba8603983566f3e964554a9c3b",
+        "audit": {
+          "createdBy": "xiezm",
+          "createdAt": "2026-09-09T08:29:43.164348Z",
+          "submittedBy": null,
+          "submittedAt": null,
+          "approvedBy": null,
+          "approvedAt": null,
+          "publishedBy": null,
+          "publishedAt": null
+        },
+        "lastModifiedBy": "service:dts-airflow",
+        "lastModifiedAt": "2026-09-09T08:29:59.935243Z",
+        "entries": [
+          {
+            "id": "875200a7-27bc-4534-af9b-fe3b29d22dc2",
+            "tenantId": "default",
+            "candidateId": "9d98120c-3bad-4c99-affa-912e946ce111",
+            "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+            "modelSpecId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+            "revision": 3,
+            "checksum": "32c03e627dc7fab5c8d4ee0b5a89ff6c8f8e49fe7120e1afc51f2143a70c196f",
+            "implementationId": "57b21379-ba40-43c5-b403-71081a05f6c5",
+            "implementationMode": "DBT_MANAGED",
+            "status": "BUILT",
+            "sortOrder": 0,
+            "selectedReason": "MATERIALIZATION_ROOT"
+          }
+        ],
+        "origin": "BATCH_WORKBENCH",
+        "executionTargetKey": "postgres-primary",
+        "adapter": "postgres",
+        "profileKey": "dts",
+        "targetName": "dev"
+      },
+      "evidence": [
+        {
+          "type": "ARTIFACT",
+          "state": "PASSED",
+          "code": null,
+          "message": null
+        },
+        {
+          "type": "BUILD_RUN",
+          "state": "PASSED",
+          "code": null,
+          "message": null
+        },
+        {
+          "type": "QUALITY_RUN",
+          "state": "UNAVAILABLE",
+          "code": "MODEL_RELEASE_EVIDENCE_NOT_AVAILABLE",
+          "message": "No current evidence is available"
+        },
+        {
+          "type": "REVIEW",
+          "state": "UNAVAILABLE",
+          "code": "MODEL_RELEASE_EVIDENCE_NOT_AVAILABLE",
+          "message": "No current evidence is available"
+        },
+        {
+          "type": "PUBLICATION",
+          "state": "UNAVAILABLE",
+          "code": "MODEL_RELEASE_EVIDENCE_NOT_AVAILABLE",
+          "message": "No current evidence is available"
+        },
+        {
+          "type": "REGISTRATION",
+          "state": "UNAVAILABLE",
+          "code": "MODEL_RELEASE_EVIDENCE_NOT_AVAILABLE",
+          "message": "No current evidence is available"
+        },
+        {
+          "type": "ROLLBACK",
+          "state": "UNAVAILABLE",
+          "code": "MODEL_RELEASE_EVIDENCE_NOT_AVAILABLE",
+          "message": "No current evidence is available"
+        }
+      ],
+      "entryEvidence": [
+        {
+          "candidateEntryId": "875200a7-27bc-4534-af9b-fe3b29d22dc2",
+          "modelSpecId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+          "modelName": "项目进度汇总_v1",
+          "modelRevision": 3,
+          "implementationRevision": 2,
+          "targetRelation": "biadmin.public.dws_test_prj",
+          "runStatus": "BUILT",
+          "relationState": "VERIFIED",
+          "pipelineRunGroupId": "db0d7830-fe72-334b-adac-ae7eda413878",
+          "dbtInvocationId": "e6485072-7464-411e-b653-c5e5a9169625",
+          "airflowDagId": "dts_release_build_postgres_primary",
+          "airflowRunId": "dts_rc_9d98120c3bad4c99affa912e946ce111_v2_a1",
+          "attempt": 1,
+          "startedAt": "2026-09-09T08:29:44.913560Z",
+          "finishedAt": "2026-09-09T08:29:59.925788Z",
+          "observedAt": "2026-09-09T08:29:58.883539Z",
+          "repairCode": null,
+          "failureMessage": null
+        }
+      ],
+      "governanceQuality": {
+        "required": true,
+        "state": "FAILED",
+        "code": "MODEL_SPEC_GOVERNANCE_QUALITY_ASSET_MISMATCH",
+        "message": "质量证据不属于当前候选物理资产",
+        "maxAgeSeconds": 86400,
+        "evidence": [
+          {
+            "assetKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:dws_test_prj",
+            "ruleId": null,
+            "ruleVersionId": null,
+            "bindingId": null,
+            "runId": null,
+            "status": "MISSING",
+            "finishedAt": null,
+            "evidenceChecksum": "31c26c0465cb2956c28d44a2c4b48ff5191fc1ea90a3aea45233790cc87be3be",
+            "violations": [
+              "ASSET_MISMATCH"
+            ]
+          }
+        ]
+      },
+      "primaryBlocker": null,
+      "allowedActions": [
+        "RUN_QUALITY",
+        "CANCEL_CANDIDATE",
+        "REMATERIALIZE"
+      ],
+      "etag": "\"release-candidate:9d98120c-3bad-4c99-affa-912e946ce111:3\""
+    },
+    "wizard": [
+      {
+        "key": "definition",
+        "canView": true,
+        "canEdit": true,
+        "reasonCode": null,
+        "primaryAction": {
+          "code": "SAVE_DEFINITION",
+          "enabled": true,
+          "reasonCode": null,
+          "targetId": null,
+          "expectedVersion": null
+        }
+      },
+      {
+        "key": "implementation",
+        "canView": true,
+        "canEdit": true,
+        "reasonCode": null,
+        "primaryAction": {
+          "code": "NEXT",
+          "enabled": true,
+          "reasonCode": null,
+          "targetId": null,
+          "expectedVersion": null
+        }
+      },
+      {
+        "key": "verification",
+        "canView": true,
+        "canEdit": true,
+        "reasonCode": null,
+        "primaryAction": {
+          "code": "RETURN_TO_MODELS",
+          "enabled": true,
+          "reasonCode": null,
+          "targetId": null,
+          "expectedVersion": null
+        }
+      },
+      {
+        "key": "delivery",
+        "canView": true,
+        "canEdit": false,
+        "reasonCode": "MODEL_DATA_MODULE_REQUIRED",
+        "primaryAction": null
+      }
+    ],
+    "steps": [
+      {
+        "key": "materialization",
+        "state": "SUCCEEDED",
+        "reasonCode": null,
+        "message": "物化已完成",
+        "evidenceRevision": 3,
+        "matchesCurrentTarget": true,
+        "resourceId": "9d98120c-3bad-4c99-affa-912e946ce111",
+        "updatedAt": "2026-09-09T08:29:59.935243Z",
+        "outputs": []
+      },
+      {
+        "key": "quality",
+        "state": "WAITING_INPUT",
+        "reasonCode": "MODEL_SPEC_GOVERNANCE_QUALITY_ASSET_MISMATCH",
+        "message": "等待配置或执行质量检查",
+        "evidenceRevision": 3,
+        "matchesCurrentTarget": true,
+        "resourceId": "9d98120c-3bad-4c99-affa-912e946ce111",
+        "updatedAt": "2026-09-09T08:29:59.935243Z",
+        "outputs": []
+      },
+      {
+        "key": "publication",
+        "state": "NOT_STARTED",
+        "reasonCode": null,
+        "message": "尚未开始发布",
+        "evidenceRevision": 3,
+        "matchesCurrentTarget": true,
+        "resourceId": "9d98120c-3bad-4c99-affa-912e946ce111",
+        "updatedAt": "2026-09-09T08:29:59.935243Z",
+        "outputs": []
+      },
+      {
+        "key": "catalog",
+        "state": "NOT_STARTED",
+        "reasonCode": "QUALITY_DATASET_REGISTRATION_MISSING",
+        "message": "资产尚未登记",
+        "evidenceRevision": null,
+        "matchesCurrentTarget": true,
+        "resourceId": null,
+        "updatedAt": null,
+        "outputs": [
+          {
+            "resourceId": null,
+            "state": "NOT_STARTED",
+            "reasonCode": "QUALITY_DATASET_REGISTRATION_MISSING",
+            "message": "资产尚未登记",
+            "matchesCurrentTarget": true,
+            "updatedAt": null
+          }
+        ]
+      },
+      {
+        "key": "analysis",
+        "state": "NOT_STARTED",
+        "reasonCode": "MODEL_DELIVERY_PUBLICATION_REQUIRED",
+        "message": "尚未开始分析准备",
+        "evidenceRevision": null,
+        "matchesCurrentTarget": false,
+        "resourceId": null,
+        "updatedAt": null,
+        "outputs": [
+          {
+            "resourceId": null,
+            "state": "NOT_STARTED",
+            "reasonCode": "MODEL_DELIVERY_PUBLICATION_REQUIRED",
+            "message": "尚未开始分析准备",
+            "matchesCurrentTarget": false,
+            "updatedAt": null
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "code": "OPEN_VISUAL",
+        "enabled": true,
+        "reasonCode": null,
+        "targetId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+        "expectedVersion": 3
+      },
+      {
+        "code": "OPEN_CODE",
+        "enabled": true,
+        "reasonCode": null,
+        "targetId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+        "expectedVersion": 3
+      },
+      {
+        "code": "EDIT_MODEL",
+        "enabled": true,
+        "reasonCode": null,
+        "targetId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+        "expectedVersion": 3
+      },
+      {
+        "code": "EDIT_IMPLEMENTATION",
+        "enabled": true,
+        "reasonCode": null,
+        "targetId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+        "expectedVersion": 3
+      },
+      {
+        "code": "SAVE",
+        "enabled": true,
+        "reasonCode": null,
+        "targetId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+        "expectedVersion": 3
+      },
+      {
+        "code": "VALIDATE",
+        "enabled": true,
+        "reasonCode": null,
+        "targetId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+        "expectedVersion": 3
+      },
+      {
+        "code": "RUN_QUALITY",
+        "enabled": true,
+        "reasonCode": null,
+        "targetId": "9d98120c-3bad-4c99-affa-912e946ce111",
+        "expectedVersion": 3
+      },
+      {
+        "code": "CANCEL_CANDIDATE",
+        "enabled": true,
+        "reasonCode": null,
+        "targetId": "9d98120c-3bad-4c99-affa-912e946ce111",
+        "expectedVersion": 3
+      },
+      {
+        "code": "REMATERIALIZE",
+        "enabled": true,
+        "reasonCode": null,
+        "targetId": "9d98120c-3bad-4c99-affa-912e946ce111",
+        "expectedVersion": 3
+      }
+    ],
+    "modelingResult": {
+      "state": "SUCCEEDED",
+      "reasonCode": null,
+      "modelSpecId": "9b11c69d-0ee4-477a-a819-ac7ab3040639",
+      "modelRevision": 3,
+      "modelChecksum": "32c03e627dc7fab5c8d4ee0b5a89ff6c8f8e49fe7120e1afc51f2143a70c196f",
+      "implementationRevision": 2,
+      "implementationChecksum": "ab1957949885b3bd8eeeb319bff69a5cfb2799a1161228b52070acb7c5cc79b5",
+      "buildMode": "DATA_BUILD",
+      "environment": "dev",
+      "candidateId": "9d98120c-3bad-4c99-affa-912e946ce111",
+      "runGroupId": "db0d7830-fe72-334b-adac-ae7eda413878",
+      "targetRelation": "biadmin.public.dws_test_prj",
+      "matchesCurrentTarget": true,
+      "observedAt": "2026-09-09T08:29:58.883539Z"
+    },
+    "dataPrimaryAction": {
+      "code": "REGISTER_DATA_ASSETS",
+      "enabled": true,
+      "reasonCode": null,
+      "targetId": "9d98120c-3bad-4c99-affa-912e946ce111",
+      "expectedVersion": 3
+    }
+  }
+}
