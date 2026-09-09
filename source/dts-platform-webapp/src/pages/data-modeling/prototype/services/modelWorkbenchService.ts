@@ -131,6 +131,8 @@ export type ModelSpecDraft = {
 	warehouseLayerCode: string;
 	implementationMode: ModelSpecImplementationMode;
 	implementationBase: ModelImplementationView | null;
+	/** Saved authoring pins are independent of the committed implementation used for version checks. */
+	authoringImplementationInputs?: ModelImplementationInput[];
 	implementationInputMode: ModelImplementationInputMode | "";
 	generationStrategyType: "" | "DATE_DIMENSION" | "SCHEMA_ONLY";
 	implementationIdempotencyKey: string;
@@ -556,6 +558,7 @@ export function modelDraftFromAuthoringSnapshot(
 		dataMartId: modelSnapshot.dataMartId || "",
 		subjectDomainId: modelSnapshot.subjectDomainId || "",
 		implementationBase: implementation,
+		authoringImplementationInputs: visualSnapshot?.inputs.map((input) => ({ ...input })),
 		implementationIdempotencyKey: crypto.randomUUID(),
 	};
 }
@@ -1119,7 +1122,7 @@ const implementationInputs = (
 		if (!dependencies.length) return null;
 		const models = context.models || [];
 		const inputs = dependencies.map((dependency) => {
-			const persisted = draft.implementationBase?.inputs.find(
+			const persisted = (draft.authoringImplementationInputs || draft.implementationBase?.inputs)?.find(
 				(input) =>
 					"modelSpecId" in input &&
 					input.modelSpecId === dependency.modelSpecId &&

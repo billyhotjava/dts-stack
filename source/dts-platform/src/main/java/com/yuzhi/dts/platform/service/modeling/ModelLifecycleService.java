@@ -166,6 +166,19 @@ public class ModelLifecycleService {
         return ModelImplementationExecutionPlanner.capabilities();
     }
 
+    @Transactional(readOnly = true)
+    public SaveImplementationCommand prepareAuthoringInputs(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        ExpectedVersion expected,
+        SaveImplementationCommand command
+    ) {
+        writableCurrent(tenantId, actorId, modelSpecId, expected);
+        // Resolve first selections only; existing implementation pins must retain drift protection.
+        return inputPolicy.pinCurrentUpstreamImplementations(tenantId, command);
+    }
+
     @Transactional
     public ImplementationValidationView validateImplementation(
         String tenantId,

@@ -242,11 +242,15 @@ public class ModelAuthoringDraftService {
             request.activeView() == ModelAuthoringContract.ActiveView.VISUAL
         );
         List<FileInput> files = drafts.authoringFiles(tenantId, actorId, modelSpecId, draftId);
-        AuthoringProjection savedProjection = project(withFiles(open.sourceBundle(), files), request.modelSpecSnapshot());
+        DraftView savedDraft = drafts
+            .findOpenAuthoring(tenantId, actorId, modelSpecId)
+            .filter(candidate -> candidate.draftId().equals(saved.draftId()))
+            .orElseThrow(() -> error("MODEL_AUTHORING_DRAFT_NOT_FOUND", "The saved authoring draft was not found", ModelAuthoringException.Kind.NOT_FOUND));
+        AuthoringProjection savedProjection = project(withFiles(open.sourceBundle(), files), savedDraft.modelSpecSnapshot());
         return new SaveAuthoringDraftView(
             saved.draftId(),
             saved.etag(),
-            request.modelSpecSnapshot(),
+            savedDraft.modelSpecSnapshot(),
             savedProjection,
             saved.fileCount(),
             saved.totalBytes(),

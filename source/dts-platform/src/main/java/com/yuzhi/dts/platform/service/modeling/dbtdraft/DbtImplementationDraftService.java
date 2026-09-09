@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository;
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository.DraftRow;
 import com.yuzhi.dts.platform.repository.modeling.DbtImplementationDraftRepository.FileRow;
@@ -610,6 +611,17 @@ public class DbtImplementationDraftService {
                 var decoded = snapshotDecoder.decode(modelSpecSnapshot);
                 boolean structuredVisual = decoded.valid() && decoded.visualImplementation() != null;
                 if (structuredVisual) {
+                    SaveImplementationCommand pinned = lifecycle.prepareAuthoringInputs(
+                        tenantId,
+                        actorId,
+                        modelSpecId,
+                        new ExpectedVersion(modelSpecId, aligned.baseModelRevision(), aligned.baseModelChecksum()),
+                        decoded.visualImplementation().command()
+                    );
+                    ObjectNode pinnedSnapshot = modelSpecSnapshot.deepCopy();
+                    ((ObjectNode) pinnedSnapshot.path("visualImplementation")).set("inputs", objectMapper.valueToTree(pinned.inputs()));
+                    modelSpecSnapshot = pinnedSnapshot;
+                    decoded = snapshotDecoder.decode(pinnedSnapshot);
                     files = recompileVisualAuthoring(
                         tenantId,
                         actorId,
