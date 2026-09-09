@@ -809,6 +809,7 @@ export type ReleaseCandidateEntryEvidence = {
 	finishedAt?: string | null;
 	observedAt?: string | null;
 	repairCode?: string | null;
+	failureMessage?: string | null;
 };
 
 export type ReleaseCandidateGovernanceQualityEvidence = {

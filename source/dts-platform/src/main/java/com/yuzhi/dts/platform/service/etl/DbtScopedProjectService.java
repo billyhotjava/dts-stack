@@ -275,6 +275,7 @@ public class DbtScopedProjectService {
                 );
             }
         }
+        bindManagedDependencyProxies(artifactsByPath, artifactsByNode);
         validateCandidateDependencyGraph(artifactsByNode);
         Map<String, Path> workspaceNodes = indexResourceFiles(
             workspaceDir.resolve("models"),
@@ -305,6 +306,42 @@ public class DbtScopedProjectService {
             Map.copyOf(artifactsByPath),
             Set.copyOf(artifactsByNode.keySet())
         );
+    }
+
+    /** Bind only the exact authoring placeholder to a node in the immutable runtime scope.
+     * The target is either a selected BUILD model or a revision-verified REUSE proxy.
+     * Never fall back to a mutable workspace table or execute the placeholder as data.
+     */
+    private void bindManagedDependencyProxies(
+        Map<String, CandidateArtifact> artifactsByPath,
+        Map<String, CandidateArtifact> artifactsByNode
+    ) {
+        Pattern placeholder = Pattern.compile(
+            "\\A\\{\\{ config\\(materialized='ephemeral', tags=\\['dts-managed-dependency'\\]\\) \\}\\}\\n" +
+            "-- Managed dependency proxy for (model\\.[A-Za-z_][A-Za-z0-9_]*\\.([A-Za-z_][A-Za-z0-9_]*)). Do not rename or delete\\.\\n" +
+            "select 1 as _dts_dependency_placeholder where 1 = 0\\n?\\z"
+        );
+        for (CandidateArtifact artifact : List.copyOf(artifactsByPath.values())) {
+            if (!artifact.path().startsWith("models/.dts_dependencies/dts_ref_")) continue;
+            Matcher match = placeholder.matcher(artifact.content());
+            if (!match.matches()) {
+                throw new ScopedProjectException("MODEL_DBT_DEPENDENCY_PROXY_INVALID",
+                    "Managed upstream placeholder was modified: " + artifact.path());
+            }
+            String selector = match.group(2);
+            String proxy = sqlNodeName(artifact.path());
+            if (selector.equals(proxy) || !artifactsByNode.containsKey(selector)) {
+                throw new ScopedProjectException("MODEL_DBT_DEPENDENCY_PROXY_UNBOUND",
+                    "Managed upstream has no pinned runtime model: " + match.group(1));
+            }
+            String sql = artifact.content().replace(
+                "select 1 as _dts_dependency_placeholder where 1 = 0",
+                "select * from {{ ref('" + selector + "') }}"
+            );
+            CandidateArtifact bound = new CandidateArtifact(artifact.path(), sha256(sql.getBytes(StandardCharsets.UTF_8)), sql);
+            artifactsByPath.put(artifact.path(), bound);
+            artifactsByNode.put(proxy, bound);
+        }
     }
 
     private void validateCandidateDependencyGraph(Map<String, CandidateArtifact> artifactsByNode) {

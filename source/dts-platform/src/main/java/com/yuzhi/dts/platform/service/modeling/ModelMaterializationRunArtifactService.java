@@ -180,6 +180,7 @@ public class ModelMaterializationRunArtifactService {
         boolean terminalStatePersisted = false;
         boolean dbtResultsPersisted = false;
         Map<UUID, String> perModelRunResults = Map.of();
+        Map<UUID, String> perModelFailureMessages = Map.of();
         UUID runInvocationId = null;
         try {
             requireSyncIdentity(group, command);
@@ -213,6 +214,7 @@ public class ModelMaterializationRunArtifactService {
                 results,
                 manifestValidation.runtimeUniqueIds()
             );
+            perModelFailureMessages = failureMessages(results, manifestValidation.runtimeUniqueIds());
             if (perModelRunResults.values().stream().anyMatch(status -> !"DBT_SUCCEEDED".equals(status))) {
                 throw failure(
                     "MODEL_DBT_BUILD_RESULT_FAILED",
@@ -318,9 +320,10 @@ public class ModelMaterializationRunArtifactService {
                     Instant failedAt = clock.instant();
                     Map<UUID, String> itemResults = dbtResultsPersisted ? Map.of() : perModelRunResults;
                     UUID failedInvocationId = runInvocationId;
+                    Map<UUID, String> itemMessages = perModelFailureMessages;
                     transactions.executeWithoutResult(status -> {
                         if (!itemResults.isEmpty()) {
-                            runs.recordDbtResults(groupId, failedInvocationId, itemResults, failedAt);
+                            runs.recordDbtResults(groupId, failedInvocationId, itemResults, itemMessages, failedAt);
                         }
                         runs.markFailed(
                             groupId,
@@ -1273,6 +1276,27 @@ public class ModelMaterializationRunArtifactService {
             };
             perModel.put(entry.pipelineRunId(), persisted);
         }
+        return Map.copyOf(perModel);
+    }
+
+    private static Map<UUID, String> failureMessages(JsonNode results, Map<UUID, String> runtimeUniqueIds) {
+        Map<String, String> messages = new HashMap<>();
+        for (JsonNode result : results.path("results")) {
+            if ("success".equalsIgnoreCase(result.path("status").asText())) continue;
+            String message = result.path("message").asText("").trim();
+            if (!message.isBlank()) {
+                // Persist bounded diagnostic text, never terminal controls or connection credentials.
+                message = message.replaceAll("\\x1B\\[[0-9;]*[A-Za-z]", "")
+                    .replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "")
+                    .replaceAll("(?i)(password|passwd|pwd|token|secret)(\\s*[=:]\\s*)[^\\s,;]+", "$1$2[REDACTED]")
+                    .replaceAll("(?i)([a-z][a-z0-9+.-]*://)[^/\\s@]+@", "$1[REDACTED]@");
+                messages.put(result.path("unique_id").asText(), message.substring(0, Math.min(message.length(), 2000)));
+            }
+        }
+        Map<UUID, String> perModel = new LinkedHashMap<>();
+        runtimeUniqueIds.forEach((runId, uniqueId) -> {
+            if (messages.containsKey(uniqueId)) perModel.put(runId, messages.get(uniqueId));
+        });
         return Map.copyOf(perModel);
     }
 

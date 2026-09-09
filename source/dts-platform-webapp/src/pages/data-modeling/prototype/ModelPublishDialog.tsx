@@ -640,6 +640,13 @@ export function ModelPublishDialog({
 					) : tab === "materialize" ? (
 						<>
 							<h3>构建与检查</h3>
+							{candidateScopeMatches && selectedEvidence.filter((entry) => entry.failureMessage).map((entry) => (
+								<div key={entry.candidateEntryId} role="alert" className="dmx-request-state">
+									<strong>{entry.modelName}：物化未完成</strong>
+									<p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{entry.failureMessage}</p>
+									<p>错误码：{entry.repairCode || "未提供"}；执行编号：{entry.pipelineRunGroupId}</p>
+								</div>
+							))}
 							<label>
 								<span>执行环境</span>
 								<select

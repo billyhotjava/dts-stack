@@ -776,6 +776,11 @@ def _dbt_build_task(**context: Any) -> None:
 
 
 def _sync_manifest_and_probe_task(**context: Any) -> None:
+    # A failed dbt process can still produce authoritative per-model results.
+    # If preparation failed, there is no runtime identity or artifact to collect.
+    if context["ti"].xcom_pull(task_ids=_PREPARE_TASK_ID) is None:
+        from airflow.exceptions import AirflowSkipException
+        raise AirflowSkipException("Runtime preparation did not produce artifacts")
     runtime = _runtime_from_xcom(context["ti"])
     group_id = runtime["pipelineRunGroupId"]
     owner = (
@@ -922,6 +927,7 @@ def build_dbt_dag(
         sync = PythonOperator(
             task_id=_SYNC_TASK_ID,
             python_callable=_sync_manifest_and_probe_task,
+            trigger_rule=TriggerRule.ALL_DONE,
         )
         finalize = PythonOperator(
             task_id="finalize_run",

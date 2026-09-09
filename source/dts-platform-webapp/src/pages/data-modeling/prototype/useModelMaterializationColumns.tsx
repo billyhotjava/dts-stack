@@ -56,8 +56,12 @@ export function useModelMaterializationColumns() {
 			{
 				title: "原因",
 				dataIndex: "repairCode",
-				render: (value?: string | null) =>
-					value === "MODEL_AIRFLOW_DAG_NOT_REGISTERED" ? "执行任务尚未就绪，构建未启动" : value || "—",
+				render: (value: string | null | undefined, row: ReleaseCandidateEntryEvidence) => (
+					<div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+						{row.failureMessage || (value === "MODEL_AIRFLOW_DAG_NOT_REGISTERED" ? "执行任务尚未就绪，构建未启动" : value || "—")}
+						{row.failureMessage && value ? <div>错误码：{value}</div> : null}
+					</div>
+				),
 			},
 			{ title: "尝试", dataIndex: "attempt", render: (value?: number | null) => value ?? "—" },
 			{ title: "完成时间", dataIndex: "finishedAt", render: (value?: string | null) => formatTime(value) },

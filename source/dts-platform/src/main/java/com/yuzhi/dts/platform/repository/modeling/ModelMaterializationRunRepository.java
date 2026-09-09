@@ -125,6 +125,17 @@ public class ModelMaterializationRunRepository {
         Map<UUID, String> statusesByPipelineRun,
         Instant now
     ) {
+        recordDbtResults(groupId, invocationId, statusesByPipelineRun, Map.of(), now);
+    }
+
+    @Transactional
+    public void recordDbtResults(
+        UUID groupId,
+        UUID invocationId,
+        Map<UUID, String> statusesByPipelineRun,
+        Map<UUID, String> failureMessages,
+        Instant now
+    ) {
         if (
             groupId == null ||
             invocationId == null ||
@@ -163,7 +174,7 @@ public class ModelMaterializationRunRepository {
                     statement.setObject(2, invocationId);
                     statement.setTimestamp(3, occurredAt);
                     statement.setTimestamp(4, occurredAt);
-                    statement.setString(5, resultMessage(result.getValue()));
+                    statement.setString(5, failureMessages.getOrDefault(result.getKey(), resultMessage(result.getValue())));
                     statement.setTimestamp(6, occurredAt);
                     statement.setObject(7, result.getKey());
                     statement.setObject(8, groupId);

@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -58,7 +59,7 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                        latest.airflow_dag_id, latest.airflow_run_id,
                        latest.attempt, latest.dispatch_status,
                        latest.last_error_code,
-                       latest.dbt_invocation_id, latest.run_status,
+                       latest.dbt_invocation_id, latest.run_status, latest.run_message,
                        latest.started_date, latest.finished_date,
                        observation.verified,
                        observation.relation_exists,
@@ -77,7 +78,7 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                                d.airflow_dag_id, d.airflow_run_id,
                                d.attempt, d.status as dispatch_status,
                                d.last_error_code, d.last_modified_at,
-                               pr.dbt_invocation_id, pr.status as run_status,
+                               pr.dbt_invocation_id, pr.status as run_status, pr.message as run_message,
                                pr.started_date, pr.finished_date
                           from modeling_pipeline_run pr
                           join modeling_materialization_dispatch d
@@ -185,7 +186,7 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                        latest.airflow_dag_id, latest.airflow_run_id,
                        latest.attempt, latest.dispatch_status,
                        latest.last_error_code,
-                       latest.dbt_invocation_id, latest.run_status,
+                       latest.dbt_invocation_id, latest.run_status, latest.run_message,
                        latest.started_date, latest.finished_date,
                        observation.verified,
                        observation.relation_exists,
@@ -207,7 +208,7 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                                d.airflow_dag_id, d.airflow_run_id,
                                d.attempt, d.status as dispatch_status,
                                d.last_error_code, d.last_modified_at,
-                               pr.dbt_invocation_id, pr.status as run_status,
+                               pr.dbt_invocation_id, pr.status as run_status, pr.message as run_message,
                                pr.started_date, pr.finished_date
                           from modeling_pipeline_run pr
                           join modeling_materialization_dispatch d
@@ -283,7 +284,7 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                    d.created_at as dispatch_created_at,
                    d.last_modified_at as dispatch_updated_at,
                    d.airflow_dag_id, d.airflow_run_id,
-                   pr.dbt_invocation_id, pr.status as run_status,
+                   pr.dbt_invocation_id, pr.status as run_status, pr.message as run_message,
                    pr.started_date, pr.finished_date,
                    observation.verified,
                    observation.relation_exists,
@@ -390,7 +391,9 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
                 row.getString("last_error_code"),
                 runStatus,
                 row.getString("dispatch_status")
-            )
+            ),
+            Set.of("FAILED", "FAILED_STALE", "BLOCKED", "SKIPPED_DEPENDENCY_FAILED").contains(runStatus == null ? "" : runStatus)
+                ? row.getString("run_message") : null
         );
     }
 

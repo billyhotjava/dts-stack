@@ -544,7 +544,8 @@ public final class ModelReleaseCandidateContract {
         Instant startedAt,
         Instant finishedAt,
         Instant observedAt,
-        String repairCode
+        String repairCode,
+        String failureMessage
     ) {
         public EntryEvidenceView {
             candidateEntryId = requiredUuid(candidateEntryId, "candidateEntryId");
@@ -561,6 +562,18 @@ public final class ModelReleaseCandidateContract {
             airflowRunId = optionalText(airflowRunId);
             if (attempt != null && attempt < 1) throw new IllegalArgumentException("attempt must be positive");
             repairCode = optionalText(repairCode);
+            failureMessage = optionalText(failureMessage);
+        }
+        public EntryEvidenceView(
+            UUID candidateEntryId, UUID modelSpecId, String modelName, int modelRevision,
+            Integer implementationRevision, String targetRelation, String runStatus,
+            RelationEvidenceState relationState, UUID pipelineRunGroupId, UUID dbtInvocationId,
+            String airflowDagId, String airflowRunId, Integer attempt, Instant startedAt,
+            Instant finishedAt, Instant observedAt, String repairCode
+        ) {
+            this(candidateEntryId, modelSpecId, modelName, modelRevision, implementationRevision,
+                targetRelation, runStatus, relationState, pipelineRunGroupId, dbtInvocationId,
+                airflowDagId, airflowRunId, attempt, startedAt, finishedAt, observedAt, repairCode, null);
         }
     }
 
