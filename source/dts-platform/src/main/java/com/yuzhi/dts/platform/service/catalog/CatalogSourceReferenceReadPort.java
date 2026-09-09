@@ -27,6 +27,13 @@ public interface CatalogSourceReferenceReadPort {
 
     Optional<String> findDatasetAssetKey(UUID sourceId, String namespace, String objectName);
 
+    record SourceField(String name, String dataType, Boolean nullable) {}
+
+    /** Field metadata follows the same catalog authorization boundary as source snapshots. */
+    default java.util.List<SourceField> readFields(UUID tableId, UUID sourceId, String namespace, String objectName, String actorDepartmentId) {
+        return java.util.List.of();
+    }
+
     enum SourceStatus {
         AVAILABLE,
         MISSING,

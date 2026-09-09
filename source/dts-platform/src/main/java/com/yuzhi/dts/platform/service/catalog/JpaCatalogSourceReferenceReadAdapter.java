@@ -190,6 +190,25 @@ public class JpaCatalogSourceReferenceReadAdapter implements CatalogSourceRefere
         );
     }
 
+    @Override
+    public List<SourceField> readFields(UUID tableId, UUID sourceId, String namespace, String objectName, String actorDepartmentId) {
+        CatalogTableSchema table;
+        if (tableId != null) {
+            if (resolveTable(tableId, actorDepartmentId).status() != SourceStatus.AVAILABLE) return List.of();
+            table = tables.findById(tableId).orElse(null);
+        } else {
+            if (resolveConnectionTable(sourceId, namespace, objectName, actorDepartmentId).status() != SourceStatus.AVAILABLE) return List.of();
+            CatalogDataset dataset = datasets.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(sourceId, namespace, objectName).orElse(null);
+            if (dataset == null) return List.of();
+            List<CatalogTableSchema> candidates = tables.findByDataset(dataset);
+            table = candidates.stream().filter(candidate -> objectName.equalsIgnoreCase(candidate.getName())).findFirst()
+                .orElseGet(() -> candidates.size() == 1 ? candidates.getFirst() : null);
+        }
+        if (table == null) return List.of();
+        return columns.findByTable(table).stream().sorted(Comparator.comparing(CatalogColumnSchema::getName))
+            .map(column -> new SourceField(column.getName(), column.getDataType(), column.getNullable())).toList();
+    }
+
     private boolean canRead(CatalogDataset dataset, String actorDepartmentId) {
         return dataset != null &&
         accessChecker.canRead(dataset) &&

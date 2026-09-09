@@ -41,4 +41,6 @@ public interface ModelSpecSourceValidationPort {
         UUID sourceBindingId,
         String resolvedVersion
     );
+    default java.util.List<com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort.SourceField> readFields(
+        String tenantId, UUID planId, UUID bindingId, String version) { return java.util.List.of(); }
 }

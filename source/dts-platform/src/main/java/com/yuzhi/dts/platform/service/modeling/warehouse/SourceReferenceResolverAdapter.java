@@ -81,6 +81,17 @@ public class SourceReferenceResolverAdapter implements SourceReferenceResolver {
         }
     }
 
+    @Override
+    public java.util.List<com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort.SourceField> readFields(
+        SourceType type, SourceLocator locator, AccessContext context, String expectedVersion) {
+        if (type != SourceType.CATALOG_TABLE && type != SourceType.CONNECTION_TABLE) return java.util.List.of();
+        ResolvedSource before = resolve(type, locator, context);
+        if (before.status() != ResolutionStatus.AVAILABLE || !java.util.Objects.equals(expectedVersion, before.resolvedVersion())) return java.util.List.of();
+        var fields = catalogSources.readFields(locator.assetId(), locator.connectionId(), locator.namespace(), locator.objectName(), actorDepartment(context));
+        ResolvedSource after = resolve(type, locator, context);
+        return after.status() == ResolutionStatus.AVAILABLE && java.util.Objects.equals(expectedVersion, after.resolvedVersion()) ? fields : java.util.List.of();
+    }
+
     private ResolvedSource resolveCatalogTable(
         SourceLocator locator,
         AccessContext accessContext,

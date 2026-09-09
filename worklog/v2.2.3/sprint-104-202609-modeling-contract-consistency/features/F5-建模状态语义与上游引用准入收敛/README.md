@@ -1,110 +1,103 @@
 # F5：建模状态语义与上游引用准入收敛
 
-**优先级**：P0  **状态**：DRAFT  **日期**：2026-09-09
+**优先级**：P0  **状态**：IN_PROGRESS  **修订日期**：2026-09-09
 
 ## 目标与现场归因
 
-用户在选择上游模型时就能看出该上游当前能否被引用；保存、提交实现和发布被拒时，界面直接说明是哪个上游、缺什么条件。设计阶段继续允许引用同规划内未发布模型，不因收紧校验而阻断 DWD/DWS 联合开发。
+保留同一建模方案内 DWD/DWS 联合设计能力，让用户在选择上游时了解其实现可用性；提交时准确定位版本、权限或字段引用错误。模型设计状态、已提交实现状态、交付状态分别表达，不再以“草稿”或 ACTIVE 单一值判断能否引用。
 
-本 Feature 来源于 2026-09-09 对建模版本与引用关系的源码复审。复审结论：分阶段准入规则本身已经存在且方向正确，缺陷集中在**状态表达**与**拒绝信息**两处，不是"校验时机排错了"。三条独立状态轴中只有一条对用户可见：
+两类问题分别整改：上游状态/依赖锁定信息缺失由 T25–T29 处理；`cost_amount` 不存在却能提交、直到执行才失败的字段校验缺口由新增 T31 处理。后者见 [现场证据](../../assests/dws-cost-field-issue-20260909.md)，不能归因成状态文案问题。已有运行时绑定和失败原因回传修复保持，F5 不重做隔离项目与物化引擎。
 
-| 状态轴 | 载体 | 取值 | 用户可见 |
-|---|---|---|---|
-| 模型设计状态 | `ModelSpecContract.ModelStatus`:373 | DRAFT / DESIGNING / VALIDATING / READY_TO_PUBLISH / PUBLISHED / ARCHIVED | 是 |
-| 实现状态 | `ModelLifecycleContract.ImplementationView.status`:771，裸 String | "ACTIVE" 等 | 否 |
-| 交付状态 | `ModelLifecycleContract.DeliveryStatus` | 15 值状态机 | 候选页可见 |
+## 阶段与准入边界
 
-`DESIGNING`、`VALIDATING`、`READY_TO_PUBLISH` 三值在 `dts-platform/src/main` 内**零写入点**（账本 C27）。因此界面上的"草稿"是 `DRAFT` 一个值被迫承载"设计未完成 / 实现已提交 / 已物化"的全部语义，用户无法据此判断上游是否可用。决定可用性的是第二条轴，而该轴既未枚举化、也未投影到任何面向选择器的读接口。
+| 阶段 | 规则与产出 |
+|---|---|
+| 设计保存 | 保留现有权限、类型/分层、非自引用和成环检查；同方案允许未发布且无实现的上游。跨方案仍要求被引用修订已发布 |
+| 作者草稿暂存 | 保留现有依赖锁定规则；字段校验可返回诊断并保留可编辑草稿，不把暂存等同于提交通过 |
+| 实现提交 | 上游已提交实现须有效且匹配所选设计版本；完整锁定必须匹配，不隐式升级；可视化字段引用须通过 T31 |
+| 物化 | 无有效上游实现则阻断；同方案未物化上游可按现有策略先 BUILD，匹配版本的已核验结果可 REUSE；CURRENT_ONLY 与跨方案限制不变 |
+| 发布 | 沿用固定修订和同批依赖规则；T29 增加归档修订防御检查前须确认真实路径和影响，不将该变化称为纯展示调整 |
 
-不把本 Feature 理解为"放宽或收紧校验"。三阶段准入强度维持现状，只改状态表达、可用性投影与拒绝信息精度。
+“草稿 + 有效实现”“草稿 + 已物化”都可能可引用；未发布不等于未提交实现。ACTIVE 只是已提交记录的原始状态，不保证匹配当前设计、满足当前使用方约束或完成物化。
 
-## 冻结契约与复用边界
+## 冻结契约
 
-### 三阶段准入矩阵冻结
+完整锁定类型 `UpstreamPin`：`{modelSpecId: UUID, revision: int, checksum: string, implementationRevision: int, implementationChecksum: string, dbtUniqueId: string}`。六项从同一一致性读取快照返回，不拼接不同时刻的数据。
 
-下表为冻结结果，本轮不改变任何一格的判定强度。
+新增只读端点 `POST /api/modeling/model-specs/upstream-availability`，具体请求、响应、权限与预算以 [T26](T26-上游可用性投影与批量查询.md) 为准。投影只提供建议，提交端必须重新判定；相同时刻、相同使用方和相同锁定的判断一致，不承诺跨并发变更永久一致。
 
-| 阶段 | 落点 | 现行规则 | 本轮动作 |
-|---|---|---|---|
-| 设计 | `ModelSpecApplicationService.validateReferenceSet`:1796 | 同规划内可引用任意修订（含未发布）；跨规划要求被钉修订快照为 PUBLISHED | 保持，不收紧 |
-| 实现保存/提交 | `ModelImplementationInputPolicy.validateUpstream`:132 | 六元组全等 + 上游实现须 ACTIVE | 保持强度，改结果结构 |
-| 物化计划 | `ModelImplementationDependencyService.resolvePlan`:342 | 缺当前实现即拒，带 modelSpecId/revision 明细 | 作为明细精度的基准形状 |
-| 发布预检 | `ModelReleaseCandidatePreflightService.validateEdges`:305 | 钉住修订漂移且该修订快照非 PUBLISHED 则阻断；同规划未发布上游按 AUTO_DEPENDENCY 纳入同批次 | 补归档分支 |
+统一判定与 `detail.issues[]` 由 [T27](T27-统一准入判定与拒绝结果结构化.md) 定义；查询先批量加载上下文，再调用无数据库访问的判定核心。保留既有服务/仓储 owner，不建立第二套规则或台账。
 
-发布阶段的 `upstream.status()` 取自**被钉修订的快照**（`ModelSpecApplicationService`:1521 读 `findRevision` 后 `compatibilityReader.read`），不是模型当前状态；该语义正确，不在本轮更改。
+只新增投影状态 `implementationState=NONE|ACTIVE|INACTIVE|UNKNOWN`，不修改持久化 `ImplementationView.status` 类型。NONE 为无已提交实现；INACTIVE 为已提交记录不活跃；作者草稿独立于已提交记录，不能用“存在编辑草稿”使仍有效的已提交实现失效。未知原始值安全拒绝，不默认为 ACTIVE。
 
-### 契约变更
+已选引用通过 `referenceState` 区分未选择、当前、设计漂移、实现漂移、不可用。展示依据 `selectable` 和原因，不依据 ACTIVE 自行推导。设计依赖图继续复用，不将其仅有的设计版本状态冒充实现锁定状态。
 
-| 类型 | 契约 | 变更 |
-|---|---|---|
-| 枚举 | `ModelLifecycleContract.ImplementationStatus` | 新增；`ImplementationView.status` 由 String 改为该枚举，取值集合以现网实际写入值为准，由 T25 冻结 |
-| 结果 | `ModelImplementationInputPolicy.ValidationResult`:249 | 由 `(boolean, String)` 扩为携带 `modelSpecId`、`reason`、`expected`/`actual` 的结构 |
-| REST | `POST /api/modeling/model-specs/upstream-availability` | 新增只读批量投影；请求 `{modelSpecIds: UUID[], ownerModelSpecId: UUID}`，响应 `ApiResponse<List<UpstreamAvailabilityView>>` |
-| DTO | `UpstreamAvailabilityView` | `{modelSpecId UUID, revision int, checksum string, implementationState enum, implementationRevision int|null, dbtUniqueId string|null, selectable boolean, blockReason string|null}` |
-| 记录 | `ModelSpecApplicationService.DependencyNode`:2216 | 追加 `implementationState`、`implementationRevision`，供已选上游区分"设计草稿"与"实现已提交" |
-| 数据 | 无 | 不新增表、列、索引、事件；实现状态仍由 `modeling_model_implementation` 承载 |
-| 迁移 | 无 | 枚举化为应用层类型变更，不改列类型。若 T25 发现现网存在枚举外取值，先补设计再决定是否需要前向 changeSet |
+`pinCurrentUpstreamImplementations` 保留为服务端首次锁定、旧客户端和降级路径的权威兼容能力；API 输入经过服务补全再持久化是正常分层，不是“侥幸满足数据库约束”。前端完整直发用于保留用户实际选定快照。
 
-`implementationState` 取值：`NONE`（无实现记录）/ `DRAFT`（有实现但非 ACTIVE）/ `ACTIVE`（可被引用）/ `UNKNOWN`（越权或不可读）。
+## UI/UX
 
-### 复用与禁止
+使用现有工作台 `/data-modeling/dimensions/workbench`：设计步骤 `ModelLogicalDependencies` 不因无实现而禁选；实现步骤 `ModelImplementationBindingFields` 以 selectable 显示可用性；`ModelVisualTransformationFields` 显示固定上游版本的字段候选及字段级错误。
 
-- 复用既有 owner：实现读取仍走 `ModelLifecycleRepository.findImplementation`；依赖图仍由 `ModelSpecApplicationService.dependencyGraph` 产出；不新建模型/实现/依赖台账（domain-dts A4）。
-- 新增端点是**只读投影**，形状对齐既有批量查询 `getModelServingSyncStatuses`（`modelSpecApi.ts`:337），不承担任何写入。
-- 不动 `ModelSpecContract.ModelSpecView`：111 个文件引用（账本 C33），加字段属高风险且无必要，可用性走独立投影。
-- 不扩权限、不改密级与租户判定、不新增菜单或页面（domain-dts 红线 4）。
-- 不改变 dbt 编译、隔离项目组装与物化执行链路，那部分由 `fa920a05b` 关闭。
+- 空：说明当前无合规候选；加载：候选区独立加载，不阻塞其余表单。
+- 候选不可读/不存在：统一显示不可用，不返回或保留其名称、版本、checksum；已明确拒绝的行不可因网络失败变为可选。
+- 辅助投影网络失败：保留表单，区分“读取失败，尚未确认”与明确的权限拒绝。仅对原本有读权限、没有明确阻断证据的候选允许尝试选择，由正常提交重新校验，见 T28。
+- 成功：显示设计版本、实现版本、当前引用状态；已选锁定保留到显式更新或移除。只有实现升级也必须提示，不能只看设计 rN。
+- 返回标签页、重新进入步骤、手动刷新或本端上游提交后重查；迟到响应不得覆盖另一模型或版本的表单。
 
-## UI/UX 与四态
-
-入口沿用 `/data-modeling/dimensions/workbench`，实现配置步骤内的既有「上游模型」选择区（`ModelImplementationBindingFields.tsx`:302），以及设计步骤的「上游模型设计」区（`ModelLogicalDependencies.tsx`:30）。不新增页面、路由或菜单。
-
-两个区的语义必须分开呈现，这是本 Feature 的核心界面产出：
-
-- **设计步骤**：继续列出同规划内全部合规上游，含未发布模型，不按实现状态过滤。副标题保留"设计版本 rN"。允许选中无实现的上游，这是联合建模的正常路径。
-- **实现步骤**：每个候选行追加可用性标记。`ACTIVE` 可勾选；`NONE`/`DRAFT` 行置灰不可勾选，并就地说明"上游尚未提交实现，需先完成其实现配置"；`UNKNOWN` 置灰并说明无读取权限。
-- **已选上游变化**：已保存但当前不可用的上游，区分三种提示，取代现有单一的"当前不可作为上游"文案：上游实现已撤回、上游设计版本已前进、上游不可读。
-
-四态：空为"当前暂无可引用的上游模型"；加载时候选区独立骨架，不阻塞其余表单；错误时展示后端返回的具名原因与上游名称，保留已填写内容；成功时勾选状态与锁定版本一并回显。
-
-走查：进入工作台 → 打开一个 DWS 模型 → 设计步骤勾选未发布 DWD 上游并保存 → 进入实现步骤，确认该上游标为不可选且原因可读 → 为该 DWD 完成实现提交 → 返回 DWS 实现步骤，确认该上游转为可选 → 勾选并提交实现 → 物化。另注入：上游实现撤回、上游设计版本前进、越权上游三条失败路径。
-
-Chrome 95 下不得引入新语法或新 API 依赖。
-
-## Task 与依赖
+## Task 与执行顺序
 
 | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|
-| T25 状态语义与准入矩阵冻结 | P0 | DRAFT | 无 |
-| T26 上游可用性投影与批量查询 | P0 | DRAFT | T25 |
-| T27 实现状态枚举化与准入结果结构化 | P0 | DRAFT | T25 |
-| T28 上游选择器可用性与依赖变化展示 | P0 | DRAFT | T26、T27 |
-| T29 六元组直发与归档上游准入补齐 | P1 | DRAFT | T27 |
-| T30 正式构建、Chrome 验收与三维证据 | P0 | DRAFT | T25–T29 |
+| [T25 状态语义与准入矩阵冻结](T25-状态语义与准入矩阵冻结.md) | P0 | DONE | 无 |
+| [T27 统一准入判定与拒绝结果结构化](T27-统一准入判定与拒绝结果结构化.md) | P0 | IN_PROGRESS | T25 |
+| [T26 上游可用性投影与批量查询](T26-上游可用性投影与批量查询.md) | P0 | IN_PROGRESS | T25、T27 |
+| [T28 上游选择器可用性与依赖变化展示](T28-上游选择器可用性与依赖变化展示.md) | P0 | IN_PROGRESS | T26、T27 |
+| [T31 可视化来源字段选择与提交前校验](T31-可视化来源字段选择与提交前校验.md) | P0 | IN_PROGRESS | T25、T26、T27、T28 |
+| [T29 归档上游准入防御补齐](T29-六元组直发与归档上游准入补齐.md) | P1 | IN_PROGRESS | T25、T27 |
+| [T30 正式验证与三维验收](T30-正式验证与三维验收.md) | P0 | IN_PROGRESS | T25–T29、T31 |
 
-顺序：T25 → T26/T27 并行 → T28 → T29 → T30。单代理执行，不启用多代理。
+单代理顺序执行：**T25 → T27 → T26 → T28 → T31 → T29 → T30**。保留既有编号，T30 始终是最终验收。
 
-## DoR 与 Gate
+T28 同时负责完整 pin 的选择、保存及回显，T31 消费其草稿输入与来源身份；T29 不再承载 P0 装配前提。
 
-- [x] 三阶段准入规则已按源码逐条核对并记录行号，见账本 C27–C34。
-- [x] 契约已钉死：新增端点方法/路径/请求响应字段、枚举取值、记录追加字段均已写明。
-- [x] 竖切片贯通：选择器 → 批量投影端点 → `ModelLifecycleRepository` → 现有实现表，无 TBD 层。
-- [x] UI 落点具名：两个既有区块，不新增页面。
-- [x] 影响分析：`ModelImplementationInputPolicy` 上游 1 个直接调用方，风险 LOW；`ModelSpecView` 111 文件引用，已据此排除加字段方案；`DependencyNode` 4 处消费，扩展成本可控。
-- [ ] `ImplementationView.status` 枚举化涉及 31 个文件、27 处字符串比较，T25 未冻结取值集合前不得开工。
-- [ ] 现网实现状态实际取值分布未采样，T25 完成前 T27 保持 DRAFT。
+## DoR、Gate 与非目标
 
-Gate：G0 复用 Sprint-104 既有基线与登录证据，本 Feature 不新增环境前提；G1 待 T25 关闭上述两项后转 PASS；G2/G3/G4 由 T30 跟踪。
+- [x] 完整锁定字段、批量投影、结构化拒绝、刷新和字段校验任务已定义；核心准入与可视化字段验证分别有责任任务。
+- [x] 无新增菜单、台账、数据库结构或状态迁移；兼容旧客户端首次锁定。
+- [x] T25 完成只读状态采样、各阶段实际错误响应核对、字段目录读取 owner/表达式支持范围和现网归档路径确认。
+- [x] T27 开工前完成所改符号影响分析并确认批量加载预算可达；T31 开工前完成字段目录契约的实际接口落点确认。
+
+G0 复用既有外部 Chrome 基线，但正式验收前重核登录/镜像；G1=PASS（实施契约与只读基线已冻结），源码完成与运行验收分别记录；G2/G3/G4=PENDING。修订文档不代表实现或验收完成。
+
+持久化实现状态枚举重构、删除 DESIGNING/VALIDATING/READY_TO_PUBLISH 从本 Feature 移出；保持旧值可读。未来独立兼容性任务需核对历史数据、旧客户端、离线包与数据库约束，不能仅凭当前库无值删枚举。
+
+不新增代码级测试。按用户要求，以外部 Chrome 的真实操作、请求/响应及运行结果验证；仅在部署目录执行必要正式编译、类型检查和交付构建。Chrome 95 兼容性单独记录，Chrome 152 不能代替。证据统一放 `assests/`，`it/README.md` 只做索引，不创建 `assets/`。
 
 ## 完成标准
 
-- [ ] 用户在实现步骤能直接看出每个上游能否引用，不再出现"选完保存才报错"。
-- [ ] 保存、提交、物化、发布四处拒绝均指明上游标识与缺失条件，不再返回无主体的单一错误码。
-- [ ] 设计阶段引用同规划未发布上游的能力未被削弱，联合建模走查通过。
-- [ ] 前端按六字段契约直发上游输入，后端不再依赖保存期补齐锁定。
-- [ ] 归档上游在依赖修订未漂移时不再静默通过发布预检。
-- [ ] IT-29–IT-32 留存真实证据；未执行阶段不标 DONE。
+- [ ] 三类草稿样本：无实现、有有效实现、已物化未发布均按各自规则通过验收。
+- [ ] 设计与实现漂移均可定位、显式更新；不可读和读取失败不混淆；六字段成组回显。
+- [ ] 错误字段 cost_amount 在提交前明确阻断，src_0.actual_cost 可成功提交和物化。
+- [ ] 批量查询不随候选数逐项查库，切换/返回/降级不丢草稿、不串模型。
+- [ ] IT-29–IT-31、IT-33–IT-35 留存真实证据，构建、部署、页面、兼容性阶段分别报告。
+- [ ] IT-32 以归档入口保护与六字段兼容路径通过为准；CURRENT+ARCHIVED 预检分支在正常业务路径不可构造时，记为已知未覆盖并保留责任任务，未覆盖项闭合前不标 F5 DONE，也不得改库造样本或宣称已验收。
 
-## 非目标
+## 2026-09-09 二轮评审落实（实施契约）
 
-不重做模型设计状态机，不启用三个零写入枚举值（处置由 T25 决定为保留或删除，二选一并记 ADR）；不改物化执行与 dbt 隔离项目组装；不引入新输入方式；不做跨规划引用策略变更；不新增角色或权限粒度；不改动生产数据。
+T28 负责六字段选择、显式更新、保存回显及来源身份同步；T29 只负责归档防御，消除 T28 对后续装配任务的反向依赖。顺序保持 T25 → T27 → T26 → T28 → T31 → T29 → T30。本轮编码全部结束并进入 Git 后才统一重建容器，外部 Chrome 验收，不增加代码级测试。
+
+来源身份由实际 implementation.inputs 顺序确定，展示、字段目录、SQL 使用同一顺序；逻辑维度引用不自动成为实现输入。删除/调整来源必须同步所有来源字段和 joins 索引；被删除来源仍被使用时保留可定位错误，禁止同名字段误绑到另一来源。存量草稿按持久化输入顺序解释，不按页面排序重解释。
+
+T31 字段目录扩展为 inputMode + 对应类型 inputs：UPSTREAM_MODEL 读取固定版本输出契约；PHYSICAL_ASSET 复用已确认源绑定和目录字段读取；GENERATED 不走外部来源校验，保留 SCHEMA_ONLY/DATE_DIMENSION 能力。字段校验覆盖 joins 左右字段。多个来源的映射始终使用限定别名；用户通过中文名称选择，系统生成 src_N.field，不要求手写。
+
+“暂存”保存编辑内容并给诊断；“提交”必须重新验证依赖和字段。保持权限、owner CAS 和不可编辑状态校验；不自动更新旧 pin。字段缺失不得阻止语义未完成草稿的保存。依赖漂移保留旧快照，只有用户明确更新引用才变更。
+
+候选支持搜索、可用/已选筛选、默认每页 10 项；无实现时可打开上游完善，刷新不覆盖草稿。字段错误定位到映射/关联/过滤对应行。
+
+只读投影在短 REPEATABLE_READ 读取事务内加载可见域、当前模型、实现和修订闭包；核心查询目标不超过 8 条、3 秒超时，物理源字段目录独立计量。每请求 200 输入、闭包 2000 节点/32 层是服务保护预算，不宣称既有业务极限；超限明确提示缩小查询范围并禁止用不完整闭包判可用。T30 记录实际查询数和耗时。
+
+归档预检分支不预先豁免：正常入口保护、历史固定修订和并发风险分项留证；无法通过正常流程覆盖时保留 T29 未完成及对应风险，不以 F5 DONE 掩盖。全部验收证据统一 assests。
+
+## 本轮实现与验收状态
+
+T25 契约冻结完成；T26/T27/T28/T29/T31 首轮源码已实现；T30 进入统一构建及外部 Chrome 验收准备。全部任务编码完成后才更新容器。本轮不新增代码级别测试，尚未宣称正式构建、部署或页面验收通过。

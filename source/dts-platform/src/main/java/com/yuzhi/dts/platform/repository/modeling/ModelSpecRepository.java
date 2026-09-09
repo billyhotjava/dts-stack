@@ -58,6 +58,53 @@ public class ModelSpecRepository {
             .findFirst();
     }
 
+    /** Bounded current heads for input inspection; caller applies the existing domain read policy. */
+    public List<StoredModelSpec> findInputHeads(String tenantId, java.util.Collection<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        if (ids.size() > 201) throw new IllegalArgumentException("Input window exceeds 201 models");
+        List<Object> args = new ArrayList<>();
+        args.add(tenantId);
+        args.addAll(ids);
+        String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        return jdbcTemplate.query(CURRENT_COLUMNS +
+            " where s.tenant_id = ? and s.contract_version = 2 and s.id in (" + placeholders + ")",
+            ModelSpecRepository::mapStored, args.toArray());
+    }
+
+    /** One recursive query over exact revision snapshots, capped before decoding. */
+    public List<StoredModelSpec> findInputClosure(String tenantId, List<ModelRevisionRef> roots) {
+        if (roots.isEmpty()) return List.of();
+        List<Object> args = new ArrayList<>();
+        String pairs = String.join(",", java.util.Collections.nCopies(roots.size(), "(?::uuid,?::integer)"));
+        roots.forEach(ref -> { args.add(ref.modelSpecId()); args.add(ref.revision()); });
+        args.add(tenantId);
+        args.add(tenantId);
+        args.add(tenantId);
+        return jdbcTemplate.query("""
+            with recursive input_roots(id, revision) as (values %s),
+            closure(id, revision, depth) as (
+                select id, revision, 0 from input_roots
+                union
+                select (edge ->> 'modelSpecId')::uuid, (edge ->> 'revision')::integer, c.depth + 1
+                  from closure c
+                  join modeling_model_spec_revision parent
+                    on parent.tenant_id = ? and parent.model_spec_id = c.id and parent.revision = c.revision
+                   and parent.contract_version = 2
+                  cross join lateral jsonb_array_elements(coalesce(parent.snapshot_json -> 'dependsOn', '[]'::jsonb)) edge
+                 where c.depth < 32
+            ), unique_refs as (select distinct id, revision from closure limit 2001)
+            select false as current_head, r.contract_version, r.tenant_id, s.id, s.plan_id, s.domain_id,
+                   r.status, r.revision, null as current_checksum, r.content_checksum as revision_checksum,
+                   r.snapshot_json::text as current_snapshot, s.idempotency_key, s.idempotency_request_hash,
+                   s.idempotency_response_snapshot::text as idempotency_response_snapshot,
+                   s.created_date, coalesce(r.last_modified_date,r.created_date) as last_modified_date
+              from unique_refs c
+              join modeling_model_spec_revision r on r.model_spec_id=c.id and r.revision=c.revision and r.tenant_id=?
+              join modeling_model_spec s on s.id=r.model_spec_id and s.tenant_id=?
+             where r.contract_version=2 and s.contract_version=2
+            """.formatted(pairs), ModelSpecRepository::mapStored, args.toArray());
+    }
+
     public boolean hasActiveModelReferences(String tenantId, UUID modelSpecId) {
         Boolean referenced = jdbcTemplate.queryForObject(
             """

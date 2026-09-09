@@ -32,6 +32,17 @@ public class ModelImplementationInputPolicy {
     private final ModelSpecRepository repository;
     private final ModelLifecycleRepository lifecycle;
     private final ModelSpecSourceValidationPort sourceValidation;
+    private final ModelInputInspectionService inspection;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ModelImplementationInputPolicy(ModelSpecApplicationService modelSpecs, ModelSpecRepository repository,
+        ModelLifecycleRepository lifecycle, ModelSpecSourceValidationPort sourceValidation, ModelInputInspectionService inspection) {
+        this.modelSpecs = modelSpecs;
+        this.repository = repository;
+        this.lifecycle = lifecycle;
+        this.sourceValidation = sourceValidation;
+        this.inspection = inspection;
+    }
 
     public ModelImplementationInputPolicy(
         ModelSpecApplicationService modelSpecs,
@@ -43,6 +54,7 @@ public class ModelImplementationInputPolicy {
         this.repository = repository;
         this.lifecycle = lifecycle;
         this.sourceValidation = sourceValidation;
+        this.inspection = null;
     }
 
     public ValidationResult validate(String tenantId, ModelSpecView owner, SaveImplementationCommand command) {
@@ -62,6 +74,12 @@ public class ModelImplementationInputPolicy {
         }
         if (!allows(owner == null ? null : owner.modelType(), command.inputMode())) {
             return ValidationResult.invalid("MODEL_IMPLEMENTATION_INPUT_KIND_NOT_ALLOWED");
+        }
+        if (inspection != null && command.inputMode() == InputMode.UPSTREAM_MODEL &&
+            command.inputs().stream().allMatch(UpstreamModelInput.class::isInstance)) {
+            List<ModelInputInspectionContract.Issue> issues = inspection.validate(tenantId, owner,
+                command.inputs().stream().map(UpstreamModelInput.class::cast).toList());
+            return issues.isEmpty() ? ValidationResult.ok() : new ValidationResult(false, "MODEL_IMPLEMENTATION_INPUT_STALE", issues);
         }
         for (ImplementationInput input : command.inputs()) {
             if (input == null || input.mode() != command.inputMode()) {
@@ -246,7 +264,57 @@ public class ModelImplementationInputPolicy {
         "MODEL_SPEC_REVISION_CONFLICT".equals(exception.code());
     }
 
-    public record ValidationResult(boolean valid, String code) {
+    static UpstreamModelInput currentPin(ModelSpecView model, ModelLifecycleContract.ImplementationView implementation) {
+        if (model == null || implementation == null || !"ACTIVE".equals(implementation.status()) ||
+            implementation.revision() != model.revision() || !Objects.equals(implementation.modelChecksum(), model.checksum()) ||
+            implementation.implementationRevision() < 1 || isBlank(implementation.implementationChecksum()) ||
+            implementation.implementationChecksum().matches("0+") || isBlank(implementation.dbtUniqueId())) return null;
+        return new UpstreamModelInput(model.id(), model.revision(), model.checksum(), implementation.implementationRevision(),
+            implementation.implementationChecksum(), implementation.dbtUniqueId());
+    }
+
+    /** Pure evaluation shared by inspection and authoritative write validation. */
+    static String inspectUpstream(ModelSpecView owner, ModelInputInspectionContract.Context context, UUID id, UpstreamModelInput pin) {
+        ModelSpecView target = context.heads().get(id);
+        if (target == null) return "NOT_AVAILABLE";
+        if (Objects.equals(owner.id(), id)) return "SELF_REFERENCE";
+        if (target.status() == ModelStatus.ARCHIVED) return "ARCHIVED";
+        if (pin != null && target.revision() != pin.revision()) return "DESIGN_REVISION_DRIFT";
+        if (pin != null && !Objects.equals(target.checksum(), pin.checksum())) return "DESIGN_CHECKSUM_DRIFT";
+        if (!allowsImplementationUpstream(owner.modelType(), target)) return "LAYER_NOT_ALLOWED";
+        if (!Objects.equals(owner.planId(), target.planId()) && target.status() != ModelStatus.PUBLISHED) return "CROSS_PLAN_UNPUBLISHED";
+        var implementation = context.implementations().get(id);
+        if (implementation == null) return "IMPLEMENTATION_MISSING";
+        if (!"ACTIVE".equals(implementation.status())) return "IMPLEMENTATION_INACTIVE";
+        UpstreamModelInput actual = currentPin(target, implementation);
+        if (actual == null) return "IMPLEMENTATION_DESIGN_MISMATCH";
+        if (pin != null) {
+            if (!pin.implementationPinned()) return "PIN_REQUIRED";
+            if (actual.implementationRevision() != pin.implementationRevision()) return "IMPLEMENTATION_REVISION_DRIFT";
+            if (!actual.implementationChecksum().equals(pin.implementationChecksum())) return "IMPLEMENTATION_CHECKSUM_DRIFT";
+            if (!actual.dbtUniqueId().equals(pin.dbtUniqueId())) return "DBT_ID_DRIFT";
+        }
+        return inspectClosure(owner.id(), target, context, new HashSet<>(), 0);
+    }
+
+    private static String inspectClosure(UUID owner, ModelSpecView target, ModelInputInspectionContract.Context context,
+                                         Set<ModelRevisionRef> visited, int depth) {
+        if (depth >= 32 && !target.dependsOn().isEmpty()) return "CONTEXT_LIMIT_EXCEEDED";
+        for (ModelRevisionRef ref : target.dependsOn()) {
+            if (owner.equals(ref.modelSpecId())) return "DEPENDENCY_CYCLE";
+            if (!visited.add(ref)) continue;
+            ModelSpecView dependency = context.revisions().get(ref);
+            if (dependency == null) return "NOT_AVAILABLE";
+            String issue = inspectClosure(owner, dependency, context, visited, depth + 1);
+            if (issue != null) return issue;
+        }
+        return null;
+    }
+
+    public record ValidationResult(boolean valid, String code, List<ModelInputInspectionContract.Issue> issues) {
+        public ValidationResult(boolean valid, String code) { this(valid, code, List.of()); }
+        public Object details() { return ModelInputInspectionContract.details(issues); }
+
         static ValidationResult ok() {
             return new ValidationResult(true, null);
         }

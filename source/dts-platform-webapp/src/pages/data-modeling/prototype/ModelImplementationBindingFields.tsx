@@ -9,11 +9,12 @@ import {
 	type ModelSpecFactShape,
 	type ModelSpecSourceRef,
 	type ModelSpecTimeSemanticsType,
-	type ModelSpecType,
 } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelSourceInventoryDialog } from "./ModelSourceInventoryDialog";
+import { ModelUpstreamSelector } from "./ModelUpstreamSelector";
 import { ModelVisualTransformationFields } from "./ModelVisualTransformationFields";
 import { Button } from "./PrototypePrimitives";
+import { reconcileModelInputIdentity } from "./services/modelInputIdentity";
 import {
 	applyModelDraftFieldPatch,
 	MODEL_KIND_CONFIG,
@@ -45,14 +46,6 @@ const TIME_SEMANTICS: Array<{ value: ModelSpecTimeSemanticsType; label: string }
 	{ value: "PERIOD", label: "统计周期" },
 	{ value: "MILESTONE_DATES", label: "里程碑日期" },
 ];
-
-const MODEL_TYPE_LABELS: Record<ModelSpecType, string> = {
-	SOURCE: "贴源表",
-	DIMENSION: "维度表",
-	FACT: "明细表",
-	SUMMARY: "汇总表",
-	APPLICATION: "应用表",
-};
 
 const INPUT_MODE_LABELS: Record<ModelImplementationInputMode, string> = {
 	PHYSICAL_ASSET: "直接选择输入源表",
@@ -110,7 +103,7 @@ export function ModelImplementationBindingFields({
 	onSourcesChanged,
 }: Props) {
 	const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
-	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
+	const patch = (next: Partial<ModelSpecDraft>) => onChange(reconcileModelInputIdentity(draft, { ...draft, ...next }));
 	const targetType = MODEL_KIND_CONFIG[draft.createKind].modelType;
 	const modes = modeOptions(draft, context.implementationCapabilities);
 	const upstreamCandidates = context.models.filter(
@@ -135,12 +128,6 @@ export function ModelImplementationBindingFields({
 					(candidate.resolvedVersion || candidate.confirmedVersion) === source.resolvedVersion,
 			),
 	);
-	const staleDependencies = draft.dependsOn.filter(
-		(dependency) =>
-			!upstreamCandidates.some(
-				(candidate) => candidate.id === dependency.modelSpecId && candidate.revision === dependency.revision,
-			),
-	);
 	const staleDimensionRefs = draft.dimensionRefs.filter(
 		(dimension) =>
 			!dimensionCandidates.some(
@@ -154,7 +141,8 @@ export function ModelImplementationBindingFields({
 	const changeMode = (mode: ModelImplementationInputMode | "") => {
 		patch({
 			implementationInputMode: mode,
-			generationStrategyType: mode === "GENERATED" ? (draft.createKind === "dimension-table" ? "DATE_DIMENSION" : "SCHEMA_ONLY") : "",
+			generationStrategyType:
+				mode === "GENERATED" ? (draft.createKind === "dimension-table" ? "DATE_DIMENSION" : "SCHEMA_ONLY") : "",
 			sourceRefs: mode === "PHYSICAL_ASSET" ? draft.sourceRefs : [],
 			dependsOn: mode === "UPSTREAM_MODEL" || mode === "GENERATED" ? draft.dependsOn : [],
 		});
@@ -175,21 +163,6 @@ export function ModelImplementationBindingFields({
 				...draft.sourceRefs.filter((item) => item.sourceBindingId !== sourceBindingId),
 				source,
 			]),
-		});
-	};
-
-	const toggleUpstream = (modelSpecId: string, checked: boolean) => {
-		if (!checked) {
-			patch({ dependsOn: draft.dependsOn.filter((item) => item.modelSpecId !== modelSpecId) });
-			return;
-		}
-		const model = upstreamCandidates.find((item) => item.id === modelSpecId);
-		if (!model) return;
-		patch({
-			dependsOn: [
-				...draft.dependsOn.filter((item) => item.modelSpecId !== modelSpecId),
-				{ modelSpecId: model.id, revision: model.revision },
-			],
 		});
 	};
 
@@ -239,13 +212,22 @@ export function ModelImplementationBindingFields({
 						{draft.implementationInputMode === "GENERATED" ? (
 							<label>
 								<span>生成策略</span>
-								<select aria-label="生成策略" value={draft.generationStrategyType}
-									onChange={(event) => patch({ generationStrategyType: event.target.value as ModelSpecDraft["generationStrategyType"] })}>
+								<select
+									aria-label="生成策略"
+									value={draft.generationStrategyType}
+									onChange={(event) =>
+										patch({ generationStrategyType: event.target.value as ModelSpecDraft["generationStrategyType"] })
+									}
+								>
 									<option value="">请选择生成策略</option>
 									<option value="SCHEMA_ONLY">仅创建表结构（空表）</option>
-									{draft.createKind === "dimension-table" ? <option value="DATE_DIMENSION">生成标准日期数据</option> : null}
+									{draft.createKind === "dimension-table" ? (
+										<option value="DATE_DIMENSION">生成标准日期数据</option>
+									) : null}
 								</select>
-								{draft.generationStrategyType === "SCHEMA_ONLY" ? <small>按当前字段、类型和主键创建空表，不读取数据；目标表已存在时会停止。</small> : null}
+								{draft.generationStrategyType === "SCHEMA_ONLY" ? (
+									<small>按当前字段、类型和主键创建空表，不读取数据；目标表已存在时会停止。</small>
+								) : null}
 							</label>
 						) : null}
 
@@ -298,42 +280,8 @@ export function ModelImplementationBindingFields({
 						) : null}
 
 						{draft.implementationInputMode === "UPSTREAM_MODEL" ? (
-							<div className="dmx-workbench-editor__wide-field dmx-implementation-binding-list">
-								<strong>上游模型</strong>
-								{upstreamCandidates.map((model) => (
-									<label key={model.id}>
-										<input
-											aria-label={`选择上游 ${model.name}`}
-											checked={draft.dependsOn.some(
-												(item) => item.modelSpecId === model.id && item.revision === model.revision,
-											)}
-											onChange={(event) => toggleUpstream(model.id, event.target.checked)}
-											type="checkbox"
-										/>
-										<span>{model.name}</span>
-										<small>
-											{MODEL_TYPE_LABELS[model.modelType]} · {model.layer} · 第 {model.revision} 版
-										</small>
-									</label>
-								))}
-								{staleDependencies.map((dependency) => (
-									<label key={`stale-upstream:${dependency.modelSpecId}:${dependency.revision}`}>
-										<input
-											aria-label={`取消不可用上游 ${dependency.modelSpecId}`}
-											checked
-											onChange={(event) => toggleUpstream(dependency.modelSpecId, event.target.checked)}
-											type="checkbox"
-										/>
-										<span>{dependency.modelSpecId}</span>
-										<small>已绑定第 {dependency.revision} 版，当前不可作为上游；请重新选择。</small>
-									</label>
-								))}
-								{!upstreamCandidates.length && !staleDependencies.length ? (
-									<small>当前暂无满足分层规则且已有当前修订的上游模型。</small>
-								) : null}
-							</div>
+							<ModelUpstreamSelector draft={draft} candidates={upstreamCandidates} onChange={onChange} />
 						) : null}
-
 					</>
 				) : null}
 

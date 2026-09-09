@@ -111,6 +111,10 @@ public class DbtImplementationDraftService {
 
     private final DbtImplementationDraftRepository repository;
     private final ModelSpecApplicationService modelSpecs;
+    private com.yuzhi.dts.platform.service.modeling.ModelSourceFieldsService sourceFields;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSourceFields(com.yuzhi.dts.platform.service.modeling.ModelSourceFieldsService sourceFields) { this.sourceFields = sourceFields; }
+
     private final ModelLifecycleService lifecycle;
     private final ModelSpecPlanWriteAccessPort writeAccess;
     private final AdvancedDbtDraftStaticValidator validator;
@@ -614,6 +618,7 @@ public class DbtImplementationDraftService {
                 var decoded = snapshotDecoder.decode(modelSpecSnapshot);
                 boolean structuredVisual = decoded.valid() && decoded.visualImplementation() != null;
                 if (structuredVisual) {
+                    try {
                     SaveImplementationCommand pinned = lifecycle.prepareAuthoringInputs(
                         tenantId,
                         actorId,
@@ -634,6 +639,19 @@ public class DbtImplementationDraftService {
                         decoded,
                         projectionSummary
                     );
+                    } catch (RuntimeException failure) {
+                        String code = failure instanceof ModelSpecException modelFailure ? modelFailure.code()
+                            : failure instanceof DraftException draftFailure ? draftFailure.code() : "";
+                        if (!java.util.Set.of("MODEL_IMPLEMENTATION_INPUT_STALE", "MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE",
+                            "DBT_DRAFT_DEPENDENCY_PIN_STALE", "IMPLEMENTATION_JOIN_INVALID", "IMPLEMENTATION_JOIN_REQUIRED",
+                            "IMPLEMENTATION_JOIN_COVERAGE_INVALID", "MULTI_SOURCE_MAPPING_MUST_BE_QUALIFIED", "MULTI_SOURCE_MAPPING_REQUIRED",
+                            "SINGLE_SOURCE_JOIN_NOT_ALLOWED", "SOURCE_REQUIRED",
+                            "IMPLEMENTATION_FILTER_INVALID", "IMPLEMENTATION_AGGREGATION_INVALID").contains(code)) throw failure;
+                        ObjectNode summary = projectionSummary != null && projectionSummary.isObject()
+                            ? ((ObjectNode) projectionSummary).deepCopy() : objectMapper.createObjectNode();
+                        summary.put("inputDiagnostic", "来源或字段配置尚未完成，草稿已保留；请修复后再提交");
+                        projectionSummary = summary;
+                    }
                 }
             }
             requireManagedFilesUnchanged(aligned, files);
@@ -1466,46 +1484,31 @@ public class DbtImplementationDraftService {
             unifiedAuthoring
         );
         ValidatedNode ownedTarget = draftTarget(validated, draft, implementation);
-        Resolution current = resolveDependencies(
-            tenantId,
-            model,
-            implementation,
-            validated.projectKey(),
-            ownedTarget.name()
-        );
-        if (!Objects.equals(source.dependencyChecksum(), current.snapshot().dependencyChecksum())) {
-            throw dependencyFailure(
-                "MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE",
-                "ModelSpec dependencies changed after the dbt draft was created",
-                Map.of(
-                    "expectedDependencyChecksum",
-                    source.dependencyChecksum(),
-                    "currentDependencyChecksum",
-                    current.snapshot().dependencyChecksum()
-                )
-            );
-        }
-        if (unifiedAuthoring) {
-            // The base snapshot protects against external drift; SQL implements the saved authoring snapshot.
-            ModelSpecView authoredModel = snapshotCodec.toUpdatedView(
-                model,
-                requireValidModelSnapshot(draft),
-                model.revision(),
-                clock.instant()
-            );
-            var decoded = snapshotDecoder.decode(jsonNode(draft.modelSpecSnapshot()));
-            ImplementationView authoredImplementation = decoded.valid() && decoded.visualImplementation() != null
-                ? visualImplementation(modelSpecId, authoredModel, implementation, decoded.visualImplementation())
-                : null;
+        var decoded = unifiedAuthoring ? snapshotDecoder.decode(jsonNode(draft.modelSpecSnapshot())) : null;
+        boolean structuredVisual = decoded != null && decoded.valid() && decoded.visualImplementation() != null;
+        Resolution current;
+        if (structuredVisual) {
+            // Owner/implementation CAS above protects the base. Explicit saved input pins are the new intent;
+            // requiring obsolete base dependency pins here would make updating a stale reference impossible.
+            ModelSpecView authoredModel = snapshotCodec.toUpdatedView(model, requireValidModelSnapshot(draft), model.revision(), clock.instant());
+            if (sourceFields != null) sourceFields.requireValid(tenantId, authoredModel, decoded.visualImplementation().command());
+            ImplementationView authoredImplementation = visualImplementation(modelSpecId, authoredModel, implementation, decoded.visualImplementation());
             if (com.yuzhi.dts.platform.service.modeling.ModelSchemaOnlySupport.isSchemaOnly(authoredImplementation) &&
                 !"dts_schema_only".equals(ownedTarget.materialization())) {
                 throw DbtImplementationDraftContract.unprocessable("MODEL_SCHEMA_ONLY_SQL_MISMATCH",
                     "Structure-only authoring must retain the registered empty-table materialization");
             }
-            current = resolveDependencies(
-                tenantId, authoredModel, authoredImplementation,
-                validated.projectKey(), ownedTarget.name()
-            );
+            current = resolveDependencies(tenantId, authoredModel, authoredImplementation, validated.projectKey(), ownedTarget.name());
+        } else {
+            current = resolveDependencies(tenantId, model, implementation, validated.projectKey(), ownedTarget.name());
+            if (!Objects.equals(source.dependencyChecksum(), current.snapshot().dependencyChecksum())) {
+                throw dependencyFailure("MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE", "ModelSpec dependencies changed after the dbt draft was created",
+                    Map.of("expectedDependencyChecksum", source.dependencyChecksum(), "currentDependencyChecksum", current.snapshot().dependencyChecksum()));
+            }
+            if (unifiedAuthoring) {
+                ModelSpecView authoredModel = snapshotCodec.toUpdatedView(model, requireValidModelSnapshot(draft), model.revision(), clock.instant());
+                current = resolveDependencies(tenantId, authoredModel, null, validated.projectKey(), ownedTarget.name());
+            }
         }
         List<String> parsed = externalDependencies(
             validated,
@@ -3253,12 +3256,10 @@ public class DbtImplementationDraftService {
                 case CONFLICT -> ErrorKind.CONFLICT;
                 case PRECONDITION_REQUIRED -> ErrorKind.PRECONDITION_FAILED;
             };
-            return new DraftException(
-                modelFailure.code(),
-                modelFailure.getMessage(),
-                kind,
-                Map.of("correlationId", correlationId)
-            );
+            LinkedHashMap<String, Object> details = new LinkedHashMap<>();
+            if (modelFailure.details() instanceof Map<?, ?> values) values.forEach((key, value) -> details.put(Objects.toString(key), value));
+            details.put("correlationId", correlationId);
+            return new DraftException(modelFailure.code(), modelFailure.getMessage(), kind, details);
         }
         return DbtImplementationDraftContract.systemError(correlationId, failure);
     }

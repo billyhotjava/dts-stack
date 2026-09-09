@@ -9,6 +9,8 @@ import type {
 } from "@/features/modeling/contracts/modelImplementationContract";
 import { Button } from "./PrototypePrimitives";
 import type { ModelSpecDraft, ModelWorkbenchContext } from "./services/modelWorkbenchService";
+import { implementationInputs } from "./services/modelWorkbenchService";
+import { ModelSourceFieldInput, useModelSourceFields } from "./useModelSourceFields";
 
 type Props = {
 	draft: ModelSpecDraft;
@@ -71,26 +73,22 @@ export const visualTransformationInputAliases = (
 	draft: ModelSpecDraft,
 	context: ModelWorkbenchContext,
 ): InputAlias[] => {
-	const physical = [...draft.sourceRefs]
-		.sort((left, right) => (left.sourceBindingId || "").localeCompare(right.sourceBindingId || ""))
-		.map((source) => ({
-			label:
-				context.sources.find((candidate) => candidate.bindingId === source.sourceBindingId)?.displayName ||
-				source.ref ||
-				source.sourceBindingId ||
-				"未命名来源",
-			role: "基础来源" as const,
-		}));
-	const models = [
-		...draft.dependsOn.map((reference) => ({ ...reference, role: "上游模型" as const })),
-		...draft.dimensionRefs.map((reference) => ({ ...reference, role: "维度引用" as const })),
-	]
-		.sort((left, right) => left.modelSpecId.localeCompare(right.modelSpecId) || left.revision - right.revision)
-		.map((reference) => ({
-			label: `${modelLabel(context, reference.modelSpecId)} · r${reference.revision}`,
-			role: reference.role,
-		}));
-	return [...physical, ...models].map((input, index) => ({ ...input, index }));
+	const inputs = implementationInputs(draft, { models: context.models })?.inputs || [];
+	return inputs.flatMap<InputAlias>((input, index) => {
+		if ("sourceBindingId" in input)
+			return [
+				{
+					index,
+					label: context.sources.find((source) => source.bindingId === input.sourceBindingId)?.displayName || "源表",
+					role: "基础来源" as const,
+				},
+			];
+		if ("modelSpecId" in input)
+			return [
+				{ index, label: `${modelLabel(context, input.modelSpecId)} · r${input.revision}`, role: "上游模型" as const },
+			];
+		return [];
+	});
 };
 
 const filterValueText = (filter: ModelImplementationFilter): string => {
@@ -131,6 +129,8 @@ const defaultFilterValue = (valueType: ModelImplementationFilterValueType): Mode
 
 export function ModelVisualTransformationFields({ draft, context, validationMessage, onChange }: Props) {
 	const aliases = visualTransformationInputAliases(draft, context);
+	const directory = useModelSourceFields(draft, context);
+	const sourceLabels = aliases.map((input) => input.label);
 	const namedFields = draft.fields.filter((field) => field.name.trim());
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
 	const canEdit = Boolean(draft.implementationInputMode) && draft.implementationInputMode !== "GENERATED";
@@ -215,10 +215,19 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 					disabled={!aliases.length || !namedFields.length}
 					onClick={() =>
 						patch({
-							fieldMappings: namedFields.map((field) => ({
-								sourceField: `${aliases.length > 1 ? "src_0." : ""}${field.name}`,
-								targetField: field.name,
-							})),
+							fieldMappings: namedFields.map((field) => {
+								const matches = directory.sources.filter((source) =>
+									source.fields.some((candidate) => candidate.name === field.name),
+								);
+								return {
+									targetField: field.name,
+									sourceField:
+										matches.length === 1
+											? `${matches[0].alias}.${field.name}`
+											: draft.fieldMappings.find((mapping) => mapping.targetField === field.name)?.sourceField ||
+												field.name,
+								};
+							}),
 						})
 					}
 				>
@@ -235,6 +244,15 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 				{!aliases.length ? <small>请先选择基础来源或上游模型。</small> : null}
 			</div>
 
+			{directory.loading && <output>正在读取固定版本的来源字段…</output>}
+			{directory.error && (
+				<div role="alert">
+					{directory.error}
+					<button type="button" onClick={directory.refresh}>
+						重试读取字段
+					</button>
+				</div>
+			)}
 			<div className="dmx-visual-transform__table-wrap">
 				<table className="dmx-visual-transform__table">
 					<thead>
@@ -259,11 +277,12 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 										<small>{field.dataType}</small>
 									</td>
 									<td>
-										<input
-											aria-label={`来源字段 ${field.name}`}
-											onChange={(event) => setMapping(field.name, event.target.value)}
-											placeholder={aliases.length > 1 ? "src_0.source_field" : "source_field"}
+										<ModelSourceFieldInput
+											label={`来源字段 ${field.name}`}
 											value={mapping?.sourceField || ""}
+											onChange={(value) => setMapping(field.name, value)}
+											sources={directory.sources}
+											labels={sourceLabels}
 										/>
 									</td>
 									<td>
@@ -340,12 +359,13 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 										) : null}
 									</td>
 									<td>
-										<input
-											aria-label={`聚合来源 ${field.name}`}
-											disabled={!aggregation}
-											onChange={(event) => updateAggregation(field.name, { sourceField: event.target.value })}
-											placeholder="src_0.amount"
+										<ModelSourceFieldInput
+											label={`聚合来源 ${field.name}`}
 											value={aggregation?.sourceField || ""}
+											onChange={(value) => updateAggregation(field.name, { sourceField: value })}
+											sources={directory.sources}
+											labels={sourceLabels}
+											disabled={!aggregation}
 										/>
 									</td>
 								</tr>
@@ -372,18 +392,20 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 									<option value="LEFT">LEFT</option>
 									<option value="INNER">INNER</option>
 								</select>
-								<input
-									aria-label={`左关联字段 src_${input.index}`}
-									onChange={(event) => updateJoin(input.index, { leftField: event.target.value })}
-									placeholder={`src_0.${draft.fields[0]?.name || "key"}`}
+								<ModelSourceFieldInput
+									label={`左关联字段 src_${input.index}`}
 									value={join?.leftField || ""}
+									onChange={(value) => updateJoin(input.index, { leftField: value })}
+									sources={directory.sources}
+									labels={sourceLabels}
 								/>
 								<span>=</span>
-								<input
-									aria-label={`右关联字段 src_${input.index}`}
-									onChange={(event) => updateJoin(input.index, { rightField: event.target.value })}
-									placeholder={`src_${input.index}.${draft.fields[0]?.name || "key"}`}
+								<ModelSourceFieldInput
+									label={`右关联字段 src_${input.index}`}
 									value={join?.rightField || ""}
+									onChange={(value) => updateJoin(input.index, { rightField: value })}
+									sources={directory.sources}
+									labels={sourceLabels}
 								/>
 							</div>
 						);

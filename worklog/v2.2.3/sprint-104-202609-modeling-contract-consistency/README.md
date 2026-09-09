@@ -216,20 +216,20 @@ F4 Gate：G0=PASS_WITH_GAPS（既有正式环境和登录已实证，新制品�
 
 F4当前进度：73697f73a源码与83项前端/30项后端专项通过；已按用户要求直接替换原platform/webapp镜像，不使用补丁包。真实浏览器36个交付请求全部200、P95约0.522s，刷新/分页/详情成功；固定并发与Chrome95完整验收仍由T24跟踪。
 
-## F5 建模状态语义与上游引用准入收敛（2026-09-09）
+## F5 建模状态语义与上游引用准入收敛（2026-09-09 修订）
 
 | Feature | Task数 | 优先级 | 状态 |
 |---|---:|---|---|
-| [F5-建模状态语义与上游引用准入收敛](features/F5-建模状态语义与上游引用准入收敛/README.md) | 6 | P0 | DRAFT |
+| [F5-建模状态语义与上游引用准入收敛](features/F5-建模状态语义与上游引用准入收敛/README.md) | 7 | P0 | IN_PROGRESS |
 
-来源为 2026-09-09 建模版本与引用关系源码复审。分阶段准入规则本身存在且方向正确，缺陷集中在状态表达与拒绝信息，不是校验时机排错。设计阶段引用同规划未发布上游的能力保持不变，不因收紧校验阻断 DWD/DWS 联合开发。
+保留同规划 DWD/DWS 联合设计能力，分别表达设计状态、已提交实现与物化结果。整改覆盖统一准入、完整版本 pin、实现单独漂移、页面刷新及字段语义校验；不能只改善错误提示而让无效字段继续进入执行。
 
 ### 现状勘察账本 F5 增量
 
 | # | 事实 | 证据 |
 |---|---|---|
 | C27 | ModelStatus 六值中 DESIGNING/VALIDATING/READY_TO_PUBLISH 在 dts-platform/src/main 内零写入点，DRAFT 独自承载全部中间语义 | ModelSpecContract.java:373 |
-| C28 | 实现状态是裸 String，全仓 27 处 "ACTIVE".equals 硬编码比较 | ModelLifecycleContract.java:771 |
+| C28 | 实现状态是裸 String，全仓 27 处 "ACTIVE".equals 硬编码比较。**其中仅 8 处作用于实现状态**，另 19 处属数据库连接、部署状态、词根、仓库层等无关对象，不在实现状态枚举化范围内；据 27 估算工作量会高估三倍多 | ModelLifecycleContract.java:771；构成核对 2026-09-09 |
 | C29 | validateUpstream 的 12 个失败分支共用一个错误码；ValidationResult 只有 boolean+String，结构上装不下上游标识 | ModelImplementationInputPolicy.java:132、:249 |
 | C30 | 同语义错误码分散三处，仅物化计划期携带 modelSpecId 明细 | ModelImplementationDependencyService.java:366；ModelReleaseCandidatePreflightService.java:326 |
 | C31 | 上游候选来自 listModelSpecs，仅过滤 ARCHIVED；实现步骤过滤只判兼容模式与分层，无实现信息 | modelWorkbenchService.ts:578、:583；ModelImplementationBindingFields.tsx:116 |
@@ -239,25 +239,43 @@ F4当前进度：73697f73a源码与83项前端/30项后端专项通过；已按�
 | C35 | 发布预检的 upstream.status 取自被钉修订快照而非模型当前状态，该语义正确 | ModelSpecApplicationService.java:1521 |
 | C36 | 依赖图端点已返回 pinnedRevision/currentRevision/state/status，是可扩展的既有 seam | ModelSpecResource.java:154；ModelSpecApplicationService.java:2216 |
 
+以上 C27–C36 保留为首次源码勘察记录；以下补充纠正其设计推论，静态分支发现不等同于真实路径已复现。
+
+| # | 补充事实与约束 | 证据/归属 |
+|---|---|---|
+| C37 | 首次选择由服务端补齐实现 pin 是既有有效协议；不能以数据库六字段 CHECK 推导三字段请求一律错误 | pinCurrentUpstreamImplementations；T29 |
+| C38 | 正常归档入口已有活动引用保护；C34 的可达性须用正常业务路径核实，禁止直接改库造样本 | ModelSpecApplicationService.archive；T25、T29 |
+| C39 | 设计版本未变而实现版本变化也会导致 pin 漂移；仅依赖 C36 的设计版本图不足以表达 | ModelImplementationInputPolicy；T26、T28 |
+| C40 | cost_amount 事故暴露来源字段语义校验缺口，与状态展示问题分开整改。缺口精确位置：requiredSourceField 仅校验标识符正则形状，sourceExpression 仅校验别名下标未越界，二者均不校验字段名存在性 | assests/dws-cost-field-issue-20260909.md；ModelLifecycleContract.java:726；ModelingDbtCompiler.java:707；T31 |
+| C41 | 批量投影不能逐项调用带查询/递归加载的校验；应批量装载上下文并复用纯判定 | T27 → T26 |
+| C42 | 引用入口同样拒绝已归档目标，isCanonicalReferenceTarget 显式排除 ARCHIVED，validateReferenceSet 经由它拒绝新建引用。与 C38 的归档入口保护构成两侧对堵，CURRENT+ARCHIVED 在正常串行路径不可达 | ModelSpecContract.java:307；ModelSpecApplicationService.java:1806 |
+| C43 | 归档在更新头记录后同步调用 updateV2RevisionLifecycle，被钉修订快照状态会变为 ARCHIVED，故 DependencyNode.status 技术上可取到该值，C34 的分支不是死代码 | ModelSpecApplicationService.java:1338 |
+| C44 | hasActiveModelReferences 只检查当前头记录的 depends_on/dimension_refs，不查历史修订；结合 C42/C43，CURRENT+ARCHIVED 的唯一残留路径是归档检查与下游引用保存并发 | ModelSpecRepository.java:61–81 |
+
 ### F5 架构决策
 
 | 决策 | 选择与理由 |
 |---|---|
-| 不动 ModelSpecView | 111 文件引用，加实现字段爆炸半径过大；可用性走独立只读投影端点 |
-| 扩展既有 seam | 已选上游状态扩展 DependencyNode（4 处消费）；候选可用性新增批量投影，形状对齐 getModelServingSyncStatuses，读取 owner 仍为 ModelLifecycleRepository |
-| 准入强度不变 | 三阶段规则维持现状，只改状态表达、可用性投影与拒绝信息精度 |
-| 规则单一来源 | 投影的 selectable 直接调用准入判定，禁止复写；两处分叉会让"显示可用但保存被拒"以新形态复现 |
-| 兼容层保留 | pinCurrentUpstreamImplementations 保留为降级与旧客户端兜底，不随前端六字段直发而删除 |
-| 零写入枚举处置 | 由 T25 二选一（保留并说明启用场景 / 确认无历史数据后删除），不允许悬置 |
+| 独立只读投影 | 不扩展 ModelSpecView 或 DependencyNode；候选与已选输入统一使用带 owner 上下文的批量可用性契约 |
+| 规则单一来源 | T27 先分离批量上下文装载与纯准入判定，T26 和写入入口复用；ACTIVE 本身不等于 selectable |
+| 完整引用快照 | 六元组包含 implementationChecksum；同一快照返回，用户明确更新已有 pin；同时识别设计和实现漂移 |
+| 兼容首次引用 | 保留服务端首次 pin 补齐与旧客户端协议；已有完整 pin 不自动降级或重钉 |
+| 范围控制 | 不重构持久化状态枚举，不删除历史状态值；投影状态不替代业务生命周期 |
+| 归档边界 | 先核实正常入口保护与预检分支可达性，再补已证实缺口；不改库构造测试状态 |
+| 字段校验 | T31 从固定版本字段契约提供选择项，并在提交前共用语义校验；保留可编辑草稿，不以物化成功代替字段校验 |
+| 刷新与权限 | 返回页面、聚焦、步骤切换和手动刷新均覆盖；过期响应不覆盖新状态，网络故障不清除已确认拒绝 |
+| 验收方式 | 新增验收使用外部 Chrome，不扩展代码级测试；源码、正式交付、部署和真实页面分别记录 |
 
-| 需求 | Task | 证据 |
+| 需求 | Task | 计划验收 |
 |---|---|---|
-| 联合建模不被收紧 | F5/T25、T28 | IT-29 |
-| 选择上游时即知可用性 | F5/T26、T28 | IT-30 |
-| 拒绝时指明上游与缺失条件 | F5/T27 | IT-31 |
-| 契约漂移收口与归档上游补洞 | F5/T29 | IT-32 |
-| 正式构建与三维验收 | F5/T30 | IT-29–IT-32 |
+| 三种草稿样本与分阶段准入 | T25、T27、T28 | IT-29 |
+| 可用性、双轴漂移与刷新 | T26、T28 | IT-30 |
+| 结构化拒绝与权限隔离 | T27、T28 | IT-31 |
+| 六元组兼容与归档路径 | T29 | IT-32（归档预检分支预期不可构造，记为已知未覆盖，不阻塞 DONE） |
+| 批量性能、正式交付及浏览器兼容 | T26、T30 | IT-33 |
+| 错误来源字段提前拦截与修正闭环 | T31 | IT-34 |
+| 多来源歧义、字段目录及草稿兼容 | T31 | IT-35 |
 
-F5 Gate：G0 复用 Sprint-104 既有基线与登录证据，不新增环境前提；G1=GAP，待 T25 冻结实现状态取值集合与零写入枚举处置后转 PASS，在此之前 T27 保持 DRAFT 不得开工；G2/G3/G4=PENDING，由 T30 跟踪。顺序：T25 → T26/T27 并行 → T28 → T29 → T30，单代理执行。
+F5 Gate：G0 复用既有基线，运行时仍核对实际环境；G1=PASS，T25 的实施契约与只读基线已冻结；实际查询预算达成仍由 T30 验证。G2/G3/G4=PENDING，由 T30 跟踪。
 
-F5 全部 Task 为 DRAFT，尚未开工，不计入任何已完成范围。
+执行顺序（单代理）：**T25 → T27 → T26 → T28 → T31 → T29 → T30**。T31 只消费 T26 的固定版本 pin，不依赖 T29 的前端装配，故 P0 的字段缺口整改不排在 P1 的 T29 之后。F5/T25 已完成契约冻结，其余六项 IN_PROGRESS；首轮源码完成，正式构建及 Chrome 验收待执行。

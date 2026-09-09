@@ -11,6 +11,11 @@ public interface SourceReferenceResolver {
     /** Resolves an already-authorized binding from a trusted background execution context. */
     ResolvedSource resolveForExecution(SourceType sourceType, SourceLocator locator, AccessContext accessContext);
 
+    default java.util.List<com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort.SourceField> readFields(
+        SourceType type, SourceLocator locator, AccessContext context, String expectedVersion) {
+        return java.util.List.of();
+    }
+
     enum ResolutionStatus {
         AVAILABLE,
         MISSING,

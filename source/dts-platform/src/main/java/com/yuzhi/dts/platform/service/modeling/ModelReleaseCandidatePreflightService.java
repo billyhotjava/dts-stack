@@ -320,6 +320,12 @@ public class ModelReleaseCandidatePreflightService {
                 );
                 continue;
             }
+            if (upstream.status() == ModelStatus.ARCHIVED) {
+                addBlocker(blockers, "MODEL_RELEASE_DEPENDENCY_ARCHIVED", edge.toModelSpecId(),
+                    "上游引用版本已归档，请调整引用后重试", Map.of("ownerModelSpecId", edge.fromModelSpecId(),
+                    "pinnedRevision", edge.pinnedRevision(), "reason", "ARCHIVED"));
+                continue;
+            }
             if (edge.state() == DependencyState.STALE && upstream.status() != ModelStatus.PUBLISHED) {
                 addBlocker(
                     blockers,

@@ -270,6 +270,19 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
         Objects.equals(sourceRef.resolvedVersion(), resolved.resolvedVersion());
     }
 
+    @Override
+    public java.util.List<com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort.SourceField> readFields(
+        String tenantId, UUID planId, UUID bindingId, String version) {
+        WarehousePlanActor actor = currentActor();
+        if (actor == null || !isCurrentBindingForGate(tenantId, planId, bindingId, version)) return java.util.List.of();
+        SourceBindingState binding = repository.findSourceBinding(tenantId, planId, bindingId).orElse(null);
+        if (binding == null) return java.util.List.of();
+        SourceType type = sourceType(binding.sourceType());
+        SourceLocator locator = readLocator(binding, type);
+        if (type == null || locator == null) return java.util.List.of();
+        return resolver.readFields(type, locator, new AccessContext(tenantId, actor.ownerId(), actor.ownerDepartmentId()), version);
+    }
+
     private WarehousePlanActor currentActor() {
         try {
             return actorProvider.currentActor();

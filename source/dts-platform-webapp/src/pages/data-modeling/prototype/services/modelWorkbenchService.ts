@@ -1,5 +1,3 @@
-import { createCommandForDraft } from "./modelDraftCreateCommand";
-import { copyDimensionProfile, dimensionProfileForSave, implementationConfiguration } from "./modelDraftConfiguration";
 import { listDataMarts } from "@/api/dataMartApi";
 import type { ModelAuthoringSnapshot, ModelAuthoringSnapshotInput } from "@/api/dbtImplementationDraftApi";
 import {
@@ -15,9 +13,9 @@ import {
 } from "@/api/modelImplementationApi";
 import { listModelFieldStandardOptions, type ModelFieldStandardOption } from "@/api/modelingStandardsApi";
 import {
-	type ModelDraftOperationCommand,
 	getModelLifecycle,
 	listModelSpecs,
+	type ModelDraftOperationCommand,
 	saveModelDraftOperation,
 	updateModelSpec,
 } from "@/api/modelSpecApi";
@@ -36,10 +34,9 @@ import type {
 	DimensionDefinitionView,
 } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import {
-	modelImplementationValidationMessage,
-	type ModelImplementationCapabilities,
 	type GeneratedImplementationInput,
 	type ModelImplementationAggregation,
+	type ModelImplementationCapabilities,
 	type ModelImplementationCastType,
 	type ModelImplementationFieldMapping,
 	type ModelImplementationFilter,
@@ -48,11 +45,12 @@ import {
 	type ModelImplementationJoin,
 	type ModelImplementationView,
 	type ModelImplementationWriteCommand,
+	modelImplementationValidationMessage,
 } from "@/features/modeling/contracts/modelImplementationContract";
 import {
 	type CanonicalModelSpecView,
-	type ModelSpecFactShape,
 	type ModelSpecDimensionProfile,
+	type ModelSpecFactShape,
 	type ModelSpecField,
 	type ModelSpecImplementationMode,
 	type ModelSpecLayer,
@@ -68,6 +66,9 @@ import {
 	validateModelSpecUpdate,
 } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { SubjectDomainView } from "@/features/modeling/contracts/subjectDomainContract";
+import { copyDimensionProfile, dimensionProfileForSave, implementationConfiguration } from "./modelDraftConfiguration";
+import { createCommandForDraft } from "./modelDraftCreateCommand";
+import { modelInputIds } from "./modelInputIdentity";
 
 export type ModelCreateKind = "dimension" | "dimension-table" | "source" | "fact" | "summary" | "application";
 export type ModelSpecCreateKind = Exclude<ModelCreateKind, "dimension">;
@@ -210,13 +211,15 @@ export type ModelDraftErrorKey =
 export type ModelDraftValidationErrors = Partial<Record<ModelDraftErrorKey, string>>;
 
 const modelKind = (model: ModelSpecView): ModelSpecCreateKind =>
-	model.modelType === "SOURCE" ? "source" : model.modelType === "DIMENSION"
-		? "dimension-table"
-		: model.modelType === "FACT"
-			? "fact"
-			: model.modelType === "SUMMARY"
-				? "summary"
-				: "application";
+	model.modelType === "SOURCE"
+		? "source"
+		: model.modelType === "DIMENSION"
+			? "dimension-table"
+			: model.modelType === "FACT"
+				? "fact"
+				: model.modelType === "SUMMARY"
+					? "summary"
+					: "application";
 
 export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchContext): ModelDraft {
 	if (kind === "dimension") {
@@ -488,7 +491,12 @@ export function modelDraftFromView(
 						: model.modelType === "SUMMARY" || model.modelType === "APPLICATION"
 							? "UPSTREAM_MODEL"
 							: ""),
-		generationStrategyType: generationStrategyType === "DATE_DIMENSION" || generationStrategyType === "SCHEMA_ONLY" ? generationStrategyType : model.modelType === "SOURCE" ? "SCHEMA_ONLY" : "",
+		generationStrategyType:
+			generationStrategyType === "DATE_DIMENSION" || generationStrategyType === "SCHEMA_ONLY"
+				? generationStrategyType
+				: model.modelType === "SOURCE"
+					? "SCHEMA_ONLY"
+					: "",
 		implementationIdempotencyKey: crypto.randomUUID(),
 		creationOperationId: crypto.randomUUID(),
 		fieldMappings: (structuredImplementation?.fieldMappings || []).map((mapping) => ({ ...mapping })),
@@ -842,10 +850,20 @@ export function validateModelDraftInput(
 	) {
 		errors.implementationInputMode = "当前模型不支持所选生成器";
 	}
-	if (draft.implementationInputMode === "GENERATED" && draft.generationStrategyType === "SCHEMA_ONLY" &&
-		(draft.materialization !== "table" || draft.loadStrategy !== "FULL" || draft.partitionFields.trim() ||
-		 draft.fieldMappings.length || Object.keys(draft.casts).length || draft.filters.length ||
-		 draft.deduplicateBy.length || draft.joins.length || draft.groupBy.length || draft.aggregations.length)) {
+	if (
+		draft.implementationInputMode === "GENERATED" &&
+		draft.generationStrategyType === "SCHEMA_ONLY" &&
+		(draft.materialization !== "table" ||
+			draft.loadStrategy !== "FULL" ||
+			draft.partitionFields.trim() ||
+			draft.fieldMappings.length ||
+			Object.keys(draft.casts).length ||
+			draft.filters.length ||
+			draft.deduplicateBy.length ||
+			draft.joins.length ||
+			draft.groupBy.length ||
+			draft.aggregations.length)
+	) {
 		errors.implementationInputMode = "仅创建表结构需要普通表、全量策略和空的映射、转换及分区配置，请先清除不兼容配置";
 	}
 	const partitionFields = parsePartitionFields(draft.partitionFields);
@@ -1037,7 +1055,9 @@ export const modelDraftToUpdateCommand = (draft: ModelSpecDraft): UpdateModelSpe
 				? { type: draft.timeSemanticsType, fields: draft.timeSemanticsFields }
 				: null,
 		generationStrategy:
-			config.modelType === "DIMENSION" && draft.implementationInputMode === "GENERATED" && draft.generationStrategyType === "DATE_DIMENSION"
+			config.modelType === "DIMENSION" &&
+			draft.implementationInputMode === "GENERATED" &&
+			draft.generationStrategyType === "DATE_DIMENSION"
 				? draft.generationStrategyType
 					? { type: draft.generationStrategyType, reference: null }
 					: null
@@ -1091,18 +1111,25 @@ const implementationIdentityOf = (
 	return { projectKey: candidate.projectKey, dbtUniqueId: candidate.dbtUniqueId };
 };
 
-const implementationInputs = (
+export const implementationInputs = (
 	draft: ModelSpecDraft,
-	context: ModelSaveContext,
+	context: Pick<ModelSaveContext, "models">,
 ): ResolvedImplementationInputs | null => {
-	if (draft.implementationInputMode === "GENERATED" && (draft.generationStrategyType === "DATE_DIMENSION" || draft.generationStrategyType === "SCHEMA_ONLY")) {
+	if (
+		draft.implementationInputMode === "GENERATED" &&
+		(draft.generationStrategyType === "DATE_DIMENSION" || draft.generationStrategyType === "SCHEMA_ONLY")
+	) {
 		return {
 			inputMode: "GENERATED",
 			inputs: [{ generatorType: draft.generationStrategyType, config: {} }],
 		};
 	}
 	if (draft.implementationInputMode === "PHYSICAL_ASSET") {
-		const sourceRefs = draft.sourceRefs;
+		const order = modelInputIds(draft);
+		const sourceRefs = [...draft.sourceRefs].sort(
+			(left, right) =>
+				order.indexOf(`source:${left.sourceBindingId}`) - order.indexOf(`source:${right.sourceBindingId}`),
+		);
 		const resolvedSourceRefs = sourceRefs.flatMap((source) =>
 			typeof source.sourceBindingId === "string" &&
 			source.sourceBindingId.trim() &&
@@ -1118,7 +1145,10 @@ const implementationInputs = (
 		};
 	}
 	if (draft.implementationInputMode === "UPSTREAM_MODEL") {
-		const dependencies = draft.dependsOn;
+		const order = modelInputIds(draft);
+		const dependencies = [...draft.dependsOn].sort(
+			(left, right) => order.indexOf(`model:${left.modelSpecId}`) - order.indexOf(`model:${right.modelSpecId}`),
+		);
 		if (!dependencies.length) return null;
 		const models = context.models || [];
 		const inputs = dependencies.map((dependency) => {

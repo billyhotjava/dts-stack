@@ -86,6 +86,46 @@ public class ModelLifecycleRepository {
             .findFirst();
     }
 
+    public List<ImplementationView> findInputImplementations(String tenantId, java.util.Collection<UUID> ids) {
+        if (ids.isEmpty()) return List.of();
+        if (ids.size() > 201) throw new IllegalArgumentException("Input window exceeds 201 models");
+        List<Object> args = new java.util.ArrayList<>();
+        args.add(tenantId);
+        args.addAll(ids);
+        String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        return jdbcTemplate
+            .query(
+                """
+                select id, model_spec_id, plan_id, model_revision, model_checksum,
+                       ownership, project_key, dbt_unique_id, status, implementation_revision,
+                       current_implementation_checksum, input_mode, inputs_json::text,
+                       field_mappings_json::text, settings_json::text, materialization
+                  from modeling_model_implementation
+                 where tenant_id = ? and model_spec_id in (%s)
+                """.formatted(placeholders),
+                (row, number) ->
+                    new ImplementationView(
+                        row.getObject("id", UUID.class),
+                        row.getObject("model_spec_id", UUID.class),
+                        row.getObject("plan_id", UUID.class),
+                        row.getInt("model_revision"),
+                        row.getString("model_checksum"),
+                        ImplementationMode.valueOf(row.getString("ownership")),
+                        row.getString("project_key"),
+                        row.getString("dbt_unique_id"),
+                        row.getString("status"),
+                        row.getInt("implementation_revision"),
+                        row.getString("current_implementation_checksum"),
+                        InputMode.valueOf(row.getString("input_mode")),
+                        readInputs(InputMode.valueOf(row.getString("input_mode")), row.getString("inputs_json")),
+                        readFieldMappings(row.getString("field_mappings_json")),
+                        readSettings(row.getString("settings_json")),
+                        row.getString("materialization")
+                    ),
+                args.toArray()
+            );
+    }
+
     /** Holds a shared row lock until the caller's transaction commits and verifies the exact implementation head. */
     public boolean lockImplementation(String tenantId, UUID modelSpecId, ImplementationView expected) {
         if (expected == null) return false;

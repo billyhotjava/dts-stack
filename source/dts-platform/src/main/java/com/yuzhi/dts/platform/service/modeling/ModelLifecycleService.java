@@ -52,6 +52,10 @@ public class ModelLifecycleService {
     private final ModelSpecPlanWriteAccessPort writeAccess;
     private final ModelLifecycleCompilerPort compiler;
     private final ModelLifecycleTestEvidencePort testEvidence;
+    private ModelSourceFieldsService sourceFields;
+    @org.springframework.beans.factory.annotation.Autowired
+    public void setSourceFields(ModelSourceFieldsService sourceFields) { this.sourceFields = sourceFields; }
+
     private final ModelImplementationInputPolicy inputPolicy;
     private final ModelLifecycleCommandReceiptRepository commandReceipts;
     private final AuditService auditService;
@@ -192,6 +196,7 @@ public class ModelLifecycleService {
         ModelImplementationInputPolicy.ValidationResult inputValidation =
             inputPolicy.validate(tenantId, model, pinned);
         if (!inputValidation.valid()) return validation(inputValidation);
+        if (sourceFields != null && pinned.ownership() == ModelSpecContract.ImplementationMode.DESIGNER_GENERATED) sourceFields.requireValid(tenantId, model, pinned);
         return validation(
             ModelImplementationExecutionPlanner.plan(
                 model,
@@ -523,6 +528,8 @@ public class ModelLifecycleService {
             artifactCount = importedTypes.size();
             lifecycle.promoteImportedArtifactsToCompiled(tenantId, modelSpecId, owner, clock.instant());
         } else {
+            if (sourceFields != null) sourceFields.requireValid(tenantId, model, new SaveImplementationCommand(
+                owner.inputMode(), owner.inputs(), owner.fieldMappings(), owner.settings(), owner.ownership(), owner.materialization(), idempotencyKey));
             artifacts = compiler.compile(tenantId, model, owner);
             lifecycle.saveArtifacts(tenantId, model, owner, idempotencyKey.trim(), artifacts, clock.instant());
             artifactCount = artifacts.size();
@@ -789,7 +796,8 @@ public class ModelLifecycleService {
     ) {
         if (command == null) throw unprocessable("MODEL_IMPLEMENTATION_INPUT_REQUIRED", "Implementation input is required");
         ModelImplementationInputPolicy.ValidationResult result = inputPolicy.validate(tenantId, model, command);
-        if (!result.valid()) throw unprocessable(result.code(), "Implementation input does not satisfy the current ModelSpec");
+        if (!result.valid()) throw new ModelSpecException(result.code(), "上游引用不满足当前模型要求，请检查具体上游", ModelSpecException.Kind.UNPROCESSABLE, result.details());
+        if (sourceFields != null && command.ownership() == ModelSpecContract.ImplementationMode.DESIGNER_GENERATED) sourceFields.requireValid(tenantId, model, command);
         ModelImplementationExecutionPlanner.ValidationResult execution =
             ModelImplementationExecutionPlanner.plan(model, command, dbtUniqueId);
         if (!execution.valid()) {
