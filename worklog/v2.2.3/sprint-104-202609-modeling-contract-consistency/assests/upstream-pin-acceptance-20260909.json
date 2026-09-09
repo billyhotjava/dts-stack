@@ -1,0 +1,862 @@
+{
+  "date": "2026-09-09",
+  "sourceRevision": "be314536756f145e3cfc82d63cb1440c4318eeb8",
+  "browser": "Chrome 152.0.7977.82 via external Playwright connector",
+  "modelId": "8898d08d-2ac2-47c8-b6e8-22bd6425e20b",
+  "records": [
+    {
+      "index": 948,
+      "step": "restore-original-draft",
+      "httpStatus": 200,
+      "request": {
+        "expectedEtag": "39eb3e99-97c9-44ca-bc63-41269bde6776",
+        "modelSpecSnapshot": {
+          "schemaVersion": 1,
+          "modelSpec": {
+            "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+            "domainId": "ec5fd336-5fd2-43ff-bb58-c8ca1ea97f41",
+            "modelType": "SUMMARY",
+            "layer": "DWS",
+            "warehouseLayerCode": "DWS",
+            "name": "项目进度汇总",
+            "description": "按项目和快照日期汇总任务数量、平均进度和实际成本",
+            "implementationMode": "DESIGNER_GENERATED",
+            "materialization": "table",
+            "businessActivityRef": null,
+            "businessProcessId": null,
+            "consumptionScenario": null,
+            "grain": {
+              "statement": "一个项目在一个快照日期一行",
+              "keys": [
+                "project_snapshot_id"
+              ]
+            },
+            "factShape": null,
+            "timeSemantics": null,
+            "generationStrategy": null,
+            "dimensionProfile": null,
+            "dataMartId": null,
+            "subjectDomainId": null,
+            "variantCode": null,
+            "fields": [
+              {
+                "name": "project_snapshot_id",
+                "role": "KEY",
+                "dataType": "STRING",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "项目快照标识",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "snapshot_date",
+                "role": "TIME",
+                "dataType": "DATE",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "快照日期",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "project_code",
+                "role": "ATTRIBUTE",
+                "dataType": "STRING",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "项目编码",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "project_name",
+                "role": "ATTRIBUTE",
+                "dataType": "STRING",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "项目名称",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "task_total",
+                "role": "MEASURE",
+                "dataType": "BIGINT",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "任务总数",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "avg_progress_pct",
+                "role": "MEASURE",
+                "dataType": "DECIMAL",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "平均完成进度",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "actual_cost_amount",
+                "role": "MEASURE",
+                "dataType": "DECIMAL",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "实际成本金额",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              }
+            ],
+            "sourceRefs": [],
+            "dependsOn": [
+              {
+                "revision": 3,
+                "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a"
+              }
+            ],
+            "dimensionRefs": [],
+            "metricRefs": [],
+            "standardBindings": []
+          },
+          "visualImplementation": {
+            "inputMode": "UPSTREAM_MODEL",
+            "inputs": [
+              {
+                "checksum": "3fda50a4ad735a2342c330e87686ce721773524b9cbc1c741b7588c1f99098d6",
+                "revision": 3,
+                "dbtUniqueId": "model.dts_model_57bfaab58c4c.dwd_test_prj",
+                "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a",
+                "implementationChecksum": "458b6f807b6cb5d7f8541c00eb2f8777188c867601f08a8a3ebbde6e05f17631",
+                "implementationRevision": 1
+              }
+            ],
+            "fieldMappings": [],
+            "settings": {
+              "targetPhysicalName": "dws_prjtest_090901",
+              "loadStrategy": "FULL",
+              "partitionFields": []
+            },
+            "ownership": "DESIGNER_GENERATED",
+            "materialization": "table",
+            "projectKey": "dts_model_8898d08d2ac2",
+            "dbtUniqueId": "model.dts_model_8898d08d2ac2.dws_prjtest_090901",
+            "idempotencyKey": "dd1fcbc3-10f5-41e2-89e3-3778759d1c82"
+          }
+        },
+        "files": [
+          {
+            "path": "dbt_project.yml",
+            "content": "name: dts_model_8898d08d2ac2\nversion: '1.0'\nconfig-version: 2\nmodel-paths:\n  - models\nmodels:\n  dts_model_8898d08d2ac2:\n    +materialized: table\n"
+          },
+          {
+            "path": "models/.dts_dependencies/dts_ref_57bfaab58c4c.sql",
+            "content": "{{ config(materialized='ephemeral', tags=['dts-managed-dependency']) }}\n-- Managed dependency proxy for model.dts_model_57bfaab58c4c.dwd_test_prj. Do not rename or delete.\nselect 1 as _dts_dependency_placeholder where 1 = 0\n"
+          },
+          {
+            "path": "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.sql",
+            "content": "{{ config(materialized='table', alias='dws_prjtest_090901', meta={'tenantId':'default','planId':'d01c183f-3067-41f4-af50-27e33e7c7c81','modelSpecId':'8898d08d-2ac2-47c8-b6e8-22bd6425e20b','revision':2,'modelRevision':2,'modelChecksum':'603511a42cca6033597b9425c7b208a063b5bc5e9a7b98b011071b44c8f3471c','implementationRevision':1,'implementationChecksum':'1b857fb210ee88d58b42f1066cda2d6c1d91b03e4d735f11d7fd824f61d762d4','layer':'DWS','targetIdentifier':'dws_prjtest_090901','loadStrategy':'FULL','dependencyChecksum':'787b22889aae124fcb3ea924ed093edbb69df87ee9bc21055624397e9131a22b'}) }}\n-- generated by DTS modeling compiler, revision 2\nselect\n    cast(project_snapshot_id as text) as project_snapshot_id,\n    cast(snapshot_date as date) as snapshot_date,\n    cast(project_code as text) as project_code,\n    cast(project_name as text) as project_name,\n    cast(task_total as bigint) as task_total,\n    cast(avg_progress_pct as numeric) as avg_progress_pct,\n    cast(actual_cost_amount as numeric) as actual_cost_amount\nfrom {{ ref('stg_dws_prjtest_090901') }}\n"
+          },
+          {
+            "path": "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.yml",
+            "content": "version: 2\nmodels:\n  - name: dws_prjtest_090901\n    description: \"一个项目在一个快照日期一行\"\n    config:\n      contract:\n        enforced: true\n    tests:\n      - unique:\n          column_name: project_snapshot_id\n    columns:\n      - name: project_snapshot_id\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n        tests:\n          - not_null\n      - name: snapshot_date\n        data_type: date\n        meta:\n          dts_logical_data_type: \"date\"\n          dts_expected_physical_type: \"date\"\n          dts_nullable: false\n      - name: project_code\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n      - name: project_name\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n      - name: task_total\n        data_type: bigint\n        meta:\n          dts_logical_data_type: \"bigint\"\n          dts_expected_physical_type: \"bigint\"\n          dts_nullable: false\n      - name: avg_progress_pct\n        data_type: numeric\n        meta:\n          dts_logical_data_type: \"decimal\"\n          dts_expected_physical_type: \"numeric\"\n          dts_nullable: false\n      - name: actual_cost_amount\n        data_type: numeric\n        meta:\n          dts_logical_data_type: \"decimal\"\n          dts_expected_physical_type: \"numeric\"\n          dts_nullable: false\n"
+          },
+          {
+            "path": "models/dws/dws_prjtest_090901/v2/i1/stg_dws_prjtest_090901.sql",
+            "content": "{{ config(materialized='ephemeral') }}\nwith source_0 as (\n    select *\n    from {{ ref('dwd_test_prj') }}\n),\ntransformed as (\n    select\n        project_snapshot_id,\n        snapshot_date,\n        project_code,\n        project_name,\n        task_total,\n        avg_progress_pct,\n        actual_cost_amount\n    from source_0 src_0\n)\nselect\n    project_snapshot_id,\n    snapshot_date,\n    project_code,\n    project_name,\n    task_total,\n    avg_progress_pct,\n    actual_cost_amount\nfrom transformed\n"
+          }
+        ],
+        "activeView": "VISUAL"
+      },
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "draftId": "a4738134-4dbf-4654-b000-4e04398602a1",
+          "etag": "facb1c07-c7c1-4f81-937f-fa2f3c42bc46",
+          "modelSpecSnapshot": {
+            "modelSpec": {
+              "name": "项目进度汇总",
+              "grain": {
+                "keys": [
+                  "project_snapshot_id"
+                ],
+                "statement": "一个项目在一个快照日期一行"
+              },
+              "layer": "DWS",
+              "fields": [
+                {
+                  "name": "project_snapshot_id",
+                  "role": "KEY",
+                  "dataType": "STRING",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "项目快照标识",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "snapshot_date",
+                  "role": "TIME",
+                  "dataType": "DATE",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "快照日期",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "project_code",
+                  "role": "ATTRIBUTE",
+                  "dataType": "STRING",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "项目编码",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "project_name",
+                  "role": "ATTRIBUTE",
+                  "dataType": "STRING",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "项目名称",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "task_total",
+                  "role": "MEASURE",
+                  "dataType": "BIGINT",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "任务总数",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "avg_progress_pct",
+                  "role": "MEASURE",
+                  "dataType": "DECIMAL",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "平均完成进度",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "actual_cost_amount",
+                  "role": "MEASURE",
+                  "dataType": "DECIMAL",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "实际成本金额",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                }
+              ],
+              "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+              "domainId": "ec5fd336-5fd2-43ff-bb58-c8ca1ea97f41",
+              "dependsOn": [
+                {
+                  "revision": 3,
+                  "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a"
+                }
+              ],
+              "factShape": null,
+              "modelType": "SUMMARY",
+              "dataMartId": null,
+              "metricRefs": [],
+              "sourceRefs": [],
+              "description": "按项目和快照日期汇总任务数量、平均进度和实际成本",
+              "variantCode": null,
+              "dimensionRefs": [],
+              "timeSemantics": null,
+              "materialization": "table",
+              "subjectDomainId": null,
+              "dimensionProfile": null,
+              "standardBindings": [],
+              "businessProcessId": null,
+              "generationStrategy": null,
+              "implementationMode": "DESIGNER_GENERATED",
+              "warehouseLayerCode": "DWS",
+              "businessActivityRef": null,
+              "consumptionScenario": null
+            },
+            "schemaVersion": 1,
+            "visualImplementation": {
+              "inputs": [
+                {
+                  "checksum": "3fda50a4ad735a2342c330e87686ce721773524b9cbc1c741b7588c1f99098d6",
+                  "revision": 3,
+                  "dbtUniqueId": "model.dts_model_57bfaab58c4c.dwd_test_prj",
+                  "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a",
+                  "implementationChecksum": "458b6f807b6cb5d7f8541c00eb2f8777188c867601f08a8a3ebbde6e05f17631",
+                  "implementationRevision": 1
+                }
+              ],
+              "settings": {
+                "loadStrategy": "FULL",
+                "partitionFields": [],
+                "targetPhysicalName": "dws_prjtest_090901"
+              },
+              "inputMode": "UPSTREAM_MODEL",
+              "ownership": "DESIGNER_GENERATED",
+              "projectKey": "dts_model_8898d08d2ac2",
+              "dbtUniqueId": "model.dts_model_8898d08d2ac2.dws_prjtest_090901",
+              "fieldMappings": [],
+              "idempotencyKey": "dd1fcbc3-10f5-41e2-89e3-3778759d1c82",
+              "materialization": "table"
+            }
+          },
+          "projection": {
+            "coverage": "FULL",
+            "lossless": false,
+            "managedPaths": [
+              "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.sql"
+            ],
+            "rawNodes": [],
+            "reasons": []
+          },
+          "fileCount": 5,
+          "totalBytes": 3520,
+          "files": [
+            {
+              "path": "dbt_project.yml",
+              "content": "name: dts_model_8898d08d2ac2\nversion: '1.0'\nconfig-version: 2\nmodel-paths:\n  - models\nmodels:\n  dts_model_8898d08d2ac2:\n    +materialized: table\n"
+            },
+            {
+              "path": "models/.dts_dependencies/dts_ref_57bfaab58c4c.sql",
+              "content": "{{ config(materialized='ephemeral', tags=['dts-managed-dependency']) }}\n-- Managed dependency proxy for model.dts_model_57bfaab58c4c.dwd_test_prj. Do not rename or delete.\nselect 1 as _dts_dependency_placeholder where 1 = 0\n"
+            },
+            {
+              "path": "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.sql",
+              "content": "{{ config(materialized='table', alias='dws_prjtest_090901', meta={'tenantId':'default','planId':'d01c183f-3067-41f4-af50-27e33e7c7c81','modelSpecId':'8898d08d-2ac2-47c8-b6e8-22bd6425e20b','revision':2,'modelRevision':2,'modelChecksum':'603511a42cca6033597b9425c7b208a063b5bc5e9a7b98b011071b44c8f3471c','implementationRevision':1,'implementationChecksum':'1b857fb210ee88d58b42f1066cda2d6c1d91b03e4d735f11d7fd824f61d762d4','layer':'DWS','targetIdentifier':'dws_prjtest_090901','loadStrategy':'FULL','dependencyChecksum':'787b22889aae124fcb3ea924ed093edbb69df87ee9bc21055624397e9131a22b'}) }}\n-- generated by DTS modeling compiler, revision 2\nselect\n    cast(project_snapshot_id as text) as project_snapshot_id,\n    cast(snapshot_date as date) as snapshot_date,\n    cast(project_code as text) as project_code,\n    cast(project_name as text) as project_name,\n    cast(task_total as bigint) as task_total,\n    cast(avg_progress_pct as numeric) as avg_progress_pct,\n    cast(actual_cost_amount as numeric) as actual_cost_amount\nfrom {{ ref('stg_dws_prjtest_090901') }}\n"
+            },
+            {
+              "path": "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.yml",
+              "content": "version: 2\nmodels:\n  - name: dws_prjtest_090901\n    description: \"一个项目在一个快照日期一行\"\n    config:\n      contract:\n        enforced: true\n    tests:\n      - unique:\n          column_name: project_snapshot_id\n    columns:\n      - name: project_snapshot_id\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n        tests:\n          - not_null\n      - name: snapshot_date\n        data_type: date\n        meta:\n          dts_logical_data_type: \"date\"\n          dts_expected_physical_type: \"date\"\n          dts_nullable: false\n      - name: project_code\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n      - name: project_name\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n      - name: task_total\n        data_type: bigint\n        meta:\n          dts_logical_data_type: \"bigint\"\n          dts_expected_physical_type: \"bigint\"\n          dts_nullable: false\n      - name: avg_progress_pct\n        data_type: numeric\n        meta:\n          dts_logical_data_type: \"decimal\"\n          dts_expected_physical_type: \"numeric\"\n          dts_nullable: false\n      - name: actual_cost_amount\n        data_type: numeric\n        meta:\n          dts_logical_data_type: \"decimal\"\n          dts_expected_physical_type: \"numeric\"\n          dts_nullable: false\n"
+            },
+            {
+              "path": "models/dws/dws_prjtest_090901/v2/i1/stg_dws_prjtest_090901.sql",
+              "content": "{{ config(materialized='ephemeral') }}\nwith source_0 as (\n    select *\n    from {{ ref('dts_ref_57bfaab58c4c') }}\n),\ntransformed as (\n    select\n        project_snapshot_id,\n        snapshot_date,\n        project_code,\n        project_name,\n        task_total,\n        avg_progress_pct,\n        actual_cost_amount\n    from source_0 src_0\n)\nselect\n    project_snapshot_id,\n    snapshot_date,\n    project_code,\n    project_name,\n    task_total,\n    avg_progress_pct,\n    actual_cost_amount\nfrom transformed\n"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "index": 949,
+      "step": "repeat-save",
+      "httpStatus": 200,
+      "request": {
+        "expectedEtag": "facb1c07-c7c1-4f81-937f-fa2f3c42bc46",
+        "modelSpecSnapshot": {
+          "schemaVersion": 1,
+          "modelSpec": {
+            "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+            "domainId": "ec5fd336-5fd2-43ff-bb58-c8ca1ea97f41",
+            "modelType": "SUMMARY",
+            "layer": "DWS",
+            "warehouseLayerCode": "DWS",
+            "name": "项目进度汇总",
+            "description": "按项目和快照日期汇总任务数量、平均进度和实际成本",
+            "implementationMode": "DESIGNER_GENERATED",
+            "materialization": "table",
+            "businessActivityRef": null,
+            "businessProcessId": null,
+            "consumptionScenario": null,
+            "grain": {
+              "statement": "一个项目在一个快照日期一行",
+              "keys": [
+                "project_snapshot_id"
+              ]
+            },
+            "factShape": null,
+            "timeSemantics": null,
+            "generationStrategy": null,
+            "dimensionProfile": null,
+            "dataMartId": null,
+            "subjectDomainId": null,
+            "variantCode": null,
+            "fields": [
+              {
+                "name": "project_snapshot_id",
+                "role": "KEY",
+                "dataType": "STRING",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "项目快照标识",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "snapshot_date",
+                "role": "TIME",
+                "dataType": "DATE",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "快照日期",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "project_code",
+                "role": "ATTRIBUTE",
+                "dataType": "STRING",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "项目编码",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "project_name",
+                "role": "ATTRIBUTE",
+                "dataType": "STRING",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "项目名称",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "task_total",
+                "role": "MEASURE",
+                "dataType": "BIGINT",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "任务总数",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "avg_progress_pct",
+                "role": "MEASURE",
+                "dataType": "DECIMAL",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "平均完成进度",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              },
+              {
+                "name": "actual_cost_amount",
+                "role": "MEASURE",
+                "dataType": "DECIMAL",
+                "nullable": false,
+                "redundant": false,
+                "displayName": "实际成本金额",
+                "securityLevel": null,
+                "sourceFieldRef": null,
+                "redundancySourceRef": null,
+                "dimensionAttributeCode": null
+              }
+            ],
+            "sourceRefs": [],
+            "dependsOn": [
+              {
+                "revision": 3,
+                "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a"
+              }
+            ],
+            "dimensionRefs": [],
+            "metricRefs": [],
+            "standardBindings": []
+          },
+          "visualImplementation": {
+            "inputMode": "UPSTREAM_MODEL",
+            "inputs": [
+              {
+                "checksum": "3fda50a4ad735a2342c330e87686ce721773524b9cbc1c741b7588c1f99098d6",
+                "revision": 3,
+                "dbtUniqueId": "model.dts_model_57bfaab58c4c.dwd_test_prj",
+                "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a",
+                "implementationChecksum": "458b6f807b6cb5d7f8541c00eb2f8777188c867601f08a8a3ebbde6e05f17631",
+                "implementationRevision": 1
+              }
+            ],
+            "fieldMappings": [],
+            "settings": {
+              "targetPhysicalName": "dws_prjtest_090901",
+              "loadStrategy": "FULL",
+              "partitionFields": []
+            },
+            "ownership": "DESIGNER_GENERATED",
+            "materialization": "table",
+            "projectKey": "dts_model_8898d08d2ac2",
+            "dbtUniqueId": "model.dts_model_8898d08d2ac2.dws_prjtest_090901",
+            "idempotencyKey": "b2b82b14-4484-4d7b-8f65-88c379defd4b"
+          }
+        },
+        "files": [
+          {
+            "path": "dbt_project.yml",
+            "content": "name: dts_model_8898d08d2ac2\nversion: '1.0'\nconfig-version: 2\nmodel-paths:\n  - models\nmodels:\n  dts_model_8898d08d2ac2:\n    +materialized: table\n"
+          },
+          {
+            "path": "models/.dts_dependencies/dts_ref_57bfaab58c4c.sql",
+            "content": "{{ config(materialized='ephemeral', tags=['dts-managed-dependency']) }}\n-- Managed dependency proxy for model.dts_model_57bfaab58c4c.dwd_test_prj. Do not rename or delete.\nselect 1 as _dts_dependency_placeholder where 1 = 0\n"
+          },
+          {
+            "path": "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.sql",
+            "content": "{{ config(materialized='table', alias='dws_prjtest_090901', meta={'tenantId':'default','planId':'d01c183f-3067-41f4-af50-27e33e7c7c81','modelSpecId':'8898d08d-2ac2-47c8-b6e8-22bd6425e20b','revision':2,'modelRevision':2,'modelChecksum':'603511a42cca6033597b9425c7b208a063b5bc5e9a7b98b011071b44c8f3471c','implementationRevision':1,'implementationChecksum':'1b857fb210ee88d58b42f1066cda2d6c1d91b03e4d735f11d7fd824f61d762d4','layer':'DWS','targetIdentifier':'dws_prjtest_090901','loadStrategy':'FULL','dependencyChecksum':'787b22889aae124fcb3ea924ed093edbb69df87ee9bc21055624397e9131a22b'}) }}\n-- generated by DTS modeling compiler, revision 2\nselect\n    cast(project_snapshot_id as text) as project_snapshot_id,\n    cast(snapshot_date as date) as snapshot_date,\n    cast(project_code as text) as project_code,\n    cast(project_name as text) as project_name,\n    cast(task_total as bigint) as task_total,\n    cast(avg_progress_pct as numeric) as avg_progress_pct,\n    cast(actual_cost_amount as numeric) as actual_cost_amount\nfrom {{ ref('stg_dws_prjtest_090901') }}\n"
+          },
+          {
+            "path": "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.yml",
+            "content": "version: 2\nmodels:\n  - name: dws_prjtest_090901\n    description: \"一个项目在一个快照日期一行\"\n    config:\n      contract:\n        enforced: true\n    tests:\n      - unique:\n          column_name: project_snapshot_id\n    columns:\n      - name: project_snapshot_id\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n        tests:\n          - not_null\n      - name: snapshot_date\n        data_type: date\n        meta:\n          dts_logical_data_type: \"date\"\n          dts_expected_physical_type: \"date\"\n          dts_nullable: false\n      - name: project_code\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n      - name: project_name\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n      - name: task_total\n        data_type: bigint\n        meta:\n          dts_logical_data_type: \"bigint\"\n          dts_expected_physical_type: \"bigint\"\n          dts_nullable: false\n      - name: avg_progress_pct\n        data_type: numeric\n        meta:\n          dts_logical_data_type: \"decimal\"\n          dts_expected_physical_type: \"numeric\"\n          dts_nullable: false\n      - name: actual_cost_amount\n        data_type: numeric\n        meta:\n          dts_logical_data_type: \"decimal\"\n          dts_expected_physical_type: \"numeric\"\n          dts_nullable: false\n"
+          },
+          {
+            "path": "models/dws/dws_prjtest_090901/v2/i1/stg_dws_prjtest_090901.sql",
+            "content": "{{ config(materialized='ephemeral') }}\nwith source_0 as (\n    select *\n    from {{ ref('dts_ref_57bfaab58c4c') }}\n),\ntransformed as (\n    select\n        project_snapshot_id,\n        snapshot_date,\n        project_code,\n        project_name,\n        task_total,\n        avg_progress_pct,\n        actual_cost_amount\n    from source_0 src_0\n)\nselect\n    project_snapshot_id,\n    snapshot_date,\n    project_code,\n    project_name,\n    task_total,\n    avg_progress_pct,\n    actual_cost_amount\nfrom transformed\n"
+          }
+        ],
+        "activeView": "VISUAL"
+      },
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "draftId": "a4738134-4dbf-4654-b000-4e04398602a1",
+          "etag": "a5c4133d-faca-4c90-a4e9-8bdac2d3db4a",
+          "modelSpecSnapshot": {
+            "modelSpec": {
+              "name": "项目进度汇总",
+              "grain": {
+                "keys": [
+                  "project_snapshot_id"
+                ],
+                "statement": "一个项目在一个快照日期一行"
+              },
+              "layer": "DWS",
+              "fields": [
+                {
+                  "name": "project_snapshot_id",
+                  "role": "KEY",
+                  "dataType": "STRING",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "项目快照标识",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "snapshot_date",
+                  "role": "TIME",
+                  "dataType": "DATE",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "快照日期",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "project_code",
+                  "role": "ATTRIBUTE",
+                  "dataType": "STRING",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "项目编码",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "project_name",
+                  "role": "ATTRIBUTE",
+                  "dataType": "STRING",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "项目名称",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "task_total",
+                  "role": "MEASURE",
+                  "dataType": "BIGINT",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "任务总数",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "avg_progress_pct",
+                  "role": "MEASURE",
+                  "dataType": "DECIMAL",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "平均完成进度",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                },
+                {
+                  "name": "actual_cost_amount",
+                  "role": "MEASURE",
+                  "dataType": "DECIMAL",
+                  "nullable": false,
+                  "redundant": false,
+                  "displayName": "实际成本金额",
+                  "securityLevel": null,
+                  "sourceFieldRef": null,
+                  "redundancySourceRef": null,
+                  "dimensionAttributeCode": null
+                }
+              ],
+              "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+              "domainId": "ec5fd336-5fd2-43ff-bb58-c8ca1ea97f41",
+              "dependsOn": [
+                {
+                  "revision": 3,
+                  "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a"
+                }
+              ],
+              "factShape": null,
+              "modelType": "SUMMARY",
+              "dataMartId": null,
+              "metricRefs": [],
+              "sourceRefs": [],
+              "description": "按项目和快照日期汇总任务数量、平均进度和实际成本",
+              "variantCode": null,
+              "dimensionRefs": [],
+              "timeSemantics": null,
+              "materialization": "table",
+              "subjectDomainId": null,
+              "dimensionProfile": null,
+              "standardBindings": [],
+              "businessProcessId": null,
+              "generationStrategy": null,
+              "implementationMode": "DESIGNER_GENERATED",
+              "warehouseLayerCode": "DWS",
+              "businessActivityRef": null,
+              "consumptionScenario": null
+            },
+            "schemaVersion": 1,
+            "visualImplementation": {
+              "inputs": [
+                {
+                  "checksum": "3fda50a4ad735a2342c330e87686ce721773524b9cbc1c741b7588c1f99098d6",
+                  "revision": 3,
+                  "dbtUniqueId": "model.dts_model_57bfaab58c4c.dwd_test_prj",
+                  "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a",
+                  "implementationChecksum": "458b6f807b6cb5d7f8541c00eb2f8777188c867601f08a8a3ebbde6e05f17631",
+                  "implementationRevision": 1
+                }
+              ],
+              "settings": {
+                "loadStrategy": "FULL",
+                "partitionFields": [],
+                "targetPhysicalName": "dws_prjtest_090901"
+              },
+              "inputMode": "UPSTREAM_MODEL",
+              "ownership": "DESIGNER_GENERATED",
+              "projectKey": "dts_model_8898d08d2ac2",
+              "dbtUniqueId": "model.dts_model_8898d08d2ac2.dws_prjtest_090901",
+              "fieldMappings": [],
+              "idempotencyKey": "b2b82b14-4484-4d7b-8f65-88c379defd4b",
+              "materialization": "table"
+            }
+          },
+          "projection": {
+            "coverage": "FULL",
+            "lossless": false,
+            "managedPaths": [
+              "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.sql"
+            ],
+            "rawNodes": [],
+            "reasons": []
+          },
+          "fileCount": 5,
+          "totalBytes": 3520,
+          "files": [
+            {
+              "path": "dbt_project.yml",
+              "content": "name: dts_model_8898d08d2ac2\nversion: '1.0'\nconfig-version: 2\nmodel-paths:\n  - models\nmodels:\n  dts_model_8898d08d2ac2:\n    +materialized: table\n"
+            },
+            {
+              "path": "models/.dts_dependencies/dts_ref_57bfaab58c4c.sql",
+              "content": "{{ config(materialized='ephemeral', tags=['dts-managed-dependency']) }}\n-- Managed dependency proxy for model.dts_model_57bfaab58c4c.dwd_test_prj. Do not rename or delete.\nselect 1 as _dts_dependency_placeholder where 1 = 0\n"
+            },
+            {
+              "path": "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.sql",
+              "content": "{{ config(materialized='table', alias='dws_prjtest_090901', meta={'tenantId':'default','planId':'d01c183f-3067-41f4-af50-27e33e7c7c81','modelSpecId':'8898d08d-2ac2-47c8-b6e8-22bd6425e20b','revision':2,'modelRevision':2,'modelChecksum':'603511a42cca6033597b9425c7b208a063b5bc5e9a7b98b011071b44c8f3471c','implementationRevision':1,'implementationChecksum':'1b857fb210ee88d58b42f1066cda2d6c1d91b03e4d735f11d7fd824f61d762d4','layer':'DWS','targetIdentifier':'dws_prjtest_090901','loadStrategy':'FULL','dependencyChecksum':'787b22889aae124fcb3ea924ed093edbb69df87ee9bc21055624397e9131a22b'}) }}\n-- generated by DTS modeling compiler, revision 2\nselect\n    cast(project_snapshot_id as text) as project_snapshot_id,\n    cast(snapshot_date as date) as snapshot_date,\n    cast(project_code as text) as project_code,\n    cast(project_name as text) as project_name,\n    cast(task_total as bigint) as task_total,\n    cast(avg_progress_pct as numeric) as avg_progress_pct,\n    cast(actual_cost_amount as numeric) as actual_cost_amount\nfrom {{ ref('stg_dws_prjtest_090901') }}\n"
+            },
+            {
+              "path": "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.yml",
+              "content": "version: 2\nmodels:\n  - name: dws_prjtest_090901\n    description: \"一个项目在一个快照日期一行\"\n    config:\n      contract:\n        enforced: true\n    tests:\n      - unique:\n          column_name: project_snapshot_id\n    columns:\n      - name: project_snapshot_id\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n        tests:\n          - not_null\n      - name: snapshot_date\n        data_type: date\n        meta:\n          dts_logical_data_type: \"date\"\n          dts_expected_physical_type: \"date\"\n          dts_nullable: false\n      - name: project_code\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n      - name: project_name\n        data_type: text\n        meta:\n          dts_logical_data_type: \"string\"\n          dts_expected_physical_type: \"text\"\n          dts_nullable: false\n      - name: task_total\n        data_type: bigint\n        meta:\n          dts_logical_data_type: \"bigint\"\n          dts_expected_physical_type: \"bigint\"\n          dts_nullable: false\n      - name: avg_progress_pct\n        data_type: numeric\n        meta:\n          dts_logical_data_type: \"decimal\"\n          dts_expected_physical_type: \"numeric\"\n          dts_nullable: false\n      - name: actual_cost_amount\n        data_type: numeric\n        meta:\n          dts_logical_data_type: \"decimal\"\n          dts_expected_physical_type: \"numeric\"\n          dts_nullable: false\n"
+            },
+            {
+              "path": "models/dws/dws_prjtest_090901/v2/i1/stg_dws_prjtest_090901.sql",
+              "content": "{{ config(materialized='ephemeral') }}\nwith source_0 as (\n    select *\n    from {{ ref('dts_ref_57bfaab58c4c') }}\n),\ntransformed as (\n    select\n        project_snapshot_id,\n        snapshot_date,\n        project_code,\n        project_name,\n        task_total,\n        avg_progress_pct,\n        actual_cost_amount\n    from source_0 src_0\n)\nselect\n    project_snapshot_id,\n    snapshot_date,\n    project_code,\n    project_name,\n    task_total,\n    avg_progress_pct,\n    actual_cost_amount\nfrom transformed\n"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "index": 950,
+      "step": "validate",
+      "httpStatus": 200,
+      "request": {
+        "expectedEtag": "a5c4133d-faca-4c90-a4e9-8bdac2d3db4a"
+      },
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "implementationValidation": {
+            "draftId": "a4738134-4dbf-4654-b000-4e04398602a1",
+            "state": "VALIDATED",
+            "etag": "6af6c8ef-2152-4aab-9dc4-464b334f5409",
+            "expiresAt": "2026-09-10T06:28:50.048172Z",
+            "validatedChecksum": "cd305a8068f22b4d7499cd2bbed977abd8d96df9d334b26c8829b8936a55a676",
+            "diagnostics": [
+              {
+                "code": "DBT_SOURCE_PROJECT_STATIC_ANALYSIS",
+                "severity": "INFO",
+                "path": "$.dbt",
+                "modelUniqueId": null,
+                "message": "已从 dbt 源项目静态读取模型、ref/source 和显式配置，未执行 dbt 或模型 SQL"
+              },
+              {
+                "code": "SOURCE_SEMANTICS_INCOMPLETE",
+                "severity": "WARNING",
+                "path": "$.models[model.dts_model_8898d08d2ac2.dws_prjtest_090901].semantics",
+                "modelUniqueId": "model.dts_model_8898d08d2ac2.dws_prjtest_090901",
+                "message": "dbt 结构已识别，但业务模型类型、粒度和消费场景不能由 SQL 安全推断"
+              }
+            ],
+            "proposedStructure": [
+              {
+                "dbtUniqueId": "model.dts_model_8898d08d2ac2.dws_prjtest_090901",
+                "name": "dws_prjtest_090901",
+                "resourcePath": "models/dws/dws_prjtest_090901/v2/i1/dws_prjtest_090901.sql",
+                "materialization": "table",
+                "nodeKind": "MODEL",
+                "dependencies": [
+                  "model.dts_model_8898d08d2ac2.dts_ref_57bfaab58c4c"
+                ]
+              }
+            ],
+            "dependencyValidation": {
+              "dependencyChecksum": "787b22889aae124fcb3ea924ed093edbb69df87ee9bc21055624397e9131a22b",
+              "matched": [
+                "model.dts_model_57bfaab58c4c.dwd_test_prj"
+              ],
+              "missing": [],
+              "undeclared": []
+            }
+          },
+          "modelIssues": [],
+          "projectionIssues": []
+        }
+      }
+    },
+    {
+      "index": 952,
+      "step": "commit",
+      "httpStatus": 200,
+      "request": {
+        "implementation": {
+          "expectedEtag": "6af6c8ef-2152-4aab-9dc4-464b334f5409",
+          "validatedChecksum": "cd305a8068f22b4d7499cd2bbed977abd8d96df9d334b26c8829b8936a55a676",
+          "dependencyChecksum": "787b22889aae124fcb3ea924ed093edbb69df87ee9bc21055624397e9131a22b",
+          "idempotencyKey": "b142382d-7734-4f38-8c77-4ea586a28c8d"
+        }
+      },
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "receipt": {
+            "draftId": "a4738134-4dbf-4654-b000-4e04398602a1",
+            "modelSpecId": "8898d08d-2ac2-47c8-b6e8-22bd6425e20b",
+            "modelRevision": 3,
+            "modelChecksum": "c8df11fde091074a44262bb00fb4394f6bf1fff564a4a60c869974542955484a",
+            "implementationId": "071aa3cd-d381-4282-bd23-b364a08fceab",
+            "implementationRevision": 1,
+            "implementationChecksum": "5ec9d95ee0520d140be9d48155c23aea11bb2ea17b0bfda4a75687499e36139e",
+            "artifactCount": 5,
+            "etag": "7a471a91-2ad4-45bc-8072-43fb568e5ac1",
+            "dependencyChecksum": "787b22889aae124fcb3ea924ed093edbb69df87ee9bc21055624397e9131a22b"
+          },
+          "origin": "SYSTEM_GENERATED"
+        }
+      }
+    }
+  ],
+  "negativeVerification": {
+    "sourceRevision": "b6f3f64dd4db7f8af8de67de95fc924c90598df4",
+    "method": "One-shot browser request interception changed implementationRevision 1 to 2; actual backend response, no mocked response and no upstream or manual database mutation",
+    "httpStatus": 409,
+    "code": "MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE",
+    "correlationId": "8b520676-bbce-484f-9d54-04f9e1c0869e",
+    "originalEtag": "7cd75bd1-00c8-424c-87c7-01a8784558a1",
+    "recovery": "Normal UI save using original ETag returned 200 after interceptor removal."
+  },
+  "limits": [
+    "No manual database edits.",
+    "No added or expanded code-level tests. Formal builds skip test execution; Java compilation, type checking and compatibility bundle build passed.",
+    "No materialization, data rows or business aggregation acceptance in this repair.",
+    "Actual Chrome 95 runtime not available; compatibility build passed, live browser was Chrome 152."
+  ]
+}
