@@ -957,7 +957,8 @@ public class DbtImplementationDraftService {
             if (actual != null && (
                 Objects.equals(actual.content(), content) ||
                 (compilerArtifactSignature(path) != null &&
-                    Objects.equals(stableCompilerContent(actual.content()), stableCompilerContent(content)))
+                    (Objects.equals(stableCompilerContent(actual.content()), stableCompilerContent(content)) ||
+                        Objects.equals(stableCompilerContent(actual.content()), stableCompilerContent(legacyCompilerRefs(content, expected)))))
             )) ownedPaths.add(path);
         });
     }
@@ -969,6 +970,19 @@ public class DbtImplementationDraftService {
             return content;
         }
         return content.replaceFirst("'implementationChecksum':'[0-9a-f]{64}'", "'implementationChecksum':'<content-checksum>'");
+    }
+
+    private static String legacyCompilerRefs(String content, Map<String, String> expected) {
+        String result = content;
+        Pattern identity = Pattern.compile("-- Managed dependency proxy for model\\.[A-Za-z0-9_]+\\.([A-Za-z0-9_]+)\\. Do not rename or delete\\.");
+        for (var file : expected.entrySet()) {
+            if (!file.getKey().startsWith("models/.dts_dependencies/dts_ref_") || !file.getKey().endsWith(".sql")) continue;
+            Matcher match = identity.matcher(file.getValue());
+            if (!match.find()) continue;
+            String proxy = file.getKey().substring(file.getKey().lastIndexOf('/') + 1, file.getKey().length() - 4);
+            result = result.replace("{{ ref('" + proxy + "') }}", "{{ ref('" + match.group(1) + "') }}");
+        }
+        return result;
     }
 
     /**
@@ -1136,6 +1150,29 @@ public class DbtImplementationDraftService {
                 if (previous != null && !Objects.equals(previous, artifact.content())) throw sourceBundleUnavailable();
             }
             if (files.isEmpty()) throw sourceBundleUnavailable();
+            if (implementation.inputMode() == InputMode.UPSTREAM_MODEL && dependencies != null) {
+                String targetName = implementation.dbtUniqueId().substring(implementation.dbtUniqueId().lastIndexOf('.') + 1);
+                Resolution resolution = resolveDependencies(tenantId, model, implementation, implementation.projectKey(), targetName);
+                if (resolution != null) {
+                    var canonical = canonicalProjects.initialize(model.id(), implementation.materialization(), targetName, resolution);
+                    Map<String, String> refs = new LinkedHashMap<>();
+                    for (var input : resolution.snapshot().modelInputs()) {
+                        String name = input.dbtUniqueId().substring(input.dbtUniqueId().lastIndexOf('.') + 1);
+                        addDependencyAlias(refs, name, DbtCanonicalProjectReconstructor.modelProxyName(input.modelSpecId()));
+                    }
+                    files.replaceAll((path, content) -> {
+                        if (!path.endsWith(".sql")) return content;
+                        String bound = content;
+                        for (var ref : refs.entrySet()) {
+                            bound = bound.replace("{{ ref('" + ref.getKey() + "') }}", "{{ ref('" + ref.getValue() + "') }}");
+                        }
+                        return bound;
+                    });
+                    canonical.files().forEach((path, content) -> {
+                        if (path.startsWith("models/.dts_dependencies/")) files.put(path, content);
+                    });
+                }
+            }
             return files;
         } catch (DraftException failure) {
             throw failure;
@@ -1509,11 +1546,8 @@ public class DbtImplementationDraftService {
 
         String normalizedProject = dbtSegment(projectKey);
         for (var input : dependencies.snapshot().modelInputs()) {
-            String[] identity = input.dbtUniqueId().split("\\.", -1);
-            if (identity.length != 3 || !"model".equals(identity[0])) throw sourceBundleUnavailable();
-            // The visual compiler emits ref(modelName); the parser qualifies it with this project.
-            // Reconcile that local spelling to the same immutable upstream pin as the proxy alias.
-            addDependencyAlias(aliases, "model." + normalizedProject + "." + dbtSegment(identity[2]), input.dbtUniqueId());
+            addDependencyAlias(aliases, "model." + normalizedProject + "." +
+                DbtCanonicalProjectReconstructor.modelProxyName(input.modelSpecId()), input.dbtUniqueId());
         }
         for (PhysicalSource source : dependencies.snapshot().physicalSources()) {
             PhysicalSourceFact fact = dependencies.physicalSourceFacts().get(source.sourceBindingId());

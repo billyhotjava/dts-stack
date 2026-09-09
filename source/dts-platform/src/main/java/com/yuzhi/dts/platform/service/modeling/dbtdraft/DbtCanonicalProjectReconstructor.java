@@ -44,6 +44,10 @@ final class DbtCanonicalProjectReconstructor {
         return initialize(modelSpecId, materialization, targetPhysicalName, null);
     }
 
+    static String modelProxyName(UUID modelSpecId) {
+        return "dts_ref_" + modelSpecId.toString().replace("-", "").substring(0, 12);
+    }
+
     CanonicalProject initialize(
         UUID modelSpecId,
         String materialization,
@@ -86,7 +90,7 @@ final class DbtCanonicalProjectReconstructor {
             );
         }
         for (ModelInput input : snapshot.modelInputs()) {
-            String proxyName = "dts_ref_" + input.modelSpecId().toString().replace("-", "").substring(0, 12);
+            String proxyName = modelProxyName(input.modelSpecId());
             String proxyPath = "models/.dts_dependencies/" + proxyName + ".sql";
             files.put(
                 proxyPath,
