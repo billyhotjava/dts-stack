@@ -8,9 +8,9 @@
 
 | 编号 | 现象与根因 | 整改与状态 |
 |---|---|---|
-| F5-B01 | 已提交 DBT_MANAGED 包保留 visualImplementation 的完整 inputs，但 modelDraftFromView 只恢复转换配置，未把完整 inputs 传给来源目录，初次打开出现 PIN_REQUIRED | 补齐已提交可视化配置与作者草稿的完整输入恢复；未锁定的设计引用提供显式选择版本动作。源码修复，待新镜像复测 |
-| F5-B02 | 打开上游使用普通绝对 href，未经过 HashRouter，路径丢失 # 路由入口 | 使用既有 React Router Link，保留独立标签页。源码修复，待复测 |
-| F5-B03 | 候选行结构从 label 变为 div，原 CSS 只匹配直接子 label，模型名、版本和动作挤在一起；刷新/分页按钮未复用产品按钮 | 使用既有 Button 与局部候选行/筛选栏样式，含窄屏换行。源码修复，待桌面及 Chrome 95 复测 |
+| F5-B01 | 已提交 DBT_MANAGED 包保留 visualImplementation 的完整 inputs，但 modelDraftFromView 只恢复转换配置，未把完整 inputs 传给来源目录，初次打开出现 PIN_REQUIRED | 补齐已提交可视化配置与作者草稿的完整输入恢复；未锁定的设计引用提供显式选择版本动作。Chrome 95 已复测通过 |
+| F5-B02 | 打开上游使用普通绝对 href，未经过 HashRouter，路径丢失 # 路由入口 | 使用既有 React Router Link，保留独立标签页。Chrome 95 正常点击已通过 |
+| F5-B03 | 候选行结构从 label 变为 div，原 CSS 只匹配直接子 label，模型名、版本和动作挤在一起；刷新/分页按钮未复用产品按钮 | 使用既有 Button 与局部候选行/筛选栏样式，含窄屏换行。Chrome 95 1366/820 宽度复测通过 |
 
 ## 首轮已验证
 
@@ -45,3 +45,7 @@
 a3a8260e4 上游 r3/i1→r3/i2 实际升级后，页面保留旧 i1；取消更新亦保留。旧 pin 下编辑并提交，创建草稿 201，但保存 500，关联 ID `4cfb7cca-6ac7-4269-b83d-9a83f2a1ee08`，响应 `Transaction silently rolled back because it has been marked as rollback-only`。用户输入保留，未新增实现。
 
 根因：只读 resolveCurrent 抛出预期领域校验异常后，参与外层事务的 Spring 拦截器先标记回滚；saveAuthoring 即使按暂存契约捕获并保留编辑也无法提交事务。修复仅为 prepareAuthoringInputs、resolveForDraft、resolveCurrent 的只读 ModelSpecException 声明 noRollbackFor；数据库/系统异常仍回滚，未捕获的领域异常仍由外层写事务阻断。共享 resolveCurrent GitNexus HIGH，直接调用方 2、传递影响 17，已检查纯读取且没有写副作用；须复验旧 pin 拒绝及有效 pin 提交/物化。
+
+## 最终复测结论
+
+F5-B01–B03 已通过 Chrome 95 实际页面复测。F5-B04：新引用根图保存/提交成功，并完成仅实现升级后的确认更新。F5-B05：4896d62f1 旧 i1 暂存 200、validate 明确 409 IMPLEMENTATION_REVISION_DRIFT；确认更新 i2 后提交并物化成功。该缺陷不再返回 rollback-only 500。完整任务覆盖及未覆盖边界见 [本轮验收](F5-acceptance-20260910.md)。

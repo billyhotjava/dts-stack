@@ -1,0 +1,82 @@
+{
+  "sourceSha": "4896d62f158ae2159dbcb68fb132e4e369c63e7b",
+  "formalBuild": "IMGVERSION_FILE=data/sprint104-acceptance/F5/images-4896d62f1.env builds/dts-build.sh --image dts-platform dts-platform-webapp --no-save",
+  "build": "PASS",
+  "codeTests": "not added or run",
+  "buildLog": "/opt/prod/s10/deploy/data/sprint104-acceptance/F5/build-4896d62f1.log",
+  "buildLogSha256": "cc6f2b9f4f459d145e4b85cfd6343ed04beb91e5e58f6eac1207a744355b814d",
+  "jar": {
+    "name": "dts-platform-2.2.3-SNAPSHOT.jar",
+    "sha256": "0b0e3329ff2787ba253670af659eb55cdc5c94a2190d72ef5de5a014822665d5",
+    "packagedClasses": {
+      "ModelInputInspectionService.class": true,
+      "ModelSourceFieldsService.class": true,
+      "ModelImplementationDependencyReadAdapter.class": true,
+      "DbtImplementationDraftService.class": true
+    }
+  },
+  "images": [
+    {
+      "tags": [
+        "dts-platform:s104-f5-4896d62f1"
+      ],
+      "id": "sha256:f060e8e9febf9407e6f50893b9f370c5d234f0bacf1ce2db0ee45d2bdeb1abdf",
+      "revision": "4896d62f158ae2159dbcb68fb132e4e369c63e7b",
+      "rootfs": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:123a078714d5ea9382d4d9f550753aefce8b34ec5ae11ae8273038d3bcbb943f",
+          "sha256:52f8a99d8090ff023e1b3060220364de42ebbe0d08425365adb835e254863ee2",
+          "sha256:0769ceae070fed7cd1bd4851c2d9149391d76eb753370af4617444e166f1e4f1",
+          "sha256:2f75446076e6c7e6ce2ec8b9725743b2a351930fc27ea6d034754505ccac2643",
+          "sha256:00d54726fc9eda89befe5e6c154f98e80150c07554ce9796bd1990fe0dfd0996",
+          "sha256:9862d2031733372be71366700291fdb5ff4d3aae471e464f078c109a11f68c9c",
+          "sha256:37d33d263d58d67d65dd06d6ac4769b75cd1014d45369756b67ae1ae3b00b709"
+        ]
+      }
+    },
+    {
+      "tags": [
+        "dts-platform-webapp:s104-f5-4896d62f1"
+      ],
+      "id": "sha256:98fe55bcee4c4f08cfc358f06d2d5c41ae9ca5184fbcbcb5e9c542d9dfa804b3",
+      "revision": "4896d62f158ae2159dbcb68fb132e4e369c63e7b",
+      "rootfs": {
+        "Type": "layers",
+        "Layers": [
+          "sha256:08bc4e534116aa76b16015484b82eac51f9a593416feae9296c8a2d4bb7aa4a2",
+          "sha256:42c9dbec1f246cb3cd92b18b79d559ac27e991d99457a0bf6124353a5806e3e3",
+          "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+          "sha256:bac811b0c722e5572477b26aba816904a937f86a1a59392fd97792c505d94b12",
+          "sha256:e6cbcec4701754c47d7caa8a37db2971e0651ebc6de5443432aa7e5333af3df3",
+          "sha256:115a727117cf27e035e9ff3f87a7ecf186a0d8a9edb397d278a356247600bbfb",
+          "sha256:42de5235bca68b8502004727d8aaad0e460f9462009ce0abf6f0d423f04132af",
+          "sha256:80755ec148e89350ce4ea5cb6b83f8ff908446941f81d0bd97b55065bfe00fa2",
+          "sha256:a30fe9cca56c040b4afbb4af3b93a9b102c9b49e9204ae33a1a0e2acd6ecdd72",
+          "sha256:fed61be79cd3cee79a8149058a1d28e3b2351c4fc35be2f532df68c3352adcda",
+          "sha256:01620116bf8dc132f6d3e3cc665f8e10e80e91a875f516da8bf11b07ec4f170e"
+        ]
+      }
+    }
+  ],
+  "offlineTar": "not exported",
+  "deployment": {
+    "checkedAt": "2026-09-10T00:31:20.705848+08:00",
+    "composeProject": "deploy",
+    "config": "docker-compose-app.yml",
+    "containers": [
+      {
+        "name": "/deploy-dts-platform-1",
+        "image": "sha256:f060e8e9febf9407e6f50893b9f370c5d234f0bacf1ce2db0ee45d2bdeb1abdf",
+        "status": "running",
+        "health": "healthy"
+      },
+      {
+        "name": "/deploy-dts-platform-webapp-1",
+        "image": "sha256:98fe55bcee4c4f08cfc358f06d2d5c41ae9ca5184fbcbcb5e9c542d9dfa804b3",
+        "status": "running",
+        "health": null
+      }
+    ]
+  }
+}
