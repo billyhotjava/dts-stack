@@ -1465,8 +1465,10 @@ public class DbtImplementationDraftService {
     ) {
         if (dependencies == null || draft.sourceBundleSnapshot() == null) return null;
         SourceBundleView source = sourceBundleSnapshot(draft.sourceBundleSnapshot());
-        if (source.dependencySnapshot() == null) return null;
         boolean unifiedAuthoring = draft.modelSpecSnapshot() != null;
+        // A repairable authoring draft can start without a resolved dependency baseline. It must
+        // still validate its saved intent; an absent baseline is never proof of valid dependencies.
+        if (source.dependencySnapshot() == null && !unifiedAuthoring) return null;
         ModelSpecView model = requireEditableModel(
             tenantId,
             actorId,
@@ -1501,7 +1503,8 @@ public class DbtImplementationDraftService {
             current = resolveDependencies(tenantId, authoredModel, authoredImplementation, validated.projectKey(), ownedTarget.name());
         } else {
             current = resolveDependencies(tenantId, model, implementation, validated.projectKey(), ownedTarget.name());
-            if (!Objects.equals(source.dependencyChecksum(), current.snapshot().dependencyChecksum())) {
+            if (source.dependencySnapshot() != null &&
+                !Objects.equals(source.dependencyChecksum(), current.snapshot().dependencyChecksum())) {
                 throw dependencyFailure("MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE", "ModelSpec dependencies changed after the dbt draft was created",
                     Map.of("expectedDependencyChecksum", source.dependencyChecksum(), "currentDependencyChecksum", current.snapshot().dependencyChecksum()));
             }
@@ -2445,7 +2448,10 @@ public class DbtImplementationDraftService {
         boolean sourceNeutralAuthoring
     ) {
         if (current == null) {
-            Resolution dependencyResolution = dependencies == null
+            // Creating an editing container must not require an implementation of every original
+            // design reference. The first save supplies explicit input pins; validation gates use
+            // that saved intent before any implementation can be committed.
+            Resolution dependencyResolution = dependencies == null || sourceNeutralAuthoring
                 ? null
                 : resolveDependencies(
                     tenantId,
@@ -2467,15 +2473,17 @@ public class DbtImplementationDraftService {
         if (implementationRevision == null || implementationChecksum == null) throw sourceBundleUnavailable();
         Resolution dependencyResolution = dependencies == null
             ? null
-            : resolveDependencies(
+            : resolveEditingBaseDependencies(
                 tenantId,
                 model,
                 current,
                 current.projectKey(),
-                current.dbtUniqueId().substring(current.dbtUniqueId().lastIndexOf('.') + 1)
+                current.dbtUniqueId().substring(current.dbtUniqueId().lastIndexOf('.') + 1),
+                sourceNeutralAuthoring
             );
 
-        if (sourceNeutralAuthoring && current.ownership() == ImplementationMode.DESIGNER_GENERATED) {
+        if (sourceNeutralAuthoring && current.ownership() == ImplementationMode.DESIGNER_GENERATED &&
+            (dependencyResolution != null || dependencies == null)) {
             if (visualCompiler == null) throw sourceBundleUnavailable();
             return withDependencies(
                 freezeCanonical(
@@ -2571,6 +2579,24 @@ public class DbtImplementationDraftService {
             dependencyResolution,
             Map.of()
         );
+    }
+
+    private Resolution resolveEditingBaseDependencies(
+        String tenantId,
+        ModelSpecView model,
+        ImplementationView implementation,
+        String projectKey,
+        String targetName,
+        boolean sourceNeutralAuthoring
+    ) {
+        try {
+            return resolveDependencies(tenantId, model, implementation, projectKey, targetName);
+        } catch (DraftException failure) {
+            if (!sourceNeutralAuthoring || !"DBT_DRAFT_DEPENDENCY_PIN_STALE".equals(failure.code())) throw failure;
+            // Restore the exact persisted source evidence below instead of recompiling stale input.
+            // Owner CAS, source checksum verification and live submit-time admission remain mandatory.
+            return null;
+        }
     }
 
     private CanonicalProject compiledDesignerProject(
