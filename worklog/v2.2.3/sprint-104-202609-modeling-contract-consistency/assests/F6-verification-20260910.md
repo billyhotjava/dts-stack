@@ -52,3 +52,9 @@ Git hook 提示本机 PATH 无 lefthook，未执行 hook；以上正式验证独
 测试镜像 `postgres:16-alpine`：imageId `sha256:75f5a96988cdf694a215073c3e9c001b706b371e2f94df3967f2efdec2787f6b`，digest `postgres@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685`。它是隔离测试镜像，不是 DTS 正式交付镜像，不能替代目标环境验收。
 
 原始输出保留本机 `/tmp/f6-compile.log`、`/tmp/f6-web-build.log`、`/tmp/f6-java-tests.log`、`/tmp/f6-java-rerun.log`、`/tmp/f6-node-rerun.log`、`/tmp/f6-vitest-rerun.log`；Maven XML 报告在 deploy 对应模块 `target/surefire-reports`。
+
+## 最终前端修正与复验
+
+55084872b 修正从指标进入 BI 卡片时的预选时序：等待目标模型元数据就绪再选择固定版本，保留无变化的选择状态以避免重复更新。该提交仅修改卡片编辑器。
+
+在 deploy ff-only 到55084872b 后，卡片编辑器专项1项通过（原9项中的1项，不重复计数），再次 `pnpm build` 通过（TypeScript及兼容构建，1m21s）。本次日志 `/tmp/f6-card-final-test.log`、`/tmp/f6-web-final-build.log`。后端没有新增改动，不重复构建或测试。最终专项唯一计数仍为128项。
