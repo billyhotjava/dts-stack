@@ -193,6 +193,8 @@ describe("indicator draft validation", () => {
 			businessCategoryId: "category-1",
 			dataDomainId: "domain-1",
 			metricType: "DERIVED",
+			executionMode: "PRECOMPUTED",
+			implementationRef: { modelSpecId: "model-2", modelRevision: 4, fieldName: "task_rate" },
 			aggregationType: "DERIVED",
 			measureField: "task_rate",
 			targetModelName: "biz_ads_task_rate",
@@ -206,7 +208,7 @@ describe("indicator draft validation", () => {
 			version: "v1",
 			isNew: true,
 		};
-		apiMocks.listModelSpecs.mockResolvedValue([
+		apiMocks.getModelSpecRevision.mockResolvedValue(
 			{
 				id: "model-2",
 				name: "biz_ads_task_rate",
@@ -214,8 +216,8 @@ describe("indicator draft validation", () => {
 				revision: 4,
 				fields: [{ name: "task_rate", role: "MEASURE" }],
 				standardBindings: [],
-			},
-		]);
+			}
+		);
 		apiMocks.createModelFieldIndicatorDraft.mockResolvedValue({ ...draft, id: "metric-3" });
 
 		await saveIndicatorDraft(draft, {

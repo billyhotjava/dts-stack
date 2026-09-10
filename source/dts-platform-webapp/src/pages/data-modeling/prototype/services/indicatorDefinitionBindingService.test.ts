@@ -87,6 +87,7 @@ test("derived implementation binding keeps semantic upstream versions and binds 
 	};
 	assert.deepEqual(bindMetricImplementationModel(values, publishedFact), {
 		...values,
+		implementationRef: { modelSpecId: "model-1", modelRevision: 3, fieldName: "task_total" },
 		targetModelName: "项目事实表",
 		sourceTable: "项目事实表",
 		sourceLayer: "DWD",

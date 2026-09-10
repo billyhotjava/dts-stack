@@ -19,7 +19,7 @@ final class PinnedIndicatorTestFixture {
                 GovIndicatorVersion snapshot = new GovIndicatorVersion();
                 snapshot.setIndicator(dependency); snapshot.setVersion(dependency.getVersion()); snapshot.setStatus(dependency.getStatus());
                 snapshot.setSnapshotJson(mapper.writeValueAsString(IndicatorMapper.toDto(dependency)));
-                when(versions.findByIndicatorAndVersion(dependency, dependency.getVersion())).thenReturn(Optional.of(snapshot));
+                when(versions.findByIndicatorAndVersion(org.mockito.ArgumentMatchers.argThat(d -> d != null && dependency.getId().equals(d.getId())), org.mockito.ArgumentMatchers.eq(dependency.getVersion()))).thenReturn(Optional.of(snapshot));
                 refs.add(new IndicatorBusinessContextContract.MetricSourceRef(IndicatorBusinessContextContract.SourceType.INDICATOR_VERSION,
                     dependency.getId().toString(), dependency.getVersion()));
             }

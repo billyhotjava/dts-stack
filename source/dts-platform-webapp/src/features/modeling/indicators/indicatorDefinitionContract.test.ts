@@ -99,6 +99,9 @@ test("published indicators move to the next draft version without clearing untou
 		metricType: null,
 		metricGroupCode: null,
 		sourceRefs: null,
+		implementationRef: null,
+		executionMode: null,
+		analysisConfig: null,
 		name: "成交金额（含税）",
 		definition: "含税成交金额",
 		status: "DRAFT",
@@ -252,6 +255,7 @@ test("stable metric type remains the single definition truth", () => {
 			code: "BUDGET_RATE",
 			name: "预算执行率",
 			metricType: "DERIVED",
+			executionMode: "FORMULA",
 			businessCategoryId: "category-1",
 			dataDomainId: "domain-1",
 			dependencyCodes: ["BUDGET_TOTAL"],
@@ -270,6 +274,7 @@ test("derived definitions keep dependency codes and pinned indicator versions on
 			code: "BUDGET_RATE",
 			name: "预算执行率",
 			metricType: "DERIVED",
+			executionMode: "FORMULA",
 			businessCategoryId: "category-1",
 			dataDomainId: "domain-1",
 			dependencyCodes: ["BUDGET_TOTAL"],
@@ -289,6 +294,7 @@ test("normalization derives the compatibility flag from stable metric type", () 
 	assert.deepEqual(
 		normalizeIndicatorEditValues({
 			metricType: "DERIVED",
+			executionMode: "FORMULA",
 			isDerived: false,
 			aggregationType: "SUM",
 			measureField: "amount",
@@ -296,6 +302,7 @@ test("normalization derives the compatibility flag from stable metric type", () 
 		}),
 		{
 			metricType: "DERIVED",
+			executionMode: "FORMULA",
 			isDerived: true,
 			aggregationType: "DERIVED",
 			datasetId: null,

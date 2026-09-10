@@ -323,7 +323,7 @@ class IndicatorServiceLifecycleTest {
 
         IndicatorDto saved = service.update(
             draft.getId(),
-            request("AVG_ORDER", "Average order v2", "DRAFT", "v1", "[\"GMV\",\"ORDER_COUNT\"]"),
+            pinned(request("AVG_ORDER", "Average order v2", "DRAFT", "v1", "[\"GMV\",\"ORDER_COUNT\"]"), gmv, orders),
             null
         );
 
@@ -380,7 +380,7 @@ class IndicatorServiceLifecycleTest {
 
         IndicatorDto staged = service.stageRevision(
             published.getId(),
-            request("AVG_ORDER", "Average order revision", "PUBLISHED", "v1", "[\"GMV\"]"),
+            pinned(request("AVG_ORDER", "Average order revision", "PUBLISHED", "v1", "[\"GMV\"]"), gmv),
             null
         );
 
@@ -421,7 +421,7 @@ class IndicatorServiceLifecycleTest {
         );
         when(referenceRepository.findByIndicatorOrderByCreatedDateAsc(any(GovIndicatorDefinition.class))).thenReturn(List.of());
 
-        service.create(request("AVG_ORDER", "Average order", "DRAFT", "v1", "[\"GMV\"]"), null);
+        service.create(pinned(request("AVG_ORDER", "Average order", "DRAFT", "v1", "[\"GMV\"]"), dependency), null);
 
         ArgumentCaptor<GovIndicatorReference> created = ArgumentCaptor.forClass(GovIndicatorReference.class);
         verify(referenceRepository).save(created.capture());
@@ -556,7 +556,7 @@ class IndicatorServiceLifecycleTest {
 
         assertThatThrownBy(() -> service.publish(draft.getId(), null))
             .isInstanceOf(IndicatorConflictException.class)
-            .hasMessageContaining("INDICATOR_DEPENDENCY_VERSION_NOT_PUBLISHED");
+            .hasMessageContaining("固定版本不存在");
 
         verify(derivationValidationService, never()).validate(draft.getId());
         verify(indicatorRepository, never()).save(draft);
@@ -589,7 +589,7 @@ class IndicatorServiceLifecycleTest {
         when(indicatorRepository.findById(dependency.getId())).thenReturn(Optional.of(dependency));
         when(businessContexts.domain(categoryId)).thenReturn(Optional.of(new DomainNode(categoryId, null, "ACTIVE")));
         when(businessContexts.domain(domainId)).thenReturn(Optional.of(new DomainNode(domainId, categoryId, "ACTIVE")));
-        when(versionRepository.findByIndicatorAndVersion(dependency, "v2")).thenReturn(Optional.of(dependencyVersion));
+        when(versionRepository.findByIndicatorAndVersion(org.mockito.ArgumentMatchers.argThat(d -> d != null && dependency.getId().equals(d.getId())), org.mockito.ArgumentMatchers.eq("v2"))).thenReturn(Optional.of(dependencyVersion));
         when(versionRepository.findByIndicatorAndVersion(draft, "v1")).thenReturn(Optional.empty());
         when(derivationValidationService.validate(draft.getId()))
             .thenReturn(new IndicatorDerivationValidationResult(true, "\"GMV\"", List.of(), List.of("GMV")));
@@ -634,6 +634,9 @@ class IndicatorServiceLifecycleTest {
         snapshot.setDomain("sales");
         snapshot.setIsDerived(true);
         snapshot.setDependencyIndicators("[\"GMV\"]");
+        var pinCarrier = new GovIndicatorDefinition();
+        PinnedIndicatorTestFixture.pin(pinCarrier, indicatorRepository, versionRepository, dependency);
+        snapshot.setSourceRefs(IndicatorMapper.readSourceRefs(pinCarrier.getSourceRefs()));
         source.setSnapshotJson(objectMapper.writeValueAsString(snapshot));
 
         when(indicatorRepository.findByIdForUpdate(current.getId())).thenReturn(Optional.of(current));
@@ -858,6 +861,7 @@ class IndicatorServiceLifecycleTest {
         when(derivationValidationService.validate(target.getId()))
             .thenReturn(new IndicatorDerivationValidationResult(true, "\"GMV\"", List.of(), List.of("GMV")));
 
+        PinnedIndicatorTestFixture.pin(target, indicatorRepository, versionRepository, dependency);
         IndicatorDerivationValidationResult result = service.validateDerivation(target.getId(), "DEPT_A");
 
         assertThat(result.valid()).isFalse();
@@ -915,6 +919,13 @@ class IndicatorServiceLifecycleTest {
         request.setDependencyIndicators(dependencies);
         request.setIsDerived(dependencies != null);
         request.setExpectedLastModifiedDate(BASELINE);
+        return request;
+    }
+
+    private IndicatorUpsertRequest pinned(IndicatorUpsertRequest request, GovIndicatorDefinition... dependencies) {
+        var carrier = new GovIndicatorDefinition();
+        PinnedIndicatorTestFixture.pin(carrier, indicatorRepository, versionRepository, dependencies);
+        request.setSourceRefs(IndicatorMapper.readSourceRefs(carrier.getSourceRefs()));
         return request;
     }
 
