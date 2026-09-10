@@ -1341,11 +1341,8 @@ pack_deployment() {
     fi
   fi
 
-  # Copy .env if it exists (contains site-specific configuration)
-  if [[ -f "${REPO_ROOT}/.env" ]]; then
-    cp "${REPO_ROOT}/.env" "${pack_dir}/.env"
-    echo "[dts-build]   + .env"
-  fi
+  # Do not ship the build machine's .env: it contains site-specific paths and secrets.
+  # Fresh deployments generate .env via init.sh; upgrades retain the site's .env.
 
   # Copy deployment worklog artifacts (model zips, deploy scripts)
   if [[ -d "${REPO_ROOT}/worklog" ]]; then
@@ -1390,6 +1387,8 @@ pack_deployment() {
   cat > "${pack_dir}/.env.template" <<'ENV_TEMPLATE'
 # DTS Stack Environment Configuration Template
 # Copy this file to .env and modify as needed, or run init.sh to generate
+# The build machine's .env is intentionally excluded from the package.
+# Let init.sh derive STACK_ROOT and related paths from the deployment directory.
 
 # Base domain (required)
 # BASE_DOMAIN=dts.local
