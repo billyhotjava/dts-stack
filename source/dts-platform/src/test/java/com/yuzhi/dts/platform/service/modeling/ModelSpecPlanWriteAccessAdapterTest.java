@@ -80,6 +80,7 @@ class ModelSpecPlanWriteAccessAdapterTest {
         plan(id, "alice", "dept-a");
         authenticate("alice", "dept-a", AuthoritiesConstants.EMPLOYEE);
         var adapter = new ModelSpecPlanWriteAccessAdapter(jdbcTemplate);
+        org.mockito.Mockito.doReturn(List.of()).when(jdbcTemplate).queryForList(anyString(), eq("another-tenant"), eq(id));
         assertThat(adapter.canMaintain("another-tenant", id, "alice")).isFalse();
         SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.AnonymousAuthenticationToken(
             "key", "alice", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ANONYMOUS"))));
@@ -115,6 +116,6 @@ class ModelSpecPlanWriteAccessAdapterTest {
             .build();
         SecurityContextHolder
             .getContext()
-            .setAuthentication(new JwtAuthenticationToken(jwt));
+            .setAuthentication(new JwtAuthenticationToken(jwt, List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(authority))));
     }
 }

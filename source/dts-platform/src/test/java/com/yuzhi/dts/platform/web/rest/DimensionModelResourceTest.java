@@ -207,7 +207,7 @@ class DimensionModelResourceTest {
     }
 
     @Test
-    void protectsBothCreateAndRecoveryWithModelingMaintainerAuthority() throws Exception {
+    void requiresAuthenticationForMenuAuthorizedCreationAndRecovery() throws Exception {
         PreAuthorize create = DimensionModelResource.class
             .getMethod("create", com.fasterxml.jackson.databind.JsonNode.class)
             .getAnnotation(PreAuthorize.class);
@@ -215,8 +215,8 @@ class DimensionModelResourceTest {
             .getMethod("recover", String.class)
             .getAnnotation(PreAuthorize.class);
 
-        assertThat(create).isNotNull().extracting(PreAuthorize::value).asString().contains("CATALOG_MAINTAINERS");
-        assertThat(recover).isNotNull().extracting(PreAuthorize::value).asString().contains("CATALOG_MAINTAINERS");
+        assertThat(create).isNotNull().extracting(PreAuthorize::value).asString().isEqualTo("isAuthenticated()");
+        assertThat(recover).isNotNull().extracting(PreAuthorize::value).asString().isEqualTo("isAuthenticated()");
     }
 
     private static OperationResult result(
