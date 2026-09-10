@@ -1,6 +1,7 @@
 import type { DataMartView } from "@/features/modeling/contracts/dataMartContract";
 import type { SubjectDomainView } from "@/features/modeling/contracts/subjectDomainContract";
 import { listDataMarts } from "../dataMartApi";
+import { getModelSpecCreationContext } from "../modelSpecApi";
 import { getDomainTree } from "../platformApi";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "../sprint64GovernanceApi";
 import { listSubjectDomains } from "../subjectDomainApi";
@@ -84,7 +85,7 @@ export async function listModelingImportContexts(): Promise<ModelingImportContex
 }
 
 export async function resolveDefaultModelingContextId(): Promise<string> {
-	return (await listModelingImportContexts())[0]?.id || "";
+	return (await getModelSpecCreationContext()).planId || "";
 }
 
 type SourcePageLoader = (

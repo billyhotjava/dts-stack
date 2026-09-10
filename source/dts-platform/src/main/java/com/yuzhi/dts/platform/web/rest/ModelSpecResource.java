@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
@@ -25,6 +26,7 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -107,6 +109,16 @@ public class ModelSpecResource {
             .eTag(ModelSpecApplicationService.etag(result.modelSpec()))
             .body(ApiResponses.ok(result.modelSpec()));
     }
+
+    @GetMapping("/creation-context")
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<CreationContext>> creationContext() {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore())
+            .body(ApiResponses.ok(new CreationContext(contexts.existingContextId(serverTenantId))));
+    }
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    public record CreationContext(UUID planId) {}
 
     @GetMapping
     public ApiResponse<List<ModelSpecView>> list(

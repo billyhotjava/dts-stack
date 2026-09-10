@@ -354,6 +354,10 @@ export const getModelSpecDependencies = (id: string) =>
 		_skipErrorToast: true,
 	} as any);
 
+/** Read the server-selected default without initializing it. */
+export const getModelSpecCreationContext = () =>
+	api.get<{ planId: string | null }>({ url: `${MODEL_SPEC_RESOURCE}/creation-context`, _skipErrorToast: true } as any);
+
 export const createModelSpec = (data: CreateModelSpecCommand) =>
 	api.post<CanonicalModelSpecView>({ url: MODEL_SPEC_RESOURCE, data, _skipErrorToast: true } as any);
 

@@ -77,6 +77,31 @@ class ModelingContextInitializationPostgresTest {
     void cleanup() { SecurityContextHolder.clearContext(); }
 
     @Test
+    void readingAnEmptyDefaultDoesNotCreateAnythingOrAdoptAnOrdinaryPlan() {
+        assertThat(contexts.existingContextId("tenant")).isNull();
+        assertThat(count("modeling_warehouse_plan")).isZero();
+        assertThat(count("modeling_warehouse_plan_policy")).isZero();
+        UUID ordinary = UUID.randomUUID();
+        jdbc.update("insert into modeling_warehouse_plan(id,tenant_id,idempotency_key,lifecycle_status) values (?, 'tenant', 'ordinary', 'DRAFT')", ordinary);
+        assertThat(contexts.existingContextId("tenant")).isNull();
+        assertThat(count("modeling_warehouse_plan")).isEqualTo(1);
+        UUID actual = save("tenant", "alice", "first");
+        assertThat(actual).isNotEqualTo(ordinary);
+        assertThat(contexts.existingContextId("tenant")).isEqualTo(actual);
+        assertThat(contexts.existingContextId("another-tenant")).isNull();
+    }
+
+    @Test
+    void aReadOnlyDefaultCanBeReadForSourcesButCannotBeUsedForNewWrites() {
+        UUID id = save("tenant", "alice", "first");
+        jdbc.update("update modeling_warehouse_plan set lifecycle_status='ARCHIVED' where id=?", id);
+        assertThat(contexts.existingContextId("tenant")).isEqualTo(id);
+        assertThatThrownBy(() -> save("tenant", "alice", "second")).isInstanceOfSatisfying(ModelSpecException.class,
+            error -> assertThat(error.code()).isEqualTo("MODEL_SPEC_PLAN_READ_ONLY"));
+        assertThat(count("saved_model")).isEqualTo(1);
+    }
+
+    @Test
     void firstSaveCreatesTheRealPlanAndPolicyAndRetryReusesThem() {
         UUID first = save("tenant", "alice", "operation-1");
         assertThat(save("tenant", "alice", "operation-1")).isEqualTo(first);

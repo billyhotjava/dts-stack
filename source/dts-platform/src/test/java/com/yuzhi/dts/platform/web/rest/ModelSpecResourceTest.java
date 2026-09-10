@@ -97,6 +97,21 @@ class ModelSpecResourceTest {
     private com.yuzhi.dts.platform.service.audit.AuditService auditService;
 
     @Test
+    void creationContextIsAReadOnlyServerTenantLookupWithAnExplicitEmptyState() throws Exception {
+        when(contexts.existingContextId("server-tenant")).thenReturn(null, PLAN_ID);
+        mockMvc.perform(get("/api/modeling/model-specs/creation-context").header("X-Tenant-Id", "ignored"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data").value(org.hamcrest.Matchers.hasKey("planId")))
+            .andExpect(jsonPath("$.data.planId").value(org.hamcrest.Matchers.nullValue()));
+        mockMvc.perform(get("/api/modeling/model-specs/creation-context"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.planId").value(PLAN_ID.toString()))
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers.header().string("Cache-Control", "no-store"));
+        verify(contexts, org.mockito.Mockito.times(2)).existingContextId("server-tenant");
+        org.mockito.Mockito.verifyNoInteractions(service);
+    }
+
+    @Test
     void postsGetsAndPutsUsingServerTenantAndStrongEtags() throws Exception {
         ModelSpecView view = view();
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));

@@ -248,7 +248,8 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 	return {
 		createKind: kind,
 		base: null,
-		planId: context.planId,
+		// New manual models resolve context atomically on save, independently of page source loading.
+		planId: "",
 		domainId: defaultDomainId,
 		name: "",
 		description: "",

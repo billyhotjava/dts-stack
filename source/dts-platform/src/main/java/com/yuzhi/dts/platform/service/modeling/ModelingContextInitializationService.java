@@ -28,6 +28,12 @@ public class ModelingContextInitializationService {
         this.plans = plans;
     }
 
+    /** Page reads must never initialize a context or adopt an unrelated warehouse plan. */
+    @Transactional(readOnly = true)
+    public UUID existingContextId(String tenantId) {
+        return findDefault(tenantId, false);
+    }
+
     @Transactional(timeout = 30)
     public <T> T withContext(
         String tenantId,
@@ -45,11 +51,11 @@ public class ModelingContextInitializationService {
               SecurityUtils.getCurrentUserLogin().filter(actor.ownerId()::equals).isPresent())) {
             throw new ModelSpecException("MODEL_SPEC_WRITE_FORBIDDEN", "An authenticated modeling actor is required", ModelSpecException.Kind.FORBIDDEN, null);
         }
-        UUID planId = findDefault(tenantId);
+        UUID planId = findDefault(tenantId, true);
         if (planId == null) {
             // Only cold starts serialize. Transaction timeout bounds lock acquisition; recheck after a competing commit.
             jdbc.query("select pg_advisory_xact_lock(hashtextextended(?, 0))", rs -> { }, "modeling-context:" + tenantId);
-            planId = findDefault(tenantId);
+            planId = findDefault(tenantId, true);
             if (planId == null) {
                 planId = plans.create(tenantId, new CreateWarehousePlanCommand(
                     "数据建模", "维护数据模型设计与实现", null, actor.ownerId(), actor.ownerDepartmentId(),
@@ -66,7 +72,7 @@ public class ModelingContextInitializationService {
         return save.apply(normalized);
     }
 
-    private UUID findDefault(String tenantId) {
+    private UUID findDefault(String tenantId, boolean requireWritable) {
         return jdbc.query("""
             select id, lifecycle_status from modeling_warehouse_plan
              where tenant_id = ? and (idempotency_key = ? or
@@ -74,7 +80,7 @@ public class ModelingContextInitializationService {
              order by case when idempotency_key = ? then 0 else 1 end, created_date, id
              limit 1
             """, (rs, row) -> {
-                if ("PUBLISHED".equals(rs.getString("lifecycle_status")) || "ARCHIVED".equals(rs.getString("lifecycle_status"))) {
+                if (requireWritable && ("PUBLISHED".equals(rs.getString("lifecycle_status")) || "ARCHIVED".equals(rs.getString("lifecycle_status")))) {
                     throw new ModelSpecException("MODEL_SPEC_PLAN_READ_ONLY", "The default modeling context is read-only", ModelSpecException.Kind.CONFLICT, null);
                 }
                 return rs.getObject("id", UUID.class);
