@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -97,7 +98,7 @@ class DimensionDefinitionResourceTest {
         View retired = view(Status.RETIRED, 3, "c".repeat(64));
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
         when(service.create(eq("server-tenant"), eq("alice"), any())).thenReturn(new CreateResult(draft, false));
-        when(service.list("server-tenant", null, null, 0, 50)).thenReturn(List.of(draft));
+        when(service.list("server-tenant", null, null, null, 0, 50)).thenReturn(List.of(draft));
         when(service.get("server-tenant", DEFINITION_ID)).thenReturn(draft);
         when(service.update(eq("server-tenant"), eq("alice"), eq(DEFINITION_ID), any(), any())).thenReturn(draft);
         when(service.confirm(eq("server-tenant"), eq("alice"), eq(DEFINITION_ID), any())).thenReturn(current);
@@ -155,8 +156,13 @@ class DimensionDefinitionResourceTest {
             .andExpect(jsonPath("$.data.status").value("RETIRED"));
 
         verify(service).create(eq("server-tenant"), eq("alice"), any());
-        verify(service).list("server-tenant", null, null, 0, 50);
+        verify(service).list("server-tenant", null, null, null, 0, 50);
         verify(service).get("server-tenant", DEFINITION_ID);
+
+        mockMvc
+            .perform(delete("/api/modeling/dimension-definitions/{id}", DEFINITION_ID).header("If-Match", ETAG))
+            .andExpect(status().isOk());
+        verify(service).delete(eq("server-tenant"), eq("alice"), eq(DEFINITION_ID), any());
     }
 
     @Test
@@ -371,11 +377,11 @@ class DimensionDefinitionResourceTest {
         assertThat(
             java.util.Arrays
                 .stream(DimensionDefinitionResource.class.getDeclaredMethods())
-                .filter(method -> List.of("create", "update", "confirm", "retire").contains(method.getName()))
+                .filter(method -> List.of("create", "update", "confirm", "retire", "delete").contains(method.getName()))
                 .map(method -> method.getAnnotation(PreAuthorize.class))
                 .map(PreAuthorize::value)
         )
-            .hasSize(4)
+            .hasSize(5)
             .allSatisfy(expression -> assertThat(expression).isEqualTo("isAuthenticated()"));
     }
 
@@ -412,6 +418,7 @@ class DimensionDefinitionResourceTest {
             "dim_30000000000000000000000000000001",
             UUID.fromString("20000000-0000-0000-0000-000000000001"),
             "Customer",
+            "customer",
             "Reusable customer dimension",
             "business-owner",
             ReuseScope.DOMAIN,
