@@ -341,8 +341,15 @@ export function useModelAuthoringSession({
 		clearFailure();
 		try {
 			const existing = authoringContext?.openDraft;
+			const baseChanged = Boolean(
+				existing &&
+					(existing.baseModelRevision !== authoringContext?.model.revision ||
+						existing.baseModelChecksum !== authoringContext?.model.checksum),
+			);
 			const open =
-				!existing || existing.state === "COMMITTED" || dirty || codeDirty ? await persist(activeView) : existing;
+				!existing || shouldPersistBeforeAuthoringValidation(existing.state, dirty || baseChanged, codeDirty)
+					? await persist(activeView)
+					: existing;
 			const checked = await validateModelAuthoringDraft(selectedModelId, open.draftId, open.etag);
 			setValidation(checked);
 			const current = await getModelAuthoringContext(selectedModelId);

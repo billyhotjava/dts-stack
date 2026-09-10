@@ -613,7 +613,7 @@ public class DbtImplementationDraftService {
                 );
             }
             if (visualView) requireUnmanagedFilesUnchanged(current, files, projectionSummary);
-            DraftRow aligned = alignAuthoringBase(tenantId, actorId, modelSpecId, current, now);
+            DraftRow aligned = alignAuthoringBase(tenantId, actorId, modelSpecId, current, now, modelSpecSnapshot);
             if (visualView) {
                 var decoded = snapshotDecoder.decode(modelSpecSnapshot);
                 boolean structuredVisual = decoded.valid() && decoded.visualImplementation() != null;
@@ -2130,6 +2130,17 @@ public class DbtImplementationDraftService {
         DraftRow draft,
         Instant now
     ) {
+        return alignAuthoringBase(tenantId, actorId, modelSpecId, draft, now, null);
+    }
+
+    private DraftRow alignAuthoringBase(
+        String tenantId,
+        String actorId,
+        UUID modelSpecId,
+        DraftRow draft,
+        Instant now,
+        JsonNode submittedSnapshot
+    ) {
         if (draft.modelSpecSnapshot() == null || draft.sourceBundleSnapshot() == null) return draft;
         ModelSpecView model = requireEditableModel(tenantId, actorId, modelSpecId, draft.planId(), true);
         boolean modelChanged = model.revision() != draft.baseModelRevision() ||
@@ -2139,8 +2150,17 @@ public class DbtImplementationDraftService {
             ModelSpecView originalModel = modelSpecs.revision(tenantId,
                 new com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef(modelSpecId, draft.baseModelRevision()));
             requireModelPins(draft, originalModel);
-            if (snapshot == null || model.status() != ModelStatus.DRAFT || model.revision() <= draft.baseModelRevision() ||
-                !Objects.equals(model.checksum(), snapshotCodec.toUpdatedView(originalModel, snapshot, model.revision(), now).checksum())) {
+            boolean matchesCurrent = snapshot != null && Objects.equals(model.checksum(),
+                snapshotCodec.toUpdatedView(originalModel, snapshot, model.revision(), now).checksum());
+            // Only an explicit save may acknowledge a separately persisted definition.
+            // The submitted logical snapshot must equal the current server model exactly;
+            // validation alone must never silently rebase stale SQL onto another definition.
+            if (!matchesCurrent && submittedSnapshot != null) {
+                var submitted = snapshotDecoder.decode(submittedSnapshot);
+                matchesCurrent = submitted.valid() && Objects.equals(model.checksum(),
+                    snapshotCodec.toUpdatedView(originalModel, submitted.modelSpec(), model.revision(), now).checksum());
+            }
+            if (!matchesCurrent || model.status() != ModelStatus.DRAFT || model.revision() <= draft.baseModelRevision()) {
                 throw DbtImplementationDraftContract.conflict(
                     "DBT_DRAFT_BASE_MODEL_CONFLICT",
                     "模型定义已变更，且与当前创作草稿不一致。草稿及 SQL 已保留，请核对模型设计后再提交。"

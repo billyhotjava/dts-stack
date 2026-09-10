@@ -62,6 +62,20 @@ describe("Sprint-92 unified authoring source contracts", () => {
 		expect(session).toContain("!open || shouldPersistBeforeAuthoringValidation(open.state, dirty, codeDirty)");
 	});
 
+	it("persists the latest definition before submitting an older implementation draft", () => {
+		const session = source("useModelAuthoringSession.ts");
+		const submit = session.slice(
+			session.indexOf("const submitImplementation ="),
+			session.indexOf("const changeFiles ="),
+		);
+		expect(submit).toContain("existing.baseModelRevision !== authoringContext?.model.revision");
+		expect(submit).toContain("existing.baseModelChecksum !== authoringContext?.model.checksum");
+		expect(submit).toContain("shouldPersistBeforeAuthoringValidation(existing.state, dirty || baseChanged, codeDirty)");
+		expect(submit.indexOf("await persist(activeView)")).toBeLessThan(
+			submit.indexOf("await validateModelAuthoringDraft"),
+		);
+	});
+
 	it("refreshes repaired projection state after validation without dropping the commit credential", () => {
 		const session = source("useModelAuthoringSession.ts");
 		const validateStart = session.indexOf("const checked = await validateModelAuthoringDraft");

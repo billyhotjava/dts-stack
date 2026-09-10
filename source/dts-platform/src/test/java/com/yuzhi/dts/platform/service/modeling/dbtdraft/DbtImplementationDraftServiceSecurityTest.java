@@ -2029,11 +2029,19 @@ class DbtImplementationDraftServiceSecurityTest {
         verify(repository, never()).replaceFiles(any(), any(), any(), any(), any(), any(), any(), any());
 
         org.mockito.Mockito.clearInvocations(repository);
+        var currentSnapshot = submitted.deepCopy();
         ((com.fasterxml.jackson.databind.node.ObjectNode) submitted.path("modelSpec")).put("name", "different unsaved definition");
         DraftException conflict = catchThrowableOfType(
             () -> ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW, submitted),
             DraftException.class);
         assertThat(conflict.code()).isEqualTo("DBT_DRAFT_BASE_MODEL_CONFLICT");
+        org.mockito.Mockito.verifyNoInteractions(repository);
+
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(null, List.of(), List.of()));
+        DraftException implementationConflict = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW, currentSnapshot),
+            DraftException.class);
+        assertThat(implementationConflict.code()).isEqualTo("DBT_DRAFT_BASE_IMPLEMENTATION_CONFLICT");
         org.mockito.Mockito.verifyNoInteractions(repository);
     }
 
