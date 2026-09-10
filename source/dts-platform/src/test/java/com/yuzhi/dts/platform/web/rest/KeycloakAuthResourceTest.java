@@ -30,6 +30,18 @@ import org.springframework.mock.web.MockHttpServletRequest;
 class KeycloakAuthResourceTest {
 
     @Test
+    void loginDoesNotExposeInternalSqlOrTokens() {
+        var keycloak = mock(KeycloakAuthService.class);
+        when(keycloak.login("alice", "password"))
+            .thenThrow(new IllegalStateException("insert into portal_sessions access_token=secret-token"));
+        var resource = newResource(mock(AdminAuthGateway.class), mock(PortalSessionRegistry.class), keycloak,
+            mock(PkiSessionTicketService.class));
+        var response = resource.login(new KeycloakAuthResource.LoginPayload("alice", "password"), new MockHttpServletRequest());
+        assertThat(response.getStatusCode().value()).isEqualTo(500);
+        assertThat(response.getBody().getMessage()).isEqualTo("登录失败，请稍后重试");
+    }
+
+    @Test
     void pkiChallengeShouldProxyAdminChallengeThroughPlatformApi() {
         AdminAuthGateway gateway = mock(AdminAuthGateway.class);
         when(gateway.getPkiChallenge())

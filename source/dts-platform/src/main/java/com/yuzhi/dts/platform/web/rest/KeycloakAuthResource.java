@@ -358,7 +358,7 @@ public class KeycloakAuthResource {
                 msg = "无法获取用户授权信息，请稍后重试";
             } else {
                 status = HttpStatus.INTERNAL_SERVER_ERROR;
-                msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
+                msg = "登录失败，请稍后重试";
             }
             log.error("[login] error username={} msg={}", username, msg);
             String auditActor = sanitizeActor(username);

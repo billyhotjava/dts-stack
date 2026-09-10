@@ -307,7 +307,7 @@ class PortalSessionRegistryTest {
                 case "findAllByNormalizedUsernameAndRevokedAtIsNull" -> findAllActive((String) args[0]);
                 case "findAllActiveForUpdate" -> findAllActive((String) args[0]);
                 case "saveAndFlush" -> save((PortalSessionEntity) args[0]);
-                case "flush" -> {
+                case "acquireUsernameLock", "flush" -> {
                     // no-op for in-memory stub
                     yield null;
                 }

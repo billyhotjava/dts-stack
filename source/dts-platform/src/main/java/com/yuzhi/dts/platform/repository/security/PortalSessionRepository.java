@@ -12,6 +12,9 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface PortalSessionRepository extends JpaRepository<PortalSessionEntity, UUID> {
+    @Query(value = "select pg_advisory_xact_lock(hashtextextended(:username, 1040910))", nativeQuery = true)
+    Object acquireUsernameLock(@Param("username") String normalizedUsername);
+
     Optional<PortalSessionEntity> findByAccessToken(String accessToken);
 
     Optional<PortalSessionEntity> findByRefreshToken(String refreshToken);

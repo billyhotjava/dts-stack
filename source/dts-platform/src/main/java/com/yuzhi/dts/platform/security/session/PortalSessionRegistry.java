@@ -240,6 +240,9 @@ public class PortalSessionRegistry {
     ) {
         String sanitizedUsername = requireUsername(username);
         String normalizedUsername = normalizeUsername(sanitizedUsername);
+        // Row locks cannot serialize absent rows or a row replaced while a login waits.
+        // Hold a username-scoped lock until this transaction commits the new session.
+        sessionRepository.acquireUsernameLock(normalizedUsername);
         List<String> normalizedRoles = normalizeRoles(roles);
         String sanitizedDisplayName = displayName == null ? null : displayName.trim();
         String sanitizedBrowserId = normalizeBrowserId(browserId);
