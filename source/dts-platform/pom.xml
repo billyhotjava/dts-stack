@@ -527,6 +527,9 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <testIncludes>
+                        <testInclude>**/security/session/PortalSessionRegistryTest.java</testInclude>
+                        <testInclude>**/security/session/PortalSessionConcurrencyTest.java</testInclude>
+                        <testInclude>**/web/rest/KeycloakAuthResourceTest.java</testInclude>
                         <testInclude>**/ModelingContextInitializationPostgresTest.java</testInclude>
                         <testInclude>**/WarehousePlanAuthorizationGuardTest.java</testInclude>
                         <testInclude>**/ModelDataRegistrationServiceTest.java</testInclude>
@@ -914,10 +917,8 @@
                     </testIncludes>
                     <testExcludes>
                         <!-- TODO: restore when cf5ff765 session refactor tests are updated -->
-                        <exclude>**/KeycloakAuthResourceTest.java</exclude>
                         <exclude>**/PortalSessionResourceTest.java</exclude>
                         <exclude>**/PortalSessionBearerTokenResolverTest.java</exclude>
-                        <exclude>**/PortalSessionRegistryTest.java</exclude>
                         <exclude>**/etl/DbtReleaseSubmissionServiceTest.java</exclude>
                         <exclude>**/sql/SqlExecutionServiceTest.java</exclude>
                         <exclude>**/web/rest/EtlResourceTest.java</exclude>

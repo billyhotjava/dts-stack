@@ -301,7 +301,7 @@ class PortalSessionRegistryTest {
             return switch (name) {
                 case "save" -> save((PortalSessionEntity) args[0]);
                 case "findByAccessToken" -> findByAccessToken((String) args[0]);
-                case "findByRefreshToken" -> findByRefreshToken((String) args[0]);
+                case "findByRefreshToken", "findByRefreshTokenForUpdate" -> findByRefreshToken((String) args[0]);
                 case "findByNormalizedUsernameAndRevokedAtIsNull" -> findActive((String) args[0]);
                 case "findActiveForUpdate" -> findActive((String) args[0]);
                 case "findAllByNormalizedUsernameAndRevokedAtIsNull" -> findAllActive((String) args[0]);
