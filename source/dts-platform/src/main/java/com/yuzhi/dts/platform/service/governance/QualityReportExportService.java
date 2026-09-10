@@ -96,7 +96,11 @@ public class QualityReportExportService {
         // Overall row
         Row overallRow = sheet.createRow(rowIdx++);
         overallRow.createCell(0).setCellValue("综合");
-        overallRow.createCell(1).setCellValue(scoreResult.overall());
+        if (scoreResult.dimensions().isEmpty()) {
+            overallRow.createCell(1).setCellValue("暂无有效评分");
+        } else {
+            overallRow.createCell(1).setCellValue(scoreResult.overall());
+        }
         overallRow.createCell(2).setCellValue(formatDelta(scoreResult.overallDelta()));
 
         // Dimension rows

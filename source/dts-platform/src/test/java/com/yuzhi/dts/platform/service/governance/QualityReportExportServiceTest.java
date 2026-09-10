@@ -100,6 +100,7 @@ class QualityReportExportServiceTest {
 
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("规则明细");
+            assertThat(workbook.getSheet("评分概览").getRow(1).getCell(1).getStringCellValue()).isEqualTo("暂无有效评分");
             assertThat(sheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("FAILED");
             assertThat(sheet.getRow(1).getCell(4).getStringCellValue()).isEqualTo("-");
         }
