@@ -89,7 +89,7 @@ class KeycloakAuthResourceTest {
         );
 
         assertThat(response.getStatusCode().value()).isEqualTo(401);
-        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("pki_session_ticket=; Path=/; Max-Age=0");
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("pki_session_ticket=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getMessage()).contains("USB-Key");
     }
@@ -131,7 +131,7 @@ class KeycloakAuthResourceTest {
         );
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
-        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("pki_session_ticket=; Path=/; Max-Age=0");
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("pki_session_ticket=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT");
         assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE))
             .anyMatch(cookie -> cookie.startsWith("portal_session=access-1;"));
         assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).anyMatch(cookie -> cookie.startsWith("browser_id=browser-1."));
