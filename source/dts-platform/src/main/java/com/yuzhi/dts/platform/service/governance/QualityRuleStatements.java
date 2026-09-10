@@ -2,7 +2,6 @@ package com.yuzhi.dts.platform.service.governance;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -16,7 +15,7 @@ public final class QualityRuleStatements {
     public static Map<String, String> resolve(String definition) {
         try {
             return resolve(JSON.readValue(definition, new TypeReference<Map<String, Object>>() {}));
-        } catch (Exception error) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException error) {
             throw new IllegalArgumentException("质量规则定义不是有效的 JSON", error);
         }
     }

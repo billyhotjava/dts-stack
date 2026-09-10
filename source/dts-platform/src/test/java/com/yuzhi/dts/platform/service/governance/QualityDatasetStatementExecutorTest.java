@@ -205,7 +205,7 @@ class QualityDatasetStatementExecutorTest {
     }
 
     @Test
-    void reportsMissingStableRowIdsAsAnExecutionError() throws Exception {
+    void countsSingleStatementWithoutRequiringStableRowIds() throws Exception {
         DefaultLakeDatasetGuard datasetGuard = mock(DefaultLakeDatasetGuard.class);
         InfraDataSourceRepository dataSourceRepository = mock(InfraDataSourceRepository.class);
         JdbcSqlExecutor jdbcSqlExecutor = mock(JdbcSqlExecutor.class);
@@ -253,11 +253,10 @@ class QualityDatasetStatementExecutorTest {
 
         QualityDatasetStatementExecutor.Execution execution = executor.execute(run(), Map.of("sql", sql));
 
-        assertThat(execution.failingRowCount()).isZero();
-        assertThat(execution.results()).anySatisfy(result -> {
-            assertThat(result.status()).isEqualTo(StatementExecutionResult.Status.FAILED);
-            assertThat(result.errorCode()).isEqualTo("RESULT_ID_REQUIRED");
-        });
+        assertThat(execution.failingRowCount()).isEqualTo(1);
+        assertThat(execution.outcome().qualityOutcome()).isEqualTo("VIOLATION");
+        assertThat(execution.outcome().statisticsStatus()).isEqualTo("EXACT");
+        verify(connection, never()).prepareStatement(distinctSql);
     }
 
     @Test
@@ -490,11 +489,9 @@ class QualityDatasetStatementExecutorTest {
             new GovernanceProperties()
         );
 
-        assertThatThrownBy(() ->
-                executor.execute(run(), Map.of("sql", "SELECT id FROM public.ods_budget_v2 WHERE project_no IS NULL"))
-            )
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("只读质量检测会话");
+        var result = executor.execute(run(), Map.of("sql", "SELECT id FROM public.ods_budget_v2 WHERE project_no IS NULL"));
+        assertThat(result.outcome().qualityOutcome()).isEqualTo("UNKNOWN");
+        assertThat(result.outcome().executionOutcome()).isEqualTo("FAILED");
         verify(connection, never()).prepareStatement(anyString());
     }
 
@@ -576,13 +573,11 @@ class QualityDatasetStatementExecutorTest {
             new GovernanceProperties()
         );
 
-        assertThatThrownBy(() -> executor.execute(run(), Map.of("sql", "SELECT id FROM public.ods_budget_v2")))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("质量检测会话")
-            .hasMessageContaining("SQLSTATE: 08001")
-            .hasMessageNotContaining("SELECT token")
-            .hasMessageNotContaining("password")
-            .hasMessageNotContaining("top-secret-token");
+        var result = executor.execute(run(), Map.of("sql", "SELECT id FROM public.ods_budget_v2"));
+        assertThat(result.outcome().executionOutcome()).isEqualTo("FAILED");
+        assertThat(result.outcome().json()).contains("CONNECTION_ERROR")
+            .doesNotContain("SELECT token", "password", "top-secret-token");
+        assertThat(result.results().toString()).doesNotContain("SELECT token", "password", "top-secret-token");
     }
 
     private static CatalogDataset dataset() {

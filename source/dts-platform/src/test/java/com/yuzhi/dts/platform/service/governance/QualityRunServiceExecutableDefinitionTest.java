@@ -366,7 +366,7 @@ class QualityRunServiceExecutableDefinitionTest {
     }
 
     @Test
-    void executionContractErrorZerosEveryFailedMetricInTheRun() {
+    void executionContractErrorLeavesEveryUnavailableMetricUnmeasured() {
         GovRule rule = new GovRule();
         rule.setId(RULE_ID);
         rule.setName("字段不存在的检查");
@@ -430,7 +430,7 @@ class QualityRunServiceExecutableDefinitionTest {
         ArgumentCaptor<GovQualityMetric> metric = ArgumentCaptor.forClass(GovQualityMetric.class);
         verify(metricRepository, times(2)).save(metric.capture());
         assertThat(metric.getAllValues()).allSatisfy(item ->
-            assertThat(item.getMetricValue()).isEqualByComparingTo("0")
+            assertThat(item.getMetricValue()).isNull()
         );
     }
 
@@ -456,7 +456,7 @@ class QualityRunServiceExecutableDefinitionTest {
         verify(qualityDatasetReadGuard).requireReadable(DATASET_ID, "D01");
         assertThat(dto.getInputParamsJson()).isNull();
         assertThat(dto.getMetricsJson()).isNull();
-        assertThat(dto.getMessage()).isEqualTo("质量检测执行失败");
+        assertThat(dto.getMessage()).contains("质量检测未能完成", "暂无有效统计").doesNotContain("top-secret-token");
         assertThat(dto.getMetrics()).singleElement().satisfies(item ->
             assertThat(item.getDetail()).isEqualTo("质量检测项执行失败")
         );

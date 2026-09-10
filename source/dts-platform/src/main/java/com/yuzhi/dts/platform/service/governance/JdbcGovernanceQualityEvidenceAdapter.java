@@ -181,7 +181,8 @@ public class JdbcGovernanceQualityEvidenceAdapter implements QualityEvidencePort
                    run.binding_id,
                    run.dataset_id,
                    case when left(ltrim(run.metrics_json), 1) = '{'
-                             and not (coalesce(run.metrics_json::jsonb ->> 'qualityOutcome', '') = 'PASSED'
+                             and not (coalesce(run.metrics_json::jsonb ->> 'schemaVersion', '') = '1'
+                                  and coalesce(run.metrics_json::jsonb ->> 'qualityOutcome', '') = 'PASSED'
                                   and coalesce(run.metrics_json::jsonb ->> 'executionOutcome', '') = 'OK')
                         then 'FAILED' else run.status end as status,
                    run.finished_at,

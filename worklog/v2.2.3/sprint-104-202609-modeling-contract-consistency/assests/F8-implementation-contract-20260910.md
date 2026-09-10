@@ -10,7 +10,7 @@
 - K70：qualityOutcome=PASSED/VIOLATION/UNKNOWN；executionOutcome=OK/FAILED；statisticsStatus=EXACT/UNDEDUPLICATED/UNAVAILABLE。任意已确认违规优先保留 VIOLATION；全部必需语句完成且无违规才 PASSED；纯故障 UNKNOWN。兼容 status：只有 PASSED+OK 为 SUCCEEDED，违规/故障为 FAILED；缺失计数不当零。安全 summary 与 diagnostics 存入既有 metrics_json 的版本化质量结果对象；历史数组按旧字段保守读取，无 schema 迁移。
 - K71：正式违规建业务工单（包括混合故障），纯故障不建；试跑永不建。历史工单保留，只出清单不自动处理。
 - K72：执行器→版本化安全结果→安全 DTO→页面完整传递 reasonCode、受控 detail；不透传原始数据库错误/SQL。覆盖刷新详情、评分与导出。静态校验的 200ms 是观测目标，保留解析硬上限 2s，明确超时结果。
-- 发布门禁：只消费正式、已发布规则的绑定运行；资产/规则版本/绑定/时效校验保持。双维度只允许 PASSED+OK，通过率为空不得作为通过；旧结果保持 SUCCEEDED 的兼容语义。试跑不能覆盖正式通过或失败；新语义须进入候选证据判定。
+- 发布门禁：只消费正式、已发布规则的绑定运行；资产/规则版本/绑定/时效校验保持。双维度只允许 PASSED+OK，不得用空通过率推导通过，必须读取明确业务与执行结论；旧结果保持 SUCCEEDED 的兼容语义。试跑不能覆盖正式通过或失败；新语义须进入候选证据判定。
 - 验收增加：未保存 SQL 与试跑 checksum 一致；sql/statements 同时存在；计数成功采样失败；多语句统计未知；纯故障/纯违规/混合三矩阵；详情刷新保留原因；DRY_RUN 隔离；正式质量通过→模型发布→BI 数据集版本生成。
 
 ## 验证边界

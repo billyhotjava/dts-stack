@@ -24,29 +24,24 @@
 | C69 | 失败样本读取 `id/fail_column/actual_value/fail_reason` 时**有兜底**（id 缺失退化为行号），因此样本落库不受 C60 影响 | QualityDatasetStatementExecutor.java:264-270 |
 | C70 | 作用域校验器现已返回结构化拒绝原因 `ScopeCheck{allowed,reasonCode,detail}`，含 UNSUPPORTED_FUNCTION / UNSUPPORTED_CAST_TYPE / UNSUPPORTED_SYNTAX / OUT_OF_SCOPE_TABLE / UNSUPPORTED_SOURCE_TYPE / INVALID_BOUND_TABLE / UNPARSEABLE_SQL / NO_TABLE_REFERENCE，可直接供页面使用 | QualitySqlScopeValidator.java:69-95（提交 4c58ce207） |
 
-**开放问题**（须 T44 关闭，不得带进实现）：
+**T44 冻结**：现网画像、存量策略、兼容决定及验收矩阵见 [实施冻结记录](F8-implementation-contract-20260910.md)。只对新保存/重新发布内容校验，历史规则、运行与工单保留；旧试跑接口兼容且隔离正式证据。
 
-1. 存量规则里有多少条 SQL 在现行约束下不可运行？按拒绝原因分类计数（无 id 列、函数越界、跨表引用），决定"保存前校验"对存量是拦截、告警还是只对新保存生效。
-2. 多语句规则（`definition.statements`）现网是否真实存在、占比多少？决定 C60 的去重是否还有保留价值。
-3. `RESULT_ID_REQUIRED` 历史运行记录条数，用于验证修复后的回归面。
-4. 试跑接口 C68 的权限表达式 `GOVERNANCE_MAINTAINER_EXPRESSION` 与规则编辑页实际使用角色是否一致；不一致则页面按钮须按权限禁用而非报 403。
-
-## 目标契约（草案，T44 冻结后方可编码）
+## 目标契约（2026-09-10 已冻结）
 
 | ID | 契约 | 语义与落点 |
 |---|---|---|
-| K67 静态校验 | `POST /api/governance/quality/rules/validate-sql`，入参 `{sql:string, datasetId:UUID}`，返回 `{valid:boolean, reasonCode:string\|null, detail:string\|null, message:string, requiresIdColumn:boolean, warnings:string[]}` | 纯静态、不连库、零副作用。复用 C70 的 `checkScope` 与 C57 的只读正则，不新建解析器。精确路径与是否并入既有 rules 资源由 T44 冻结 |
-| K68 保存准入 | 规则保存时对 `definition.sql` 执行 K67；不通过则 400 并回传 `reasonCode/detail` | 替换 C56 的非空校验。存量规则的处置策略由 T44 开放问题 1 决定，默认只对本次提交内容生效，不回溯改写历史规则 |
-| K69 失败行统计 | 单语句：直接复用 `countFailures` 结果，不再执行 C60 的去重查询；多语句：探测结果集是否有 `id`，无则按语句求和并在 `warnings` 标注"未去重" | 去掉 `id` 硬依赖。任何情况下统计失败都不得使整次运行判失败，退化为统计缺失 + 警告 |
-| K70 结论分离 | 运行结果区分 `qualityOutcome`（PASSED/VIOLATION）与 `executionOutcome`（OK/FAILED+分类）两个维度 | 修正 C63 的压制：已查出违规行时业务结论必须保留并展示，基础设施故障单独呈现，不互相覆盖 |
-| K71 工单准入 | 仅 `qualityOutcome=VIOLATION` 生成质量问题工单；`executionOutcome=FAILED` 走运维提示，不建待认领业务工单 | 修正 C64。试跑维持不建工单 |
-| K72 页面反馈 | 运行详情按 K70 分区展示：业务结论、执行状态、具体原因（reasonCode+detail）、可执行的修改建议；规则编辑页展示函数清单与结果集要求，并接入 C68 试跑 | 文案映射须覆盖**全部**已知分类，新增分类无映射时回落到 reasonCode 原文而非笼统兜底（修正 C66） |
+| K67 静态校验 | `POST /api/governance/quality/rules/validate-sql`，入参 `{datasetId,definition:{sql?,statements?}}`，返回 `{valid,checksum,diagnostics:[{statementKey,reasonCode,detail}],allowedFunctions}` | 允许读取平台元数据并检查对象权限；禁止连接目标数据源、执行用户 SQL。复用现有只读及作用域解析器 |
+| K68 保存准入 | 校验、保存、草稿试跑和执行共用有效语句解析；非空 statements 优先，逐条校验 | 不允许合规 sql 掩盖非法 statements；拒绝时返回结构化原因；不回溯改写历史版本 |
+| K69 失败行统计 | 单语句复用违规计数，无 id 依赖；多语句无法精确去重时标记 UNDEDUPLICATED，精确失败行数为空 | 次数单独保留但不当去重行数；统计缺失或未去重不参与通过率、评分；采样失败保留已确认违规 |
+| K70 结论分离 | qualityOutcome=PASSED/VIOLATION/UNKNOWN，executionOutcome=OK/FAILED，statisticsStatus=EXACT/UNDEDUPLICATED/UNAVAILABLE | 任意违规保留 VIOLATION；纯故障 UNKNOWN；版本化安全结果持久化到 metrics_json，通过安全 DTO 显式透出；旧 status 兼容 |
+| K71 工单准入 | 正式运行仅 VIOLATION 建业务工单，包括违规与故障并存；纯故障不建；DRY_RUN 永不建单 | 历史工单不自动删除；沿用既有去重与审计 |
+| K72 页面反馈 | 编辑页接新草稿试跑 `POST /api/governance/quality/rules/dry-run`，入参同 K67；详情显示双维度及安全原因 | 不需要 ruleId；checksum 对应当前输入，输入变更丢弃旧结果；试跑不写规则/运行/样本，不进入发布门禁及评分；未知分类回落 reasonCode |
 
-## 非功能预算（建议值，T44 基线后冻结）
+## 非功能预算（实施预算）
 
 | 约束 | 预算 | 检查/责任 |
 |---|---|---|
-| 静态校验 | 单次 ≤200ms（JSqlParser 解析上限 2s 已存在），不连库、不落库 | T48 计时并断言允许只读平台元数据查询，禁止目标数据源连接和用户 SQL 执行 |
+| 静态校验 | 单次 ≤200ms（JSqlParser 解析上限 2s 已存在），允许平台元数据读取，禁止目标库连接和写入 | T48 计时并断言允许只读平台元数据查询，禁止目标数据源连接和用户 SQL 执行 |
 | 保存准入 | 不改变既有保存事务边界与幂等 | T48 并发保存与重放检查 |
 | 失败统计 | 去重查询取消后，单语句规则运行 SQL 次数有违规时由 4 降为 3（包含总行数查询） | T45 记录实际语句数 |
 | 兼容 | 既有 errorCode 取值与 `gov_quality_run.error_category` 列不变；不新增业务表 | T44 冻结，T50 回归既有 10 处 DATASET_SCOPE_BLOCKED 断言 |
