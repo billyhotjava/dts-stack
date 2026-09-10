@@ -2000,7 +2000,8 @@ class DbtImplementationDraftServiceSecurityTest {
         when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(latest);
         when(modelSpecs.revision(eq(TENANT), any())).thenReturn(previous);
         when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
-        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(designerImplementation(), List.of(), List.of()));
+        ImplementationView currentImplementation = designerImplementation();
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(currentImplementation, List.of(), List.of()));
         SourceBundleView source = sourceBundle("sprint83", List.of(
             new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
             new FileInput("models/orders.sql", "select manual_business_rule from orders\n")
