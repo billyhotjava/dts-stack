@@ -36,7 +36,7 @@ export async function saveModelDefinitionDraft(
 	const prepared = prepareModelDraftForSave(draft, context.dimensionDefinitions);
 	const errors = Object.values(validateModelDefinitionInput(prepared));
 	if (errors.length) throw new Error(errors.join("；"));
-	const planId = prepared.planId || (await resolveDefaultModelingContextId());
+	const planId = prepared.planId || (await resolveDefaultModelingContextId(prepared.creationOperationId));
 	if (!planId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
 	const writable = { ...prepared, planId };
 	const modelSpec = modelDraftToUpdateCommand(writable);

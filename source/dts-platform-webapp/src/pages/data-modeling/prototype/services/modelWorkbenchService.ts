@@ -1358,7 +1358,7 @@ const validatedImplementationSave = async (
 
 export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveContext): Promise<ModelDraftSaveResult> {
 	if (draft.base && draft.base.compatibilityMode !== "CANONICAL") throw new Error("历史只读模型不能在工作台中修改");
-	const backendContextId = draft.planId || (await resolveDefaultModelingContextId());
+	const backendContextId = draft.planId || (await resolveDefaultModelingContextId(draft.creationOperationId));
 	if (!backendContextId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
 	const writableDraft = draft.planId ? draft : { ...draft, planId: backendContextId };
 	const prepared = prepareModelDraftForSave(writableDraft, context.dimensionDefinitions);
