@@ -13,7 +13,7 @@ C43–C49 为首轮登记；C50–C55 为同日第二轮只读核验补录，其
 | C45 | MODEL_SPEC_FIELD 优先于公式；派生聚合无条件 MAX，适用粒度未在此处证明 | source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/governance/IndicatorCalculationService.java:115、:368 |
 | C46 | 公式按 dependencyCodes 读取当前定义，未按 sourceRefs 的 INDICATOR_VERSION 执行 | 同上 IndicatorCalculationService.java:186 |
 | C47 | 计算只传 ID；有时间取最新组合，无时间聚合整表；编辑器无修饰词/周期消费控件 | 同上 IndicatorCalculationService.java:82、:349；source/dts-platform-webapp/src/pages/data-modeling/prototype/MetricDefinitionBindingFields.tsx:105 |
-| C48 | 平台→分析的指标投影链**已存在且在运行**：定时 worker（默认 30s）→ 同步命令服务 → 载荷工厂 → 只读指标适配器 → analytics；BI 的 AnalyticsMetric 与语义执行是该链的消费端。平台 publish 方法本身只更新状态/授权/快照 | source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/CatalogModelSemanticSyncWorker.java:32；同包 CatalogModelSemanticSyncCommandService.java:28；同包 CatalogModelSemanticPayloadFactory.java:93；source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/governance/IndicatorService.java:534；source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/semantic/SemanticQueryService.java:171 |
+| C48 | 平台→分析的指标投影链**源码链已确认，当前运行状态待基线验证**：定时 worker（默认 30s）→ 同步命令服务 → 载荷工厂 → 只读指标适配器 → analytics；BI 的 AnalyticsMetric 与语义执行是该链的消费端。平台 publish 方法本身只更新状态/授权/快照 | source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/CatalogModelSemanticSyncWorker.java:32；同包 CatalogModelSemanticSyncCommandService.java:28；同包 CatalogModelSemanticPayloadFactory.java:93；source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/governance/IndicatorService.java:534；source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/semantic/SemanticQueryService.java:171 |
 | C49 | 计算历史失败被置空；分层固定公共层；发布反馈不等于 BI 可用 | source/dts-platform-webapp/src/pages/data-modeling/prototype/MetricsPage.tsx:253、:318、:334 |
 | C50 | 该投影**只覆盖原子指标**：适配器 SQL 硬编码 `metric_type='ATOMIC'` 且必须命中 `SEMANTIC_MODEL_REVISION` 的 sourceRef；派生/复合指标当前没有到 BI 的通路 | source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/CatalogModelSemanticIndicatorReadAdapter.java:21 |
 | C51 | 指标版本**被读出后丢弃**：适配器 SQL 选出 `indicator.version`，但 wire 契约 `MetricPayload` 的十个字段没有版本位 | 同上适配器 :30；source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/CatalogModelSemanticContract.java:33；CatalogModelSemanticPayloadFactory.java:137 |
@@ -36,20 +36,40 @@ C43–C49 为首轮登记；C50–C55 为同日第二轮只读核验补录，其
 
 | ID | 输入/输出字段 | 语义与落点 |
 |---|---|---|
-| K61 固定引用 | `implementationRef:{modelSpecId:UUID,modelRevision:int,fieldName:string}`；`sourceRefs:[{sourceType:"INDICATOR_VERSION",sourceId:UUID,sourceVersion:string}]` | 现有创建/rebind/修订命令承载；服务端响应精确锚点。旧 MODEL_SPEC_FIELD 可还原则复用，否则阻断并要求显式绑定；不得按名称/编码升到最新版 |
+| K61 固定引用 | `implementationRef:{modelSpecId:UUID,modelRevision:int,fieldName:string}`；`sourceRefs:[{sourceType:"INDICATOR_VERSION",sourceId:UUID,sourceVersion:string}]` | 现有创建/rebind/修订命令承载；服务端响应精确锚点。模型字段型的旧 MODEL_SPEC_FIELD 可还原则复用，否则阻断并要求显式绑定；公式型只要求完整、合法的固定上游引用，不强制绑定结果模型；不得按名称/编码升到最新版 |
 | K62 执行方式 | `executionMode:"FORMULA"\|"PRECOMPUTED"`；`expression:string\|null`；`resultGrain:string[]`；`allowedAggregations:string[]`；运行输出 `indicatorId,indicatorVersion,dependencyVersions,sourceMode,queryId,dataAsOf,value:number\|null,nullReason:string\|null` | 公式模式按版本依赖计算；预计算模式按声明粒度读取。比率/不可加性必须声明或拒绝跨粒度；聚合/null 规则进入预检。定义和运行字段存储位置由 T32 固定 |
 | K63 限定规则 | `modifierRefs:[{id:UUID,version:string}]`；谓词 `{fieldRef:string,op:EQ\|IN\|BETWEEN,value:typedScalar\|typedScalar[]}`；时间周期独立固定引用 | 使用现有修饰词/周期 owner，绑定允许字段；查询参数化，不接受任意 SQL。时间累计/滚动计算不能伪装为普通过滤，首批支持清单由 T32 冻结 |
 | K64 分析请求 | `indicatorRefs:[{id:UUID,version:string}],timeRange:{fieldRef:string,start:string,endExclusive:string,timezone:string},dimensions:string[],filters:predicate[],limit:int`；返回 `columns,rows,resolvedVersions,queryId,dataAsOf,cacheHit,warnings` | 优先扩展现有语义查询契约及平台适配，不新增并行计算服务；单值旧 calculate 保留但明确 LATEST_PERIOD/ALL_DATA。时间区间、维度兼容和排序确定；精确 HTTP 入口由 T32 冻结 |
-| K65 发布投影 | `{indicatorId:UUID,indicatorVersion:string,assetType:string,assetKey:string,semanticModelRef:string,analyticsMetricRef:string}`；状态复用既有 `SYNC_PENDING\|SYNCED\|SYNC_FAILED` 加 `syncAttempts/lastSyncError/nextSyncAt`，页面另需表达「未注册」态 | 在 C48 的 serving 投影链上扩展；状态与重试沿用 C53 的持久化模型和 CAS `version`，不新造第二套状态枚举或注册表。T32 必须冻结两处结构缺口：①派生/复合指标的投影覆盖（C50 当前零通路）；②触发源——指标发布当前不入队同步（C52），须定为「指标发布触发」还是「模型修订同步顺带带出」。定义发布和分析注册分别记状态；GET 零副作用，失败可独立恢复 |
-| K66 BI 消费 | 卡片查询绑定 `{indicatorId:UUID,indicatorVersion:string}` 加 K64 参数；返回解析版本及资产追溯；看板全局参数映射到查询参数 | 公共指标唯一 owner 在平台，BI 为版本化投影。**前置阻断**：wire 契约 `MetricPayload` 无版本位（C51），「卡片按固定版本引用」要么扩展该跨服务契约（破坏性，须定兼容与灰度顺序），要么在平台侧解析后再投影；二选一由 T32 冻结，不得留到 T37 实施时临时决定。卡片引用固定版本，升级需展示影响及显式操作；读取结果重新校验租户、权限/密级，缓存不能跨权限上下文复用 |
+| K65 发布投影 | `{indicatorId:UUID,indicatorVersion:string,assetType:string,assetKey:string,semanticModelRef:string,analyticsMetricRef:string}`；状态复用既有 `SYNC_PENDING\|SYNCED\|SYNC_FAILED` 加 `syncAttempts/lastSyncError/nextSyncAt`，页面另需表达「未注册」态 | 在 C48 的 serving 投影链上扩展；状态与重试沿用 C53 的持久化模型和 CAS `version`，不新造第二套状态机或注册 owner；现表是模型级状态，须按下文版本投影协议扩展存储，不得直接当作逐指标版本状态。T32 必须冻结两处结构缺口：①派生/复合指标的投影覆盖（C50 当前零通路）；②触发源——指标发布当前不入队同步（C52），必须保证指标独立发布即产生持久化同步意图；模型修订同步可补偿带出，但不能作为唯一触发条件。定义发布和分析注册分别记状态；GET 零副作用，失败可独立恢复 |
+| K66 BI 消费 | 卡片查询绑定 `{indicatorId:UUID,indicatorVersion:string}` 加 K64 参数；返回解析版本及资产追溯；看板全局参数映射到查询参数 | 公共指标唯一 owner 在平台，BI 为版本化投影。**前置阻断**：wire 契约 `MetricPayload` 无版本位（C51），「卡片按固定版本引用」要么扩展该跨服务契约（需验证向后兼容，新增可选字段不必然是破坏性变更），要么在平台侧解析后再投影；二选一由 T32 冻结，不得留到 T37 实施时临时决定。卡片引用固定版本，升级需展示影响及显式操作；读取结果重新校验租户、权限/密级，缓存不能跨权限上下文复用 |
+
+## 多维公式对齐规则（K62–K64 增量）
+
+- 固定指标版本中的 `dimensionBindings` 映射公共维度标识到每个依赖的固定模型字段；`timeBinding` 声明业务时间角色、字段、时区及支持粒度。T32 冻结具体 DTO 和存储。名称相同不能自动视为可关联维度，业务时间角色不兼容时拒绝请求。
+- 查询时间与公共维度筛选必须一致传递给各依赖；指标自带修饰词仅作用于该指标，外部筛选与其按 AND 合并，不允许覆盖。无法映射的筛选或维度在执行前拒绝，禁止静默忽略。
+- 每个依赖先按同一公共维度键和时间桶聚合，再按完整键对齐后执行公式；聚合结果每键最多一行，出现重复键拒绝。禁止直接 JOIN 原始明细造成扇出。
+- 首批以依赖分组键并集对齐，不自动补完整日历。缺失依赖组默认返回 null 与 `MISSING_DEPENDENCY_GROUP`；只有固定指标显式声明可将缺组视为零，且该依赖查询成功，才补零。零分母为 null 与 `ZERO_DENOMINATOR`。缺组、SQL NULL、查询失败分别处理；任一依赖查询失败不得展示为成功计算。
+- 不同地区编码未映射、时间桶/时区不兼容时拒绝；NULL 维度键的分组及展示规则由 T32 固定。跨依赖读取须约定一致性等级：首批同源在同一查询或同一读快照完成，不能以依次读取的不同时间点声称一致；无法满足则明确拒绝或列为不支持。
+- 结果行数上限在分组对齐/公式计算后应用；不得分别截断分子、分母再计算。超限返回明确错误或已声明的稳定分页协议，不允许静默少算。
+
+## 指标版本投影与模型级状态（K65–K66 增量）
+
+现有 `modeling_catalog_model_serving_projection` 按 `(tenant_id,model_spec_id)` 唯一（CatalogModelServingProjectionRepository.java:83），表示模型级同步。复用该 owner 和重试机制，不等于把其单条状态直接作为所有指标版本的状态。
+
+- 逻辑交付身份为 `{tenantId,environment,indicatorId,indicatorVersion}`，须保存逐版本 desired/applied 标识或校验和、消费映射、失败及重试信息。模型级状态与版本级结果分别表达，v2 失败不得把 v1 标成不可用。
+- T32 冻结存储方案：优先在既有 owner 内扩展不可变版本映射与交付明细；必要的从属表允许按正式迁移增加，但不能新增平行注册控制面。必须列明唯一键、CAS 粒度、历史保留和清理条件，不能只给 modelSpecId 增列一个“当前指标版本”。
+- 公式型没有 implementationRef 时，以固定依赖集合确定既有语义模型/数据集绑定；不能虚构实现模型或随便选第一个上游作为宿主。单源且公共粒度兼容是首批准入条件，无法归属时明确阻断分析准备。投影中需携带可执行公式及固定依赖映射，不能只放版本标签。
+- v1、v2 消费映射同时存在；卡片使用精确指标版本解析，同名指标不能覆盖旧映射。平台侧解析方案也必须说明 analytics 如何区分两个版本，不得仅在平台返回版本号。
+- 指标发布产生持久化同步意图；冻结事务边界及可靠补偿，防止发布成功后通知丢失。重试绑定精确版本及载荷校验和；乱序响应只能完成对应意图，不得用 v1 的迟到响应覆盖 v2 或整模型状态。
+- 验收必须包含 v1 已就绪、v2 失败、旧卡片可用；重试 v2 后两版本并存；响应乱序；模型不变仅指标发布；无实现模型的公式指标可按支持边界进入 BI。
 
 ## T32 必须关闭的开工缺口
 
-1. 固定指标快照读取 owner、草稿/归档/撤销版本政策；旧定义与实现引用冲突如何检测，不能用当前状态一刀切否定历史快照。**具名交付物**：现网已发布指标中缺精确 `MODEL_SPEC_FIELD`（会在 K61 下被阻断重绑）的条数与占比，按原子/派生/复合分列，附查询语句与执行时间；该计数决定阻断策略是否可接受，缺此计数不得冻结 K61。
+1. 固定指标快照读取 owner、草稿/归档/撤销版本政策；旧定义与实现引用冲突如何检测，不能用当前状态一刀切否定历史快照。**具名交付物**：现网已发布指标按「模型字段型缺精确引用、公式型依赖完整、公式型依赖缺失、模式无法判定」四组统计数量与占比，再按原子/派生/复合分列，附分母、查询语句与执行时间。公式型依赖完整不得计入强制重绑；模式未知只列待判定，不猜测为损坏。缺该分类统计不得冻结 K61。
 2. 模式、结果粒度、限定条件与运行版本的真实持久化字段、索引、迁移和并发协议；发布/rebind 失败是否留下草稿及恢复路径。冻结每个写命令的事务/CAS/幂等策略。
 3. 在 C48 已确认的 serving 投影链上冻结三件事，不再重复"链路是否存在"的核实：①派生/复合指标的投影方案（C50 当前只投原子）；②版本传递方案——扩展 `MetricPayload` 还是平台侧解析（C51），含跨服务兼容与灰度顺序；③触发源与幂等键（C52 指标发布不入队）。另需明确跨服务部分成功的可观察状态、重试顺序与旧卡片兼容。`dts-metrics` 侧不在核实范围内（C54）。
 4. K64 的真实请求路径/DTO、超时取消与权限上下文传递；首批维度、时间与谓词支持清单。
-5. 当前目标、外部 Chrome 登录、隔离样本及真实数据画像；不得继承 F5 的“仅浏览器新增验收”约束为 F6 默认，也不擅自改动 F5 验收约定。
+5. 当前目标、外部 Chrome 登录、隔离样本及真实数据画像；补一次 C48 实际配置开关、worker 领取记录、投影状态变化、关联请求号和 analytics 接收/可查询结果，失败或未启用按基线缺口记录，不重新全仓扫描；不得继承 F5 的“仅浏览器新增验收”约束为 F6 默认，也不擅自改动 F5 验收约定。
 
 ## 非功能预算与可执行检查（建议值，T32 基线后冻结）
 
