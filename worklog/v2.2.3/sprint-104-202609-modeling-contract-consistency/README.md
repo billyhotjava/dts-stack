@@ -12,7 +12,7 @@
 
 **最新实施状态**：F1/F2 已有主要实现，F3 的 SOURCE、逻辑依赖、结构物化、三步页面、接入目标绑定和数据接手代码已落地；正式包及真实 Chrome 95 分项验收进行中。规划内活动候选唯一约束已按冻结契约修复并通过真实PG回归；最终正式包9a5e7ce60正在部署复验，独立离线目标仍未指定，不能标记全部完成。见 [F3 运行记录](it/evidence/current-environment/f3-runtime-20260907.md)；旧记录按各自提交保留。
 
-**2026-09-10 首次建模整改**：已 review F1–F6 的相关 feature/task，新增 [F7/T40–T43](features/F7-首次建模初始化与菜单授权一致性/README.md)，共 7 个 Feature、43 个 Task。当前建模权限按菜单控制；首次上下文由后端与模型原子保存。Review、冻结契约和 IT-44–47 见 [F7 契约](assests/F7-first-model-initialization.md)。F7 正在实施，真实空库浏览器验收有工具缺口；历史验收结论不变。
+**2026-09-10 首次建模整改**：已 review F1–F6 的相关 feature/task，新增 [F7/T40–T43](features/F7-首次建模初始化与菜单授权一致性/README.md)，共 7 个 Feature、43 个 Task。当前建模权限按菜单控制；首次上下文由后端与模型原子保存。Review、冻结契约和 IT-44–47 见 [F7 契约](assests/F7-first-model-initialization.md)。F7 编码和定向验证已完成，正式交付与真实空库页面验收待完成；历史验收结论不变。
 
 ## 范围与来源
 
@@ -96,9 +96,9 @@ F2 账本 C11–C18 见 [原交付契约](assests/delivery-workflow-contract.md)
 | Gate | 状态 | 证据与关联 |
 |---|---|---|
 | G1 首次保存/菜单授权契约 | PASS | [F7 契约](assests/F7-first-model-initialization.md)，T40–T42 |
-| G2 源码与专项 | PASS（源码） | [本轮验证](assests/F7-validation-20260910.md)，后端 55/55、前端 81/81、前端源码构建通过；不代表运行验收 |
+| G2 源码与专项 | PASS（源码） | [最新编码验证](assests/F7-implementation-20260910.md)，后端主回归 58/58、补充专项 29/29、前端 87/87、前端源码构建通过；不代表运行验收 |
 | G3 正式交付/部署 | PENDING | T43，尚未构建本轮镜像或部署 |
-| G4 真实空库页面与 Chrome95 | GAP | T43/IT-44–47，浏览器工具未就绪 |
+| G4 真实空库页面与 Chrome95 | PENDING | T43/IT-44–47，本轮尚未执行真实页面验收 |
 
 ## 当前源码测试证据（2026-09-06）
 
