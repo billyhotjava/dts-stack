@@ -279,3 +279,55 @@ F4当前进度：73697f73a源码与83项前端/30项后端专项通过；已按�
 F5 Gate：G0 复用既有基线，运行时仍核对实际环境；G1=PASS，T25 的实施契约与只读基线已冻结；实际查询预算达成仍由 T30 验证。G2/G3/G4=PENDING，由 T30 跟踪。
 
 执行顺序（单代理）：**T25 → T27 → T26 → T28 → T31 → T29 → T30**。T28 提供完整 pin 的选择、保存、回显和来源顺序，T31 消费该固定输入；T29 只负责归档防御。F5/T25 已完成契约冻结，其余六项编码完成、运行分项验收中；最终证据见 assests/F5-acceptance-20260910.md。
+
+
+## F6 指标计算口径与资产 BI 协作闭环（2026-09-10）
+
+新增 [F6](features/F6-指标计算口径与资产BI协作闭环/README.md)，8 个 Task（T32–T39），全部 DRAFT。本增量承接指标 review；不改变 F1–F5 的状态及验收约定。
+
+| Feature | Task 数 | 优先级 | 状态 |
+|---|---:|---|---|
+| [F6-指标计算口径与资产BI协作闭环](features/F6-指标计算口径与资产BI协作闭环/README.md) | 8 | P1 | DRAFT |
+
+**ADR 增量**：公共口径复用平台指标 owner；模型与上游指标分别精确 pin；显式区分公式计算与预计算结果，不默认 MAX；BI 投影在既有 platform serving 链（`CatalogModelSemanticSyncWorker`→命令服务→载荷工厂→只读指标适配器）上扩展，复用其持久化状态与受控重试，不另建控制面；`dts-metrics` 注册链在 platform 侧零调用点，明确排除。
+
+**契约/Context Ledger**：[K61–K66、C43–C55、开工缺口与预算](assests/F6-metric-asset-bi-contract.md)。C48 已按第二轮只读核验更正（投影链存在），C50–C55 为补录事实：派生/复合零通路、wire 契约无版本位、指标发布不触发同步、既有状态与重试可复用、dts-metrics 排除、依赖按 code 全局取首条。UI→平台定义/版本→资产与模型→查询/分析注册→BI 卡片→看板链路以此为增量；精确协议未冻结，禁止提前标 READY。
+
+| 需求 | Task | 验收 |
+|---|---|---|
+| 基线与 owner/契约核实 | T32 | IT-36 |
+| 实现模型固定版本 | T33 | IT-37 |
+| 执行方式与正确粒度 | T34 | IT-38 |
+| 上游版本及历史追溯 | T35 | IT-39 |
+| 修饰词、时间与多维查询 | T36 | IT-40 |
+| 资产发布投影与 BI 引用 | T37 | IT-41 |
+| 页面状态/异常反馈 | T38 | IT-42 |
+| 正式交付与真实闭环 | T39 | IT-43 |
+
+**Gate 增量**：G0=GAP、G1=GAP（T32）；G2=PENDING（T33–T38）；G3/G4=PENDING（T39）。本次只完成规划文档及静态一致性检查，未启动实现/构建/部署/运行验收。
+
+**排期约束**：F6 不参与本 Sprint 收敛。F3 离线目标待指定、F4 Chrome95 与并发验收、F5 归档预检分支三项 P0/P1 缺口闭合前不启动 T32。T32 的核实跨 platform/analytics 两服务且需关闭三处结构缺口（C50–C52），工作量不视为轻量前置；若 F3–F5 收敛期延长，F6 整体转入 Sprint-105，不拆分穿插。
+
+**最新全 Sprint 统计（覆盖上文历史统计）**：6 个 Feature、39 个 Task；DRAFT=8，READY=0，IN_PROGRESS=29，DONE=2，BLOCKED=0。执行顺序 T32→T33→T34→T35→T36→T37→T38→T39；单代理。
+
+
+## 文档完整性缺口（2026-09-10 登记）
+
+静态校验发现 11 份被引用的文档在本 Sprint 目录内不存在，且经 `git log --all --diff-filter=A` 确认**从未提交过任何分支**。引用方仍以正常链接呈现，读者会误认为契约已落盘。
+
+| 缺失文档 | 被引用处 | 影响 |
+|---|---|---|
+| `assests/F3-modeling-data-boundary.md` | F2 README、F3 README、T15–T19、it/README、本文件 | F3/T15 的「建模完成边界与增量契约冻结」无落盘产物 |
+| `assests/delivery-workflow-contract.md` | F2 README、T09–T14、it/README、本文件 | F2 交付契约无落盘产物 |
+| `assests/T09-contract-freeze.md` | F2 README、T09、T11、it/baseline.md | F2/T09 的「契约冻结完成」结论无落盘产物 |
+| `assests/T10-B2-definition-save-contract.md` | T10 | 定义保存契约缺失 |
+| `assests/contract-matrix.md` | T02 | F1 三端字段矩阵缺失 |
+| `assests/backend-contract-evidence.md` | T07 | F1 后端契约证据缺失 |
+| `assests/delivery-contract-fixtures.json` | F2 README、T09 | 交付契约夹具缺失 |
+| `assests/browser-test-issues-20260908.md` | T05、T06、it/evidence/…/browser-round1-20260908.md | 浏览器问题清单缺失 |
+| `assests/capability-matrix.md` | it/手工验收用例-20260907.md | 能力矩阵缺失 |
+| `assests/domain-profile.md`、`assests/nfr-budget.md`、`assests/review-evidence.md`、`assests/review-remediation-20260908.md` | 本文件 | 域画像、非功能预算与 review 证据缺失 |
+
+处理要求：**不得补写内容冒充当时冻结结论**。每项二选一——把当时的真实产物补进来并保留原始时间，或把引用改成「未落盘」并同步下调对应 Task 的冻结声明（当前 sprint-queue 中 T09/T15 标注为「契约冻结完成」，与本表冲突）。该缺口不属于 F6，归 F1–F3 owner 处理，F6 的 C43–C55 与 K61–K66 已按新约定全部落盘在 [F6 契约](assests/F6-metric-asset-bi-contract.md)。
+
+另：本 Sprint 目录名为 `assests`（拼写错误），其余 Sprint 统一使用 `assets`。共 44 个文件引用该路径，重命名需一次性替换，未执行，待决策。
