@@ -202,3 +202,21 @@ it("never serializes the structure generator as a dimension business generation 
 	const draft = makeDraft({ implementationInputMode: "GENERATED", generationStrategyType: "SCHEMA_ONLY" });
 	expect(modelDraftToUpdateCommand(draft).generationStrategy).toBeNull();
 });
+
+it("saves the first model without a context preflight and retains retry identity", async () => {
+	const draft = { ...definition(), planId: "" };
+	const before = JSON.stringify(draft);
+	vi.mocked(saveModelDraftOperation).mockRejectedValueOnce(new Error("save failed"));
+	await expect(saveModelDefinitionDraft(draft, context)).rejects.toThrow("save failed");
+	await saveModelDefinitionDraft(draft, context);
+	const calls = vi.mocked(saveModelDraftOperation).mock.calls;
+	expect(calls).toHaveLength(2);
+	expect(calls[0][0]).toEqual(calls[1][0]);
+	expect(calls[0][0].create.planId).toBe("");
+	expect(JSON.stringify(draft)).toBe(before);
+});
+
+it("does not replace an explicitly malformed context", async () => {
+	await expect(saveModelDefinitionDraft({ ...definition(), planId: "invalid" }, context)).rejects.toThrow();
+	expect(saveModelDraftOperation).not.toHaveBeenCalled();
+});

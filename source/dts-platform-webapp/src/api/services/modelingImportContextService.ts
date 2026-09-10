@@ -5,7 +5,6 @@ import { getDomainTree } from "../platformApi";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "../sprint64GovernanceApi";
 import { listSubjectDomains } from "../subjectDomainApi";
 import {
-	createWarehousePlan,
 	getWarehousePlanCategories,
 	getWarehousePlanSources,
 	listWarehousePlans,
@@ -84,18 +83,8 @@ export async function listModelingImportContexts(): Promise<ModelingImportContex
 		.map((item) => ({ id: item.id, code: item.code, name: item.name }));
 }
 
-export async function resolveDefaultModelingContextId(creationOperationId?: string): Promise<string> {
-	const existingId = (await listModelingImportContexts())[0]?.id;
-	if (existingId || !creationOperationId) return existingId || "";
-	// Only an explicit save initializes the compatibility context. The server
-	// derives tenant/owner from the authenticated actor and enforces write access.
-	const created = await createWarehousePlan({
-		name: "数据建模",
-		objective: "维护数据模型设计与实现",
-		onboardingMode: "BUSINESS_FIRST",
-		idempotencyKey: `modeling-context:${creationOperationId}`,
-	});
-	return created.planId;
+export async function resolveDefaultModelingContextId(): Promise<string> {
+	return (await listModelingImportContexts())[0]?.id || "";
 }
 
 type SourcePageLoader = (

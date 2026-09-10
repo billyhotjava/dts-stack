@@ -66,7 +66,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class WarehousePlanResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+        "isAuthenticated()";
 
     private final WarehousePlanApplicationService service;
     private final WarehousePlanStageProjectionService stageProjectionService;

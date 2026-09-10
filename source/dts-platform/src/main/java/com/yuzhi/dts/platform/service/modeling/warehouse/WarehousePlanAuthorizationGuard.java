@@ -22,24 +22,10 @@ public class WarehousePlanAuthorizationGuard {
     }
 
     public boolean canReadPlan(WarehousePlanHeader current, WarehousePlanActor actor) {
-        if (
-            current == null ||
-            actor == null ||
-            !StringUtils.hasText(actor.ownerId()) ||
-            !SecurityUtils.isAuthenticated()
-        ) {
-            return false;
-        }
-        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
-            return true;
-        }
-        if (Objects.equals(current.ownerId(), actor.ownerId().trim())) {
-            return true;
-        }
-        return (
-            SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPARTMENT_PRIVILEGED_ROLES) &&
-            sameDepartment(current.ownerDepartmentId(), actor.ownerDepartmentId())
-        );
+        return current != null && actor != null && StringUtils.hasText(actor.ownerId()) &&
+            SecurityUtils.isAuthenticated() &&
+            (SecurityUtils.getCurrentUserId().filter(actor.ownerId()::equals).isPresent() ||
+             SecurityUtils.getCurrentUserLogin().filter(actor.ownerId()::equals).isPresent());
     }
 
     public void requirePlanRead(WarehousePlanHeader current, WarehousePlanActor actor) {
@@ -50,27 +36,10 @@ public class WarehousePlanAuthorizationGuard {
     }
 
     public void requirePlanMaintenance(WarehousePlanHeader current, WarehousePlanActor actor) {
-        if (current == null || actor == null || !StringUtils.hasText(actor.ownerId())) {
-            throw new WarehousePlanException(
-                "WAREHOUSE_PLAN_AUTHENTICATED_ACTOR_REQUIRED",
-                "An authenticated actor is required for warehouse plan maintenance",
-                null
-            );
-        }
-        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
-            return;
-        }
-        if (
-            SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.DEPARTMENT_PRIVILEGED_ROLES) &&
-            sameDepartment(current.ownerDepartmentId(), actor.ownerDepartmentId())
-        ) {
-            return;
-        }
+        if (canReadPlan(current, actor)) return;
         throw new WarehousePlanException(
-            "WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN",
-            "The authenticated actor cannot maintain a warehouse plan outside their department",
-            null
-        );
+            "WAREHOUSE_PLAN_AUTHENTICATED_ACTOR_REQUIRED",
+            "An authenticated actor is required for warehouse plan maintenance", null);
     }
 
     public void validateHeaderUpdate(

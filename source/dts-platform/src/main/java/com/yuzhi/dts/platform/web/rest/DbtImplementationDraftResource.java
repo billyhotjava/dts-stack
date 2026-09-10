@@ -36,7 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** REST boundary for isolated, static-only advanced dbt implementation drafts. */
 @RestController
 @RequestMapping("/api/modeling/model-specs/{modelSpecId}/dbt-drafts")
-@PreAuthorize("hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)")
+@PreAuthorize("isAuthenticated()")
 public class DbtImplementationDraftResource {
 
     private final DbtImplementationDraftService service;

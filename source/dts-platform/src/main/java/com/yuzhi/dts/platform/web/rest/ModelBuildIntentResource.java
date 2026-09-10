@@ -35,7 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ModelBuildIntentResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_MAINTAINERS)";
+        "isAuthenticated()";
     private static final Pattern STRONG_ETAG = Pattern.compile(
         "^\\\"model-spec:([0-9a-fA-F-]{36}):([1-9][0-9]*):([0-9a-f]{64})\\\"$"
     );

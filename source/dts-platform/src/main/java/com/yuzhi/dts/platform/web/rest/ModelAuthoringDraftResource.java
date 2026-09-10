@@ -41,7 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 /** Canonical REST facade shared by visual and code model authoring views. */
 @RestController
 @RequestMapping("/api/modeling/model-specs/{modelSpecId}")
-@PreAuthorize("hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)")
+@PreAuthorize("isAuthenticated()")
 public class ModelAuthoringDraftResource {
 
     private final ModelAuthoringDraftService service;

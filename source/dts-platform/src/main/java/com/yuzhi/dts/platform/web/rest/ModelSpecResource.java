@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.CreateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService.ExpectedVersion;
@@ -45,7 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ModelSpecResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+        "isAuthenticated()";
     private static final Pattern STRONG_ETAG = Pattern.compile(
         "^\\\"model-spec:([0-9a-fA-F-]{36}):([1-9][0-9]*):([0-9a-f]{64})\\\"$"
     );
@@ -55,6 +56,7 @@ public class ModelSpecResource {
     private final ModelSpecUpdateRequestDecoder updateDecoder;
     private final ModelSpecStageGateService stageGates;
     private final WarehousePlanActorProvider actorProvider;
+    private final ModelingContextInitializationService contexts;
     private final String serverTenantId;
 
     public ModelSpecResource(
@@ -63,6 +65,7 @@ public class ModelSpecResource {
         ModelSpecUpdateRequestDecoder updateDecoder,
         ModelSpecStageGateService stageGates,
         WarehousePlanActorProvider actorProvider,
+        ModelingContextInitializationService contexts,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.service = service;
@@ -70,12 +73,18 @@ public class ModelSpecResource {
         this.updateDecoder = updateDecoder;
         this.stageGates = stageGates;
         this.actorProvider = actorProvider;
+        this.contexts = contexts;
         this.serverTenantId = serverTenantId;
     }
 
     @PostMapping
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<ModelSpecView>> create(@RequestBody JsonNode body) {
+        return contexts.withContext(serverTenantId, actorProvider.currentActor(), java.util.Collections.singletonList(body),
+            resolved -> createResolved(resolved.getFirst()));
+    }
+
+    private ResponseEntity<ApiResponse<ModelSpecView>> createResolved(JsonNode body) {
         ModelSpecCreateRequestDecoder.DecodeResult decoded = createDecoder.decode(body);
         if (!decoded.valid()) throw invalidRequest(decoded.issues());
         if (DimensionModelCreateRequestDecoder.isInternalIdempotencyKey(decoded.command().idempotencyKey())) {

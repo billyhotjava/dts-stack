@@ -1,7 +1,5 @@
 package com.yuzhi.dts.platform.service.modeling;
 
-import com.yuzhi.dts.platform.security.AuthoritiesConstants;
-import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import java.util.List;
 import java.util.Map;
@@ -12,7 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Authenticated institute-wide or department-scoped plan authorization with an owner fallback. */
+/** Modeling follows menu access; tenant and actor checks also protect background owner operations. */
 @Component
 @Transactional(readOnly = true)
 public class ModelSpecPlanWriteAccessAdapter implements ModelSpecPlanWriteAccessPort {
@@ -39,33 +37,9 @@ public class ModelSpecPlanWriteAccessAdapter implements ModelSpecPlanWriteAccess
         if (rows.size() != 1) return false;
         Map<String, Object> row = rows.getFirst();
         String ownerId = text(row.get("owner_id"));
-        String ownerDepartmentId = text(row.get("owner_department_id"));
-        if (!matchesAuthenticatedActor(actor)) {
-            // Scheduled legacy reconciliation has no user SecurityContext. Keep the historical owner-only
-            // fallback there, while authenticated requests must always pass the role and scope checks below.
-            return actor.equals(ownerId) && !hasAuthenticatedPrincipal();
-        }
-        if (
-            SecurityUtils.hasCurrentUserAnyOfAuthorities(
-                AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES
-            )
-        ) {
-            return true;
-        }
-        return (
-            SecurityUtils.hasCurrentUserThisAuthority(
-                AuthoritiesConstants.DEPT_DATA_OWNER
-            ) &&
-            SecurityUtils
-                .getCurrentUserDept()
-                .map(activeDepartment ->
-                    DepartmentUtils.matches(
-                        ownerDepartmentId,
-                        activeDepartment
-                    )
-                )
-                .orElse(false)
-        );
+        if (SecurityUtils.isAuthenticated() && matchesAuthenticatedActor(actor)) return true;
+        // Scheduled reconciliation has no user principal; it retains the historical owner-only fallback.
+        return actor.equals(ownerId) && !hasAuthenticatedPrincipal();
     }
 
     private static boolean matchesAuthenticatedActor(String actorId) {

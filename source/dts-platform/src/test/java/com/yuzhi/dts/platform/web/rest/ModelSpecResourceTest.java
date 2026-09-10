@@ -64,6 +64,18 @@ class ModelSpecResourceTest {
     private MockMvc mockMvc;
 
     @MockBean
+    private com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService contexts;
+
+    @org.junit.jupiter.api.BeforeEach
+    void resolveExplicitContext() {
+        org.mockito.Mockito.when(contexts.withContext(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+                java.util.function.Function<java.util.List<com.fasterxml.jackson.databind.JsonNode>, Object> save = invocation.getArgument(3);
+                return save.apply(invocation.getArgument(2));
+            });
+    }
+
+    @MockBean
     private ModelSpecApplicationService service;
 
     @MockBean

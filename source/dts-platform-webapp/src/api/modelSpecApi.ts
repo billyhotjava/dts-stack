@@ -360,7 +360,11 @@ export const createModelSpec = (data: CreateModelSpecCommand) =>
 export const saveModelDraftOperation = (data: ModelDraftOperationCommand) =>
 	api.post<ModelDraftOperationResult>({
 		url: `${MODEL_SPEC_RESOURCE}/draft-operations`,
-		data,
+		data: {
+			...data,
+			create: { ...data.create, planId: data.create.planId || undefined },
+			modelSpec: { ...data.modelSpec, planId: data.modelSpec.planId || undefined },
+		},
 		_skipErrorToast: true,
 	} as any);
 

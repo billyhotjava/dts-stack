@@ -76,7 +76,7 @@ class WarehousePlanAuthorizationGuardTest {
     }
 
     @Test
-    void fakeOwnerAndCrossDepartmentPlanMaintenanceAreRejected() {
+    void fakeOwnerIsRejectedButMenuUserMayMaintainAcrossDepartments() {
         authenticate(AuthoritiesConstants.DEPT_LEADER);
         WarehousePlanActor actor = new WarehousePlanActor("actor-1", "dept-a");
         when(directoryGateway.findUserByPrincipalKey("missing-owner")).thenReturn(Optional.empty());
@@ -86,17 +86,9 @@ class WarehousePlanAuthorizationGuardTest {
                 WarehousePlanException.class,
                 error -> org.assertj.core.api.Assertions.assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_OWNER_FORBIDDEN")
             );
-        assertThatThrownBy(() -> guard.requirePlanMaintenance(plan("owner-2", "dept-b"), actor))
-            .isInstanceOfSatisfying(
-                WarehousePlanException.class,
-                error -> org.assertj.core.api.Assertions.assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN")
-            );
+        assertThatCode(() -> guard.requirePlanMaintenance(plan("owner-2", "dept-b"), actor)).doesNotThrowAnyException();
 
-        assertThatThrownBy(() -> guard.requirePlanMaintenance(plan("owner-3", "dept-ba"), actor))
-            .isInstanceOfSatisfying(
-                WarehousePlanException.class,
-                error -> org.assertj.core.api.Assertions.assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN")
-            );
+        assertThatCode(() -> guard.requirePlanMaintenance(plan("owner-3", "dept-ba"), actor)).doesNotThrowAnyException();
     }
 
     @Test
@@ -131,32 +123,19 @@ class WarehousePlanAuthorizationGuardTest {
     }
 
     @Test
-    void planReadsAreLimitedToInstituteScopeOwnerOrTheExactAuthenticatedDepartment() {
-        WarehousePlanHeader departmentPlan = plan("owner-1", "dept-a");
-        WarehousePlanActor departmentActor = new WarehousePlanActor("employee-1", "dept-a");
-
+    void menuAccessDoesNotRequireOwnershipOrDepartmentButRequiresTheAuthenticatedActor() {
+        WarehousePlanActor actor = new WarehousePlanActor("actor-1", "dept-a");
         authenticate(AuthoritiesConstants.EMPLOYEE);
-        assertThat(guard.canReadPlan(departmentPlan, departmentActor)).isTrue();
-        assertThat(guard.canReadPlan(plan("owner-2", "dept-ba"), departmentActor)).isFalse();
-        assertThat(guard.canReadPlan(plan("owner-3", "10010"), new WarehousePlanActor("employee-1", "10"))).isFalse();
-
-        authenticate(AuthoritiesConstants.USER);
-        assertThat(guard.canReadPlan(departmentPlan, new WarehousePlanActor("owner-1", "another-department"))).isTrue();
-        assertThat(guard.canReadPlan(departmentPlan, new WarehousePlanActor("employee-1", "dept-a"))).isFalse();
-
-        authenticate(AuthoritiesConstants.INST_LEADER);
-        assertThat(guard.canReadPlan(plan("owner-2", "dept-b"), departmentActor)).isTrue();
-
+        assertThat(guard.canReadPlan(plan("owner-2", "dept-b"), actor)).isTrue();
+        assertThatCode(() -> guard.requirePlanMaintenance(plan("owner-2", "dept-b"), actor)).doesNotThrowAnyException();
+        assertThat(guard.canReadPlan(plan("owner-2", "dept-b"), new WarehousePlanActor("forged", "dept-a"))).isFalse();
         SecurityContextHolder.clearContext();
-        assertThat(guard.canReadPlan(departmentPlan, departmentActor)).isFalse();
-        assertThatThrownBy(() -> guard.requirePlanRead(departmentPlan, departmentActor))
-            .isInstanceOfSatisfying(WarehousePlanException.class, error ->
-                assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_NOT_FOUND")
-            );
+        assertThat(guard.canReadPlan(plan("owner-2", "dept-b"), actor)).isFalse();
+        assertThatThrownBy(() -> guard.requirePlanMaintenance(plan("owner-2", "dept-b"), actor)).isInstanceOf(WarehousePlanException.class);
     }
 
     private static void authenticate(String authority) {
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("actor", "n/a", authority));
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("actor-1", "n/a", authority));
     }
 
     private static WarehousePlanHeader plan(String ownerId, String departmentId) {

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DimensionModelApplicationService;
@@ -30,11 +31,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class DimensionModelResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+        "isAuthenticated()";
 
     private final DimensionModelApplicationService service;
     private final DimensionModelCreateRequestDecoder decoder;
     private final WarehousePlanActorProvider actorProvider;
+    private final ModelingContextInitializationService contexts;
     private final AuditService auditService;
     private final String serverTenantId;
 
@@ -42,12 +44,14 @@ public class DimensionModelResource {
         DimensionModelApplicationService service,
         DimensionModelCreateRequestDecoder decoder,
         WarehousePlanActorProvider actorProvider,
+        ModelingContextInitializationService contexts,
         AuditService auditService,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.service = service;
         this.decoder = decoder;
         this.actorProvider = actorProvider;
+        this.contexts = contexts;
         this.auditService = auditService;
         this.serverTenantId = serverTenantId;
     }
@@ -56,7 +60,16 @@ public class DimensionModelResource {
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<OperationResult>> create(@RequestBody JsonNode body) {
         try {
-            OperationResult result = service.create(serverTenantId, actorId(), decoder.decode(body));
+            OperationResult result = contexts.withContext(serverTenantId, actorProvider.currentActor(),
+                java.util.Collections.singletonList(body == null ? null : body.get("modelSpec")), resolved -> {
+                    JsonNode normalized = body;
+                    if (body != null && body.isObject()) {
+                        com.fasterxml.jackson.databind.node.ObjectNode copy = body.deepCopy();
+                        copy.set("modelSpec", resolved.getFirst());
+                        normalized = copy;
+                    }
+                    return service.create(serverTenantId, actorId(), decoder.decode(normalized));
+                });
             return ResponseEntity
                 .status(result.replayed() ? HttpStatus.OK : HttpStatus.CREATED)
                 .location(URI.create("/api/modeling/model-specs/" + result.currentModelSpec().id()))

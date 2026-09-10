@@ -33,10 +33,11 @@ class ModelSpecReservedIdempotencyBoundaryTest {
             mock(ModelSpecUpdateRequestDecoder.class),
             mock(ModelSpecStageGateService.class),
             mock(WarehousePlanActorProvider.class),
+            new com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService(null, null),
             "server-tenant"
         );
 
-        assertThatThrownBy(() -> resource.create(new ObjectMapper().createObjectNode()))
+        assertThatThrownBy(() -> resource.create(new ObjectMapper().createObjectNode().put("planId", java.util.UUID.randomUUID().toString())))
             .isInstanceOf(ModelSpecException.class)
             .satisfies(error -> {
                 ModelSpecException exception = (ModelSpecException) error;

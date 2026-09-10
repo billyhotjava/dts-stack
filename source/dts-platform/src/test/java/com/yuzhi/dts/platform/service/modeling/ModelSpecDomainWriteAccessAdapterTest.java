@@ -18,9 +18,9 @@ class ModelSpecDomainWriteAccessAdapterTest {
     private CatalogDomainAccessReadPort domains;
 
     @Test
-    void delegatesMaintenanceChecksOnlyForPersistedDomains() {
+    void modelReferenceRequiresDomainVisibilityInsteadOfDomainMaintenance() {
         UUID id = UUID.randomUUID();
-        when(domains.canMaintain(id)).thenReturn(true);
+        when(domains.canRead(id)).thenReturn(true);
 
         ModelSpecDomainWriteAccessAdapter adapter = new ModelSpecDomainWriteAccessAdapter(domains);
 

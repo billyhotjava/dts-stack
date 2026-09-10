@@ -17,6 +17,7 @@ public class ModelSpecDomainWriteAccessAdapter implements ModelSpecDomainWriteAc
 
     @Override
     public boolean canMaintain(UUID domainId) {
-        return domains.canMaintain(domainId);
+        // Referencing a visible data domain does not require editing the catalog domain itself.
+        return domains.canRead(domainId);
     }
 }

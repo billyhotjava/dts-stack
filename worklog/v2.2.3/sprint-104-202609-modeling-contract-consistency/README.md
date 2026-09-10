@@ -12,6 +12,8 @@
 
 **最新实施状态**：F1/F2 已有主要实现，F3 的 SOURCE、逻辑依赖、结构物化、三步页面、接入目标绑定和数据接手代码已落地；正式包及真实 Chrome 95 分项验收进行中。规划内活动候选唯一约束已按冻结契约修复并通过真实PG回归；最终正式包9a5e7ce60正在部署复验，独立离线目标仍未指定，不能标记全部完成。见 [F3 运行记录](it/evidence/current-environment/f3-runtime-20260907.md)；旧记录按各自提交保留。
 
+**2026-09-10 首次建模整改**：已 review F1–F6 的相关 feature/task，新增 [F7/T40–T43](features/F7-首次建模初始化与菜单授权一致性/README.md)，共 7 个 Feature、43 个 Task。当前建模权限按菜单控制；首次上下文由后端与模型原子保存。Review、冻结契约和 IT-44–47 见 [F7 契约](assests/F7-first-model-initialization.md)。F7 正在实施，真实空库浏览器验收有工具缺口；历史验收结论不变。
+
 ## 范围与来源
 
 初始范围为五项 P1 不一致及能力边界核对，F1 含 T01–T08。2026-09-06 扩展 F2“模型交付与资产治理贯通”，新增 T09–T14；2026-09-07 按用户新要求新增 F3/T15–T20，全 Sprint 共 3 个 Feature、20 个 Task。F2 原有四步向导、质量闭环、目录 CAS 和精确分析注册源码及验证进展继续保留，F3 只接续其中与新模块边界冲突的部分。源码落地不计作验收完成，原进展见 [本轮实现与验证记录](it/evidence/current-environment/implementation-progress-20260907.md)。

@@ -1,6 +1,5 @@
 import api from "@/api/apiClient";
 import { saveModelDraftOperation } from "@/api/modelSpecApi";
-import { resolveDefaultModelingContextId } from "@/api/services/modelingImportContextService";
 import type { CanonicalModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { toModelSpecEtag, validateModelSpecUpdate } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { createCommandForDraft } from "./modelDraftCreateCommand";
@@ -36,11 +35,11 @@ export async function saveModelDefinitionDraft(
 	const prepared = prepareModelDraftForSave(draft, context.dimensionDefinitions);
 	const errors = Object.values(validateModelDefinitionInput(prepared));
 	if (errors.length) throw new Error(errors.join("；"));
-	const planId = prepared.planId || (await resolveDefaultModelingContextId(prepared.creationOperationId));
-	if (!planId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
-	const writable = { ...prepared, planId };
+	const writable = prepared;
 	const modelSpec = modelDraftToUpdateCommand(writable);
-	const issues = validateModelSpecUpdate(modelSpec).filter((issue) => issue.code !== "MODEL_SPEC_UPSTREAM_REQUIRED");
+	const issues = validateModelSpecUpdate(modelSpec).filter(
+		(issue) => issue.code !== "MODEL_SPEC_UPSTREAM_REQUIRED" && !(issue.code === "MODEL_SPEC_PLAN_REQUIRED" && !prepared.planId),
+	);
 	if (issues.length)
 		throw new Error(issues.map((issue) => `${issue.field}：${issue.message || issue.code}`).join("；"));
 	const saved = await saveModelDraftOperation({

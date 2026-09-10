@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService;
 import com.yuzhi.dts.platform.service.modeling.DimensionModelCreateRequestDecoder;
 import com.yuzhi.dts.platform.service.modeling.ModelDraftSaveApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelDraftSaveApplicationService.SaveResult;
@@ -28,12 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class ModelDraftOperationResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
-        "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
+        "isAuthenticated()";
 
     private final ModelDraftSaveApplicationService service;
     private final ModelSpecCreateRequestDecoder createDecoder;
     private final ModelSpecUpdateRequestDecoder updateDecoder;
     private final WarehousePlanActorProvider actorProvider;
+    private final ModelingContextInitializationService contexts;
     private final String tenantId;
 
     public ModelDraftOperationResource(
@@ -41,12 +43,14 @@ public class ModelDraftOperationResource {
         ModelSpecCreateRequestDecoder createDecoder,
         ModelSpecUpdateRequestDecoder updateDecoder,
         WarehousePlanActorProvider actorProvider,
+        ModelingContextInitializationService contexts,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String tenantId
     ) {
         this.service = service;
         this.createDecoder = createDecoder;
         this.updateDecoder = updateDecoder;
         this.actorProvider = actorProvider;
+        this.contexts = contexts;
         this.tenantId = tenantId;
     }
 
@@ -54,6 +58,12 @@ public class ModelDraftOperationResource {
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<SaveResult>> save(@RequestBody DraftOperationRequest request) {
         if (request == null) throw invalidRequest(List.of());
+        return contexts.withContext(tenantId, actorProvider.currentActor(),
+            java.util.Arrays.asList(request.create(), request.modelSpec()),
+            resolved -> saveResolved(new DraftOperationRequest(resolved.get(0), resolved.get(1), request.implementation(), request.saveMode())));
+    }
+
+    private ResponseEntity<ApiResponse<SaveResult>> saveResolved(DraftOperationRequest request) {
         SaveMode saveMode = SaveMode.parse(request.saveMode());
         if (saveMode == SaveMode.DEFINITION_ONLY && request.implementation() != null) {
             throw invalidRequest(List.of(new FieldIssue(

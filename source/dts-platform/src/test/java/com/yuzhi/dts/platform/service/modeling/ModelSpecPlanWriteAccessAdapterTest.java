@@ -42,16 +42,16 @@ class ModelSpecPlanWriteAccessAdapterTest {
     }
 
     @Test
-    void departmentDataOwnerIsRestrictedToPlansOwnedByTheSameDepartment() {
+    void ordinaryMenuUserCanMaintainPlansAcrossDepartments() {
         UUID sameDepartmentPlan = UUID.randomUUID();
         UUID foreignDepartmentPlan = UUID.randomUUID();
         plan(sameDepartmentPlan, "another-owner", "dept-a");
         plan(foreignDepartmentPlan, "alice", "dept-b");
-        authenticate("alice", "dept-a", AuthoritiesConstants.DEPT_DATA_OWNER);
+        authenticate("alice", "dept-a", AuthoritiesConstants.EMPLOYEE);
         ModelSpecPlanWriteAccessAdapter adapter = new ModelSpecPlanWriteAccessAdapter(jdbcTemplate);
 
         assertThat(adapter.canMaintain("tenant", sameDepartmentPlan, "alice")).isTrue();
-        assertThat(adapter.canMaintain("tenant", foreignDepartmentPlan, "alice")).isFalse();
+        assertThat(adapter.canMaintain("tenant", foreignDepartmentPlan, "alice")).isTrue();
     }
 
     @Test
@@ -72,6 +72,18 @@ class ModelSpecPlanWriteAccessAdapterTest {
 
         assertThat(adapter.canMaintain("tenant", planId, "alice")).isTrue();
         assertThat(adapter.canMaintain("tenant", planId, " ")).isFalse();
+    }
+
+    @Test
+    void deniesCrossTenantAndAnonymousOwnerAccess() {
+        UUID id = UUID.randomUUID();
+        plan(id, "alice", "dept-a");
+        authenticate("alice", "dept-a", AuthoritiesConstants.EMPLOYEE);
+        var adapter = new ModelSpecPlanWriteAccessAdapter(jdbcTemplate);
+        assertThat(adapter.canMaintain("another-tenant", id, "alice")).isFalse();
+        SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.AnonymousAuthenticationToken(
+            "key", "alice", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ANONYMOUS"))));
+        assertThat(adapter.canMaintain("tenant", id, "alice")).isFalse();
     }
 
     private void plan(UUID planId, String ownerId, String departmentId) {

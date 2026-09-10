@@ -12,12 +12,14 @@
 | F1-通用建模契约与物化一致性 | P1（能力边界 T07 为 P2） | 8 | IN_PROGRESS |
 | [F2-模型交付与资产治理贯通](sprint-104-202609-modeling-contract-consistency/features/F2-模型交付与资产治理贯通/README.md) | P1 | 6 | IN_PROGRESS（保留已有切片及证据，边界由 F3 接续） |
 | [F3-全层建模与数据模块边界简化](sprint-104-202609-modeling-contract-consistency/features/F3-全层建模与数据模块边界简化/README.md) | P1 | 6 | IN_PROGRESS（实现及 Chrome 95 分项验收） |
-
 | [F4-模型工作台性能与交付状态稳定性](sprint-104-202609-modeling-contract-consistency/features/F4-模型工作台性能与交付状态稳定性/README.md) | P0 | 4 | IN_PROGRESS |
 | [F5-建模状态语义与上游引用准入收敛](sprint-104-202609-modeling-contract-consistency/features/F5-建模状态语义与上游引用准入收敛/README.md) | P0 | 7 | IN_PROGRESS |
 | [F6-指标计算口径与资产BI协作闭环](sprint-104-202609-modeling-contract-consistency/features/F6-指标计算口径与资产BI协作闭环/README.md) | P1 | 8 | IN_PROGRESS |
+| [F7-首次建模初始化与菜单授权一致性](sprint-104-202609-modeling-contract-consistency/features/F7-首次建模初始化与菜单授权一致性/README.md) | P0 | 4 | IN_PROGRESS |
 
-**统计**: DRAFT=0，READY=0，IN_PROGRESS=37，DONE=2，BLOCKED=0；6 个 Feature、39 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成；F5/T25 契约冻结完成，其余六项编码完成、正式构建部署及外部 Chrome 分项验收中。
+**F7 增量**: S10DC-80；T40 服务端原子初始化、T41 菜单授权对齐、T42 单次保存、T43 回归与正式验收。契约已冻结并开始修复；浏览器 GAP 单列。
+
+**统计**: DRAFT=0，READY=0，IN_PROGRESS=41，DONE=2，BLOCKED=0；7 个 Feature、43 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成；F5/T25 契约冻结完成，其余六项编码完成、正式构建部署及外部 Chrome 分项验收中。
 **执行顺序**: T01 归因 → T07 保存/执行边界冻结 → T02 契约 → T05/T06/T03/T04 → T07 一致性验证 → T08 集成验收。
 **F2 执行顺序**: T09 契约/基线 → T10 四步向导与统一交付状态 → T11 质量闭环、T12 资产维护、T13 分析恢复 → T14 端到端与离线交付。
 **F3 执行顺序**: T15 契约/副作用冻结 → T16 ODS 与逻辑引用 → T17 结构物化/完成判定 → T18 三步页面 → T19 接入绑定与数据接手 → T20 集成验收。

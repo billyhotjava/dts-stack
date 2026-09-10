@@ -1089,12 +1089,14 @@ const validateDraft = (
 	capabilities?: ModelImplementationCapabilities,
 ) => {
 	const missing: string[] = [];
-	if (!draft.planId) missing.push("可写建模上下文");
+	if (draft.base && !draft.planId) missing.push("可写建模上下文");
 	if (!draft.warehouseLayerCode) missing.push("请选择数仓分层");
 	const validationErrors = validateModelDraftInput(draft, capabilities);
 	missing.push(...Object.values(validationErrors));
 	if (missing.length) throw new Error(`请补齐：${Array.from(new Set(missing)).join("、")}`);
-	const issues = validateModelSpecUpdate(update);
+	const issues = validateModelSpecUpdate(update).filter(
+		(issue) => !(issue.code === "MODEL_SPEC_PLAN_REQUIRED" && !draft.base && !draft.planId),
+	);
 	if (issues.length)
 		throw new Error(issues.map((issue) => `${issue.field}：${issue.message || issue.code}`).join("；"));
 };
@@ -1358,10 +1360,7 @@ const validatedImplementationSave = async (
 
 export async function saveModelDraft(draft: ModelSpecDraft, context: ModelSaveContext): Promise<ModelDraftSaveResult> {
 	if (draft.base && draft.base.compatibilityMode !== "CANONICAL") throw new Error("历史只读模型不能在工作台中修改");
-	const backendContextId = draft.planId || (await resolveDefaultModelingContextId(draft.creationOperationId));
-	if (!backendContextId) throw new Error("服务端尚未提供可写建模上下文，请联系管理员初始化");
-	const writableDraft = draft.planId ? draft : { ...draft, planId: backendContextId };
-	const prepared = prepareModelDraftForSave(writableDraft, context.dimensionDefinitions);
+	const prepared = prepareModelDraftForSave(draft, context.dimensionDefinitions);
 	const preparedDraft = context.implementationCapabilities
 		? normalizeModelDraftImplementation(prepared, context.implementationCapabilities)
 		: prepared;
