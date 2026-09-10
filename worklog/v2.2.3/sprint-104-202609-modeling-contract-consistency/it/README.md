@@ -127,3 +127,7 @@ F5 新增验收通过外部 Chrome 完成，不新增 Java/Vitest/其他代码�
 ## F6 指标、资产与 BI 验收增量（2026-09-10）
 
 [IT-36–IT-43 验收清单](F6-指标资产BI验收.md) 对应 T32–T39，全部未执行。既有源码和其他 Feature 的运行记录不替代 F6 版本/口径/双卡片闭环证据。
+
+## F7 首次建模增量（2026-09-10）
+
+IT-44–47 的冻结用例见 [F7 契约](../assests/F7-first-model-initialization.md)，实际阶段结果见 [本轮验证](../assests/F7-validation-20260910.md)。尚未完成正式部署和真实空库页面验收，禁止据源码检查将 Sprint 标为 DONE。

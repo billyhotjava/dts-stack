@@ -91,6 +91,15 @@ F2 账本 C11–C18 见 [原交付契约](assests/delivery-workflow-contract.md)
 | G3 | F3 正式交付与安全恢复 | PENDING | 复用 F1/T08、F2/T14 机制，只补本次差异 | T20 |
 | G4 | F3 模块边界与全层真实验收 | PENDING | IT-19/21/23 有分项证据，IT-20/22 完整主线及 IT-24 独立离线待完成 | T20 |
 
+## F7 增量 Gate（2026-09-10）
+
+| Gate | 状态 | 证据与关联 |
+|---|---|---|
+| G1 首次保存/菜单授权契约 | PASS | [F7 契约](assests/F7-first-model-initialization.md)，T40–T42 |
+| G2 源码与专项 | PASS（源码） | [本轮验证](assests/F7-validation-20260910.md)，后端 55/55、前端 81/81、前端源码构建通过；不代表运行验收 |
+| G3 正式交付/部署 | PENDING | T43，尚未构建本轮镜像或部署 |
+| G4 真实空库页面与 Chrome95 | GAP | T43/IT-44–47，浏览器工具未就绪 |
+
 ## 当前源码测试证据（2026-09-06）
 
 - 提交 `bd0670acc89e7dd1be82e0d12961ba7744f63ca2` 的部署目录 Docker Maven 专项为 99/99；工作台 Vitest 日志为 92/92。正式命令、首轮测试夹具修复原因和边界见 [源码专项归档](it/evidence/source-test-summary-20260906.md)。
