@@ -662,6 +662,7 @@
                         <testInclude>**/domain/governance/GovIndicatorDefinitionJsonMappingTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorBusinessContextContractTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorBusinessContextLiquibaseTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorImplementationRefUpgradeTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorContextMigrationServiceIT.java</testInclude>
                         <testInclude>**/service/governance/ReferenceCodeServiceRelationshipGraphTest.java</testInclude>
                         <testInclude>**/service/infra/ConnectorDriverBindingServiceTest.java</testInclude>
