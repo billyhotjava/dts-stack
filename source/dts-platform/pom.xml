@@ -645,6 +645,13 @@
                         <testInclude>**/service/governance/SqlRepairServiceTest.java</testInclude>
                         <testInclude>**/service/governance/MeasurementUnitApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorServiceLifecycleTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorQueryPlanTest.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorQueryPlanPostgresTest.java</testInclude>
+                        <testInclude>**/service/governance/PinnedIndicatorTestFixture.java</testInclude>
+                        <testInclude>**/service/governance/IndicatorCalculationServiceTest.java</testInclude>
+                        <testInclude>**/service/governance/ControlledIndicatorDerivationCompilerTest.java</testInclude>
+                        <testInclude>**/service/modeling/serving/CatalogModelSemanticPayloadFactoryTest.java</testInclude>
+                        <testInclude>**/service/modeling/serving/CatalogModelSemanticSyncServiceTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorDerivationValidationServiceTest.java</testInclude>
                         <testInclude>**/service/governance/DbtIndicatorGeneratorDerivationTest.java</testInclude>
                         <testInclude>**/service/governance/IndicatorPublishPreviewServiceTest.java</testInclude>
