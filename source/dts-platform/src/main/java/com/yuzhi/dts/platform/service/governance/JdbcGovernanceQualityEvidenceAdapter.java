@@ -180,11 +180,15 @@ public class JdbcGovernanceQualityEvidenceAdapter implements QualityEvidencePort
                    run.rule_version_id,
                    run.binding_id,
                    run.dataset_id,
-                   run.status,
+                   case when left(ltrim(run.metrics_json), 1) = '{'
+                             and not (coalesce(run.metrics_json::jsonb ->> 'qualityOutcome', '') = 'PASSED'
+                                  and coalesce(run.metrics_json::jsonb ->> 'executionOutcome', '') = 'OK')
+                        then 'FAILED' else run.status end as status,
                    run.finished_at,
                    run.created_date
               from gov_quality_run run
              where run.binding_id in (%s)
+               and upper(coalesce(run.trigger_type, '')) <> 'DRY_RUN'
                and coalesce(run.started_at, run.scheduled_at, run.created_date) <= ?
              order by run.binding_id,
                       coalesce(run.finished_at, run.started_at, run.scheduled_at, run.created_date) desc,

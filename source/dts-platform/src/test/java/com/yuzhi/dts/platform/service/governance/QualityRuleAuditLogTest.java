@@ -42,7 +42,8 @@ class QualityRuleAuditLogTest {
             mock(AccessChecker.class),
             mock(OrganizationVisibilityService.class),
             mock(QualityEffectiveDepartmentResolver.class),
-            mock(QualityDatasetReadGuard.class)
+            mock(QualityDatasetReadGuard.class),
+            mock(QualityRulePreflightService.class)
         );
 
         String serialized = ReflectionTestUtils.invokeMethod(service, "writeDefinition", Map.of("sql", "select 1"));

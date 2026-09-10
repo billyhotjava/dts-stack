@@ -93,7 +93,7 @@ final class QualitySqlScopeValidator {
         }
     }
 
-    private static String allowedFunctions() {
+    static String allowedFunctions() {
         return String.join("、", SAFE_FUNCTIONS.stream().sorted().toList());
     }
 

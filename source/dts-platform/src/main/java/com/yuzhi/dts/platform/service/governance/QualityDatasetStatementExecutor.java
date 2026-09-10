@@ -60,138 +60,116 @@ public class QualityDatasetStatementExecutor {
         this.governanceProperties = governanceProperties;
     }
 
+    public Validation validate(UUID datasetId, Map<String, String> statements) {
+        CatalogDataset dataset = datasetGuard.requireDefaultLakeDataset(datasetId);
+        InfraDataSource source = dataSourceRepository.findById(dataset.getSourceId())
+            .orElseThrow(() -> new IllegalStateException("数据资产关联的数据源不存在"));
+        String sourceType = resolveSourceType(source);
+        BoundTable table = resolveBoundTable(dataset, sourceType);
+        List<QualityExecutionOutcome.Diagnostic> diagnostics = new ArrayList<>();
+        statements.forEach((key, value) -> {
+            String sql = normalizeSql(value);
+            SqlValidateResponse validation = sqlValidationService.validate(
+                new SqlValidateRequest(sql, source.getId().toString(), null, dataset.getHiveDatabase(), null), QUALITY_EXECUTOR);
+            if (!validation.executable()) {
+                diagnostics.add(new QualityExecutionOutcome.Diagnostic(key, "WRITE_BLOCKED", null));
+            } else {
+                var scope = checkScope(sql, table, sourceType);
+                if (!scope.allowed()) diagnostics.add(new QualityExecutionOutcome.Diagnostic(key, scope.reasonCode(), scope.detail()));
+            }
+        });
+        if (statements.isEmpty()) diagnostics.add(new QualityExecutionOutcome.Diagnostic("sql", "NO_STATEMENTS", null));
+        return new Validation(diagnostics.isEmpty(), QualityRuleStatements.checksum(statements), List.copyOf(diagnostics),
+            QualitySqlScopeValidator.allowedFunctions());
+    }
+
     public Execution execute(GovQualityRun run, Map<String, String> statements) {
-        if (run == null || run.getDatasetId() == null) {
-            throw new IllegalArgumentException("质量运行未绑定数据资产");
+        if (run == null || run.getDatasetId() == null) throw new IllegalArgumentException("质量运行未绑定数据资产");
+        Validation validation = validate(run.getDatasetId(), statements);
+        List<StatementExecutionResult> results = new ArrayList<>();
+        List<QualityExecutionOutcome.Diagnostic> diagnostics = new ArrayList<>(validation.diagnostics());
+        if (!validation.valid()) {
+            for (var diagnostic : diagnostics) results.add(new StatementExecutionResult(diagnostic.statementKey(), "",
+                StatementExecutionResult.Status.FAILED, "检测 SQL 未通过校验", "WRITE_BLOCKED".equals(diagnostic.reasonCode()) ? "WRITE_BLOCKED" : "DATASET_SCOPE_BLOCKED"));
+            return new Execution(results, null, null, new QualityExecutionOutcome(1, "UNKNOWN", "FAILED", "UNAVAILABLE", null, diagnostics));
         }
         CatalogDataset dataset = datasetGuard.requireDefaultLakeDataset(run.getDatasetId());
-        UUID sourceId = dataset.getSourceId();
-        if (sourceId == null) {
-            throw new IllegalStateException("数据资产未关联可执行的数据源");
-        }
-        InfraDataSource dataSource = dataSourceRepository
-            .findById(sourceId)
-            .orElseThrow(() -> new IllegalStateException("数据资产关联的数据源不存在"));
-        if (!StringUtils.hasText(dataSource.getJdbcUrl())) {
-            throw new IllegalStateException("数据资产关联的数据源未配置 JDBC 连接");
-        }
-
-        String sourceType = resolveSourceType(dataSource);
-        BoundTable boundTable = resolveBoundTable(dataset, sourceType);
-        String tableName = boundTable != null ? boundTable.qualifiedName() : null;
-        String persistedTableName = StringUtils.hasText(tableName) ? tableName : dataset.getName();
-        List<StatementExecutionResult> results = new ArrayList<>();
+        InfraDataSource source = dataSourceRepository.findById(dataset.getSourceId()).orElseThrow();
+        String sourceType = resolveSourceType(source);
+        BoundTable table = resolveBoundTable(dataset, sourceType);
         List<GovQualityFailingRow> samples = new ArrayList<>();
         List<String> failingStatements = new ArrayList<>();
         Integer rowsTotal = null;
-        int failingRowCount = 0;
-
-        try (Connection connection = jdbcSqlExecutor.getConnection(dataSource)) {
+        Integer failingRows = null;
+        long occurrences = 0;
+        int completed = 0;
+        boolean executionFailed = false;
+        String statistics = "EXACT";
+        try (Connection connection = jdbcSqlExecutor.getConnection(source)) {
             configureReadOnlyTransaction(connection, sourceType);
             try {
-                rowsTotal = countRows(connection, tableName);
-                for (Map.Entry<String, String> entry : statements.entrySet()) {
+                rowsTotal = countRows(connection, table.qualifiedName());
+                if (rowsTotal == null) statistics = "UNAVAILABLE";
+                for (var entry : statements.entrySet()) {
                     String sql = normalizeSql(entry.getValue());
-                    if (!StringUtils.hasText(sql)) {
-                        results.add(
-                            new StatementExecutionResult(
-                                entry.getKey(),
-                                entry.getValue(),
-                                StatementExecutionResult.Status.SKIPPED,
-                                "检测语句为空"
-                            )
-                        );
-                        continue;
-                    }
-                    SqlValidateResponse validation = sqlValidationService.validate(
-                        new SqlValidateRequest(sql, sourceId.toString(), null, dataset.getHiveDatabase(), null),
-                        QUALITY_EXECUTOR
-                    );
-                    if (!validation.executable()) {
-                        results.add(
-                            new StatementExecutionResult(
-                                entry.getKey(),
-                                sql,
-                                StatementExecutionResult.Status.FAILED,
-                                "质量检测 SQL 未通过只读安全校验",
-                                "WRITE_BLOCKED"
-                            )
-                        );
-                        continue;
-                    }
-                    QualitySqlScopeValidator.ScopeCheck scope = checkScope(sql, boundTable, sourceType);
-                    if (!scope.allowed()) {
-                        results.add(
-                            new StatementExecutionResult(
-                                entry.getKey(),
-                                sql,
-                                StatementExecutionResult.Status.FAILED,
-                                scope.message(),
-                                "DATASET_SCOPE_BLOCKED"
-                            )
-                        );
-                        continue;
-                    }
                     try {
-                        long statementFailureCount = countFailures(connection, sql);
-                        if (statementFailureCount == 0) {
-                            results.add(
-                                new StatementExecutionResult(
-                                    entry.getKey(),
-                                    sql,
-                                    StatementExecutionResult.Status.SUCCEEDED,
-                                    "未发现异常数据"
-                                )
-                            );
-                            continue;
+                        long count = countFailures(connection, sql);
+                        completed++;
+                        occurrences = Math.addExact(occurrences, count);
+                        if (count == 0) {
+                            results.add(new StatementExecutionResult(entry.getKey(), sql, StatementExecutionResult.Status.SUCCEEDED, "未发现异常数据"));
+                        } else {
+                            // Record the business verdict before any optional sample/statistics operation.
+                            failingStatements.add(sql);
+                            results.add(new StatementExecutionResult(entry.getKey(), sql, StatementExecutionResult.Status.FAILED,
+                                "发现 " + count + " 条不符合规则的数据", "QUALITY_VIOLATION"));
+                            try {
+                                collectFailureSamples(connection, sql, run, table.qualifiedName(), samples);
+                            } catch (SQLException error) {
+                                executionFailed = true;
+                                diagnostics.add(new QualityExecutionOutcome.Diagnostic(entry.getKey(), "SAMPLE_FAILED", null));
+                                results.add(new StatementExecutionResult(entry.getKey() + ":sample", "", StatementExecutionResult.Status.FAILED,
+                                    "违规结论已保留，失败样本采集未完成", "SAMPLE_FAILED"));
+                            }
                         }
-                        failingStatements.add(sql);
-                        collectFailureSamples(connection, sql, run, persistedTableName, samples);
-                        results.add(
-                            new StatementExecutionResult(
-                                entry.getKey(),
-                                sql,
-                                StatementExecutionResult.Status.FAILED,
-                                "发现 " + statementFailureCount + " 条不符合规则的数据"
-                            )
-                        );
-                    } catch (SQLException ex) {
-                        results.add(
-                            new StatementExecutionResult(
-                                entry.getKey(),
-                                sql,
-                                StatementExecutionResult.Status.FAILED,
-                                sqlErrorMessage(ex),
-                                safeSqlState(ex)
-                            )
-                        );
+                    } catch (SQLException | ArithmeticException error) {
+                        executionFailed = true;
+                        String code = error instanceof SQLException sqlError ? QualityRunOutcomeSemantics.normalizeErrorCode(safeSqlState(sqlError)) : "STATISTICS_OVERFLOW";
+                        diagnostics.add(new QualityExecutionOutcome.Diagnostic(entry.getKey(), code, null));
+                        results.add(new StatementExecutionResult(entry.getKey(), "", StatementExecutionResult.Status.FAILED, "检测语句执行未完成", code));
                     }
                 }
-                try {
-                    failingRowCount = countDistinctFailureRows(connection, failingStatements, rowsTotal);
-                } catch (SQLException exception) {
-                    results.add(
-                        new StatementExecutionResult(
-                            "__failed_rows__",
-                            "",
-                            StatementExecutionResult.Status.FAILED,
-                            "质量检测结果必须返回稳定的 id 字段：" + sqlErrorMessage(exception),
-                            "RESULT_ID_REQUIRED"
-                        )
-                    );
+                if (completed == statements.size()) {
+                    if (failingStatements.size() <= 1) {
+                        failingRows = occurrences <= Integer.MAX_VALUE ? (int) occurrences : null;
+                    } else {
+                        try { failingRows = countDistinctFailureRows(connection, failingStatements, rowsTotal); }
+                        catch (SQLException error) {
+                            statistics = "UNDEDUPLICATED";
+                            diagnostics.add(new QualityExecutionOutcome.Diagnostic("statistics", "STATISTICS_UNDEDUPLICATED", null));
+                        }
+                    }
                 }
-            } finally {
-                rollbackReadOnlyTransaction(connection, sourceType);
+            } finally { rollbackReadOnlyTransaction(connection, sourceType); }
+        } catch (SQLException error) {
+            executionFailed = true;
+            diagnostics.add(new QualityExecutionOutcome.Diagnostic("connection", "CONNECTION_ERROR", null));
+            results.add(new StatementExecutionResult("connection", "", StatementExecutionResult.Status.FAILED, "只读检测会话未能完成", "CONNECTION_ERROR"));
+        }
+        if (run.getId() != null && !samples.isEmpty()) {
+            try { failingRowRepository.saveAll(samples); }
+            catch (RuntimeException error) {
+                // A persistence failure must roll back normally; the caller retains the execution outcome.
+                throw error;
             }
-        } catch (SQLException ex) {
-            throw new IllegalStateException("无法建立只读质量检测会话：" + sqlErrorMessage(ex), ex);
         }
-
-        if (!samples.isEmpty()) {
-            failingRowRepository.saveAll(samples);
-        }
-        return new Execution(results, rowsTotal, failingRowCount);
+        if (failingRows == null && "EXACT".equals(statistics)) statistics = "UNAVAILABLE";
+        String quality = occurrences > 0 ? "VIOLATION" : completed == statements.size() && !executionFailed ? "PASSED" : "UNKNOWN";
+        return new Execution(List.copyOf(results), rowsTotal, failingRows, new QualityExecutionOutcome(1, quality,
+            executionFailed ? "FAILED" : "OK", statistics, completed > 0 ? occurrences : null, diagnostics));
     }
+
+    public record Validation(boolean valid, String checksum, List<QualityExecutionOutcome.Diagnostic> diagnostics, String allowedFunctions) {}
 
     private Integer countRows(Connection connection, String tableName) {
         if (!StringUtils.hasText(tableName)) {
@@ -430,5 +408,15 @@ public class QualityDatasetStatementExecutor {
 
     private record BoundTable(String schema, String table, String qualifiedName) {}
 
-    public record Execution(List<StatementExecutionResult> results, Integer rowsTotal, int failingRowCount) {}
+    public record Execution(List<StatementExecutionResult> results, Integer rowsTotal, Integer failingRowCount, QualityExecutionOutcome outcome) {
+        public Execution(List<StatementExecutionResult> results, Integer rowsTotal, int failingRowCount) {
+            this(results, rowsTotal, failingRowCount, legacyOutcome(results, rowsTotal, failingRowCount));
+        }
+        private static QualityExecutionOutcome legacyOutcome(List<StatementExecutionResult> results, Integer rowsTotal, int failingRowCount) {
+            String error = QualityRunOutcomeSemantics.dominantFailureCategory(results);
+            boolean violated = failingRowCount > 0 || results.stream().anyMatch(r -> "QUALITY_VIOLATION".equals(r.errorCode()) || r.message().contains("不符合规则"));
+            return new QualityExecutionOutcome(1, violated ? "VIOLATION" : error == null ? "PASSED" : "UNKNOWN",
+                error == null || "QUALITY_VIOLATION".equals(error) ? "OK" : "FAILED", rowsTotal == null ? "UNAVAILABLE" : "EXACT", (long) failingRowCount, List.of());
+        }
+    }
 }

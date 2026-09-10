@@ -1,3 +1,4 @@
+import { QualitySqlPreflight } from "@/features/data-quality/QualitySqlPreflight";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import api from "@/api/apiClient";
@@ -264,6 +265,7 @@ function ModelTargetRuleForm({
 						onChange={(event) => setSql(event.target.value)}
 					/>
 				</label>
+				<QualitySqlPreflight datasetId={asset.datasetId} sql={sql} disabled={saving} />
 				{failure ? (
 					<div className="dmx-inline-error" role="alert">
 						{failure}

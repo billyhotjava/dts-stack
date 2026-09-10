@@ -579,14 +579,15 @@ public class QualityRunService {
             List<StatementExecutionResult> results = execution.results();
             run.setRowsTotal(execution.rowsTotal());
             run.setFailingRowCount(execution.failingRowCount());
-            persistMetrics(run, results);
+
             StatementExecutionResult.Status aggregate = aggregateStatus(results);
             run.setStatus(mapStatus(aggregate));
             run.setMessage(summaryMessage(results));
             run.setErrorCategory(resolveErrorCategory(results));
             run.setFinishedAt(Instant.now());
             run.setDurationMs(java.time.Duration.between(start, run.getFinishedAt()).toMillis());
-            run.setMetricsJson(writeSafeMetrics(results));
+            run.setMetricsJson(execution.outcome().json());
+            persistMetrics(run, results);
             runRepository.save(run);
             if (aggregate == StatementExecutionResult.Status.FAILED) {
                 Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
@@ -595,7 +596,7 @@ public class QualityRunService {
                 payload.put("failedStatementCount", failedStatementCount(results));
                 payload.put("errorCategory", StringUtils.defaultIfBlank(run.getErrorCategory(), "EXECUTION_FAILED"));
                 auditRunCompletion(run, AuditStage.FAIL, payload);
-                if (!isDryRun(run)) {
+                if (!isDryRun(run) && execution.outcome().violated()) {
                     createIssueForFailedRun(run, results, resolveRunActor(run));
                 }
             } else {
@@ -619,6 +620,7 @@ public class QualityRunService {
             run.setFinishedAt(Instant.now());
             run.setMessage("质量检测执行失败");
             run.setErrorCategory(resolveErrorCategory(ex.getMessage()));
+            if (run.getMetricsJson() == null) run.setMetricsJson(QualityExecutionOutcome.unknown(run.getErrorCategory()).json());
             run.setDurationMs(java.time.Duration.between(start, run.getFinishedAt()).toMillis());
             runRepository.save(run);
             Map<String, Object> payload = buildRunAuditPayload(run, "运行质量规则：" + resolveRunRuleName(run));
@@ -626,9 +628,7 @@ public class QualityRunService {
             payload.put("errorType", ex.getClass().getSimpleName());
             payload.put("errorCategory", StringUtils.defaultIfBlank(run.getErrorCategory(), "EXECUTION_FAILED"));
             auditRunCompletion(run, AuditStage.FAIL, payload);
-            if (!isDryRun(run)) {
-                createIssueForFailedRun(run, null, resolveRunActor(run));
-            }
+            // Execution-only failures never create data-quality business issues.
         }
     }
 
@@ -758,37 +758,8 @@ public class QualityRunService {
     }
 
     private Map<String, String> resolveStatements(GovRuleVersion version) {
-        if (version.getDefinition() == null) {
-            return Collections.emptyMap();
-        }
-        try {
-            Map<String, Object> raw = objectMapper.readValue(version.getDefinition(), MAP_TYPE);
-            if (raw.containsKey("statements")) {
-                Object statements = raw.get("statements");
-                if (statements instanceof Map<?, ?> map) {
-                    Map<String, String> resolved = new LinkedHashMap<>();
-                    map.forEach((key, value) -> {
-                        if (key != null && value != null && StringUtils.isNotBlank(String.valueOf(value))) {
-                            resolved.put(String.valueOf(key), String.valueOf(value));
-                        }
-                    });
-                    if (!resolved.isEmpty()) {
-                        return resolved;
-                    }
-                }
-            }
-            if (raw.containsKey("sql")) {
-                Object sqlValue = raw.get("sql");
-                if (sqlValue == null) {
-                    return Collections.emptyMap();
-                }
-                String sql = String.valueOf(sqlValue);
-                return StringUtils.isNotBlank(sql) ? Map.of("sql", sql) : Collections.emptyMap();
-            }
-        } catch (Exception ex) {
-            log.warn("event=quality_rule_definition_parse_failed errorType={}", ex.getClass().getSimpleName());
-        }
-        return Collections.emptyMap();
+        if (version.getDefinition() == null) return Collections.emptyMap();
+        return QualityRuleStatements.resolve(version.getDefinition());
     }
 
     private Map<String, String> renderParams(Map<String, String> statements, Map<String, Object> params) {
@@ -832,18 +803,9 @@ public class QualityRunService {
             // Compute metric_value: pass rate based on rowsTotal and failingRowCount
             Integer rowsTotal = run.getRowsTotal();
             Integer failingRows = run.getFailingRowCount();
-            if (hasExecutionError && result.status() == StatementExecutionResult.Status.FAILED) {
-                metric.setMetricValue(BigDecimal.ZERO);
-            } else if (rowsTotal != null && rowsTotal > 0) {
-                int failing = Math.min(rowsTotal, Math.max(0, failingRows != null ? failingRows : 0));
-                BigDecimal passRate = BigDecimal.valueOf(rowsTotal - failing)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(BigDecimal.valueOf(rowsTotal), 6, RoundingMode.HALF_UP);
-                metric.setMetricValue(passRate);
-            } else if (result.status() == StatementExecutionResult.Status.SUCCEEDED) {
-                metric.setMetricValue(BigDecimal.valueOf(100));
-            } else if (result.status() == StatementExecutionResult.Status.FAILED) {
-                metric.setMetricValue(BigDecimal.ZERO);
+            Integer rate = QualityRunOutcomeSemantics.passRate(run.getStatus(), run.getErrorCategory(), rowsTotal, failingRows);
+            if (rate != null && "EXACT".equals(QualityExecutionOutcome.read(run).statisticsStatus())) {
+                metric.setMetricValue(BigDecimal.valueOf(rate));
             }
             // Set threshold_value from rule severity config if available
             GovRule rule = run.getRule();

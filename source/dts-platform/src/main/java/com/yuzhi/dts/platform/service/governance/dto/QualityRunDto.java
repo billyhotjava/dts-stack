@@ -6,6 +6,9 @@ import java.util.UUID;
 
 public class QualityRunDto {
 
+    private com.yuzhi.dts.platform.service.governance.QualityExecutionOutcome outcome;
+    public com.yuzhi.dts.platform.service.governance.QualityExecutionOutcome getOutcome() { return outcome; }
+    public void setOutcome(com.yuzhi.dts.platform.service.governance.QualityExecutionOutcome outcome) { this.outcome = outcome; }
     private UUID id;
     private UUID ruleId;
     private UUID ruleVersionId;

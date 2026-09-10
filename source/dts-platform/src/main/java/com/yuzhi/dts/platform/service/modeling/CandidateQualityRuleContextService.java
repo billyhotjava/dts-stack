@@ -129,7 +129,7 @@ public class CandidateQualityRuleContextService {
         boolean allAssetsConfigurable = !assets.isEmpty() && assets.stream().allMatch(QualityAssetView::configurable);
         boolean allConfigured = allAssetsConfigurable && assets.stream()
             .allMatch(asset -> asset.rules().stream().anyMatch(CandidateQualityRuleContextService::publishedBinding));
-        if (candidate.status() == DeliveryStatus.BUILT && allAssetsConfigurable && !allConfigured) {
+        if ((candidate.status() == DeliveryStatus.BUILT || candidate.status() == DeliveryStatus.QUALITY_RUNNING) && allAssetsConfigurable && !allConfigured) {
             return new QualityActionView("CONFIGURE_QUALITY_RULES", "MODEL_SPEC_GOVERNANCE_QUALITY_RULE_REQUIRED");
         }
         if (candidate.status() == DeliveryStatus.BUILT && allConfigured) {

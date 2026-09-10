@@ -1,3 +1,4 @@
+import { QualitySqlPreflight } from "./QualitySqlPreflight";
 import { Alert, Button, Card, Form, Input, Radio, Select, Space, Switch } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router";
@@ -60,6 +61,8 @@ export function RuleEditorPage() {
 	const canManage = useQualityMaintainerAccess();
 	const { datasets, loading: datasetsLoading, message, lakeName } = useDefaultLakeDatasets();
 	const [form] = Form.useForm<RuleForm>();
+	const draftSql = Form.useWatch("sql", form);
+	const draftDatasetId = Form.useWatch("datasetId", form);
 	const [saving, setSaving] = useState(false);
 	const [loading, setLoading] = useState(Boolean(ruleId));
 	const [loadError, setLoadError] = useState("");
@@ -499,11 +502,12 @@ export function RuleEditorPage() {
 						>
 							<Input.TextArea
 								rows={10}
-								placeholder="SELECT * FROM table_name WHERE column_name IS NULL"
+								placeholder="SELECT * FROM public.your_table WHERE column_name IS NULL"
 								className="dq-code-block"
 							/>
 						</Form.Item>
 					)}
+					<QualitySqlPreflight datasetId={draftDatasetId} sql={currentTemplate ? previewSql : draftSql} disabled={!canManage || saving || loading} />
 					<Space size={24}>
 						<Form.Item name="enabled" label="启用规则" valuePropName="checked">
 							<Switch />

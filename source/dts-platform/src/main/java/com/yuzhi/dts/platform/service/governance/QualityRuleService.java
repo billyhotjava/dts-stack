@@ -59,6 +59,7 @@ public class QualityRuleService {
     private final OrganizationVisibilityService organizationVisibilityService;
     private final QualityEffectiveDepartmentResolver departmentResolver;
     private final QualityDatasetReadGuard datasetReadGuard;
+    private final QualityRulePreflightService preflight;
 
     public QualityRuleService(
         GovRuleRepository ruleRepository,
@@ -72,7 +73,8 @@ public class QualityRuleService {
         AccessChecker accessChecker,
         OrganizationVisibilityService organizationVisibilityService,
         QualityEffectiveDepartmentResolver departmentResolver,
-        QualityDatasetReadGuard datasetReadGuard
+        QualityDatasetReadGuard datasetReadGuard,
+        QualityRulePreflightService preflight
     ) {
         this.ruleRepository = ruleRepository;
         this.versionRepository = versionRepository;
@@ -86,6 +88,7 @@ public class QualityRuleService {
         this.organizationVisibilityService = organizationVisibilityService;
         this.departmentResolver = departmentResolver;
         this.datasetReadGuard = datasetReadGuard;
+        this.preflight = preflight;
     }
 
     @Transactional(readOnly = true)
@@ -273,6 +276,7 @@ public class QualityRuleService {
 
     private QualityRuleDto createRuleInternal(QualityRuleUpsertRequest request, String actor, String activeDeptHeader) {
         validateDatasetBindingContract(request, activeDeptHeader);
+        preflight.requireValid(request.getDatasetId(), request.getDefinition(), activeDeptHeader);
         String code = resolveRuleCode(request.getCode());
         if (ruleRepository.findByCode(code).isPresent()) {
             throw new IllegalArgumentException("编码重复: " + code);
@@ -322,6 +326,7 @@ public class QualityRuleService {
         requireUnchangedDataset(rule, request);
         Map<String, Object> before = toRuleAuditView(rule);
         validateDatasetBindingContract(request, activeDeptHeader);
+        preflight.requireValid(request.getDatasetId(), request.getDefinition(), activeDeptHeader);
         if (StringUtils.isNotBlank(request.getCode())) {
             ruleRepository
                 .findByCode(request.getCode().trim())
@@ -454,6 +459,9 @@ public class QualityRuleService {
         if (STATUS_PUBLISHED.equals(nextStatus)) {
             requireExecutableDefinition(target.getDefinition());
             requireExecutableBinding(rule, target, activeDeptHeader);
+            try {
+                preflight.requireValid(rule.getDatasetId(), objectMapper.readValue(target.getDefinition(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {}), activeDeptHeader);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException error) { throw new IllegalArgumentException("质量规则定义无效", error); }
         }
         target.setStatus(nextStatus);
         if (StringUtils.isNotBlank(notes)) {

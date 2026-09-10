@@ -1,3 +1,4 @@
+import { qualityDiagnosticText } from "./qualityExecutionContract";
 import { SearchOutlined } from "@ant-design/icons";
 import { Alert, Button, Card, Descriptions, Input, Progress, Select, Space, Tabs, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -461,6 +462,13 @@ export function RunDetailPage() {
 					description={run.message || qualityLabel(run.errorCategory, "请检查失败样本与执行 SQL。")}
 				/>
 			) : null}
+			{run?.outcome ? <Card title="检测结论">
+                <p>业务结论：{run.outcome.qualityOutcome === "PASSED" ? "检查通过" : run.outcome.qualityOutcome === "VIOLATION" ? "发现违规数据" : "暂无有效结论"}</p>
+                <p>执行状态：{run.outcome.executionOutcome === "OK" ? "正常完成" : "执行未完成"}</p>
+                {run.outcome.violationOccurrences != null && run.outcome.qualityOutcome === "VIOLATION" ? <p>已确认违规记录次数：{run.outcome.violationOccurrences}（多语句可能重复）</p> : null}
+                {run.outcome.statisticsStatus !== "EXACT" ? <p>精确统计不可用，不计入通过率和质量评分。</p> : null}
+                {run.outcome.diagnostics.map((item, index) => <p key={index}>{qualityDiagnosticText(item)}</p>)}
+            </Card> : null}
 			<div className="dq-metric-grid">
 				<QualityMetric label="扫描行数" value={hasStatistics ? total.toLocaleString() : "暂无统计"} />
 				<QualityMetric label="通过行数" value={hasStatistics ? passed.toLocaleString() : "暂无统计"} color="#52c41a" />

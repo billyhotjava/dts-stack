@@ -22,8 +22,8 @@ public final class QualityRunOutcomeSemantics {
         if ("SKIPPED".equals(normalizedStatus) || "QUEUED".equals(normalizedStatus) || "RUNNING".equals(normalizedStatus)) {
             return null;
         }
-        if (isExecutionFailure(status, errorCategory, failingRowCount)) {
-            return 0;
+        if (isExecutionFailure(status, errorCategory, failingRowCount) || rowsTotal == null || rowsTotal <= 0 || failingRowCount == null) {
+            return null;
         }
         if (rowsTotal != null && rowsTotal > 0) {
             int failing = Math.min(rowsTotal, Math.max(0, failingRowCount != null ? failingRowCount : 0));
@@ -107,6 +107,11 @@ public final class QualityRunOutcomeSemantics {
 
     public static String normalizeErrorCode(String errorCode) {
         String normalized = errorCode != null ? errorCode.trim().toUpperCase(Locale.ROOT).replace('-', '_') : "";
+        if (normalized.startsWith("08")) return "CONNECTION_ERROR";
+        if ("42501".equals(normalized)) return "PERMISSION_DENIED";
+        if ("42P01".equals(normalized) || "42703".equals(normalized)) return "OBJECT_NOT_FOUND";
+        if ("42601".equals(normalized)) return "SQL_SYNTAX";
+        if ("57014".equals(normalized)) return "TIMEOUT";
         return normalized.matches("[A-Z0-9_]{1,64}") ? normalized : "EXECUTION_ERROR";
     }
 

@@ -199,7 +199,11 @@ public class QualityScoreService {
     }
 
     private boolean isScorableRun(GovQualityRun run) {
-        String status = run != null ? run.getStatus() : null;
+        if (run == null || "DRY_RUN".equalsIgnoreCase(run.getTriggerType())) return false;
+        var outcome = QualityExecutionOutcome.read(run);
+        if (!"EXACT".equals(outcome.statisticsStatus()) || !"OK".equals(outcome.executionOutcome())
+            || QualityRunOutcomeSemantics.passRate(run.getStatus(), run.getErrorCategory(), run.getRowsTotal(), run.getFailingRowCount()) == null) return false;
+        String status = run.getStatus();
         return (
             "SUCCEEDED".equalsIgnoreCase(status) ||
             "SUCCESS".equalsIgnoreCase(status) ||

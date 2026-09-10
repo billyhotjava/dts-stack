@@ -189,7 +189,11 @@ final class QualityRunQueryService {
         }
         dto.setInputParamsJson(null);
         dto.setMetricsJson(null);
+        dto.setOutcome(QualityExecutionOutcome.read(run));
         dto.setMessage(safeRunMessage(run));
+        if (dto.getOutcome() != null && dto.getOutcome().violated() && "FAILED".equals(dto.getOutcome().executionOutcome())) {
+            dto.setMessage("已发现违规数据，同时存在执行故障；请分别查看业务结论与执行原因。");
+        }
         if (dto.getMetrics() != null) {
             dto.getMetrics().forEach(metric -> metric.setDetail(safeMetricDetail(parseMetricStatus(metric.getStatus()))));
         }

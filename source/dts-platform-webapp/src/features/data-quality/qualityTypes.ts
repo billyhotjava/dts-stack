@@ -1,3 +1,4 @@
+import type { QualityOutcome } from "./qualityExecutionContract";
 import { qualityLabel } from "@/utils/customerDisplayLabels";
 
 export type QualityDataset = {
@@ -77,6 +78,7 @@ export type QualityRun = {
 	message?: string;
 	errorCategory?: string;
 	executedSql?: string;
+	outcome?: QualityOutcome;
 	rowsTotal?: number;
 	failingRowCount?: number;
 	failingRows?: number;
@@ -112,7 +114,7 @@ export type QualityWorkflowRun = {
 };
 
 export const getQualityRunCounts = (
-	run?: Pick<QualityRun, "rowsTotal" | "failingRowCount" | "status" | "errorCategory">,
+	run?: Pick<QualityRun, "rowsTotal" | "failingRowCount" | "status" | "errorCategory" | "outcome">,
 ) => {
 	const total = Math.max(0, Number(run?.rowsTotal || 0));
 	const failed = Math.min(total, Math.max(0, Number(run?.failingRowCount || 0)));
@@ -124,7 +126,8 @@ export const getQualityRunCounts = (
 		(errorCategory ? errorCategory !== "QUALITY_VIOLATION" : Number(run?.failingRowCount || 0) <= 0);
 	const passed = executionFailed ? 0 : Math.max(0, total - failed);
 	const passRate = total && !executionFailed ? Math.round((passed / total) * 10000) / 100 : 0;
-	const hasStatistics = !pending && !executionFailed && total > 0;
+	const hasStatistics = !pending && !executionFailed && total > 0 && run?.failingRowCount != null
+		&& (!run.outcome || (run.outcome.statisticsStatus === "EXACT" && run.outcome.executionOutcome === "OK"));
 	return { total, failed, passed, passRate, hasStatistics };
 };
 

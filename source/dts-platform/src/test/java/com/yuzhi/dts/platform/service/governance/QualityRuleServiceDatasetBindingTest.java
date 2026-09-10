@@ -104,7 +104,8 @@ class QualityRuleServiceDatasetBindingTest {
             accessChecker,
             organizationVisibilityService,
             departmentResolver,
-            datasetReadGuard
+            datasetReadGuard,
+            mock(QualityRulePreflightService.class)
         );
     }
 
