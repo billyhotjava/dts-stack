@@ -287,7 +287,7 @@ F5 Gate：G0 复用既有基线，运行时仍核对实际环境；G1=PASS，T25
 
 | Feature | Task 数 | 优先级 | 状态 |
 |---|---:|---|---|
-| [F6-指标计算口径与资产BI协作闭环](features/F6-指标计算口径与资产BI协作闭环/README.md) | 8 | P1 | DRAFT |
+| [F6-指标计算口径与资产BI协作闭环](features/F6-指标计算口径与资产BI协作闭环/README.md) | 8 | P1 | IN_PROGRESS |
 
 **ADR 增量**：公共口径复用平台指标 owner；模型与上游指标分别精确 pin；显式区分公式计算与预计算结果，不默认 MAX；BI 投影在既有 platform serving 链（`CatalogModelSemanticSyncWorker`→命令服务→载荷工厂→只读指标适配器）上扩展，复用其持久化状态与受控重试，不另建控制面；`dts-metrics` 注册链在 platform 侧零调用点，明确排除。
 
@@ -334,4 +334,6 @@ F5 Gate：G0 复用既有基线，运行时仍核对实际环境；G1=PASS，T25
 
 **F6 文档复审修订**：模型级状态与指标版本交付分离；多维公式聚合后按公共键对齐；存量按模式分类；T32 仅冻结契约与基线，不依赖实现完成。C48 源码已确认，运行待证。详见 F6 统一契约，任务状态与排期不变。
 
-**F6 最新实施统计**：按本轮用户授权开始编码并统一后置测试；全 Sprint DRAFT=1、IN_PROGRESS=36、DONE=2，其他状态0；覆盖此前统计。见 [实施记录](assests/F6-implementation-20260910.md)，没有新增验收完成项。
+**F6 最新实施统计**：按本轮用户授权开始编码并统一后置测试；全 Sprint DRAFT=0、IN_PROGRESS=37、DONE=2，其他状态0；覆盖此前统计。见 [实施记录](assests/F6-implementation-20260910.md)，没有新增验收完成项。
+
+**F6 编码收尾**：编码及专项验证完成（后端88项、前端40项、前端正式构建）；交付包、部署和真实页面验收未完成。T32–T39仍为IN_PROGRESS，不增加DONE计数。
