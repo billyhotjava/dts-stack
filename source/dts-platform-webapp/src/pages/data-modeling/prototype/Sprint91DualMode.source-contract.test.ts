@@ -74,7 +74,7 @@ describe("Sprint-92 unified authoring source contracts", () => {
 		expect(session).toContain("...open.modelSpecSnapshot,");
 		expect(session).toContain("modelSpec: currentDefinition");
 		expect(session).toContain(
-			"modelDraftToUpdateCommand(modelDraftFromView(value.model, value.implementation || null))",
+			"modelDraftFromView(value.model, value.implementation || null)",
 		);
 		expect(submit.indexOf("await persist(activeView)")).toBeLessThan(
 			submit.indexOf("await validateModelAuthoringDraft"),
