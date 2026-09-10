@@ -84,7 +84,8 @@ class IndicatorServiceLifecycleTest {
         catalogDomains,
         codeAssetGrantWriter,
         derivationValidationService,
-        businessContexts
+        businessContexts,
+        mock(com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository.class)
     );
 
     @BeforeEach
@@ -548,6 +549,7 @@ class IndicatorServiceLifecycleTest {
 
         when(indicatorRepository.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
         when(indicatorRepository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(dependency));
+        when(indicatorRepository.findById(dependency.getId())).thenReturn(Optional.of(dependency));
         when(businessContexts.domain(categoryId)).thenReturn(Optional.of(new DomainNode(categoryId, null, "ACTIVE")));
         when(businessContexts.domain(domainId)).thenReturn(Optional.of(new DomainNode(domainId, categoryId, "ACTIVE")));
         when(versionRepository.findByIndicatorAndVersion(dependency, "v9")).thenReturn(Optional.empty());
@@ -584,6 +586,7 @@ class IndicatorServiceLifecycleTest {
 
         when(indicatorRepository.findByIdForUpdate(draft.getId())).thenReturn(Optional.of(draft));
         when(indicatorRepository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(dependency));
+        when(indicatorRepository.findById(dependency.getId())).thenReturn(Optional.of(dependency));
         when(businessContexts.domain(categoryId)).thenReturn(Optional.of(new DomainNode(categoryId, null, "ACTIVE")));
         when(businessContexts.domain(domainId)).thenReturn(Optional.of(new DomainNode(domainId, categoryId, "ACTIVE")));
         when(versionRepository.findByIndicatorAndVersion(dependency, "v2")).thenReturn(Optional.of(dependencyVersion));
@@ -849,6 +852,7 @@ class IndicatorServiceLifecycleTest {
         dependency.setDataLevel("DATA_INTERNAL");
         when(indicatorRepository.findByIdForUpdate(target.getId())).thenReturn(Optional.of(target));
         when(indicatorRepository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(dependency));
+        when(indicatorRepository.findById(dependency.getId())).thenReturn(Optional.of(dependency));
         when(accessChecker.resolveHighestDataLevel()).thenReturn(DataLevel.DATA_CONFIDENTIAL);
         when(organizationVisibilityService.isRoot(anyString())).thenReturn(false);
         when(derivationValidationService.validate(target.getId()))
@@ -874,6 +878,7 @@ class IndicatorServiceLifecycleTest {
 
         when(indicatorRepository.findByIdForUpdate(target.getId())).thenReturn(Optional.of(target));
         when(indicatorRepository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(dependency));
+        when(indicatorRepository.findById(dependency.getId())).thenReturn(Optional.of(dependency));
         when(indicatorRepository.findFirstByCodeIgnoreCase("gmv")).thenReturn(Optional.of(dependency));
         when(accessChecker.resolveHighestDataLevel()).thenReturn(DataLevel.DATA_CONFIDENTIAL);
         when(derivationValidationService.validate(target.getId()))
@@ -921,6 +926,9 @@ class IndicatorServiceLifecycleTest {
         value.setStatus(status);
         value.setVersion(version);
         value.setLastModifiedDate(BASELINE);
+        value.setExecutionMode("FORMULA");
+        value.setAnalysisConfig("{\"dimensionBindings\":{},\"resultGrain\":[],\"allowedAggregations\":[\"SUM\"],\"predicates\":[],\"modifierRefs\":[]}");
+        value.setAggregationType("SUM");
         return value;
     }
 
@@ -955,6 +963,8 @@ class IndicatorServiceLifecycleTest {
         value.setIndicator(indicator);
         value.setVersion(version);
         value.setStatus(status);
+        try { value.setSnapshotJson(new ObjectMapper().findAndRegisterModules().writeValueAsString(IndicatorMapper.toDto(indicator))); }
+        catch (Exception error) { throw new AssertionError(error); }
         return value;
     }
 }

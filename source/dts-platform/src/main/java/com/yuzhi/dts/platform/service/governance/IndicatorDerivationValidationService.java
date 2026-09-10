@@ -29,15 +29,18 @@ public class IndicatorDerivationValidationService {
     private final GovIndicatorDefinitionRepository repository;
     private final ControlledIndicatorDerivationCompiler compiler;
     private final ObjectMapper objectMapper;
+    private final com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository versions;
 
     public IndicatorDerivationValidationService(
         GovIndicatorDefinitionRepository repository,
         ControlledIndicatorDerivationCompiler compiler,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository versions
     ) {
         this.repository = repository;
         this.compiler = compiler;
         this.objectMapper = objectMapper;
+        this.versions = versions;
     }
 
     public IndicatorDerivationValidationResult validate(UUID indicatorId) {
@@ -64,18 +67,16 @@ public class IndicatorDerivationValidationService {
         Set<String> targetDimensions = dimensionFields(target.getDimensionFields(), issues, "目标指标");
         String targetTimeGrain = normalizeTimeGrain(target.getTimeGrain());
 
+        var pinnedDependencies = IndicatorVersionDependencies.resolve(target, repository, versions, objectMapper);
         for (String dependencyCode : dependencyCodes) {
             String normalizedDependency = normalizeCode(dependencyCode);
-            if (normalizedDependency.equals(targetCode)) {
-                addIssue(issues, "DERIVATION_SELF_REFERENCE", "派生指标不能依赖自身: " + dependencyCode);
-                continue;
-            }
-            GovIndicatorDefinition dependency = repository.findFirstByCodeIgnoreCase(dependencyCode).orElse(null);
+            GovIndicatorDefinition dependency = pinnedDependencies.stream()
+                .filter(item -> dependencyCode.equalsIgnoreCase(item.getCode())).findFirst().orElse(null);
             if (dependency == null) {
                 addIssue(issues, "DERIVATION_DEPENDENCY_MISSING", "依赖指标不存在: " + dependencyCode);
                 continue;
             }
-            if (target.getId() != null && target.getId().equals(dependency.getId())) {
+            if (target.getId() != null && target.getId().equals(dependency.getId()) && java.util.Objects.equals(target.getVersion(), dependency.getVersion())) {
                 addIssue(issues, "DERIVATION_SELF_REFERENCE", "派生指标不能依赖自身: " + dependencyCode);
                 continue;
             }
@@ -92,7 +93,7 @@ public class IndicatorDerivationValidationService {
             if (
                 hasPathToTarget(
                     dependency,
-                    targetCode,
+                    target.getId() + "@" + target.getVersion(),
                     new LinkedHashSet<>(),
                     new HashSet<>()
                 )
@@ -147,22 +148,17 @@ public class IndicatorDerivationValidationService {
         Set<String> visiting,
         Set<String> visited
     ) {
-        String currentCode = normalizeCode(current.getCode());
+        String currentCode = current.getId() + "@" + current.getVersion();
         if (currentCode.equals(targetCode)) {
             return true;
         }
         if (visited.contains(currentCode)) {
             return false;
         }
-        if (!visiting.add(currentCode)) {
+        if (visiting.size() >= 32 || visited.size() >= 100 || !visiting.add(currentCode)) {
             return true;
         }
-        for (String dependencyCode : parseDependenciesSilently(current.getDependencyIndicators())) {
-            String normalizedDependency = normalizeCode(dependencyCode);
-            if (normalizedDependency.equals(targetCode)) {
-                return true;
-            }
-            GovIndicatorDefinition dependency = repository.findFirstByCodeIgnoreCase(dependencyCode).orElse(null);
+        for (GovIndicatorDefinition dependency : IndicatorVersionDependencies.resolve(current, repository, versions, objectMapper)) {
             if (dependency != null && hasPathToTarget(dependency, targetCode, visiting, visited)) {
                 return true;
             }

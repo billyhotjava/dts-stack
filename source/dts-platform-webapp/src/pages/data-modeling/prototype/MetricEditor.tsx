@@ -4,6 +4,7 @@ import type {
 	IndicatorDefinition,
 	IndicatorEditValues,
 } from "@/features/modeling/indicators/indicatorDefinitionContract";
+import { IndicatorAnalysisFields } from "./IndicatorAnalysisFields";
 import { MetricDefinitionBindingFields } from "./MetricDefinitionBindingFields";
 import { ModifierDefinitionEditor } from "./ModifierDefinitionEditor";
 import type { PlanningCatalogDomain } from "./services/planningCatalogDomainService";
@@ -29,7 +30,7 @@ export function MetricEditor({
 	indicators?: IndicatorDefinition[];
 }) {
 	const set = (key: keyof IndicatorEditValues, value: unknown) => onChange({ ...values, [key]: value });
-	const isModifier = String(values.category || "").toUpperCase() === "MODIFIER";
+	const isModifier = ["MODIFIER", "TIME_PERIOD"].includes(String(values.category || "").toUpperCase());
 	if (isModifier) {
 		return (
 			<ModifierDefinitionEditor
@@ -169,8 +170,7 @@ export function MetricEditor({
 			<section className="dmx-metric-section">
 				<h3>业务计算语义</h3>
 				<p className="dmx-capability-note">
-					普通指标页不显示或编辑原始 SQL；SQL/Jinja 只在具备维护权限的高级 dbt 实现中处理。当前功能入口
-					尚未提供独立业务表达式契约，因此此处只维护聚合、度量和依赖语义。
+					公式计算复用固定版本的上游指标；预计算模式读取已完成加工的结果字段。请明确计算方式和统计范围。
 				</p>
 				<div>
 					<MetricDefinitionBindingFields
@@ -192,6 +192,7 @@ export function MetricEditor({
 					</MetricField>
 				</div>
 			</section>
+			<IndicatorAnalysisFields values={values} onChange={onChange} indicators={indicators} />
 		</div>
 	);
 }

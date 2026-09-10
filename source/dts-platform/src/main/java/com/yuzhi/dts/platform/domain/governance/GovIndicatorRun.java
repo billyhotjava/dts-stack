@@ -58,6 +58,34 @@ public class GovIndicatorRun implements Serializable {
     @Column(name = "dbt_run_id", length = 64)
     private String dbtRunId;
 
+    @Column(name = "indicator_version", length = 32)
+    private String indicatorVersion;
+
+    @Column(name = "dependency_versions", columnDefinition = "text")
+    private String dependencyVersions;
+
+    @Column(name = "query_id", length = 64)
+    private String queryId;
+    @Column(name = "source_mode", length = 32)
+    private String sourceMode;
+    @Column(name = "null_reason", length = 64)
+    private String nullReason;
+    @Column(name = "data_as_of")
+    private Instant dataAsOf;
+    public String getQueryId() { return queryId; }
+    public void setQueryId(String value) { queryId = value; }
+    public String getSourceMode() { return sourceMode; }
+    public void setSourceMode(String value) { sourceMode = value; }
+    public String getNullReason() { return nullReason; }
+    public void setNullReason(String value) { nullReason = value; }
+    public Instant getDataAsOf() { return dataAsOf; }
+    public void setDataAsOf(Instant value) { dataAsOf = value; }
+
+    public String getIndicatorVersion() { return indicatorVersion; }
+    public void setIndicatorVersion(String value) { indicatorVersion = value; }
+    public String getDependencyVersions() { return dependencyVersions; }
+    public void setDependencyVersions(String value) { dependencyVersions = value; }
+
     public UUID getId() {
         return id;
     }

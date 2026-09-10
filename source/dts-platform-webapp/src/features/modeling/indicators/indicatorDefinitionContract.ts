@@ -9,7 +9,28 @@ export type IndicatorMetricSourceRef = {
 	sourceVersion: string;
 };
 
+export type IndicatorImplementationRef = { modelSpecId: string; modelRevision: number; fieldName: string };
+
+export type IndicatorVersionRef = { id: string; version: string };
+export type IndicatorPredicate = {
+	fieldRef: string;
+	op: "EQ" | "IN" | "BETWEEN";
+	value: string | number | boolean | (string | number | boolean)[];
+};
+export type IndicatorAnalysisConfig = {
+	dimensionBindings: Record<string, string>;
+	timeBinding?: { fieldRef: string; fieldName: string; timezone: string; grain: string } | null;
+	resultGrain: string[];
+	allowedAggregations: string[];
+	modifierRefs: IndicatorVersionRef[];
+	predicates: IndicatorPredicate[];
+	periodRef?: IndicatorVersionRef | null;
+	periodMode?: string | null;
+	missingGroupsAsZero: boolean;
+};
+
 export type IndicatorDefinition = {
+	analysisConfig?: IndicatorAnalysisConfig | null;
 	id?: string;
 	code?: string | null;
 	name?: string | null;
@@ -22,6 +43,7 @@ export type IndicatorDefinition = {
 	sourceRefs?: IndicatorMetricSourceRef[] | null;
 	definition?: string | null;
 	expressionSql?: string | null;
+	executionMode?: "FORMULA" | "PRECOMPUTED" | null;
 	datasetId?: string | null;
 	owner?: string | null;
 	ownerDept?: string | null;
@@ -48,6 +70,7 @@ export type IndicatorDefinition = {
 	sourceLayer?: string | null;
 	targetLayer?: string | null;
 	targetModelName?: string | null;
+	implementationRef?: IndicatorImplementationRef | null;
 	unit?: string | null;
 	precisionScale?: number | null;
 	thresholdMin?: number | null;
@@ -104,6 +127,7 @@ type IndicatorDimensionField = {
 };
 
 const UPSERT_FIELDS = [
+	"analysisConfig",
 	"code",
 	"name",
 	"category",
@@ -115,6 +139,7 @@ const UPSERT_FIELDS = [
 	"sourceRefs",
 	"definition",
 	"expressionSql",
+	"executionMode",
 	"datasetId",
 	"owner",
 	"ownerDept",
@@ -141,6 +166,7 @@ const UPSERT_FIELDS = [
 	"sourceLayer",
 	"targetLayer",
 	"targetModelName",
+	"implementationRef",
 	"unit",
 	"precisionScale",
 	"thresholdMin",
@@ -296,7 +322,7 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 	const category = String(values.category ?? "")
 		.trim()
 		.toUpperCase();
-	const isModifier = category === "MODIFIER";
+	const isModifier = ["MODIFIER", "TIME_PERIOD"].includes(category);
 	if (!code) issues.push(isModifier ? "修饰词编码不能为空" : "指标编码不能为空");
 	if (!name) issues.push(isModifier ? "修饰词名称不能为空" : "指标名称不能为空");
 	if (isModifier) {
@@ -355,8 +381,11 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 			issues.push("派生指标必须选择数据域");
 		}
 		if (!String(values.expressionSql ?? "").trim()) issues.push("派生/复合指标必须填写受控计算公式");
-		if (!String(values.targetModelName ?? "").trim()) issues.push("派生/复合指标必须选择实现模型");
-		if (!String(values.measureField ?? "").trim()) issues.push("派生/复合指标必须选择实现结果字段");
+		if (!values.executionMode) issues.push("请选择公式计算或预计算结果");
+		if (values.executionMode === "PRECOMPUTED") {
+			if (!values.implementationRef) issues.push("预计算指标必须选择固定实现模型版本");
+			if (!String(values.measureField ?? "").trim()) issues.push("预计算指标必须选择结果字段");
+		}
 		if (!sourceRefs.length) {
 			issues.push("派生/复合指标必须固定上游指标版本");
 		} else if (sourceRefs.some((ref) => ref.sourceType !== "INDICATOR_VERSION")) {
@@ -391,9 +420,11 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 
 export function normalizeIndicatorEditValues(values: IndicatorEditValues): IndicatorEditValues {
 	if (
-		String(values.category ?? "")
-			.trim()
-			.toUpperCase() === "MODIFIER"
+		["MODIFIER", "TIME_PERIOD"].includes(
+			String(values.category ?? "")
+				.trim()
+				.toUpperCase(),
+		)
 	) {
 		return {
 			...values,

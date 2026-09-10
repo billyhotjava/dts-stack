@@ -279,4 +279,5 @@
     <include file="config/liquibase/changelog/20260906_01_catalog_dataset_version.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260908_01_model_schema_candidate_scope.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260908_02_model_candidate_model_scope.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260910_01_indicator_implementation_ref.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

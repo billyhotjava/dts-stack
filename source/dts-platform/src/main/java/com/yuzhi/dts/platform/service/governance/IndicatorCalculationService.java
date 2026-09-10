@@ -55,6 +55,12 @@ public class IndicatorCalculationService {
     private final ControlledIndicatorDerivationCompiler compiler;
     private final ObjectMapper objectMapper;
     private final String serverTenantId;
+    private final IndicatorService indicatorService;
+    private final PublishedIndicatorVersionReader publishedVersions;
+    private final com.yuzhi.dts.platform.service.security.AccessChecker accessChecker;
+    private final com.yuzhi.dts.platform.service.modeling.ModelSpecReader modelReader;
+    private final com.yuzhi.dts.platform.service.permission.AssetPermissionService permissions;
+    private final com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository serving;
 
     public IndicatorCalculationService(
         GovIndicatorDefinitionRepository indicators,
@@ -64,6 +70,12 @@ public class IndicatorCalculationService {
         QueryGateway queryGateway,
         ControlledIndicatorDerivationCompiler compiler,
         ObjectMapper objectMapper,
+        IndicatorService indicatorService,
+        PublishedIndicatorVersionReader publishedVersions,
+        com.yuzhi.dts.platform.service.security.AccessChecker accessChecker,
+        com.yuzhi.dts.platform.service.modeling.ModelSpecReader modelReader,
+        com.yuzhi.dts.platform.service.permission.AssetPermissionService permissions,
+        com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository serving,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.indicators = indicators;
@@ -74,149 +86,185 @@ public class IndicatorCalculationService {
         this.compiler = compiler;
         this.objectMapper = objectMapper;
         this.serverTenantId = serverTenantId;
+        this.indicatorService = indicatorService;
+        this.modelReader = modelReader;
+        this.accessChecker = accessChecker;
+        this.publishedVersions = publishedVersions; this.permissions = permissions;
+        this.serving = serving;
     }
 
-    public CalculationBatch calculate(List<UUID> indicatorIds) {
-        if (indicatorIds == null || indicatorIds.isEmpty()) {
-            throw new IndicatorRequestException("计算指标不能为空");
+    public record ConsumerActor(String username, List<String> roles, String dept, String classification) {}
+    public record ConsumerPlan(String tenantId, UUID datasourceId, String sql, List<Object> bindings,
+        List<String> columns, List<IndicatorAnalysisContract.VersionRef> resolvedVersions, int limit) {}
+
+    @Transactional(readOnly = true)
+    public ConsumerPlan planForConsumer(IndicatorAnalysisContract.Query query, ConsumerActor actor) {
+        if (actor == null || !StringUtils.hasText(actor.username()) || actor.roles() == null || !StringUtils.hasText(actor.classification())) {
+            throw new org.springframework.security.access.AccessDeniedException("分析用户上下文缺失");
         }
+        var plan = new IndicatorQueryPlan(query, ref -> {
+            var historical = publishedVersions.read(ref);
+            var current = indicators.findById(ref.id()).orElseThrow(() -> new IndicatorNotFoundException("指标不存在"));
+            authorizeConsumer(actor, current, current.getDataLevel());
+            authorizeConsumer(actor, current, historical.getDataLevel());
+            return historical;
+        }, definition -> {
+            var implementation = publishedVersions.implementation(definition);
+            if (implementation == null) throw new IndicatorConflictException("缺少固定实现");
+            String assetKey = com.yuzhi.dts.platform.service.catalog.CatalogAssetKey.semanticModel(implementation.modelSpecId().toString());
+            var decision = permissions.checkAction(new com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionCheckCommand(
+                actor.username(), actor.roles(), actor.dept(), actor.classification(), "SEMANTIC_MODEL", implementation.modelSpecId().toString(), assetKey, "READ", null));
+            if (!decision.allowed()) throw new org.springframework.security.access.AccessDeniedException("无权读取指标来源资产");
+            return querySource(definition, true);
+        }, compiler).build();
+        List<String> columns = new ArrayList<>(query.dimensions());
+        for (int i = 0; i < query.indicatorRefs().size(); i++) { columns.add("metric_" + i); columns.add("metric_" + i + "_null_reason"); columns.add("metric_" + i + "_invalid"); }
+        return new ConsumerPlan(serverTenantId, plan.datasourceId(), plan.sql(), plan.parameters(), columns, plan.versions(), query.limit());
+    }
+
+    private void authorizeConsumer(ConsumerActor actor, GovIndicatorDefinition definition, String level) {
+        String key = com.yuzhi.dts.platform.service.catalog.CatalogAssetKey.codeAsset(com.yuzhi.dts.platform.service.catalog.CatalogAssetType.GOV_INDICATOR, "default", definition.getCode());
+        var decision = permissions.checkAction(new com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionCheckCommand(
+            actor.username(), actor.roles(), actor.dept(), actor.classification(), "GOV_INDICATOR", definition.getId().toString(), key, "READ", level));
+        if (!decision.allowed()) throw new org.springframework.security.access.AccessDeniedException("无权读取指标或其历史版本");
+    }
+
+    @Transactional(readOnly = true)
+    public IndicatorAnalysisContract.Result query(IndicatorAnalysisContract.Query request, String activeDept) {
+        String queryId = "metric-query-" + UUID.randomUUID();
+        Instant dataAsOf = Instant.now();
+        IndicatorQueryPlan.Plan plan = new IndicatorQueryPlan(request, ref -> {
+            var snapshot = indicatorService.getVersion(ref.id(), ref.version(), activeDept);
+            if (!"PUBLISHED".equals(snapshot.getStatus())) throw new IndicatorConflictException("固定指标版本尚未发布");
+            var definition = restoreSnapshot(ref.id(), ref.version(), snapshot.getSnapshotJson());
+            var current = indicators.findById(ref.id()).orElseThrow(() -> new IndicatorNotFoundException("指标不存在"));
+            if ("ARCHIVED".equals(current.getStatus()) || "DEPRECATED".equals(current.getStatus())) throw new IndicatorConflictException("指标已停用");
+            if (definition.getAnalysisConfig() == null && "LATEST_PERIOD".equals(request.scope()) && !IndicatorDefinitionSemantics.isDerivedLike(definition)) {
+                var implementation = publishedVersions.implementation(definition);
+                if (implementation == null) throw new IndicatorConflictException("存量指标缺少可还原的固定实现");
+                var model = models.revision(serverTenantId, new ModelRevisionRef(implementation.modelSpecId(), implementation.modelRevision()));
+                Map<String, String> bindings = new LinkedHashMap<>();
+                model.fields().stream().filter(field -> field.role() != FieldRole.MEASURE).forEach(field -> bindings.put(field.name(), field.name()));
+                var times = temporalKeys(model);
+                if (times.size() > 1) throw new IndicatorConflictException("该存量版本有多个时间键，请修订并声明分析时间字段");
+                definition.setAnalysisConfig(IndicatorMapper.writeAnalysisConfig(new IndicatorAnalysisContract.Config(bindings,
+                    times.isEmpty() ? null : new IndicatorAnalysisContract.TimeBinding("business_time", times.get(0), "Asia/Shanghai", "native"),
+                    List.of(), List.of(String.valueOf(definition.getAggregationType()).toUpperCase(Locale.ROOT)), List.of(), List.of(), null, null, false)));
+            }
+            return definition;
+        }, this::querySource, compiler).build();
+        var payload = queryGateway.executeBound(plan.sql(), plan.datasourceId(), plan.parameters(), request.limit() + 1);
+        Object raw = payload.get("rows");
+        if (!(raw instanceof List<?> list)) throw new IndicatorConflictException("查询结果格式无效");
+        if (Boolean.TRUE.equals(payload.get("truncated")) || list.size() > request.limit()) {
+            throw new IndicatorConflictException("结果超过行数上限，请缩小时间或维度筛选范围");
+        }
+        List<Map<String, Object>> rows = new ArrayList<>();
+        List<String> columns = new ArrayList<>(request.dimensions());
+        for (int i = 0; i < request.indicatorRefs().size(); i++) {
+            columns.add("metric_" + i); columns.add("metric_" + i + "_null_reason");
+        }
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> row)) throw new IndicatorConflictException("查询结果行格式无效");
+            for (int i = 0; i < request.indicatorRefs().size(); i++) {
+                if (Boolean.TRUE.equals(row.get("metric_" + i + "_invalid"))) throw new IndicatorConflictException("预计算结果在声明粒度上重复，已拒绝返回聚合值");
+            }
+            Map<String, Object> visible = new LinkedHashMap<>();
+            columns.forEach(column -> visible.put(column, row.get(column)));
+            rows.add(visible);
+        }
+        return new IndicatorAnalysisContract.Result(columns, rows, plan.versions(), queryId, dataAsOf, false,
+            List.of("同源单条语句快照；空维度键保留为 null；结果不补完整日历"));
+    }
+
+    private IndicatorQueryPlan.Source querySource(GovIndicatorDefinition indicator) {
+        return querySource(indicator, false);
+    }
+
+    private IndicatorQueryPlan.Source querySource(GovIndicatorDefinition indicator, boolean consumerAuthorized) {
+        GovIndicatorReference reference = modelFieldReference(indicator);
+        if (reference == null) throw new IndicatorConflictException("该版本缺少精确模型字段引用");
+        Matcher target = MODEL_FIELD_TARGET.matcher(reference.getRefTarget());
+        if (!target.matches()) throw new IndicatorConflictException("模型字段引用无效");
+        UUID modelId = UUID.fromString(target.group(1)); int revision = Integer.parseInt(target.group(2));
+        ModelSpecView model = consumerAuthorized ? modelReader.revision(serverTenantId, new ModelRevisionRef(modelId, revision))
+            : models.revision(serverTenantId, new ModelRevisionRef(modelId, revision));
+        if (model.status() != ModelStatus.PUBLISHED || model.fields().stream().noneMatch(field -> field.role() == FieldRole.MEASURE && target.group(3).equals(field.name()))) throw new IndicatorConflictException("固定模型版本或度量字段不可用");
+        if (!consumerAuthorized) {
+            String login = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("请先登录"));
+            var decision = permissions.checkAction(new com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionCheckCommand(
+                login, com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserAuthorities(),
+                com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDept().orElse(null), accessChecker.resolveHighestDataLevel().name(),
+                "SEMANTIC_MODEL", modelId.toString(), com.yuzhi.dts.platform.service.catalog.CatalogAssetKey.semanticModel(modelId.toString()), "READ", null));
+            if (!decision.allowed()) throw new org.springframework.security.access.AccessDeniedException("无权读取指标来源资产");
+        }
+        var projection = serving.findProjection(serverTenantId, modelId)
+            .orElseThrow(() -> new IndicatorConflictException("固定模型尚无可分析资产"));
+        var ref = projection.servingRef();
+        if (ref == null || ref.modelRevision() != revision || !java.util.Objects.equals(ref.modelChecksum(), model.checksum())) {
+            throw new IndicatorConflictException("固定模型版本当前没有匹配的服务数据，不能切换到最新模型");
+        }
+        if (ref.sourceId() == null) throw new IndicatorConflictException("模型服务数据源缺失");
+        Set<String> fields = model.fields().stream().filter(java.util.Objects::nonNull).map(ModelField::name).collect(java.util.stream.Collectors.toSet());
+        if (!target.group(3).equals(indicator.getMeasureField())) throw new IndicatorConflictException("度量字段与固定实现不一致");
+        return new IndicatorQueryPlan.Source(ref.sourceId(), ref.schemaName(), ref.identifier(), fields);
+    }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public CalculationBatch calculate(List<UUID> indicatorIds) { return calculate(indicatorIds, null); }
+
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
+    public CalculationBatch calculate(List<UUID> indicatorIds, String activeDept) {
+        if (indicatorIds == null || indicatorIds.isEmpty() || indicatorIds.size() > 64) throw new IndicatorRequestException("计算指标数量须为1至64");
         String requestId = "metric-calc-" + UUID.randomUUID();
         Instant submittedAt = Instant.now();
-        Map<UUID, CalculationItem> calculated = new LinkedHashMap<>();
         List<CalculationItem> requested = new ArrayList<>();
-        for (UUID indicatorId : indicatorIds) {
+        for (UUID id : indicatorIds) {
+            long started = System.currentTimeMillis();
             try {
-                requested.add(calculateNode(indicatorId, requestId, calculated, new LinkedHashSet<>(), 0));
+                var current = indicators.findById(id).orElseThrow(() -> new IndicatorNotFoundException("指标不存在"));
+                var snapshot = indicatorService.getVersion(id, current.getVersion(), activeDept);
+                var definition = restoreSnapshot(id, current.getVersion(), snapshot.getSnapshotJson());
+                var response = query(new IndicatorAnalysisContract.Query(
+                    List.of(new IndicatorAnalysisContract.VersionRef(id, current.getVersion())), null, List.of(), List.of(), 1, "LATEST_PERIOD"), activeDept);
+                var row = response.rows().isEmpty() ? Map.<String, Object>of() : response.rows().get(0);
+                var value = decimal(row.get("metric_0"));
+                String reason = row.get("metric_0_null_reason") == null ? null : String.valueOf(row.get("metric_0_null_reason"));
+                requested.add(saveSuccess(definition, requestId, new Computed(value, response.rows().size(), StringUtils.hasText(definition.getDateColumn()) ? "LATEST_PERIOD" : "ALL_DATA", null, null, reason, response), System.currentTimeMillis() - started));
             } catch (RuntimeException error) {
-                CalculationItem failed = calculated.get(indicatorId);
-                requested.add(failed != null ? failed : saveFailure(indicatorId, requestId, safeMessage(error)));
+                requested.add(saveFailure(id, requestId, safeMessage(error)));
             }
         }
         long success = requested.stream().filter(item -> "SUCCESS".equals(item.status())).count();
         return new CalculationBatch(requestId, submittedAt, requested, success, requested.size() - success);
     }
 
-    private CalculationItem calculateNode(
-        UUID indicatorId,
-        String requestId,
-        Map<UUID, CalculationItem> calculated,
-        Set<UUID> visiting,
-        int depth
-    ) {
-        CalculationItem existing = calculated.get(indicatorId);
-        if (existing != null) return existing;
-        if (depth > MAX_DEPTH || !visiting.add(indicatorId)) {
-            throw new IndicatorConflictException("指标计算依赖存在循环或深度超过限制");
-        }
-        long startedAt = System.currentTimeMillis();
-        GovIndicatorDefinition indicator = indicators
-            .findById(indicatorId)
-            .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + indicatorId));
+    private GovIndicatorDefinition restoreSnapshot(UUID id, String version, String json) {
         try {
-            if (!"PUBLISHED".equalsIgnoreCase(indicator.getStatus())) {
-                throw new IndicatorConflictException("只有已发布指标可以提交计算: " + indicator.getCode());
-            }
-            GovIndicatorReference modelField = modelFieldReference(indicator);
-            Computed computed = modelField != null
-                ? computeFromModel(indicator, modelField)
-                : computeFromFormula(indicator, requestId, calculated, visiting, depth);
-            CalculationItem item = saveSuccess(indicator, requestId, computed, System.currentTimeMillis() - startedAt);
-            calculated.put(indicatorId, item);
-            return item;
-        } catch (RuntimeException error) {
-            CalculationItem failed = saveFailure(
-                indicator,
-                requestId,
-                safeMessage(error),
-                System.currentTimeMillis() - startedAt
-            );
-            calculated.put(indicatorId, failed);
-            throw error;
-        } finally {
-            visiting.remove(indicatorId);
+            var request = objectMapper.readerFor(com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest.class)
+                .without(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                .<com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest>readValue(json);
+            GovIndicatorDefinition result = new GovIndicatorDefinition();
+            IndicatorMapper.apply(result, request);
+            result.setId(id);
+            result.setVersion(version);
+            result.setStatus("PUBLISHED");
+            return result;
+        } catch (Exception error) {
+            throw new IndicatorConflictException("指标版本快照无法读取，请修复版本记录");
         }
     }
 
     private GovIndicatorReference modelFieldReference(GovIndicatorDefinition indicator) {
-        return references
-            .findByIndicatorOrderByCreatedDateAsc(indicator)
-            .stream()
-            .filter(reference -> "MODEL_SPEC_FIELD".equalsIgnoreCase(reference.getRefType()))
-            .findFirst()
-            .orElse(null);
-    }
-
-    private Computed computeFromModel(GovIndicatorDefinition indicator, GovIndicatorReference reference) {
-        Matcher target = MODEL_FIELD_TARGET.matcher(String.valueOf(reference.getRefTarget()));
-        if (!target.matches()) {
-            throw new IndicatorConflictException("模型字段实现引用无效，请重新绑定指标实现");
-        }
-        UUID modelId = UUID.fromString(target.group(1));
-        int revision = Integer.parseInt(target.group(2));
-        String fieldName = target.group(3);
-        ModelSpecView model = models.revision(serverTenantId, new ModelRevisionRef(modelId, revision));
-        if (model.status() != ModelStatus.PUBLISHED || model.revision() != revision) {
-            throw new IndicatorConflictException("指标固定的模型版本尚未发布");
-        }
-        ModelField field = model
-            .fields()
-            .stream()
-            .filter(candidate -> candidate != null && fieldName.equals(candidate.name()))
-            .findFirst()
-            .orElseThrow(() -> new IndicatorConflictException("指标实现字段已不存在: " + fieldName));
-        if (field.role() != FieldRole.MEASURE) {
-            throw new IndicatorConflictException("指标实现字段不再是 MEASURE: " + fieldName);
-        }
-        String relation = model.implementationPolicy() != null && StringUtils.hasText(model.implementationPolicy().physicalName())
-            ? model.implementationPolicy().physicalName()
-            : model.name();
-        requireRelation(relation);
-        List<String> periodKeys = temporalKeys(model);
-        String sql = modelCalculationSql(
-            relation,
-            fieldName,
-            aggregation(indicator.getAggregationType(), IndicatorDefinitionSemantics.isDerivedLike(indicator)),
-            periodKeys
-        );
-        Map<String, Object> payload = queryGateway.execute(sql);
-        ResultRow row = resultRow(payload);
-        return new Computed(row.value(), row.rowsProcessed(), "MODEL_FIELD", relation, fieldName);
-    }
-
-    private Computed computeFromFormula(
-        GovIndicatorDefinition indicator,
-        String requestId,
-        Map<UUID, CalculationItem> calculated,
-        Set<UUID> visiting,
-        int depth
-    ) {
-        if (!IndicatorDefinitionSemantics.isDerivedLike(indicator) || !StringUtils.hasText(indicator.getExpressionSql())) {
-            throw new IndicatorConflictException("指标缺少固定模型字段实现");
-        }
-        List<String> dependencyCodes = dependencyCodes(indicator.getDependencyIndicators());
-        if (dependencyCodes.isEmpty()) {
-            throw new IndicatorConflictException("派生指标缺少上游指标");
-        }
-        Map<String, String> aliases = new LinkedHashMap<>();
-        List<String> inputs = new ArrayList<>();
-        int rowsProcessed = 0;
-        for (String code : dependencyCodes) {
-            GovIndicatorDefinition dependency = indicators
-                .findFirstByCodeIgnoreCase(code)
-                .orElseThrow(() -> new IndicatorConflictException("上游指标不存在: " + code));
-            CalculationItem item = calculateNode(dependency.getId(), requestId, calculated, visiting, depth + 1);
-            if (!"SUCCESS".equals(item.status()) || item.value() == null) {
-                throw new IndicatorConflictException("上游指标计算失败: " + code);
-            }
-            aliases.put(code, quoteIdentifier(code));
-            inputs.add(item.value().toPlainString() + "::numeric AS " + quoteIdentifier(code));
-            rowsProcessed += Math.max(0, item.rowsProcessed());
-        }
-        String expression = compiler.compile(indicator.getExpressionSql(), aliases);
-        String sql = "SELECT CAST(" + expression + " AS numeric) AS metric_value, 1::bigint AS rows_processed " +
-            "FROM (SELECT " + String.join(", ", inputs) + ") metric_inputs";
-        ResultRow row = resultRow(queryGateway.execute(sql));
-        return new Computed(row.value(), rowsProcessed, "FORMULA", null, null);
+        IndicatorImplementationRef ref = IndicatorMapper.readImplementationRef(indicator.getImplementationRef());
+        String target = ref != null ? ref.modelSpecId() + "@" + ref.modelRevision() + "#" + ref.fieldName()
+            : IndicatorDefinitionSemantics.expectedModelFieldReferenceTarget(indicator).orElse(null);
+        // Never read the mutable current reference when executing an old snapshot.
+        if (target == null) return null;
+        GovIndicatorReference reference = new GovIndicatorReference();
+        reference.setRefType("MODEL_SPEC_FIELD");
+        reference.setRefTarget(target);
+        return reference;
     }
 
     private CalculationItem saveSuccess(
@@ -228,7 +276,7 @@ public class IndicatorCalculationService {
         GovIndicatorRun previous = runs
             .findByIndicatorIdOrderByRunAtDesc(indicator.getId())
             .stream()
-            .filter(run -> "SUCCESS".equalsIgnoreCase(run.getStatus()) && run.getComputedValue() != null)
+            .filter(run -> "SUCCESS".equalsIgnoreCase(run.getStatus()) && run.getComputedValue() != null && indicator.getVersion().equals(run.getIndicatorVersion()))
             .findFirst()
             .orElse(null);
         BigDecimal previousValue = previous != null ? previous.getComputedValue() : null;
@@ -236,9 +284,14 @@ public class IndicatorCalculationService {
         if (computed.value() != null && previousValue != null && previousValue.signum() != 0) {
             changeRate = computed.value().subtract(previousValue).divide(previousValue.abs(), 6, RoundingMode.HALF_UP);
         }
-        String alertLevel = alertLevel(indicator, computed.value());
+        String alertLevel = computed.value() == null ? "UNKNOWN" : alertLevel(indicator, computed.value());
         GovIndicatorRun run = new GovIndicatorRun();
         run.setIndicatorId(indicator.getId());
+        run.setIndicatorVersion(indicator.getVersion());
+        try { run.setDependencyVersions(objectMapper.writeValueAsString(computed.result().resolvedVersions())); }
+        catch (Exception error) { throw new IndicatorConflictException("运行版本追溯无法保存"); }
+        run.setQueryId(computed.result().queryId()); run.setDataAsOf(computed.result().dataAsOf());
+        run.setSourceMode(computed.sourceMode()); run.setNullReason(computed.nullReason());
         run.setRunAt(Instant.now());
         run.setStatus("SUCCESS");
         run.setComputedValue(computed.value());
@@ -248,7 +301,7 @@ public class IndicatorCalculationService {
         run.setDurationMs((int) Math.min(Integer.MAX_VALUE, Math.max(0, durationMs)));
         run.setDbtRunId(requestId);
         run.setAlertLevel(alertLevel);
-        run.setThresholdHit(!"GREEN".equals(alertLevel));
+        run.setThresholdHit(computed.value() != null && !"GREEN".equals(alertLevel));
         run.setAlertReason(alertReason(indicator, computed.value(), alertLevel));
         GovIndicatorRun saved = runs.save(run);
         return new CalculationItem(
@@ -265,14 +318,16 @@ public class IndicatorCalculationService {
             computed.relation(),
             computed.field(),
             null,
-            saved.getRunAt()
+            saved.getRunAt(),
+            indicator.getVersion(),
+            computed.value() == null ? (computed.nullReason() == null ? "EMPTY_DATA" : computed.nullReason()) : null
         );
     }
 
     private CalculationItem saveFailure(UUID indicatorId, String requestId, String message) {
         GovIndicatorDefinition indicator = indicators.findById(indicatorId).orElse(null);
         if (indicator == null) {
-            return new CalculationItem(indicatorId, null, null, "FAILED", null, null, null, 0, 0, null, null, null, message, Instant.now());
+            return new CalculationItem(indicatorId, null, null, "FAILED", null, null, null, 0, 0, null, null, null, message, Instant.now(), null, null);
         }
         return saveFailure(indicator, requestId, message, 0);
     }
@@ -285,6 +340,8 @@ public class IndicatorCalculationService {
     ) {
         GovIndicatorRun run = new GovIndicatorRun();
         run.setIndicatorId(indicator.getId());
+        run.setIndicatorVersion(indicator.getVersion());
+        run.setDependencyVersions(indicator.getSourceRefs());
         run.setRunAt(Instant.now());
         run.setStatus("FAILED");
         run.setRowsProcessed(0);
@@ -297,7 +354,7 @@ public class IndicatorCalculationService {
         GovIndicatorRun saved = runs.save(run);
         return new CalculationItem(
             indicator.getId(), indicator.getCode(), indicator.getName(), "FAILED", null, null, null, 0,
-            run.getDurationMs(), null, null, null, message, saved.getRunAt()
+            run.getDurationMs(), null, null, null, message, saved.getRunAt(), indicator.getVersion(), null
         );
     }
 
@@ -308,9 +365,6 @@ public class IndicatorCalculationService {
         }
         BigDecimal value = decimal(row.get("metric_value"));
         int rowsProcessed = number(row.get("rows_processed"));
-        if (value == null) {
-            throw new IndicatorConflictException("指标计算结果为空，请检查物化表数据");
-        }
         return new ResultRow(value, rowsProcessed);
     }
 
@@ -449,7 +503,7 @@ public class IndicatorCalculationService {
         return normalized.length() > 500 ? normalized.substring(0, 500) : normalized;
     }
 
-    private record Computed(BigDecimal value, int rowsProcessed, String sourceMode, String relation, String field) {}
+    private record Computed(BigDecimal value, int rowsProcessed, String sourceMode, String relation, String field, String nullReason, IndicatorAnalysisContract.Result result) {}
     private record ResultRow(BigDecimal value, int rowsProcessed) {}
 
     public record CalculationBatch(
@@ -474,6 +528,8 @@ public class IndicatorCalculationService {
         String relation,
         String field,
         String errorMessage,
-        Instant runAt
+        Instant runAt,
+        String indicatorVersion,
+        String nullReason
     ) {}
 }

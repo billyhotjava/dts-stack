@@ -36,6 +36,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 class DbtIndicatorGeneratorDerivationTest {
 
     private final GovIndicatorDefinitionRepository repository = mock(GovIndicatorDefinitionRepository.class);
+    private final com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository versions = mock(com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ControlledIndicatorDerivationCompiler compiler = new ControlledIndicatorDerivationCompiler();
     private final DbtIndicatorGenerator generator = new DbtIndicatorGenerator(
@@ -43,7 +44,7 @@ class DbtIndicatorGeneratorDerivationTest {
         new DbtProperties(),
         objectMapper,
         compiler,
-        new IndicatorDerivationValidationService(repository, compiler, objectMapper)
+        new IndicatorDerivationValidationService(repository, compiler, objectMapper, versions)
     );
 
     @Test
@@ -58,7 +59,9 @@ class DbtIndicatorGeneratorDerivationTest {
 
         when(repository.findById(targetId)).thenReturn(Optional.of(target));
         when(repository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(gmv));
+        PinnedIndicatorTestFixture.pin(target, repository, versions, gmv);
         when(repository.findFirstByCodeIgnoreCase("ORDER_COUNT")).thenReturn(Optional.of(count));
+        PinnedIndicatorTestFixture.pin(target, repository, versions, gmv, count);
 
         Map<String, String> preview = generator.previewSql(targetId);
 
@@ -67,7 +70,7 @@ class DbtIndicatorGeneratorDerivationTest {
             .contains("JOIN {{ ref('ind_ORDER_COUNT') }} AS dep_1")
             .contains("dep_1.report_period = dep_0.report_period")
             .contains("dep_1.region_code = dep_0.region_code")
-            .contains("dep_0.GMV / nullif(dep_1.ORDER_COUNT, 0) AS AVG_ORDER")
+            .contains("dep_0.GMV / NULLIF((nullif(dep_1.ORDER_COUNT, 0)), 0) AS AVG_ORDER")
             .doesNotContain("{{metric:");
     }
 
@@ -83,6 +86,7 @@ class DbtIndicatorGeneratorDerivationTest {
 
         when(repository.findById(targetId)).thenReturn(Optional.of(target));
         when(repository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(gmv));
+        PinnedIndicatorTestFixture.pin(target, repository, versions, gmv);
 
         assertThat(generator.previewSql(targetId).get("sql"))
             .contains("{{ ref('ind_GMV') }} AS dep_0")
@@ -101,7 +105,9 @@ class DbtIndicatorGeneratorDerivationTest {
 
         when(repository.findById(targetId)).thenReturn(Optional.of(target));
         when(repository.findFirstByCodeIgnoreCase("GMV")).thenReturn(Optional.of(gmv));
+        PinnedIndicatorTestFixture.pin(target, repository, versions, gmv);
         when(repository.findFirstByCodeIgnoreCase("ORDER_COUNT")).thenReturn(Optional.of(count));
+        PinnedIndicatorTestFixture.pin(target, repository, versions, gmv, count);
 
         assertThatThrownBy(() -> generator.previewSql(targetId))
             .isInstanceOf(IllegalArgumentException.class)
@@ -122,7 +128,7 @@ class DbtIndicatorGeneratorDerivationTest {
             properties,
             objectMapper,
             compiler,
-            new IndicatorDerivationValidationService(repository, compiler, objectMapper)
+            new IndicatorDerivationValidationService(repository, compiler, objectMapper, versions)
         );
 
         assertThatThrownBy(() -> localGenerator.generate(traversalId))
@@ -152,7 +158,7 @@ class DbtIndicatorGeneratorDerivationTest {
             properties,
             objectMapper,
             compiler,
-            new IndicatorDerivationValidationService(repository, compiler, objectMapper)
+            new IndicatorDerivationValidationService(repository, compiler, objectMapper, versions)
         );
 
         GenerationResult result = localGenerator.generateAndRun(List.of(indicatorId));
@@ -840,7 +846,7 @@ class DbtIndicatorGeneratorDerivationTest {
             properties,
             objectMapper,
             compiler,
-            new IndicatorDerivationValidationService(repository, compiler, objectMapper)
+            new IndicatorDerivationValidationService(repository, compiler, objectMapper, versions)
         );
     }
 

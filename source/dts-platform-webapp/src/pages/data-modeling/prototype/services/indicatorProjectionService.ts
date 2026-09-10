@@ -1,4 +1,4 @@
-import { getModelSpecRevision, listModelSpecs } from "@/api/modelSpecApi";
+import { getModelSpecRevision } from "@/api/modelSpecApi";
 import {
 	archiveIndicator,
 	calculateIndicators,
@@ -67,6 +67,9 @@ export type IndicatorCalculationBatch = {
 };
 
 export type IndicatorCalculationHistory = {
+	indicatorVersion?: string | null;
+	nullReason?: string | null;
+	queryId?: string | null;
 	id: string;
 	runAt: string;
 	status: string;
@@ -165,7 +168,7 @@ export function filterIndicators(
 }
 
 export const supportsIndicatorCreation = (type: MetricType) =>
-	type === "原子指标" || type === "派生指标" || type === "复合指标" || type === "修饰词";
+	type === "原子指标" || type === "派生指标" || type === "复合指标" || type === "修饰词" || type === "时间周期";
 
 export const supportsIndicatorCalculation = (type: MetricType) =>
 	type === "原子指标" || type === "派生指标" || type === "复合指标";
@@ -179,6 +182,18 @@ export function createIndicatorDraft(type: MetricType, domain = ""): MetricSelec
 		name: "",
 		domain,
 		category,
+		analysisConfig:
+			type === "时间周期"
+				? {
+						dimensionBindings: {},
+						resultGrain: [],
+						allowedAggregations: [],
+						predicates: [],
+						modifierRefs: [],
+						missingGroupsAsZero: false,
+						periodMode: "RANGE",
+					}
+				: null,
 		metricType: isQualifier ? null : type === "复合指标" ? "COMPOSITE" : type === "派生指标" ? "DERIVED" : "ATOMIC",
 		status: "DRAFT",
 		version: "v1",
@@ -216,6 +231,7 @@ type ModelFieldDraftRequest = {
 async function modelFieldDraftRequest(payload: IndicatorUpsertPayload): Promise<ModelFieldDraftRequest | null> {
 	if (String(payload.category || "").toUpperCase() === "MODIFIER") return null;
 	const metricType = String(payload.metricType || "ATOMIC").toUpperCase();
+	if (metricType !== "ATOMIC" && payload.executionMode === "FORMULA") return null;
 	const modelSource = payload.sourceRefs?.find((ref) => ref.sourceType === "SEMANTIC_MODEL_REVISION");
 	let model: ModelSpecView | undefined;
 	if (metricType === "ATOMIC") {
@@ -224,13 +240,12 @@ async function modelFieldDraftRequest(payload: IndicatorUpsertPayload): Promise<
 		if (!revisionMatch) throw new Error("来源模型修订格式无效，请重新选择模型");
 		model = await getModelSpecRevision(modelSource.sourceId, Number(revisionMatch[1]));
 	} else {
-		const targetModelName = String(payload.targetModelName || "");
-		if (!targetModelName || !payload.measureField) return null;
-		const candidates = (await listModelSpecs())
-			.filter((candidate) => candidate.name === targetModelName && candidate.status === "PUBLISHED")
-			.sort((left, right) => right.revision - left.revision);
-		model = candidates[0];
-		if (!model) throw new Error("实现模型已变化，请刷新后重新选择");
+		const ref = payload.implementationRef;
+		if (!ref) throw new Error("请选择明确的实现模型版本，旧记录不能自动升级到最新版本");
+		model = await getModelSpecRevision(ref.modelSpecId, ref.modelRevision);
+		if (model.id !== ref.modelSpecId || model.revision !== ref.modelRevision) {
+			throw new Error("实现模型版本不匹配，请重新选择");
+		}
 	}
 	const fieldName = String(payload.measureField || "");
 	const field = model.fields.find((candidate) => candidate.name === fieldName && candidate.role === "MEASURE");
@@ -340,7 +355,10 @@ export function normalizeIndicatorFailure(error: unknown): { kind: "permission" 
 	const status = Number(response?.status || 0);
 	if (status === 401 || status === 403)
 		return { kind: "permission", message: "当前账号无权访问或维护指标，请联系管理员授权。" };
-	if (response) return { kind: "request", message: "指标服务请求失败，请稍后重试。" };
+	if (response) {
+		const data = (error as { response?: { data?: { message?: string; detail?: string } } }).response?.data;
+		return { kind: "request", message: data?.message || data?.detail || "指标服务请求失败，请稍后重试。" };
+	}
 	const detail = error instanceof Error ? error.message.trim() : "";
 	return { kind: "request", message: detail || "指标服务请求失败，请稍后重试。" };
 }

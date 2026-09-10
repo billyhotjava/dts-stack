@@ -18,7 +18,7 @@ class ControlledIndicatorDerivationCompilerTest {
                 "{{metric:GMV}} / nullif({{metric:ORDER_COUNT}}, 0)",
                 List.of("GMV", "ORDER_COUNT")
             )
-        ).isEqualTo("\"GMV\" / nullif(\"ORDER_COUNT\", 0)");
+        ).isEqualTo("\"GMV\" / NULLIF((nullif(\"ORDER_COUNT\", 0)), 0)");
     }
 
     @Test
@@ -28,7 +28,7 @@ class ControlledIndicatorDerivationCompilerTest {
                 "round({{metric:GMV}} / nullif({{metric:ORDER_COUNT}}, 0), 2)",
                 Map.of("GMV", "dep_0.GMV", "ORDER_COUNT", "dep_1.ORDER_COUNT")
             )
-        ).isEqualTo("round(dep_0.GMV / nullif(dep_1.ORDER_COUNT, 0), 2)");
+        ).isEqualTo("round(dep_0.GMV / NULLIF((nullif(dep_1.ORDER_COUNT, 0)), 0), 2)");
     }
 
     @Test

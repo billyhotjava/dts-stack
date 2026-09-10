@@ -109,6 +109,14 @@ public class JdbcSqlExecutor {
         Consumer<Integer> progressHook,
         AtomicBoolean cancelFlag
     ) throws SQLException {
+        return execute(ds, sql, executionId, rowLimit, progressHook, cancelFlag, List.of());
+    }
+
+    /** Bound values never become SQL text. Used by governed metric queries. */
+    public ExecutionResult execute(
+        InfraDataSource ds, String sql, UUID executionId, int rowLimit,
+        Consumer<Integer> progressHook, AtomicBoolean cancelFlag, List<Object> parameters
+    ) throws SQLException {
         validateDatasource(ds);
         String password = resolvePassword(ds);
 
@@ -136,6 +144,9 @@ public class JdbcSqlExecutor {
             boolean ok = false;
             try {
                 try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    for (int index = 0; index < parameters.size(); index++) {
+                        ps.setObject(index + 1, parameters.get(index));
+                    }
                     ps.setFetchSize(STREAM_CHUNK_SIZE);
                     if (queryTimeoutSeconds > 0) {
                         try {

@@ -1,5 +1,7 @@
 package com.yuzhi.dts.platform.service.governance.request;
 
+import com.yuzhi.dts.platform.service.governance.IndicatorImplementationRef;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -19,6 +21,12 @@ public class IndicatorUpsertRequest {
     private List<MetricSourceRef> sourceRefs;
     private String definition;
     private String expressionSql;
+
+    private String executionMode;
+
+    private com.yuzhi.dts.platform.service.governance.IndicatorAnalysisContract.Config analysisConfig;
+
+
     private String datasetId;
     private String owner;
     private String ownerDept;
@@ -51,6 +59,7 @@ public class IndicatorUpsertRequest {
     private String sourceLayer;
     private String targetLayer;
     private String targetModelName;
+    private IndicatorImplementationRef implementationRef;
 
     // 业务属性
     private String unit;
@@ -377,6 +386,12 @@ public class IndicatorUpsertRequest {
         this.targetLayer = targetLayer;
     }
 
+    public IndicatorImplementationRef getImplementationRef() { return implementationRef; }
+
+    public void setImplementationRef(IndicatorImplementationRef implementationRef) {
+        this.implementationRef = implementationRef;
+    }
+
     public String getTargetModelName() {
         return targetModelName;
     }
@@ -518,4 +533,9 @@ public class IndicatorUpsertRequest {
     public void setExpectedLastModifiedDate(Instant expectedLastModifiedDate) {
         this.expectedLastModifiedDate = expectedLastModifiedDate;
     }
+    public String getExecutionMode() { return executionMode; }
+
+    public void setExecutionMode(String executionMode) { this.executionMode = executionMode; }
+    public com.yuzhi.dts.platform.service.governance.IndicatorAnalysisContract.Config getAnalysisConfig() { return analysisConfig; }
+    public void setAnalysisConfig(com.yuzhi.dts.platform.service.governance.IndicatorAnalysisContract.Config value) { this.analysisConfig = value; }
 }

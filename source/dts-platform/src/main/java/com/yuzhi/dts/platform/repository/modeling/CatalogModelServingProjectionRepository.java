@@ -41,6 +41,75 @@ public class CatalogModelServingProjectionRepository {
         this.objectMapper = objectMapper;
     }
 
+    /** Version intents share the serving owner, lease and compare-and-set protocol. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void enqueueIndicator(UUID id, String indicatorVersion) {
+        jdbcTemplate.update("""
+            insert into modeling_catalog_indicator_serving_projection
+                (tenant_id, indicator_id, indicator_version, sync_status, sync_attempts, version, next_sync_at)
+            values ('default', ?, ?, 'SYNC_PENDING', 0, 1, now())
+            on conflict (tenant_id, indicator_id, indicator_version) do nothing
+            """, id, indicatorVersion);
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public List<IndicatorSyncCandidate> claimIndicatorSyncCandidates(int limit, Instant now, Duration lease) {
+        return jdbcTemplate.query("""
+            with due as (
+                select tenant_id, indicator_id, indicator_version
+                from modeling_catalog_indicator_serving_projection
+                where sync_status in ('SYNC_PENDING', 'SYNC_FAILED') and next_sync_at <= ?
+                order by next_sync_at, indicator_id limit ? for update skip locked
+            ) update modeling_catalog_indicator_serving_projection p
+            set next_sync_at = ?, version = p.version + 1
+            from due where p.tenant_id = due.tenant_id and p.indicator_id = due.indicator_id
+                and p.indicator_version = due.indicator_version
+            returning p.*
+            """, (row, n) -> new IndicatorSyncCandidate(row.getString("tenant_id"),
+                row.getObject("indicator_id", UUID.class), row.getString("indicator_version"),
+                row.getLong("version"), row.getInt("sync_attempts")),
+            Timestamp.from(now), Math.min(50, limit), Timestamp.from(now.plus(lease)));
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public boolean completeIndicatorSync(IndicatorSyncCandidate candidate, String mapping, String error, Instant next) {
+        return jdbcTemplate.update("""
+            update modeling_catalog_indicator_serving_projection
+            set sync_status = ?, mapping = case when ? is null then mapping else cast(? as jsonb) end,
+                last_sync_error = ?, next_sync_at = ?, sync_attempts = sync_attempts + 1, version = version + 1, updated_at = now()
+            where tenant_id = ? and indicator_id = ? and indicator_version = ? and version = ?
+            """, error == null ? "SYNCED" : "SYNC_FAILED", mapping, mapping, error,
+            next == null ? null : Timestamp.from(next), candidate.tenantId(), candidate.indicatorId(), candidate.indicatorVersion(), candidate.version()) == 1;
+    }
+
+    public Map<String, Object> indicatorSyncState(UUID indicatorId, String indicatorVersion) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+            select sync_status as "status", sync_attempts as "syncAttempts", last_sync_error as "lastSyncError",
+                next_sync_at as "nextSyncAt", mapping::text as mapping, version
+            from modeling_catalog_indicator_serving_projection
+            where tenant_id = 'default' and indicator_id = ? and indicator_version = ?
+            """, indicatorId, indicatorVersion);
+        if (rows.isEmpty()) return Map.of("status", "UNREGISTERED");
+        var result = rows.get(0);
+        if (result.get("mapping") instanceof String mapping) {
+            try { result.put("mapping", objectMapper.readValue(mapping, Map.class)); }
+            catch (Exception error) { throw new IllegalStateException("INDICATOR_MAPPING_INVALID"); }
+        }
+        return result;
+    }
+
+    @Transactional
+    public boolean retryIndicatorSync(UUID indicatorId, String indicatorVersion, long expectedVersion) {
+        return jdbcTemplate.update("""
+            update modeling_catalog_indicator_serving_projection set sync_status = 'SYNC_PENDING',
+                sync_attempts = 0, next_sync_at = now(), version = version + 1, updated_at = now()
+            where tenant_id = 'default' and indicator_id = ? and indicator_version = ? and version = ?
+                and sync_status = 'SYNC_FAILED'
+            """, indicatorId, indicatorVersion, expectedVersion) == 1;
+    }
+
+    public record IndicatorSyncCandidate(String tenantId, UUID indicatorId, String indicatorVersion, long version, int syncAttempts) {}
+
     /** Convenience for the canonical path; internally preserves the two independent transitions. */
     @Transactional(propagation = Propagation.MANDATORY)
     public ProjectionMutation projectSuccessfulPublication(SuccessfulPublicationCommand command) {

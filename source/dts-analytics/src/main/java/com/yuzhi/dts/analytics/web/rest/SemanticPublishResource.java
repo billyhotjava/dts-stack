@@ -155,6 +155,8 @@ public class SemanticPublishResource {
         }
         AnalyticsDatabase database = registration.database();
         AnalyticsTable table = registration.table();
+        // Serialize retries and concurrent version registrations on the same physical table.
+        tableRepository.lockForSemanticPublish(table.getId());
         String resolvedModelName = firstNonBlank(modelName, tableName);
         AnalyticsSemanticModel existingModel = semanticModelRepository.findByModelNameIgnoreCase(resolvedModelName).orElse(null);
         if (existingModel != null && !matchesRegisteredTarget(existingModel, database, table, tenantId, platformDataSourceId)) {
@@ -342,7 +344,7 @@ public class SemanticPublishResource {
         }
 
         boolean created = false;
-        AnalyticsMetric metric = metricRepository.findAll().stream()
+        AnalyticsMetric metric = metricRepository.findAllByArchivedFalseAndBaseTableIdOrderByIdAsc(table.getId()).stream()
             .filter(m -> table.getId().equals(m.getBaseTableId()) && name.equals(m.getName()) && !m.isArchived())
             .findFirst()
             .orElse(null);
@@ -387,6 +389,22 @@ public class SemanticPublishResource {
         metricJsonMap.put("expression_field", metric.getExpressionField());
         metricJsonMap.put("unit", metric.getUnit());
         metricJsonMap.put("source", "semantic-publish");
+        if (metricNode.hasNonNull("indicatorId")) {
+            String indicatorId = java.util.UUID.fromString(metricNode.get("indicatorId").asText()).toString();
+            String indicatorVersion = textOrNull(metricNode, "indicatorVersion");
+            if (indicatorVersion == null || !indicatorVersion.matches("v[1-9][0-9]{0,8}")) throw new IllegalArgumentException("指标版本无效");
+            String expectedName = "indicator_" + indicatorId.replace("-", "") + "_" + indicatorVersion;
+            if (!expectedName.equals(name)) throw new IllegalArgumentException("指标版本映射不一致");
+            metricJsonMap.put("indicatorId", indicatorId);
+            metricJsonMap.put("indicatorVersion", indicatorVersion);
+            metricJsonMap.put("assetType", textOrNull(metricNode, "assetType"));
+            metricJsonMap.put("assetKey", textOrNull(metricNode, "assetKey"));
+            try {
+                String analysis = textOrNull(metricNode, "analysisConfig");
+                if (analysis != null) metricJsonMap.put("analysisConfig", objectMapper.readTree(analysis));
+            } catch (Exception error) { throw new IllegalArgumentException("指标分析契约无效"); }
+        }
+
         metricJsonMap.put("model_name", semanticModel.getModelName());
         metricJsonMap.put("security_level", securityLevel);
         putIfPresent(metricJsonMap, "description", textOrNull(metricNode, "description"));
@@ -399,7 +417,7 @@ public class SemanticPublishResource {
         try {
             metric.setMetricJson(objectMapper.writeValueAsString(metricJsonMap));
         } catch (Exception ex) {
-            metric.setMetricJson("{}");
+            throw new IllegalArgumentException("指标元数据序列化失败", ex);
         }
 
         metric = metricRepository.save(metric);

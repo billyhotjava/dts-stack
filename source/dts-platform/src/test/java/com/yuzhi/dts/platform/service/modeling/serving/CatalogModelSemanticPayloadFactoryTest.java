@@ -67,7 +67,7 @@ class CatalogModelSemanticPayloadFactoryTest {
         when(classifications.resolve("ASSET", assetKey))
             .thenReturn(Optional.of(new ClassificationFact("ASSET", assetKey, "DATA_INTERNAL", "PROPAGATED")));
 
-        CatalogModelSemanticPayloadFactory factory = new CatalogModelSemanticPayloadFactory(models, indicators, classifications);
+        CatalogModelSemanticPayloadFactory factory = new CatalogModelSemanticPayloadFactory(models, indicators, classifications, mock(com.yuzhi.dts.platform.service.governance.PublishedIndicatorVersionReader.class), mock(com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository.class));
         var payload = factory.create(candidate());
 
         assertThat(payload.platformDataSourceId()).isEqualTo(SOURCE_ID.toString());
@@ -99,7 +99,7 @@ class CatalogModelSemanticPayloadFactoryTest {
         when(classifications.resolve("ASSET", CatalogAssetKey.semanticModel(MODEL_ID.toString())))
             .thenReturn(Optional.empty());
 
-        CatalogModelSemanticPayloadFactory factory = new CatalogModelSemanticPayloadFactory(models, indicators, classifications);
+        CatalogModelSemanticPayloadFactory factory = new CatalogModelSemanticPayloadFactory(models, indicators, classifications, mock(com.yuzhi.dts.platform.service.governance.PublishedIndicatorVersionReader.class), mock(com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository.class));
 
         assertThatThrownBy(() -> factory.create(candidate()))
             .isInstanceOf(CatalogModelSemanticPayloadFactory.SemanticPayloadException.class)

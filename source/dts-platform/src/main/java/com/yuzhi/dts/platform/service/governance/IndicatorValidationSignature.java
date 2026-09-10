@@ -54,6 +54,7 @@ final class IndicatorValidationSignature {
         append(input, "aggregation", normalizeUpper(entity.getAggregationType()));
         append(input, "measure", normalize(entity.getMeasureField()));
         append(input, "date", normalize(entity.getDateColumn()));
+        append(input, "implementationRef", canonicalJson(entity.getImplementationRef(), objectMapper, "implementationRef"));
         append(input, "sourceTable", normalize(entity.getSourceTable()));
         append(input, "sourceLayer", normalizeUpper(entity.getSourceLayer()));
         append(input, "targetLayer", normalizeUpper(entity.getTargetLayer()));
@@ -62,6 +63,8 @@ final class IndicatorValidationSignature {
         append(input, "precision", normalizeNumber(entity.getPrecisionScale()));
         append(input, "staticFilter", normalize(entity.getStaticFilter()));
         append(input, "joinConfig", canonicalJson(entity.getJoinConfig(), objectMapper, "joinConfig"));
+        append(input, "analysisConfig", canonicalJson(entity.getAnalysisConfig(), objectMapper, "analysisConfig"));
+        append(input, "executionMode", normalizeUpper(entity.getExecutionMode()));
         append(input, "expressionSql", normalize(entity.getExpressionSql()));
         append(
             input,
@@ -77,7 +80,9 @@ final class IndicatorValidationSignature {
         append(
             input,
             "dependencyState",
-            dependencyState(dependencies.codes(), objectMapper, repository)
+            IndicatorMapper.readSourceRefs(entity.getSourceRefs()).stream().anyMatch(ref -> ref.sourceType() == IndicatorBusinessContextContract.SourceType.INDICATOR_VERSION)
+                ? canonicalJson(entity.getSourceRefs(), objectMapper, "fixedDependencyVersions")
+                : dependencyState(dependencies.codes(), objectMapper, repository)
         );
         return DigestUtils.sha256Hex(input.toString());
     }

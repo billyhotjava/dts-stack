@@ -1,24 +1,10 @@
-import { } from "@ant-design/icons";
-import {
-	Alert,
-	Breadcrumb,
-	Button,
-	Card,
-	Empty,
-	Input,
-	Modal,
-	Select,
-	Space,
-	Spin,
-	Tag,
-	Typography,
-} from "antd";
-import { CompactTable } from "@/components/table";
+import { Alert, Breadcrumb, Button, Card, Empty, Input, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { CompactTable } from "@/components/table";
 import { useMenuStore } from "@/store/menuStore";
 import { useUserRoles } from "@/store/userStore";
 import {
@@ -192,6 +178,7 @@ export default function SemanticCardEditorPage() {
 	const [filters, setFilters] = useState<QueryFilter[]>([]);
 	const [derivedMetrics, setDerivedMetrics] = useState<DerivedMetricDraft[]>([]);
 	const [limit, setLimit] = useState(200);
+	const [timeRange, setTimeRange] = useState<SemanticQueryBody["timeRange"]>();
 	const [displayType, setDisplayType] = useState<VisualizationType>("table");
 
 	useEffect(() => {
@@ -311,6 +298,10 @@ export default function SemanticCardEditorPage() {
 			raw: dimension,
 		})),
 	);
+	const governedMetrics = metricOptions.filter(
+		(option) => selectedMeasures.includes(option.value) && option.raw.indicatorId,
+	);
+	const metricTime = asRecord(asRecord(governedMetrics[0]?.raw.analysisConfig)?.timeBinding);
 	const metricOptionMap = useMemo(() => new Map(metricOptions.map((item) => [item.value, item])), [metricOptions]);
 	const dimensionOptionMap = useMemo(
 		() => new Map(dimensionOptions.map((item) => [item.value, item])),
@@ -323,6 +314,8 @@ export default function SemanticCardEditorPage() {
 		const searchBase = new URLSearchParams(location.search).get("base");
 		if (searchBase && modelMap.has(searchBase)) {
 			setBaseModelId(searchBase);
+			const metric = new URLSearchParams(location.search).get("metric");
+			if (metric) setSelectedMeasures([metric]);
 			return;
 		}
 		const first = models[0];
@@ -382,6 +375,7 @@ export default function SemanticCardEditorPage() {
 		setCollectionId(typeof card.collection_id === "number" ? card.collection_id : null);
 		setDisplayType((card.display as VisualizationType) || "table");
 		if (semanticQuery) {
+			setTimeRange(semanticQuery.timeRange);
 			applySemanticDraft(
 				semanticQuery,
 				setBaseModelId,
@@ -396,6 +390,13 @@ export default function SemanticCardEditorPage() {
 	}, [isVirtualDatasetMode, recordState]);
 
 	const buildSemanticQuery = (): SemanticQueryBody => ({
+		indicatorRefs: governedMetrics.length
+			? governedMetrics.map((item) => ({
+					id: String(item.raw.indicatorId),
+					version: String(item.raw.indicatorVersion),
+				}))
+			: undefined,
+		timeRange,
 		base: baseModelId || undefined,
 		joins: selectedJoinTargets.map((target) => {
 			const matched = joinOptionMap.get(target);
@@ -525,6 +526,20 @@ export default function SemanticCardEditorPage() {
 			toast.error("请补全名称和基础模型");
 			return;
 		}
+		if (recordId && recordState?.state === "loaded" && !isVirtualDatasetMode) {
+			const previous = extractSemanticQuery((recordState.value as CardDetail).dataset_query);
+			const oldRefs = previous?.indicatorRefs || [];
+			const changed = oldRefs.filter((old) =>
+				governedMetrics.some((item) => item.raw.indicatorId === old.id && item.raw.indicatorVersion !== old.version),
+			);
+			if (
+				changed.length &&
+				!window.confirm(
+					`本次将升级 ${changed.length} 个公共指标版本。保存后，所有引用这张卡片的看板将使用新口径；其他卡片保持原版本。确认保存？`,
+				)
+			)
+				return;
+		}
 		setSaving(true);
 		try {
 			const body = {
@@ -621,6 +636,49 @@ export default function SemanticCardEditorPage() {
 
 	return (
 		<div className="space-y-4">
+			{governedMetrics.length > 0 && (
+				<Card size="small" title="公共指标固定版本">
+					<Space wrap>
+						{governedMetrics.map((item) => (
+							<Tag key={item.value}>
+								<Link to={`/data-modeling/metrics/atomic?indicatorId=${item.raw.indicatorId}`}>{item.label}</Link>
+							</Tag>
+						))}
+					</Space>
+					<p>保存后保持所选版本；升级版本会影响所有复用此卡片的看板。</p>
+					{metricTime && (
+						<Space wrap>
+							<span>时间范围（{String(metricTime.timezone)}）</span>
+							<Input
+								aria-label="分析起始时刻"
+								placeholder="2026-01-01T00:00:00+08:00"
+								value={timeRange?.start || ""}
+								onChange={(e) =>
+									setTimeRange({
+										fieldRef: String(metricTime.fieldRef),
+										timezone: String(metricTime.timezone),
+										start: e.target.value,
+										endExclusive: timeRange?.endExclusive || "",
+									})
+								}
+							/>
+							<Input
+								aria-label="分析截止时刻（不含）"
+								placeholder="2027-01-01T00:00:00+08:00"
+								value={timeRange?.endExclusive || ""}
+								onChange={(e) =>
+									setTimeRange({
+										fieldRef: String(metricTime.fieldRef),
+										timezone: String(metricTime.timezone),
+										start: timeRange?.start || "",
+										endExclusive: e.target.value,
+									})
+								}
+							/>
+						</Space>
+					)}
+				</Card>
+			)}
 			<Breadcrumb
 				items={[
 					{ title: <Link to="/bi">BI</Link> },
@@ -656,34 +714,20 @@ export default function SemanticCardEditorPage() {
 				actions={
 					<Space wrap>
 						{!isVirtualDatasetMode && (
-							<Button
-								onClick={() => setVdsModalOpen(true)}
-								disabled={!canModel || noSemanticModels}
-							>
+							<Button onClick={() => setVdsModalOpen(true)} disabled={!canModel || noSemanticModels}>
 								保存为 VDS
 							</Button>
 						)}
 						{isVirtualDatasetMode && (
-							<Button
-								loading={savingVds}
-								onClick={saveVirtualDataset}
-								disabled={!canModel || noSemanticModels}
-							>
+							<Button loading={savingVds} onClick={saveVirtualDataset} disabled={!canModel || noSemanticModels}>
 								保存 VDS
 							</Button>
 						)}
 						{isVirtualDatasetMode && recordId && canPromote && (
-							<Button onClick={promoteVirtualDataset}>
-								提升到 dbt
-							</Button>
+							<Button onClick={promoteVirtualDataset}>提升到 dbt</Button>
 						)}
 						{!isVirtualDatasetMode && (
-							<Button
-								type="primary"
-								loading={saving}
-								onClick={saveCard}
-								disabled={!canModel || noSemanticModels}
-							>
+							<Button type="primary" loading={saving} onClick={saveCard} disabled={!canModel || noSemanticModels}>
 								保存卡片
 							</Button>
 						)}
@@ -1037,9 +1081,7 @@ export default function SemanticCardEditorPage() {
 													</Button>
 												</Space>
 											))}
-											<Button
-												onClick={() => setFilters((current) => [...current, { field: "", op: "=", value: "" }])}
-											>
+											<Button onClick={() => setFilters((current) => [...current, { field: "", op: "=", value: "" }])}>
 												新增筛选
 											</Button>
 										</Space>

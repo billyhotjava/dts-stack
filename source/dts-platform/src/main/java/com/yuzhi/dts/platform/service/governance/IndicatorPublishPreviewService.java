@@ -88,6 +88,12 @@ public class IndicatorPublishPreviewService {
                 )
             );
         }
+        if (IndicatorAnalysisValidation.qualifier(indicator)) {
+            boolean ready = blockingIssues.isEmpty();
+            payload.put("readyToPublish", ready); payload.put("blockingIssues", blockingIssues); payload.put("warningIssues", warningIssues);
+            payload.put("publishGate", Map.of("passed", ready, "blockerCount", blockingIssues.size(), "warningCount", 0));
+            return payload;
+        }
         boolean derived = IndicatorDefinitionSemantics.isDerivedLike(indicator);
         boolean modelBoundAtomic = IndicatorDefinitionSemantics.isModelBoundAtomic(indicator);
         String datasetIdRaw = normalizeText(indicator.getDatasetId());
@@ -213,7 +219,7 @@ public class IndicatorPublishPreviewService {
             }
         }
 
-        if (blockingIssues.isEmpty() && !modelBoundAtomic) {
+        if (blockingIssues.isEmpty() && !modelBoundAtomic && !derived) {
             try {
                 dbtGenerator.previewSql(indicatorId);
             } catch (RuntimeException ex) {

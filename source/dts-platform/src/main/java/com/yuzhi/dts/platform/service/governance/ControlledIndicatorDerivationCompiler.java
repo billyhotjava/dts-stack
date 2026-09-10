@@ -58,6 +58,16 @@ public class ControlledIndicatorDerivationCompiler {
         return new Parser(expression.trim(), normalizedAliases).parse();
     }
 
+    public record CompiledFormula(String expression, String zeroDenominator) {}
+
+    public CompiledFormula compileWithDiagnostics(String expression, Map<String, String> metricAliases) {
+        // Run the same bounded grammar and collect denominator checks from its parsed operands.
+        compile(expression, metricAliases);
+        Parser parser = new Parser(expression.trim(), normalizeAliases(metricAliases));
+        String sql = parser.parse();
+        return new CompiledFormula(sql, parser.denominators.isEmpty() ? "false" : "(" + String.join(" OR ", parser.denominators) + ")");
+    }
+
     public List<String> referencedMetricCodes(String expression) {
         if (!StringUtils.hasText(expression)) {
             return List.of();
@@ -101,6 +111,7 @@ public class ControlledIndicatorDerivationCompiler {
         private int position;
         private int tokenCount;
         private int nestingDepth;
+        private final List<String> denominators = new ArrayList<>();
 
         private Parser(String source, Map<String, String> aliases) {
             this.source = source;
@@ -141,7 +152,9 @@ public class ControlledIndicatorDerivationCompiler {
                     value = value + " * " + parseUnary();
                 } else if (consume('/')) {
                     recordToken();
-                    value = value + " / " + parseUnary();
+                    String denominator = parseUnary();
+                    denominators.add("(" + denominator + ") = 0");
+                    value = value + " / NULLIF((" + denominator + "), 0)";
                 } else {
                     return value;
                 }
@@ -257,6 +270,7 @@ public class ControlledIndicatorDerivationCompiler {
                     break;
                 }
                 validateArity(function, arguments.size());
+                if ("nullif".equals(function) && "0".equals(arguments.get(1))) denominators.add("(" + arguments.get(0) + ") = 0");
                 return function + "(" + String.join(", ", arguments) + ")";
             } finally {
                 exitNesting();

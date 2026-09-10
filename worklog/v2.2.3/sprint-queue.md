@@ -15,9 +15,9 @@
 
 | [F4-模型工作台性能与交付状态稳定性](sprint-104-202609-modeling-contract-consistency/features/F4-模型工作台性能与交付状态稳定性/README.md) | P0 | 4 | IN_PROGRESS |
 | [F5-建模状态语义与上游引用准入收敛](sprint-104-202609-modeling-contract-consistency/features/F5-建模状态语义与上游引用准入收敛/README.md) | P0 | 7 | IN_PROGRESS |
-| [F6-指标计算口径与资产BI协作闭环](sprint-104-202609-modeling-contract-consistency/features/F6-指标计算口径与资产BI协作闭环/README.md) | P1 | 8 | DRAFT |
+| [F6-指标计算口径与资产BI协作闭环](sprint-104-202609-modeling-contract-consistency/features/F6-指标计算口径与资产BI协作闭环/README.md) | P1 | 8 | IN_PROGRESS |
 
-**统计**: DRAFT=8，READY=0，IN_PROGRESS=29，DONE=2，BLOCKED=0；6 个 Feature、39 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成；F5/T25 契约冻结完成，其余六项编码完成、正式构建部署及外部 Chrome 分项验收中。
+**统计**: DRAFT=1，READY=0，IN_PROGRESS=36，DONE=2，BLOCKED=0；6 个 Feature、39 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成；F5/T25 契约冻结完成，其余六项编码完成、正式构建部署及外部 Chrome 分项验收中。
 **执行顺序**: T01 归因 → T07 保存/执行边界冻结 → T02 契约 → T05/T06/T03/T04 → T07 一致性验证 → T08 集成验收。
 **F2 执行顺序**: T09 契约/基线 → T10 四步向导与统一交付状态 → T11 质量闭环、T12 资产维护、T13 分析恢复 → T14 端到端与离线交付。
 **F3 执行顺序**: T15 契约/副作用冻结 → T16 ODS 与逻辑引用 → T17 结构物化/完成判定 → T18 三步页面 → T19 接入绑定与数据接手 → T20 集成验收。
@@ -25,9 +25,10 @@
 **F5 执行顺序**: T25 契约冻结 → T27 统一准入判定 → T26 批量投影 → T28 选择器与刷新 → T31 来源字段选择与提交前校验 → T29 归档防御 → T30 正式验证。单代理；G1=PASS。T28 提供完整 pin 选择/保存/回显和来源顺序，T31 消费其固定输入。T29 的归档预检分支未覆盖继续跟踪，闭合前不标 F5 DONE。
 **F5 来源与边界**: 2026-09-09 源码复审及来源字段事故。保留同规划未发布上游的联合设计能力；统一 owner 上下文准入、六元组快照及设计/实现双轴漂移，补字段语义校验。不改持久化状态枚举，不扩展 ModelSpecView/DependencyNode，不另建规则或 SQL 解析器。新增验收仅使用外部 Chrome，记录于 assests；T25 DONE，其余六项 IN_PROGRESS，IT-29–IT-35 分项已执行；证据见 sprint-104 assests/F5-acceptance-20260910.md。
 
+**F6 当前实施**: 已授权提前编码，T32–T38 IN_PROGRESS，T39 DRAFT；统一后置测试，尚未完成。见 [实施记录](sprint-104-202609-modeling-contract-consistency/assests/F6-implementation-20260910.md)。
 **F6 规划增量（2026-09-10）**: T32 基线/契约→T33 模型版本→T34 执行口径/粒度→T35 上游版本→T36 修饰词/多维查询→T37 资产/BI 映射→T38 页面反馈→T39 正式验收。全部 DRAFT，G0/G1 待 T32 冻结；IT-36–IT-43 未执行。本次仅文档规划，不开始编码。
 **F6 契约修订**: 已补版本级交付/公式宿主、分组时间对齐、模式分类统计与 T32 非循环 DoD；运行基线仍待证，全部 DRAFT，未启动 T32。
-**F6 排期约束**: 不参与本 Sprint 收敛；F3 离线目标、F4 Chrome95/并发、F5 归档预检三项闭合前不启动 T32。BI 投影 owner 已核实为 platform serving 链，dts-metrics 注册链排除；T37 需先处理派生/复合零通路、wire 契约无版本位、指标发布不触发同步三处结构缺口，不按“补映射”估量。
+**F6 原排期约束（已被本轮编码授权覆盖）**: 不参与本 Sprint 收敛；F3 离线目标、F4 Chrome95/并发、F5 归档预检三项闭合前不启动 T32。BI 投影 owner 已核实为 platform serving 链，dts-metrics 注册链排除；T37 需先处理派生/复合零通路、wire 契约无版本位、指标发布不触发同步三处结构缺口，不按“补映射”估量。
 
 **F4 当前证据**: 73697f73a已正式构建并直接替换原platform/webapp；前端83项、后端30项通过，实际36个交付请求全部200/P95约0.522s。刷新/分页/详情正常；Chrome95与固定并发验收由T24继续跟踪，不出补丁包。
 
@@ -2142,7 +2143,7 @@
 | F2-门户消费体验 | P0 | 2 | DRAFT（依赖 F1） |
 | F3-集中验收与交付 | P0 | 1 | DRAFT（依赖 F1/F2） |
 
-**统计**: DONE=1，READY=1，DRAFT=3，IN_PROGRESS=0，BLOCKED=0（共 5 Task）。
+**统计**: DONE=1，READY=1，DRAFT=1，IN_PROGRESS=0，BLOCKED=0（共 5 Task）。
 **执行顺序**: F0 → F1/T01 → F2/T01 → F2/T02 → F3/T01；编码完成后集中执行一次构建与 E2E。
 **关键决策**: `dts-analytics` 保持大屏/发布/权限唯一 owner；`GET /bi/api/screens?publishedOnly=true` 是门户目录契约；治理主题域只分组不替代权限；叶子以稳定 screenId 深链；现有 `sys.nav.portal.biScreens` 原位改名改路由以保留角色绑定；发布运行态复用同源预览路由的 published/embed 模式。
 **已知风险**: 本地 2 个有效大屏均未发布，而现有镜像有 2 条启用 preview 链接；真实登录和 Chrome 95 executable 缺失；共享工作区已有未提交改动，本 Sprint 不触碰、不暂存、不回滚。

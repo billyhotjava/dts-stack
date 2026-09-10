@@ -72,6 +72,8 @@ public class SemanticQueryService {
     private final AnalyticsVirtualDatasetRepository virtualDatasetRepository;
     private final AnalysisQueryGateway analysisQueryGateway;
     private final ObjectMapper objectMapper;
+    private final PlatformIndicatorPlanClient indicatorPlans;
+    private final com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository databases;
 
     public SemanticQueryService(
         AnalyticsSemanticModelRepository semanticModelRepository,
@@ -80,7 +82,9 @@ public class SemanticQueryService {
         AnalyticsFieldRepository fieldRepository,
         AnalyticsVirtualDatasetRepository virtualDatasetRepository,
         AnalysisQueryGateway analysisQueryGateway,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        PlatformIndicatorPlanClient indicatorPlans,
+        com.yuzhi.dts.analytics.repository.AnalyticsDatabaseRepository databases
     ) {
         this.semanticModelRepository = semanticModelRepository;
         this.semanticJoinRepository = semanticJoinRepository;
@@ -89,6 +93,7 @@ public class SemanticQueryService {
         this.virtualDatasetRepository = virtualDatasetRepository;
         this.analysisQueryGateway = analysisQueryGateway;
         this.objectMapper = objectMapper;
+        this.indicatorPlans = indicatorPlans; this.databases = databases;
     }
 
     @Transactional(readOnly = true)
@@ -157,8 +162,11 @@ public class SemanticQueryService {
     }
 
     @Transactional(readOnly = true)
-    public Map<String, Object> previewSql(JsonNode body, PlatformContext context) {
-        CompiledSemanticQuery compiled = compile(body, context);
+    public Map<String, Object> previewSql(JsonNode body, PlatformContext context) { return previewSql(body, context, null); }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> previewSql(JsonNode body, PlatformContext context, Long userId) {
+        CompiledSemanticQuery compiled = compileForActor(body, context, userId);
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", "ok");
         response.put("meta", Map.of(
@@ -166,16 +174,18 @@ public class SemanticQueryService {
             "security_applied", compiled.securityApplied(),
             "warnings", compiled.warnings()
         ));
-        response.put("columns", compiled.columns().stream().map(ColumnMeta::toMap).toList());
+        response.put("columns", visibleColumns(compiled).stream().map(ColumnMeta::toMap).toList());
         return response;
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> runQuery(JsonNode body, PlatformContext context, Long userId) throws SQLException {
-        CompiledSemanticQuery compiled = compile(body, context);
-        boolean skipCache = "fresh".equalsIgnoreCase(trimToNull(body != null ? body.path("cache_hint").asText(null) : null));
+        CompiledSemanticQuery compiled = compileForActor(body, context, userId);
+        boolean skipCache = compiled.securityApplied().contains("fixed_indicator_versions") || "fresh".equalsIgnoreCase(trimToNull(body != null ? body.path("cache_hint").asText(null) : null));
         AnalysisQueryGateway.GatewayExecution execution = executeThroughGateway(compiled, context, userId, skipCache, "/api/semantic/query");
         DatasetQueryService.DatasetResult result = execution.datasetResult();
+        validateGovernedResult(compiled, result);
+        result = visibleGovernedResult(compiled, result);
 
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("row_count", result.rows().size());
@@ -188,22 +198,24 @@ public class SemanticQueryService {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("status", "ok");
         response.put("meta", meta);
-        response.put("columns", compiled.columns().stream().map(ColumnMeta::toMap).toList());
+        response.put("columns", visibleColumns(compiled).stream().map(ColumnMeta::toMap).toList());
         response.put("rows", result.rows());
         return response;
     }
 
     @Transactional(readOnly = true)
     public SemanticExecutionResult executeForCard(JsonNode body, PlatformContext context, Long userId) throws SQLException {
-        CompiledSemanticQuery compiled = compile(body, context);
-        boolean skipCache = "fresh".equalsIgnoreCase(trimToNull(body != null ? body.path("cache_hint").asText(null) : null));
+        CompiledSemanticQuery compiled = compileForActor(body, context, userId);
+        boolean skipCache = compiled.securityApplied().contains("fixed_indicator_versions") || "fresh".equalsIgnoreCase(trimToNull(body != null ? body.path("cache_hint").asText(null) : null));
         AnalysisQueryGateway.GatewayExecution execution = executeThroughGateway(compiled, context, userId, skipCache, "/api/card/query");
         DatasetQueryService.DatasetResult rawResult = execution.datasetResult();
+        validateGovernedResult(compiled, rawResult);
+        rawResult = visibleGovernedResult(compiled, rawResult);
 
         DatasetQueryService.DatasetResult cardResult = new DatasetQueryService.DatasetResult(
             rawResult.rows(),
-            toMetabaseCols(compiled.columns()),
-            toMetabaseResultsMetadata(compiled.columns()),
+            toMetabaseCols(visibleColumns(compiled)),
+            toMetabaseResultsMetadata(visibleColumns(compiled)),
             rawResult.resultsTimezone()
         );
         return new SemanticExecutionResult(
@@ -256,9 +268,12 @@ public class SemanticQueryService {
     }
 
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> previewCardColumns(JsonNode body, PlatformContext context) {
-        CompiledSemanticQuery compiled = compile(body, context);
-        return toMetabaseResultsMetadata(compiled.columns());
+    public List<Map<String, Object>> previewCardColumns(JsonNode body, PlatformContext context) { return previewCardColumns(body, context, null); }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> previewCardColumns(JsonNode body, PlatformContext context, Long userId) {
+        CompiledSemanticQuery compiled = compileForActor(body, context, userId);
+        return toMetabaseResultsMetadata(visibleColumns(compiled));
     }
 
     @Transactional(readOnly = true)
@@ -421,6 +436,11 @@ public class SemanticQueryService {
         response.put("security_level", normalizeSecurityLevel(defaultText(asText(metricJson.get("security_level")), model.getSecurityLevel())));
         response.put("format", metricJson.get("format"));
         response.put("description", asText(metricJson.get("description")));
+        if (metricJson.get("indicatorId") != null) {
+            response.put("indicatorId", metricJson.get("indicatorId")); response.put("indicatorVersion", metricJson.get("indicatorVersion"));
+            response.put("assetType", metricJson.get("assetType")); response.put("assetKey", metricJson.get("assetKey"));
+            response.put("analysisConfig", metricJson.get("analysisConfig"));
+        }
         return response;
     }
 
@@ -469,10 +489,156 @@ public class SemanticQueryService {
             .toList();
     }
 
+    private List<ColumnMeta> visibleColumns(CompiledSemanticQuery compiled) {
+        return compiled.securityApplied().contains("fixed_indicator_versions")
+            ? compiled.columns().stream().filter(column -> !column.id().endsWith("_invalid")).toList() : compiled.columns();
+    }
+
+    private DatasetQueryService.DatasetResult visibleGovernedResult(CompiledSemanticQuery compiled, DatasetQueryService.DatasetResult result) {
+        if (!compiled.securityApplied().contains("fixed_indicator_versions")) return result;
+        List<Integer> selected = new ArrayList<>();
+        for (int i = 0; i < compiled.columns().size(); i++) if (!compiled.columns().get(i).id().endsWith("_invalid")) selected.add(i);
+        List<List<Object>> rows = result.rows().stream().map(row -> selected.stream().map(row::get).toList()).toList();
+        return new DatasetQueryService.DatasetResult(rows, toMetabaseCols(visibleColumns(compiled)), toMetabaseResultsMetadata(visibleColumns(compiled)), result.resultsTimezone());
+    }
+
+    private void validateGovernedResult(CompiledSemanticQuery compiled, DatasetQueryService.DatasetResult result) {
+        if (!compiled.securityApplied().contains("fixed_indicator_versions")) return;
+        if (result.rows().size() >= compiled.constraints().maxResults()) throw new IllegalArgumentException("指标结果超过上限，请缩小筛选范围");
+        for (var row : result.rows()) {
+            for (int i = 0; i < compiled.columns().size(); i++) {
+                if (compiled.columns().get(i).id().endsWith("_invalid") && Boolean.TRUE.equals(row.get(i))) {
+                    throw new IllegalArgumentException("预计算指标在声明粒度上存在重复记录");
+                }
+            }
+        }
+    }
+
+    private CompiledSemanticQuery compileForActor(JsonNode body, PlatformContext context, Long userId) {
+        JsonNode request = governedRequest(body);
+        if (request == null) return compile(body, context);
+        var plan = indicatorPlans.plan(request, context, userId);
+        var database = databases.findByTenantIdAndPlatformDataSourceId(plan.tenantId(), plan.datasourceId())
+            .orElseThrow(() -> new IllegalArgumentException("指标数据源尚未注册到分析服务"));
+        List<ColumnMeta> columns = plan.columns().stream().map(name -> new ColumnMeta(name, name,
+            name.endsWith("_invalid") ? "boolean" : name.startsWith("metric_") && !name.endsWith("_null_reason") ? "number" : "string", null)).toList();
+        return new CompiledSemanticQuery(database.getId(), plan.sql(), plan.bindings(), columns,
+            List.of("fixed_indicator_versions", "platform_current_permissions"),
+            List.of("固定版本: " + plan.resolvedVersions()), new DatasetQueryService.DatasetConstraints(plan.limit() + 1, 30, "UTC"));
+    }
+
+    private JsonNode governedRequest(JsonNode body) {
+        if (body == null) return null;
+        if (body.has("indicatorRefs") && body.path("measures").isEmpty()) {
+            if (!body.path("joins").isEmpty() || !body.path("derived_metrics").isEmpty() || !body.path("order_by").isEmpty()) throw new IllegalArgumentException("公共指标不支持临时关联、公式或排序");
+            return body;
+        }
+        if (!body.path("measures").isArray()) return null;
+        var metrics = loadMetricMap(loadAllModelMap().values());
+        var refs = objectMapper.createArrayNode();
+        List<Map<String, Object>> governedMetadata = new ArrayList<>();
+        int selected = 0;
+        for (JsonNode node : body.path("measures")) {
+            selected++;
+            String key = node.isTextual() ? node.asText() : node.path("id").asText();
+            var metric = metrics.get(normalizeKey(key));
+            if (metric == null) continue;
+            var metadata = safeReadJsonMap(metric.getMetricJson());
+            if (metadata.get("indicatorId") != null) {
+                governedMetadata.add(metadata);
+                refs.addObject().put("id", String.valueOf(metadata.get("indicatorId"))).put("version", String.valueOf(metadata.get("indicatorVersion")));
+            }
+        }
+        if (refs.isEmpty()) return null;
+        if (refs.size() != selected) throw new IllegalArgumentException("公共指标请单独分析，不能混入临时度量");
+        if (body.has("indicatorRefs") && !body.get("indicatorRefs").equals(refs)) throw new IllegalArgumentException("卡片固定版本引用与所选指标不一致");
+        if (!body.path("joins").isEmpty() || !body.path("derived_metrics").isEmpty() || !body.path("order_by").isEmpty()) throw new IllegalArgumentException("公共指标使用已发布口径，不能追加临时关联、公式或排序");
+        var query = objectMapper.createObjectNode(); query.set("indicatorRefs", refs);
+        var dimensions = query.putArray("dimensions");
+        for (JsonNode dimension : body.path("dimensions")) {
+            String key = dimension.isTextual() ? dimension.asText() : dimension.path("id").asText();
+            if (dimension.isObject() && dimension.hasNonNull("granularity") && !"native".equals(dimension.get("granularity").asText())) throw new IllegalArgumentException("公共指标只支持模型已声明的时间粒度");
+            dimensions.add(publicDimension(key, governedMetadata));
+        }
+        if (body.has("timeRange")) query.set("timeRange", body.get("timeRange").deepCopy());
+        var filters = query.putArray("filters");
+        for (JsonNode filter : body.path("filters")) {
+            String key = filter.path("field").asText(filter.path("id").asText());
+            String op = filter.path("op").asText();
+            if (applyGovernedTimeFilter(query, key, filter, governedMetadata)) continue;
+            var rule = filters.addObject(); rule.put("fieldRef", publicDimension(key, governedMetadata));
+            rule.put("op", switch (op) { case "=" -> "EQ"; case "in" -> "IN"; case "between" -> "BETWEEN"; default -> throw new IllegalArgumentException("公共指标不支持该筛选操作"); });
+            if ("between".equals(op) && filter.has("value_to")) {
+                var range = objectMapper.createArrayNode(); range.add(filter.path("value")); range.add(filter.get("value_to")); rule.set("value", range);
+            } else rule.set("value", filter.path("value"));
+        }
+        query.put("limit", body.path("limit").asInt(200));
+        return query;
+    }
+
+    private boolean applyGovernedTimeFilter(com.fasterxml.jackson.databind.node.ObjectNode query, String key, JsonNode filter,
+                                              List<Map<String, Object>> metadata) {
+        String field = key.substring(key.lastIndexOf('.') + 1);
+        JsonNode first = objectMapper.valueToTree(metadata.get(0).get("analysisConfig")).path("timeBinding");
+        if (first.isMissingNode() || first.isNull() || (!field.equals(first.path("fieldRef").asText()) && !field.equals(first.path("fieldName").asText()))) return false;
+        for (var metric : metadata) {
+            JsonNode time = objectMapper.valueToTree(metric.get("analysisConfig")).path("timeBinding");
+            if (!first.path("fieldRef").equals(time.path("fieldRef")) || !first.path("timezone").equals(time.path("timezone"))) throw new IllegalArgumentException("指标时间映射不兼容");
+        }
+        String op = filter.path("op").asText();
+        JsonNode value = filter.path("value");
+        java.time.ZoneId zone = java.time.ZoneId.of(first.path("timezone").asText());
+        java.time.OffsetDateTime start;
+        java.time.OffsetDateTime end;
+        if ("=".equals(op) && value.isTextual()) {
+            var day = java.time.LocalDate.parse(value.asText());
+            start = day.atStartOfDay(zone).toOffsetDateTime(); end = day.plusDays(1).atStartOfDay(zone).toOffsetDateTime();
+        } else if ("between".equals(op) || ("in".equals(op) && value.isArray() && value.size() == 2)) {
+            String a = value.isArray() ? value.path(0).asText() : value.asText();
+            String b = value.isArray() ? value.path(1).asText() : filter.path("value_to").asText();
+            start = java.time.LocalDate.parse(a).atStartOfDay(zone).toOffsetDateTime();
+            end = java.time.LocalDate.parse(b).plusDays(1).atStartOfDay(zone).toOffsetDateTime();
+        } else throw new IllegalArgumentException("时间筛选需一个日期或两个日期组成的区间");
+        JsonNode previous = query.path("timeRange");
+        if (!previous.isMissingNode() && !previous.isNull()) {
+            if (!first.path("fieldRef").equals(previous.path("fieldRef")) || !first.path("timezone").equals(previous.path("timezone"))) throw new IllegalArgumentException("卡片与看板时间映射不兼容");
+            var oldStart = java.time.OffsetDateTime.parse(previous.path("start").asText());
+            var oldEnd = java.time.OffsetDateTime.parse(previous.path("endExclusive").asText());
+            if (oldStart.isAfter(start)) start = oldStart;
+            if (oldEnd.isBefore(end)) end = oldEnd;
+        }
+        if (!start.isBefore(end)) throw new IllegalArgumentException("卡片与看板时间范围无交集");
+        var range = query.putObject("timeRange"); range.put("fieldRef", first.path("fieldRef").asText());
+        range.put("timezone", zone.getId()); range.put("start", start.toString()); range.put("endExclusive", end.toString());
+        return true;
+    }
+
+    private String publicDimension(String reference, List<Map<String, Object>> metadata) {
+        String field = reference.substring(reference.lastIndexOf('.') + 1);
+        String resolved = null;
+        for (var metric : metadata) {
+            JsonNode config = objectMapper.valueToTree(metric.get("analysisConfig"));
+            JsonNode bindings = config.path("dimensionBindings");
+            String key = bindings.has(field) ? field : null;
+            var entries = bindings.fields();
+            while (entries.hasNext()) {
+                var entry = entries.next();
+                if (field.equals(entry.getValue().asText())) {
+                    if (key != null && !key.equals(entry.getKey())) throw new IllegalArgumentException("公共维度映射存在歧义");
+                    key = entry.getKey();
+                }
+            }
+            if (key == null || (resolved != null && !resolved.equals(key))) throw new IllegalArgumentException("所选指标的公共维度映射不兼容");
+            resolved = key;
+        }
+        return resolved;
+    }
+
     private CompiledSemanticQuery compile(JsonNode body, PlatformContext context) {
         if (body == null || !body.isObject()) {
             throw new IllegalArgumentException("语义查询体不能为空");
         }
+        if (governedRequest(body) != null) throw new IllegalArgumentException("公共指标需通过已登录用户的固定版本分析入口预览");
         String baseModelName = trimToNull(body.path("base").asText(null));
         if (baseModelName == null) {
             throw new IllegalArgumentException("base 不能为空");

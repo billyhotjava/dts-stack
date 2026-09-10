@@ -12,6 +12,10 @@ public interface AnalyticsTableRepository extends JpaRepository<AnalyticsTable, 
 
     Optional<AnalyticsTable> findByDatabaseIdAndSchemaNameAndName(Long databaseId, String schemaName, String name);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("select t from AnalyticsTable t where t.id = :id")
+    Optional<AnalyticsTable> lockForSemanticPublish(@org.springframework.data.repository.query.Param("id") Long id);
+
     long deleteByDatabaseId(Long databaseId);
 }
 

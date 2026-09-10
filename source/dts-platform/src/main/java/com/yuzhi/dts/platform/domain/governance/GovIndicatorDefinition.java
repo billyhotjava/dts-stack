@@ -56,6 +56,15 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
     @Column(name = "expression_sql")
     private String expressionSql;
 
+    @Column(name = "execution_mode", length = 24)
+    private String executionMode;
+
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "analysis_config", columnDefinition = "jsonb")
+    private String analysisConfig;
+
+
+
     @Column(name = "dataset_id", length = 64)
     private String datasetId;
 
@@ -155,6 +164,10 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
 
     @Column(name = "target_model_name", length = 200)
     private String targetModelName;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "implementation_ref", columnDefinition = "jsonb")
+    private String implementationRef;
 
     // --- 业务属性 ---
 
@@ -542,6 +555,10 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
         this.targetLayer = targetLayer;
     }
 
+    public String getImplementationRef() { return implementationRef; }
+
+    public void setImplementationRef(String implementationRef) { this.implementationRef = implementationRef; }
+
     public String getTargetModelName() {
         return targetModelName;
     }
@@ -675,4 +692,9 @@ public class GovIndicatorDefinition extends AbstractAuditingEntity<UUID> impleme
     public void setTemplateId(UUID templateId) {
         this.templateId = templateId;
     }
+    public String getExecutionMode() { return executionMode; }
+
+    public void setExecutionMode(String executionMode) { this.executionMode = executionMode; }
+    public String getAnalysisConfig() { return analysisConfig; }
+    public void setAnalysisConfig(String value) { this.analysisConfig = value; }
 }

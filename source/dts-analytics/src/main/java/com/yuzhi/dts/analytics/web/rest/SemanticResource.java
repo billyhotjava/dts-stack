@@ -89,7 +89,7 @@ public class SemanticResource {
         AnalyticsUser actor = MetabaseAuth.currentUser(sessionService, request).orElse(null);
         Map<String, Object> attrs = queryAttributes(body);
         try {
-            Object result = semanticQueryService.previewSql(body, PlatformContext.from(request));
+            Object result = semanticQueryService.previewSql(body, PlatformContext.from(request), actor == null ? null : actor.getId());
             semanticAuditService.logSuccess("SEMANTIC_QUERY_PREVIEW", "预览语义查询 SQL", actor, request, null, attrs);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException ex) {

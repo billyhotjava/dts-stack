@@ -167,7 +167,42 @@ public class CatalogModelSemanticSyncService {
                 );
             }
         }
-        return new SyncResult(candidates.size(), succeeded, failed, stale);
+        var indicatorCandidates = repository.claimIndicatorSyncCandidates(BATCH_SIZE, now, LEASE);
+        for (var candidate : indicatorCandidates) {
+            try {
+                var payload = payloadFactory.createIndicator(candidate);
+                client.publish(payload);
+                var metric = payload.metrics().get(0);
+                String mapping = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(Map.of(
+                    "indicatorId", candidate.indicatorId().toString(), "indicatorVersion", candidate.indicatorVersion(),
+                    "assetType", metric.assetType(), "assetKey", metric.assetKey(),
+                    "semanticModelRef", payload.modelName(), "analyticsMetricRef", payload.modelName() + "." + metric.name()));
+                if (repository.completeIndicatorSync(candidate, mapping, null, null)) {
+                    succeeded++;
+                    if (auditService != null) {
+                        try {
+                            auditService.auditActionAs("scheduler", "indicator-sync:" + candidate.indicatorId() + ":" + candidate.indicatorVersion(),
+                                now, "GOV_INDICATOR_REGISTER", AuditStage.SUCCESS, candidate.indicatorId().toString(), Map.of("version", candidate.indicatorVersion()));
+                        } catch (RuntimeException auditFailure) {
+                            LOG.error("Indicator registration audit failed id={} version={}", candidate.indicatorId(), candidate.indicatorVersion(), auditFailure);
+                        }
+                    }
+                } else stale++;
+            } catch (Exception failure) {
+                String code = failure instanceof RuntimeException runtime ? errorCode(runtime) : "INDICATOR_SYNC_SERIALIZATION_FAILED";
+                if (repository.completeIndicatorSync(candidate, null, code, nextAttempt(now, candidate.syncAttempts(), code))) {
+                    failed++;
+                    if (auditService != null) {
+                        try { auditService.auditActionAs("scheduler", "indicator-sync:" + candidate.indicatorId() + ":" + candidate.indicatorVersion() + ":a" + candidate.syncAttempts(),
+                            now, "GOV_INDICATOR_REGISTER", AuditStage.FAIL, candidate.indicatorId().toString(),
+                            Map.of("version", candidate.indicatorVersion(), "errorCode", code, "attempt", candidate.syncAttempts())); }
+                        catch (RuntimeException auditFailure) { LOG.error("Indicator failure audit unavailable id={} version={}", candidate.indicatorId(), candidate.indicatorVersion(), auditFailure); }
+                    }
+                } else stale++;
+                LOG.warn("Indicator sync failed id={} indicatorVersion={} errorCode={}", candidate.indicatorId(), candidate.indicatorVersion(), code);
+            }
+        }
+        return new SyncResult(candidates.size() + indicatorCandidates.size(), succeeded, failed, stale);
     }
 
     private void recordTerminalFailure(

@@ -140,6 +140,22 @@ public class CardResource {
             cards = cardRepository.findAllByArchivedFalseOrderByIdAsc();
         }
 
+        String indicatorId = request.getParameter("indicatorId");
+        String indicatorVersion = request.getParameter("indicatorVersion");
+        if (indicatorId != null) {
+            String normalizedId = java.util.UUID.fromString(indicatorId).toString();
+            if (indicatorVersion == null || !indicatorVersion.matches("v[1-9][0-9]{0,8}")) throw new IllegalArgumentException("指标版本无效");
+            String metricName = "indicator_" + normalizedId.replace("-", "") + "_" + indicatorVersion;
+            cards = cards.stream().filter(card -> {
+                try {
+                    JsonNode query = objectMapper.readTree(card.getDatasetQueryJson()).path("semantic_query");
+                    for (JsonNode ref : query.path("indicatorRefs")) if (normalizedId.equals(ref.path("id").asText()) && indicatorVersion.equals(ref.path("version").asText())) return true;
+                    for (JsonNode measure : query.path("measures")) if (measure.asText().endsWith("." + metricName)) return true;
+                    return false;
+                } catch (Exception error) { return false; }
+            }).toList();
+        }
+
         cards = assetListFilterService.filterByPermission(
             cards, "CARD", c -> String.valueOf(c.getId()), request);
 
@@ -865,7 +881,8 @@ public class CardResource {
             if (isSemanticDatasetQuery(datasetQuery)) {
                 return semanticQueryService.previewCardColumns(
                     extractSemanticQuery(datasetQuery),
-                    PlatformContext.from(request)
+                    PlatformContext.from(request),
+                    sessionService.resolveUser(request).orElseThrow(() -> new IllegalArgumentException("Authentication required")).getId()
                 );
             }
             QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(

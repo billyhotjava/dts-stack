@@ -1,6 +1,6 @@
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useBlocker, useSearchParams } from "react-router";
 import { getModelSpecRevision, listModelSpecs } from "@/api/modelSpecApi";
 import { listBusinessProcessesApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
 import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
@@ -8,6 +8,7 @@ import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Con
 import { parseIndicatorDependencyCodes } from "@/features/modeling/indicators/indicatorDefinitionContract";
 import { statusLabel } from "@/utils/customerDisplayLabels";
 import type { DataModelingRoute } from "../types";
+import { IndicatorAnalysisPanel } from "./IndicatorAnalysisPanel";
 import { MetricEditor } from "./MetricEditor";
 import { Button, PageHeader, RequestState, Status, Toast, useTransientMessage } from "./PrototypePrimitives";
 import {
@@ -46,6 +47,7 @@ const typeByView: Record<string, MetricType> = {
 };
 
 const toForm = (selected: MetricSelection): IndicatorEditValues => ({
+	analysisConfig: selected.analysisConfig || null,
 	code: selected.code,
 	name: selected.name,
 	definition: selected.definition || "",
@@ -68,6 +70,8 @@ const toForm = (selected: MetricSelection): IndicatorEditValues => ({
 	sourceLayer: selected.sourceLayer || null,
 	targetLayer: selected.targetLayer || null,
 	targetModelName: selected.targetModelName || null,
+	implementationRef: selected.implementationRef || null,
+	executionMode: selected.executionMode || null,
 	dateColumn: selected.dateColumn || null,
 	dependencyCodes: parseIndicatorDependencyCodes(selected.dependencyIndicators),
 });
@@ -114,10 +118,33 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 	const [calculationBatch, setCalculationBatch] = useState<IndicatorCalculationBatch | null>(null);
 	const [calculationHistory, setCalculationHistory] = useState<IndicatorCalculationHistory[]>([]);
 	const [contextFailure, setContextFailure] = useState("");
+	const [historyFailure, setHistoryFailure] = useState("");
+	const [historyReload, setHistoryReload] = useState(0);
 	const processEpoch = useRef(0);
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState<"save" | "validate" | "publish" | "archive" | "calculate" | "">("");
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
+	const dirty = Boolean(selected) && JSON.stringify(values) !== JSON.stringify(selected ? toForm(selected) : {});
+	const blocker = useBlocker(
+		({ currentLocation, nextLocation }) =>
+			dirty &&
+			!busy &&
+			currentLocation.pathname + currentLocation.search !== nextLocation.pathname + nextLocation.search,
+	);
+	useEffect(() => {
+		if (blocker.state !== "blocked") return;
+		if (window.confirm("指标修改尚未保存，确认放弃并离开？")) blocker.proceed();
+		else blocker.reset();
+	}, [blocker]);
+	useEffect(() => {
+		if (!dirty) return;
+		const handle = (event: BeforeUnloadEvent) => {
+			event.preventDefault();
+			event.returnValue = "";
+		};
+		window.addEventListener("beforeunload", handle);
+		return () => window.removeEventListener("beforeunload", handle);
+	}, [dirty]);
 	const previousMetricType = useRef(metricType);
 	const { message, show } = useTransientMessage();
 	const select = useCallback((next: MetricSelection | null) => {
@@ -146,11 +173,15 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		};
 	}, [canCalculate]);
 	const pinnedModelSource = values.sourceRefs?.find((ref) => ref.sourceType === "SEMANTIC_MODEL_REVISION");
-	const pinnedModelRevision = String(pinnedModelSource?.sourceVersion || "").match(/^r([1-9][0-9]*)$/i)?.[1] || "";
+	const pinnedModelRevision =
+		values.implementationRef?.modelRevision ||
+		String(pinnedModelSource?.sourceVersion || "").match(/^r([1-9][0-9]*)$/i)?.[1] ||
+		"";
+	const pinnedModelId = values.implementationRef?.modelSpecId || pinnedModelSource?.sourceId;
 	useEffect(() => {
-		if (!pinnedModelSource?.sourceId || !pinnedModelRevision) return;
+		if (!pinnedModelId || !pinnedModelRevision) return;
 		let active = true;
-		void getModelSpecRevision(pinnedModelSource.sourceId, Number(pinnedModelRevision))
+		void getModelSpecRevision(pinnedModelId, Number(pinnedModelRevision))
 			.then((model) => {
 				if (!active) return;
 				setMetricModels((current) => [
@@ -164,7 +195,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		return () => {
 			active = false;
 		};
-	}, [pinnedModelRevision, pinnedModelSource?.sourceId]);
+	}, [pinnedModelRevision, pinnedModelId]);
 	const load = useCallback(
 		async (preferredIndicatorId?: string | null) => {
 			const epoch = ++requestEpoch.current;
@@ -239,23 +270,26 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			previousMetricType.current = metricType;
 		}
 	}, [metricType]);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: historyReload explicitly refreshes unchanged selection.
 	useEffect(() => {
 		if (!canCalculate || !selected?.id || String(selected.status || "").toUpperCase() !== "PUBLISHED") {
 			setCalculationHistory([]);
 			return;
 		}
 		let active = true;
+		setHistoryFailure("");
+		setCalculationHistory([]);
 		void loadIndicatorCalculationHistory(selected.id)
 			.then((items) => {
 				if (active) setCalculationHistory(items);
 			})
 			.catch(() => {
-				if (active) setCalculationHistory([]);
+				if (active) setHistoryFailure("计算历史读取失败，请重试。");
 			});
 		return () => {
 			active = false;
 		};
-	}, [canCalculate, selected?.id, selected?.status]);
+	}, [canCalculate, selected?.id, selected?.status, historyReload]);
 
 	const visible = useMemo(
 		() => filterIndicators(catalog, { type: metricType, domain, businessCategoryId, query }),
@@ -275,6 +309,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		setSearchParams(next, { replace: true });
 	};
 	const returnToList = () => {
+		if (dirty && !busy && !window.confirm("指标修改尚未保存，确认返回列表？")) return;
 		select(null);
 		const next = new URLSearchParams(searchParams);
 		next.delete("indicatorId");
@@ -289,7 +324,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			...createIndicatorDraft(metricType, selectedDomain?.code || ""),
 			businessCategoryId: categoryId || null,
 			dataDomainId: selectedDomain?.id || null,
-			category: isModifier ? "MODIFIER" : selectedCategory?.name || null,
+			category: isModifier ? "MODIFIER" : metricType === "时间周期" ? "TIME_PERIOD" : selectedCategory?.name || null,
 		});
 		const next = new URLSearchParams(searchParams);
 		next.delete("indicatorId");
@@ -315,7 +350,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			width: 150,
 			render: (value, row) => domainLabels.get(String(value || "")) || row.domain || "未归属",
 		},
-		{ title: "数仓分层", key: "layer", width: 100, render: () => "公共层" },
+		{ title: "数仓分层", key: "layer", width: 100, render: (_, row) => row.targetLayer || row.sourceLayer || "不适用" },
 		{ title: "负责人", dataIndex: "owner", width: 130, render: (value) => String(value || "—") },
 		{ title: "版本", dataIndex: "version", width: 90, render: (value) => String(value || "—") },
 		{
@@ -419,6 +454,8 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 		{ title: "错误", dataIndex: "errorMessage", width: 260, render: (value) => String(value || "—") },
 	];
 	const historyColumns: CompactColumns<IndicatorCalculationHistory> = [
+		{ title: "指标版本", dataIndex: "indicatorVersion", render: (value) => String(value || "历史未记录") },
+		{ title: "空值原因", dataIndex: "nullReason", render: (value) => String(value || "—") },
 		{ title: "提交时间", dataIndex: "runAt", width: 190, render: (value) => String(value || "—") },
 		{
 			title: "状态",
@@ -486,9 +523,18 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 							<Button disabled={Boolean(busy)} onClick={returnToList}>
 								返回指标列表
 							</Button>
-							<Button disabled={!canMaintain || Boolean(busy)} primary onClick={() => void mutate("save")}>
+							<Button
+								disabled={!canMaintain || Boolean(busy) || selected.status === "PUBLISHED"}
+								primary
+								onClick={() => void mutate("save")}
+							>
 								{busy === "save" ? "保存中…" : "保存"}
 							</Button>
+							{!canCalculate && (
+								<Button disabled={!canMaintain || Boolean(busy) || !selected.id} onClick={() => void mutate("publish")}>
+									{selected.status === "PUBLISHED" ? "发布新版本" : "发布限定规则"}
+								</Button>
+							)}
 							{canCalculate ? (
 								<>
 									<Button
@@ -501,7 +547,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 										disabled={!canMaintain || Boolean(busy) || !selected.id}
 										onClick={() => void mutate("publish")}
 									>
-										{busy === "publish" ? "发布中…" : "发布"}
+										{busy === "publish" ? "发布中…" : selected.status === "PUBLISHED" ? "发布新版本" : "发布"}
 									</Button>
 									<Button
 										disabled={
@@ -536,7 +582,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 							</div>
 						) : null}
 						{!canMaintain ? <div className="dmx-capability-note">当前账号只有指标查看权限。</div> : null}
-						<fieldset className="dmx-editor-fieldset" disabled={!canMaintain}>
+						<fieldset className="dmx-editor-fieldset" disabled={!canMaintain || Boolean(busy)}>
 							<MetricEditor
 								businessCategories={businessCategories}
 								codeLocked={Boolean(selected.id)}
@@ -548,6 +594,13 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								values={values}
 							/>
 						</fieldset>
+						{canCalculate && selected.status === "PUBLISHED" && (
+							<IndicatorAnalysisPanel
+								key={`${selected.id}@${selected.version}`}
+								indicator={selected}
+								canMaintain={canMaintain}
+							/>
+						)}
 						{canCalculate && calculationBatch?.items.some((item) => item.indicatorId === selected.id) ? (
 							<section className="dmx-metric-section" aria-label="本次计算结果">
 								<h3>本次计算结果</h3>
@@ -560,7 +613,12 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 								/>
 							</section>
 						) : null}
-						{canCalculate && calculationHistory.length ? (
+						{canCalculate && historyFailure ? (
+							<div role="alert">
+								{historyFailure}
+								<Button onClick={() => setHistoryReload((value) => value + 1)}>重试</Button>
+							</div>
+						) : canCalculate && calculationHistory.length ? (
 							<section className="dmx-metric-section dmx-metric-section--history" aria-label="计算历史">
 								<h3>计算历史</h3>
 								<CompactTable

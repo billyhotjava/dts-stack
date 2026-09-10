@@ -45,6 +45,7 @@ export function bindMetricImplementationModel(
 		return {
 			...values,
 			targetModelName: null,
+			implementationRef: null,
 			sourceTable: null,
 			sourceLayer: null,
 			targetLayer: null,
@@ -56,6 +57,11 @@ export function bindMetricImplementationModel(
 	return {
 		...values,
 		targetModelName: model.name,
+		implementationRef: {
+			modelSpecId: model.id,
+			modelRevision: model.revision,
+			fieldName: measureFields.has(currentMeasure) ? currentMeasure : "",
+		},
 		sourceTable: physicalModelName(model),
 		sourceLayer: model.layer,
 		targetLayer: model.layer,
@@ -73,14 +79,11 @@ export const selectedMetricModelKey = (values: IndicatorEditValues): string => {
 
 export const selectedImplementationModelKey = (
 	values: IndicatorEditValues,
-	models: readonly ModelSpecView[],
+	_models: readonly ModelSpecView[],
 ): string => {
-	const targetModelName = String(values.targetModelName || "");
-	if (!targetModelName) return "";
-	const candidates = models
-		.filter((model) => model.name === targetModelName)
-		.sort((left, right) => right.revision - left.revision);
-	return candidates.length ? metricModelKey(candidates[0]) : "";
+	const ref = values.implementationRef;
+	if (!ref) return "";
+	return `${ref.modelSpecId}@r${ref.modelRevision}`;
 };
 
 export function bindIndicatorDependencies(

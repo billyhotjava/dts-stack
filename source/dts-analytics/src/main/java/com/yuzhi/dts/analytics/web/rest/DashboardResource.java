@@ -892,7 +892,7 @@ public class DashboardResource {
             }
             if (isSemanticDatasetQuery(datasetQuery)) {
                 SemanticQueryService.SemanticExecutionResult semanticResult = semanticQueryService.executeForCard(
-                    extractSemanticQuery(datasetQuery),
+                    applyDashcardParametersToSemantic(extractSemanticQuery(datasetQuery), dashcard, body),
                     PlatformContext.from(request),
                     MetabaseAuth.currentUser(sessionService, request).map(AnalyticsUser::getId).orElse(null)
                 );
@@ -1044,6 +1044,33 @@ public class DashboardResource {
                 "error", "Dashboard classification is missing or awaiting recomputation"
             ));
         }
+    }
+
+    private JsonNode applyDashcardParametersToSemantic(JsonNode query, AnalyticsDashboardCard dashcard, JsonNode body) {
+        if (body == null || !body.path("parameters").isArray() || body.path("parameters").isEmpty()) return query;
+        if (body.path("parameters").size() > 32) throw new IllegalArgumentException("看板参数不能超过32项");
+        if (dashcard.getParameterMappingsJson() == null || dashcard.getParameterMappingsJson().isBlank()) return query;
+        JsonNode mappings;
+        try { mappings = objectMapper.readTree(dashcard.getParameterMappingsJson()); }
+        catch (Exception error) { throw new IllegalArgumentException("看板参数映射无效"); }
+        if (!mappings.isArray() || mappings.size() > 64) throw new IllegalArgumentException("看板参数映射无效");
+        ObjectNode result = query.deepCopy();
+        ArrayNode filters = result.path("filters").isArray() ? (ArrayNode) result.get("filters") : result.putArray("filters");
+        for (JsonNode mapping : mappings) {
+            String id = mapping.path("parameter_id").asText();
+            for (JsonNode parameter : body.path("parameters")) {
+                if (!id.equals(parameter.path("id").asText()) || !parameter.hasNonNull("value")) continue;
+                JsonNode target = mapping.path("target");
+                if (!target.isArray() || target.size() < 2 || !"dimension".equals(target.get(0).asText())) throw new IllegalArgumentException("指标卡片参数须映射到分析维度");
+                Long fieldId = extractFieldIdFromDimension(target.get(1));
+                AnalyticsField field = fieldId == null ? null : fieldRepository.findById(fieldId).orElse(null);
+                if (field == null) throw new IllegalArgumentException("看板参数引用字段不存在");
+                JsonNode value = parameter.get("value");
+                ObjectNode filter = filters.addObject();
+                filter.put("field", field.getName()); filter.put("op", value.isArray() ? "in" : "="); filter.set("value", value);
+            }
+        }
+        return result;
     }
 
     private JsonNode applyDashcardParametersToMbql(JsonNode mbql, AnalyticsDashboardCard dashcard, JsonNode body) {

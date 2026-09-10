@@ -117,6 +117,29 @@ public class JdbcQueryGateway implements QueryGateway {
         }
     }
 
+    @Override
+    public Map<String, Object> executeBound(String sql, UUID datasourceId, List<Object> parameters, int limit) {
+        if (datasourceId == null || limit < 1 || limit > 10001 || parameters == null || parameters.size() > 2048) {
+            throw new IllegalArgumentException("指标查询数据源或预算无效");
+        }
+        InfraDataSource ds = infraDataSourceRepository.findById(datasourceId)
+            .orElseThrow(() -> new IllegalArgumentException("指标固定数据源不存在"));
+        if (!"ACTIVE".equalsIgnoreCase(ds.getStatus()) || !"POSTGRESQL".equalsIgnoreCase(ds.getType())) {
+            throw new IllegalArgumentException("指标多维查询当前仅支持可用的 PostgreSQL 数据源");
+        }
+        try {
+            ExecutionResult result = jdbcSqlExecutor.execute(ds, sql, null, limit, null, new AtomicBoolean(false), parameters);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("headers", result.columns().stream().map(JdbcSqlExecutor.ColumnMeta::name).toList());
+            payload.put("rows", result.rows());
+            payload.put("truncated", result.truncated());
+            return payload;
+        } catch (SQLException error) {
+            LOG.warn("Bound metric query failed datasource={} state={}", datasourceId, error.getSQLState());
+            throw new IllegalStateException("指标查询失败，请使用查询编号联系管理员", error);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // Datasource resolution
     // -----------------------------------------------------------------------

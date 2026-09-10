@@ -33,18 +33,25 @@ public class CatalogModelSemanticPayloadFactory {
     private final ModelSpecReader modelSpecReader;
     private final CatalogModelSemanticIndicatorReadAdapter indicators;
     private final CatalogClassificationBoundary classifications;
+    private final com.yuzhi.dts.platform.service.governance.PublishedIndicatorVersionReader versions;
+    private final com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository projections;
 
     public CatalogModelSemanticPayloadFactory(
         ModelSpecReader modelSpecReader,
         CatalogModelSemanticIndicatorReadAdapter indicators,
-        CatalogClassificationBoundary classifications
+        CatalogClassificationBoundary classifications,
+        com.yuzhi.dts.platform.service.governance.PublishedIndicatorVersionReader versions,
+        com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository projections
     ) {
         this.modelSpecReader = modelSpecReader;
         this.indicators = indicators;
         this.classifications = classifications;
+        this.versions = versions; this.projections = projections;
     }
 
-    public PublishPayload create(SyncCandidate candidate) {
+    public PublishPayload create(SyncCandidate candidate) { return create(candidate, true); }
+
+    private PublishPayload create(SyncCandidate candidate, boolean includeLegacyMetrics) {
         ModelServingProjection projection = candidate == null ? null : candidate.projection();
         ServingRef serving = projection == null ? null : projection.servingRef();
         if (projection == null || serving == null) {
@@ -90,7 +97,7 @@ public class CatalogModelSemanticPayloadFactory {
                 field.role() == FieldRole.TIME ? "native" : null
             ))
             .toList();
-        List<MetricPayload> metrics = indicators.findPublishedAtomicIndicators(model.id(), model.revision()).stream()
+        List<MetricPayload> metrics = (includeLegacyMetrics ? indicators.findPublishedAtomicIndicators(model.id(), model.revision()) : List.<AtomicIndicator>of()).stream()
             .map(indicator -> metric(indicator, fieldsByName, securityLevel))
             .toList();
         String grain = model.grain() == null
@@ -112,6 +119,50 @@ public class CatalogModelSemanticPayloadFactory {
             dimensions,
             List.of()
         );
+    }
+
+    public PublishPayload createIndicator(com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository.IndicatorSyncCandidate candidate) {
+        var versionRef = new com.yuzhi.dts.platform.service.governance.IndicatorAnalysisContract.VersionRef(candidate.indicatorId(), candidate.indicatorVersion());
+        var indicator = versions.read(versionRef);
+        var host = host(versionRef, new java.util.HashSet<>(), new int[]{0}, 0);
+        var projection = projections.findProjection(candidate.tenantId(), host.modelSpecId())
+            .orElseThrow(() -> failure("CATALOG_MODEL_SEMANTIC_SERVING_REF_REQUIRED"));
+        if (projection.servingRef() == null || projection.servingRef().modelRevision() != host.modelRevision()) throw failure("CATALOG_MODEL_SEMANTIC_REVISION_MISMATCH");
+        var base = create(new SyncCandidate(projection, 0), false);
+        String name = "indicator_" + candidate.indicatorId().toString().replace("-", "") + "_" + candidate.indicatorVersion();
+        String assetKey = CatalogAssetKey.codeAsset(com.yuzhi.dts.platform.service.catalog.CatalogAssetType.GOV_INDICATOR, "default", indicator.getCode());
+        var metric = new MetricPayload(name, indicator.getName() + " · " + candidate.indicatorVersion(), "GOVERNED", null,
+            indicator.getUnit(), indicator.getDateColumn(), indicator.getTimeGrain(), indicator.getTags(),
+            analyticsSecurityLevel(indicator.getDataLevel()), indicator.getDefinition(), candidate.indicatorId(), candidate.indicatorVersion(), "GOV_INDICATOR", assetKey, indicator.getAnalysisConfig());
+        return new PublishPayload(base.tenantId(), base.platformDataSourceId(), base.modelName(), base.tableName(), base.schemaName(),
+            base.label(), base.description(), base.securityLevel(), base.grain(), base.specVersion(), base.exposedToModeler(),
+            List.of(metric), base.dimensions(), base.joins());
+    }
+
+    private com.yuzhi.dts.platform.service.governance.IndicatorImplementationRef host(
+        com.yuzhi.dts.platform.service.governance.IndicatorAnalysisContract.VersionRef ref,
+        java.util.Set<com.yuzhi.dts.platform.service.governance.IndicatorAnalysisContract.VersionRef> visiting, int[] expanded, int depth
+    ) {
+        if (++expanded[0] > 256 || depth > 32 || !visiting.add(ref)) throw failure("INDICATOR_DEPENDENCY_CYCLE");
+        try {
+            var indicator = versions.read(ref);
+            if (!"FORMULA".equals(indicator.getExecutionMode())) {
+                var implementation = versions.implementation(indicator);
+                if (implementation == null) throw failure("INDICATOR_IMPLEMENTATION_REQUIRED");
+                return implementation;
+            }
+            var dependencies = versions.dependencies(indicator);
+            if (dependencies.isEmpty()) throw failure("INDICATOR_DEPENDENCY_REQUIRED");
+            var hosts = dependencies.stream().map(dep -> host(dep, visiting, expanded, depth + 1)).toList();
+            var first = hosts.get(0);
+            var firstProjection = projections.findProjection("default", first.modelSpecId()).orElseThrow(() -> failure("INDICATOR_HOST_NOT_READY"));
+            for (var item : hosts) {
+                var projection = projections.findProjection("default", item.modelSpecId()).orElseThrow(() -> failure("INDICATOR_HOST_NOT_READY"));
+                if (projection.servingRef() == null || firstProjection.servingRef() == null || projection.servingRef().modelRevision() != item.modelRevision()
+                    || !Objects.equals(projection.servingRef().sourceId(), firstProjection.servingRef().sourceId())) throw failure("INDICATOR_CROSS_SOURCE_UNSUPPORTED");
+            }
+            return first;
+        } finally { visiting.remove(ref); }
     }
 
     private static MetricPayload metric(

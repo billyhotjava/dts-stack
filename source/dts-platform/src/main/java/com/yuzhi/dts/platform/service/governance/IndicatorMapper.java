@@ -18,6 +18,29 @@ final class IndicatorMapper {
 
     private IndicatorMapper() {}
 
+    static IndicatorAnalysisContract.Config readAnalysisConfig(String json) {
+        if (!StringUtils.hasText(json)) return null;
+        try { return OBJECT_MAPPER.readValue(json, IndicatorAnalysisContract.Config.class); }
+        catch (Exception error) { throw new IndicatorRequestException("指标分析配置无效"); }
+    }
+    static String writeAnalysisConfig(IndicatorAnalysisContract.Config value) {
+        if (value == null) return null;
+        try { return OBJECT_MAPPER.writeValueAsString(value); }
+        catch (Exception error) { throw new IndicatorRequestException("指标分析配置无法保存"); }
+    }
+
+    static IndicatorImplementationRef readImplementationRef(String json) {
+        if (!StringUtils.hasText(json)) return null;
+        try { return OBJECT_MAPPER.readValue(json, IndicatorImplementationRef.class); }
+        catch (Exception error) { throw new IndicatorConflictException("指标实现版本记录无效，请重新绑定"); }
+    }
+
+    static String writeImplementationRef(IndicatorImplementationRef ref) {
+        if (ref == null) return null;
+        try { return OBJECT_MAPPER.writeValueAsString(ref); }
+        catch (Exception error) { throw new IllegalStateException("无法保存指标实现版本", error); }
+    }
+
     static IndicatorDto toDto(GovIndicatorDefinition entity) {
         if (entity == null) return null;
         IndicatorDto dto = new IndicatorDto();
@@ -33,6 +56,7 @@ final class IndicatorMapper {
         dto.setSourceRefs(readSourceRefs(entity.getSourceRefs()));
         dto.setDefinition(entity.getDefinition());
         dto.setExpressionSql(entity.getExpressionSql());
+        dto.setExecutionMode(entity.getExecutionMode());
         dto.setDatasetId(entity.getDatasetId());
         dto.setOwner(entity.getOwner());
         dto.setOwnerDept(entity.getOwnerDept());
@@ -66,6 +90,8 @@ final class IndicatorMapper {
         dto.setSourceLayer(entity.getSourceLayer());
         dto.setTargetLayer(entity.getTargetLayer());
         dto.setTargetModelName(entity.getTargetModelName());
+        dto.setImplementationRef(readImplementationRef(entity.getImplementationRef()));
+        dto.setAnalysisConfig(readAnalysisConfig(entity.getAnalysisConfig()));
         // 业务属性
         dto.setUnit(entity.getUnit());
         dto.setPrecisionScale(entity.getPrecisionScale());
@@ -121,6 +147,7 @@ final class IndicatorMapper {
         }
         entity.setDefinition(trimToNull(request.getDefinition()));
         entity.setExpressionSql(trimToNull(request.getExpressionSql()));
+        entity.setExecutionMode(upperToNull(request.getExecutionMode()));
         entity.setDatasetId(trimToNull(request.getDatasetId()));
         entity.setOwner(trimToNull(request.getOwner()));
         entity.setOwnerDept(trimToNull(request.getOwnerDept()));
@@ -154,6 +181,8 @@ final class IndicatorMapper {
         entity.setSourceLayer(trimToNull(request.getSourceLayer()));
         entity.setTargetLayer(trimToNull(request.getTargetLayer()));
         entity.setTargetModelName(trimToNull(request.getTargetModelName()));
+        entity.setImplementationRef(writeImplementationRef(request.getImplementationRef()));
+        entity.setAnalysisConfig(writeAnalysisConfig(request.getAnalysisConfig()));
         // 业务属性
         entity.setUnit(trimToNull(request.getUnit()));
         entity.setPrecisionScale(request.getPrecisionScale());

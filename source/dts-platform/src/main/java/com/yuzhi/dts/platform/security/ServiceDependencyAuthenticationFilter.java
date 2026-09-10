@@ -135,6 +135,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
                 || isGetInfraDataSourceDetail(method, path)
                 || isGetRuntimeDetail(method, path)
                 || isAnalyticsDatasetContract(method, path)
+                || isPost(method, path, "/api/internal/indicators/plan")
                 || isPut(method, path, "/api/internal/reports/registrations")
                 || isAnalyticsAssetPermission(method, path)
                 || isAnalyticsClassificationConsumer(method, path);

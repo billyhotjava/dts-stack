@@ -186,6 +186,9 @@ public class IndicatorDashboardService {
             row.put("rowsProcessed", r.getRowsProcessed());
             row.put("durationMs", r.getDurationMs());
             row.put("requestId", r.getDbtRunId());
+            row.put("indicatorVersion", r.getIndicatorVersion()); row.put("dependencyVersions", r.getDependencyVersions());
+            row.put("queryId", r.getQueryId()); row.put("dataAsOf", r.getDataAsOf());
+            row.put("sourceMode", r.getSourceMode()); row.put("nullReason", r.getNullReason());
             row.put("errorMessage", r.getErrorMessage());
             history.add(row);
         }

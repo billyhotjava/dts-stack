@@ -5,6 +5,12 @@ import java.util.UUID;
 
 public interface QueryGateway {
 
+    /** Strict datasource and bound parameters; unsupported adapters must fail closed. */
+    default Map<String, Object> executeBound(String sql, UUID datasourceId, java.util.List<Object> parameters, int limit) {
+        throw new UnsupportedOperationException("当前查询适配器不支持指标参数化查询");
+    }
+
+
     /**
      * Execute a read-only query against a specific datasource, associating the execution with
      * the given {@code executionId} for chunk persistence and cancellation support.

@@ -1,6 +1,6 @@
 # F6 指标、资产与 BI 契约草案及勘察账本
 
-日期：2026-09-10；状态：DRAFT。本文件承接指标页面只读 review，不代表运行复现。仓库路径均相对根目录；行号为登记时位置，后续只补变化。
+日期：2026-09-10；状态：接口与首批范围已冻结，运行验证待 T39。本文件承接指标页面只读 review，不代表运行复现。仓库路径均相对根目录；行号为登记时位置，后续只补变化。
 
 C43–C49 为首轮登记；C50–C55 为同日第二轮只读核验补录，其中 C48 已按核验结果更正——原登记把 BI 映射 owner 指向 dts-metrics 注册类并判定映射链待核实，实际存在的是 platform serving 投影链（见 C48、C54）。
 
@@ -89,3 +89,36 @@ C43–C49 为首轮登记；C50–C55 为同日第二轮只读核验补录，其
 保留既有记录与 API，采用扩展兼容迁移；不自动回填最新版本。新旧服务滚动/回退的允许组合必须 T39 记录，不可回退的数据变化给出前向恢复办法。运行日志包含请求号、指标版本、数据源引用、查询耗时/超时、注册阶段与可重试原因，不记录凭据或敏感明细。
 
 开发目录只编辑/静态检查/review/commit/push；所有编译测试、正式构建/交付、Compose 部署在 deploy 经 ff-only 后完成。禁止容器补丁。当前工作只写规划文档。
+
+
+## 2026-09-10 编码冻结补录
+
+### 接口与持久化
+
+- 创建、更新、修订、回滚沿用原接口。新增 `implementationRef`、`executionMode`、`analysisConfig`；后者明确包含 `dimensionBindings`、`timeBinding`、`resultGrain`、`allowedAggregations`、`modifierRefs`、`predicates`、`periodRef`、`periodMode`、`missingGroupsAsZero`。字段随快照、回滚及验证签名一起保存。
+- 查询入口为 `POST /api/governance/indicators/query`，请求 `indicatorRefs,timeRange,dimensions,filters,limit,scope`。scope 为 RANGE（默认）、LATEST_PERIOD、ALL_DATA；有业务时间映射时 RANGE 必须提供区间。旧 calculate 保留，显式执行最新周期，无时间维度则全量；存量单时间键原子版本可以从固定模型还原，不重写历史快照，多时间键要求修订。
+- 返回 `columns,rows,resolvedVersions,queryId,dataAsOf,cacheHit,warnings`。dataAsOf 是本次请求开始时刻，表示当前数据查询，**不是历史数据版本或物理数据快照保留承诺**。指标版本固定口径，不固定数据内容。
+- `analysisConfig` 落当前定义 JSONB；版本表仍用 snapshot_json。运行记录新增 indicator_version、dependency_versions、query_id、source_mode、null_reason、data_as_of。原子/公式共享同一查询规划器，先按公共键聚合再对齐；所有叶子在一条 SQL 中执行。
+- 新增 serving owner 下 `modeling_catalog_indicator_serving_projection`，主键 `(tenant_id,indicator_id,indicator_version)`。每个部署数据库代表一个环境，不接受客户端传入环境；当前平台唯一治理租户为 default。版本快照作为 desired 定义；mapping 作为 applied 映射，CAS version 在领取、完成、重试时递增。已成功 v1 不会因 v2 失败而重写状态。
+- 发布/发布回滚版本在原事务内写入同步意图。原 `CatalogModelSemanticSyncWorker -> CatalogModelSemanticSyncService` 领取模型及指标版本意图；`CommandService` 是原模型状态读取/重试入口，并非 worker 执行 owner。本次指标状态接口沿 IndicatorService 扩展，同步仍由原 serving worker 负责。
+- `GET /api/governance/indicators/{id}/versions/{version}/analysis-status` 零副作用；`POST .../analysis-retry` 要求 `{expectedVersion:long}`，仅失败状态可重试；并发不匹配返回冲突。
+- MetricPayload 增加可空 indicatorId、indicatorVersion、assetType、assetKey、analysisConfig。BI 名称为 `indicator_{uuid去连字符}_{version}`，旧 MetricPayload 构造器保留。公式依固定上游选择同源宿主，不虚构结果模型。
+- BI 查询每次通过受信任服务入口 `POST /api/internal/indicators/plan` 取得计划；该入口只允许 service:dts-analytics，并逐项检查用户对当前指标、历史密级及源模型资产的 READ 权限。analytics 仍通过 AnalysisQueryGateway 执行，禁用此类查询的结果缓存。
+- 卡片保存显式 indicatorRefs，同时保留版本化 measures 供既有编辑器回显；两者必须一致。升级确认提示对所有复用该卡片的看板生效。卡片列表支持 indicatorId/indicatorVersion 过滤，仍按原权限过滤，指标页面展示可见使用记录。
+
+### 首批能力与预算
+
+- 仅支持可用 PostgreSQL 数据源、同源单语句快照；跨源拒绝。固定模型必须有匹配修订和校验和的当前服务数据；不借用最新模型补齐缺失历史版本。
+- 公共维度必须显式映射；NULL 键按 IS NOT DISTINCT FROM 合并。时间字段采用模型原生粒度，日/月/年通过已建模字段分组；不执行任意时间桶转换。业务角色、时区、粒度不兼容拒绝。
+- 修饰词沿原指标定义 owner（category=MODIFIER），周期 category=TIME_PERIOD，均固定已发布版本。首批周期支持 RANGE，界面提供本月/本年明确区间；累计、滚动、同比环比不伪装为筛选，旧窗口/SQL筛选须显式修订。
+- EQ、IN、BETWEEN 仅接收标量或标量数组；所有值走 JDBC bind。参数最多2048个，单条件100个值，外部筛选32项，合并限定128项。
+- 每请求16个指标、8个分组维度、100个唯一版本、32层依赖、256个展开节点；最终结果1–10000行，计划200000字符上限。叶子不截断，最终 limit+1 检测超限并拒绝。
+- 预计算结果按完整声明粒度查询，重复结果拒绝；首批不允许跨粒度重新聚合比率。公式缺组默认 null、显式缺组补零、SQL NULL 和零分母分别表达；查询失败不伪装为零。
+- 网关复用 JdbcSqlExecutor 的连接、查询超时和凭据解析；新增 executeBound 严格数据源定位，不回退默认库。不支持参数化的旧 adapter 明确拒绝。
+- 表/接口语法、时区转换、权限矩阵、CAS 乱序、两版本卡片结果仍须正式测试；上述为编码契约，不是通过证据。
+
+### 当前环境只读盘点
+
+2026-09-10 10:35:06+08，当前 `dts-stack-dts-pg-1` 中 gov_indicator_definition=0、gov_indicator_version=0。因此四组现存指标均为0，无法用当前业务数据构造双版本证据。早先 deploy-* 的1条指标记录属于另一环境，不能移作本环境验收。部署目录当前缺失，统一测试时按正式 Git 路径准备独立构建目录。
+
+补充：看板映射到业务时间字段时支持 YYYY-MM-DD 单日或双日期区间，按指标时区转换为半开区间，与卡片既有范围取交集；无交集明确报错。维度条件继续 AND 合并。

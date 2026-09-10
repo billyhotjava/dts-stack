@@ -105,6 +105,18 @@ public class ModelFieldIndicatorDraftService {
         indicator.setStatus("DRAFT");
         indicator.setVersion("v1");
         indicator.setMeasureField(field.name());
+        indicator.setImplementationRef(new IndicatorImplementationRef(model.id(), model.revision(), field.name()));
+        if (indicator.getAnalysisConfig() == null) {
+            java.util.Map<String, String> bindings = new java.util.LinkedHashMap<>();
+            model.fields().stream().filter(item -> item.role() != FieldRole.MEASURE).forEach(item -> bindings.put(item.name(), item.name()));
+            String timeField = model.timeSemantics() == null || model.timeSemantics().fields().isEmpty() ? null : model.timeSemantics().fields().get(0);
+            indicator.setAnalysisConfig(new IndicatorAnalysisContract.Config(bindings,
+                timeField == null ? null : new IndicatorAnalysisContract.TimeBinding("business_time", timeField, "Asia/Shanghai", "native"),
+                model.grain() == null ? java.util.List.of() : model.grain().keys(),
+                java.util.List.of(metricType == MetricType.ATOMIC ? (indicator.getAggregationType() == null ? "SUM" : indicator.getAggregationType()) : "MAX"),
+                java.util.List.of(), java.util.List.of(), null, null, false));
+        }
+
         indicator.setIsDerived(metricType != MetricType.ATOMIC);
         indicator.setTargetModelName(model.name());
         indicator.setSourceLayer(model.layer().name());

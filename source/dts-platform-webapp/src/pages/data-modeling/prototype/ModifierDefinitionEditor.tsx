@@ -1,4 +1,5 @@
 import type { IndicatorEditValues } from "@/features/modeling/indicators/indicatorDefinitionContract";
+import { IndicatorAnalysisFields } from "./IndicatorAnalysisFields";
 import type { PlanningCatalogDomain } from "./services/planningCatalogDomainService";
 
 export function ModifierDefinitionEditor({
@@ -21,9 +22,9 @@ export function ModifierDefinitionEditor({
 	return (
 		<div className="dmx-metric-scroll">
 			<section className="dmx-metric-section">
-				<h3>修饰词基本信息</h3>
+				<h3>{values.category === "TIME_PERIOD" ? "时间周期" : "修饰词"}基本信息</h3>
 				<p className="dmx-capability-note">
-					修饰词用于限定指标统计范围，例如“当期”“累计”“境内”或“已验收”。它维护可复用的业务含义和适用范围，不绑定模型度量字段，也不独立提交计算。
+					修饰词用于限定指标统计范围，例如“境内”或“已验收”；时间周期使用明确起止区间。它维护可复用的业务含义和适用范围，不绑定模型度量字段，也不独立提交计算。
 				</p>
 				<div>
 					<ModifierField label="英文缩写" required>
@@ -38,7 +39,7 @@ export function ModifierDefinitionEditor({
 						<input onChange={(event) => set("name", event.target.value)} value={String(values.name || "")} />
 					</ModifierField>
 					<ModifierField label="对象类型">
-						<input disabled value="修饰词" />
+						<input disabled value={values.category === "TIME_PERIOD" ? "时间周期" : "修饰词"} />
 					</ModifierField>
 					<ModifierField label="业务分类">
 						<select
@@ -48,7 +49,7 @@ export function ModifierDefinitionEditor({
 								const currentDomain = dataDomains.find((item) => item.id === selectedDomainId && item.parentId === id);
 								onChange({
 									...values,
-									category: "MODIFIER",
+									category: values.category || "MODIFIER",
 									businessCategoryId: id || null,
 									dataDomainId: currentDomain?.id || null,
 									domain: currentDomain?.code || null,
@@ -72,7 +73,7 @@ export function ModifierDefinitionEditor({
 								const dataDomain = dataDomains.find((item) => item.id === id);
 								onChange({
 									...values,
-									category: "MODIFIER",
+									category: values.category || "MODIFIER",
 									dataDomainId: id || null,
 									domain: dataDomain?.code || null,
 								});
@@ -102,6 +103,7 @@ export function ModifierDefinitionEditor({
 					</ModifierField>
 				</div>
 			</section>
+			<IndicatorAnalysisFields values={values} onChange={onChange} />
 		</div>
 	);
 }

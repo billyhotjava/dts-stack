@@ -88,6 +88,7 @@ public class IndicatorService {
     private final CodeAssetGrantWriter codeAssetGrantWriter;
     private final IndicatorDerivationValidationService derivationValidationService;
     private final IndicatorBusinessContextReadPort businessContexts;
+    private final com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository indicatorServing;
 
     public IndicatorService(
         GovIndicatorDefinitionRepository repository,
@@ -102,7 +103,8 @@ public class IndicatorService {
         CatalogDomainDictionaryReadPort catalogDomains,
         CodeAssetGrantWriter codeAssetGrantWriter,
         IndicatorDerivationValidationService derivationValidationService,
-        IndicatorBusinessContextReadPort businessContexts
+        IndicatorBusinessContextReadPort businessContexts,
+        com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository indicatorServing
     ) {
         this.repository = repository;
         this.versionRepository = versionRepository;
@@ -117,6 +119,7 @@ public class IndicatorService {
         this.codeAssetGrantWriter = codeAssetGrantWriter;
         this.derivationValidationService = derivationValidationService;
         this.businessContexts = businessContexts;
+        this.indicatorServing = indicatorServing;
     }
 
     @Transactional(readOnly = true)
@@ -546,7 +549,22 @@ public class IndicatorService {
         GovIndicatorDefinition saved = repository.save(entity);
         syncCodeAssetGrant(saved);
         snapshot(saved, saved.getVersion(), STATUS_PUBLISHED, saved.getVersionNotes(), Instant.now());
+        if (saved.getMetricType() != null) indicatorServing.enqueueIndicator(saved.getId(), saved.getVersion());
         return IndicatorMapper.toDto(saved);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> analysisStatus(UUID id, String version, String activeDept) {
+        getVersion(id, version, activeDept);
+        return indicatorServing.indicatorSyncState(id, version);
+    }
+
+    public Map<String, Object> retryAnalysis(UUID id, String version, long expectedVersion, String activeDept) {
+        var entity = repository.findById(id).orElseThrow(() -> new IndicatorNotFoundException("指标不存在"));
+        requireMutationAccess(entity, resolveTrustedActiveDept(activeDept));
+        getVersion(id, version, activeDept);
+        if (!indicatorServing.retryIndicatorSync(id, version, expectedVersion)) throw new IndicatorConflictException("分析注册状态已变化，请刷新后重试");
+        return indicatorServing.indicatorSyncState(id, version);
     }
 
     public IndicatorValidationResultDto validateComputeRule(UUID id, String activeDept) {
@@ -562,9 +580,11 @@ public class IndicatorService {
         String signature = computeSignature(entity);
         result.setSignature(signature);
 
-        if (IndicatorDefinitionSemantics.isModelBoundAtomic(entity)) {
-            String expectedReference = IndicatorDefinitionSemantics.expectedModelFieldReferenceTarget(entity).orElse(null);
-            if (!StringUtils.hasText(entity.getAggregationType()) || "DERIVED".equalsIgnoreCase(entity.getAggregationType())) {
+        if (IndicatorDefinitionSemantics.isModelBoundAtomic(entity) || "PRECOMPUTED".equals(entity.getExecutionMode())) {
+            var implementation = IndicatorMapper.readImplementationRef(entity.getImplementationRef());
+            String expectedReference = implementation == null ? IndicatorDefinitionSemantics.expectedModelFieldReferenceTarget(entity).orElse(null)
+                : implementation.modelSpecId() + "@" + implementation.modelRevision() + "#" + implementation.fieldName();
+            if (!"PRECOMPUTED".equals(entity.getExecutionMode()) && (!StringUtils.hasText(entity.getAggregationType()) || "DERIVED".equalsIgnoreCase(entity.getAggregationType()))) {
                 return persistValidation(entity, now, signature, result, "FAILED", "原子指标聚合方式无效", null);
             }
             if (!StringUtils.hasText(expectedReference)) {
@@ -637,8 +657,16 @@ public class IndicatorService {
             .findByIdForUpdate(id)
             .orElseThrow(() -> new IndicatorNotFoundException("指标不存在: " + id));
         requireMutationAccess(entity, trustedActiveDept);
+        IndicatorDerivationValidationResult validation;
+        if ("PRECOMPUTED".equals(entity.getExecutionMode())) {
+            var checked = validateComputeRule(id, activeDept);
+            validation = new IndicatorDerivationValidationResult("SUCCESS".equals(checked.getStatus()), null,
+                "SUCCESS".equals(checked.getStatus()) ? List.of() : List.of(new IndicatorDerivationValidationResult.Issue("PRECOMPUTED_IMPLEMENTATION_INVALID", checked.getMessage())),
+                parseDependencyCodes(entity.getDependencyIndicators()));
+        } else validation = derivationValidationService.validate(id);
         IndicatorDerivationValidationResult result = enforceDependencyAccess(
-            derivationValidationService.validate(id),
+            validation,
+            entity,
             trustedActiveDept
         );
         entity.setLastValidationStatus(result.valid() ? "SUCCESS" : "FAILED");
@@ -824,6 +852,13 @@ public class IndicatorService {
         GovIndicatorVersion snap = versionRepository
             .findByIndicatorAndVersion(entity, version)
             .orElseThrow(() -> new IndicatorNotFoundException("指标版本不存在"));
+        IndicatorDto historical = parseSnapshot(snap.getSnapshotJson());
+        if (historical == null) throw new IndicatorConflictException("指标版本快照无法读取");
+        GovIndicatorDefinition historicalLevel = new GovIndicatorDefinition();
+        historicalLevel.setDataLevel(historical.getDataLevel());
+        if (!levelAllowed(historicalLevel)) {
+            throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator version");
+        }
         return IndicatorMapper.toDto(snap);
     }
 
@@ -902,6 +937,7 @@ public class IndicatorService {
             syncCodeAssetGrant(entity);
         }
         snapshot(entity, rollbackVersion, entity.getStatus(), entity.getVersionNotes(), releasedAt);
+        if (publishAfterRollback && entity.getMetricType() != null) indicatorServing.enqueueIndicator(entity.getId(), rollbackVersion);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("indicator", IndicatorMapper.toDto(entity));
@@ -1166,6 +1202,7 @@ public class IndicatorService {
         IndicatorMapper.applyBusinessContext(entity, snapshot);
         entity.setDefinition(snapshot.getDefinition());
         entity.setExpressionSql(snapshot.getExpressionSql());
+        entity.setExecutionMode(snapshot.getExecutionMode());
         entity.setDatasetId(snapshot.getDatasetId());
         entity.setOwner(snapshot.getOwner());
         entity.setOwnerDept(snapshot.getOwnerDept());
@@ -1196,6 +1233,8 @@ public class IndicatorService {
         entity.setSourceLayer(snapshot.getSourceLayer());
         entity.setTargetLayer(snapshot.getTargetLayer());
         entity.setTargetModelName(snapshot.getTargetModelName());
+        entity.setImplementationRef(IndicatorMapper.writeImplementationRef(snapshot.getImplementationRef()));
+        entity.setAnalysisConfig(IndicatorMapper.writeAnalysisConfig(snapshot.getAnalysisConfig()));
         // 业务属性
         entity.setUnit(snapshot.getUnit());
         entity.setPrecisionScale(snapshot.getPrecisionScale());
@@ -1275,14 +1314,14 @@ public class IndicatorService {
             return;
         }
         Map<UUID, GovIndicatorDefinition> desired = new LinkedHashMap<>();
+        var pinnedDependencies = IndicatorVersionDependencies.resolve(indicator, repository, versionRepository, objectMapper);
         for (String code : parseDependencyCodes(indicator.getDependencyIndicators())) {
-            GovIndicatorDefinition dependency = repository
-                .findFirstByCodeIgnoreCase(code)
-                .orElseThrow(() -> new IndicatorRequestException("依赖指标不存在: " + code));
+            GovIndicatorDefinition dependency = pinnedDependencies.stream().filter(item -> code.equalsIgnoreCase(item.getCode())).findFirst()
+                .orElseThrow(() -> new IndicatorRequestException("依赖指标固定版本不存在: " + code));
             if (dependency.getId() == null) {
                 throw new IndicatorRequestException("依赖指标缺少稳定标识: " + code);
             }
-            if (indicator.getId().equals(dependency.getId())) {
+            if (indicator.getId().equals(dependency.getId()) && java.util.Objects.equals(indicator.getVersion(), dependency.getVersion())) {
                 throw new IndicatorRequestException("指标不能依赖自身: " + code);
             }
             desired.putIfAbsent(dependency.getId(), dependency);
@@ -1349,6 +1388,7 @@ public class IndicatorService {
 
     private IndicatorDerivationValidationResult enforceDependencyAccess(
         IndicatorDerivationValidationResult validation,
+        GovIndicatorDefinition target,
         String activeDept
     ) {
         if (validation == null) {
@@ -1360,15 +1400,17 @@ public class IndicatorService {
             );
         }
         List<IndicatorDerivationValidationResult.Issue> issues = new ArrayList<>(validation.issues());
-        for (String code : validation.dependencyCodes()) {
-            GovIndicatorDefinition dependency = repository.findFirstByCodeIgnoreCase(code).orElse(null);
-            if (dependency != null && (!deptAllowed(dependency, activeDept) || !levelAllowed(dependency))) {
-                issues.add(
-                    new IndicatorDerivationValidationResult.Issue(
-                        "DERIVATION_DEPENDENCY_ACCESS_DENIED",
-                        "当前组织或密级上下文无权使用依赖指标: " + code
-                    )
-                );
+        java.util.ArrayDeque<GovIndicatorDefinition> pending = new java.util.ArrayDeque<>();
+        pending.add(target); Set<String> checked = new LinkedHashSet<>();
+        while (!pending.isEmpty()) {
+            var parent = pending.removeFirst();
+            for (GovIndicatorDefinition pinned : IndicatorVersionDependencies.resolve(parent, repository, versionRepository, objectMapper)) {
+                if (!checked.add(pinned.getId() + "@" + pinned.getVersion())) continue;
+                if (checked.size() > 100) throw new IndicatorConflictException("依赖版本数量超过100");
+                GovIndicatorDefinition current = repository.findById(pinned.getId()).orElse(null);
+                if (current == null || !deptAllowed(current, activeDept) || !levelAllowed(current) || !levelAllowed(pinned)) {
+                    issues.add(new IndicatorDerivationValidationResult.Issue("DERIVATION_DEPENDENCY_ACCESS_DENIED", "当前上下文无权使用固定依赖版本"));
+                } else { pending.add(pinned); }
             }
         }
         boolean valid = validation.valid() && issues.size() == validation.issues().size();
@@ -1444,6 +1486,19 @@ public class IndicatorService {
             throw new IndicatorRequestException("Invalid indicator");
         }
         ensureBusinessContextDeliverable(entity);
+        var analysis = IndicatorMapper.readAnalysisConfig(entity.getAnalysisConfig());
+        if (analysis != null) {
+            var qualifiers = new ArrayList<>(analysis.modifierRefs());
+            if (analysis.periodRef() != null) qualifiers.add(analysis.periodRef());
+            for (var ref : qualifiers) {
+                var snapshot = getVersion(ref.id(), ref.version(), activeDept);
+                if (!STATUS_PUBLISHED.equals(snapshot.getStatus())) throw new IndicatorConflictException("限定规则版本尚未发布");
+                var item = parseSnapshot(snapshot.getSnapshotJson());
+                if (item == null || !List.of("MODIFIER", "TIME_PERIOD").contains(item.getCategory())) throw new IndicatorConflictException("限定规则引用类型不正确");
+                if (DataLevel.normalize(entity.getDataLevel()) == null || DataLevel.normalize(item.getDataLevel()) == null || DataLevel.normalize(entity.getDataLevel()).rank() < DataLevel.normalize(item.getDataLevel()).rank()) throw new IndicatorConflictException("指标密级不能低于限定规则");
+            }
+        }
+        if (IndicatorAnalysisValidation.qualifier(entity)) return;
         if (IndicatorDefinitionSemantics.isDerivedLike(entity)) {
             IndicatorDerivationValidationResult result = validateDerivation(entity.getId(), activeDept);
             if (!result.valid()) {
@@ -1749,6 +1804,13 @@ public class IndicatorService {
 
     private void validateUpsert(GovIndicatorDefinition entity, UUID existingId, String activeDept) {
         if (entity == null) throw new IndicatorRequestException("Invalid indicator payload");
+        if (StringUtils.hasText(entity.getExecutionMode()) &&
+            !"FORMULA".equals(entity.getExecutionMode()) && !"PRECOMPUTED".equals(entity.getExecutionMode())) {
+            throw new IndicatorRequestException("指标执行方式无效");
+        }
+        if ("FORMULA".equals(entity.getExecutionMode()) && !IndicatorDefinitionSemantics.isDerivedLike(entity)) {
+            throw new IndicatorRequestException("原子指标不能使用派生公式计算");
+        }
         if (!StringUtils.hasText(entity.getCode())) {
             throw new IndicatorRequestException("指标编码不能为空");
         }
@@ -1788,6 +1850,8 @@ public class IndicatorService {
     }
 
     private void validateBusinessContextDraft(GovIndicatorDefinition entity) {
+        IndicatorAnalysisValidation.validate(entity, false);
+        if (IndicatorAnalysisValidation.qualifier(entity)) return;
         if (!hasStableBusinessContext(entity)) {
             return;
         }
@@ -1800,13 +1864,19 @@ public class IndicatorService {
     }
 
     private void ensureBusinessContextDeliverable(GovIndicatorDefinition entity) {
+        IndicatorAnalysisValidation.validate(entity, true);
+        if (IndicatorAnalysisValidation.qualifier(entity)) return;
+        if (IndicatorDefinitionSemantics.isDerivedLike(entity)) {
+            if (!"FORMULA".equals(entity.getExecutionMode()) && !"PRECOMPUTED".equals(entity.getExecutionMode())) {
+                throw new IndicatorConflictException("发布前必须明确指标执行方式");
+            }
+            if ("PRECOMPUTED".equals(entity.getExecutionMode()) && entity.getImplementationRef() == null) {
+                throw new IndicatorConflictException("预计算指标缺少固定实现版本");
+            }
+        }
         BusinessContext target = businessContext(entity);
         List<String> dependencyCodes = parseDependencyCodes(entity.getDependencyIndicators());
-        List<GovIndicatorDefinition> upstreamIndicators = dependencyCodes
-            .stream()
-            .map(code -> repository.findFirstByCodeIgnoreCase(code).orElse(null))
-            .filter(Objects::nonNull)
-            .toList();
+        List<GovIndicatorDefinition> upstreamIndicators = IndicatorVersionDependencies.resolve(entity, repository, versionRepository, objectMapper);
         List<BusinessContext> upstream = upstreamIndicators.stream().map(this::businessContext).toList();
         var result = IndicatorBusinessContextContract.validateDeliverable(target, upstream);
         if (!result.valid()) {

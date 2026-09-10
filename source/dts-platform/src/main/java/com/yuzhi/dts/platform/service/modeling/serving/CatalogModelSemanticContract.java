@@ -40,8 +40,18 @@ public final class CatalogModelSemanticContract {
         String timeGrain,
         String tags,
         String securityLevel,
-        String description
-    ) {}
+        String description,
+        java.util.UUID indicatorId,
+        String indicatorVersion,
+        String assetType,
+        String assetKey,
+        String analysisConfig
+    ) {
+        public MetricPayload(String name, String displayName, String aggregation, String field, String unit,
+            String timeDimension, String timeGrain, String tags, String securityLevel, String description) {
+            this(name, displayName, aggregation, field, unit, timeDimension, timeGrain, tags, securityLevel, description, null, null, null, null, null);
+        }
+    }
 
     public record DimensionPayload(
         String name,

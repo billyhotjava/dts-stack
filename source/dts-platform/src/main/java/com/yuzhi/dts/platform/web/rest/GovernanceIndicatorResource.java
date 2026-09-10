@@ -928,6 +928,34 @@ public class GovernanceIndicatorResource {
 
     // dbt Generation -----------------------------------------------------------
 
+    @GetMapping("/indicators/{id}/versions/{version}/analysis-status")
+    public ApiResponse<Map<String, Object>> indicatorAnalysisStatus(@PathVariable UUID id, @PathVariable String version,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept) {
+        return ApiResponses.ok(indicators.analysisStatus(id, version, activeDept));
+    }
+
+    @PostMapping("/indicators/{id}/versions/{version}/analysis-retry")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> retryIndicatorAnalysis(@PathVariable UUID id, @PathVariable String version,
+        @RequestBody Map<String, Long> body, @RequestHeader(value = "X-Active-Dept", required = false) String activeDept) {
+        if (body.get("expectedVersion") == null) throw new IllegalArgumentException("缺少注册状态版本");
+        var result = indicators.retryAnalysis(id, version, body.get("expectedVersion"), activeDept);
+        audit.auditAction("GOV_INDICATOR_REGISTER", AuditStage.SUCCESS, id.toString(), Map.of("summary", "重试指标分析注册", "indicatorVersion", version));
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/indicators/query")
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
+    public ApiResponse<com.yuzhi.dts.platform.service.governance.IndicatorAnalysisContract.Result> queryIndicators(
+        @RequestBody com.yuzhi.dts.platform.service.governance.IndicatorAnalysisContract.Query body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        var result = indicatorCalculation.query(body, activeDept);
+        audit.auditAction("GOV_INDICATOR_CALCULATE", AuditStage.SUCCESS, result.queryId(),
+            Map.of("summary", "按固定版本分析指标", "indicatorCount", body.indicatorRefs().size(), "rowCount", result.rows().size()));
+        return ApiResponses.ok(result);
+    }
+
     @PostMapping("/indicators/calculate")
     @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     public ApiResponse<CalculationBatch> calculateIndicators(
@@ -935,8 +963,8 @@ public class GovernanceIndicatorResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<UUID> ids = parseCalculationIds(body);
-        indicators.validateGenerationAccess(ids, activeDept);
-        CalculationBatch result = indicatorCalculation.calculate(ids);
+        for (UUID id : ids) indicators.get(id, activeDept);
+        CalculationBatch result = indicatorCalculation.calculate(ids, activeDept);
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("summary", "提交已发布指标计算");
         detail.put("requestId", result.requestId());

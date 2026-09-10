@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+ <changeSet id="20260910-01-indicator-implementation-ref" author="codex">
+  <addColumn tableName="gov_indicator_definition"><column name="implementation_ref" type="jsonb"/></addColumn>
+  <sql><![CDATA[
+    WITH exact_refs AS (
+      SELECT indicator_id, min(ref_target) target FROM gov_indicator_reference
+      WHERE ref_type = 'MODEL_SPEC_FIELD'
+      GROUP BY indicator_id HAVING count(*) = 1
+    )
+    UPDATE gov_indicator_definition i
+    SET implementation_ref = jsonb_build_object(
+      'modelSpecId', split_part(r.target, '@', 1),
+      'modelRevision', split_part(split_part(r.target, '@', 2), '#', 1)::integer,
+      'fieldName', split_part(r.target, '#', 2))
+    FROM exact_refs r WHERE r.indicator_id = i.id
+      AND r.target ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}@[1-9][0-9]{0,8}#[A-Za-z_][A-Za-z0-9_]*$';
+  ]]></sql>
+  <addColumn tableName="gov_indicator_definition"><column name="execution_mode" type="varchar(24)"/></addColumn>
+  <addColumn tableName="gov_indicator_definition"><column name="analysis_config" type="jsonb"/></addColumn>
+  <addColumn tableName="gov_indicator_run">
+   <column name="indicator_version" type="varchar(32)"/>
+   <column name="dependency_versions" type="text"/>
+   <column name="query_id" type="varchar(64)"/>
+   <column name="source_mode" type="varchar(32)"/>
+   <column name="null_reason" type="varchar(64)"/>
+   <column name="data_as_of" type="timestamptz"/>
+  </addColumn>
+  <sql><![CDATA[
+    CREATE TABLE modeling_catalog_indicator_serving_projection (
+      tenant_id varchar(128) NOT NULL, indicator_id uuid NOT NULL REFERENCES gov_indicator_definition(id),
+      indicator_version varchar(32) NOT NULL, sync_status varchar(32) NOT NULL,
+      sync_attempts integer NOT NULL DEFAULT 0, version bigint NOT NULL DEFAULT 1,
+      mapping jsonb, last_sync_error varchar(500), next_sync_at timestamptz,
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (tenant_id, indicator_id, indicator_version),
+      CHECK (sync_status IN ('SYNC_PENDING','SYNCED','SYNC_FAILED'))
+    );
+    CREATE INDEX idx_indicator_serving_due ON modeling_catalog_indicator_serving_projection(next_sync_at)
+      WHERE sync_status IN ('SYNC_PENDING','SYNC_FAILED');
+    INSERT INTO modeling_catalog_indicator_serving_projection(tenant_id,indicator_id,indicator_version,sync_status,next_sync_at)
+      SELECT 'default',v.indicator_id,v.version,'SYNC_PENDING',now() FROM gov_indicator_version v JOIN gov_indicator_definition d ON d.id=v.indicator_id
+      WHERE v.status='PUBLISHED' AND d.metric_type IS NOT NULL AND coalesce(d.category,'') NOT IN ('MODIFIER','TIME_PERIOD');
+  ]]></sql>
+  <!-- Expand-only: application rollback retains this schema and changelog; never drop version history. -->
+ </changeSet>
+</databaseChangeLog>

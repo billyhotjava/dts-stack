@@ -179,6 +179,8 @@ export type CardQueryResponse = {
 export type DashboardQueryResponse = CardQueryResponse;
 
 export type SemanticQueryBody = {
+	indicatorRefs?: Array<{ id: string; version: string }>;
+	timeRange?: { fieldRef: string; start: string; endExclusive: string; timezone: string };
 	base?: string;
 	joins?: Array<{ to: string; via?: string; type?: string }>;
 	measures?: string[];
@@ -1885,6 +1887,10 @@ export type PlatformOrgNode = {
 };
 
 export const analyticsApi = {
+	listIndicatorCards: (id: string, version: string) =>
+		fetchJson<Array<{ id: number; name: string }>>(
+			`/bi/api/card?indicatorId=${encodeURIComponent(id)}&indicatorVersion=${encodeURIComponent(version)}`,
+		),
 	getCurrentUser: () => fetchJson<CurrentUser>("/bi/api/user/current"),
 	getUser: (id: number | string) =>
 		fetchJson<{ id: number; email?: string; common_name?: string; first_name?: string; last_name?: string }>(

@@ -75,7 +75,15 @@ export function MetricDefinitionBindingFields({
 					<select
 						aria-label="度量字段"
 						disabled={!selectedModel}
-						onChange={(event) => onChange({ ...values, measureField: event.target.value || null })}
+						onChange={(event) =>
+							onChange({
+								...values,
+								measureField: event.target.value || null,
+								implementationRef: values.implementationRef
+									? { ...values.implementationRef, fieldName: event.target.value }
+									: null,
+							})
+						}
 						value={String(values.measureField || "")}
 					>
 						<option value="">请选择 MEASURE 字段</option>
@@ -106,6 +114,24 @@ export function MetricDefinitionBindingFields({
 
 	return (
 		<>
+			<BindingField label="执行方式" required>
+				<select
+					value={values.executionMode || ""}
+					onChange={(event) =>
+						onChange({
+							...values,
+							executionMode: event.target.value as "FORMULA" | "PRECOMPUTED",
+							...(event.target.value === "FORMULA"
+								? { implementationRef: null, targetModelName: null, measureField: null, sourceTable: null }
+								: {}),
+						})
+					}
+				>
+					<option value="">请选择计算方式</option>
+					<option value="FORMULA">公式计算</option>
+					<option value="PRECOMPUTED">读取预计算结果</option>
+				</select>
+			</BindingField>
 			<BindingField label="上游指标版本" required wide>
 				<select
 					aria-label="上游指标版本"
@@ -140,43 +166,55 @@ export function MetricDefinitionBindingFields({
 				/>
 				<small>仅允许引用所选指标编码，不在此处录入原始 SQL。</small>
 			</BindingField>
-			<BindingField label="实现模型" required>
-				<select
-					aria-label="实现模型"
-					onChange={(event) =>
-						onChange(
-							bindMetricImplementationModel(
-								values,
-								availableModels.find((model) => metricModelKey(model) === event.target.value) || null,
-							),
-						)
-					}
-					value={selectedImplementationKey}
-				>
-					<option value="">请选择已发布的指标实现模型</option>
-					{availableModels.map((model) => (
-						<option key={metricModelKey(model)} value={metricModelKey(model)}>
-							{model.name}（{model.layer} · r{model.revision}）
-						</option>
-					))}
-				</select>
-			</BindingField>
-			<BindingField label="结果字段" required>
-				<select
-					aria-label="结果字段"
-					disabled={!selectedImplementation}
-					onChange={(event) => onChange({ ...values, measureField: event.target.value || null })}
-					value={String(values.measureField || "")}
-				>
-					<option value="">请选择 MEASURE 结果字段</option>
-					{implementationFields.map((field) => (
-						<option key={field.name} value={field.name}>
-							{field.displayName || field.name}（{field.name}）
-						</option>
-					))}
-				</select>
-				<small>业务公式定义语义；实现模型字段用于上线后的真实计算与追溯。</small>
-			</BindingField>
+			{values.executionMode === "PRECOMPUTED" ? (
+				<>
+					<BindingField label="实现模型" required>
+						<select
+							aria-label="实现模型"
+							onChange={(event) =>
+								onChange(
+									bindMetricImplementationModel(
+										values,
+										availableModels.find((model) => metricModelKey(model) === event.target.value) || null,
+									),
+								)
+							}
+							value={selectedImplementationKey}
+						>
+							<option value="">请选择已发布的指标实现模型</option>
+							{availableModels.map((model) => (
+								<option key={metricModelKey(model)} value={metricModelKey(model)}>
+									{model.name}（{model.layer} · r{model.revision}）
+								</option>
+							))}
+						</select>
+					</BindingField>
+					<BindingField label="结果字段" required>
+						<select
+							aria-label="结果字段"
+							disabled={!selectedImplementation}
+							onChange={(event) =>
+								onChange({
+									...values,
+									measureField: event.target.value || null,
+									implementationRef: values.implementationRef
+										? { ...values.implementationRef, fieldName: event.target.value }
+										: null,
+								})
+							}
+							value={String(values.measureField || "")}
+						>
+							<option value="">请选择 MEASURE 结果字段</option>
+							{implementationFields.map((field) => (
+								<option key={field.name} value={field.name}>
+									{field.displayName || field.name}（{field.name}）
+								</option>
+							))}
+						</select>
+						<small>预计算模式读取固定模型结果；当前单值计算要求所选周期只有一行结果，不对比率取最大值。</small>
+					</BindingField>
+				</>
+			) : null}
 		</>
 	);
 }
