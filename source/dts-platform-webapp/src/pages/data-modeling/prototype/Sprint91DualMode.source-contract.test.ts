@@ -71,6 +71,11 @@ describe("Sprint-92 unified authoring source contracts", () => {
 		expect(submit).toContain("existing.baseModelRevision !== authoringContext?.model.revision");
 		expect(submit).toContain("existing.baseModelChecksum !== authoringContext?.model.checksum");
 		expect(submit).toContain("shouldPersistBeforeAuthoringValidation(existing.state, dirty || baseChanged, codeDirty)");
+		expect(session).toContain("...open.modelSpecSnapshot,");
+		expect(session).toContain("modelSpec: currentDefinition");
+		expect(session).toContain(
+			"modelDraftToUpdateCommand(modelDraftFromView(value.model, value.implementation || null))",
+		);
 		expect(submit.indexOf("await persist(activeView)")).toBeLessThan(
 			submit.indexOf("await validateModelAuthoringDraft"),
 		);

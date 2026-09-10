@@ -22,6 +22,7 @@ import {
 	type ModelDraftValidationErrors,
 	type ModelWorkbenchContext,
 	modelDraftFromAuthoringSnapshot,
+	modelDraftFromView,
 	modelDraftToAuthoringSnapshot,
 	modelDraftToUpdateCommand,
 	normalizeModelDraftImplementation,
@@ -418,10 +419,25 @@ export function useModelAuthoringSession({
 						modelDraftFromAuthoringSnapshot(value.model, value.implementation || null, open.modelSpecSnapshot),
 					);
 				} else if (open && !matchesCurrentDefinition) {
-					setConflict(true);
-					setAuthoringFailure(
-						"实现草稿基于旧模型版本，已保留当前模型设计。请核对旧草稿后重新开始编辑，不可直接提交旧版本实现。",
-					);
+					if (open.modelSpecSnapshot && "modelSpec" in open.modelSpecSnapshot) {
+						const currentDefinition = modelDraftToUpdateCommand(
+							modelDraftFromView(value.model, value.implementation || null),
+						);
+						replaceDraft(
+							modelDraftFromAuthoringSnapshot(value.model, value.implementation || null, {
+								...open.modelSpecSnapshot,
+								modelSpec: currentDefinition,
+							}),
+						);
+						setAuthoringFailure(
+							"模型定义已更新，已保留实现配置与 SQL。请核对后重新提交，系统将按当前模型版本重新校验。",
+						);
+					} else {
+						setConflict(true);
+						setAuthoringFailure(
+							"实现草稿基于旧模型版本，已保留当前模型设计。请核对旧草稿后重新开始编辑，不可直接提交旧版本实现。",
+						);
+					}
 				}
 				return true;
 			} catch (error) {
