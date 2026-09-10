@@ -1259,6 +1259,12 @@ pack_deployment() {
   mkdir -p "${pack_dir}/services/dts-dbt"
   cp "${REPO_ROOT}/services/dts-dbt/dbt_project.yml" "${pack_dir}/services/dts-dbt/" 2>/dev/null || true
   cp "${REPO_ROOT}/services/dts-dbt/run-tests.sh" "${pack_dir}/services/dts-dbt/" 2>/dev/null || true
+  if [[ ! -f "${REPO_ROOT}/services/dts-dbt/run-model-build.sh" ]]; then
+    echo "[dts-build] ERROR: required dbt runtime launcher is missing: services/dts-dbt/run-model-build.sh" >&2
+    rm -rf "${tmp_dir}"
+    return 1
+  fi
+  cp "${REPO_ROOT}/services/dts-dbt/run-model-build.sh" "${pack_dir}/services/dts-dbt/"
 
   # Every model-path declared by dbt_project.yml must exist in the offline
   # package. The canonical models/ tree is populated by model imports, so only
@@ -1359,16 +1365,11 @@ pack_deployment() {
   mkdir -p "${pack_dir}/logs"
   mkdir -p "${pack_dir}/services/dts-pg/data"
   mkdir -p "${pack_dir}/services/dts-airflow/dags"
-  # Ship the static release-build DAG; site-generated DAGs remain site-owned.
-  local release_dag="services/dts-airflow/dags/dts_release_build_postgres_primary.py"
-  if [[ ! -f "${REPO_ROOT}/${release_dag}" ]]; then
-    echo "[dts-build] ERROR: required release-build DAG is missing: ${release_dag}" >&2
-    rm -rf "${tmp_dir}"
-    return 1
-  fi
-  cp "${REPO_ROOT}/${release_dag}" "${pack_dir}/${release_dag}"
+  # DbtDagService.ensureReleaseBuildDag generates release DAGs at dispatch.
+  # Keep this directory empty: local DAGs can contain site-specific binding IDs.
   local required_runtime_file
   for required_runtime_file in \
+    services/dts-dbt/run-model-build.sh \
     services/dts-airflow/extra/dts_runtime/dbt_task_factory.py \
     bin/lib/dts-runtime-files.sh
   do

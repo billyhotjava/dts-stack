@@ -30,8 +30,9 @@ mkdir -p \
 cp "${REPO_ROOT}/builds/dts-build.sh" "${TEST_REPO}/builds/dts-build.sh"
 cp "${REPO_ROOT}/builds/write-release-metadata.py" "${TEST_REPO}/builds/write-release-metadata.py"
 mkdir -p "${TEST_REPO}/services/dts-airflow/dags"
-cp "${REPO_ROOT}/services/dts-airflow/dags/dts_release_build_postgres_primary.py" \
+printf '%s\n' '# site-generated DAG must not ship' > \
   "${TEST_REPO}/services/dts-airflow/dags/dts_release_build_postgres_primary.py"
+cp "${REPO_ROOT}/services/dts-dbt/run-model-build.sh" "${TEST_REPO}/services/dts-dbt/"
 mkdir -p "${TEST_REPO}/services/dts-airflow/extra/dts_runtime"
 cp "${REPO_ROOT}/services/dts-airflow/extra/dts_runtime/dbt_task_factory.py" \
   "${TEST_REPO}/services/dts-airflow/extra/dts_runtime/dbt_task_factory.py"
@@ -251,7 +252,17 @@ assert manifest['runtimeFilesRequired'] is True
 assert manifest['imagesIncluded'] is False
 PY
 (cd "${PACKAGE_EXTRACT}" && sha256sum -c extra/files-checksums.txt >/dev/null)
-test -f "${PACKAGE_EXTRACT}/dts-stack/services/dts-airflow/dags/dts_release_build_postgres_primary.py"
+test ! -e "${PACKAGE_EXTRACT}/dts-stack/services/dts-airflow/dags/dts_release_build_postgres_primary.py"
+cmp "${REPO_ROOT}/services/dts-dbt/run-model-build.sh" \
+  "${PACKAGE_EXTRACT}/dts-stack/services/dts-dbt/run-model-build.sh"
+mv "${TEST_REPO}/services/dts-dbt/run-model-build.sh" "${TMP_DIR}/run-model-build.sh"
+if PATH="${FAKE_BIN}:${PATH}" "${TEST_REPO}/builds/dts-build.sh" --pack --no-images \
+  --output "${TMP_DIR}/missing-launcher.tar.gz" >"${TMP_DIR}/missing-launcher.log" 2>&1; then
+  echo "package unexpectedly succeeded without the dbt runtime launcher" >&2
+  exit 1
+fi
+grep -q 'required dbt runtime launcher is missing' "${TMP_DIR}/missing-launcher.log"
+mv "${TMP_DIR}/run-model-build.sh" "${TEST_REPO}/services/dts-dbt/run-model-build.sh"
 
 if grep -qx 'dts-stack/services/dts-dbt/profiles/profiles.yml' <<<"${ARCHIVE_CONTENTS}"; then
   echo "deployment package leaked the local dbt profiles.yml" >&2
