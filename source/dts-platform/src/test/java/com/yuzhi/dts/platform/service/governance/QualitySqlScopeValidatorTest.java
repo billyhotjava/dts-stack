@@ -176,6 +176,79 @@ class QualitySqlScopeValidatorTest {
             .isFalse();
     }
 
+    @Test
+    void acceptsTheTrimFamilyThatIsSemanticallyIdenticalToTheAllowedTrim() {
+        // PostgreSQL TRIM(x) is btrim(x); rejecting only the explicit spelling was a trap, not a boundary.
+        assertThat(allowed("SELECT * FROM public.ods_budget_v2 WHERE project_no IS NULL OR BTRIM(project_no) = ''"))
+            .isTrue();
+        assertThat(allowed("SELECT id FROM public.ods_budget_v2 WHERE LTRIM(project_no) = ''")).isTrue();
+        assertThat(allowed("SELECT id FROM public.ods_budget_v2 WHERE RTRIM(project_no) = ''")).isTrue();
+        assertThat(allowed("SELECT id FROM public.ods_budget_v2 WHERE btrim(CAST(project_no AS text)) = ''")).isTrue();
+    }
+
+    @Test
+    void namesTheRejectedConstructSoOperatorsDoNotHaveToReadTheValidator() {
+        QualitySqlScopeValidator.ScopeCheck unsupportedFunction = check(
+            "SELECT lower(project_no) FROM public.ods_budget_v2"
+        );
+        assertThat(unsupportedFunction.allowed()).isFalse();
+        assertThat(unsupportedFunction.reasonCode()).isEqualTo("UNSUPPORTED_FUNCTION");
+        assertThat(unsupportedFunction.detail()).isEqualTo("lower");
+        assertThat(unsupportedFunction.message()).contains("lower").contains("btrim");
+
+        QualitySqlScopeValidator.ScopeCheck outOfScope = check(
+            "SELECT b.id, s.secret FROM public.ods_budget_v2 b, private.customer_secret s"
+        );
+        assertThat(outOfScope.allowed()).isFalse();
+        assertThat(outOfScope.reasonCode()).isEqualTo("OUT_OF_SCOPE_TABLE");
+        assertThat(outOfScope.message()).contains("绑定资产以外的表");
+
+        QualitySqlScopeValidator.ScopeCheck unsupportedCast = check(
+            "SELECT CAST(project_no AS custom_type) FROM public.ods_budget_v2"
+        );
+        assertThat(unsupportedCast.allowed()).isFalse();
+        assertThat(unsupportedCast.reasonCode()).isEqualTo("UNSUPPORTED_CAST_TYPE");
+        assertThat(unsupportedCast.detail()).isEqualTo("custom_type");
+
+        QualitySqlScopeValidator.ScopeCheck unsupportedSource = QualitySqlScopeValidator.checkScope(
+            "SELECT id FROM public.ods_budget_v2",
+            "public",
+            "ods_budget_v2",
+            "CLICKHOUSE"
+        );
+        assertThat(unsupportedSource.allowed()).isFalse();
+        assertThat(unsupportedSource.reasonCode()).isEqualTo("UNSUPPORTED_SOURCE_TYPE");
+        assertThat(unsupportedSource.detail()).isEqualTo("CLICKHOUSE");
+
+        QualitySqlScopeValidator.ScopeCheck unparseable = check("SELECT FROM");
+        assertThat(unparseable.allowed()).isFalse();
+        assertThat(unparseable.reasonCode()).isEqualTo("UNPARSEABLE_SQL");
+
+        QualitySqlScopeValidator.ScopeCheck pivot = QualitySqlScopeValidator.checkScope(
+            "SELECT * FROM public.ods_budget_v2 UNPIVOT (value FOR attribute IN (project_no)) u",
+            "public",
+            "ods_budget_v2",
+            "INCEPTOR"
+        );
+        assertThat(pivot.allowed()).isFalse();
+        assertThat(pivot.reasonCode()).isEqualTo("UNSUPPORTED_SYNTAX");
+
+        // An allowed function carrying a smuggled subquery must not be reported as "not in the allowlist".
+        QualitySqlScopeValidator.ScopeCheck smuggledClause = check(
+            "SELECT count(id ORDER BY (SELECT secret FROM private.customer_secret LIMIT 1)) FROM public.ods_budget_v2"
+        );
+        assertThat(smuggledClause.allowed()).isFalse();
+        assertThat(smuggledClause.reasonCode()).isEqualTo("UNSUPPORTED_SYNTAX");
+        assertThat(smuggledClause.message()).contains("count").doesNotContain("不在质量检测允许清单内");
+
+        assertThat(check("SELECT id FROM public.ods_budget_v2").allowed()).isTrue();
+        assertThat(check("SELECT id FROM public.ods_budget_v2").message()).isEmpty();
+    }
+
+    private static QualitySqlScopeValidator.ScopeCheck check(String sql) {
+        return QualitySqlScopeValidator.checkScope(sql, "public", "ods_budget_v2", "POSTGRESQL");
+    }
+
     private static boolean allowed(String sql) {
         return QualitySqlScopeValidator.referencesOnlyBoundTable(sql, "public", "ods_budget_v2", "POSTGRESQL");
     }

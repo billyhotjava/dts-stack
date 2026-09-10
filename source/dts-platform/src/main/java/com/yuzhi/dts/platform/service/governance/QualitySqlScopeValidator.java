@@ -48,45 +48,112 @@ import org.springframework.util.StringUtils;
 final class QualitySqlScopeValidator {
 
     private static final int PARSE_TIMEOUT_MILLIS = 2_000;
-    private static final Set<String> SAFE_FUNCTIONS = Set.of("count", "round", "nullif", "sum", "trim");
+    private static final Set<String> SAFE_FUNCTIONS = Set.of(
+        "btrim",
+        "count",
+        "ltrim",
+        "nullif",
+        "round",
+        "rtrim",
+        "sum",
+        "trim"
+    );
     private static final Set<String> SAFE_CAST_TYPES = Set.of("numeric", "text", "string");
 
     private QualitySqlScopeValidator() {}
 
+    /**
+     * Outcome of one scope check. A denial always names the construct that failed so operators do
+     * not have to read this class to understand why their statement was rejected.
+     */
+    record ScopeCheck(boolean allowed, String reasonCode, String detail) {
+        static ScopeCheck ok() {
+            return new ScopeCheck(true, null, null);
+        }
+
+        static ScopeCheck denied(String reasonCode, String detail) {
+            return new ScopeCheck(false, reasonCode, detail);
+        }
+
+        String message() {
+            if (allowed) {
+                return "";
+            }
+            return switch (reasonCode) {
+                case "UNSUPPORTED_SOURCE_TYPE" -> "检测资产的数据源类型不支持质量检测 SQL 解析：" + detail;
+                case "INVALID_BOUND_TABLE" -> "绑定资产的库表名不是规范标识符：" + detail;
+                case "UNPARSEABLE_SQL" -> "检测 SQL 无法解析为单条只读查询：" + detail;
+                case "UNSUPPORTED_FUNCTION" -> "函数 " + detail + " 不在质量检测允许清单内，当前允许：" + allowedFunctions();
+                case "UNSUPPORTED_CAST_TYPE" -> "CAST 目标类型 " + detail + " 不在允许清单内，当前允许：" + allowedCastTypes();
+                case "UNSUPPORTED_SYNTAX" -> "检测 SQL 使用了不受支持的语法：" + detail;
+                case "NO_TABLE_REFERENCE" -> "检测 SQL 未引用任何物理表";
+                case "OUT_OF_SCOPE_TABLE" -> "检测 SQL 引用了绑定资产以外的表：" + detail;
+                default -> "检测 SQL 未通过绑定资产校验：" + reasonCode;
+            };
+        }
+    }
+
+    private static String allowedFunctions() {
+        return String.join("、", SAFE_FUNCTIONS.stream().sorted().toList());
+    }
+
+    private static String allowedCastTypes() {
+        return String.join("、", SAFE_CAST_TYPES.stream().sorted().toList());
+    }
+
     static boolean referencesOnlyBoundTable(String sql, String boundSchema, String boundTable, String sourceType) {
-        if (!StringUtils.hasText(sql) || !StringUtils.hasText(boundSchema) || !StringUtils.hasText(boundTable)) {
-            return false;
+        return checkScope(sql, boundSchema, boundTable, sourceType).allowed();
+    }
+
+    static ScopeCheck checkScope(String sql, String boundSchema, String boundTable, String sourceType) {
+        if (!StringUtils.hasText(sql)) {
+            return ScopeCheck.denied("UNPARSEABLE_SQL", "语句为空");
+        }
+        if (!StringUtils.hasText(boundSchema) || !StringUtils.hasText(boundTable)) {
+            return ScopeCheck.denied("INVALID_BOUND_TABLE", "绑定资产缺少库名或表名");
         }
         IdentifierDialect identifierDialect = IdentifierDialect.forSource(sourceType);
-        if (identifierDialect == null || !isCanonicalBoundIdentifier(boundTable, identifierDialect)) {
-            return false;
+        if (identifierDialect == null) {
+            return ScopeCheck.denied("UNSUPPORTED_SOURCE_TYPE", String.valueOf(sourceType));
+        }
+        if (!isCanonicalBoundIdentifier(boundTable, identifierDialect)) {
+            return ScopeCheck.denied("INVALID_BOUND_TABLE", boundTable);
         }
         if (!isCanonicalBoundIdentifier(boundSchema, identifierDialect)) {
-            return false;
+            return ScopeCheck.denied("INVALID_BOUND_TABLE", boundSchema);
         }
         try {
             Statements statements = CCJSqlParserUtil.parseStatements(sql, parser ->
                 configureParser(parser, identifierDialect)
             );
             if (statements.size() != 1) {
-                return false;
+                return ScopeCheck.denied("UNPARSEABLE_SQL", "只允许一条语句，实际 " + statements.size() + " 条");
             }
             Statement statement = statements.get(0);
             if (!(statement instanceof Select select)) {
-                return false;
+                return ScopeCheck.denied("UNPARSEABLE_SQL", "只允许 SELECT 查询");
             }
 
             SecurityTablesFinder finder = new SecurityTablesFinder(identifierDialect);
             Set<String> references = finder.getTables((Statement) select);
-            if (finder.unsafe() || references.isEmpty()) {
-                return false;
+            if (finder.rejected()) {
+                return ScopeCheck.denied(finder.reasonCode(), finder.detail());
             }
-            return references
+            if (references.isEmpty()) {
+                return ScopeCheck.denied("NO_TABLE_REFERENCE", null);
+            }
+            String outOfScope = references
                 .stream()
-                .allMatch(reference -> matchesBoundTable(reference, boundSchema, boundTable, identifierDialect));
-        } catch (Exception ignored) {
+                .filter(reference -> !matchesBoundTable(reference, boundSchema, boundTable, identifierDialect))
+                .findFirst()
+                .orElse(null);
+            if (outOfScope != null) {
+                return ScopeCheck.denied("OUT_OF_SCOPE_TABLE", outOfScope);
+            }
+            return ScopeCheck.ok();
+        } catch (Exception parseFailure) {
             // Parser errors, timeouts, and unsupported dialect constructs are denied by design.
-            return false;
+            return ScopeCheck.denied("UNPARSEABLE_SQL", "解析失败");
         }
     }
 
@@ -192,14 +259,35 @@ final class QualitySqlScopeValidator {
     private static final class SecurityTablesFinder extends TablesNamesFinder<Void> {
 
         private final IdentifierDialect identifierDialect;
-        private boolean unsafe;
+        private String reasonCode;
+        private String detail;
 
         private SecurityTablesFinder(IdentifierDialect identifierDialect) {
             this.identifierDialect = identifierDialect;
         }
 
-        boolean unsafe() {
-            return unsafe;
+        boolean rejected() {
+            return reasonCode != null;
+        }
+
+        String reasonCode() {
+            return reasonCode;
+        }
+
+        String detail() {
+            return detail;
+        }
+
+        /** First rejection wins so the reported reason is the one nearest the author's intent. */
+        private void reject(String reasonCode, String detail) {
+            if (this.reasonCode == null) {
+                this.reasonCode = reasonCode;
+                this.detail = detail;
+            }
+        }
+
+        private void rejectSyntax(String detail) {
+            reject("UNSUPPORTED_SYNTAX", detail);
         }
 
         @Override
@@ -210,16 +298,15 @@ final class QualitySqlScopeValidator {
                 select.getJoins().forEach(join -> {
                     inspectFromItem(join.getRightItem());
                     if (join.isApply() || join.isWindowJoin() || join.getJoinWindow() != null || join.getJoinHint() != null) {
-                        unsafe = true;
+                        rejectSyntax("APPLY/窗口 JOIN 或 JOIN 提示");
                     }
                 });
             }
-            if (
-                hasUnsafeSelectOptions(select) ||
-                select.getIntoTempTable() != null ||
-                (select.getIntoTables() != null && !select.getIntoTables().isEmpty())
-            ) {
-                unsafe = true;
+            if (hasUnsafeSelectOptions(select)) {
+                rejectSyntax("FOR UPDATE/锁定子句");
+            }
+            if (select.getIntoTempTable() != null || (select.getIntoTables() != null && !select.getIntoTables().isEmpty())) {
+                rejectSyntax("SELECT INTO");
             }
             Void result = super.visit(select, context);
             inspectSelectTail(select, context);
@@ -230,7 +317,9 @@ final class QualitySqlScopeValidator {
         @Override
         public <S> Void visit(ParenthesedSelect select, S context) {
             inspectFromItem(select);
-            unsafe |= hasUnsafeSelectOptions(select);
+            if (hasUnsafeSelectOptions(select)) {
+                rejectSyntax("FOR UPDATE/锁定子句");
+            }
             Void result = super.visit(select, context);
             inspectSelectTail(select, context);
             return result;
@@ -239,7 +328,9 @@ final class QualitySqlScopeValidator {
         @Override
         public <S> Void visit(SetOperationList select, S context) {
             inspectFromItem(select);
-            unsafe |= hasUnsafeSelectOptions(select);
+            if (hasUnsafeSelectOptions(select)) {
+                rejectSyntax("FOR UPDATE/锁定子句");
+            }
             Void result = super.visit(select, context);
             inspectSelectTail(select, context);
             return result;
@@ -248,7 +339,9 @@ final class QualitySqlScopeValidator {
         @Override
         public <S> Void visit(TableStatement select, S context) {
             inspectFromItem(select);
-            unsafe |= hasUnsafeSelectOptions(select);
+            if (hasUnsafeSelectOptions(select)) {
+                rejectSyntax("FOR UPDATE/锁定子句");
+            }
             Void result = super.visit(select, context);
             inspectSelectTail(select, context);
             return result;
@@ -257,7 +350,9 @@ final class QualitySqlScopeValidator {
         @Override
         public <S> Void visit(Values select, S context) {
             inspectFromItem(select);
-            unsafe |= hasUnsafeSelectOptions(select);
+            if (hasUnsafeSelectOptions(select)) {
+                rejectSyntax("FOR UPDATE/锁定子句");
+            }
             Void result = super.visit(select, context);
             inspectSelectTail(select, context);
             return result;
@@ -283,7 +378,7 @@ final class QualitySqlScopeValidator {
                 select.getPreferringClause() != null ||
                 select.getKsqlWindow() != null
             ) {
-                unsafe = true;
+                rejectSyntax("LATERAL VIEW/窗口定义/PREFERRING");
             }
         }
 
@@ -300,7 +395,7 @@ final class QualitySqlScopeValidator {
                 inspectExpression(select.getFetch().getExpression(), context);
             }
             if (select.getPivot() != null || select.getUnPivot() != null) {
-                unsafe = true;
+                rejectSyntax("PIVOT/UNPIVOT");
             }
         }
 
@@ -324,7 +419,7 @@ final class QualitySqlScopeValidator {
                 fromItem != null &&
                 (fromItem.getPivot() != null || fromItem.getUnPivot() != null || fromItem.getSampleClause() != null)
             ) {
-                unsafe = true;
+                rejectSyntax("PIVOT/UNPIVOT/TABLESAMPLE");
             }
         }
 
@@ -332,7 +427,7 @@ final class QualitySqlScopeValidator {
         public <S> Void visit(Table table, S context) {
             inspectFromItem(table);
             if (table.getIndexHint() != null || table.getSqlServerHints() != null) {
-                unsafe = true;
+                rejectSyntax("表级索引提示");
             }
             return super.visit(table, context);
         }
@@ -345,19 +440,19 @@ final class QualitySqlScopeValidator {
 
         @Override
         public <S> Void visit(LateralSubSelect select, S context) {
-            unsafe = true;
+            rejectSyntax("LATERAL 子查询");
             return null;
         }
 
         @Override
         public <S> Void visit(TableFunction tableFunction, S context) {
-            unsafe = true;
+            rejectSyntax("表函数");
             return null;
         }
 
         @Override
         public <S> Void visit(FromQuery fromQuery, S context) {
-            unsafe = true;
+            rejectSyntax("FROM 管道查询");
             return null;
         }
 
@@ -365,9 +460,13 @@ final class QualitySqlScopeValidator {
         public <S> Void visit(Function function, S context) {
             List<String> nameParts = function.getMultipartName();
             String name = nameParts != null && nameParts.size() == 1 ? nameParts.get(0) : null;
-            if (
-                !StringUtils.hasText(name) ||
-                !SAFE_FUNCTIONS.contains(name.toLowerCase(Locale.ROOT)) ||
+            if (!StringUtils.hasText(name) || !SAFE_FUNCTIONS.contains(name.toLowerCase(Locale.ROOT))) {
+                reject(
+                    "UNSUPPORTED_FUNCTION",
+                    StringUtils.hasText(name) ? name.toLowerCase(Locale.ROOT) : String.valueOf(function.getName())
+                );
+            } else if (
+                // The name is allowed, but these clauses can smuggle subqueries into an allowed call.
                 function.getNamedParameters() != null ||
                 function.getAttribute() != null ||
                 function.getHavingClause() != null ||
@@ -375,7 +474,7 @@ final class QualitySqlScopeValidator {
                 function.getLimit() != null ||
                 (function.getOrderByElements() != null && !function.getOrderByElements().isEmpty())
             ) {
-                unsafe = true;
+                rejectSyntax("函数 " + name.toLowerCase(Locale.ROOT) + " 携带不受支持的子句（ORDER BY/LIMIT/HAVING/KEEP/具名参数）");
             }
             return super.visit(function, context);
         }
@@ -391,7 +490,7 @@ final class QualitySqlScopeValidator {
                 // PostgreSQL type literals such as schema.custom_type 'value' are parsed by
                 // JSqlParser as a qualified Column plus a single-quoted alias. Reject that
                 // ambiguous shape so it cannot bypass the CAST target-type allowlist.
-                unsafe = true;
+                rejectSyntax("不受支持的列别名：" + aliasName);
             }
             inspectExpression(selectItem.getExpression(), context);
             return null;
@@ -431,68 +530,68 @@ final class QualitySqlScopeValidator {
                 (expression.getColumnDefinitions() != null && !expression.getColumnDefinitions().isEmpty()) ||
                 StringUtils.hasText(expression.getFormat())
             ) {
-                unsafe = true;
+                reject("UNSUPPORTED_CAST_TYPE", StringUtils.hasText(typeName) ? typeName : "未知");
             }
             return super.visit(expression, context);
         }
 
         @Override
         public <S> Void visit(NextValExpression expression, S context) {
-            unsafe = true;
+            rejectSyntax("NEXTVAL 序列表达式");
             return null;
         }
 
         @Override
         public <S> Void visit(VariableAssignment expression, S context) {
-            unsafe = true;
+            rejectSyntax("变量赋值");
             return null;
         }
 
         @Override
         public <S> Void visit(TranscodingFunction expression, S context) {
-            unsafe = true;
+            rejectSyntax("转码函数");
             return null;
         }
 
         @Override
         public <S> Void visit(AnalyticExpression expression, S context) {
-            unsafe = true;
+            rejectSyntax("窗口/分析函数");
             return null;
         }
 
         @Override
         public <S> Void visit(ExtractExpression expression, S context) {
-            unsafe = true;
+            rejectSyntax("EXTRACT 表达式");
             return null;
         }
 
         @Override
         public <S> Void visit(MySQLGroupConcat expression, S context) {
-            unsafe = true;
+            rejectSyntax("GROUP_CONCAT");
             return null;
         }
 
         @Override
         public <S> Void visit(TimeKeyExpression expression, S context) {
-            unsafe = true;
+            rejectSyntax("时间关键字表达式");
             return null;
         }
 
         @Override
         public <S> Void visit(XMLSerializeExpr expression, S context) {
-            unsafe = true;
+            rejectSyntax("XMLSERIALIZE");
             return null;
         }
 
         @Override
         public <S> Void visit(JsonAggregateFunction expression, S context) {
-            unsafe = true;
+            rejectSyntax("JSON 聚合函数");
             return null;
         }
 
         @Override
         public <S> Void visit(JsonFunction expression, S context) {
-            unsafe = true;
+            rejectSyntax("JSON 函数");
             return null;
         }
     }

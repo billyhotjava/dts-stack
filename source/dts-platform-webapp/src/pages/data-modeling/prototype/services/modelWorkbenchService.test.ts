@@ -830,13 +830,20 @@ describe("model workbench draft validation", () => {
 		expect(emptyModelDraft("summary", context)).toMatchObject({ warehouseLayerCode: "DWS" });
 		expect(emptyModelDraft("application", context)).toMatchObject({ warehouseLayerCode: "ADS" });
 		expect(emptyModelDraft("fact", context)).toMatchObject({
-			planId: "plan-1",
+			planId: "",
 			implementationInputMode: "PHYSICAL_ASSET",
 			factShape: "",
 			timeSemanticsType: "",
 		});
 		expect(emptyModelDraft("summary", context)).toMatchObject({ implementationInputMode: "UPSTREAM_MODEL" });
 		expect(emptyModelDraft("application", context)).toMatchObject({ implementationInputMode: "UPSTREAM_MODEL" });
+	});
+
+	it.each(["source", "dimension-table", "fact", "summary", "application"] as const)("leaves %s context resolution to the server", (kind) => {
+		const context = { planId: "legacy-plan", domains: [], implementationCapabilities } as never;
+		const draft = emptyModelDraft(kind, context) as ModelSpecDraft;
+		expect(draft.planId).toBe("");
+		expect(draft.creationOperationId).toBeTruthy();
 	});
 
 	it("uses the canonical domain id for new draft domain binding", () => {

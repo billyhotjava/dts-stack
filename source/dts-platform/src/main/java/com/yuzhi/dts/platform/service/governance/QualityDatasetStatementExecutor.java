@@ -119,13 +119,14 @@ public class QualityDatasetStatementExecutor {
                         );
                         continue;
                     }
-                    if (!referencesOnlyBoundTable(sql, boundTable, sourceType)) {
+                    QualitySqlScopeValidator.ScopeCheck scope = checkScope(sql, boundTable, sourceType);
+                    if (!scope.allowed()) {
                         results.add(
                             new StatementExecutionResult(
                                 entry.getKey(),
                                 sql,
                                 StatementExecutionResult.Status.FAILED,
-                                "质量检测 SQL 只能读取当前绑定数据资产对应的物理表",
+                                scope.message(),
                                 "DATASET_SCOPE_BLOCKED"
                             )
                         );
@@ -301,11 +302,11 @@ public class QualityDatasetStatementExecutor {
         return schema != null ? new BoundTable(schema, table, schema + "." + table) : null;
     }
 
-    private boolean referencesOnlyBoundTable(String sql, BoundTable boundTable, String sourceType) {
+    private QualitySqlScopeValidator.ScopeCheck checkScope(String sql, BoundTable boundTable, String sourceType) {
         if (boundTable == null) {
-            return false;
+            return QualitySqlScopeValidator.ScopeCheck.denied("INVALID_BOUND_TABLE", "检测资产未解析出物理库表");
         }
-        return QualitySqlScopeValidator.referencesOnlyBoundTable(sql, boundTable.schema(), boundTable.table(), sourceType);
+        return QualitySqlScopeValidator.checkScope(sql, boundTable.schema(), boundTable.table(), sourceType);
     }
 
     private String resolveSourceType(InfraDataSource dataSource) {
