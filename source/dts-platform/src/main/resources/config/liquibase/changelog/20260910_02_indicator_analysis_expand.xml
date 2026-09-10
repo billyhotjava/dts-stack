@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+ <changeSet id="20260910-02-indicator-analysis-expand" author="codex">
+  <!-- Forward-only, nullable additions. Keep schema and version history on application rollback. -->
+  <sql><![CDATA[
+    ALTER TABLE gov_indicator_definition ADD COLUMN IF NOT EXISTS analysis_config jsonb;
+    ALTER TABLE gov_indicator_run ADD COLUMN IF NOT EXISTS query_id varchar(64);
+    ALTER TABLE gov_indicator_run ADD COLUMN IF NOT EXISTS source_mode varchar(32);
+    ALTER TABLE gov_indicator_run ADD COLUMN IF NOT EXISTS null_reason varchar(64);
+    ALTER TABLE gov_indicator_run ADD COLUMN IF NOT EXISTS data_as_of timestamptz;
+    CREATE TABLE IF NOT EXISTS modeling_catalog_indicator_serving_projection (
+      tenant_id varchar(128) NOT NULL, indicator_id uuid NOT NULL REFERENCES gov_indicator_definition(id),
+      indicator_version varchar(32) NOT NULL, sync_status varchar(32) NOT NULL,
+      sync_attempts integer NOT NULL DEFAULT 0, version bigint NOT NULL DEFAULT 1,
+      mapping jsonb, last_sync_error varchar(500), next_sync_at timestamptz,
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (tenant_id, indicator_id, indicator_version),
+      CHECK (sync_status IN ('SYNC_PENDING','SYNCED','SYNC_FAILED'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_indicator_serving_due ON modeling_catalog_indicator_serving_projection(next_sync_at)
+      WHERE sync_status IN ('SYNC_PENDING','SYNC_FAILED');
+  ]]></sql>
+ </changeSet>
+ <changeSet id="20260910-03-indicator-serving-backfill" author="codex">
+  <sql><![CDATA[
+    INSERT INTO modeling_catalog_indicator_serving_projection(tenant_id,indicator_id,indicator_version,sync_status,next_sync_at)
+      SELECT 'default',v.indicator_id,v.version,'SYNC_PENDING',now() FROM gov_indicator_version v JOIN gov_indicator_definition d ON d.id=v.indicator_id
+      WHERE v.status='PUBLISHED' AND d.metric_type IS NOT NULL AND coalesce(d.category,'') NOT IN ('MODIFIER','TIME_PERIOD')
+      ON CONFLICT (tenant_id,indicator_id,indicator_version) DO NOTHING;
+  ]]></sql>
+ </changeSet>
+</databaseChangeLog>

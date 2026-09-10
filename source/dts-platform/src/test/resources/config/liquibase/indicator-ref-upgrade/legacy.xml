@@ -1,10 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+<databaseChangeLog logicalFilePath="config/liquibase/changelog/20260910_01_indicator_implementation_ref.xml" xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
  <changeSet id="20260910-01-indicator-implementation-ref" author="codex">
-  <!-- Accept the already-shipped expanded variant; missing additions run below in new changesets. -->
-  <validCheckSum>9:701bf26bcae14951cf1cc35d6f3d6421</validCheckSum>
   <addColumn tableName="gov_indicator_definition"><column name="implementation_ref" type="jsonb"/></addColumn>
   <sql><![CDATA[
     WITH exact_refs AS (
