@@ -9,7 +9,7 @@
 | 编号 | 已核实事实 | 源码证据 |
 |---|---|---|
 | C56 | 保存规则时对 SQL **只校验非空**，不解析、不查函数、不查作用域、不查结果集形状 | source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/governance/QualityRuleService.java:661 |
-| C57 | 运行时有两道预检：正则挡 DML（`WRITE_BLOCKED`）→ AST 作用域与函数白名单（`DATASET_SCOPE_BLOCKED`），都在连库之前 | QualityDatasetStatementExecutor.java:106、:122；service/sql/SqlValidationService.java:19 |
+| C57 | 运行时有两道预检：正则挡 DML（`WRITE_BLOCKED`）→ AST 作用域与函数白名单（`DATASET_SCOPE_BLOCKED`），实际在目标连接和总行数查询之后；T48 前移 | QualityDatasetStatementExecutor.java:106、:122；service/sql/SqlValidationService.java:19 |
 | C58 | 函数白名单原为 count/round/nullif/sum/trim，匹配的是**函数名拼写**而非能力；`btrim` 与已放行的 `trim` 在 PostgreSQL 中是同一函数 | QualitySqlScopeValidator.java:51（已由提交 4c58ce207 补入 btrim/ltrim/rtrim 并拆分拒绝原因） |
 | C59 | `SqlValidationService.validate` 会产出追加 `LIMIT 1000` 的 `rewritten`，但执行器**丢弃 rewritten、仍执行原 sql**，该限流实际未生效 | SqlValidationService.java:41-46；QualityDatasetStatementExecutor.java:106-121 |
 | C60 | 统计失败行时硬取名为 `id` 的列：`SELECT quality_statement.id AS row_id FROM (<用户SQL>) quality_statement`；表无 `id` 即抛 SQLException → `RESULT_ID_REQUIRED` | QualityDatasetStatementExecutor.java:228-233、:174-180 |
@@ -46,9 +46,9 @@
 
 | 约束 | 预算 | 检查/责任 |
 |---|---|---|
-| 静态校验 | 单次 ≤200ms（JSqlParser 解析上限 2s 已存在），不连库、不落库 | T48 计时并断言零 DB 交互 |
+| 静态校验 | 单次 ≤200ms（JSqlParser 解析上限 2s 已存在），不连库、不落库 | T48 计时并断言允许只读平台元数据查询，禁止目标数据源连接和用户 SQL 执行 |
 | 保存准入 | 不改变既有保存事务边界与幂等 | T48 并发保存与重放检查 |
-| 失败统计 | 去重查询取消后，单语句规则运行 SQL 次数由 3 降为 2 | T45 记录实际语句数 |
+| 失败统计 | 去重查询取消后，单语句规则运行 SQL 次数有违规时由 4 降为 3（包含总行数查询） | T45 记录实际语句数 |
 | 兼容 | 既有 errorCode 取值与 `gov_quality_run.error_category` 列不变；不新增业务表 | T44 冻结，T50 回归既有 10 处 DATASET_SCOPE_BLOCKED 断言 |
 | 安全 | 只读与绑定表作用域约束一律不放宽；静态校验不得成为探测他表存在性的旁路 | T48 越权/跨表用例，错误信息不泄露对象存在性 |
 
