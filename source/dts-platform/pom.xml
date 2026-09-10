@@ -527,6 +527,7 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <configuration>
                     <testIncludes>
+                        <testInclude>**/F8*.java</testInclude>
                         <testInclude>**/security/session/PortalSessionRegistryTest.java</testInclude>
                         <testInclude>**/security/session/PortalSessionConcurrencyTest.java</testInclude>
                         <testInclude>**/web/rest/KeycloakAuthResourceTest.java</testInclude>
