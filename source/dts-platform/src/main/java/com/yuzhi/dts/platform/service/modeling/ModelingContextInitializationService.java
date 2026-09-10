@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Function;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,7 +40,7 @@ public class ModelingContextInitializationService {
             return save.apply(requests);
         }
         if (tenantId == null || tenantId.isBlank() || actor == null || actor.ownerId() == null ||
-            !SecurityUtils.isAuthenticated() ||
+            !SecurityUtils.isAuthenticated() || !SecurityContextHolder.getContext().getAuthentication().isAuthenticated() ||
             !(SecurityUtils.getCurrentUserId().filter(actor.ownerId()::equals).isPresent() ||
               SecurityUtils.getCurrentUserLogin().filter(actor.ownerId()::equals).isPresent())) {
             throw new ModelSpecException("MODEL_SPEC_WRITE_FORBIDDEN", "An authenticated modeling actor is required", ModelSpecException.Kind.FORBIDDEN, null);

@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicatio
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
 import java.util.Objects;
 import org.springframework.stereotype.Component;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
 
 @Component
@@ -23,7 +24,7 @@ public class WarehousePlanAuthorizationGuard {
 
     public boolean canReadPlan(WarehousePlanHeader current, WarehousePlanActor actor) {
         return current != null && actor != null && StringUtils.hasText(actor.ownerId()) &&
-            SecurityUtils.isAuthenticated() &&
+            SecurityUtils.isAuthenticated() && SecurityContextHolder.getContext().getAuthentication().isAuthenticated() &&
             (SecurityUtils.getCurrentUserId().filter(actor.ownerId()::equals).isPresent() ||
              SecurityUtils.getCurrentUserLogin().filter(actor.ownerId()::equals).isPresent());
     }

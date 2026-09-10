@@ -154,7 +154,8 @@ class ModelingContextInitializationPostgresTest {
             List.<JsonNode>of(mapper.createObjectNode().put("planId", UUID.randomUUID().toString()), mapper.createObjectNode()),
             List.<JsonNode>of(mapper.createArrayNode())
         )) {
-            assertThat(contexts.withContext("tenant", actor("alice"), requests, nodes -> nodes)).isSameAs(requests);
+            List<JsonNode> resolved = contexts.withContext("tenant", actor("alice"), requests, nodes -> nodes);
+            assertThat(resolved).isSameAs(requests);
         }
         assertThat(count("modeling_warehouse_plan")).isZero();
     }
@@ -166,6 +167,9 @@ class ModelingContextInitializationPostgresTest {
         assertThatThrownBy(() -> save("tenant", "alice", "b")).isInstanceOfSatisfying(ModelSpecException.class,
             error -> assertThat(error.code()).isEqualTo("MODEL_SPEC_PLAN_READ_ONLY"));
         assertThatThrownBy(() -> contexts.withContext("empty-tenant", actor("forged"), request(), nodes -> nodes))
+            .isInstanceOf(ModelSpecException.class);
+        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("alice", "unused"));
+        assertThatThrownBy(() -> contexts.withContext("empty-tenant", actor("alice"), request(), nodes -> nodes))
             .isInstanceOf(ModelSpecException.class);
         SecurityContextHolder.clearContext();
         assertThatThrownBy(() -> contexts.withContext("empty-tenant", actor("alice"), request(), nodes -> nodes))

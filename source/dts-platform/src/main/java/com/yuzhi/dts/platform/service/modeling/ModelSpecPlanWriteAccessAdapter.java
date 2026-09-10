@@ -37,9 +37,9 @@ public class ModelSpecPlanWriteAccessAdapter implements ModelSpecPlanWriteAccess
         if (rows.size() != 1) return false;
         Map<String, Object> row = rows.getFirst();
         String ownerId = text(row.get("owner_id"));
-        if (SecurityUtils.isAuthenticated() && matchesAuthenticatedActor(actor)) return true;
+        if (hasAuthenticatedPrincipal() && SecurityUtils.isAuthenticated() && matchesAuthenticatedActor(actor)) return true;
         // Scheduled reconciliation has no user principal; it retains the historical owner-only fallback.
-        return actor.equals(ownerId) && !hasAuthenticatedPrincipal();
+        return actor.equals(ownerId) && SecurityContextHolder.getContext().getAuthentication() == null;
     }
 
     private static boolean matchesAuthenticatedActor(String actorId) {

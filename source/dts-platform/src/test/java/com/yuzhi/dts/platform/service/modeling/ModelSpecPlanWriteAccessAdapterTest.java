@@ -84,6 +84,8 @@ class ModelSpecPlanWriteAccessAdapterTest {
         SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.AnonymousAuthenticationToken(
             "key", "alice", List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_ANONYMOUS"))));
         assertThat(adapter.canMaintain("tenant", id, "alice")).isFalse();
+        SecurityContextHolder.getContext().setAuthentication(new org.springframework.security.authentication.TestingAuthenticationToken("alice", "unused"));
+        assertThat(adapter.canMaintain("tenant", id, "alice")).isFalse();
     }
 
     private void plan(UUID planId, String ownerId, String departmentId) {
