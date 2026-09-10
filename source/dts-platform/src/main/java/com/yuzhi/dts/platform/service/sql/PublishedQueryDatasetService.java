@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.sql;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetAsset;
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetVersion;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
@@ -210,8 +211,26 @@ public class PublishedQueryDatasetService {
         }
         if (query.ownerDept() != null && !DepartmentUtils.matches(summary.ownerDept(), query.ownerDept())) return false;
         if (query.warehouseLayer() != null && !query.warehouseLayer().equalsIgnoreCase(summary.warehouseLayer())) return false;
-        if (query.classification() != null && !query.classification().equalsIgnoreCase(summary.classification())) return false;
+        if (query.classification() != null && !classificationMatches(query.classification(), summary.classification())) return false;
         return query.bizDomain() == null || query.bizDomain().equalsIgnoreCase(contract.bizDomain());
+    }
+
+    /**
+     * Compare a requested classification filter against the dataset's own level.
+     *
+     * <p>The two sides do not share a spelling: the UI sends the prefixed form (DATA_SECRET) while
+     * the contract snapshot stores the bare code (SECRET), so a direct equalsIgnoreCase never
+     * matched and filtering by 秘密/机密 always came back empty. Both sides are normalized through
+     * SecurityLevelCatalog first. Values the catalog cannot resolve fall back to a literal
+     * comparison so an unrecognized filter still behaves as before rather than matching everything.
+     */
+    private boolean classificationMatches(String requested, String actual) {
+        String normalizedRequested = SecurityLevelCatalog.normalizeDataCode(requested);
+        String normalizedActual = SecurityLevelCatalog.normalizeDataCode(actual);
+        if (normalizedRequested != null && normalizedActual != null) {
+            return normalizedRequested.equals(normalizedActual);
+        }
+        return requested.equalsIgnoreCase(actual);
     }
 
     private boolean isPublishedEnabled(QueryDatasetAsset asset) {

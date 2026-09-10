@@ -66,6 +66,75 @@ class PublishedQueryDatasetServiceTest {
         assertThat(page.toString()).doesNotContain("baseSql", "select ");
     }
 
+    /**
+     * Production stores the bare code (SECRET) in classificationFloor while the UI filter sends the
+     * prefixed form (DATA_SECRET). A literal comparison never matched, so filtering the asset list
+     * by 秘密/机密 always came back empty. Both spellings must resolve to the same level.
+     */
+    @Test
+    void list_shouldMatchClassificationAcrossPrefixedAndBareSpellings() {
+        authenticateMaintainer();
+        QueryDatasetAsset asset = asset();
+        QueryDatasetVersion version = publishedVersionWithClassification(asset, "SECRET");
+        when(assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc()).thenReturn(List.of(asset));
+        when(versionRepository.findByDataset_IdAndVersionNo(asset.getId(), 2)).thenReturn(Optional.of(version));
+
+        PublishedQueryDatasetService service = new PublishedQueryDatasetService(
+            assetRepository,
+            versionRepository,
+            new ObjectMapper()
+        );
+        var page = service.list(
+            new PublishedQueryDatasetQuery(0, 10, null, null, null, null, "DATA_SECRET"),
+            "D1"
+        );
+
+        assertThat(page.totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void list_shouldStillExcludeDatasetsAtADifferentClassification() {
+        authenticateMaintainer();
+        QueryDatasetAsset asset = asset();
+        QueryDatasetVersion version = publishedVersionWithClassification(asset, "SECRET");
+        when(assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc()).thenReturn(List.of(asset));
+        when(versionRepository.findByDataset_IdAndVersionNo(asset.getId(), 2)).thenReturn(Optional.of(version));
+
+        PublishedQueryDatasetService service = new PublishedQueryDatasetService(
+            assetRepository,
+            versionRepository,
+            new ObjectMapper()
+        );
+        var page = service.list(
+            new PublishedQueryDatasetQuery(0, 10, null, null, null, null, "DATA_CONFIDENTIAL"),
+            "D1"
+        );
+
+        assertThat(page.totalElements()).isZero();
+    }
+
+    /** Legacy DATA_SENSITIVE rows resolve onto SECRET and must be reachable by the SECRET filter. */
+    @Test
+    void list_shouldMatchLegacySensitiveAsSecret() {
+        authenticateMaintainer();
+        QueryDatasetAsset asset = asset();
+        QueryDatasetVersion version = publishedVersionWithClassification(asset, "DATA_SENSITIVE");
+        when(assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc()).thenReturn(List.of(asset));
+        when(versionRepository.findByDataset_IdAndVersionNo(asset.getId(), 2)).thenReturn(Optional.of(version));
+
+        PublishedQueryDatasetService service = new PublishedQueryDatasetService(
+            assetRepository,
+            versionRepository,
+            new ObjectMapper()
+        );
+        var page = service.list(
+            new PublishedQueryDatasetQuery(0, 10, null, null, null, null, "DATA_SECRET"),
+            "D1"
+        );
+
+        assertThat(page.totalElements()).isEqualTo(1);
+    }
+
     @Test
     void runtimeContract_shouldReturnOnlyPinnedPublishedSnapshot() {
         QueryDatasetAsset asset = asset();
@@ -126,6 +195,18 @@ class PublishedQueryDatasetServiceTest {
         asset.setCreatedBy("alice");
         asset.setSqlText("select project_code from ads_project_health");
         return asset;
+    }
+
+    private QueryDatasetVersion publishedVersionWithClassification(QueryDatasetAsset asset, String classificationFloor) {
+        QueryDatasetVersion version = publishedVersion(asset);
+        version.setSemanticContractJson(
+            version.getSemanticContractJson().replace("\"classificationFloor\":\"DATA_INTERNAL\"",
+                "\"classificationFloor\":\"" + classificationFloor + "\"")
+        );
+        version.setSemanticContractChecksum(
+            PublishedQueryDatasetService.checksum(version.getSemanticContractJson(), version.getSqlText())
+        );
+        return version;
     }
 
     private QueryDatasetVersion publishedVersion(QueryDatasetAsset asset) {
