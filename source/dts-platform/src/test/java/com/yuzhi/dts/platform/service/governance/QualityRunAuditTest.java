@@ -184,7 +184,9 @@ class QualityRunAuditTest {
                 List.of(new StatementExecutionResult("sql", sensitiveSql, StatementExecutionResult.Status.FAILED,
                     "driver leaked top-secret-token")),
                 1,
-                1
+                1,
+                new QualityExecutionOutcome(1, "VIOLATION", "FAILED", "EXACT", 1L,
+                    List.of(new QualityExecutionOutcome.Diagnostic("sql", "EXECUTION_ERROR", null)))
             )
         );
         UUID issueId = UUID.fromString("40000000-0000-0000-0000-000000000051");
@@ -227,6 +229,30 @@ class QualityRunAuditTest {
             eq(issueId.toString()),
             any()
         );
+    }
+
+    @Test
+    void pureExecutionFailureNeverCreatesBusinessIssue() {
+        GovQualityRun run = executableRun("MANUAL", "alice");
+        when(runRepository.findById(RUN_ID)).thenReturn(Optional.of(run));
+        when(statementExecutor.execute(any(), any())).thenReturn(new QualityDatasetStatementExecutor.Execution(
+            List.of(new StatementExecutionResult("sql", "", StatementExecutionResult.Status.FAILED, "执行失败", "TIMEOUT")),
+            10, null, QualityExecutionOutcome.unknown("TIMEOUT")));
+        ReflectionTestUtils.invokeMethod(service, "doExecuteRun", RUN_ID, Map.of());
+        org.mockito.Mockito.verifyNoInteractions(issueTicketService);
+        org.assertj.core.api.Assertions.assertThat(QualityExecutionOutcome.read(run).qualityOutcome()).isEqualTo("UNKNOWN");
+    }
+
+    @Test
+    void draftViolationNeverCreatesBusinessIssue() {
+        GovQualityRun run = executableRun("DRY_RUN", "alice");
+        when(runRepository.findById(RUN_ID)).thenReturn(Optional.of(run));
+        when(statementExecutor.execute(any(), any())).thenReturn(new QualityDatasetStatementExecutor.Execution(
+            List.of(new StatementExecutionResult("sql", "", StatementExecutionResult.Status.FAILED, "违规", "QUALITY_VIOLATION")),
+            10, 2, new QualityExecutionOutcome(1, "VIOLATION", "OK", "EXACT", 2L, List.of())));
+        ReflectionTestUtils.invokeMethod(service, "doExecuteRun", RUN_ID, Map.of());
+        org.mockito.Mockito.verifyNoInteractions(issueTicketService);
+        org.assertj.core.api.Assertions.assertThat(QualityExecutionOutcome.read(run).violated()).isTrue();
     }
 
     @Test

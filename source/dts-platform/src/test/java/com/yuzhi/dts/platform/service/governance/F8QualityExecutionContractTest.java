@@ -34,6 +34,9 @@ class F8QualityExecutionContractTest {
         var result = f.executor.execute(f.run, Map.of("sql", SQL));
         assertThat(result.failingRowCount()).isEqualTo(2);
         assertThat(result.results()).anyMatch(r -> r.message().contains("2 条不符合规则"));
+        assertThat(result.outcome().qualityOutcome()).isEqualTo("VIOLATION");
+        assertThat(result.outcome().executionOutcome()).isEqualTo("FAILED");
+        assertThat(result.outcome().diagnostics()).anyMatch(d -> d.reasonCode().equals("SAMPLE_FAILED"));
     }
 
     @Test
@@ -41,6 +44,26 @@ class F8QualityExecutionContractTest {
         Fixture f = new Fixture();
         var result = f.executor.execute(f.run, Map.of("sql", "SELECT * FROM public.other_table"));
         assertThat(result.results()).anyMatch(r -> "DATASET_SCOPE_BLOCKED".equals(r.errorCode()));
+        verifyNoInteractions(f.jdbc);
+    }
+
+    @Test
+    void multipleViolationsWithoutIdDegradeStatisticsWithoutLosingBusinessVerdict() throws Exception {
+        Fixture f = new Fixture();
+        when(f.connection.prepareStatement(contains("quality_statement.id"))).thenThrow(new SQLException("id missing", "42703"));
+        var result = f.executor.execute(f.run, Map.of("first", SQL, "second", SQL));
+        assertThat(result.outcome().qualityOutcome()).isEqualTo("VIOLATION");
+        assertThat(result.outcome().statisticsStatus()).isEqualTo("UNDEDUPLICATED");
+        assertThat(result.outcome().violationOccurrences()).isEqualTo(4L);
+        assertThat(result.failingRowCount()).isNull();
+    }
+
+    @Test
+    void unsupportedFunctionIsNamedWithoutOpeningAConnection() throws Exception {
+        Fixture f = new Fixture();
+        var result = f.executor.validate(f.run.getDatasetId(), Map.of("sql", "SELECT pg_sleep(1) FROM public.projects"));
+        assertThat(result.valid()).isFalse();
+        assertThat(result.diagnostics()).anyMatch(d -> "UNSUPPORTED_FUNCTION".equals(d.reasonCode()) && "pg_sleep".equals(d.detail()));
         verifyNoInteractions(f.jdbc);
     }
 

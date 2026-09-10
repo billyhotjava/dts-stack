@@ -61,7 +61,7 @@ class QualityReportExportServiceTest {
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("规则明细");
             assertThat(sheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("SUCCEEDED");
-            assertThat(sheet.getRow(1).getCell(4).getStringCellValue()).isEqualTo("100%");
+            assertThat(sheet.getRow(1).getCell(4).getStringCellValue()).isEqualTo("-");
             assertThat(sheet.getRow(1).getCell(5).getNumericCellValue()).isZero();
             assertThat(sheet.getRow(2).getCell(4).getStringCellValue()).isEqualTo("75.00%");
             assertThat(sheet.getRow(2).getCell(5).getNumericCellValue()).isEqualTo(5.0D);
@@ -101,7 +101,7 @@ class QualityReportExportServiceTest {
         try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {
             var sheet = workbook.getSheet("规则明细");
             assertThat(sheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("FAILED");
-            assertThat(sheet.getRow(1).getCell(4).getStringCellValue()).isEqualTo("0.00%");
+            assertThat(sheet.getRow(1).getCell(4).getStringCellValue()).isEqualTo("-");
         }
     }
 

@@ -31,8 +31,8 @@ public record QualityExecutionOutcome(
             try { return JSON.readValue(json, QualityExecutionOutcome.class); }
             catch (Exception ignored) { return unknown("RESULT_CONTRACT_INVALID"); }
         }
-        boolean passed = "SUCCEEDED".equalsIgnoreCase(run.getStatus());
-        boolean violated = "QUALITY_VIOLATION".equalsIgnoreCase(run.getErrorCategory());
+        boolean passed = "SUCCEEDED".equalsIgnoreCase(run.getStatus()) || "SUCCESS".equalsIgnoreCase(run.getStatus()) || "PASSED".equalsIgnoreCase(run.getStatus());
+        boolean violated = "FAILED".equalsIgnoreCase(run.getStatus()) && !QualityRunOutcomeSemantics.isExecutionFailure(run.getStatus(), run.getErrorCategory(), run.getFailingRowCount());
         return new QualityExecutionOutcome(1, passed ? "PASSED" : violated ? "VIOLATION" : "UNKNOWN",
             passed || violated ? "OK" : "FAILED", run.getFailingRowCount() != null && run.getRowsTotal() != null ? "EXACT" : "UNAVAILABLE",
             run.getFailingRowCount() == null ? null : run.getFailingRowCount().longValue(), List.of());

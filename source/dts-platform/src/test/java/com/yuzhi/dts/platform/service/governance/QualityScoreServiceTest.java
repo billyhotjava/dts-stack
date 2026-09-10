@@ -19,7 +19,7 @@ class QualityScoreServiceTest {
     private static final UUID DATASET_ID = UUID.fromString("50000000-0000-0000-0000-000000000093");
 
     @Test
-    void failedExecutionWithCountedRowsScoresZeroInsteadOfOneHundred() {
+    void failedExecutionWithCountedRowsDoesNotProduceAMeasuredScore() {
         GovQualityRunRepository repository = mock(GovQualityRunRepository.class);
         QualityDatasetReadGuard readGuard = mock(QualityDatasetReadGuard.class);
         GovQualityRun failed = run("FAILED", 20, 0);
@@ -30,7 +30,8 @@ class QualityScoreServiceTest {
         var result = new QualityScoreService(repository, readGuard).calculate(DATASET_ID, 30, "dept-a");
 
         assertThat(result.overall()).isZero();
-        assertThat(result.dimensions()).singleElement().satisfies(dimension -> assertThat(dimension.score()).isZero());
+        assertThat(result.dimensions()).isEmpty();
+        assertThat(result.trend()).isEmpty();
     }
 
     @Test

@@ -105,7 +105,7 @@ class QualityRuleServiceDatasetBindingTest {
             organizationVisibilityService,
             departmentResolver,
             datasetReadGuard,
-            mock(QualityRulePreflightService.class)
+            org.mockito.Mockito.mock(QualityRulePreflightService.class)
         );
     }
 

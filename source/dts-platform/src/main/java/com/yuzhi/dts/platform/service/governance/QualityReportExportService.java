@@ -138,12 +138,13 @@ public class QualityReportExportService {
             if (latestRun != null) {
                 String status = latestRun.getStatus();
                 row.createCell(3).setCellValue(status != null ? status : "");
-                if (isPassed(status)) {
-                    row.createCell(4).setCellValue("100%");
+                row.createCell(4).setCellValue(formatPassRate(latestRun));
+                var outcome = QualityExecutionOutcome.read(latestRun);
+                if ("EXACT".equals(outcome.statisticsStatus()) && latestRun.getFailingRowCount() != null) {
+                    row.createCell(5).setCellValue(Math.max(0, latestRun.getFailingRowCount()));
                 } else {
-                    row.createCell(4).setCellValue(formatPassRate(latestRun));
+                    row.createCell(5).setCellValue("-");
                 }
-                row.createCell(5).setCellValue(Math.max(0, latestRun.getFailingRowCount() != null ? latestRun.getFailingRowCount() : 0));
             } else {
                 row.createCell(3).setCellValue("-");
                 row.createCell(4).setCellValue("-");
@@ -162,6 +163,8 @@ public class QualityReportExportService {
         if (run == null) {
             return "-";
         }
+        var outcome = QualityExecutionOutcome.read(run);
+        if (!"EXACT".equals(outcome.statisticsStatus()) || !"OK".equals(outcome.executionOutcome())) return "-";
         Integer passRate = QualityRunOutcomeSemantics.passRate(
             run.getStatus(),
             run.getErrorCategory(),
@@ -189,7 +192,7 @@ public class QualityReportExportService {
     private Map<UUID, GovQualityRun> findLatestRunPerRule(UUID datasetId) {
         List<GovQualityRun> runs = runRepository.findByDatasetId(datasetId, PageRequest.of(0, 5000));
         return runs.stream()
-            .filter(r -> r.getRule() != null)
+            .filter(r -> r.getRule() != null && !"DRY_RUN".equalsIgnoreCase(r.getTriggerType()))
             .collect(Collectors.toMap(
                 r -> r.getRule().getId(),
                 r -> r,

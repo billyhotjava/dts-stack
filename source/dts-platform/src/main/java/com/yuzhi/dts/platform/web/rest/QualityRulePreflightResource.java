@@ -6,7 +6,6 @@ import com.yuzhi.dts.platform.service.governance.QualityDatasetStatementExecutor
 import com.yuzhi.dts.platform.service.governance.QualityRulePreflightService;
 import com.yuzhi.dts.platform.service.governance.QualityRulePreflightService.*;
 import java.util.Map;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
@@ -27,9 +26,16 @@ public class QualityRulePreflightResource {
     @PostMapping("/dry-run")
     public ApiResponse<Preview> preview(@RequestBody Request request,
         @RequestHeader(value="X-Active-Dept", required=false) String activeDept) {
-        Preview preview = preflight.preview(request, activeDept);
-        audit.recordAction("GOV_RULE_DRY_RUN", AuditStage.SUCCESS, request.datasetId().toString(),
-            Map.of("summary", "草稿质量规则试跑", "checksum", preview.checksum(), "qualityOutcome", preview.outcome().qualityOutcome()));
-        return ApiResponses.ok(preview);
+        try {
+            Preview preview = preflight.preview(request, activeDept);
+            audit.recordAttempt("GOV_RULE_DRY_RUN", "OK".equals(preview.outcome().executionOutcome()) ? AuditStage.SUCCESS : AuditStage.FAIL,
+                request.datasetId().toString(), Map.of("summary", "草稿质量规则试跑", "checksum", preview.checksum(),
+                    "qualityOutcome", preview.outcome().qualityOutcome(), "executionOutcome", preview.outcome().executionOutcome()));
+            return ApiResponses.ok(preview);
+        } catch (RuntimeException error) {
+            audit.recordFailureAction("GOV_RULE_DRY_RUN", request == null || request.datasetId() == null ? "unknown" : request.datasetId().toString(),
+                Map.of("summary", "草稿质量规则试跑未完成", "reasonCode", "QUALITY_PREFLIGHT_REJECTED"));
+            throw error;
+        }
     }
 }

@@ -103,7 +103,7 @@ public class ModelDeliveryStatusQueryService {
     static StepView qualityStep(CandidateView candidate, WorkbenchView workspace, boolean current) {
         if (candidate == null) return step("quality", "NOT_STARTED", false, null);
         if (!current || workspace == null) return step("quality", "UNKNOWN", false, candidate);
-        String state = switch (candidate.status()) { case QUALITY_RUNNING -> governanceState(workspace); case QUALITY_FAILED -> "FAILED"; case QUALITY_PASSED, REVIEW_PENDING, APPROVED, PUBLISHING, PARTIAL, PUBLISHED -> governanceState(workspace); case BUILT -> "WAITING_INPUT"; default -> "NOT_STARTED"; };
+        String state = switch (candidate.status()) { case QUALITY_RUNNING -> workspace.governanceQuality() != null && "MODEL_SPEC_GOVERNANCE_QUALITY_MISSING".equals(workspace.governanceQuality().code()) ? "WAITING_INPUT" : "RUNNING"; case QUALITY_FAILED -> "FAILED"; case QUALITY_PASSED, REVIEW_PENDING, APPROVED, PUBLISHING, PARTIAL, PUBLISHED -> governanceState(workspace); case BUILT -> "WAITING_INPUT"; default -> "NOT_STARTED"; };
         String reason = state.equals("SUCCEEDED") ? null : workspace.governanceQuality() == null ? "MODEL_DELIVERY_QUALITY_EVIDENCE_UNAVAILABLE" : workspace.governanceQuality().code();
         return new StepView("quality", state, reason, qualityMessage(state), candidate.version(), true, candidate.id().toString(), candidate.lastModifiedAt(), List.of());
     }
