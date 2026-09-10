@@ -19,6 +19,7 @@ import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisQueryGateway;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisRequestContext;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -63,7 +64,8 @@ public class SemanticQueryService {
         "is_not_null"
     );
     private static final Set<String> ALLOWED_DERIVED_FUNCTIONS = Set.of("ABS", "ROUND", "COALESCE", "NULLIF");
-    private static final List<String> SECURITY_LEVELS = List.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
+    // Ladder order comes from the canonical catalog so it cannot drift from the rest of the platform.
+    private static final List<String> SECURITY_LEVELS = SecurityLevelCatalog.dataCodesInOrder();
 
     private final AnalyticsSemanticModelRepository semanticModelRepository;
     private final AnalyticsSemanticJoinRepository semanticJoinRepository;
@@ -1407,18 +1409,13 @@ public class SemanticQueryService {
         };
     }
 
+    /**
+     * Normalize to a canonical bare code via {@link SecurityLevelCatalog}. Behaviour is unchanged
+     * (SENSITIVE and TOP_SECRET still fold onto SECRET and CONFIDENTIAL, blank and unrecognized
+     * input still default to INTERNAL); the ladder is no longer duplicated here.
+     */
     private String normalizeSecurityLevel(String level) {
-        String normalized = trimToNull(level);
-        if (normalized == null) {
-            return "INTERNAL";
-        }
-        normalized = normalized.toUpperCase(Locale.ROOT);
-        return switch (normalized) {
-            case "PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL" -> normalized;
-            case "SENSITIVE" -> "SECRET";
-            case "TOP_SECRET" -> "CONFIDENTIAL";
-            default -> "INTERNAL";
-        };
+        return SecurityLevelCatalog.normalizeDataCodeOrDefault(level);
     }
 
     private String metricId(String modelName, String metricName) {
@@ -1489,12 +1486,11 @@ public class SemanticQueryService {
             if (!StringUtils.hasText(value)) {
                 return null;
             }
-            String normalized = value.trim().toUpperCase(Locale.ROOT);
-            return switch (normalized) {
-                case "SENSITIVE" -> "SECRET";
-                case "TOP_SECRET" -> "CONFIDENTIAL";
-                default -> normalized;
-            };
+            // SENSITIVE/TOP_SECRET fold onto SECRET/CONFIDENTIAL inside the catalog now.
+            // Unrecognized values are still passed through upper-cased so rank() keeps its
+            // existing INTERNAL fallback.
+            String canonical = SecurityLevelCatalog.normalizeDataCode(value);
+            return canonical != null ? canonical : value.trim().toUpperCase(Locale.ROOT);
         }
 
         private static int rank(String value) {

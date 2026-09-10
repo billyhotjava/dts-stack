@@ -567,16 +567,14 @@ public class SemanticPublishResource {
         return defaultValue;
     }
 
+    /**
+     * Normalize to a canonical bare code via {@link com.yuzhi.dts.common.security.SecurityLevelCatalog}.
+     * Behaviour is unchanged (SENSITIVE and TOP_SECRET still fold onto SECRET and CONFIDENTIAL,
+     * blank and unrecognized input still default to INTERNAL); the ladder simply no longer has a
+     * private copy here.
+     */
     private static String normalizeSecurityLevel(String value) {
-        if (value == null || value.isBlank()) {
-            return "INTERNAL";
-        }
-        return switch (value.trim().toUpperCase()) {
-            case "PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL" -> value.trim().toUpperCase();
-            case "SENSITIVE" -> "SECRET";
-            case "TOP_SECRET" -> "CONFIDENTIAL";
-            default -> "INTERNAL";
-        };
+        return com.yuzhi.dts.common.security.SecurityLevelCatalog.normalizeDataCodeOrDefault(value);
     }
 
     private static <T> List<T> concat(List<T> a, List<T> b) {

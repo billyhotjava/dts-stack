@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.modeling.serving;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository.SyncCandidate;
 import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary;
@@ -215,13 +216,12 @@ public class CatalogModelSemanticPayloadFactory {
         if (!StringUtils.hasText(value)) {
             throw failure("CATALOG_MODEL_SEMANTIC_CLASSIFICATION_INVALID");
         }
-        return switch (value.trim().toUpperCase(Locale.ROOT)) {
-            case "PUBLIC", "DATA_PUBLIC" -> "PUBLIC";
-            case "INTERNAL", "DATA_INTERNAL" -> "INTERNAL";
-            case "SENSITIVE", "SECRET", "DATA_SENSITIVE", "DATA_SECRET" -> "SECRET";
-            case "TOP_SECRET", "CONFIDENTIAL", "DATA_TOP_SECRET", "DATA_CONFIDENTIAL" -> "CONFIDENTIAL";
-            default -> throw failure("CATALOG_MODEL_SEMANTIC_CLASSIFICATION_INVALID");
-        };
+        // Canonical ladder and aliases live in SecurityLevelCatalog; unknown values still fail closed.
+        String canonical = SecurityLevelCatalog.normalizeDataCode(value);
+        if (canonical == null) {
+            throw failure("CATALOG_MODEL_SEMANTIC_CLASSIFICATION_INVALID");
+        }
+        return canonical;
     }
 
     private static String normalizeName(String value) {

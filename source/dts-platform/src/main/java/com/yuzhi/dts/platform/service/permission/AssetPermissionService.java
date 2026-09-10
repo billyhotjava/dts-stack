@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.permission;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.permission.AssetGrant;
 import com.yuzhi.dts.platform.domain.permission.AssetOwnership;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
@@ -27,8 +28,6 @@ public class AssetPermissionService {
     private static final String SCREEN_ASSET_TYPE = "SCREEN";
     private static final String SCREEN_CODE_PREFIX = "screen-";
     private static final String NO_ROLE_PLACEHOLDER = "__NO_ROLE__";
-    private static final List<String> CLASSIFICATION_LADDER = List.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
-
     private static final Set<String> SUPERUSER_ROLES = Set.of(
         AuthoritiesConstants.ADMIN,
         AuthoritiesConstants.OP_ADMIN
@@ -670,12 +669,19 @@ public class AssetPermissionService {
         return callerRank >= assetRank;
     }
 
+    /**
+     * Rank on the canonical ladder from {@link SecurityLevelCatalog}.
+     *
+     * <p>The ordering is unchanged (PUBLIC 0 &lt; INTERNAL 1 &lt; SECRET 2 &lt; CONFIDENTIAL 3);
+     * only its source moved, so the ladder can no longer drift from the rest of the platform.
+     * One behavioural consequence: the previous exact-match lookup did not recognize prefixed
+     * values such as {@code DATA_SECRET}, which scored -1 and were let through by the
+     * {@code assetRank <= 0} branch in {@link #isClassificationAllowed}. Those values are stored
+     * in practice, so they are now ranked properly and actually enforced. Genuinely unknown
+     * values still score -1 and keep their previous behaviour.
+     */
     private int classificationRank(String level) {
-        String token = normalizeToken(level);
-        if (token == null) {
-            return -1;
-        }
-        return CLASSIFICATION_LADDER.indexOf(token);
+        return SecurityLevelCatalog.dataRank(normalizeToken(level));
     }
 
     private boolean isPublic(String classification) {

@@ -54,6 +54,17 @@ public record PlatformContext(String dept, String classification, String roles) 
         return t.isBlank() ? null : t;
     }
 
+    /**
+     * Map the X-DTS-Personnel-Level header to the highest data level the caller may read.
+     *
+     * <p>The results agree with {@code SecurityLevelCatalog.maxDataLevelForPersonnel}
+     * (GENERAL→SECRET, IMPORTANT/CORE→CONFIDENTIAL), but this table is deliberately NOT replaced
+     * by {@code SecurityLevelCatalog.parseMaxDataLevel}: the two disagree on bare digits. Here
+     * "0"/"1"/"2" are personnel levels (0→GENERAL→SECRET), whereas the catalog reads digits as
+     * data levels (0→PUBLIC). Since this header carries a personnel level, the local reading is
+     * the correct one for this call site. Collapsing the two needs a dedicated
+     * personnel-first catalog API rather than a drop-in swap.
+     */
     private static String mapPersonnelLevelToMaxClassification(String value) {
         String token = normalizeToken(value);
         if (token == null) {

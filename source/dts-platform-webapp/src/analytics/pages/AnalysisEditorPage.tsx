@@ -41,6 +41,7 @@ import {
 	type AnalysisWorkspaceQueryState,
 } from "./analysis/AnalysisWorkspace";
 import { analysisQueryFingerprint } from "./analysisWorkspaceModel";
+import { DATA_SECURITY_LEVEL_OPTIONS } from "@/constants/governance";
 
 const { Text, Title } = Typography;
 
@@ -548,13 +549,7 @@ export default function AnalysisEditorPage() {
 						<Select
 							value={audience.classification}
 							onChange={(classification) => { setAudience((value) => ({ ...value, classification })); setPublicationValidation(null); }}
-							options={[
-								{ label: "公开", value: "DATA_PUBLIC" },
-								{ label: "内部", value: "DATA_INTERNAL" },
-								{ label: "保密", value: "DATA_CONFIDENTIAL" },
-								{ label: "敏感", value: "DATA_SENSITIVE" },
-								{ label: "秘密", value: "DATA_SECRET" },
-							]}
+							options={DATA_SECURITY_LEVEL_OPTIONS}
 							style={{ width: "100%" }}
 						/>
 					</div>

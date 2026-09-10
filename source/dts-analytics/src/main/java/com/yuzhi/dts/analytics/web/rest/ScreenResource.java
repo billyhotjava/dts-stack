@@ -1448,14 +1448,12 @@ public class ScreenResource {
     }
 
     private static int classificationRank(String value) {
-        if (value == null) return 0;
-        return switch (value.trim().toUpperCase(java.util.Locale.ROOT)) {
-            case "PUBLIC" -> 0;
-            case "INTERNAL" -> 1;
-            case "SECRET" -> 2;
-            case "CONFIDENTIAL" -> 3;
-            default -> 0;
-        };
+        // Ladder comes from SecurityLevelCatalog so this cannot drift from the rest of the
+        // platform. The fail-open default is deliberate and documented on isDowngrade above:
+        // an unset or unrecognized "before" counts as PUBLIC so owners are encouraged to
+        // backfill a level rather than being blocked.
+        Integer rank = com.yuzhi.dts.common.security.SecurityLevelCatalog.dataRankOrNull(value);
+        return rank == null ? 0 : rank;
     }
 
     @DeleteMapping(path = "/{id}/grants/{grantId}")

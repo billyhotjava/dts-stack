@@ -21,6 +21,7 @@ import com.yuzhi.dts.analytics.service.analysis.AnalysisQuerySpecValidator;
 import com.yuzhi.dts.analytics.service.analysis.AnalysisSpecValidationException;
 import com.yuzhi.dts.analytics.service.analysis.GovernedAnalysisDatasetContract;
 import com.yuzhi.dts.analytics.service.analysis.GovernedAnalysisDatasetContractProvider;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Clock;
@@ -329,28 +330,36 @@ public class AnalysisPublicationService {
         return List.copyOf(normalized);
     }
 
+    /**
+     * Normalize an audience classification to the canonical prefixed form (DATA_PUBLIC ...
+     * DATA_CONFIDENTIAL), delegating to {@link SecurityLevelCatalog}.
+     *
+     * <p>This used to carry a private ladder that placed CONFIDENTIAL below SECRET and added a
+     * SENSITIVE step, so a CONFIDENTIAL dataset could be published under a level the gate believed
+     * was higher. It also decoded S0..S4 with the opposite meaning of
+     * {@code ClassificationMapper} (which defines S1=CONFIDENTIAL ... S4=PUBLIC), so an S1 value
+     * arriving from the workbench API was read as INTERNAL. Both are gone: the ladder now comes
+     * from the catalog, and S-codes are no longer decoded here because this service is not their
+     * source of truth.
+     *
+     * <p>Blank input keeps the historical INTERNAL default. Unrecognized input is returned
+     * upper-cased and unmapped, so {@link #classificationRank(String)} yields -1 and the caller
+     * fails closed instead of silently downgrading.
+     */
     static String normalizeClassification(String value) {
-        if (!StringUtils.hasText(value)) return "DATA_INTERNAL";
-        String normalized = value.trim().toUpperCase(Locale.ROOT);
-        return switch (normalized) {
-            case "PUBLIC", "S0", "DATA_PUBLIC" -> "DATA_PUBLIC";
-            case "INTERNAL", "S1", "DATA_INTERNAL" -> "DATA_INTERNAL";
-            case "CONFIDENTIAL", "S2", "DATA_CONFIDENTIAL" -> "DATA_CONFIDENTIAL";
-            case "SENSITIVE", "S3", "DATA_SENSITIVE" -> "DATA_SENSITIVE";
-            case "SECRET", "S4", "DATA_SECRET" -> "DATA_SECRET";
-            default -> normalized;
-        };
+        if (!StringUtils.hasText(value)) {
+            return "DATA_" + SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code();
+        }
+        String canonical = SecurityLevelCatalog.normalizePrefixedDataCode(value);
+        return canonical != null ? canonical : value.trim().toUpperCase(Locale.ROOT);
     }
 
+    /**
+     * Rank on the canonical ladder: PUBLIC(0) &lt; INTERNAL(1) &lt; SECRET(2) &lt; CONFIDENTIAL(3).
+     * Unrecognized values yield -1 so comparisons fail closed.
+     */
     static int classificationRank(String value) {
-        return switch (normalizeClassification(value)) {
-            case "DATA_PUBLIC" -> 0;
-            case "DATA_INTERNAL" -> 1;
-            case "DATA_CONFIDENTIAL" -> 2;
-            case "DATA_SENSITIVE" -> 3;
-            case "DATA_SECRET" -> 4;
-            default -> -1;
-        };
+        return SecurityLevelCatalog.dataRank(value);
     }
 
     private PublicationIssue issue(String code, String path, String message) {

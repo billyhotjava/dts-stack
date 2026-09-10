@@ -104,7 +104,14 @@ public final class SecurityLevelCatalog {
     public enum DataSecurityLevel {
         PUBLIC(0, "PUBLIC", "公开", List.of("0", "DATA_PUBLIC", "NON_SECRET", "NONE_SECRET", "NS", "非密", "公开级")),
         INTERNAL(1, "INTERNAL", "内部", List.of("1", "DATA_INTERNAL", "GENERAL", "一般", "内部级")),
-        SECRET(2, "SECRET", "秘密", List.of("2", "DATA_SECRET", "IMPORTANT", "重要", "秘密级")),
+        SECRET(
+            2,
+            "SECRET",
+            "秘密",
+            // SENSITIVE is a legacy token from the BI publication path; it was never a separate
+            // step and is collapsed onto SECRET here so legacy rows stay resolvable.
+            List.of("2", "DATA_SECRET", "IMPORTANT", "重要", "秘密级", "SENSITIVE", "DATA_SENSITIVE", "敏感", "敏感级")
+        ),
         CONFIDENTIAL(
             3,
             "CONFIDENTIAL",

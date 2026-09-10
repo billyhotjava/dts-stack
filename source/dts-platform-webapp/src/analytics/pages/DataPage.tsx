@@ -27,6 +27,7 @@ import {
 } from "antd";
 import { PageSection } from "../components/PageContainer/PageContainer";
 import { canPromoteSemanticModel } from "./semantic/semanticAccess";
+import { DATA_SECURITY_LEVEL_OPTIONS } from "@/constants/governance";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
@@ -280,12 +281,7 @@ export default function DataPage() {
 						allowClear
 						value={classification || undefined}
 						style={{ width: 160 }}
-						options={[
-							{ value: "DATA_PUBLIC", label: "公开" },
-							{ value: "DATA_INTERNAL", label: "内部" },
-							{ value: "DATA_SENSITIVE", label: "敏感" },
-							{ value: "DATA_RESTRICTED", label: "受限" },
-						]}
+						options={DATA_SECURITY_LEVEL_OPTIONS}
 						onChange={(value) => updateLocation({ classification: value })}
 					/>
 				</Space>

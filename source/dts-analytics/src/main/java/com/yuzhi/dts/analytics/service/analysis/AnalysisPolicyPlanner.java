@@ -1,13 +1,13 @@
 package com.yuzhi.dts.analytics.service.analysis;
 
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
-import java.util.Locale;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -24,7 +24,9 @@ public class AnalysisPolicyPlanner {
         AnalysisRequestContext context = requestContext == null
             ? new AnalysisRequestContext(null, null, null, null, null, null)
             : requestContext;
-        int actorLevel = actor.isSuperuser() ? 3 : classificationLevel(context.classification(), false);
+        int actorLevel = actor.isSuperuser()
+            ? SecurityLevelCatalog.DataSecurityLevel.CONFIDENTIAL.number()
+            : classificationLevel(context.classification(), false);
         int datasetLevel = classificationLevel(contract == null ? null : contract.classification(), true);
         if (actorLevel < datasetLevel) {
             throw new AnalysisForbiddenException("actor clearance is below the dataset classification");
@@ -55,19 +57,24 @@ public class AnalysisPolicyPlanner {
         return sha256(actorId + "|" + text(context.department()) + "|" + text(context.classification()) + "|" + text(context.roles()));
     }
 
+    /**
+     * Rank a classification on the canonical ladder from {@link SecurityLevelCatalog}
+     * (PUBLIC 0 &lt; INTERNAL 1 &lt; SECRET 2 &lt; CONFIDENTIAL 3). SENSITIVE resolves to SECRET
+     * there, matching what this method used to hard-code.
+     *
+     * <p>An absent value stays 0. An unrecognized dataset ("contract") value still fails closed;
+     * an unrecognized actor value still degrades to 0, as before.
+     */
     private int classificationLevel(String value, boolean contractValue) {
-        String normalized = text(value).toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
-        if (normalized.startsWith("DATA_")) normalized = normalized.substring(5);
-        return switch (normalized) {
-            case "", "PUBLIC" -> 0;
-            case "INTERNAL" -> 1;
-            case "SENSITIVE", "SECRET" -> 2;
-            case "CONFIDENTIAL", "TOP_SECRET", "TOPSECRET" -> 3;
-            default -> {
-                if (contractValue) throw new AnalysisForbiddenException("dataset classification is not recognized");
-                yield 0;
-            }
-        };
+        if (text(value).isEmpty()) {
+            return 0;
+        }
+        Integer rank = SecurityLevelCatalog.dataRankOrNull(value);
+        if (rank != null) {
+            return rank;
+        }
+        if (contractValue) throw new AnalysisForbiddenException("dataset classification is not recognized");
+        return 0;
     }
 
     private String sha256(String value) {

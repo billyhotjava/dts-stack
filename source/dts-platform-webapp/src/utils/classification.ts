@@ -39,6 +39,12 @@ const CLASSIFICATION_ALIAS_MAP: Record<string, ClassificationLevel> = {
 	重要: "SECRET",
 	秘密: "SECRET",
 	秘密级: "SECRET",
+	// Legacy tokens from the BI publication path. SENSITIVE was never a separate level;
+	// it is collapsed onto SECRET here to match SecurityLevelCatalog on the backend.
+	SENSITIVE: "SECRET",
+	DATA_SENSITIVE: "SECRET",
+	敏感: "SECRET",
+	敏感级: "SECRET",
 	"3": "CONFIDENTIAL",
 	CONFIDENTIAL: "CONFIDENTIAL",
 	DATA_CONFIDENTIAL: "CONFIDENTIAL",

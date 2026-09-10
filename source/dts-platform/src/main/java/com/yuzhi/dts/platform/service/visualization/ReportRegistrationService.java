@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.visualization;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import java.time.Instant;
@@ -9,6 +10,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -18,9 +20,16 @@ import org.springframework.util.StringUtils;
 public class ReportRegistrationService {
 
     private static final Pattern ASSET_KEY = Pattern.compile("[A-Za-z0-9_-]{1,96}");
-    private static final Set<String> CLASSIFICATIONS = Set.of(
-        "DATA_PUBLIC", "DATA_INTERNAL", "DATA_CONFIDENTIAL", "DATA_SENSITIVE", "DATA_SECRET"
-    );
+    /**
+     * Accepted classifications, derived from {@link SecurityLevelCatalog} rather than listed here.
+     * The previous literal set carried a DATA_SENSITIVE step that is not part of the canonical
+     * ladder; SENSITIVE is now accepted as an alias of SECRET during normalization instead.
+     */
+    private static final Set<String> CLASSIFICATIONS = SecurityLevelCatalog
+        .dataCodesInOrder()
+        .stream()
+        .map(code -> "DATA_" + code)
+        .collect(Collectors.toUnmodifiableSet());
 
     private final BiReportLinkRepository repository;
 
@@ -113,16 +122,18 @@ public class ReportRegistrationService {
         return values.isEmpty() ? null : String.join(",", values);
     }
 
+    /**
+     * Normalize to the canonical prefixed form via {@link SecurityLevelCatalog}.
+     *
+     * <p>The old private table placed CONFIDENTIAL below SECRET and decoded S0..S4 with the
+     * opposite meaning of {@code ClassificationMapper} (S1=CONFIDENTIAL ... S4=PUBLIC), so an
+     * S-code from the workbench API was registered at the wrong level. S-codes are no longer
+     * decoded here. Unrecognized values are returned unchanged and then rejected by the
+     * CLASSIFICATIONS check, so this path fails closed.
+     */
     private String normalizeClassification(String value) {
-        String normalized = upper(value);
-        return switch (normalized) {
-            case "PUBLIC", "S0", "DATA_PUBLIC" -> "DATA_PUBLIC";
-            case "INTERNAL", "S1", "DATA_INTERNAL" -> "DATA_INTERNAL";
-            case "CONFIDENTIAL", "S2", "DATA_CONFIDENTIAL" -> "DATA_CONFIDENTIAL";
-            case "SENSITIVE", "S3", "DATA_SENSITIVE" -> "DATA_SENSITIVE";
-            case "SECRET", "S4", "DATA_SECRET" -> "DATA_SECRET";
-            default -> normalized;
-        };
+        String canonical = SecurityLevelCatalog.normalizePrefixedDataCode(value);
+        return canonical != null ? canonical : upper(value);
     }
 
     private String upper(String value) {

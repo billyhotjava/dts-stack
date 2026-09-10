@@ -184,8 +184,11 @@ public class PlatformCapabilityResource {
 
     private Map<String, Object> classificationCapabilities() {
         Map<String, Object> classification = new LinkedHashMap<>();
-        classification.put("levels", List.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL"));
-        classification.put("defaultLevel", "INTERNAL");
+        classification.put("levels", com.yuzhi.dts.common.security.SecurityLevelCatalog.dataCodesInOrder());
+        classification.put(
+            "defaultLevel",
+            com.yuzhi.dts.common.security.SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code()
+        );
         classification.put("enforcement", "platform");
         classification.put("missingClassification", "deny");
         return classification;

@@ -61,9 +61,9 @@ public class ScreenPermissionService {
      */
     private static final String NO_ROLE_PLACEHOLDER = "__NO_ROLE__";
 
-    /** Classification ladder, low → high. */
+    /** Classification ladder, low → high. Sourced from the canonical catalog. */
     private static final List<String> CLASSIFICATION_LADDER =
-            List.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
+            com.yuzhi.dts.common.security.SecurityLevelCatalog.dataCodesInOrder();
 
     private final AnalyticsScreenAccessRepository accessRepository;
     private final AnalyticsScreenRepository screenRepository;

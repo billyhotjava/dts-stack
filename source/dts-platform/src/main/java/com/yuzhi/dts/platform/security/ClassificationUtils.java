@@ -82,7 +82,7 @@ public class ClassificationUtils {
      */
     public java.util.Set<String> currentAllowedClassifications() {
         String maxCode = getCurrentUserMaxLevel();
-        java.util.List<String> order = java.util.List.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
+        java.util.List<String> order = SecurityLevelCatalog.dataCodesInOrder();
         int idx = maxCode == null ? -1 : order.indexOf(maxCode.trim().toUpperCase(java.util.Locale.ROOT));
         if (idx < 0) {
             // 未识别的 max code 视作最低权限（仅 PUBLIC），保守拒绝。
