@@ -1,6 +1,6 @@
 import { Alert, Breadcrumb, Button, Card, Empty, Input, Modal, Select, Space, Spin, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
@@ -147,6 +147,7 @@ export default function SemanticCardEditorPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const navigate = useNavigate();
 	const location = useLocation();
+	const appliedMetricLink = useRef("");
 	const params = useParams();
 	const menus = useMenuStore((state) => state.menus);
 	const roles = useUserRoles();
@@ -314,8 +315,6 @@ export default function SemanticCardEditorPage() {
 		const searchBase = new URLSearchParams(location.search).get("base");
 		if (searchBase && modelMap.has(searchBase)) {
 			setBaseModelId(searchBase);
-			const metric = new URLSearchParams(location.search).get("metric");
-			if (metric) setSelectedMeasures([metric]);
 			return;
 		}
 		const first = models[0];
@@ -326,24 +325,39 @@ export default function SemanticCardEditorPage() {
 
 	useEffect(() => {
 		const joinSet = new Set(joinOptions.map((item) => item.targetId));
-		setSelectedJoinTargets((current) => current.filter((item) => joinSet.has(item)));
+		setSelectedJoinTargets((current) =>
+			current.every((item) => joinSet.has(item)) ? current : current.filter((item) => joinSet.has(item)),
+		);
 	}, [joinOptions]);
 
 	useEffect(() => {
 		const metricSet = new Set(metricOptions.map((item) => item.value));
-		setSelectedMeasures((current) => current.filter((item) => metricSet.has(item)));
-	}, [metricOptions]);
+		if (metaState.state !== "loaded" || !baseModelId) return;
+		const metric = new URLSearchParams(location.search).get("metric");
+		if (!recordId && metric && metricSet.has(metric) && appliedMetricLink.current !== location.search) {
+			appliedMetricLink.current = location.search;
+			setSelectedMeasures([metric]);
+			return;
+		}
+		setSelectedMeasures((current) =>
+			current.every((item) => metricSet.has(item)) ? current : current.filter((item) => metricSet.has(item)),
+		);
+	}, [metricOptions, metaState.state, baseModelId, location.search, recordId]);
 
 	useEffect(() => {
 		const dimensionSet = new Set(dimensionOptions.map((item) => item.value));
-		setSelectedDimensions((current) => current.filter((item) => dimensionSet.has(item)));
-		setFilters((current) =>
-			current.filter(
+		if (metaState.state !== "loaded" || !baseModelId) return;
+		setSelectedDimensions((current) =>
+			current.every((item) => dimensionSet.has(item)) ? current : current.filter((item) => dimensionSet.has(item)),
+		);
+		setFilters((current) => {
+			const next = current.filter(
 				(item) =>
 					!item.field || dimensionSet.has(item.field) || metricOptions.some((metric) => metric.value === item.field),
-			),
-		);
-	}, [dimensionOptions, metricOptions]);
+			);
+			return next.length === current.length ? current : next;
+		});
+	}, [dimensionOptions, metricOptions, metaState.state, baseModelId]);
 
 	useEffect(() => {
 		if (recordState?.state !== "loaded") return;
