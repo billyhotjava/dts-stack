@@ -532,6 +532,7 @@
                         <testInclude>**/web/rest/KeycloakAuthResourceTest.java</testInclude>
                         <testInclude>**/ModelingContextInitializationPostgresTest.java</testInclude>
                         <testInclude>**/WarehousePlanAuthorizationGuardTest.java</testInclude>
+                        <testInclude>**/web/rest/DimensionDefinitionResourceTest.java</testInclude>
                         <testInclude>**/ModelDataRegistrationServiceTest.java</testInclude>
                         <testInclude>**/ModelIngestionTargetServiceTest.java</testInclude>
                         <testInclude>**/ModelSchemaOnlySupportTest.java</testInclude>

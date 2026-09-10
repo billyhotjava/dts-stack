@@ -59,3 +59,7 @@ G0：源码/构建路径已有证据；真实空库浏览器 GAP。G1：以上�
 - `resolveDefaultModelingContextId` 改为读取该接口；规划列表保留给显式导入上下文选择，不参与新建默认选择。
 - `emptyModelDraft` 创建的 ModelSpec 草稿 planId 留空，首次保存由服务端补齐。已有模型恢复/更新及 API 显式 planId 保持原值。来源列表使用服务端返回的同一默认上下文，避免向新模型提供其他规划的绑定。
 - 验收：有普通旧规划但无默认上下文时，GET 不初始化；GET 与 POST 默认 ID 一致；归档默认可读但不可写；所有新建种类不继承列表上下文，已保存模型保留 planId；查询错误原样反馈，不退回随意选取规划。
+
+## T41 业务维度入口权限补齐（2026-09-10）
+
+工作台 `createKind=dimension` 调用既有 `/api/modeling/dimension-definitions` 创建/维护可复用业务维度，不经过 DimensionModelResource。DimensionDefinitionResource 仍使用 CATALOG_MAINTAINERS，与 F7 菜单规则冲突；改为已认证准入。下游已复用 ModelSpecDomainWriteAccessPort，继续使用域可见性与来源独立约束，无须更改维度台账。原创建/更新/确认/退役 DTO、服务端 tenant/actor、ETag 及状态校验保持；新增普通 EMPLOYEE 与匿名的方法权限验证，恢复该旧测试类在正式 Maven 编译清单中的入口。

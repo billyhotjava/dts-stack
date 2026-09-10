@@ -46,7 +46,29 @@ import org.springframework.test.web.servlet.MockMvc;
     }
 )
 @AutoConfigureMockMvc(addFilters = false)
+@org.springframework.context.annotation.Import(DimensionDefinitionResourceTest.MenuSecurity.class)
+@org.springframework.security.test.context.support.WithMockUser(username = "alice", roles = "EMPLOYEE")
 class DimensionDefinitionResourceTest {
+
+    @org.springframework.boot.test.context.TestConfiguration
+    @org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity
+    static class MenuSecurity {}
+
+    @Autowired
+    private DimensionDefinitionResource securedResource;
+
+    @MockBean
+    private com.yuzhi.dts.platform.service.audit.AuditService auditService;
+
+    @MockBean
+    private com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftRejectionAudit dbtImplementationDraftRejectionAudit;
+
+    @Test
+    @org.springframework.security.test.context.support.WithAnonymousUser
+    void anonymousCannotCreateBusinessDimensions() {
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> securedResource.create(null))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
 
     private static final UUID DEFINITION_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
     private static final String CHECKSUM = "a".repeat(64);
@@ -354,7 +376,7 @@ class DimensionDefinitionResourceTest {
                 .map(PreAuthorize::value)
         )
             .hasSize(4)
-            .allSatisfy(expression -> assertThat(expression).contains("CATALOG_MAINTAINERS"));
+            .allSatisfy(expression -> assertThat(expression).isEqualTo("isAuthenticated()"));
     }
 
     private static String createJson() {
