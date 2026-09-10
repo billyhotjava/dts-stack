@@ -1986,6 +1986,57 @@ class DbtImplementationDraftServiceSecurityTest {
     }
 
     @Test
+    void savesTheCurrentDefinitionOverAnOlderAuthoringBaseWithoutChangingFiles() throws Exception {
+        ModelSpecView previous = model(3, MODEL_CHECKSUM);
+        when(previous.id()).thenReturn(MODEL_ID);
+        var submitted = versionedVisualSnapshot();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) submitted.path("modelSpec").path("fields").get(0))
+            .put("dataType", "DATE");
+        var decoded = new com.yuzhi.dts.platform.service.modeling.authoring.ModelAuthoringSnapshotDecoder(objectMapper)
+            .decode(submitted);
+        assertThat(decoded.valid()).isTrue();
+        ModelSpecView latest = new com.yuzhi.dts.platform.service.modeling.ModelSpecSnapshotCodec(objectMapper)
+            .toUpdatedView(previous, decoded.modelSpec(), 4, NOW);
+        when(modelSpecs.get(TENANT, MODEL_ID)).thenReturn(latest);
+        when(modelSpecs.revision(eq(TENANT), any())).thenReturn(previous);
+        when(writeAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        when(lifecycle.timeline(TENANT, MODEL_ID)).thenReturn(new TimelineView(designerImplementation(), List.of(), List.of()));
+        SourceBundleView source = sourceBundle("sprint83", List.of(
+            new FileInput("dbt_project.yml", "name: sprint83\nmodel-paths: [models]\n"),
+            new FileInput("models/orders.sql", "select manual_business_rule from orders\n")
+        ));
+        DraftRow original = authoringRowWithSource(objectMapper.writeValueAsString(versionedVisualSnapshot()),
+            objectMapper.writeValueAsString(source), "{}");
+        DraftRow aligned = org.mockito.Mockito.spy(original);
+        when(aligned.baseModelRevision()).thenReturn(4);
+        when(aligned.baseModelChecksum()).thenReturn(latest.checksum());
+        when(repository.alignAuthoringBase(any(), any(), any(), any(), any(), anyInt(), any(), anyInt(), any(),
+            any(), any(), any(), any(), any(), any(), any())).thenReturn(Optional.of(aligned));
+
+        DraftException stale = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW),
+            DraftException.class);
+        assertThat(stale.code()).isEqualTo("DBT_DRAFT_BASE_MODEL_CONFLICT");
+        org.mockito.Mockito.verifyNoInteractions(repository);
+
+        DraftRow result = ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID,
+            original, NOW, submitted);
+        assertThat(result.baseModelRevision()).isEqualTo(4);
+        verify(repository).alignAuthoringBase(eq(TENANT), eq(MODEL_ID), eq(DRAFT_ID), eq(ACTOR), eq("authoring-etag"),
+            eq(3), eq(MODEL_CHECKSUM), eq(4), eq(latest.checksum()), eq(2), eq(IMPLEMENTATION_CHECKSUM),
+            eq(2), eq(IMPLEMENTATION_CHECKSUM), eq(original.sourceBundleSnapshot()), any(), eq(NOW));
+        verify(repository, never()).replaceFiles(any(), any(), any(), any(), any(), any(), any(), any());
+
+        org.mockito.Mockito.clearInvocations(repository);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) submitted.path("modelSpec")).put("name", "different unsaved definition");
+        DraftException conflict = catchThrowableOfType(
+            () -> ReflectionTestUtils.invokeMethod(service, "alignAuthoringBase", TENANT, ACTOR, MODEL_ID, original, NOW, submitted),
+            DraftException.class);
+        assertThat(conflict.code()).isEqualTo("DBT_DRAFT_BASE_MODEL_CONFLICT");
+        org.mockito.Mockito.verifyNoInteractions(repository);
+    }
+
+    @Test
     void recognizesUneditedGeneratedSqlAtThePreviousRevisionAfterBaseAlignment() throws Exception {
         String oldPath = "models/dwd/orders/v3/i2/orders.sql";
         String customPath = "models/dwd/orders/v3/i2/custom.sql";
