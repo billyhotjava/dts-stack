@@ -1635,7 +1635,7 @@ describe("model workbench draft validation", () => {
 		expect(saveModelImplementation).not.toHaveBeenCalled();
 	});
 
-	it("creates a DBT-managed dimension model without inventing a designer implementation", async () => {
+	it.each(["explicit", "automatic"])("creates a DBT-managed dimension with %s context through one save", async (contextMode) => {
 		const initial = {
 			...canonicalFactView(),
 			modelType: "DIMENSION" as const,
@@ -1661,7 +1661,7 @@ describe("model workbench draft validation", () => {
 		vi.mocked(saveModelDraftOperation).mockResolvedValue({ model: saved, implementation: null, replayed: false });
 		const draft: ModelSpecDraft = {
 			...(validDimensionDraft() as ModelSpecDraft),
-			planId: initial.planId,
+			planId: contextMode === "automatic" ? "" : initial.planId,
 			domainId: initial.domainId,
 			name: initial.name,
 			description: initial.description,
