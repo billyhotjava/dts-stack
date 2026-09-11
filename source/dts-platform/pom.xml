@@ -547,6 +547,7 @@
                         <testInclude>**/config/TestSecurityConfiguration.java</testInclude>
                         <testInclude>**/config/CacheConfigurationIsolationTest.java</testInclude>
                         <testInclude>**/service/catalog/CatalogGrantClassificationProjectionPostgresIT.java</testInclude>
+                        <testInclude>**/service/catalog/CatalogDatasetClassificationProjectionPostgresTest.java</testInclude>
                         <testInclude>**/repository/audit/PlatformAuditOutboxRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/DataMartRepositoryTest.java</testInclude>
                         <testInclude>**/repository/modeling/FrozenDbtBundleArtifactRecoveryTest.java</testInclude>

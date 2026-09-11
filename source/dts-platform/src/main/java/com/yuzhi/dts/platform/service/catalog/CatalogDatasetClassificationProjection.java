@@ -23,13 +23,17 @@ public class CatalogDatasetClassificationProjection implements CatalogClassifica
         );
     }
 
+    /**
+     * The entity stores UTC wall-clock time (hibernate.jdbc.time_zone=UTC); a bare current_timestamp is cast in the
+     * session zone and would read back hours ahead in the catalog.
+     */
     @Override
     public void project(CatalogClassificationSnapshot snapshot) {
         jdbcTemplate.update(
             """
             update catalog_dataset dataset
                set classification = :effectiveLevel,
-                   last_modified_date = current_timestamp
+                   last_modified_date = timezone('UTC', current_timestamp)
              where (
                     'source:' || coalesce(dataset.source_id::text, 'unknown')
                     || '/schema:' || regexp_replace(
