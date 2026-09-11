@@ -43,3 +43,9 @@ services/dts-dbt/target
 services/dts-dbt/logs
 services/dts-dbt/profiles/profiles.yml
 services/dts-dbt/profiles/.user.yml
+
+# A checkout may share its root with a deployed stack. Never send runtime secrets
+# or bind-mounted service files to image builders; build inputs live in builds/source.
+/.env
+/.env.*
+/services
