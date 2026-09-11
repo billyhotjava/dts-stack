@@ -55,6 +55,50 @@ export function modelSecurityLevel(override: ModelSpecImportSemanticOverride, fi
 	return levels.every((level) => level && level === levels[0]) ? levels[0] : "";
 }
 
+const NO_FIELD_CONTRACT_HINT = "dbt 包未提供带类型的字段契约（需 contract.enforced 且各列声明 data_type），无法确认字段发布密级";
+
+type PreviewReadinessInput = {
+	inspection: DbtArchiveInspection | null;
+	planId: string;
+	selected: string[];
+	packageDomains: string[];
+	domainMappings: Record<string, string>;
+	semanticOverrides: Record<string, ModelSpecImportSemanticOverride>;
+};
+
+/** Everything still blocking 生成预览, in the order a user can resolve it; empty means ready. */
+export function previewReadinessIssues({
+	inspection,
+	planId,
+	selected,
+	packageDomains,
+	domainMappings,
+	semanticOverrides,
+}: PreviewReadinessInput): string[] {
+	if (!inspection) return ["请先完成包检查"];
+	const issues: string[] = [];
+	if (!planId) issues.push("请选择规划上下文");
+	const unmapped = packageDomains.filter((code) => !domainMappings[code]);
+	if (unmapped.length) issues.push(`请映射数据域：${unmapped.join("、")}`);
+	if (!selected.length) issues.push("请至少勾选一个可导入模型");
+	const byId = new Map(inspection.package.models.map((model) => [model.dbtUniqueId, model]));
+	for (const uniqueId of selected) {
+		const model = byId.get(uniqueId);
+		if (!model) continue;
+		const label = model.name || uniqueId;
+		const override = semanticOverrides[uniqueId] || { modelUniqueId: uniqueId };
+		const fieldNames = (model.columns || []).map((column) => column.name);
+		if (!fieldNames.length) issues.push(`${label}：${NO_FIELD_CONTRACT_HINT}，请取消勾选或补充后重新上传`);
+		else if (!modelSecurityLevel(override, fieldNames)) issues.push(`${label}：请确认发布密级`);
+		const modelType = override.modelType || model.semantics?.modelType || "";
+		if (modelType === "FACT" && !override.businessProcessId) issues.push(`${label}：请选择业务过程`);
+		if (modelType === "APPLICATION" && (!override.dataMartId || !override.subjectDomainId)) {
+			issues.push(`${label}：请选择数据集市和主题域`);
+		}
+	}
+	return issues;
+}
+
 export function StrategyStep({ archive, onArchive }: { archive: File | null; onArchive: (file: File | null) => void }) {
 	return (
 		<>
@@ -417,7 +461,11 @@ export function ConfirmStep(props: ConfirmStepProps) {
 						</option>
 					))}
 				</select>
-				<small>这是当前操作者的显式治理确认，不会写回或篡改原始 dbt SQL。</small>
+				<small>
+					{selected.length
+						? "这是当前操作者的显式治理确认，不会写回或篡改原始 dbt SQL；未识别字段的模型不会被应用。"
+						: "请先在下表勾选要导入的模型，再批量确认发布密级。"}
+				</small>
 			</label>
 			<ImportSemanticsTable
 				inspection={inspection}
@@ -609,6 +657,13 @@ function ImportSemanticsTable({
 				render: (_, { model }) => {
 					const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
 					const fieldNames = (model.columns || []).map((column) => column.name);
+					if (!fieldNames.length) {
+						return (
+							<select aria-label={`${model.dbtUniqueId} 发布密级`} disabled title={NO_FIELD_CONTRACT_HINT} value="">
+								<option value="">未识别字段</option>
+							</select>
+						);
+					}
 					return (
 						<select
 							aria-label={`${model.dbtUniqueId} 发布密级`}

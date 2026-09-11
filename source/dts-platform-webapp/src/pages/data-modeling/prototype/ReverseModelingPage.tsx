@@ -26,7 +26,7 @@ import { type CompactColumns, CompactTable } from "@/components/table";
 import { dataModelingPath } from "../navigation";
 import type { DataModelingRoute } from "../types";
 import { Button, PageHeader, RequestState, Status } from "./PrototypePrimitives";
-import { ConfirmStep, modelSecurityLevel, StrategyStep } from "./ReverseModelingInspectionSteps";
+import { ConfirmStep, previewReadinessIssues, StrategyStep } from "./ReverseModelingInspectionSteps";
 import {
 	defaultImportConflictResolutions,
 	type RenameMapping,
@@ -188,21 +188,10 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 			),
 		[inspection],
 	);
-	const importGovernanceReady = useMemo(() => {
-		if (!inspection) return false;
-		const byId = new Map(inspection.package.models.map((model) => [model.dbtUniqueId, model]));
-		return selected.every((uniqueId) => {
-			const model = byId.get(uniqueId);
-			const override = semanticOverrides[uniqueId];
-			if (!model || !override) return false;
-			const fieldNames = (model.columns || []).map((column) => column.name);
-			if (!modelSecurityLevel(override, fieldNames)) return false;
-			const modelType = override.modelType || model.semantics?.modelType || "";
-			if (modelType === "FACT" && !override.businessProcessId) return false;
-			if (modelType === "APPLICATION" && (!override.dataMartId || !override.subjectDomainId)) return false;
-			return true;
-		});
-	}, [inspection, selected, semanticOverrides]);
+	const previewIssues = useMemo(
+		() => previewReadinessIssues({ inspection, planId, selected, packageDomains, domainMappings, semanticOverrides }),
+		[inspection, planId, selected, packageDomains, domainMappings, semanticOverrides],
+	);
 	const hasRetryableResult = Boolean(
 		(result?.overallRun?.items || result?.items || []).some((item) =>
 			item.issues.some((issue) => issue.retryable === true),
@@ -500,6 +489,16 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 							<RequestState description="上一步尚未返回有效结果。" kind="empty" title="暂无可展示内容" />
 						)}
 					</div>
+					{step === 1 && inspection && previewIssues.length ? (
+						<section className="dmx-reverse-readiness" aria-label="生成预览前待完成" role="status">
+							<strong>生成预览前还需完成</strong>
+							<ul>
+								{previewIssues.map((issue) => (
+									<li key={issue}>{issue}</li>
+								))}
+							</ul>
+						</section>
+					) : null}
 					<footer className="dmx-wizard-actions">
 						<Button disabled={Boolean(busy)} onClick={reset}>
 							取消
@@ -520,20 +519,9 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 						) : null}
 						{step === 1 ? (
 							<Button
-								disabled={
-									!canMaintain ||
-									!planId ||
-									!selected.length ||
-									packageDomains.some((code) => !domainMappings[code]) ||
-									!importGovernanceReady ||
-									Boolean(busy)
-								}
+								disabled={!canMaintain || previewIssues.length > 0 || Boolean(busy)}
 								primary
-								title={
-									importGovernanceReady
-										? undefined
-										: "请先为已选模型确认发布密级，并补齐明细表业务过程、应用表数据集市和主题域"
-								}
+								title={previewIssues.length ? previewIssues.join("；") : undefined}
 								onClick={() => void createPreview()}
 							>
 								{busy === "preview" ? "正在预览…" : "生成预览"}
