@@ -10,6 +10,7 @@ import { t } from "../../i18n";
 import { ParameterMappingPopover, type ParameterMapping } from "./ParameterMappingPopover";
 import { InteractionSettingsPopover } from "./InteractionSettingsPopover";
 import type { DashboardParameter } from "./DashboardFilterBar";
+import { resolveRouteForOpen } from "../../helpers/resolveAnalyticsUrl";
 
 type LoadState<T> =
 	| { state: "loading" }
@@ -107,7 +108,11 @@ export function DashboardEditorCard({
 							icon={<EditOutlined />}
 							aria-label="打开分析"
 							title="打开分析"
-							href={dashcard.card_id ? `/bi/questions/${encodeURIComponent(String(dashcard.card_id))}/edit` : undefined}
+							href={
+								dashcard.card_id
+									? resolveRouteForOpen(`/bi/questions/${encodeURIComponent(String(dashcard.card_id))}/edit`)
+									: undefined
+							}
 							target="_blank"
 							onClick={(event) => event.stopPropagation()}
 						/>

@@ -9,6 +9,8 @@ import { actionColumn, CompactTable } from "@/components/table";
 import { } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
+import { writeTextToClipboard } from "../hooks/clipboard";
+import { resolveRouteHref } from "../helpers/resolveAnalyticsUrl";
 
 type LoadState<T> =
 	| { state: "loading" }
@@ -64,12 +66,17 @@ export default function DashboardsPage() {
 	};
 
 	const handleShare = async (id: number) => {
-		const url = `${window.location.origin}/bi/dashboards/${id}`;
 		try {
-			await navigator.clipboard.writeText(url);
-			message.success("看板链接已复制");
+			const { uuid } = await analyticsApi.createDashboardPublicLink(id);
+			const url = resolveRouteHref(`/bi/public/dashboard/${encodeURIComponent(uuid)}`);
+			const copied = await writeTextToClipboard(url);
+			if (copied) {
+				message.success("公开链接已复制");
+			} else {
+				window.prompt("复制链接：", url);
+			}
 		} catch {
-			message.error("复制失败，请手动复制浏览器地址");
+			message.error("生成分享链接失败，请稍后重试");
 		}
 	};
 

@@ -7,6 +7,7 @@ const NAME_FIELD_URL = new URL("./dashboard/DashboardNameField.tsx", import.meta
 const NAME_FIELD = existsSync(NAME_FIELD_URL) ? readFileSync(NAME_FIELD_URL, "utf8") : "";
 const GRID = readFileSync(new URL("./dashboard/DashboardEditorGrid.tsx", import.meta.url), "utf8");
 const CARD = readFileSync(new URL("./dashboard/DashboardEditorCard.tsx", import.meta.url), "utf8");
+const INSPECTOR = readFileSync(new URL("./dashboard/DashboardComponentInspector.tsx", import.meta.url), "utf8");
 const API = readFileSync(new URL("../api/analyticsApi.ts", import.meta.url), "utf8");
 
 test("dashboard publication saves the current draft before validating it", () => {
@@ -32,6 +33,13 @@ test("dashboard composition exposes a library, external drop and component inspe
 	assert.match(GRID, /onDrop=/);
 	assert.match(CARD, /替换分析/);
 	assert.match(CARD, /打开分析/);
+});
+
+test("open-analysis actions keep the hash router base instead of the bare bi path", () => {
+	for (const source of [CARD, INSPECTOR]) {
+		assert.match(source, /resolveRouteForOpen\(\s*`\/bi\/questions\//);
+		assert.doesNotMatch(source, /href=\{dashcard\.card_id \? `\/bi\//);
+	}
 });
 
 test("new dashboard makes its required name explicit and explains an empty save", () => {

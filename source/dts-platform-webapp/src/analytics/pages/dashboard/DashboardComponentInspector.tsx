@@ -2,6 +2,7 @@ import { DeleteOutlined, EditOutlined, SwapOutlined } from "@ant-design/icons";
 import { Button, Divider, Empty, InputNumber, Space, Tag } from "antd";
 import type { DashboardCard } from "../../api/analyticsApi";
 import { isPublishedAnalysisCard } from "./dashboardEditorModel";
+import { resolveRouteForOpen } from "../../helpers/resolveAnalyticsUrl";
 
 interface DashboardComponentInspectorProps {
 	dashcard: DashboardCard | null;
@@ -73,7 +74,11 @@ export function DashboardComponentInspector({
 						<Button
 							block
 							icon={<EditOutlined />}
-							href={dashcard.card_id ? `/bi/questions/${encodeURIComponent(String(dashcard.card_id))}/edit` : undefined}
+							href={
+								dashcard.card_id
+									? resolveRouteForOpen(`/bi/questions/${encodeURIComponent(String(dashcard.card_id))}/edit`)
+									: undefined
+							}
 							target="_blank"
 							disabled={!dashcard.card_id}
 						>

@@ -51,6 +51,12 @@ test("Sprint-45 dashboards and screens expose complete delivery lifecycle action
 	}
 });
 
+test("dashboard list share copies the public link with the router base", () => {
+	assert.match(DASHBOARDS_SOURCE, /createDashboardPublicLink/);
+	assert.match(DASHBOARDS_SOURCE, /resolveRouteHref\(`\/bi\/public\/dashboard\//);
+	assert.doesNotMatch(DASHBOARDS_SOURCE, /window\.location\.origin\}\/bi\/dashboards\//);
+});
+
 test("Sprint-45 enhanced analysis tools are clearly auxiliary and not the default consumption path", () => {
 	for (const label of ["增强分析工具", "辅助工具"]) {
 		assert.match(METRIC_LENS_SOURCE, new RegExp(label));
