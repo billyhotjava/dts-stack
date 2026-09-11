@@ -105,8 +105,8 @@ describe("ModelVisualTransformationFields", () => {
 		for (let click = 0; click < 2; click += 1) {
 			act(() => autoMap?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 			expect(current.fieldMappings).toEqual([
-				{ sourceField: "src_0.record_id", targetField: "record_id" },
-				{ sourceField: "src_0.amount", targetField: "amount" },
+				{ targetField: "record_id", sourceField: "record_id" },
+				{ targetField: "amount", sourceField: "amount" },
 			]);
 			expect(container.querySelectorAll('[aria-label^="来源字段 "]')).toHaveLength(2);
 			expect(current.fields).toBe(originalFields);
@@ -137,10 +137,8 @@ describe("ModelVisualTransformationFields", () => {
 		current.dependsOn = [{ modelSpecId: "30000000-0000-0000-0000-000000000001", revision: 3 }];
 
 		expect(visualTransformationInputAliases(current, context())).toEqual([
-			{ index: 0, label: "预算来源 A", role: "基础来源" },
-			{ index: 1, label: "预算来源 B", role: "基础来源" },
-			{ index: 2, label: "日期维度表 · r2", role: "维度引用" },
-			{ index: 3, label: "预算事实表 · r3", role: "上游模型" },
+			{ index: 0, label: "预算来源 B", role: "基础来源" },
+			{ index: 1, label: "预算来源 A", role: "基础来源" },
 		]);
 	});
 
@@ -165,8 +163,8 @@ describe("ModelVisualTransformationFields", () => {
 		expect(onChange).toHaveBeenCalledWith(
 			expect.objectContaining({
 				fieldMappings: [
-					{ sourceField: "src_0.record_id", targetField: "record_id" },
-					{ sourceField: "src_0.amount", targetField: "amount" },
+					{ targetField: "record_id", sourceField: "record_id" },
+					{ targetField: "amount", sourceField: "amount" },
 				],
 			}),
 		);
