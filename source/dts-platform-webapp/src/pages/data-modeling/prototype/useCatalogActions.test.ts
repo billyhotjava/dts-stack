@@ -86,16 +86,18 @@ describe("removing a model with delivery history", () => {
 		expect(options.setSaving).toHaveBeenLastCalledWith(false);
 	});
 
-	it.each(["MODEL_SPEC_DELETE_REFERENCED", "MODEL_SPEC_REVISION_CONFLICT"])(
-		"does not attempt archive for %s",
-		async (code) => {
-			vi.mocked(deleteModelSpec).mockRejectedValue(failure(code));
-			await useCatalogActions(options).removeModel(model);
-			expect(archiveModelSpec).not.toHaveBeenCalled();
-			expect(confirm).toHaveBeenCalledOnce();
-			expect(options.setFailure).toHaveBeenLastCalledWith(expect.objectContaining({ code }));
-		},
-	);
+	it.each([
+		["MODEL_SPEC_DELETE_REFERENCED", "解除对该模型的依赖"],
+		["MODEL_SPEC_REVISION_CONFLICT", "刷新列表后"],
+	])("does not attempt archive for %s and explains it", async (code, hint) => {
+		vi.mocked(deleteModelSpec).mockRejectedValue(failure(code));
+		await useCatalogActions(options).removeModel(model);
+		expect(archiveModelSpec).not.toHaveBeenCalled();
+		expect(confirm).toHaveBeenCalledOnce();
+		expect(options.setFailure).toHaveBeenLastCalledWith(
+			expect.objectContaining({ code, message: expect.stringContaining(hint) }),
+		);
+	});
 
 	it("reports archive failure and preserves the selection", async () => {
 		vi.mocked(deleteModelSpec).mockRejectedValue(failure("MODEL_SPEC_DELETE_IN_USE"));

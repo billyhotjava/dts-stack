@@ -9,9 +9,9 @@ import type { DimensionDefinitionView } from "@/features/modeling/contracts/dime
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { dataModelingPath } from "../navigation";
 import { conceptDimensionDraftFromView, type ModelDraft } from "./services/modelWorkbenchService";
-import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
+import { type ModelingRequestFailure, normalizeModelingRequestFailure } from "./services/planningProjectionService";
 
-type WorkbenchFailure = { kind: "permission" | "request"; message: string } | null;
+type WorkbenchFailure = ModelingRequestFailure | null;
 
 export type CatalogActionOptions = {
 	navigate: (to: string) => void;
@@ -74,6 +74,22 @@ export function useCatalogActions(options: CatalogActionOptions) {
 					await deleteModelSpec({ id: model.id, revision: model.revision, checksum: model.checksum });
 				} catch (error) {
 					const failure = normalizeModelingRequestFailure(error, "模型删除失败。");
+					if (failure.code === "MODEL_SPEC_DELETE_REFERENCED") {
+						setFailure({
+							kind: "request",
+							code: failure.code,
+							message: `模型「${model.name}」正被其他在用模型引用，无法删除。请先在引用它的模型中解除对该模型的依赖，再重试删除。`,
+						});
+						return;
+					}
+					if (failure.code === "MODEL_SPEC_REVISION_CONFLICT") {
+						setFailure({
+							kind: "request",
+							code: failure.code,
+							message: "模型已被其他操作更新，本次删除未执行。请刷新列表后基于最新版本重试。",
+						});
+						return;
+					}
 					if (failure.code !== "MODEL_SPEC_DELETE_IN_USE") throw error;
 					if (
 						!window.confirm(
