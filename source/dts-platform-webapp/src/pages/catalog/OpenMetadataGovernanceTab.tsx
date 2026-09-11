@@ -1,5 +1,8 @@
 import { Alert, Button, Collapse, Descriptions, Form, Input, message, Select, Tag } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { listDepartments, type DeptDto } from "@/api/services/deptService";
+import { searchUsers, type UserDirectoryEntry } from "@/api/services/userDirectoryService";
+import { useUserInfo } from "@/store/userStore";
 import {
 	type ClassificationFactView,
 	getCatalogClassificationFacts,
@@ -9,6 +12,13 @@ import {
 import { AssetTagPanel } from "@/components/catalog/tags/AssetTagPanel";
 import type { CatalogDomainOption } from "@/hooks/useCatalogDomainOptions";
 import { classificationText } from "./assets/assetPageShared";
+import {
+	defaultOwnerFields,
+	deptForOwner,
+	deptSelectOptions,
+	ownerLeavesDept,
+	ownerSelectOptions,
+} from "./governanceOwnerModel";
 
 const LEVELS = [
 	{ label: "公开", value: "PUBLIC" },
@@ -52,16 +62,60 @@ export function OpenMetadataGovernanceTab({
 	const [fact, setFact] = useState<ClassificationFactView | null>(null);
 	const [floorDraft, setFloorDraft] = useState("");
 	const [floorReason, setFloorReason] = useState("");
+	const userInfo = useUserInfo();
+	const [departments, setDepartments] = useState<DeptDto[]>([]);
+	const [directoryUsers, setDirectoryUsers] = useState<UserDirectoryEntry[]>([]);
+	const [directoryLoading, setDirectoryLoading] = useState(false);
+	const selectedDept = Form.useWatch("ownerDept", form);
+	const selectedOwner = Form.useWatch("businessOwner", form);
 
 	useEffect(() => {
 		form.setFieldsValue({
 			domainId: dataset.domainId,
 			warehouseLayer: dataset.warehouseLayer,
-			ownerDept: dataset.ownerDept,
-			businessOwner: dataset.owner,
+			...defaultOwnerFields(dataset, userInfo),
 			securityPolicyRefs: dataset.securityPolicyRefs,
 		});
-	}, [dataset, form]);
+	}, [dataset, form, userInfo]);
+
+	useEffect(() => {
+		let cancelled = false;
+		setDirectoryLoading(true);
+		void Promise.all([listDepartments(), searchUsers()])
+			.then(([depts, users]) => {
+				if (cancelled) return;
+				setDepartments(depts);
+				setDirectoryUsers(users);
+			})
+			.finally(() => {
+				if (!cancelled) setDirectoryLoading(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	const deptOptions = useMemo(() => deptSelectOptions(departments, selectedDept), [departments, selectedDept]);
+	const ownerOptions = useMemo(
+		() => ownerSelectOptions(directoryUsers, selectedDept, selectedOwner),
+		[directoryUsers, selectedDept, selectedOwner],
+	);
+	const searchOwners = async (keyword: string) => {
+		const found = await searchUsers(keyword);
+		setDirectoryUsers((current) => [
+			...current,
+			...found.filter((user) => !current.some((known) => known.username === user.username)),
+		]);
+	};
+	const onOwnerFieldsChange = (changed: Record<string, unknown>) => {
+		if ("businessOwner" in changed) {
+			const dept = deptForOwner(directoryUsers, changed.businessOwner as string | undefined);
+			if (dept) form.setFieldValue("ownerDept", dept);
+		}
+		if ("ownerDept" in changed && ownerLeavesDept(directoryUsers, form.getFieldValue("businessOwner"), changed.ownerDept as string)) {
+			form.setFieldValue("businessOwner", undefined);
+		}
+	};
 
 	useEffect(() => {
 		if (!assetKey) {
@@ -176,7 +230,7 @@ export function OpenMetadataGovernanceTab({
 						description="请稍后刷新页面重试；其他治理信息仍可继续维护。"
 					/>
 				) : null}
-				<Form form={form} layout="vertical">
+				<Form form={form} layout="vertical" onValuesChange={onOwnerFieldsChange}>
 					<div className="grid gap-x-4 md:grid-cols-2">
 						<Form.Item
 							label="业务归属数据域"
@@ -193,11 +247,28 @@ export function OpenMetadataGovernanceTab({
 								notFoundContent={domainLoading ? "正在加载数据域..." : "暂无可用数据域"}
 							/>
 						</Form.Item>
-						<Form.Item label="业务负责人" name="businessOwner">
-							<Input allowClear placeholder="请输入业务负责人" />
+						<Form.Item label="业务负责人" name="businessOwner" extra="默认当前登录人；选择人员会同步其所属部门。">
+							<Select
+								allowClear
+								showSearch
+								optionFilterProp="label"
+								loading={directoryLoading}
+								placeholder="请选择业务负责人"
+								options={ownerOptions}
+								onSearch={(keyword) => void searchOwners(keyword)}
+								notFoundContent={directoryLoading ? "正在加载人员..." : "该部门下暂无可选人员"}
+							/>
 						</Form.Item>
-						<Form.Item label="归属部门" name="ownerDept">
-							<Input allowClear placeholder="请输入归属部门" />
+						<Form.Item label="归属部门" name="ownerDept" extra="切换部门后，业务负责人只列出该部门人员。">
+							<Select
+								allowClear
+								showSearch
+								optionFilterProp="label"
+								loading={directoryLoading}
+								placeholder="请选择归属部门"
+								options={deptOptions}
+								notFoundContent={directoryLoading ? "正在加载部门..." : "暂无可选部门"}
+							/>
 						</Form.Item>
 						<Form.Item label="仓库分层" name="warehouseLayer">
 							<Select
