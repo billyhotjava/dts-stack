@@ -3,7 +3,7 @@
 - 提交：`33a31f595094cea900f81cbfcdafb5f7c42c7f1b`
 - 正式镜像：`dts-dbt:1.10.0`，ID `sha256:0ba5a2a6d1999ddfffd9f7b9265811ec184cbb9b53ea3c669b4c0e15a2c16a17`
 - 运行时：dbt Core `1.10.22`，Postgres adapter `1.10.0`
-- 原始机器可读证据：[T04-composite-dbt.json](T04-composite-dbt.json)；宏来源摘要为 `5d43e82a01bbec9d97878479f3122a35a85904db4876b1112cb4dab6eb5d2e60`。
+- 原始机器可读证据：[F1-T04-composite-dbt.json](F1-T04-composite-dbt.json)；宏来源摘要为 `5d43e82a01bbec9d97878479f3122a35a85904db4876b1112cb4dab6eb5d2e60`。
 
 以上是已有专项运行的实际 SHA；当前正式构建候选为 `f14830709`，尚未以该候选重新执行本专项。
 

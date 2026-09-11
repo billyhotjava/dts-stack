@@ -1,4 +1,4 @@
-# T10-B1 单主动作与创作门禁验证
+# F2-T02-B1 单主动作与创作门禁验证
 
 ## 实施范围
 
@@ -10,7 +10,7 @@
 
 ## 既有服务边界（后续四步复用）
 
-只读核验：ModelAuthoringDraftService.context 复用 ModelVisualizationCapabilityEvaluator.authoringActions；能力不等于可向空 draftId 发命令，无草稿时现有 ensureSession 先创建。authoring save 只保存快照/files/activeView 与 ETag，validate/commit 独立；首建/前端 persist 尚耦合完整实现校验，W1 不能仅拆布局。W3/W4 精确命令仍见 T09 冻结记录。本次未新增后端状态机、接口、迁移或四步页面。
+只读核验：ModelAuthoringDraftService.context 复用 ModelVisualizationCapabilityEvaluator.authoringActions；能力不等于可向空 draftId 发命令，无草稿时现有 ensureSession 先创建。authoring save 只保存快照/files/activeView 与 ETag，validate/commit 独立；首建/前端 persist 尚耦合完整实现校验，W1 不能仅拆布局。W3/W4 精确命令仍见 F2-T01 冻结记录。本次未新增后端状态机、接口、迁移或四步页面。
 
 ## 检查与证据
 
@@ -25,7 +25,7 @@
 | GitNexus | 索引 stale 后执行 analyze 成功（145.7s）；局部Python scope解析有警告。impact/detect_changes LOW；图未列出React调用，不把零索引调用当无影响。自动改写AGENTS/CLAUDE已撤销，仅保留本轮源码/任务改动 |
 | 单次聚焦 review | 次入口绕过pending限制已修并有组件测试；modelIssues遗漏意见经对照父编辑器现存显示和测试排除，未重复渲染 |
 | commit hook | `Can't find lefthook in PATH`，未执行，不声称hook通过 |
-| 浏览器/Chrome95/正式镜像/离线安装 | 未执行；无容器改动，T10不标DONE |
+| 浏览器/Chrome95/正式镜像/离线安装 | 未执行；无容器改动，F2-T02不标DONE |
 
 测试日志 `/tmp/sprint104-b1-tests.log`、`/tmp/sprint104-b1-retest.log`。jsdom 的 getComputedStyle 伪元素提示不代表 Chrome95 证据。
 

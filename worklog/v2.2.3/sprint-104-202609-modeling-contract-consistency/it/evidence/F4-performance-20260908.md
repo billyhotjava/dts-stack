@@ -19,7 +19,7 @@
 原始诊断日志临时保存在/tmp/dts-modeling-performance-platform.log，不提交含请求身份的全量日志；以上保留最小必要事实。
 
 ## 实施与回归
-- c2c068125：F4/T21–T24、追溯矩阵、现场账本和首批失败用例。
+- c2c068125：F4-T01–T04、追溯矩阵、现场账本和首批失败用例。
 - 60ff381d8：将新增事务测试纳入现有编译白名单；此前 Maven success 未执行该测试，不计 PASS。
 - RED：原事务实现2/2失败（/tmp/s104-f4-red-java-included.log），原前端1失败/4通过（/tmp/s104-f4-red-ui.log），断言成功模型不应被另一模型失败抹掉。
 - 73697f73a：聚合NOT_SUPPORTED、状态并发2/逐行提交/AbortSignal取消、列表/编辑资料分阶段加载；GitNexus影响及detect_changes LOW。
@@ -34,7 +34,7 @@
 运维：打开模型列表后逐行状态完成、单条异常不影响其它模型。若5分钟内任一Hikari连接等待超时或delivery-status 499/5xx超过1%，登记P1，先读取platform日志和PG pg_stat_activity，再对照Traefik RequestPath/StartUTC/Duration/OriginStatus。不可用状态不能当业务失败；先刷新单页，不重复发起物化/发布。不新增告警基础设施，阈值为本Feature运行核验规则，尚未自动化部署。
 
 ## 用户交付方式修正
-用户明确要求不出补丁包、直接替换原镜像。本次采用原deploy Compose定向up -d --no-deps，仅替换platform/webapp；此前自动生成的tar.gz不用于此次更新，后续不再生成包。T24以正式镜像与容器/页面证据验收，不把补丁包作为门槛。
+用户明确要求不出补丁包、直接替换原镜像。本次采用原deploy Compose定向up -d --no-deps，仅替换platform/webapp；此前自动生成的tar.gz不用于此次更新，后续不再生成包。F4-T04以正式镜像与容器/页面证据验收，不把补丁包作为门槛。
 正式构建完成：源码73697f73a；后端30/30、前端83/83；前端pnpm build含tsc和LEGACY_BROWSER_BUILD成功。新platform=sha256:750a6ba63b8bff5ce362210a2f9658065acdab0e909e651cf6ccb93d1faf95d8；新webapp=sha256:0b4c2572ce6edfa088ac9ebb20689844695946e96d367063926405946be919f0。镜像revision标签均为73697f73a605399c793f691e8d76a48a2a499715。
 
 ## 直接镜像替换与页面验证（2026-09-08 18:49–18:55）
@@ -43,4 +43,4 @@
 - 真实刷新捕捉到“正在准备编辑资料，模型列表可先浏览”，编辑/新建临时禁用，资料就绪后按钮恢复；第二页、返回第一页、进入0908项目任务快照明细详情均成功，详情显示“建模已完成”。未发起物化/保存/发布。
 - 36个delivery-status请求全部200，P50=0.139s，P95=0.522s，最大0.522s；见F4-runtime-metrics-73697f73a.json。与修复前60条日志样本比较属于实际浏览器操作前后观察，不冒充同负载受控压测。
 - 新容器截至页面复验未出现Hikari Connection is not available。旧标签刷新曾出现空白且控制台无已捕获错误；新标签正常，因此不宣称旧标签问题根因已解决，保留正常新标签供用户使用。
-- IT-25事务专项、IT-26列表正常/刷新/分页、IT-27实际分阶段加载均有通过证据。Chrome95真实引擎、窄屏、固定10并发3轮压测及回退演练未在本轮执行，T24与F4保持IN_PROGRESS，不宣称Sprint全部完成；直接镜像替换要求已完成，补丁包N/A。
+- IT-25事务专项、IT-26列表正常/刷新/分页、IT-27实际分阶段加载均有通过证据。Chrome95真实引擎、窄屏、固定10并发3轮压测及回退演练未在本轮执行，F4-T04与F4保持IN_PROGRESS，不宣称Sprint全部完成；直接镜像替换要求已完成，补丁包N/A。

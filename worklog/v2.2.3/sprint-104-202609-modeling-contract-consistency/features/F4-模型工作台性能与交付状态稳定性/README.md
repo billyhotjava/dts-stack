@@ -5,7 +5,7 @@
 ## 目标与现场归因
 用户进入模型工作台时能先看到并操作模型列表；交付状态逐行到达，单个失败不影响其余模型；状态查询不能长期占住连接并等待另一条连接。保留 F3 建模完成与数据运营分离的业务判定。
 
-现场基线为源码/部署 checkout `200812f71094a78020d866a79ee9257be7ba02d4`，容器具体制品身份在 T24 核验，不以 checkout 替代镜像身份。现场 Hikari total=10/active=10/idle=0，等待线程约 9–14，30000ms 后超时；PG 快照 8 条 idle in transaction 约 34s，最后 SQL 为 modeling_warehouse_plan owner 查询。浏览器已登录工作台，17 条记录、第一页10条的三列均显示交付状态读取失败。不能把该证据当成 SQL 慢扫描或 CPU 不足。
+现场基线为源码/部署 checkout `200812f71094a78020d866a79ee9257be7ba02d4`，容器具体制品身份在 T04 核验，不以 checkout 替代镜像身份。现场 Hikari total=10/active=10/idle=0，等待线程约 9–14，30000ms 后超时；PG 快照 8 条 idle in transaction 约 34s，最后 SQL 为 modeling_warehouse_plan owner 查询。浏览器已登录工作台，17 条记录、第一页10条的三列均显示交付状态读取失败。不能把该证据当成 SQL 慢扫描或 CPU 不足。
 
 完整调用链：列表逐模型 GET delivery-status → ModelDeliveryStatusQueryService.get 的只读外层事务 → authoring/workspace/权限读取 → CandidateQualityRuleContextService.context(NOT_SUPPORTED，挂起外层) → DefaultLakeDatasetGuard → DefaultDestinationSyncService.checkDefaultDestinationStatus(REQUIRES_NEW) → admin 数据湖读取及本地镜像同步。外层事务挂起并不释放其连接，构成并发连接饥饿风险；该因果链仍需事务代理回归及运行并发复验。
 
@@ -24,16 +24,16 @@
 ## Task 与依赖
 | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|
-| T21 交付聚合事务边界 | P0 | IN_PROGRESS | 现有契约/现场账本 |
-| T22 列表状态限流与逐行隔离 | P0 | IN_PROGRESS | 现有 delivery-status 契约 |
-| T23 首屏与编辑辅助加载分离 | P1 | IN_PROGRESS | T22；原 loadModelWorkbenchContext 契约 |
-| T24 正式验证与运行性能验收 | P0 | IN_PROGRESS | T21–T23 源码进入 Git |
+| T01 交付聚合事务边界 | P0 | IN_PROGRESS | 现有契约/现场账本 |
+| T02 列表状态限流与逐行隔离 | P0 | IN_PROGRESS | 现有 delivery-status 契约 |
+| T03 首屏与编辑辅助加载分离 | P1 | IN_PROGRESS | T02；原 loadModelWorkbenchContext 契约 |
+| T04 正式验证与运行性能验收 | P0 | IN_PROGRESS | T01–T03 源码进入 Git |
 
 ## DoR 与 Gate
 - [x] 契约、页面入口、复用 owner、错误路径、依赖及测试目标固定。
 - [x] 现场已登录17条真实模型；容器/数据库可访问；沿用 Sprint 已有正式 Maven/Vitest/发布入口。
 - [x] GitNexus get 上游1个 REST调用方，LOW；列表组件图未报告调用方，LOW，实际 React 页面消费由源码确认。
-- [ ] 新制品、并发时延与 Chrome95 完整验收（T24），不得用旧基线关闭本 Feature。
+- [ ] 新制品、并发时延与 Chrome95 完整验收（T04），不得用旧基线关闭本 Feature。
 
 ## 性能预算与可执行验证
 | 项目 | 预算/检查 |

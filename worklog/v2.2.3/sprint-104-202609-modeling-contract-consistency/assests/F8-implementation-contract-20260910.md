@@ -2,7 +2,7 @@
 
 来源：用户授权开始编码；基线 8c7023572，覆盖八条审核意见及模型发布门禁补充。本文优先于原 K67–K72 草案中的冲突描述，不自动改变其他 Feature 状态。
 
-- T44 只读画像：3 规则、5 版本、0 statements、多语句占比 0%；历史 RESULT_ID_REQUIRED=4，DATASET_SCOPE_BLOCKED=16。5 个定义中 select * 无 FROM=1，函数越界=0、跨表=0；4 个有表定义在无 id 的目标上存在条件性统计故障。保留所有历史规则/运行/工单，不直接改库。
+- F8-T01 只读画像：3 规则、5 版本、0 statements、多语句占比 0%；历史 RESULT_ID_REQUIRED=4，DATASET_SCOPE_BLOCKED=16。5 个定义中 select * 无 FROM=1，函数越界=0、跨表=0；4 个有表定义在无 id 的目标上存在条件性统计故障。保留所有历史规则/运行/工单，不直接改库。
 - K67：POST /api/governance/quality/rules/validate-sql；{datasetId, definition:{sql?,statements?}}。允许只读平台元数据和对象权限检查，禁止连接目标库。返回 valid、逐语句安全 diagnostics、SQL checksum、允许函数清单；非法/越权遵循 400/403，禁止泄露他表身份。
 - K68：校验、保存、草稿试跑、正式执行共用有效语句解析。非空 statements 优先；每条语句校验，禁止合规 sql 掩盖非法 statements。新保存（含草稿）与重新发布均校验，不改写历史定义。
 - 草稿试跑：POST /api/governance/quality/rules/dry-run；入参同 K67，直接执行编辑框快照，不接受 ruleId 代替内容，不创建规则/版本/正式运行/失败样本记录或工单。只读目标查询、已有超时、最多 1000 样本；返回 checksum，输入变化后界面丢弃旧结果。旧 runs/dry-run 保留兼容，但其 DRY_RUN 记录不得进入正式发布证据。

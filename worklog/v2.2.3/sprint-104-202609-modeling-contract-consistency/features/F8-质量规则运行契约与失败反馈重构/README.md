@@ -22,7 +22,7 @@
 
 ## 账本、契约与验收
 
-只读证据 C56–C70、目标契约 K67–K72、开放问题与非功能预算见 [F8 契约](../../assests/F8-quality-rule-execution-contract.md)。精确路径、DTO 与存量策略已于 T44 冻结，实施进展见 [验证记录](../../assests/F8-verification-20260910.md)。
+只读证据 C56–C70、目标契约 K67–K72、开放问题与非功能预算见 [F8 契约](../../assests/F8-quality-rule-execution-contract.md)。精确路径、DTO 与存量策略已于 T01 冻结，实施进展见 [验证记录](../../assests/F8-verification-20260910.md)。
 
 ## 端到端契约链
 
@@ -32,7 +32,7 @@
 | API | `POST /api/governance/quality/rules/validate-sql`（K67）；规则保存加入准入（K68）；试跑复用 `POST /api/governance/quality/runs/dry-run`（C68） | 静态校验零副作用、不连库；保存不通过返回 400 + reasonCode/detail |
 | Service | `QualitySqlScopeValidator.checkScope`（C70）、`QualityRuleService.requireExecutableDefinition`（C56）、`QualityDatasetStatementExecutor`（C60/C61）、`QualityRunOutcomeSemantics`（C63） | 复用既有解析与分类，不另建平行实现 |
 | 数据 | `gov_quality_run.error_category` / `metrics_json`；`gov_quality_failing_row` | 取值集合扩展但列不变；无新业务表 |
-| 迁移 | 预期无 changeSet | 若 K70 需要持久化第二维度，由 T44 判定并给出正式 changeSet |
+| 迁移 | 预期无 changeSet | 若 K70 需要持久化第二维度，由 T01 判定并给出正式 changeSet |
 
 ## UI/UX 规格
 
@@ -64,41 +64,41 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |---|---|---|---|---|
-| T44 | [运行契约基线与失败语义冻结](T44-运行契约基线与失败语义冻结.md) | P0 | DONE | 无；复用 C56–C70，不继承其他 Feature 验收状态 |
-| T45 | [失败行统计去除 id 硬依赖](T45-失败行统计去除id硬依赖.md) | P0 | IN_PROGRESS | T44 |
-| T46 | [业务结论与执行故障双维度分离](T46-业务结论与执行故障双维度分离.md) | P0 | IN_PROGRESS | T44、T45 |
-| T47 | [失败分类文案全覆盖与原因透出](T47-失败分类文案全覆盖与原因透出.md) | P1 | IN_PROGRESS | T44、T46 |
-| T48 | [保存前静态校验与编辑页契约提示](T48-保存前静态校验与编辑页契约提示.md) | P0 | IN_PROGRESS | T44 |
-| T49 | [平台故障不生成质量问题工单](T49-平台故障不生成质量问题工单.md) | P1 | IN_PROGRESS | T44、T46 |
-| T50 | [质量规则闭环正式验收](T50-质量规则闭环正式验收.md) | P0 | IN_PROGRESS | T45–T49 进入 Git；T44 冻结 |
+| T01 | [运行契约基线与失败语义冻结](T01-运行契约基线与失败语义冻结.md) | P0 | DONE | 无；复用 C56–C70，不继承其他 Feature 验收状态 |
+| T02 | [失败行统计去除 id 硬依赖](T02-失败行统计去除id硬依赖.md) | P0 | IN_PROGRESS | T01 |
+| T03 | [业务结论与执行故障双维度分离](T03-业务结论与执行故障双维度分离.md) | P0 | IN_PROGRESS | T01、T02 |
+| T04 | [失败分类文案全覆盖与原因透出](T04-失败分类文案全覆盖与原因透出.md) | P1 | IN_PROGRESS | T01、T03 |
+| T05 | [保存前静态校验与编辑页契约提示](T05-保存前静态校验与编辑页契约提示.md) | P0 | IN_PROGRESS | T01 |
+| T06 | [平台故障不生成质量问题工单](T06-平台故障不生成质量问题工单.md) | P1 | IN_PROGRESS | T01、T03 |
+| T07 | [质量规则闭环正式验收](T07-质量规则闭环正式验收.md) | P0 | IN_PROGRESS | T02–T06 进入 Git；T01 冻结 |
 
-执行顺序：T44 → T45 → T46 → T48 → T47 → T49 → T50。单代理；不因任务数量自动委派。
+执行顺序：T01 → T02 → T03 → T05 → T04 → T06 → T07。单代理；不因任务数量自动委派。
 
 ## 任务通用契约
 
-以下四项对 T44–T50 统一生效，Task 只写差异。
+以下四项对 T01–T07 统一生效，Task 只写差异。
 
 - **数据流与复用**：规则编辑页 → 静态校验/保存准入 → 质量运行触发 → `QualityDatasetStatementExecutor` 两道预检 → 只读连接执行 → 结论分类 → 运行详情与工单。每个 Task 只承担其对应段，全部复用账本中的既有类，禁止另建平行实现。
 - **错误路径**：输入非法 400 并回传 `reasonCode/detail`；未认证/越权沿用 401/403；不可见对象沿用既有防枚举策略，静态校验不得成为探测他表存在性的旁路；并发保存冲突 409。失败不得显示成功、不得清空用户已输入的 SQL。
-- **存储与兼容**：复用 `gov_rule` / `gov_rule_version` / `gov_quality_run` / `gov_quality_failing_row`；`error_category` 列与既有取值不变，只扩展取值集合。新增字段仅按 T44 冻结内容落地，禁止双写形成第二事实源。
-- **UI 落点**：使用既有质量工作台页面与深链，不另建工具页面；每个具名控制项必须有空、加载、错误、成功及无权限反馈。T44/T50 的界面工作限于只读走查与证据记录。
+- **存储与兼容**：复用 `gov_rule` / `gov_rule_version` / `gov_quality_run` / `gov_quality_failing_row`；`error_category` 列与既有取值不变，只扩展取值集合。新增字段仅按 T01 冻结内容落地，禁止双写形成第二事实源。
+- **UI 落点**：使用既有质量工作台页面与深链，不另建工具页面；每个具名控制项必须有空、加载、错误、成功及无权限反馈。T01/T07 的界面工作限于只读走查与证据记录。
 
 ## Gate 与 Definition of Ready
 
 | Gate | 状态 | 缺口与归属 |
 |---|---|---|
-| G0 | PASS | T44 已记录现网 3 规则/5 版本、多语句为 0 及历史失败分类 |
+| G0 | PASS | T01 已记录现网 3 规则/5 版本、多语句为 0 及历史失败分类 |
 | G1 | PASS | K67–K72 已冻结；双维度、试跑隔离、统计降级及历史兼容已明确 |
 | G2 | PENDING | 实现前逐符号影响分析；完成一致变更集后至多一次聚焦 review |
-| G3 | PENDING | 正式构建与回退；T50 |
-| G4 | PENDING | IT-48–IT-54、真实页面与 Chrome95；T50 |
+| G3 | PENDING | 正式构建与回退；T07 |
+| G4 | PENDING | IT-48–IT-54、真实页面与 Chrome95；T07 |
 
 - [x] 用户目标、范围、契约链、页面与任务追溯已写明。
 - [ ] 存量数据画像有证据。
 - [ ] API、错误码全集、存量兼容策略冻结。
 - [ ] 任务依赖完成，预算与验收方式确认。
 
-用户已授权编码。T44 DONE；T45–T49 代码与专项验证见验证记录，真实集成/Chrome95 尚待 T50 验收，F8 保持 IN_PROGRESS。
+用户已授权编码。T01 DONE；T02–T06 代码与专项验证见验证记录，真实集成/Chrome95 尚待 T07 验收，F8 保持 IN_PROGRESS。
 
 ## Definition of Done
 
@@ -106,7 +106,7 @@
 - [ ] 既有 10 处 `DATASET_SCOPE_BLOCKED` 断言与既有错误码取值未被破坏。
 - [ ] 静态校验允许只读平台元数据查询，禁止目标数据源连接和用户 SQL 执行、不泄露对象存在性，越权与跨表用例通过。
 - [ ] 源码检查/测试、正式构建交付、容器部署、真实页面及 Chrome95 各自记证；缺一不宣称全链完成。
-- [ ] 存量规则处置按 T44 结论执行并留证；未迁移须注明依据。
+- [ ] 存量规则处置按 T01 结论执行并留证；未迁移须注明依据。
 - [ ] IT 索引、任务状态、Sprint 与 queue 统计一致。
 
 ## 非目标

@@ -19,7 +19,7 @@ Surefire 汇总为 **99 tests, 0 failures, 0 errors, 0 skipped**，Maven `BUILD 
 
 `/tmp/sprint104-workbench-final.log` 记录 `/opt/prod/s10/deploy/source/dts-platform-webapp` 的 Vitest 4.1.0 运行：**2 test files passed，92 tests passed**，耗时 `11.25s`。日志中的 jsdom `getComputedStyle(..., pseudo-element)` 提示不影响该次通过结果。
 
-这 92 项只构成前端源码测试证据；Chrome 95、真实页面旅程和 API/运行时集成仍待 T08。
+这 92 项只构成前端源码测试证据；Chrome 95、真实页面旅程和 API/运行时集成仍待 F1-T08。
 
 ## 页面验收发现问题后的针对性回归
 
