@@ -37,6 +37,7 @@ import {
 	publicationIssueMessage,
 	toDashboardParams,
 	toEditableDashcards,
+	toRoleOptions,
 } from "./dashboard/dashboardEditorModel";
 import { useDashboardCardQueries } from "./dashboard/useDashboardCardQueries";
 import { DATA_SECURITY_LEVEL_OPTIONS } from "@/constants/governance";
@@ -103,12 +104,7 @@ export default function DashboardEditorPage() {
 		[platformOrgs],
 	);
 	const roleOptions = useMemo(
-		() => platformRoles.state === "loaded"
-			? platformRoles.value.map((role) => ({
-				value: role.name,
-				label: role.description ? `${role.name} · ${role.description}` : role.name,
-			}))
-			: [],
+		() => platformRoles.state === "loaded" ? toRoleOptions(platformRoles.value) : [],
 		[platformRoles],
 	);
 

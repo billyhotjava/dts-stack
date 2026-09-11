@@ -42,6 +42,13 @@ import {
 } from "./analysis/AnalysisWorkspace";
 import { analysisQueryFingerprint } from "./analysisWorkspaceModel";
 import { DATA_SECURITY_LEVEL_OPTIONS } from "@/constants/governance";
+import { analyticsApi, type PlatformOrgNode, type PlatformRole } from "../api/analyticsApi";
+import { flattenDepartmentOptions, toRoleOptions } from "./dashboard/dashboardEditorModel";
+import {
+	analysisPublicationIssueMessage,
+	atLeastClassification,
+	publicationClassificationFloor,
+} from "./analysis/analysisPublicationModel";
 
 const { Text, Title } = Typography;
 
@@ -49,6 +56,11 @@ type EditorState =
 	| { status: "loading" }
 	| { status: "ready"; contract: AnalysisDatasetDetail; analysis?: Analysis }
 	| { status: "error"; error: unknown };
+
+type DirectoryState<T> =
+	| { state: "loading" }
+	| { state: "loaded"; value: T }
+	| { state: "error" };
 
 type SaveNotice = { kind: "success" | "error"; message: string; correlationId?: string } | null;
 
@@ -112,10 +124,41 @@ export default function AnalysisEditorPage() {
 		classification: "DATA_INTERNAL",
 		expiresAt: null,
 	});
+	const [platformOrgs, setPlatformOrgs] = useState<DirectoryState<PlatformOrgNode[]>>({ state: "loading" });
+	const [platformRoles, setPlatformRoles] = useState<DirectoryState<PlatformRole[]>>({ state: "loading" });
+	const [directoryReloadKey, setDirectoryReloadKey] = useState(0);
 	const [versionsOpen, setVersionsOpen] = useState(false);
 	const [versions, setVersions] = useState<AnalysisVersion[]>([]);
 	const [versionsLoading, setVersionsLoading] = useState(false);
 	const queryAbortRef = useRef<AbortController | null>(null);
+	const departmentOptions = useMemo(
+		() => (platformOrgs.state === "loaded" ? flattenDepartmentOptions(platformOrgs.value) : []),
+		[platformOrgs],
+	);
+	const roleOptions = useMemo(
+		() => (platformRoles.state === "loaded" ? toRoleOptions(platformRoles.value) : []),
+		[platformRoles],
+	);
+
+	// Publication audiences come from the governed platform directory, the same codes the access guard matches.
+	useEffect(() => {
+		if (!publishOpen) return;
+		void directoryReloadKey;
+		let cancelled = false;
+		setPlatformOrgs({ state: "loading" });
+		setPlatformRoles({ state: "loading" });
+		analyticsApi
+			.listPlatformOrgs()
+			.then((value) => !cancelled && setPlatformOrgs({ state: "loaded", value }))
+			.catch(() => !cancelled && setPlatformOrgs({ state: "error" }));
+		analyticsApi
+			.listPlatformRoles()
+			.then((value) => !cancelled && setPlatformRoles({ state: "loaded", value }))
+			.catch(() => !cancelled && setPlatformRoles({ state: "error" }));
+		return () => {
+			cancelled = true;
+		};
+	}, [publishOpen, directoryReloadKey]);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -322,7 +365,7 @@ export default function AnalysisEditorPage() {
 		}
 	};
 
-	const validatePublication = async (): Promise<PublicationValidation | null> => {
+	const validatePublication = async (target: PublicationAudience = audience): Promise<PublicationValidation | null> => {
 		if (!analysis) {
 			setPublicationError("请先保存草稿，再进行发布校验。");
 			return null;
@@ -330,8 +373,8 @@ export default function AnalysisEditorPage() {
 		setPublicationBusy(true);
 		setPublicationError(null);
 		try {
-			const expiresAt = audience.expiresAt ? new Date(audience.expiresAt).toISOString() : null;
-			const result = await validateAnalysisPublication(analysis.id, { ...audience, expiresAt });
+			const expiresAt = target.expiresAt ? new Date(target.expiresAt).toISOString() : null;
+			const result = await validateAnalysisPublication(analysis.id, { ...target, expiresAt });
 			setPublicationValidation(result);
 			return result;
 		} catch (error) {
@@ -343,10 +386,14 @@ export default function AnalysisEditorPage() {
 	};
 
 	const openPublication = () => {
+		const floor = publicationClassificationFloor(contract?.dataset.classification);
+		const next = { ...audience, classification: atLeastClassification(audience.classification, floor) };
+		setAudience(next);
 		setPublishOpen(true);
 		setPublicationValidation(null);
 		setPublicationError(null);
-		if (analysis) void validatePublication();
+		// Validate up front only once an audience exists; an empty form should not open on a wall of blockers.
+		if (analysis && (next.deptCodes.length > 0 || next.roleCodes.length > 0)) void validatePublication(next);
 	};
 
 	const publish = async () => {
@@ -527,23 +574,42 @@ export default function AnalysisEditorPage() {
 					<div>
 						<Text strong>可见部门</Text>
 						<Select
-							mode="tags"
+							mode="multiple"
 							value={audience.deptCodes}
 							onChange={(deptCodes) => { setAudience((value) => ({ ...value, deptCodes })); setPublicationValidation(null); }}
-							placeholder="输入部门编码后回车"
+							options={departmentOptions}
+							loading={platformOrgs.state === "loading"}
+							disabled={platformOrgs.state !== "loaded"}
+							showSearch
+							optionFilterProp="label"
+							placeholder="选择可见部门"
 							style={{ width: "100%" }}
 						/>
 					</div>
 					<div>
 						<Text strong>可见角色</Text>
 						<Select
-							mode="tags"
+							mode="multiple"
 							value={audience.roleCodes}
 							onChange={(roleCodes) => { setAudience((value) => ({ ...value, roleCodes })); setPublicationValidation(null); }}
-							placeholder="输入角色编码后回车"
+							options={roleOptions}
+							loading={platformRoles.state === "loading"}
+							disabled={platformRoles.state !== "loaded"}
+							showSearch
+							optionFilterProp="label"
+							placeholder="选择可见角色"
 							style={{ width: "100%" }}
 						/>
 					</div>
+					{platformOrgs.state === "error" ? (
+						<Alert type="error" showIcon message="部门目录加载失败" action={<Button size="small" onClick={() => setDirectoryReloadKey((value) => value + 1)}>重试</Button>} />
+					) : null}
+					{platformRoles.state === "error" ? (
+						<Alert type="error" showIcon message="角色目录加载失败" action={<Button size="small" onClick={() => setDirectoryReloadKey((value) => value + 1)}>重试</Button>} />
+					) : null}
+					{platformOrgs.state === "loaded" && platformRoles.state === "loaded" && departmentOptions.length === 0 && roleOptions.length === 0 ? (
+						<Alert type="warning" showIcon message="目录暂无可选部门或角色" action={<Button size="small" onClick={() => setDirectoryReloadKey((value) => value + 1)}>重新加载</Button>} />
+					) : null}
 					<div>
 						<Text strong>发布密级</Text>
 						<Select
@@ -570,7 +636,7 @@ export default function AnalysisEditorPage() {
 								message={publicationValidation.valid ? "校验通过，可以发布" : "存在发布阻断项"}
 							/>
 							{publicationValidation.blockers.map((blocker) => (
-								<Alert key={`${blocker.code}-${blocker.path}`} type="error" showIcon message={blocker.code} description={`${blocker.path}：${blocker.message}`} />
+								<Alert key={`${blocker.code}-${blocker.path}`} type="error" showIcon message={analysisPublicationIssueMessage(blocker, publicationValidation.dependencySnapshot)} />
 							))}
 							<Card size="small" title="依赖快照">
 								<pre style={{ margin: 0, whiteSpace: "pre-wrap", wordBreak: "break-all", maxHeight: 240, overflow: "auto" }}>

@@ -70,3 +70,13 @@ test("analysis publication is a validated and versioned action separate from sav
 		assert.match(EDITOR_SOURCE, new RegExp(audienceField));
 	}
 });
+
+test("analysis publication audience comes from the platform directory and blockers are readable", () => {
+	assert.match(EDITOR_SOURCE, /analyticsApi[\s\S]{0,40}\.listPlatformOrgs\(\)/);
+	assert.match(EDITOR_SOURCE, /analyticsApi[\s\S]{0,40}\.listPlatformRoles\(\)/);
+	assert.doesNotMatch(EDITOR_SOURCE, /mode="tags"[\s\S]{0,180}audience\.deptCodes/);
+	assert.doesNotMatch(EDITOR_SOURCE, /mode="tags"[\s\S]{0,180}audience\.roleCodes/);
+	assert.match(EDITOR_SOURCE, /analysisPublicationIssueMessage\(blocker/);
+	assert.doesNotMatch(EDITOR_SOURCE, /message=\{blocker\.code\}/);
+	assert.match(EDITOR_SOURCE, /publicationClassificationFloor\(contract\?\.dataset\.classification\)/);
+});

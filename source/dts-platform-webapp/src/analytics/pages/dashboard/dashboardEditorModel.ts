@@ -5,6 +5,7 @@ import type {
 	DashboardPublicationAudience,
 	DashboardPublicationIssue,
 	PlatformOrgNode,
+	PlatformRole,
 } from "../../api/analyticsApi";
 import type { DashboardParameter } from "./DashboardFilterBar";
 
@@ -51,6 +52,13 @@ export function flattenDepartmentOptions(
 		}
 	}
 	return options;
+}
+
+export function toRoleOptions(roles: PlatformRole[]): Array<{ value: string; label: string }> {
+	return roles.map((role) => ({
+		value: role.name,
+		label: role.description ? `${role.name} · ${role.description}` : role.name,
+	}));
 }
 
 export function isPublishedAnalysisCard(
