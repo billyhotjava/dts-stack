@@ -64,6 +64,25 @@
 .dmx-wizard-completion .dmx-dialog-actions {
 	flex-wrap: wrap;
 }
+.dmx-wizard-completion__link {
+	display: inline-flex;
+	align-items: center;
+	height: 32px;
+	padding: 0 15px;
+	border: 1px solid #d9d9d9;
+	border-radius: 6px;
+	background: #fff;
+	color: rgba(0, 0, 0, 0.88);
+	white-space: nowrap;
+}
+.dmx-wizard-completion__link:hover {
+	border-color: #4096ff;
+	color: #4096ff;
+}
+.dmx-wizard-completion__link:focus-visible {
+	outline: 2px solid #91caff;
+	outline-offset: 1px;
+}
 .dmx-model-wizard .dmx-editor-toolbar {
 	position: sticky;
 	bottom: 0;
