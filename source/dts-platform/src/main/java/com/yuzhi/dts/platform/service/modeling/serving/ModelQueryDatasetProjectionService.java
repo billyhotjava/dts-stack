@@ -13,9 +13,14 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DeriveCommand;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.SubjectRef;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecReader;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.PublishPayload;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContract.ServingRef;
 import com.yuzhi.dts.platform.service.sql.QueryDatasetContractSnapshotAssembler;
+import com.yuzhi.dts.platform.service.sql.QueryDatasetContractSnapshotAssembler.ModelMeasure;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +41,7 @@ public class ModelQueryDatasetProjectionService {
     private final CanonicalModelIdentityReadPort identityReadPort;
     private final CatalogConsumerClassificationService classificationService;
     private final QueryDatasetContractSnapshotAssembler contractAssembler;
+    private final ModelSpecReader modelSpecReader;
 
     public ModelQueryDatasetProjectionService(
         QueryDatasetAssetRepository assetRepository,
@@ -43,7 +49,8 @@ public class ModelQueryDatasetProjectionService {
         CatalogDatasetRepository catalogDatasetRepository,
         CanonicalModelIdentityReadPort identityReadPort,
         CatalogConsumerClassificationService classificationService,
-        QueryDatasetContractSnapshotAssembler contractAssembler
+        QueryDatasetContractSnapshotAssembler contractAssembler,
+        ModelSpecReader modelSpecReader
     ) {
         this.assetRepository = assetRepository;
         this.versionRepository = versionRepository;
@@ -51,6 +58,7 @@ public class ModelQueryDatasetProjectionService {
         this.identityReadPort = identityReadPort;
         this.classificationService = classificationService;
         this.contractAssembler = contractAssembler;
+        this.modelSpecReader = modelSpecReader;
     }
 
     public ProjectionResult project(SyncCandidate candidate, PublishPayload semantic) {
@@ -73,6 +81,7 @@ public class ModelQueryDatasetProjectionService {
             .findById(modelSpecId)
             .orElseThrow(() -> new IllegalStateException("MODEL_QUERY_DATASET_MODEL_IDENTITY_REQUIRED"));
         String sql = baseSql(serving);
+        List<ModelMeasure> measures = measures(projection.tenantId(), serving);
         QueryDatasetAsset asset = assetRepository.findBySourceModelSpecId(modelSpecId).orElseGet(QueryDatasetAsset::new);
         boolean newAsset = asset.getId() == null;
         mapAsset(asset, physical, serving, modelSpecId, sql, newAsset);
@@ -83,7 +92,7 @@ public class ModelQueryDatasetProjectionService {
 
         List<QueryDatasetVersion> versions = versionRepository.findByDataset_IdOrderByVersionNoDesc(asset.getId());
         QueryDatasetVersion current = findCurrent(versions, semantic.specVersion(), sql);
-        if (current != null) {
+        if (current != null && contractAssembler.coversMeasures(current.getSemanticContractJson(), measures)) {
             publishAsset(asset, current);
             assetRepository.save(asset);
             return new ProjectionResult(true, false, asset.getId(), current.getVersionNo());
@@ -104,7 +113,15 @@ public class ModelQueryDatasetProjectionService {
         version.setStatus("DRAFT");
         version.setSqlText(sql);
         version.setChangeSummary("由已发布模型 " + identity.modelName() + " 自动同步");
-        var snapshot = contractAssembler.assemblePublishedModel(asset, version, physical, identity, semantic, classification);
+        var snapshot = contractAssembler.assemblePublishedModel(
+            asset,
+            version,
+            physical,
+            identity,
+            semantic,
+            measures,
+            classification
+        );
         if (!"READY".equals(snapshot.status())) {
             throw new IllegalStateException("MODEL_QUERY_DATASET_CONTRACT_NOT_READY");
         }
@@ -126,6 +143,16 @@ public class ModelQueryDatasetProjectionService {
         publishAsset(asset, version);
         assetRepository.save(asset);
         return new ProjectionResult(true, true, asset.getId(), version.getVersionNo());
+    }
+
+    private List<ModelMeasure> measures(String tenantId, ServingRef serving) {
+        var model = modelSpecReader.revision(tenantId, new ModelRevisionRef(serving.modelSpecId(), serving.modelRevision()));
+        List<ModelField> fields = model == null || model.fields() == null ? List.of() : model.fields();
+        return fields
+            .stream()
+            .filter(field -> field != null && field.role() == FieldRole.MEASURE && StringUtils.hasText(field.name()))
+            .map(field -> new ModelMeasure(field.name(), field.displayName(), field.dataType()))
+            .toList();
     }
 
     private static void mapAsset(

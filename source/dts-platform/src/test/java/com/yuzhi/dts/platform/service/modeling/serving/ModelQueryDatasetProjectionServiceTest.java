@@ -20,12 +20,19 @@ import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.DerivationResult;
 import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationService.ResolvedSource;
+import com.yuzhi.dts.platform.domain.explore.QueryDatasetVersion;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelRevisionRef;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelSpecView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecReader;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.DimensionPayload;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.MetricPayload;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.PublishPayload;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContract.ModelServingProjection;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelServingContract.ServingRef;
 import com.yuzhi.dts.platform.service.sql.QueryDatasetContractSnapshotAssembler;
+import com.yuzhi.dts.platform.service.sql.QueryDatasetContractSnapshotAssembler.ModelMeasure;
 import com.yuzhi.dts.platform.service.sql.QueryDatasetContractSnapshotAssembler.Snapshot;
 import java.time.Instant;
 import java.util.List;
@@ -70,20 +77,29 @@ class ModelQueryDatasetProjectionServiceTest {
         when(versions.findByDataset_IdOrderByVersionNoDesc(DATASET_ID)).thenReturn(List.of());
         when(identities.findById(MODEL_ID)).thenReturn(Optional.of(identity));
         when(classifications.derive(any())).thenReturn(classification);
-        when(assembler.assemblePublishedModel(any(), any(), any(), any(), any(), any())).thenReturn(snapshot);
+        when(assembler.assemblePublishedModel(any(), any(), any(), any(), any(), any(), any())).thenReturn(snapshot);
         ModelQueryDatasetProjectionService service = new ModelQueryDatasetProjectionService(
             assets,
             versions,
             catalog,
             identities,
             classifications,
-            assembler
+            assembler,
+            modelReader()
         );
 
         var result = service.project(candidate(), payload());
 
         assertThat(result).isEqualTo(new ModelQueryDatasetProjectionService.ProjectionResult(true, true, DATASET_ID, 1));
-        verify(assembler).assemblePublishedModel(any(), any(), any(), any(), any(), any());
+        verify(assembler).assemblePublishedModel(
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            org.mockito.ArgumentMatchers.eq(List.of(new ModelMeasure("budget_amount", "预算金额", "numeric"))),
+            any()
+        );
         verify(versions).save(
             org.mockito.ArgumentMatchers.argThat(version ->
                 "PUBLISHED".equals(version.getStatus()) &&
@@ -117,13 +133,98 @@ class ModelQueryDatasetProjectionServiceTest {
             catalog,
             identities,
             classifications,
-            assembler
+            assembler,
+            modelReader()
         );
 
         var result = service.project(candidate(), payload());
 
         assertThat(result).isEqualTo(new ModelQueryDatasetProjectionService.ProjectionResult(false, false, null, 0));
         verify(assets, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
+    void republishesCurrentContractThatDoesNotExposeModelMeasures() {
+        QueryDatasetAssetRepository assets = mock(QueryDatasetAssetRepository.class);
+        QueryDatasetVersionRepository versions = mock(QueryDatasetVersionRepository.class);
+        CatalogDatasetRepository catalog = mock(CatalogDatasetRepository.class);
+        CanonicalModelIdentityReadPort identities = mock(CanonicalModelIdentityReadPort.class);
+        CatalogConsumerClassificationService classifications = mock(CatalogConsumerClassificationService.class);
+        QueryDatasetContractSnapshotAssembler assembler = new QueryDatasetContractSnapshotAssembler(
+            new com.fasterxml.jackson.databind.ObjectMapper()
+        );
+        QueryDatasetAsset existing = new QueryDatasetAsset();
+        existing.setId(DATASET_ID);
+        QueryDatasetVersion stale = new QueryDatasetVersion();
+        stale.setDataset(existing);
+        stale.setVersionNo(1);
+        stale.setStatus("PUBLISHED");
+        stale.setContractSnapshotStatus("READY");
+        stale.setSemanticContractVersion("r3");
+        stale.setSqlText("SELECT * FROM \"public\".\"biz_ads_budget_kpi_v2\"");
+        stale.setSemanticContractJson("{\"metrics\":[{\"code\":\"record_count\",\"expression\":\"*\"}]}");
+        when(catalog.findById(PHYSICAL_ASSET_ID)).thenReturn(Optional.of(physical("DWS")));
+        when(assets.findBySourceModelSpecId(MODEL_ID)).thenReturn(Optional.of(existing));
+        when(assets.save(any(QueryDatasetAsset.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(versions.findByDataset_IdOrderByVersionNoDesc(DATASET_ID)).thenReturn(List.of(stale));
+        when(versions.findMaxVersionNo(DATASET_ID)).thenReturn(1);
+        when(identities.findById(MODEL_ID)).thenReturn(Optional.of(identity()));
+        when(classifications.derive(any())).thenReturn(classification());
+        ModelQueryDatasetProjectionService service = new ModelQueryDatasetProjectionService(
+            assets,
+            versions,
+            catalog,
+            identities,
+            classifications,
+            assembler,
+            modelReader()
+        );
+
+        var result = service.project(candidate(), payloadWithoutIndicators());
+
+        assertThat(result).isEqualTo(new ModelQueryDatasetProjectionService.ProjectionResult(true, true, DATASET_ID, 2));
+        assertThat(stale.getStatus()).isEqualTo("ARCHIVED");
+        verify(versions).save(
+            org.mockito.ArgumentMatchers.argThat(version ->
+                version.getVersionNo() == 2 &&
+                "PUBLISHED".equals(version.getStatus()) &&
+                version.getSemanticContractJson().contains("\"code\":\"budget_amount\"") &&
+                version.getSemanticContractJson().contains("\"aggregation\":\"SUM\"")
+            )
+        );
+    }
+
+    private static ModelSpecReader modelReader() {
+        ModelSpecReader reader = mock(ModelSpecReader.class);
+        ModelSpecView model = mock(ModelSpecView.class);
+        when(model.fields()).thenReturn(
+            List.of(
+                new ModelField("project_code", "项目编码", "varchar", false, null, FieldRole.KEY, "DATA_INTERNAL", null, false, null),
+                new ModelField("budget_amount", "预算金额", "numeric", true, null, FieldRole.MEASURE, "DATA_INTERNAL", null, false, null)
+            )
+        );
+        when(reader.revision("tenant-a", new ModelRevisionRef(MODEL_ID, 3))).thenReturn(model);
+        return reader;
+    }
+
+    private static PublishPayload payloadWithoutIndicators() {
+        PublishPayload base = payload();
+        return new PublishPayload(
+            base.tenantId(),
+            base.platformDataSourceId(),
+            base.modelName(),
+            base.tableName(),
+            base.schemaName(),
+            base.label(),
+            base.description(),
+            base.securityLevel(),
+            base.grain(),
+            base.specVersion(),
+            base.exposedToModeler(),
+            List.of(),
+            base.dimensions(),
+            base.joins()
+        );
     }
 
     private static CatalogDataset physical(String layer) {

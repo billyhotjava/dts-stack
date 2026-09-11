@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.sql;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetAsset;
@@ -14,10 +15,12 @@ import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContr
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.MetricPayload;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.PublishPayload;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -26,6 +29,11 @@ import org.springframework.util.StringUtils;
 public class QueryDatasetContractSnapshotAssembler {
 
     public static final String CONTRACT_SCHEMA = "dts.query-dataset-contract/v1";
+
+    private static final Set<String> NUMERIC_TYPES = Set.of(
+        "int", "integer", "int2", "int4", "int8", "bigint", "smallint", "tinyint", "numeric", "decimal", "number",
+        "float", "float4", "float8", "double", "double precision", "real", "money"
+    );
 
     private final ObjectMapper objectMapper;
 
@@ -83,6 +91,22 @@ public class QueryDatasetContractSnapshotAssembler {
         PublishPayload semantic,
         DerivationResult classification
     ) {
+        return assemblePublishedModel(asset, version, physical, identity, semantic, List.of(), classification);
+    }
+
+    /**
+     * Model MEASURE fields without a published atomic indicator are still part of the physical result
+     * schema; exposing them keeps the BI field list aligned with what the DWS/ADS model materialized.
+     */
+    public Snapshot assemblePublishedModel(
+        QueryDatasetAsset asset,
+        QueryDatasetVersion version,
+        CatalogDataset physical,
+        ModelIdentity identity,
+        PublishPayload semantic,
+        List<ModelMeasure> measures,
+        DerivationResult classification
+    ) {
         List<String> blockers = publishedModelBlockers(asset, physical, identity, semantic, classification);
         String status = blockers.isEmpty() ? "READY" : "UNRESOLVED";
         String contractVersion = semantic != null && StringUtils.hasText(semantic.specVersion())
@@ -102,7 +126,7 @@ public class QueryDatasetContractSnapshotAssembler {
         contract.put("warehouseLayer", physical == null ? null : upper(physical.getWarehouseLayer()));
         contract.put("bizDomain", physical == null || physical.getDomain() == null ? null : physical.getDomain().getCode());
         contract.put("dimensions", publishedDimensions(semantic));
-        contract.put("metrics", publishedMetrics(semantic));
+        contract.put("metrics", publishedMetrics(semantic, measures));
         contract.put("joins", publishedJoins(semantic));
         contract.put("sourceModels", modelContracts(models));
         contract.put("classificationFloor", classification == null ? null : classification.effectiveLevel());
@@ -173,7 +197,7 @@ public class QueryDatasetContractSnapshotAssembler {
         return dimension;
     }
 
-    private List<Map<String, Object>> publishedMetrics(PublishPayload semantic) {
+    private List<Map<String, Object>> publishedMetrics(PublishPayload semantic, List<ModelMeasure> measures) {
         List<Map<String, Object>> metrics = new ArrayList<>();
         if (semantic != null) {
             semantic
@@ -182,6 +206,19 @@ public class QueryDatasetContractSnapshotAssembler {
                 .filter(metric -> metric != null && StringUtils.hasText(metric.name()))
                 .map(this::publishedMetric)
                 .forEach(metrics::add);
+        }
+        Set<String> taken = new HashSet<>();
+        metrics.forEach(metric -> {
+            taken.add(lower(metric.get("code")));
+            taken.add(lower(metric.get("expression")));
+        });
+        publishedDimensions(semantic).forEach(dimension -> taken.add(lower(dimension.get("code"))));
+        if (measures != null) {
+            for (ModelMeasure measure : measures) {
+                if (measure == null || !StringUtils.hasText(measure.name())) continue;
+                if (!taken.add(lower(measure.name()))) continue;
+                metrics.add(modelMeasureMetric(measure));
+            }
         }
         boolean hasRecordCount = metrics.stream().anyMatch(metric -> "record_count".equals(metric.get("code")));
         if (!hasRecordCount) metrics.addAll(defaultMetrics());
@@ -196,6 +233,50 @@ public class QueryDatasetContractSnapshotAssembler {
         metric.put("unit", StringUtils.hasText(source.unit()) ? source.unit().trim() : null);
         metric.put("expression", StringUtils.hasText(source.field()) ? source.field().trim() : source.name().trim());
         return metric;
+    }
+
+    private static Map<String, Object> modelMeasureMetric(ModelMeasure source) {
+        String code = source.name().trim();
+        Map<String, Object> metric = new LinkedHashMap<>();
+        metric.put("code", code);
+        metric.put("label", StringUtils.hasText(source.displayName()) ? source.displayName().trim() : code);
+        metric.put("aggregation", isNumeric(source.dataType()) ? "SUM" : "COUNT");
+        metric.put("unit", null);
+        metric.put("expression", code);
+        return metric;
+    }
+
+    private static boolean isNumeric(String dataType) {
+        String type = lower(dataType);
+        int precision = type.indexOf('(');
+        return NUMERIC_TYPES.contains(precision < 0 ? type : type.substring(0, precision).trim());
+    }
+
+    /** True when a stored contract already exposes every model measure, so it can be reused as current. */
+    public boolean coversMeasures(String contractJson, List<ModelMeasure> measures) {
+        if (measures == null || measures.isEmpty()) return true;
+        if (!StringUtils.hasText(contractJson)) return false;
+        Set<String> exposed = new HashSet<>();
+        try {
+            JsonNode contract = objectMapper.readTree(contractJson);
+            for (JsonNode metric : contract.path("metrics")) {
+                exposed.add(lower(metric.path("code").asText(null)));
+                exposed.add(lower(metric.path("expression").asText(null)));
+            }
+            for (JsonNode dimension : contract.path("dimensions")) {
+                exposed.add(lower(dimension.path("code").asText(null)));
+            }
+        } catch (JsonProcessingException unreadable) {
+            return false;
+        }
+        return measures
+            .stream()
+            .filter(measure -> measure != null && StringUtils.hasText(measure.name()))
+            .allMatch(measure -> exposed.contains(lower(measure.name())));
+    }
+
+    private static String lower(Object value) {
+        return value == null ? "" : value.toString().trim().toLowerCase(Locale.ROOT);
     }
 
     private List<Map<String, Object>> publishedJoins(PublishPayload semantic) {
@@ -365,6 +446,9 @@ public class QueryDatasetContractSnapshotAssembler {
     }
 
     private record ModelEntry(String reference, ModelIdentity identity) {}
+
+    /** A MEASURE field of the published model revision, as materialized in the physical table. */
+    public record ModelMeasure(String name, String displayName, String dataType) {}
 
     public record Snapshot(String schema, String version, String status, String contractJson, String checksum) {}
 }

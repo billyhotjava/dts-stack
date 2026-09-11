@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.service.catalog.CatalogConsumerClassificationServi
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.DimensionPayload;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.MetricPayload;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticContract.PublishPayload;
+import com.yuzhi.dts.platform.service.sql.QueryDatasetContractSnapshotAssembler.ModelMeasure;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -82,5 +83,66 @@ class QueryDatasetPublishedModelContractTest {
             .contains("\"expression\":\"budget_amount\"")
             .contains("\"classificationFloor\":\"DATA_INTERNAL\"");
         assertThat(snapshot.checksum()).hasSize(64);
+    }
+
+    @Test
+    void exposesModelMeasuresWithoutIndicatorsAndKeepsIndicatorPrecedence() {
+        QueryDatasetContractSnapshotAssembler assembler = new QueryDatasetContractSnapshotAssembler(new ObjectMapper());
+        UUID modelId = UUID.fromString("30000000-0000-0000-0000-000000000002");
+        QueryDatasetAsset asset = new QueryDatasetAsset();
+        asset.setId(UUID.fromString("70000000-0000-0000-0000-000000000002"));
+        asset.setSourceDatasourceId(UUID.fromString("10000000-0000-0000-0000-000000000002"));
+        QueryDatasetVersion version = new QueryDatasetVersion();
+        version.setDataset(asset);
+        version.setVersionNo(1);
+        version.setSqlText("SELECT * FROM \"public\".\"prjdemo_dws_project_progress\"");
+        CatalogDataset physical = new CatalogDataset();
+        physical.setWarehouseLayer("DWS");
+        ModelIdentity identity = new ModelIdentity(ModelIdentityType.SEMANTIC_MODEL, modelId, modelId, null, "项目进度汇总", 3, null);
+        PublishPayload semantic = new PublishPayload(
+            "default",
+            asset.getSourceDatasourceId().toString(),
+            "model_spec_" + modelId.toString().replace("-", ""),
+            "prjdemo_dws_project_progress",
+            "public",
+            "项目进度汇总",
+            null,
+            "INTERNAL",
+            null,
+            "r3",
+            true,
+            List.of(new MetricPayload("gov_task_total", "任务总数(指标)", "SUM", "task_total", null, null, null, null, "INTERNAL", null)),
+            List.of(new DimensionPayload("project_code", "项目编码", "dimension", null)),
+            List.of()
+        );
+        UUID snapshotId = UUID.fromString("80000000-0000-0000-0000-000000000002");
+        DerivationResult classification = new DerivationResult(
+            "REPORT",
+            "bi-dataset:" + asset.getId(),
+            "DATA_INTERNAL",
+            snapshotId,
+            1,
+            List.of(new ResolvedSource("ASSET", identity.assetKey(), snapshotId, 1, "DATA_INTERNAL")),
+            null,
+            List.of()
+        );
+        List<ModelMeasure> measures = List.of(
+            new ModelMeasure("task_total", "任务总数", "bigint"),
+            new ModelMeasure("avg_progress_pct", "平均完成进度", "numeric(10,2)"),
+            new ModelMeasure("owner_name", null, "text")
+        );
+
+        var snapshot = assembler.assemblePublishedModel(asset, version, physical, identity, semantic, measures, classification);
+
+        assertThat(snapshot.status()).isEqualTo("READY");
+        assertThat(snapshot.contractJson())
+            .contains("{\"code\":\"gov_task_total\",\"label\":\"任务总数(指标)\",\"aggregation\":\"SUM\",\"unit\":null,\"expression\":\"task_total\"}")
+            .doesNotContain("\"code\":\"task_total\"")
+            .contains("{\"code\":\"avg_progress_pct\",\"label\":\"平均完成进度\",\"aggregation\":\"SUM\",\"unit\":null,\"expression\":\"avg_progress_pct\"}")
+            .contains("{\"code\":\"owner_name\",\"label\":\"owner_name\",\"aggregation\":\"COUNT\",\"unit\":null,\"expression\":\"owner_name\"}")
+            .contains("\"code\":\"record_count\"");
+        assertThat(assembler.coversMeasures(snapshot.contractJson(), measures)).isTrue();
+        assertThat(assembler.coversMeasures("{\"metrics\":[{\"code\":\"record_count\"}]}", measures)).isFalse();
+        assertThat(assembler.coversMeasures(null, List.of())).isTrue();
     }
 }
