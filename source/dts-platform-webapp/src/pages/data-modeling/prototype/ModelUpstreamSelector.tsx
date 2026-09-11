@@ -9,6 +9,7 @@ import { isUpstreamModelImplementationPinned } from "@/features/modeling/contrac
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { Button } from "./PrototypePrimitives";
 import { reconcileModelInputIdentity } from "./services/modelInputIdentity";
+import { adoptableUpstreamPins, withUpstreamPin } from "./services/upstreamPinAdoption";
 import { implementationInputs, type ModelSpecDraft } from "./services/modelWorkbenchService";
 
 export const inputReasonText = (reason?: string | null): string =>
@@ -139,6 +140,17 @@ export function ModelUpstreamSelector({ draft, candidates, onChange }: Props) {
 			controller.abort();
 		};
 	}, [requestKey]);
+	// A selected upstream without an implementation pin cannot expose its fields; adopt the matching current pin once.
+	const adoptedKey = useRef("");
+	useEffect(() => {
+		if (state.identity !== identity || state.loading) return;
+		const adoptable = adoptableUpstreamPins(draft, items);
+		if (!adoptable.length) return;
+		const key = `${identity}:${JSON.stringify(adoptable)}`;
+		if (adoptedKey.current === key) return;
+		adoptedKey.current = key;
+		onChange(reconcileModelInputIdentity(draft, adoptable.reduce(withUpstreamPin, draft)));
+	}, [draft, identity, items, onChange, state.identity, state.loading]);
 	const rows = useMemo(() => {
 		const result = [...candidates];
 		for (const selected of draft.dependsOn)
@@ -168,8 +180,12 @@ export function ModelUpstreamSelector({ draft, candidates, onChange }: Props) {
 			next.authoringImplementationInputs = previous.filter(
 				(input) => !("modelSpecId" in input) || input.modelSpecId !== model.id,
 			);
+		} else if (pin) {
+			onChange(reconcileModelInputIdentity(draft, withUpstreamPin(draft, pin)));
+			if (update) setPendingUpdate(null);
+			return;
 		} else {
-			const selected = pin || { modelSpecId: model.id, revision: model.revision, checksum: model.checksum };
+			const selected = { modelSpecId: model.id, revision: model.revision, checksum: model.checksum };
 			if (!selected.checksum) return;
 			next.dependsOn = draft.dependsOn.some((ref) => ref.modelSpecId === model.id)
 				? draft.dependsOn.map((ref) =>

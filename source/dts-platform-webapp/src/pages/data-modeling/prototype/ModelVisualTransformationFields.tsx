@@ -7,9 +7,11 @@ import type {
 	ModelImplementationFilterValueType,
 	ModelImplementationJoin,
 } from "@/features/modeling/contracts/modelImplementationContract";
+import { useEffect, useRef } from "react";
 import { Button } from "./PrototypePrimitives";
 import type { ModelSpecDraft, ModelWorkbenchContext } from "./services/modelWorkbenchService";
 import { implementationInputs } from "./services/modelWorkbenchService";
+import { defaultNameMappings, uniqueSourceField } from "./services/visualFieldMapping";
 import { ModelSourceFieldInput, useModelSourceFields } from "./useModelSourceFields";
 
 type Props = {
@@ -134,6 +136,26 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 	const namedFields = draft.fields.filter((field) => field.name.trim());
 	const patch = (next: Partial<ModelSpecDraft>) => onChange({ ...draft, ...next });
 	const canEdit = Boolean(draft.implementationInputMode) && draft.implementationInputMode !== "GENERATED";
+	const directoryResolved =
+		!directory.loading &&
+		directory.sources.length > 0 &&
+		directory.sources.every((source) => source.schemaState === "RESOLVED");
+
+	// Once the pinned field directory is known, unmapped target fields default to their same-name source field.
+	const autoMappedKey = useRef("");
+	useEffect(() => {
+		if (!canEdit || !directoryResolved) return;
+		const next = defaultNameMappings(
+			draft.fields.map((field) => field.name.trim()).filter(Boolean),
+			directory.sources,
+			draft.fieldMappings,
+		);
+		if (!next) return;
+		const key = JSON.stringify(next);
+		if (autoMappedKey.current === key) return;
+		autoMappedKey.current = key;
+		onChange({ ...draft, fieldMappings: next });
+	}, [canEdit, directoryResolved, directory.sources, draft, onChange]);
 
 	const setMapping = (targetField: string, sourceField: string) => {
 		const next = draft.fieldMappings.filter((mapping) => mapping.targetField !== targetField);
@@ -215,19 +237,13 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 					disabled={!aliases.length || !namedFields.length}
 					onClick={() =>
 						patch({
-							fieldMappings: namedFields.map((field) => {
-								const matches = directory.sources.filter((source) =>
-									source.fields.some((candidate) => candidate.name === field.name),
-								);
-								return {
-									targetField: field.name,
-									sourceField:
-										matches.length === 1
-											? `${matches[0].alias}.${field.name}`
-											: draft.fieldMappings.find((mapping) => mapping.targetField === field.name)?.sourceField ||
-												field.name,
-								};
-							}),
+							fieldMappings: namedFields.map((field) => ({
+								targetField: field.name,
+								sourceField:
+									uniqueSourceField(field.name, directory.sources) ||
+									draft.fieldMappings.find((mapping) => mapping.targetField === field.name)?.sourceField ||
+									field.name,
+							})),
 						})
 					}
 				>
@@ -283,6 +299,7 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 											onChange={(value) => setMapping(field.name, value)}
 											sources={directory.sources}
 											labels={sourceLabels}
+											selectWhenResolved
 										/>
 									</td>
 									<td>

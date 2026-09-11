@@ -66,8 +66,10 @@ type Props = {
 	sources: ModelInputFieldSource[];
 	labels: string[];
 	disabled?: boolean;
+	/** Render a closed dropdown once every input's field directory is resolved; free input stays the fallback. */
+	selectWhenResolved?: boolean;
 };
-export function ModelSourceFieldInput({ label, value, onChange, sources, labels, disabled }: Props) {
+export function ModelSourceFieldInput({ label, value, onChange, sources, labels, disabled, selectWhenResolved }: Props) {
 	const options = sources.flatMap((source) =>
 		source.fields.map((field) => ({
 			value: `${source.alias}.${field.name}`,
@@ -78,12 +80,32 @@ export function ModelSourceFieldInput({ label, value, onChange, sources, labels,
 	const known = options.some(
 		(option) => option.value === value || (sources.length === 1 && option.value === `src_0.${value}`),
 	);
-	const missing =
-		Boolean(value) &&
-		!disabled &&
-		sources.length > 0 &&
-		sources.every((source) => source.schemaState === "RESOLVED") &&
-		!known;
+	const resolved = sources.length > 0 && sources.every((source) => source.schemaState === "RESOLVED");
+	const missing = Boolean(value) && !disabled && resolved && !known;
+	if (selectWhenResolved && resolved && options.length > 0) {
+		const selected =
+			options.find((option) => option.value === value)?.value ??
+			(sources.length === 1 ? options.find((option) => option.value === `src_0.${value}`)?.value : undefined) ??
+			value;
+		return (
+			<div>
+				<select aria-label={label} aria-invalid={missing} value={selected} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+					<option value="">请选择来源字段</option>
+					{missing ? <option value={value}>{value}（不在来源目录中）</option> : null}
+					{options.map((option) => (
+						<option key={option.value} value={option.value}>
+							{option.label}
+						</option>
+					))}
+				</select>
+				{missing && (
+					<small role="alert">
+						{value.startsWith("src_2147483647.") ? "原来源已移除，请重新选择字段" : "字段不在当前来源目录中，请检查选择"}
+					</small>
+				)}
+			</div>
+		);
+	}
 	return (
 		<div>
 			<input
