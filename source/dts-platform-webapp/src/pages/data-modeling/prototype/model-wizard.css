@@ -49,6 +49,21 @@
 	color: #64748b;
 	margin-top: 8px;
 }
+.dmx-wizard-completion {
+	padding: 4px 20px 20px;
+}
+.dmx-wizard-completion h3 {
+	margin: 0 0 6px;
+	font-weight: 600;
+}
+.dmx-wizard-completion p {
+	margin: 0 0 16px;
+	color: #475569;
+	overflow-wrap: anywhere;
+}
+.dmx-wizard-completion .dmx-dialog-actions {
+	flex-wrap: wrap;
+}
 .dmx-model-wizard .dmx-editor-toolbar {
 	position: sticky;
 	bottom: 0;

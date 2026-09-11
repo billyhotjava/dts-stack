@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect } from "react";
-import { Link, useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import {
 	MODEL_WIZARD_STEPS,
 	type ModelDeliveryStatus,
@@ -61,6 +61,7 @@ export function ModelWizardFrame({
 	onAssetGuardChange: (handle: UnsavedEditorHandle | null) => void;
 }) {
 	const [params, setParams] = useSearchParams();
+	const navigate = useNavigate();
 	const requested = normalizeModelWizardStep(params.get("step"));
 	const step = requested || delivery?.recommendedStep || "definition";
 	const completed = delivery?.modelingResult?.state === "SUCCEEDED" && delivery.modelingResult.matchesCurrentTarget;
@@ -131,12 +132,12 @@ export function ModelWizardFrame({
 						))}
 					</section>
 					{step === "delivery" || completed ? (
-						<section aria-label={completed ? "建模完成" : "历史交付结果"}>
+						<section className="dmx-wizard-completion" aria-label={completed ? "建模完成" : "历史交付结果"}>
 							<h3>{completed ? "建模已完成" : "历史交付结果"}</h3>
 							<p>{completed ? `当前版本已物化到 ${delivery?.modelingResult?.targetRelation || "目标表"}。` : "此页保留交付结果回看，资产治理和发布请进入数据管理。"}</p>
 							<div className="dmx-dialog-actions">
 								<Button primary onClick={onBack}>返回模型列表</Button>
-								<Link to={`/catalog/search?view=table&modelSpecId=${encodeURIComponent(model.id)}&environment=${encodeURIComponent(environment)}${delivery?.candidate?.id ? `&candidateId=${encodeURIComponent(delivery.candidate.id)}` : ""}`}>去数据管理</Link>
+								<Button onClick={() => navigate(`/catalog/search?view=table&modelSpecId=${encodeURIComponent(model.id)}&environment=${encodeURIComponent(environment)}${delivery?.candidate?.id ? `&candidateId=${encodeURIComponent(delivery.candidate.id)}` : ""}`)}>去数据管理</Button>
 							</div>
 						</section>
 					) : loading && !delivery ? (
