@@ -59,7 +59,14 @@ class CatalogClassificationVersionVisibilityPostgresIT {
         String key = "semantic-model:" + UUID.randomUUID();
         try (var pool = java.util.concurrent.Executors.newFixedThreadPool(2)) {
             var barrier = new java.util.concurrent.CyclicBarrier(2);
-            var low = pool.submit(() -> { barrier.await(5, java.util.concurrent.TimeUnit.SECONDS); return service.sealOrRaise(command(key,"INTERNAL")); });
+            var low = pool.submit(() -> {
+                barrier.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                try { return service.sealOrRaise(command(key,"INTERNAL")); }
+                catch (CatalogClassificationService.CatalogClassificationException denied) {
+                    // If the higher classification committed first, rejecting the lower request is required.
+                    assertThat(denied.code()).isEqualTo("CLASSIFICATION_DOWNGRADE_FORBIDDEN"); return null;
+                }
+            });
             var high = pool.submit(() -> { barrier.await(5, java.util.concurrent.TimeUnit.SECONDS); return service.sealOrRaise(command(key,"SECRET")); });
             low.get(20,java.util.concurrent.TimeUnit.SECONDS); high.get(20,java.util.concurrent.TimeUnit.SECONDS);
         }
