@@ -21,6 +21,16 @@
 
 大屏“个人新建 + 实例共享”范式不推广到数据连接与 ODS/DWD/DWS 模型。
 
+## 1.1 功能新旧与存量边界（2026-09-12 用户确认）
+
+| 能力 | 现场状态 | 对 F9 的影响 |
+|---|---|---|
+| 数据建模：数仓计划、模型、ADS、模型共享 | 本版本新增，客户现场无存量 | 迁移只建结构，不需要跨部门归并方案与现场预检；T04/T06 的 changeSet 在空表或测试环境极小数据上执行 |
+| 大屏及其共享、越级、密级派生 | 既有功能，自 2026-04 起在现场运行并有存量 | F9 对大屏零改动，只做密级链核对（K83）与验收走查；任何改动都需另立任务并评估存量大屏重算影响 |
+| 资产目录、资产授权、访问审批、角色与菜单 | 既有功能，现场有存量 | K78 密级只升不降按存量数据实施，Q5 历史降级扫描仍需执行；K73 角色收紧需先核对现场在用账号 |
+
+因此 F9 的“存量兼容”只对既有功能成立；建模侧不承诺也不需要跨版本数据迁移。
+
 ## 2. 对既有契约的替代映射
 
 | 既有契约 | 原内容 | F9 替代 | 保留 |
@@ -120,7 +130,7 @@ F7 已有源码、测试和证据保留，不删除、不改写历史记录；F9
 | S13 | 部门甲数据管理员 A 调岗到部门乙（dept_code 变更后重新登录） | A 打开部门甲公共层与自己在部门甲创建的 ADS | 部门甲公共层不可见不可改；ADS 归属保留、A 失去编辑权；部门甲领导仍可管理；归属不转移（Q2 已确认） | ①⑤ | IT-59、IT-61 |
 | S14 | 系统崩溃，启用 opadmin | opadmin 修复任意部门模型 | 保留全部能力；每次写入审计标注应急账号 | ②⑨ | IT-57 |
 | S15 | 部门甲已有 DWD“项目任务快照明细”（同业务过程、同来源表、同粒度键） | B 新建 DWD 并保存设计 | 提示“部门甲已有相似模型”并列出可打开的模型；B 可忽略继续保存 | ⑤ | IT-63 |
-| S16 | 存量：租户默认上下文“数据建模”，其中模型由多个部门人员创建 | 执行 F9 迁移 | 默认上下文按 T01 预检结论归属部门；无法确定部门时迁移中止并输出清单，不静默合并 | 数据 | IT-58 |
+| S16 | 建模为本版本新增，现场无存量；测试环境有一个租户默认上下文与少量模型 | 执行 F9 迁移 | 部分唯一索引直接建立；测试环境默认上下文归属其 owner 部门；预检仍执行，遇到无法判定部门的记录中止并输出清单，但不设计跨部门归并方案 | 数据 | IT-58 |
 
 ## 5. Context Ledger C71–C88
 
@@ -146,6 +156,10 @@ F7 已有源码、测试和证据保留，不删除、不改写历史记录；F9
 | C86 | 大屏 ACL：`analytics_screen_access` 授予 USER/ROLE，权限 OWNER/MANAGER/VIEWER，越级仅对 VIEWER 生效；大屏密级门槛为人员密级 ≥ 大屏密级 | `source/dts-analytics/.../domain/AnalyticsScreenAccess.java`；`service/ScreenPermissionService.java` |
 | C87 | 数据连接维护角色为 DATA_MAINTAINER_ROLES（含部门领导）；记录 ownerDept，写入不校验操作人部门 | `web/rest/infra/InfraDataSourceResource.java:46,203` |
 | C88 | 测试环境：1 个计划（部门 1153，DRAFT）、DWD 3 个与 DWS 1 个、无 ADS、1 个模型含依赖；客户现场未核对 | 2026-09-09/11 只读查询，T01 复核 |
+| C89 | 大屏密级由上游派生：收集指标/表/库上游（ASSET key 形如 `source:{平台源}/schema:{schema}/table:{table}`），调用 platform `/api/catalog/classifications/consumers/derive`，取上游与人工下限的最大值；创建大屏强制选密级并写入人工下限；上游密级缺失时存为 BLOCKED_UPSTREAM 草稿 | `source/dts-analytics/.../service/AnalyticsConsumerClassificationService.java:140-240`；`service/AnalyticsClassificationClient.java:48-63`；`web/rest/ScreenResource.java:812-824` |
+| C90 | 目录授权创建的被授权人信息（userId/username/deptCode）全部来自请求体，服务端不解析、不校验其部门与角色 | `web/rest/catalog/CatalogSecurityResource.java:186-212` |
+| C91 | 平台侧目录只能取到用户 `(id, username, displayName, deptCode, deptName)` 与全量角色字典，没有“某用户拥有哪些角色”的查询；dts-admin `/api/platform/directory/users`、`/users/resolve` 同样不返回角色 | `service/directory/AdminUserDirectoryClient.java:16-32`；`service/admin/gateway/directory/AdminDirectoryGateway.java:108-174,442`；`source/dts-admin/.../PlatformDirectoryResource.java:116-133,487` |
+| C92 | 建模（计划、模型、ADS）为本版本新增，现场无存量；大屏自 2026-04 起为既有功能，资产目录与角色菜单同为既有功能 | 用户确认 2026-09-12 |
 
 ## 6. 拟定契约 K73–K85
 
@@ -158,26 +172,27 @@ F7 已有源码、测试和证据保留，不删除、不改写历史记录；F9
 | K77 | 跨部门引用暂停 | `dependsOn`、`dimensionRefs` 指向其他部门计划的模型 → 422 `MODEL_SPEC_CROSS_DEPARTMENT_REF_PENDING_APPROVAL`，details `{field, referencedModelSpecId, referencedDepartmentCode}`；存量已 pin 引用原样重保存允许，改 pin 或新增拒绝；上游可用性投影对跨部门候选返回 `selectable:false, reasonCode` 同上 | T05 |
 | K78 | 资产密级只升不降 | `PUT /api/catalog/datasets/{id}` 与所有写 `catalog_dataset.classification` 的用户入口：新值低于当前有效密级 → 409 `CLASSIFICATION_DOWNGRADE_FORBIDDEN`，不写入；高于 → 经 `CatalogClassificationService` 提升人工下限；相等 → 不变。审计 `CATALOG_CLASSIFICATION_RAISE` / `CATALOG_CLASSIFICATION_DOWNGRADE_REJECTED` | T02 |
 | K79 | ADS 归属 | `modeling_model_spec.owner_id varchar(128)` 前向增列；APPLICATION 模型由 r1 `created_by` 回填，其余层为 null 且不参与判定；新建 ADS 写入当前 actor；视图 `ModelSpecView.ownerId` 只读输出 | T06 |
-| K80 | ADS 编辑授权 | 表 `modeling_model_access(id uuid pk, tenant_id, model_spec_id, grantee_type USER\|ROLE, grantee_id, permission EDITOR, granted_by, granted_at, revoked_by, revoked_at)`，部分唯一 `(tenant_id, model_spec_id, grantee_type, grantee_id) where revoked_at is null`。`GET /api/modeling/model-specs/{id}/access-grants` → `[{id,granteeType,granteeId,granteeName,permission,grantedBy,grantedAt}]`；`POST` body `{granteeType, granteeId, permission:"EDITOR"}` → 201；`DELETE .../access-grants/{grantId}` → 204。错误：非 ADS 422 `MODEL_ACCESS_LAYER_NOT_SHAREABLE`；授予人非创建人/本部门领导/所级角色 403 `MODEL_ACCESS_MANAGE_DENIED`；被授权人无建模角色 422 `MODEL_ACCESS_GRANTEE_NOT_AUTHOR`；被授权人不在模型所属部门 422 `MODEL_ACCESS_CROSS_DEPARTMENT_PENDING_APPROVAL`；ROLE 只允许 K73 部门级角色；重复授予 200 返回已有记录 | T06 |
+| K80 | ADS 编辑授权 | 表 `modeling_model_access(id uuid pk, tenant_id, model_spec_id, grantee_type USER\|ROLE, grantee_id, permission EDITOR, granted_by, granted_at, revoked_by, revoked_at)`，部分唯一 `(tenant_id, model_spec_id, grantee_type, grantee_id) where revoked_at is null`。`GET /api/modeling/model-specs/{id}/access-grants` → `[{id,granteeType,granteeId,granteeName,permission,grantedBy,grantedAt}]`；`POST` body `{granteeType, granteeId, permission:"EDITOR"}` → 201；`DELETE .../access-grants/{grantId}` → 204。错误：非 ADS 422 `MODEL_ACCESS_LAYER_NOT_SHAREABLE`；授予人非创建人/本部门领导/所级角色 403 `MODEL_ACCESS_MANAGE_DENIED`；被授权人无建模角色 422 `MODEL_ACCESS_GRANTEE_NOT_AUTHOR`（角色与部门由 K86 的目录解析给出，不采信请求体，见 C90）；被授权人不在模型所属部门 422 `MODEL_ACCESS_CROSS_DEPARTMENT_PENDING_APPROVAL`；ROLE 只允许 K73 部门级角色；重复授予 200 返回已有记录 | T06 |
 | K81 | 模型级编辑判定 `ModelSpecWriteAccessPort.canEdit(tenant, modelSpecId, actor)` | 非 APPLICATION → K75；APPLICATION → 所级角色 ∨ (部门领导 ∧ 同部门) ∨ (具备 K73 角色 ∧ 同部门 ∧ (owner ∨ 有效 USER 授权 ∨ 有效 ROLE 授权命中))。模型定义、创作草稿、实现、构建、发布等以模型为对象的写操作改用该端口；计划级操作（执行绑定、运行健康等）保留 K75。拒绝 403 `MODEL_EDIT_GRANT_REQUIRED`。`authoring-context` 与 `delivery-status` 的 allowedActions/wizard 只读原因同步输出该码 | T06 |
 | K82 | 跨部门申请入口 | 仅界面：上游选择器与 ADS 共享抽屉显示禁用按钮“申请跨部门引用/共享（待开放）”，提示审核模块未开放；不新增接口。后续挂接 C85 `/api/catalog/access` | T07 |
-| K83 | 大屏消费 ADS 的密级链 | T01 核实大屏密级是否不低于其引用 ADS 的资产密级；若成立则只补验收；若不成立，本 Feature 只登记缺口与影响，修复另立任务，不在 F9 内扩展大屏密级模型 | T07 |
+| K83 | 大屏消费 ADS 的密级链 | 已核实成立（C89）：大屏密级 = max(上游资产密级, 人工下限)，上游缺密级则大屏进 BLOCKED 草稿。F9 对大屏零改动，T07 只做逐层记录，T09 用真实账号走查 S12 | T07、T09 |
 | K84 | 审计 | `MODEL_ACCESS_GRANT`、`MODEL_ACCESS_REVOKE`、`MODELING_ROLE_DENIED`、`MODEL_EDIT_GRANT_DENIED`、`MODEL_SPEC_CROSS_DEPARTMENT_REF_REJECTED`、`CATALOG_CLASSIFICATION_RAISE`、`CATALOG_CLASSIFICATION_DOWNGRADE_REJECTED`、`MODELING_CONTEXT_DEPARTMENT_INITIALIZED`；全部在 dts-admin 审计资源字典登记（domain-dts D2），IP 走 `IpAddressUtils.resolveClientIp` | T02、T03、T05、T06 |
+| K86 | 被授权人角色与部门的权威解析 | 现有目录接口不返回用户角色（C91）。dts-admin `GET /api/platform/directory/users/resolve` 响应增加 `roles:string[]`（realm 角色码），平台侧 `AdminUserDirectoryClient.UserSummary` 同步增加该字段；仅用于单次授权请求的服务端校验，不落库、不长期缓存。目录不可用时授权接口返回 503 `MODEL_ACCESS_DIRECTORY_UNAVAILABLE` 并拒绝授权，不得放行或采信请求体 | T01 冻结、T06 落地 |
 | K85 | 同部门重复建设提示 | `GET /api/modeling/model-specs/similar?planId&modelType&businessProcessId&sourceKeys&grainKeys` 只读 → `[{modelSpecId,name,layer,status,matchReasons:[BUSINESS_PROCESS\|SOURCE_SET\|GRAIN_KEYS]}]`，仅限同部门计划、仅 ODS/DWD/DWS；不阻断保存 | T08 |
 
 ## 7. 开放问题
 
-Q1–Q3 已由用户于 2026-09-12 确认，结论进入决策集合，实施期不再重议；Q4–Q7 仍由 F9-T01 关闭。
+Q1–Q3 已由用户于 2026-09-12 确认；Q4、Q6、Q7 同日按用户澄清与代码核实关闭；仅 Q5 仍由 F9-T01 执行。
 
 | # | 问题 | 结论 / 默认处理 | 状态 |
 |---|---|---|---|
 | Q1 | 所级角色是否豁免 K77 跨部门引用暂停 | 不豁免；研究所数据管理员与所级领导同样暂停，跨部门一律走审核 | 已确认 2026-09-12 |
 | Q2 | 创建人调岗或离职后 ADS 归属是否可转移，由谁转移 | 不转移；归属人保留原值，本部门领导与所级角色凭管理权维护，不提供转移接口 | 已确认 2026-09-12 |
 | Q3 | 自定义角色如何映射到 K73（是否允许授权管理员把自定义角色声明为“建模角色”） | 自定义角色不算建模角色，不具备建模权；建模权只来自 K73 的内置角色 | 已确认 2026-09-12 |
-| Q4 | 客户现场：每部门计划数、无部门计划、跨部门存量引用、各角色人数、建模菜单绑定 | 未核对前 T04/T05 不得执行迁移 | 待 F9-T01 |
-| Q5 | 历史目录降密级：从 `CATALOG_ASSET_EDIT` 审计前后快照扫描 | 仅出清单，是否恢复由用户确认 | 待 F9-T01 |
-| Q6 | ADS 编辑授权校验被授权人角色与部门所复用的目录服务端客户端 | T01 补录目录授权创建时解析被授权人部门的既有入口，禁止新建用户目录副本 | 待 F9-T01 |
-| Q7 | 大屏密级与引用 ADS 资产密级关系（K83） | 未核实前不宣称 S12 通过 | 待 F9-T01 |
+| Q4 | 客户现场建模存量（每部门计划数、跨部门引用、ADS 创建人回填） | 已关闭：建模为本版本新增，现场无存量（C92），不存在迁移归并需求；T01 只采集测试环境计数，现场仍需核对在用角色账号以评估 K73 收紧影响 | 已确认 2026-09-12 |
+| Q5 | 历史目录降密级：从 `CATALOG_ASSET_EDIT` 审计前后快照扫描 | 目录为既有功能且现场有存量，扫描仍需执行；仅出清单，是否恢复由用户确认 | 待 F9-T01 |
+| Q6 | ADS 编辑授权如何权威校验被授权人角色与部门 | 已关闭：目录授权是请求体透传（C90），不可复用；平台目录客户端有部门无角色（C91）。结论为复用 `AdminUserDirectoryClient` 并按 K86 扩展角色字段，不新建用户目录副本 | 已确认 2026-09-12 |
+| Q7 | 大屏密级与引用 ADS 资产密级关系（K83） | 已关闭：大屏密级取上游与人工下限的最大值，上游缺密级则大屏被阻断（C89），链路成立；F9 对大屏零改动，S12 仍须 T09 真实走查 | 已确认 2026-09-12 |
 
 ## 8. 非功能与交付约束
 

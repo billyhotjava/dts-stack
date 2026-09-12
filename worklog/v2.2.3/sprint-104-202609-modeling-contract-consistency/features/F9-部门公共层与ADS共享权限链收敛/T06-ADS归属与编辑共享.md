@@ -2,7 +2,7 @@
 
 **优先级**：P1
 **状态**：DRAFT
-**依赖**：T01（K79–K81 冻结、Q6 结论）、T05（部门维护范围）；Q2 已确认：归属不转移
+**依赖**：T01（K79–K81、K86 冻结）、T05（部门维护范围）；Q2 已确认归属不转移，Q6 已确认被授权人解析方案
 
 ## 目标
 
@@ -22,7 +22,7 @@ ADS 归创建人：同部门其他建模人员默认只读；创建人可把编�
 
 ## 技术设计与契约
 
-- **契约引用**：C76、C81、C84、K79、K80、K81、K84。
+- **契约引用**：C76、C81、C84、C90、C91、K79、K80、K81、K84、K86。
 - **数据契约**：
   - `modeling_model_spec.owner_id varchar(128)`：前向增列；APPLICATION 模型以 r1 `created_by` 回填；新建 ADS 写入当前 actor；非 ADS 为 null。
   - `modeling_model_access`：`id uuid pk`、`tenant_id varchar(128) not null`、`model_spec_id uuid not null fk`、`grantee_type varchar(8) check in ('USER','ROLE')`、`grantee_id varchar(128) not null`、`permission varchar(16) check = 'EDITOR'`、`granted_by varchar(128) not null`、`granted_at timestamp not null`、`revoked_by varchar(128)`、`revoked_at timestamp`；部分唯一 `(tenant_id, model_spec_id, grantee_type, grantee_id) where revoked_at is null`；索引 `(tenant_id, grantee_type, grantee_id) where revoked_at is null`。
@@ -34,11 +34,11 @@ ADS 归创建人：同部门其他建模人员默认只读；创建人可把编�
 - **判定契约**：新增 `ModelSpecWriteAccessPort.canEdit(tenant, modelSpecId, actor)`：非 APPLICATION → K75；APPLICATION → 所级角色 ∨ (部门领导 ∧ 同部门) ∨ (具备 K73 角色 ∧ 同部门 ∧ (owner ∨ 有效 USER 授权 ∨ actor 角色命中有效 ROLE 授权))。拒绝 403 `MODEL_EDIT_GRANT_REQUIRED`，审计 `MODEL_EDIT_GRANT_DENIED`。管理授权 = 所级角色 ∨ (部门领导 ∧ 同部门) ∨ owner；不提供归属转移接口（Q2）。
 - **数据流**：
   - 编辑：工作台保存 → 接口角色准入（T03）→ `canEdit`（本任务，替代以模型为对象的写操作中的 `canMaintain`）→ 既有写入 → 审计。
-  - 共享：抽屉添加 → 授权接口 → 校验管理权、层级、被授权人角色与部门（Q6 复用目录授权解析被授权人部门的既有服务端入口）→ 写授权表 → 审计 `MODEL_ACCESS_GRANT/REVOKE`。
+  - 共享：抽屉添加 → 授权接口 → 校验管理权、层级、被授权人角色与部门（按 K86：复用 `AdminUserDirectoryClient` 解析被授权人部门与角色，目录授权的请求体透传不可采信，见 C90/C91；目录不可用返回 503 并拒绝授权）→ 写授权表 → 审计 `MODEL_ACCESS_GRANT/REVOKE`。
   - 展示：`authoring-context` 与 `delivery-status` 的 allowedActions/wizard 按 `canEdit` 输出，只读原因 `MODEL_EDIT_GRANT_REQUIRED`；模型列表批量计算“我的权限”，不逐行查询。
 - **错误路径**：撤销后已打开页面的写请求 403 并保留输入；被授权人角色在授权后被收回 → `canEdit` 实时按 K73 判定为拒绝；并发授予同一人 → 部分唯一约束冲突转 200 返回已有记录；模型归档后授权保留但编辑沿用归档只读。
 - **复用点**：计划级操作（执行绑定、运行健康、质量补跑等计划对象）保持 `canMaintain`；以模型为对象的写操作切换到 `canEdit`，C76 中的具体切换清单由 T01 冻结；被授权人解析复用目录授权既有入口，不建用户目录副本；大屏 ACL 只作语义参考，不共用表。
-- **实现方案**：迁移（增列、回填、建表）→ 端口与适配器 → 按 T01 清单替换调用 → 授权接口与审计 → allowedActions/列表权限批量计算 → 前端共享抽屉与只读提示。
+- **实现方案**：K86 目录角色字段扩展（dts-admin 响应 + 平台客户端）→ 迁移（增列、回填、建表）→ 端口与适配器 → 按 T01 清单替换调用 → 授权接口与审计 → allowedActions/列表权限批量计算 → 前端共享抽屉与只读提示。建模为本版本新增，回填只涉及测试环境数据。
 
 ## UI 交互
 
@@ -50,7 +50,7 @@ ADS 归创建人：同部门其他建模人员默认只读；创建人可把编�
 
 ## 影响范围
 
-新 changeSet；`ModelSpecWriteAccessPort` 及适配器；T01 清单内以模型为对象的写服务；`ModelSpecResource`（授权接口）；`ModelAuthoringDraftService.context`、`ModelDeliveryStatusQueryService` allowedActions；模型列表查询；dts-admin 审计字典；前端工作台工具栏、共享抽屉、只读提示、列表列。编辑前对端口与每个调用方运行 GitNexus impact 并报告。
+新 changeSet；dts-admin 目录响应与平台目录客户端（K86）；`ModelSpecWriteAccessPort` 及适配器；T01 清单内以模型为对象的写服务；`ModelSpecResource`（授权接口）；`ModelAuthoringDraftService.context`、`ModelDeliveryStatusQueryService` allowedActions；模型列表查询；dts-admin 审计字典；前端工作台工具栏、共享抽屉、只读提示、列表列。编辑前对端口与每个调用方运行 GitNexus impact 并报告。
 
 ## 验证与验收
 
@@ -60,7 +60,7 @@ ADS 归创建人：同部门其他建模人员默认只读；创建人可把编�
 
 ## Definition of Ready
 
-- [ ] K79–K81 冻结，Q6 关闭（Q2 已确认不转移），C76 切换清单冻结。
+- [ ] K79–K81、K86 冻结（Q2、Q6 已确认），C76 切换清单冻结。
 - [ ] T05 已落地；T01 已确认现场 ADS 创建人回填可行。
 - [ ] GitNexus impact 已报告用户。
 
