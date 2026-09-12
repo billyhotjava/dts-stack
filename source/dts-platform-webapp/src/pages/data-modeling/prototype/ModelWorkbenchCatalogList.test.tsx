@@ -34,7 +34,10 @@ const apiMocks = vi.hoisted(() => ({
 }));
 const accessState = vi.hoisted(() => ({ denied: false, unavailable: false }));
 vi.mock("./useModelingAccess", () => ({
-    useModelAccess: (ids: string[]) => ({ isError: accessState.unavailable, data: Object.fromEntries(ids.map(id => [id, {canEdit: !accessState.denied, canManage: !accessState.denied}])) }),
+	useModelAccess: (ids: string[]) => ({
+		isError: accessState.unavailable,
+		data: Object.fromEntries(ids.map((id) => [id, { canEdit: !accessState.denied, canManage: !accessState.denied }])),
+	}),
 }));
 const routerPush = vi.hoisted(() => vi.fn());
 
@@ -92,7 +95,8 @@ const currentDimension = {
 } as DimensionDefinitionView;
 
 beforeEach(() => {
-    accessState.denied = false; accessState.unavailable = false;
+	accessState.denied = false;
+	accessState.unavailable = false;
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	container = document.createElement("div");
 	document.body.appendChild(container);
@@ -340,7 +344,12 @@ describe("ModelWorkbenchCatalogList", () => {
 		await act(async () => Promise.resolve());
 
 		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(2);
-		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(publishedModel.id, undefined, undefined, expect.any(AbortSignal));
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(
+			publishedModel.id,
+			undefined,
+			undefined,
+			expect.any(AbortSignal),
+		);
 		const row = Array.from(container.querySelectorAll("tr")).find((item) => item.textContent?.includes("订单明细表"));
 		expect(row?.textContent).toContain("资产已登记");
 		expect(row?.textContent).toContain("分析准备失败");
@@ -559,9 +568,11 @@ it("keeps refresh available while editor options are unavailable", async () => {
 });
 
 it.each(["denied", "unavailable"] as const)("disables model edits when object authorization is %s", async (failure) => {
-    accessState[failure] = true;
-    await renderPerformanceList([draftModel]);
-    const edits = Array.from(container.querySelectorAll("button")).filter(button => button.textContent?.replace(/\s/g, "") === "编辑");
-    expect(edits.length).toBeGreaterThan(0);
-    expect(edits.every(button => button.disabled)).toBe(true);
+	accessState[failure] = true;
+	await renderPerformanceList([draftModel]);
+	const edits = Array.from(container.querySelectorAll("button")).filter(
+		(button) => button.textContent?.replace(/\s/g, "") === "编辑",
+	);
+	expect(edits.length).toBeGreaterThan(0);
+	expect(edits.every((button) => button.disabled)).toBe(true);
 });
