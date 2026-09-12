@@ -2,70 +2,37 @@
 
 **优先级**：P1
 **状态**：DRAFT
-**依赖**：T01（K79–K81、K86 冻结）、T05（部门维护范围）；Q2 已确认归属不转移，Q6 已确认被授权人解析方案
+**类型/责任**：模型 ACL 与全操作面授权开发；平台/前端负责人待排定。
+**依赖**：T01 冻结 K79–K81/K86–K90 及 Q9；T03 提供稳定主体/当前目录，T05 提供部门/来源/实际范围/后台基础。
 
-## 目标
+## 目标与场景
 
-ADS 归创建人：同部门其他建模人员默认只读；创建人可把编辑权授给同部门建模人员或部门级建模角色，也可撤销；部门领导与所级角色始终可管理；授权与撤销即时生效并审计。
+ADS 默认仅创建人与管理角色可编辑；创建人可共享给同部门建模人员或部门级建模角色。编辑权、授权管理权、审核职责、数据访问权分别判定。覆盖 S03–S07/S13/S17–S19/S21/S22/S26。
 
-## 使用场景
+## 数据与接口
 
-- **S03**：B 打开 A 创建的 ADS“项目月报” → 可查看定义、实现与交付状态；编辑控件只读，提示“编辑需创建人授权”。
-- **S04**：A 点击“共享”，搜索并添加 B 为可编辑 → 201；B 刷新后可编辑保存。
-- **S05**：A 撤销 B；B 未刷新直接保存 → 403 `MODEL_EDIT_GRANT_REQUIRED`，输入保留；刷新后只读。
-- **S06**：A 尝试授权普通员工 C → 422 `MODEL_ACCESS_GRANTEE_NOT_AUTHOR`。
-- **S07**：部门甲领导 L 修改 A 未共享的 ADS → 允许，审计标注管理权。
-- **角色授权**：A 授予角色“部门数据管理员” → 部门甲全部数据管理员可编辑；部门乙数据管理员不受影响。
-- **跨部门**：A 尝试授权部门乙数据管理员 D → 422 `MODEL_ACCESS_CROSS_DEPARTMENT_PENDING_APPROVAL`，抽屉显示“申请跨部门共享（待开放）”。
-- **S13**：A 调岗后失去该 ADS 编辑权；归属人仍显示 A 且不转移（Q2 已确认）；部门甲领导凭管理权维护。
-- **非 ADS**：对 DWD 调用授权接口 → 422 `MODEL_ACCESS_LAYER_NOT_SHAREABLE`，界面不显示“共享”。
+- 以 [K79/K80/K87、§6.5](../../assests/F9-permission-chain-contract.md#65-ads-授权协议与生命周期) 为唯一协议：owner_id、USER granteeId、授予/撤销主体统一稳定目录 ID；ROLE 为内置角色码，匹配时仍限本部门。
+- r1.created_by 结合创建审计证明原主体后解析目录 ID 再回填，不能仅按当前同名账号认领，历史修订文字不改。无法解析/重名歧义中止测试迁移并列清单；不直接复制 username。新建/复制/导入、层级转换与归档按 §6.5 处理，不借转换复活授权或转移归属。
+- 建立模型授权表、活动部分唯一和反查索引；服务端同时校验 grant 与 tenant/model；查询、重复授予、撤销幂等及错误格式按 K80/§6.5，不能用任意 grantId 删除其他模型授权。
+- K86 当前用户查询/候选人搜索复用 T03 能力：只返回本部门具备建模角色且 enabled 的候选，最多按既有分页返回；服务端提交时重新校验。目录不可用 503 拒绝，不采信请求角色/部门，也不逐候选无限查询目录。
 
-## 技术设计与契约
+## 编辑与动作判定
 
-- **契约引用**：C76、C81、C84、C90、C91、K79、K80、K81、K84、K86。
-- **数据契约**：
-  - `modeling_model_spec.owner_id varchar(128)`：前向增列；APPLICATION 模型以 r1 `created_by` 回填；新建 ADS 写入当前 actor；非 ADS 为 null。
-  - `modeling_model_access`：`id uuid pk`、`tenant_id varchar(128) not null`、`model_spec_id uuid not null fk`、`grantee_type varchar(8) check in ('USER','ROLE')`、`grantee_id varchar(128) not null`、`permission varchar(16) check = 'EDITOR'`、`granted_by varchar(128) not null`、`granted_at timestamp not null`、`revoked_by varchar(128)`、`revoked_at timestamp`；部分唯一 `(tenant_id, model_spec_id, grantee_type, grantee_id) where revoked_at is null`；索引 `(tenant_id, grantee_type, grantee_id) where revoked_at is null`。
-- **接口契约**：
-  - `GET /api/modeling/model-specs/{id}/access-grants` → `ApiResponse<[{id, granteeType, granteeId, granteeName, permission, grantedBy, grantedAt}]>` 与 `canManage:boolean`。
-  - `POST /api/modeling/model-specs/{id}/access-grants`，body `{granteeType:"USER"|"ROLE", granteeId:string, permission:"EDITOR"}` → 201 新记录；已存在有效记录 → 200 原记录。
-  - `DELETE /api/modeling/model-specs/{id}/access-grants/{grantId}` → 204；已撤销 → 204 幂等。
-  - 错误：403 `MODEL_ACCESS_MANAGE_DENIED`；422 `MODEL_ACCESS_LAYER_NOT_SHAREABLE`、`MODEL_ACCESS_GRANTEE_NOT_AUTHOR`、`MODEL_ACCESS_CROSS_DEPARTMENT_PENDING_APPROVAL`；ROLE 只接受 `ROLE_DEPT_DATA_OWNER`、`ROLE_DEPT_LEADER`，其他 422 `MODEL_ACCESS_GRANTEE_NOT_AUTHOR`；不可见模型 404。
-- **判定契约**：新增 `ModelSpecWriteAccessPort.canEdit(tenant, modelSpecId, actor)`：非 APPLICATION → K75；APPLICATION → 所级角色 ∨ (部门领导 ∧ 同部门) ∨ (具备 K73 角色 ∧ 同部门 ∧ (owner ∨ 有效 USER 授权 ∨ actor 角色命中有效 ROLE 授权))。拒绝 403 `MODEL_EDIT_GRANT_REQUIRED`，审计 `MODEL_EDIT_GRANT_DENIED`。管理授权 = 所级角色 ∨ (部门领导 ∧ 同部门) ∨ owner；不提供归属转移接口（Q2）。
-- **数据流**：
-  - 编辑：工作台保存 → 接口角色准入（T03）→ `canEdit`（本任务，替代以模型为对象的写操作中的 `canMaintain`）→ 既有写入 → 审计。
-  - 共享：抽屉添加 → 授权接口 → 校验管理权、层级、被授权人角色与部门（按 K86：复用 `AdminUserDirectoryClient` 解析被授权人部门与角色，目录授权的请求体透传不可采信，见 C90/C91；目录不可用返回 503 并拒绝授权）→ 写授权表 → 审计 `MODEL_ACCESS_GRANT/REVOKE`。
-  - 展示：`authoring-context` 与 `delivery-status` 的 allowedActions/wizard 按 `canEdit` 输出，只读原因 `MODEL_EDIT_GRANT_REQUIRED`；模型列表批量计算“我的权限”，不逐行查询。
-- **错误路径**：撤销后已打开页面的写请求 403 并保留输入；被授权人角色在授权后被收回 → `canEdit` 实时按 K73 判定为拒绝；并发授予同一人 → 部分唯一约束冲突转 200 返回已有记录；模型归档后授权保留但编辑沿用归档只读。
-- **复用点**：计划级操作（执行绑定、运行健康、质量补跑等计划对象）保持 `canMaintain`；以模型为对象的写操作切换到 `canEdit`，C76 中的具体切换清单由 T01 冻结；被授权人解析复用目录授权既有入口，不建用户目录副本；大屏 ACL 只作语义参考，不共用表。
-- **实现方案**：K86 目录角色字段扩展（dts-admin 响应 + 平台客户端）→ 迁移（增列、回填、建表）→ 端口与适配器 → 按 T01 清单替换调用 → 授权接口与审计 → allowedActions/列表权限批量计算 → 前端共享抽屉与只读提示。建模为本版本新增，回填只涉及测试环境数据。
+1. 实现 ModelSpecWriteAccessPort.canEdit：K87 主体与 K76 先行；非 ADS 用 K75；ADS 按 K81 的管理/同部门 owner/有效授权判定。授权管理还要求 owner 当前同部门且仍有建模能力，不能仅 owner_id 相等；普通 EDITOR 无再授权权。
+2. 按 T01 调用表接入定义、草稿、实现、导入、构建、发布、serving、质量补跑、批量候选、绑定修复、手动运行、重试和幂等重放。按 K88 服务器展开的实际写/执行集逐模型批量判定；不能因入口是 planId 就只查 canMaintain。
+3. 批量存在无权目标整批 403/404 且不新建候选/运行，不部分成功；纯读取的已发布上游只查读取、引用及密级，不要求编辑权。审核仍按 K90 职责与禁止自审，EDITOR 不产生审核权。
+4. 授权撤销与模型操作在模型级锁/版本边界确定顺序；撤销提交后新操作立即拒绝。角色/部门/停用改变取 K87 当前值，不信任页面或旧会话。已运行外部任务按 K89 如实处置，不能伪称已回滚。
+5. USER 后台保留稳定发起人与封存 scope/版本并复核，非计划首建人仍可合法执行；SYSTEM 只运行认证绑定内已部署版本，不能获得任意 ADS 编辑、ACL 管理或新发布权。
+6. authoring-context、delivery-status、列表 allowedActions 和共享抽屉使用同一服务端判定；ACL 批量查询避免 N+1。低密级 EDITOR 仍不能通过预览、构建来源、查询或导出读取不允许的数据。
 
-## UI 交互
+## UI 与影响
 
-- 入口：ADS 工作台工具栏“共享”按钮，仅 `canManage=true` 时显示；非 ADS 不显示。
-- 抽屉：成员搜索只返回同部门具备建模角色的用户和两个部门级建模角色；列表显示成员、权限、授予人、时间与“撤销”；固定显示“部门领导（管理权，默认拥有）”；底部禁用按钮“申请跨部门共享（待开放）”。
-- 只读：无编辑权时工作台各步骤主动作隐藏，页头提示“你可以查看此模型；编辑需创建人授权”，并显示归属人。
-- 列表：“我的权限”列显示“可编辑/只读/管理”。
-- 四态：抽屉空（尚未共享）/加载（禁重复添加）/错误（按错误码文案，保留搜索输入）/成功（刷新列表并提示）。
+ADS 工具栏“共享”只在 canManage 时显示；普通编辑者不可再授权。抽屉列出合格成员和内置部门角色，固定管理权不可撤销；底部通用待开放入口。无编辑权只读，403 保留输入，目录故障显示可重试；撤销后下一次保存失败。
 
-## 影响范围
+范围：模型 owner/授权迁移、端口与 Q9 全调用表、目录候选查询、authoring/delivery/list、共享组件与审计字典。T03 负责主体目录底座，本任务不另建用户目录副本。编辑前 impact；开发估算必须包含批量/后台/重放，不按原单个抽屉估算。
 
-新 changeSet；dts-admin 目录响应与平台目录客户端（K86）；`ModelSpecWriteAccessPort` 及适配器；T01 清单内以模型为对象的写服务；`ModelSpecResource`（授权接口）；`ModelAuthoringDraftService.context`、`ModelDeliveryStatusQueryService` allowedActions；模型列表查询；dts-admin 审计字典；前端工作台工具栏、共享抽屉、只读提示、列表列。编辑前对端口与每个调用方运行 GitNexus impact 并报告。
+## 验证与完成标准
 
-## 验证与验收
-
-- RED：同部门数据管理员当前可直接修改他人 ADS；授权接口不存在。
-- GREEN：S03–S07、角色授权、跨部门授权、非 ADS 授权、撤销即时生效、归档、并发授予逐一通过；回填后存量 ADS 归属人与 r1 创建人一致；列表权限计算 SQL 次数不随行数线性增长。
-- 映射 **IT-61**。
-
-## Definition of Ready
-
-- [ ] K79–K81、K86 冻结（Q2、Q6 已确认），C76 切换清单冻结。
-- [ ] T05 已落地；T01 已确认现场 ADS 创建人回填可行。
-- [ ] GitNexus impact 已报告用户。
-
-## Definition of Done
-
-- [ ] 迁移在清洁库与升级库验证，回填对照留证。
-- [ ] 判定矩阵、授权接口、撤销、并发专项测试通过，C76 调用方回归无失败。
-- [ ] IT-61 留存各场景请求/响应、授权表前后数据、审计与 Chrome 95 截图。
+- Ready：T03/T05 能力可用；稳定 ID、授权协议、所有动作/后台调用清单冻结，测试回填可行。
+- IT-61：S03–S07、调岗 owner 的编辑和授权管理、角色授权/撤销、非 ADS、跨部门、grantId 串租户/模型、并发授予/撤销、改名/同名重建、层级转换无管理权拒绝/再次转 ADS 不改历史 owner/归档、混合批量、只读上游、幂等重放、USER 撤权后执行、SYSTEM 范围、低密级 EDITOR。
+- Done：迁移清洁库/升级库及稳定身份对照、动作矩阵、授权/撤销/并发/后台专项通过；20/200 行 SQL/目录调用次数留证；真实页面和正式包/部署分别记录。
