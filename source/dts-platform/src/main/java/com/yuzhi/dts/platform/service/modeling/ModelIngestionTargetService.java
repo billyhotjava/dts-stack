@@ -27,12 +27,15 @@ public class ModelIngestionTargetService {
         this.evidence = evidence; this.targets = targets; this.access = access;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ModelSpecReader snapshots;
+
     @Transactional(readOnly = true)
     public Target resolveForUser(String tenant, String actor, UUID id, String environment) {
         var model = models.get(tenant, id);
-        access.requireEdit(tenant, id, actor);
+        if (!access.canEdit(tenant, id, actor)) throw failure("MODEL_INGESTION_TARGET_FORBIDDEN", Kind.FORBIDDEN);
         if (!access.canMaintain(tenant, model.planId(), actor)) throw failure("MODEL_INGESTION_TARGET_FORBIDDEN", Kind.FORBIDDEN);
-        return current(tenant, id, environment);
+        return current(tenant, id, environment, model);
     }
 
     @Transactional(readOnly = true)
@@ -40,14 +43,14 @@ public class ModelIngestionTargetService {
         if (expected == null || expected.schemaVersion() != 1 || expected.modelSpecId() == null) {
             throw failure("MODEL_INGESTION_TARGET_INVALID", Kind.BAD_REQUEST);
         }
-        Target actual = current(tenant, expected.modelSpecId(), expected.environment());
+        // Service-authenticated endpoint validates an existing exact physical target; it never creates a model or borrows an owner.
+        Target actual = current(tenant, expected.modelSpecId(), expected.environment(), snapshots.get(tenant, expected.modelSpecId()));
         if (!actual.equals(expected)) throw failure("MODEL_INGESTION_TARGET_STALE", Kind.CONFLICT);
         return actual;
     }
 
-    private Target current(String tenant, UUID id, String environment) {
+    private Target current(String tenant, UUID id, String environment, ModelSpecContract.ModelSpecView model) {
         if (environment == null || environment.isBlank()) throw failure("MODEL_INGESTION_TARGET_INVALID", Kind.BAD_REQUEST);
-        var model = models.get(tenant, id);
         if (model.modelType() != ModelSpecContract.ModelType.SOURCE || model.layer() != ModelSpecContract.Layer.ODS) {
             throw failure("MODEL_INGESTION_TARGET_REQUIRES_ODS", Kind.UNPROCESSABLE);
         }

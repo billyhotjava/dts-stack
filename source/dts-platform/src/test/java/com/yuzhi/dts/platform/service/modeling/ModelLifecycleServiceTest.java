@@ -80,6 +80,7 @@ class ModelLifecycleServiceTest {
         ModelImplementationInputPolicy adapter = new ModelImplementationInputPolicy(
             modelSpecs, modelSpecRepository, lifecycle, mock(ModelSpecSourceValidationPort.class)
         );
+        org.springframework.test.util.ReflectionTestUtils.setField(adapter, "sourceScope", mock(ModelingSourceScopeGuard.class));
         ModelLifecycleService service = new ModelLifecycleService(
             modelSpecs,
             modelSpecRepository,
@@ -137,6 +138,7 @@ class ModelLifecycleServiceTest {
         ModelImplementationInputPolicy adapter = new ModelImplementationInputPolicy(
             modelSpecs, modelSpecRepository, lifecycle, mock(ModelSpecSourceValidationPort.class)
         );
+        org.springframework.test.util.ReflectionTestUtils.setField(adapter, "sourceScope", mock(ModelingSourceScopeGuard.class));
         ModelLifecycleService service = new ModelLifecycleService(
             modelSpecs,
             modelSpecRepository,

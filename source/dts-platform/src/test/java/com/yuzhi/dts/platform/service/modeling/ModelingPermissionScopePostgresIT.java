@@ -66,7 +66,7 @@ class ModelingPermissionScopePostgresIT {
         var domains=mock(ModelSpecDomainReadAccessPort.class);
         when(domains.visibleDomainIds()).thenReturn(Set.of(domain));
         var audit=mock(AuditService.class);
-        doAnswer(call -> { jdbc.update("insert into permission_audit values (?,?)",call.getArgument(1),call.getArgument(5));return null; })
+        doAnswer(call -> { jdbc.update("insert into permission_audit values (?,?)",call.getArgument(1,String.class),call.getArgument(5,String.class));return null; })
             .when(audit).recordAs(anyString(),anyString(),anyString(),anyString(),nullable(String.class),anyString(),anyMap(),anyMap());
         context=new AnnotationConfigApplicationContext(); context.register(Transactions.class);
         context.registerBean(JdbcTemplate.class,()->jdbc);

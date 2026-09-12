@@ -41,6 +41,7 @@ class ModelIngestionTargetServiceTest {
         when(model.layer()).thenReturn(ModelSpecContract.Layer.ODS); when(model.revision()).thenReturn(3);
         when(model.checksum()).thenReturn("model-checksum"); when(model.fields()).thenReturn(List.of());
         when(access.canMaintain("tenant", plan, "writer")).thenReturn(true);
+        when(access.canEdit("tenant", id, "writer")).thenReturn(true);
         when(implementations.findImplementation("tenant", id)).thenReturn(java.util.Optional.of(implementation));
         when(implementation.id()).thenReturn(implementationId); when(implementation.revision()).thenReturn(3);
         when(implementation.modelChecksum()).thenReturn("model-checksum");
@@ -85,6 +86,9 @@ class ModelIngestionTargetServiceTest {
         var candidates = mock(ModelReleaseCandidateRepository.class);
         var service = new ModelIngestionTargetService(models, mock(ModelLifecycleRepository.class), candidates,
             mock(CandidatePublicationEvidenceRepository.class), mock(ModelExecutionTargetCatalogResolver.class), mock(ModelSpecPlanWriteAccessPort.class));
+        var snapshots = mock(ModelSpecReader.class);
+        when(snapshots.get("tenant",id)).thenReturn(model);
+        org.springframework.test.util.ReflectionTestUtils.setField(service,"snapshots",snapshots);
         var target = new ModelIngestionTargetService.Target(1, id, 1, "a".repeat(64), 1, "b".repeat(64), "dev", UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(), "warehouse", "ods", "orders", List.of());
         assertThatThrownBy(() -> service.validateForExecution("tenant", target))
             .isInstanceOfSatisfying(ModelReleaseCandidateException.class, error -> assertThat(error.code()).isEqualTo("MODEL_INGESTION_TARGET_REQUIRES_ODS"));

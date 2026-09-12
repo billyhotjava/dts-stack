@@ -218,6 +218,7 @@ class ModelReleaseCandidateServiceTest {
         CandidateView creator = candidate(DeliveryStatus.DRAFT, 1, createdAudit(), List.of());
         when(repository.findCommandByIdempotencyKey(TENANT, "original-create-key")).thenReturn(Optional.empty());
         when(repository.findByIdempotencyKey(TENANT, "original-create-key")).thenReturn(Optional.of(creator));
+        when(repository.find(TENANT,CANDIDATE_ID)).thenReturn(Optional.of(creator));
 
         assertThatThrownBy(() ->
             service.transition(
@@ -1036,7 +1037,6 @@ class ModelReleaseCandidateServiceTest {
     @Test
     void cannotReadOrMutateACandidateThroughAnotherTenant() {
         String otherTenant = "tenant-b";
-        when(repository.findCommandByIdempotencyKey(otherTenant, "cross-tenant-key")).thenReturn(Optional.empty());
         when(repository.find(otherTenant, CANDIDATE_ID)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->

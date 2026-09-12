@@ -192,7 +192,7 @@ public class ModelMaterializationPlanService {
         );
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public ValidatedPlan requireCurrent(String tenantId, PreviewCommand command, String expectedChecksum) {
         if (expectedChecksum == null || !expectedChecksum.matches("^[0-9a-f]{64}$")) {
             throw new ModelReleaseCandidateException(

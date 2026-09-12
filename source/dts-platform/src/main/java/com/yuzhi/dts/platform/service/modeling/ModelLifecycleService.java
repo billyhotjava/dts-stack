@@ -917,7 +917,8 @@ public class ModelLifecycleService {
         PlanState plan = modelSpecRepository
             .lockPlan(tenantId, result.planId())
             .orElseThrow(() -> notFound("Warehouse plan was not found"));
-        if ("ARCHIVED".equals(plan.lifecycleStatus()) || !writeAccess.canEdit(tenantId, result.id(), actorId)) {
+        writeAccess.requireEdit(tenantId, result.modelSpecId(), actorId);
+        if ("ARCHIVED".equals(plan.lifecycleStatus()) || !writeAccess.canEdit(tenantId, result.modelSpecId(), actorId)) {
             throw new ModelSpecException(
                 "MODEL_SPEC_PLAN_FORBIDDEN",
                 "Warehouse plan is not available for lifecycle maintenance",
