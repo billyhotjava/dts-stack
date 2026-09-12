@@ -53,8 +53,8 @@ const ASSET_FAMILY_LABELS: Record<string, string> = {
 };
 
 const RELATION_TYPE_LABELS: Record<string, string> = {
-	MATERIALIZES_TO: "物化为数据表",
-	MATERIALIZED_FROM: "由数据模型物化",
+	MATERIALIZES_TO: "构建为数据表",
+	MATERIALIZED_FROM: "由数据模型构建",
 	DERIVED_FROM: "来源于数据模型",
 	SERVES_BI_DATASET: "支撑分析数据集",
 	VISUALIZES: "使用分析数据集",

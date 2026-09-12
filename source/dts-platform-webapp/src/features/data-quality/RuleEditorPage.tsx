@@ -136,7 +136,7 @@ export function RuleEditorPage() {
 				const rule = toList<QualityRule>(response).find((item) => String(item.id) === requestedRuleId);
 				if (!rule) throw new Error("未找到需要编辑的规则");
 				if (linkedDatasetId && rule.datasetId !== linkedDatasetId) {
-					throw new Error("该规则不属于当前模型物化资产，不能在此上下文编辑");
+					throw new Error("该规则不属于当前模型构建资产，不能在此上下文编辑");
 				}
 				const version = Number(rule.latestVersion?.version);
 				if (
@@ -307,7 +307,7 @@ export function RuleEditorPage() {
 		try {
 			const values = await form.validateFields();
 			if (linkedDatasetId && values.datasetId !== linkedDatasetId) {
-				throw new Error("模型物化资产不可变更，请返回模型交付流程后重新进入");
+				throw new Error("模型构建资产不可变更，请返回模型交付流程后重新进入");
 			}
 			if (
 				activeRuleId.current !== operationRuleId ||

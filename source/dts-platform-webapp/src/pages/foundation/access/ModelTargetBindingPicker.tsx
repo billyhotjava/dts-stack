@@ -26,14 +26,14 @@ export function ModelTargetBindingPicker({ form }: { form: FormInstance<AccessPl
 			form.setFieldsValue({ modelTarget: target, targetDataSourceId: target.dataSourceId,
 				fileTargetTable: `${target.schemaName}.${target.tableName}`, fileLandingMode: "create_new", fileRecreateConfirmed: false,
 				tableSelectionMode: "manual", syncMode: "full_refresh" });
-		} catch (error) { if (sequence === request.current) setFailure(error instanceof Error ? error.message : "目标不可绑定，请先物化模型"); }
+		} catch (error) { if (sequence === request.current) setFailure(error instanceof Error ? error.message : "目标不可关联，请先构建模型"); }
 		finally { if (sequence === request.current) setBusy(false); }
 	};
 	return <div>
 		<Form.Item name="modelTarget" hidden><BindingValue /></Form.Item>
 		<label>已有模型表（可选）</label>
 		<Select aria-label="已有模型表" style={{ width: "100%" }} loading={busy} disabled={busy}
-			placeholder="选择已物化贴源表" value={binding?.modelSpecId}
+			placeholder="选择已构建贴源表" value={binding?.modelSpecId}
 			options={models.map(model => ({ value: model.id, label: `${model.name} · r${model.revision}` }))}
 			onChange={id => void bind(id)} />
 		{failure ? <Alert type="error" message={failure} action={<Button onClick={() => { setFailure(""); setReload(n => n + 1); }}>重试列表</Button>} /> : null}

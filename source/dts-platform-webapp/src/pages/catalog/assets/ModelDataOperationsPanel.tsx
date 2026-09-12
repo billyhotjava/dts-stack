@@ -60,7 +60,7 @@ export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId
 		{failure ? <div role="alert">{failure}<Button disabled={busy || dirty} onClick={() => void load()}>重试</Button></div> : null}
 		{busy && !value ? <p>正在读取当前目标和资产状态…</p> : null}
 		{value ? <>
-			<p>{value.delivery.modelingResult?.state === "SUCCEEDED" ? "模型已完成物化" : "当前模型物化证据待确认"} · {value.delivery.modelingResult?.targetRelation || "尚无目标表"}</p>
+			<p>{value.delivery.modelingResult?.state === "SUCCEEDED" ? "模型已完成构建" : "当前模型构建记录待确认"} · {value.delivery.modelingResult?.targetRelation || "尚无目标表"}</p>
 			<Link to={`/data-modeling/dimensions/workbench?modelSpecId=${encodeURIComponent(modelSpecId)}&step=definition&environment=${encodeURIComponent(environment)}`}>编辑模型</Link>
 			{action?.code === "REGISTER_DATA_ASSETS" ? <Button disabled={!canCommand || !action.enabled} onClick={() => void register()}>登记数据资产</Button> : null}
 			{value.model.modelType === "SOURCE" && value.delivery.modelingResult?.state === "SUCCEEDED" ? <p><Link to="/foundation/data-sources/access/new">配置数据接入</Link>：在目标步骤选择此模型表，也可编辑已有接入任务绑定。</p> : null}
