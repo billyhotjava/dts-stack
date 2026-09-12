@@ -573,6 +573,12 @@ it.each(["denied", "unavailable"] as const)("disables model edits when object au
 	const edits = Array.from(container.querySelectorAll("button")).filter(
 		(button) => button.textContent?.replace(/\s/g, "") === "编辑",
 	);
-	expect(edits.length).toBeGreaterThan(0);
-	expect(edits.every((button) => button.disabled)).toBe(true);
+	expect(edits).toHaveLength(0);
+	const buttons = Array.from(container.querySelectorAll("button"));
+	expect(buttons.some((button) => button.textContent?.replace(/\s/g, "") === "查看")).toBe(true);
+	const writes = buttons.filter((button) =>
+		["删除", "归档", "生成构建发布单"].some((label) => button.textContent?.includes(label)),
+	);
+	expect(writes.length).toBeGreaterThan(0);
+	expect(writes.every((button) => button.disabled)).toBe(true);
 });

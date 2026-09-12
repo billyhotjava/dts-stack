@@ -48,7 +48,9 @@ class ModelingPermissionScopePostgresIT {
             create table portal_sessions(id uuid primary key);
             create table modeling_warehouse_plan(id uuid primary key, tenant_id varchar(128), owner_department_id varchar(128), lifecycle_status varchar(32), idempotency_key text);
             create table modeling_model_spec(id uuid primary key, tenant_id varchar(128), plan_id uuid references modeling_warehouse_plan(id), domain_id uuid, model_type varchar(32), status varchar(32), unique(tenant_id,id));
-            create table modeling_operational_run_dispatch(id uuid primary key);
+            create table modeling_operational_run_dispatch(id uuid primary key,tenant_id text,binding_id uuid,binding_version integer,scope_checksum text,trigger_type text);
+            create table modeling_model_release_candidate_command(tenant_id text,candidate_id uuid,candidate_version integer,to_status text,actor_id text);
+            create table modeling_model_release_candidate_entry(tenant_id text,candidate_id uuid,model_spec_id uuid);
             create table permission_audit(action text, outcome text);
             create table modeling_plan_execution_binding(id uuid primary key, tenant_id varchar(128), plan_id uuid, version integer, desired_scope_checksum text, deployment_status text, deployed_checksum text, desired_deployment_checksum text);
             create table modeling_plan_execution_binding_entry(id uuid primary key,tenant_id varchar(128),binding_id uuid,model_spec_id uuid);
@@ -159,6 +161,42 @@ class ModelingPermissionScopePostgresIT {
         as("leader",()->transaction.execute(status->{ access.reclassifyAccess("tenant",ads,"leader",ModelSpecContract.ModelType.SUMMARY,ModelSpecContract.ModelType.APPLICATION);jdbc.update("update modeling_model_spec set model_type='APPLICATION' where id=?",ads);return null; }));
         assertThat(jdbc.queryForObject("select owner_id from modeling_model_spec where id=?",String.class,ads)).isEqualTo("owner");
         as("editor",()->{assertThat(access.canEdit("tenant",ads,"editor")).isFalse();return null;});
+    }
+    @Test void queuedUserMustRetainAllActualModelGrantsAtDispatch() {
+        UUID candidate = UUID.randomUUID();
+        jdbc.update("insert into modeling_model_release_candidate_command values ('tenant',?,2,'BUILDING','editor')",candidate);
+        jdbc.update("insert into modeling_model_release_candidate_entry values ('tenant',?,?)",candidate,ads);
+        var grant = as("owner",()->access.grant("tenant",ads,grant("USER","editor"))).grant();
+        var execution = execution();
+        try (var scope = execution.candidate("tenant",candidate,2,"BUILDING")) { assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id()).isEqualTo("editor"); }
+        as("owner",()->{access.revoke("tenant",ads,grant.id());return null;});
+        assertThatThrownBy(()->execution.candidate("tenant",candidate,2,"BUILDING")).isInstanceOf(ModelSpecException.class);
+        assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional()).isEmpty();
+        assertThatThrownBy(()->execution.candidate("tenant",candidate,3,"BUILDING")).isInstanceOf(ModelingIdentityException.class);
+    }
+    @Test void manualExecutionPinsInitiatorAndActiveBindingWhileSystemCannotCreateUserAuthority() {
+        UUID binding = UUID.randomUUID(), group = UUID.randomUUID();
+        jdbc.update("insert into modeling_plan_execution_binding values (?,'tenant',?,1,'scope','ACTIVE','deployment','deployment')",binding,planA);
+        jdbc.update("insert into modeling_plan_execution_binding_entry values (?,'tenant',?,?)",UUID.randomUUID(),binding,shared);
+        jdbc.update("insert into modeling_operational_run_dispatch(id,tenant_id,binding_id,binding_version,scope_checksum,trigger_type,initiator_id) values (?,'tenant',?,1,'scope','MANUAL','editor')",group,binding);
+        var manual = new com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.OpenedRun(group,"tenant",planA,binding,1,"MANUAL","dag","run","scope","bundle","QUEUED",false);
+        var execution = execution();
+        try(var scope = execution.operational(manual)) { assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id()).isEqualTo("editor"); }
+        assertThatThrownBy(()->execution.system(manual)).isInstanceOf(ModelingIdentityException.class);
+        directory.put("editor",user("editor","dept-b",AuthoritiesConstants.DEPT_DATA_OWNER));
+        assertThatThrownBy(()->execution.operational(manual)).isInstanceOf(ModelSpecException.class);
+        var cron = new com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.OpenedRun(group,"tenant",planA,binding,1,"CRON","dag","run","scope","bundle","QUEUED",false);
+        try(var scope = execution.system(cron)) {
+            assertThat(ModelingSystemExecution.permits("tenant",planA)).isTrue();
+            assertThat(ModelingSystemExecution.permits("tenant",planB)).isFalse();
+            assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional()).isEmpty();
+        }
+        assertThat(ModelingSystemExecution.permits("tenant",planA)).isFalse();
+        jdbc.update("update modeling_plan_execution_binding set version=2 where id=?",binding);
+        assertThatThrownBy(()->execution.system(cron)).isInstanceOf(ModelingIdentityException.class);
+    }
+    private ModelingExecutionAuthorization execution() {
+        return new ModelingExecutionAuthorization(jdbc, identities, new ModelSpecPlanWriteAccessAdapter(access), context.getBean(ModelingPermissionAudit.class));
     }
     private ModelSpecAccessService.GrantCommand grant(String type,String id) {return new ModelSpecAccessService.GrantCommand(type,id,"EDITOR");}
     private <T> T as(String actor,Supplier<T> work) {return identities.asCurrentUser(actor,work);}

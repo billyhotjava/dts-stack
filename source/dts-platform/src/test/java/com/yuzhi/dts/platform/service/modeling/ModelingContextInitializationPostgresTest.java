@@ -178,7 +178,7 @@ class ModelingContextInitializationPostgresTest {
         var identities = new com.yuzhi.dts.platform.security.modeling.ModelingIdentityService(mock(com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.class));
         var outsider = new com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.ModelingUser("outsider","outsider","他部用户","dept-b","乙",List.of("ROLE_DEPT_DATA_OWNER"),true,"GENERAL");
         assertThatThrownBy(() -> identities.withIdentity(outsider, () -> contexts.withContext("tenant",new WarehousePlanActor("outsider","dept-b"),List.of(mapper.createObjectNode().put("planId",plan.toString())),nodes -> nodes)))
-            .isInstanceOf(com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanException.class);
+            .isInstanceOf(com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException.class);
         assertThat(count("saved_model")).isEqualTo(1);
     }
 

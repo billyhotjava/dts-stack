@@ -33,7 +33,7 @@ class ModelSpecReservedIdempotencyBoundaryTest {
             mock(ModelSpecUpdateRequestDecoder.class),
             mock(ModelSpecStageGateService.class),
             mock(WarehousePlanActorProvider.class),
-            new com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService(null, null),
+            new com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService(null, null, null),
             "server-tenant"
         );
 

@@ -39,5 +39,5 @@ class ModelingIdentityFilterTest {
         filter.doFilter(new MockHttpServletRequest("GET","/api/catalog/datasets"),response,(request,reply)->assertThat(ModelingIdentity.optional()).isEmpty());
         assertThat(response.getStatus()).isEqualTo(200);verifyNoInteractions(directory,access);
     }
-    private void authenticate(Map<String,Object> attributes){var roles=List.of(new SimpleGrantedAuthority("ROLE_INST_DATA_OWNER"));var principal=new DefaultOAuth2AuthenticatedPrincipal("alice",attributes,roles);SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(principal,null,roles));}
+    private void authenticate(Map<String,Object> attributes){java.util.Collection<org.springframework.security.core.GrantedAuthority> roles=List.of(new SimpleGrantedAuthority("ROLE_INST_DATA_OWNER"));var principal=new DefaultOAuth2AuthenticatedPrincipal("alice",attributes,roles);SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(principal,null,roles));}
 }

@@ -2,140 +2,55 @@ package com.yuzhi.dts.platform.service.modeling.warehouse;
 
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.LifecycleStatus.DRAFT;
 import static com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.OnboardingMode.BUSINESS_FIRST;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
-
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.modeling.*;
 import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway;
-import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.UserSummary;
+import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.ModelingUser;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
-import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanApplicationService.WarehousePlanException;
 import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.WarehousePlanHeader;
-import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 
-@ExtendWith(MockitoExtension.class)
 class WarehousePlanAuthorizationGuardTest {
-
-    @Mock
-    private AdminDirectoryGateway directoryGateway;
-
-    private WarehousePlanAuthorizationGuard guard;
-
-    @BeforeEach
-    void setUp() {
-        guard = new WarehousePlanAuthorizationGuard(directoryGateway);
+    private final AdminDirectoryGateway directory = mock(AdminDirectoryGateway.class);
+    private final WarehousePlanAuthorizationGuard guard = new WarehousePlanAuthorizationGuard(directory);
+    private final ModelingIdentityService identities = new ModelingIdentityService(directory);
+    private final WarehousePlanActor actor = new WarehousePlanActor("actor-1", "dept-a");
+    private void as(String role, Runnable action) {
+        identities.withIdentity(new ModelingUser("actor-1", "alice", "Alice", "dept-a", "甲", List.of(role), true, "GENERAL"), () -> { action.run(); return null; });
     }
-
-    @AfterEach
-    void clearSecurityContext() {
-        SecurityContextHolder.clearContext();
+    @Test void publicLayerIsJointlyMaintainedButOwnerAndDepartmentAreImmutable() {
+        as(AuthoritiesConstants.DEPT_DATA_OWNER, () -> {
+            assertThatCode(() -> guard.validateHeaderUpdate(plan("owner-1", "dept-a"), "owner-1", "dept-a", actor)).doesNotThrowAnyException();
+            assertThatThrownBy(() -> guard.validateHeaderUpdate(plan("owner-1", "dept-a"), "owner-2", "dept-a", actor)).isInstanceOf(ModelSpecException.class);
+            assertThatThrownBy(() -> guard.validateHeaderUpdate(plan("owner-1", "dept-a"), "owner-1", "dept-b", actor)).isInstanceOf(ModelSpecException.class);
+        });
+        verifyNoInteractions(directory);
     }
-
-    @Test
-    void departmentMaintainerMayKeepOrTransferOwnershipOnlyInsideTheAuthenticatedDepartment() {
-        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER);
-        WarehousePlanActor actor = new WarehousePlanActor("actor-1", "dept-a");
-        WarehousePlanHeader current = plan("owner-1", "dept-a");
-
-        assertThatCode(() -> guard.validateHeaderUpdate(current, "owner-1", "dept-a", actor)).doesNotThrowAnyException();
-        verifyNoInteractions(directoryGateway);
-
-        when(directoryGateway.findUserByPrincipalKey("owner-2"))
-            .thenReturn(Optional.of(new UserSummary("owner-2", "bob", "Bob", "dept-a", "A")));
-        assertThatCode(() -> guard.validateHeaderUpdate(current, "owner-2", "dept-a", actor)).doesNotThrowAnyException();
-
-        when(directoryGateway.findUserByPrincipalKey("owner-3"))
-            .thenReturn(Optional.of(new UserSummary("owner-3", "carol", "Carol", "dept-b", "B")));
-        assertThatThrownBy(() -> guard.validateHeaderUpdate(current, "owner-3", "dept-b", actor))
-            .isInstanceOfSatisfying(
-                WarehousePlanException.class,
-                error -> org.assertj.core.api.Assertions.assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN")
-            );
+    @Test void exactDepartmentMatchingRejectsSuffixAncestorAndOtherDepartment() {
+        as(AuthoritiesConstants.DEPT_LEADER, () -> {
+            for (String department : List.of("dept-b", "dept-ba", "dept-a/child", "dept")) assertThat(guard.canReadPlan(plan("other", department), actor)).isFalse();
+        });
     }
-
-    @Test
-    void unchangedOwnerWithoutDepartmentDoesNotRequireDirectoryLookup() {
-        authenticate(AuthoritiesConstants.INST_DATA_OWNER);
-        WarehousePlanActor actor = new WarehousePlanActor("actor-1", null);
-        WarehousePlanHeader current = plan("owner-1", null);
-
-        assertThatCode(() -> guard.validateHeaderUpdate(current, "owner-1", null, actor)).doesNotThrowAnyException();
-        verifyNoInteractions(directoryGateway);
+    @Test void instituteRoleMayReadAnotherValidDepartmentButCannotReassignIt() {
+        as(AuthoritiesConstants.INST_DATA_OWNER, () -> {
+            assertThat(guard.canReadPlan(plan("other", "dept-b"), actor)).isTrue();
+            assertThatThrownBy(() -> guard.validateHeaderUpdate(plan("other", "dept-b"), "other", "dept-c", actor)).isInstanceOf(ModelSpecException.class);
+        });
     }
-
-    @Test
-    void fakeOwnerIsRejectedButMenuUserMayMaintainAcrossDepartments() {
-        authenticate(AuthoritiesConstants.DEPT_LEADER);
-        WarehousePlanActor actor = new WarehousePlanActor("actor-1", "dept-a");
-        when(directoryGateway.findUserByPrincipalKey("missing-owner")).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> guard.validateHeaderUpdate(plan("owner-1", "dept-a"), "missing-owner", "dept-a", actor))
-            .isInstanceOfSatisfying(
-                WarehousePlanException.class,
-                error -> org.assertj.core.api.Assertions.assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_OWNER_FORBIDDEN")
-            );
-        assertThatCode(() -> guard.requirePlanMaintenance(plan("owner-2", "dept-b"), actor)).doesNotThrowAnyException();
-
-        assertThatCode(() -> guard.requirePlanMaintenance(plan("owner-3", "dept-ba"), actor)).doesNotThrowAnyException();
+    @Test void missingDepartmentIsNeverADefaultWritableContext() {
+        as(AuthoritiesConstants.INST_DATA_OWNER, () -> assertThat(guard.canReadPlan(plan("owner", null), actor)).isFalse());
     }
-
-    @Test
-    void departmentSuffixCollisionCannotAuthorizeOwnershipTransfer() {
-        authenticate(AuthoritiesConstants.DEPT_DATA_OWNER);
-        WarehousePlanActor actor = new WarehousePlanActor("actor-1", "dept-a");
-        WarehousePlanHeader current = plan("owner-1", "dept-a");
-        when(directoryGateway.findUserByPrincipalKey("owner-ba"))
-            .thenReturn(Optional.of(new UserSummary("owner-ba", "ba", "BA", "dept-ba", "BA")));
-
-        assertThatThrownBy(() -> guard.validateHeaderUpdate(current, "owner-ba", "dept-ba", actor))
-            .isInstanceOfSatisfying(
-                WarehousePlanException.class,
-                error -> org.assertj.core.api.Assertions.assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN")
-            );
+    @Test void employeeMenuGrantDoesNotAuthorizeModeling() {
+        as(AuthoritiesConstants.EMPLOYEE, () -> assertThat(guard.canReadPlan(plan("owner", "dept-a"), actor)).isFalse());
     }
-
-    @Test
-    void instituteMaintainerMayTransferOnlyToARealDirectoryIdentityWithMatchingDepartment() {
-        authenticate(AuthoritiesConstants.INST_DATA_OWNER);
-        WarehousePlanActor actor = new WarehousePlanActor("actor-1", "dept-a");
-        WarehousePlanHeader current = plan("owner-1", "dept-a");
-        when(directoryGateway.findUserByPrincipalKey("owner-3"))
-            .thenReturn(Optional.of(new UserSummary("owner-3", "carol", "Carol", "dept-b", "B")));
-
-        assertThatCode(() -> guard.validateHeaderUpdate(current, "owner-3", "dept-b", actor)).doesNotThrowAnyException();
-        assertThatThrownBy(() -> guard.validateHeaderUpdate(current, "owner-3", "forged-dept", actor))
-            .isInstanceOfSatisfying(
-                WarehousePlanException.class,
-                error -> org.assertj.core.api.Assertions.assertThat(error.code()).isEqualTo("WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN")
-            );
-    }
-
-    @Test
-    void menuAccessDoesNotRequireOwnershipOrDepartmentButRequiresTheAuthenticatedActor() {
-        WarehousePlanActor actor = new WarehousePlanActor("actor-1", "dept-a");
-        authenticate(AuthoritiesConstants.EMPLOYEE);
-        assertThat(guard.canReadPlan(plan("owner-2", "dept-b"), actor)).isTrue();
-        assertThatCode(() -> guard.requirePlanMaintenance(plan("owner-2", "dept-b"), actor)).doesNotThrowAnyException();
-        assertThat(guard.canReadPlan(plan("owner-2", "dept-b"), new WarehousePlanActor("forged", "dept-a"))).isFalse();
-        SecurityContextHolder.clearContext();
-        assertThat(guard.canReadPlan(plan("owner-2", "dept-b"), actor)).isFalse();
-        assertThatThrownBy(() -> guard.requirePlanMaintenance(plan("owner-2", "dept-b"), actor)).isInstanceOf(WarehousePlanException.class);
-    }
-
-    private static void authenticate(String authority) {
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("actor-1", "n/a", authority));
+    @Test void forgedActorAndMissingCurrentIdentityAreRejected() {
+        as(AuthoritiesConstants.DEPT_DATA_OWNER, () -> assertThat(guard.canReadPlan(plan("owner", "dept-a"), new WarehousePlanActor("forged", "dept-a"))).isFalse());
+        assertThatThrownBy(() -> guard.canReadPlan(plan("owner", "dept-a"), actor)).isInstanceOf(ModelingIdentityException.class);
     }
 
     private static WarehousePlanHeader plan(String ownerId, String departmentId) {
