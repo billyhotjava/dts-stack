@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "dataflow",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/02-data-mainline.dataflow.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/02-data-mainline.html",
+  "specification": {
+    "sha256": "6e4476058d71e35b0efdd6281b56686ec1d4daf76ad05e88cb17d89568a54724",
+    "bytes": 3754
+  },
+  "artifact": {
+    "sha256": "ad75f2270aadbbe01fe0a8fd8481e4b92b5d36294edf4ba0cb3c5911a53a9b3f",
+    "bytes": 711018
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

@@ -1,0 +1,237 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DTS 架构总览（源码与配置）",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [
+      1030,
+      550
+    ]
+  },
+  "components": [
+    {
+      "id": "entry",
+      "type": "frontend",
+      "label": "用户访问入口",
+      "sublabel": "Traefik 与管理／平台前端",
+      "pos": [
+        40,
+        220
+      ],
+      "size": [
+        180,
+        66
+      ]
+    },
+    {
+      "id": "platform",
+      "type": "backend",
+      "label": "业务治理",
+      "sublabel": "dts-platform",
+      "pos": [
+        290,
+        220
+      ],
+      "size": [
+        180,
+        66
+      ]
+    },
+    {
+      "id": "ingestion",
+      "type": "backend",
+      "label": "接入执行",
+      "sublabel": "dts-ingestion",
+      "pos": [
+        540,
+        220
+      ],
+      "size": [
+        180,
+        66
+      ]
+    },
+    {
+      "id": "execution",
+      "type": "backend",
+      "label": "调度与计算",
+      "sublabel": "Airflow / dbt / Addax",
+      "pos": [
+        790,
+        220
+      ],
+      "size": [
+        180,
+        66
+      ]
+    },
+    {
+      "id": "admin",
+      "type": "backend",
+      "label": "管理与审计",
+      "sublabel": "dts-admin",
+      "pos": [
+        290,
+        40
+      ],
+      "size": [
+        180,
+        66
+      ]
+    },
+    {
+      "id": "identity",
+      "type": "security",
+      "label": "身份服务",
+      "sublabel": "Keycloak",
+      "pos": [
+        540,
+        40
+      ],
+      "size": [
+        180,
+        66
+      ]
+    },
+    {
+      "id": "analytics",
+      "type": "backend",
+      "label": "分析消费",
+      "sublabel": "dts-analytics",
+      "pos": [
+        290,
+        400
+      ],
+      "size": [
+        180,
+        66
+      ]
+    },
+    {
+      "id": "metadata",
+      "type": "backend",
+      "label": "元数据服务",
+      "sublabel": "OpenMetadata",
+      "pos": [
+        540,
+        400
+      ],
+      "size": [
+        180,
+        66
+      ]
+    },
+    {
+      "id": "events",
+      "type": "messagebus",
+      "label": "平台事件",
+      "sublabel": "Kafka · 开关控制",
+      "pos": [
+        40,
+        400
+      ],
+      "size": [
+        180,
+        66
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "entry-to-platform",
+      "from": "entry",
+      "to": "platform",
+      "label": "业务 API",
+      "variant": "default"
+    },
+    {
+      "id": "platform-to-ingestion",
+      "from": "platform",
+      "to": "ingestion",
+      "label": "接入任务",
+      "variant": "default"
+    },
+    {
+      "id": "ingestion-to-execution",
+      "from": "ingestion",
+      "to": "execution",
+      "label": "编排执行",
+      "variant": "default"
+    },
+    {
+      "id": "platform-to-admin",
+      "from": "platform",
+      "to": "admin",
+      "label": "组织与权限",
+      "variant": "default"
+    },
+    {
+      "id": "admin-to-identity",
+      "from": "admin",
+      "to": "identity",
+      "label": "身份管理",
+      "variant": "default"
+    },
+    {
+      "id": "platform-to-analytics",
+      "from": "platform",
+      "to": "analytics",
+      "label": "语义发布",
+      "variant": "default",
+      "labelAt": [
+        380,
+        343
+      ]
+    },
+    {
+      "id": "ingestion-to-metadata",
+      "from": "ingestion",
+      "to": "metadata",
+      "label": "元数据同步",
+      "variant": "default",
+      "labelAt": [
+        630,
+        343
+      ]
+    },
+    {
+      "id": "platform-to-events",
+      "from": "platform",
+      "to": "events",
+      "label": "异步事件",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "职责边界",
+      "items": [
+        "管理端集中组织、三员管理与审计",
+        "平台持有资产、模型和发布控制",
+        "分析页面已接入平台前端"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "共享依赖",
+      "items": [
+        "PostgreSQL 为多项服务保存状态",
+        "OpenMetadata 依赖 Elasticsearch",
+        "common 是公共代码依赖"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "仅画主关系，接口依据见 evidence.md",
+        "Kafka 链路是否启用需核对配置",
+        "服务声明不等于运行与业务验收"
+      ]
+    }
+  ]
+}

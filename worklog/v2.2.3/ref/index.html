@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>DTS 架构与工作流程 · 团队参考</title>
+  <style>
+    :root {
+      --navy: #102d43;
+      --ink: #172e43;
+      --muted: #526879;
+      --accent: #087a79;
+      --line: #d8e2e8;
+      --paper: #f3f6f8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    }
+    a { color: inherit; }
+    button { font: inherit; }
+    a:focus, button:focus { outline: 3px solid #e3a535; outline-offset: 4px; }
+    a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
+    .skip-link {
+      position: fixed; top: -80px; left: 20px; z-index: 10;
+      padding: 10px 16px; color: var(--ink); background: white;
+    }
+    .skip-link:focus { top: 12px; }
+    .shell { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh; }
+    .sidebar {
+      display: flex; flex-direction: column; padding: 28px 18px 24px;
+      color: #e7f0f6; background: var(--navy);
+    }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 10px 26px; }
+    .brand-mark {
+      display: grid; place-items: center; width: 44px; height: 44px;
+      border: 1px solid #557283; border-radius: 10px;
+      font-size: 17px; font-weight: 750; letter-spacing: -0.5px;
+    }
+    .brand-name { margin: 0; font-size: 16px; font-weight: 650; }
+    .brand-version { display: block; color: #b5cad8; font-size: 12px; }
+    .section-label { margin: 0 10px 10px; color: #a9c4d3; font-size: 12px; letter-spacing: 1px; }
+    .topics { display: flex; flex-direction: column; gap: 6px; }
+    .topic {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 13px 11px; border: 1px solid transparent; border-radius: 8px;
+      text-decoration: none;
+    }
+    .topic:hover { background: #1b3b51; }
+    .topic[aria-current="page"] { border-color: #507685; background: #234959; }
+    .topic-number { padding-top: 1px; color: #a8c4d3; font: 13px/1.8 ui-monospace, Consolas, monospace; }
+    .topic[aria-current="page"] .topic-number { color: #8be4cf; }
+    .topic-title { display: block; font-size: 15px; font-weight: 600; }
+    .topic-note { display: block; margin-top: 3px; color: #b8cbd7; font-size: 12px; }
+    .resources { margin-top: 30px; padding-top: 22px; border-top: 1px solid #345064; }
+    .resource-links { display: grid; gap: 10px; padding: 0 10px; }
+    .resource-links a { width: fit-content; font-size: 14px; text-decoration-color: #668596; text-underline-offset: 4px; }
+    .resource-links a:hover { color: #98e6d5; }
+    .sidebar-footer { margin-top: auto; padding: 30px 10px 0; color: #b8cbd7; font-size: 12px; }
+    .sidebar-footer p { margin: 4px 0; }
+    .sidebar-footer code { color: #e7f0f6; font-size: 12px; }
+    .workspace { display: flex; flex-direction: column; min-width: 0; height: 100vh; min-height: 760px; padding: 26px 28px 16px; }
+    .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 17px; }
+    .eyebrow { margin: 0; color: var(--muted); font-size: 14px; }
+    .offline-note { margin: 0; color: var(--accent); font-size: 12px; white-space: nowrap; }
+    .offline-note::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
+    .reader {
+      display: flex; flex: 1; flex-direction: column; min-height: 0;
+      border: 1px solid var(--line); border-radius: 12px; background: #fff;
+      box-shadow: 0 3px 14px #102d4308; overflow: hidden;
+    }
+    .reader-header { padding: 20px 22px 16px; border-bottom: 1px solid var(--line); }
+    .reader-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .title-group { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .chapter { color: var(--accent); font: 14px/1.5 ui-monospace, Consolas, monospace; white-space: nowrap; }
+    h1 { margin: 0; font-size: 23px; font-weight: 650; line-height: 1.4; letter-spacing: -0.4px; }
+    .reader-description { margin: 9px 0 0; color: var(--muted); font-size: 14px; }
+    .actions { display: flex; align-items: center; flex-shrink: 0; gap: 9px; }
+    .action {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 36px; padding: 6px 11px; border: 1px solid var(--line); border-radius: 6px;
+      color: var(--ink); background: #fff; font-size: 13px; text-decoration: none; cursor: pointer;
+    }
+    .action:hover { border-color: #95afb9; background: #f0f7f7; }
+    .action-primary { color: #fff; border-color: var(--accent); background: var(--accent); }
+    .action-primary:hover { color: #fff; border-color: #086663; background: #086663; }
+    .diagram-frame { display: block; flex: 1; width: 100%; min-height: 420px; border: 0; background: #fff; }
+    .reader-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 18px; border-top: 1px solid var(--line); }
+    .reader-hint { margin: 0; color: var(--muted); font-size: 12px; }
+    .stepper { display: flex; gap: 8px; flex-shrink: 0; }
+    .stepper button:disabled { color: #7a8995; border-color: #e1e7ec; background: #f6f8fa; cursor: default; }
+    .page-footer { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; padding-top: 12px; color: var(--muted); font-size: 12px; }
+    .page-footer a { text-underline-offset: 3px; }
+    noscript p { margin: 0; padding: 10px 22px; color: #69511c; background: #fff8e7; font-size: 14px; }
+    @media (max-width: 1150px) {
+      .shell { grid-template-columns: 220px minmax(0, 1fr); }
+      .sidebar { padding-left: 12px; padding-right: 12px; }
+      .workspace { padding: 20px 18px 14px; }
+      .reader-title-row { align-items: flex-start; flex-wrap: wrap; }
+      h1 { font-size: 21px; }
+    }
+    @media (max-width: 800px) {
+      .shell { display: block; }
+      .sidebar { padding: 16px; }
+      .brand { padding: 0 0 14px; }
+      .sidebar > .section-label, .topic-note, .sidebar-footer { display: none; }
+      .topics { flex-direction: row; overflow-x: auto; padding: 4px 2px 8px; }
+      .topic { align-items: center; flex-shrink: 0; padding: 9px 12px; gap: 8px; }
+      .topic-title { font-size: 14px; }
+      .resources { margin-top: 8px; padding-top: 12px; }
+      .resources .section-label { display: none; }
+      .resource-links { display: flex; flex-wrap: wrap; gap: 10px 18px; padding: 0; }
+      .resource-links a { font-size: 12px; }
+      .workspace { height: auto; min-height: 0; padding: 18px 12px 14px; }
+      .page-heading { gap: 8px; margin-bottom: 12px; }
+      .eyebrow { font-size: 13px; }
+      .reader-header { padding: 16px; }
+      .reader-description { font-size: 13px; }
+      .diagram-frame { flex: none; height: 75vh; min-height: 560px; }
+      .reader-footer { align-items: flex-start; flex-direction: column; padding: 12px 16px; }
+      .stepper { width: 100%; justify-content: space-between; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#reader">跳转到图示阅读区</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="资料导航">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">DTS</span>
+        <div><p class="brand-name">架构与工作流程</p><span class="brand-version">v2.2.3 · 团队参考</span></div>
+      </div>
+      <p class="section-label">五个主题，一条阅读路径</p>
+      <nav class="topics" aria-label="图示主题">
+        <a class="topic" href="01-architecture.html" target="diagram-frame" data-id="architecture" data-title="架构总览" data-source="01-architecture.architecture.json" data-description="从服务职责与系统边界开始，了解管理、治理、接入、分析和基础设施如何配合。" aria-current="page">
+          <span class="topic-number">01</span><span><span class="topic-title">架构总览</span><span class="topic-note">服务职责与系统边界</span></span>
+        </a>
+        <a class="topic" href="02-data-mainline.html" target="diagram-frame" data-id="data-mainline" data-title="数据业务主流程" data-source="02-data-mainline.dataflow.json" data-description="沿数据接入、资产治理、建模和分析理解业务链，区分物理产物与发布契约。">
+          <span class="topic-number">02</span><span><span class="topic-title">数据业务主流程</span><span class="topic-note">从数据接入到分析消费</span></span>
+        </a>
+        <a class="topic" href="03-approval.html" target="diagram-frame" data-id="approval" data-title="权限与通用审批" data-source="03-approval.workflow.json" data-description="梳理通用变更申请、审批、执行与审计，结合说明核对拒绝和执行失败的处理。">
+          <span class="topic-number">03</span><span><span class="topic-title">权限与通用审批</span><span class="topic-note">申请、决策、执行与审计</span></span>
+        </a>
+        <a class="topic" href="04-model-to-bi.html" target="diagram-frame" data-id="model-to-bi" data-title="模型发布到分析" data-source="04-model-to-bi.sequence.json" data-description="跟踪模型发布后的语义同步与 QueryDataset 投影，理解分析端读取契约的调用时序。">
+          <span class="topic-number">04</span><span><span class="topic-title">模型发布到分析</span><span class="topic-note">语义同步与契约读取</span></span>
+        </a>
+        <a class="topic" href="05-delivery.html" target="diagram-frame" data-id="delivery" data-title="团队交付流程" data-source="05-delivery.workflow.json" data-description="对齐开发、构建测试、正式发布与真实业务验收的交接，分别记录各阶段的证据。">
+          <span class="topic-number">05</span><span><span class="topic-title">团队交付流程</span><span class="topic-note">开发、发布与验收交接</span></span>
+        </a>
+      </nav>
+      <div class="resources">
+        <p class="section-label">配套材料</p>
+        <div class="resource-links">
+          <a href="README.md" target="_blank" rel="noopener">阅读与协作说明 ↗</a>
+          <a href="evidence.md" target="_blank" rel="noopener">源码依据与限制 ↗</a>
+          <a href="handoff.json" target="_blank" rel="noopener">校验与交接记录 ↗</a>
+          <a href="source-baseline.json" target="_blank" rel="noopener">源码基线记录 ↗</a>
+        </div>
+      </div>
+      <div class="sidebar-footer">
+        <p>资料日期 · 2026-09-12</p>
+        <p>源码基线 · <code title="2e91f12f5b3709f9892dff4d88d4689b1dabfc02">2e91f12f5b</code></p>
+        <p>图 01—04：源码与配置梳理<br>图 05：项目交付约定</p>
+      </div>
+    </aside>
+    <main class="workspace" id="reader" tabindex="-1">
+      <div class="page-heading">
+        <p class="eyebrow">团队参考 / 架构与工作流程</p>
+        <p class="offline-note">支持离线阅读</p>
+      </div>
+      <section class="reader" aria-labelledby="diagram-title">
+        <header class="reader-header">
+          <div class="reader-title-row">
+            <div class="title-group" aria-live="polite" aria-atomic="true">
+              <span class="chapter" id="chapter">01 / 05</span>
+              <h1 id="diagram-title">架构总览</h1>
+            </div>
+            <div class="actions">
+              <a class="action" id="source-link" href="01-architecture.architecture.json" target="_blank" rel="noopener">图源 JSON ↗</a>
+              <a class="action action-primary" id="open-link" href="01-architecture.html" target="_blank" rel="noopener">独立打开 ↗</a>
+            </div>
+          </div>
+          <p class="reader-description" id="diagram-description">从服务职责与系统边界开始，了解管理、治理、接入、分析和基础设施如何配合。</p>
+        </header>
+        <noscript><p>当前浏览器未启用 JavaScript。可通过主题导航在下方切换原图；上方标题与辅助链接保持为第一张图。</p></noscript>
+        <iframe class="diagram-frame" id="diagram-frame" name="diagram-frame" src="01-architecture.html" title="架构总览 · 交互图示" allowfullscreen></iframe>
+        <footer class="reader-footer">
+          <p class="reader-hint">图内可缩放、切换主题和导出；分享演示时可独立打开原图。</p>
+          <div class="stepper" aria-label="顺序阅读">
+            <button class="action" id="previous" type="button" disabled>← 上一主题</button>
+            <button class="action" id="next" type="button" disabled>下一主题 →</button>
+          </div>
+        </footer>
+      </section>
+      <footer class="page-footer">
+        <span>共享时请保留整个 ref 目录，打开 index.html 即可。</span>
+        <a href="README.md" target="_blank" rel="noopener">协作分工与资料维护 ↗</a>
+      </footer>
+    </main>
+  </div>
+  <script>
+    (() => {
+      'use strict';
+      const topics = Array.from(document.querySelectorAll('.topic'));
+      const frame = document.getElementById('diagram-frame');
+      const title = document.getElementById('diagram-title');
+      const description = document.getElementById('diagram-description');
+      const chapter = document.getElementById('chapter');
+      const sourceLink = document.getElementById('source-link');
+      const openLink = document.getElementById('open-link');
+      const previous = document.getElementById('previous');
+      const next = document.getElementById('next');
+      let current = -1;
+
+      function render(index) {
+        if (index < 0 || index >= topics.length || index === current) return;
+        const topic = topics[index];
+        const path = topic.getAttribute('href');
+        topics.forEach((item, itemIndex) => {
+          if (itemIndex === index) item.setAttribute('aria-current', 'page');
+          else item.removeAttribute('aria-current');
+        });
+        title.textContent = topic.dataset.title;
+        description.textContent = topic.dataset.description;
+        chapter.textContent = String(index + 1).padStart(2, '0') + ' / 05';
+        sourceLink.setAttribute('href', topic.dataset.source);
+        openLink.setAttribute('href', path);
+        frame.setAttribute('title', topic.dataset.title + ' · 交互图示');
+        if (frame.getAttribute('src') !== path) frame.setAttribute('src', path);
+        previous.disabled = index === 0;
+        next.disabled = index === topics.length - 1;
+        document.title = topic.dataset.title + ' · DTS 架构与工作流程';
+        current = index;
+      }
+
+      function navigate(index) {
+        if (index < 0 || index >= topics.length) return;
+        window.location.hash = topics[index].dataset.id;
+        render(index);
+      }
+
+      function readHash() {
+        const id = window.location.hash.slice(1);
+        // 仅允许五个已列出的主题，URL 片段不会成为文件路径。
+        const index = topics.findIndex(topic => topic.dataset.id === id);
+        // 保留跳转到阅读区的无障碍链接，不改变正在阅读的主题。
+        if (id === 'reader' && current >= 0) return;
+        render(index < 0 ? 0 : index);
+      }
+
+      topics.forEach((topic, index) => {
+        topic.addEventListener('click', event => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          navigate(index);
+        });
+      });
+      previous.addEventListener('click', () => navigate(current - 1));
+      next.addEventListener('click', () => navigate(current + 1));
+      window.addEventListener('hashchange', readHash);
+      readHash();
+    })();
+  </script>
+</body>
+</html>

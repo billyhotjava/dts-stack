@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "DTS 数据业务主线（能力衔接）",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [
+      1080,
+      560
+    ]
+  },
+  "stages": [
+    {
+      "label": "数据来源"
+    },
+    {
+      "label": "接入与元数据"
+    },
+    {
+      "label": "资产与建模"
+    },
+    {
+      "label": "发布与契约"
+    },
+    {
+      "label": "分析消费"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "sources",
+      "type": "external",
+      "label": "业务数据源",
+      "sublabel": "数据库 / API / 文件",
+      "stage": 0,
+      "row": 0,
+      "width": 150
+    },
+    {
+      "id": "ingestion",
+      "type": "backend",
+      "label": "数据接入",
+      "sublabel": "任务与执行记录",
+      "stage": 1,
+      "row": 0,
+      "width": 150
+    },
+    {
+      "id": "physical",
+      "type": "database",
+      "label": "接入物理资产",
+      "sublabel": "目标表与资产登记",
+      "stage": 2,
+      "row": 0,
+      "width": 150
+    },
+    {
+      "id": "model",
+      "type": "backend",
+      "label": "建模与物化",
+      "sublabel": "模型修订 / dbt",
+      "stage": 2,
+      "row": 2,
+      "width": 150
+    },
+    {
+      "id": "serving",
+      "type": "database",
+      "label": "模型物理产物",
+      "sublabel": "DWS / ADS",
+      "stage": 3,
+      "row": 2,
+      "width": 150
+    },
+    {
+      "id": "dataset",
+      "type": "backend",
+      "label": "发布查询数据集",
+      "sublabel": "QueryDataset",
+      "stage": 3,
+      "row": 0,
+      "width": 150
+    },
+    {
+      "id": "bi",
+      "type": "frontend",
+      "label": "受治理分析",
+      "sublabel": "数据集 / 图表 / 看板",
+      "stage": 4,
+      "row": 0,
+      "width": 150
+    },
+    {
+      "id": "metadata",
+      "type": "database",
+      "label": "元数据目录",
+      "sublabel": "OpenMetadata",
+      "stage": 1,
+      "row": 2,
+      "width": 150
+    }
+  ],
+  "flows": [
+    {
+      "id": "sources-to-ingestion",
+      "from": "sources",
+      "to": "ingestion",
+      "label": "读取源数据",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ingestion-to-physical",
+      "from": "ingestion",
+      "to": "physical",
+      "label": "写入目标",
+      "variant": "emphasis"
+    },
+    {
+      "id": "physical-to-model",
+      "from": "physical",
+      "to": "model",
+      "label": "读取已绑定资产",
+      "variant": "default",
+      "labelAt": [
+        530,
+        270
+      ]
+    },
+    {
+      "id": "model-to-serving",
+      "from": "model",
+      "to": "serving",
+      "label": "物化产物",
+      "variant": "emphasis"
+    },
+    {
+      "id": "serving-to-dataset",
+      "from": "serving",
+      "to": "dataset",
+      "label": "发布投影",
+      "variant": "emphasis"
+    },
+    {
+      "id": "dataset-to-bi",
+      "from": "dataset",
+      "to": "bi",
+      "label": "契约消费",
+      "variant": "emphasis"
+    },
+    {
+      "id": "ingestion-to-metadata",
+      "from": "ingestion",
+      "to": "metadata",
+      "label": "元数据同步",
+      "variant": "default",
+      "labelAt": [
+        315,
+        270
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "业务衔接",
+      "items": [
+        "建模绑定输入资产并校验版本",
+        "物理产物与发布契约分别管理",
+        "元数据路径不表示搬运业务数据"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "核对边界",
+      "items": [
+        "本图不表示任务自动串联",
+        "质量策略与密级按对象单独核对",
+        "未使用真实数据执行整条链路"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+{
+  "commit": "2e91f12f5b3709f9892dff4d88d4689b1dabfc02",
+  "files": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "222a39283c467618cb46b24d6f5591dda01db2c335524f3267f8829203824cbe",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "builds/dts-build.sh",
+      "sha256": "28dd1ec92c9ed66c8e1c7ee7e7eaa3ad7d3e08bf84685994adfa5211a8ae0cbb",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "docker-compose-app.yml",
+      "sha256": "70dc278960654d1b8691a48af86f74004cad26cdfb1a1f762436c075104a02bd",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/config/SecurityConfiguration.java",
+      "sha256": "2fe952d012c66d4821e744f17d41e36b494c8a32eb4e70aa80d3fa7fb2e3b988",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AdminApiResource.java",
+      "sha256": "3b0bd4242ada92fdefb5491737d1b04aedfb1bbce0b2582d42d7d5ef00b80968",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AdminApiResource.java",
+      "sha256": "3b0bd4242ada92fdefb5491737d1b04aedfb1bbce0b2582d42d7d5ef00b80968",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AdminApiResource.java",
+      "sha256": "3b0bd4242ada92fdefb5491737d1b04aedfb1bbce0b2582d42d7d5ef00b80968",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AdminApiResource.java",
+      "sha256": "3b0bd4242ada92fdefb5491737d1b04aedfb1bbce0b2582d42d7d5ef00b80968",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/AdminApiResource.java",
+      "sha256": "3b0bd4242ada92fdefb5491737d1b04aedfb1bbce0b2582d42d7d5ef00b80968",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/analysis/PlatformAnalysisDatasetContractClient.java",
+      "sha256": "056c6764dc2da8cb3621ceca1bac26852bef1494cfae1f82b4839e0d0ab825dc",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/service/IngestionTaskService.java",
+      "sha256": "c47ec050caf619de4a78ac51a0cb51ee3d3b6cc177728254b2fc79906e08bd18",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/service/openmetadata/OpenMetadataAdapter.java",
+      "sha256": "753fea3f305dbcb47c852cae12d4311b8e01e6164d4096f3eb52450efdcc45ac",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java",
+      "sha256": "882e1ca3346190a71b8525c5e1194aba5eac9350db42ef5d19b5f93570016c4a",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform-webapp/src/routes/sections/dashboard/static-routes.tsx",
+      "sha256": "9d1e4e1a590a3dbd9b87af19670823b24214045822fa7508a176e97c3421cd11",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/event/PlatformEventKafkaDispatcher.java",
+      "sha256": "00f0dde346b7eddb7d88cbe5850632e3ea283f43a9d8c4d64736ade34f0d0ac2",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/infra/PostgresCatalogSyncService.java",
+      "sha256": "b3ae2510e0547fb9dacedc2d00ddf53df1d3143a676fe7fae5b39e08be527954",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/ingestion/IngestionFlowProjectionService.java",
+      "sha256": "874f40a29e11bdf6690ef4c9a8f9d176345923b9c28d76e23bd9d30de7b0481a",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/ingestion/IngestionServiceClient.java",
+      "sha256": "292778568797ac3add0fd29f21d1606bece529d45be842dfa48abadb4e0695a3",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelImplementationDependencySnapshotResolver.java",
+      "sha256": "257f09dd00c3b74f5aa76435a620ef857fb75cbb12850f7b07d2d1bfec48cd14",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelMaterializationDispatchService.java",
+      "sha256": "e8623479162064a1309607667de6be261f59161f3e3a8cc8bbe0ed0e38d4750c",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelMaterializationPlanService.java",
+      "sha256": "f643695e0968f2b4f3be2878ba1f531408f98b13fa390b6a6e422211cdd56878",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/AnalyticsSemanticPublishClient.java",
+      "sha256": "ea69ab2dc55e67fcc8096963dc567542d094414b4249148ec22e2c36f5d8b8a1",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/CatalogModelSemanticSyncService.java",
+      "sha256": "d64041a18ec039d0d5367753a792f75a8e404e0193e66765361071527cead055",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/CatalogModelSemanticSyncService.java",
+      "sha256": "d64041a18ec039d0d5367753a792f75a8e404e0193e66765361071527cead055",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/CatalogModelServingService.java",
+      "sha256": "7fdd59043616a3f97975e3b7237ce410cefffcfcf9cb76ea40170cec6195ff26",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/ModelQueryDatasetProjectionService.java",
+      "sha256": "ff739218fd417c576eaf790f2a59fe441f13a771e28e6003dc5723fea59099dc",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/dts-platform/src/main/resources/config/application.yml",
+      "sha256": "d1308d481a3eedcbcd019d914ded9132364802397db381296dcdbb25d277c97d",
+      "worktree_matches_baseline": true
+    },
+    {
+      "path": "source/pom.xml",
+      "sha256": "5df7ac476feb8d0e82e2032d796114f89e511cb1dc8c74e3199b082f601b6d2d",
+      "worktree_matches_baseline": true
+    }
+  ]
+}

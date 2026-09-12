@@ -1,0 +1,188 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "DTS 权限与通用审批（当前实现）",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "通用变更主线"
+    },
+    {
+      "id": "exceptions",
+      "label": "拒绝与失败",
+      "variant": "exception"
+    }
+  ],
+  "mainPath": [
+    "draft",
+    "pending",
+    "approved",
+    "apply",
+    "applied",
+    "audit"
+  ],
+  "nodes": [
+    {
+      "id": "draft",
+      "lane": "main",
+      "col": 0,
+      "type": "backend",
+      "label": "创建变更",
+      "sublabel": "DRAFT",
+      "width": 132
+    },
+    {
+      "id": "pending",
+      "lane": "main",
+      "col": 1,
+      "type": "backend",
+      "label": "提交申请",
+      "sublabel": "PENDING",
+      "width": 132
+    },
+    {
+      "id": "approved",
+      "lane": "main",
+      "col": 2,
+      "type": "security",
+      "label": "同意申请",
+      "sublabel": "APPROVED",
+      "width": 132
+    },
+    {
+      "id": "apply",
+      "lane": "main",
+      "col": 3,
+      "type": "backend",
+      "label": "执行变更",
+      "sublabel": "按资源类型分派",
+      "width": 132
+    },
+    {
+      "id": "applied",
+      "lane": "main",
+      "col": 4,
+      "type": "database",
+      "label": "执行成功",
+      "sublabel": "已支持类型：APPLIED",
+      "width": 132
+    },
+    {
+      "id": "audit",
+      "lane": "main",
+      "col": 5,
+      "type": "database",
+      "label": "记录审计",
+      "sublabel": "保存决定与执行结果",
+      "width": 132
+    },
+    {
+      "id": "rejected",
+      "lane": "exceptions",
+      "col": 2,
+      "type": "security",
+      "label": "拒绝申请",
+      "sublabel": "REJECTED",
+      "width": 132
+    },
+    {
+      "id": "failed",
+      "lane": "exceptions",
+      "col": 4,
+      "type": "security",
+      "label": "执行失败",
+      "sublabel": "FAILED / lastError",
+      "width": 132
+    }
+  ],
+  "edges": [
+    {
+      "id": "draft-to-pending",
+      "from": "draft",
+      "to": "pending",
+      "role": "main"
+    },
+    {
+      "id": "pending-to-approved",
+      "from": "pending",
+      "to": "approved",
+      "role": "main",
+      "label": "同意"
+    },
+    {
+      "id": "approved-to-apply",
+      "from": "approved",
+      "to": "apply",
+      "role": "main"
+    },
+    {
+      "id": "apply-to-applied",
+      "from": "apply",
+      "to": "applied",
+      "role": "main",
+      "label": "成功"
+    },
+    {
+      "id": "applied-to-audit",
+      "from": "applied",
+      "to": "audit",
+      "role": "main"
+    },
+    {
+      "id": "pending-to-rejected",
+      "from": "pending",
+      "to": "rejected",
+      "role": "error",
+      "label": "拒绝"
+    },
+    {
+      "id": "apply-to-failed",
+      "from": "apply",
+      "to": "failed",
+      "role": "error",
+      "label": "失败"
+    },
+    {
+      "id": "rejected-to-audit",
+      "from": "rejected",
+      "to": "audit",
+      "role": "branch",
+      "label": "记录拒绝"
+    },
+    {
+      "id": "failed-to-audit",
+      "from": "failed",
+      "to": "audit",
+      "role": "branch",
+      "label": "记录失败"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "管理入口",
+      "items": [
+        "管理 API 按三员角色集合放行",
+        "本图聚焦通用 change-requests",
+        "Keycloak 专用审批需另行核对"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "当前边界",
+      "items": [
+        "图示为常规路径，非强制状态机",
+        "动作权限与禁止自审需补验证",
+        "失败会尝试回滚事务并记录原因"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "DTS 模型发布到分析（关键时序）",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [
+      1080,
+      620
+    ],
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "participants": [
+    {
+      "id": "serving",
+      "type": "database",
+      "label": "Serving 台账",
+      "sublabel": "平台持久化"
+    },
+    {
+      "id": "sync",
+      "type": "backend",
+      "label": "语义同步",
+      "sublabel": "platform 内部"
+    },
+    {
+      "id": "analytics",
+      "type": "backend",
+      "label": "分析服务",
+      "sublabel": "dts-analytics"
+    },
+    {
+      "id": "dataset",
+      "type": "database",
+      "label": "查询数据集",
+      "sublabel": "platform 契约"
+    }
+  ],
+  "messages": [
+    {
+      "id": "step-1",
+      "from": "sync",
+      "to": "serving",
+      "y": 170,
+      "label": "领取到期候选与租约",
+      "variant": "default"
+    },
+    {
+      "id": "step-2",
+      "from": "serving",
+      "to": "sync",
+      "y": 212,
+      "label": "返回模型发布候选",
+      "variant": "return"
+    },
+    {
+      "id": "step-3",
+      "from": "sync",
+      "to": "analytics",
+      "y": 254,
+      "label": "HTTP 发布语义与服务凭据",
+      "variant": "security"
+    },
+    {
+      "id": "step-4",
+      "from": "analytics",
+      "to": "sync",
+      "y": 296,
+      "label": "发布调用返回",
+      "variant": "return"
+    },
+    {
+      "id": "step-5",
+      "from": "sync",
+      "to": "dataset",
+      "y": 338,
+      "label": "投影已启用的 DWS / ADS 资产",
+      "variant": "emphasis"
+    },
+    {
+      "id": "step-6",
+      "from": "dataset",
+      "to": "sync",
+      "y": 380,
+      "label": "READY 契约与 PUBLISHED 版本",
+      "variant": "return"
+    },
+    {
+      "id": "step-7",
+      "from": "sync",
+      "to": "serving",
+      "y": 422,
+      "label": "记录同步成功（版本条件更新）",
+      "variant": "default"
+    },
+    {
+      "id": "step-8",
+      "from": "analytics",
+      "to": "dataset",
+      "y": 464,
+      "label": "后续请求：契约缓存未命中 GET",
+      "variant": "default"
+    },
+    {
+      "id": "step-9",
+      "from": "dataset",
+      "to": "analytics",
+      "y": 506,
+      "label": "返回契约（分析端校验引用）",
+      "variant": "return"
+    }
+  ],
+  "segments": [
+    {
+      "from": 150,
+      "to": 449,
+      "label": "后台同步"
+    },
+    {
+      "from": 452,
+      "to": 540,
+      "label": "后续消费"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "关键契约",
+      "items": [
+        "物理产物、发布版本与消费引用分别校验",
+        "分析端读取契约与发布调用为不同阶段",
+        "分析端核对 ID、版本、校验和及发布状态"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "失败与恢复",
+      "items": [
+        "异常记录错误码并按规则安排重试",
+        "永久错误或重试耗尽停止自动重试",
+        "远端发布与本地投影没有分布式事务"
+      ]
+    }
+  ]
+}

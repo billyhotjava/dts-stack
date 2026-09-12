@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/04-model-to-bi.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/04-model-to-bi.html",
+  "specification": {
+    "sha256": "33694097b1cd7fafef507670aa97d616b64f26253ee2bd863cc68d4f5eddcc6e",
+    "bytes": 3220
+  },
+  "artifact": {
+    "sha256": "6a22f4e62017ecc65a4625afe0007eaf20790d37666e470bb10f4b0f364e75ad",
+    "bytes": 706916
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

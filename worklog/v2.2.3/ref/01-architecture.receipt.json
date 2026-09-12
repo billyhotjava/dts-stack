@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/01-architecture.architecture.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/01-architecture.html",
+  "specification": {
+    "sha256": "ae70edcae8577836012031e1d54d435e3b25c71f79adf657a2b5a18094a660d1",
+    "bytes": 4458
+  },
+  "artifact": {
+    "sha256": "7042815f2ab9537330aaeb7b388716d73b2bdd7355e2c9be4214b72177621a90",
+    "bytes": 711718
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

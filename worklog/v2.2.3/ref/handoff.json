@@ -1,0 +1,127 @@
+{
+  "date": "2026-09-12",
+  "scope": "DTS v2.2.3 架构与工作流程参考材料",
+  "source_commit": "2e91f12f5b3709f9892dff4d88d4689b1dabfc02",
+  "source_files_verified": 28,
+  "source_baseline": "source-baseline.json",
+  "archify_version": "2.16.0",
+  "entry": "index.html",
+  "reading_guide": "README.md",
+  "evidence": "evidence.md",
+  "diagrams": [
+    {
+      "id": "01-architecture",
+      "diagram_type": "architecture",
+      "specification": "01-architecture.architecture.json",
+      "output": "01-architecture.html",
+      "specification_sha256": "ae70edcae8577836012031e1d54d435e3b25c71f79adf657a2b5a18094a660d1",
+      "artifact_sha256": "7042815f2ab9537330aaeb7b388716d73b2bdd7355e2c9be4214b72177621a90",
+      "validation": "9/9 showcase, 0 errors, 0 warnings",
+      "viewport_containment": "passed at 1440x900, 1600x1000, 1920x1080, 2048x1320",
+      "visual_review": "passed",
+      "manual_inspection": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "visual_notes": "已阅读当前产物截图：标题、节点、关系与卡片可读，无截断或溢出。浏览器自动结果与人工阅读分开记录。",
+      "correction_rounds": 1,
+      "receipt": "01-architecture.receipt.json",
+      "visual_receipt": "01-architecture.visual-check.json"
+    },
+    {
+      "id": "02-data-mainline",
+      "diagram_type": "dataflow",
+      "specification": "02-data-mainline.dataflow.json",
+      "output": "02-data-mainline.html",
+      "specification_sha256": "6e4476058d71e35b0efdd6281b56686ec1d4daf76ad05e88cb17d89568a54724",
+      "artifact_sha256": "ad75f2270aadbbe01fe0a8fd8481e4b92b5d36294edf4ba0cb3c5911a53a9b3f",
+      "validation": "9/9 showcase, 0 errors, 0 warnings",
+      "viewport_containment": "passed at 1440x900, 1600x1000, 1920x1080, 2048x1320",
+      "visual_review": "passed",
+      "manual_inspection": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "visual_notes": "已阅读当前产物截图：标题、节点、关系与卡片可读，无截断或溢出。浏览器自动结果与人工阅读分开记录。",
+      "correction_rounds": 2,
+      "receipt": "02-data-mainline.receipt.json",
+      "visual_receipt": "02-data-mainline.visual-check.json"
+    },
+    {
+      "id": "03-approval",
+      "diagram_type": "workflow",
+      "specification": "03-approval.workflow.json",
+      "output": "03-approval.html",
+      "specification_sha256": "c825dbbad03d618adb17d003c9ab7ed5bd9f87eb59f5c19fafeb49330f3d84ee",
+      "artifact_sha256": "79f481e0bea49c01602b608a9c5ca8ce7f5c8e29818ff15f22f260e760b451cd",
+      "validation": "9/9 showcase, 0 errors, 0 warnings",
+      "viewport_containment": "passed at 1440x900, 1600x1000, 1920x1080, 2048x1320",
+      "visual_review": "passed",
+      "manual_inspection": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "visual_notes": "已阅读当前产物截图：标题、节点、关系与卡片可读，无截断或溢出。浏览器自动结果与人工阅读分开记录。",
+      "correction_rounds": 0,
+      "receipt": "03-approval.receipt.json",
+      "visual_receipt": "03-approval.visual-check.json"
+    },
+    {
+      "id": "04-model-to-bi",
+      "diagram_type": "sequence",
+      "specification": "04-model-to-bi.sequence.json",
+      "output": "04-model-to-bi.html",
+      "specification_sha256": "33694097b1cd7fafef507670aa97d616b64f26253ee2bd863cc68d4f5eddcc6e",
+      "artifact_sha256": "6a22f4e62017ecc65a4625afe0007eaf20790d37666e470bb10f4b0f364e75ad",
+      "validation": "9/9 showcase, 0 errors, 0 warnings",
+      "viewport_containment": "passed at 1440x900, 1600x1000, 1920x1080, 2048x1320",
+      "visual_review": "passed",
+      "manual_inspection": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "visual_notes": "已阅读当前产物截图：标题、节点、关系与卡片可读，无截断或溢出。浏览器自动结果与人工阅读分开记录。",
+      "correction_rounds": 1,
+      "receipt": "04-model-to-bi.receipt.json",
+      "visual_receipt": "04-model-to-bi.visual-check.json"
+    },
+    {
+      "id": "05-delivery",
+      "diagram_type": "workflow",
+      "specification": "05-delivery.workflow.json",
+      "output": "05-delivery.html",
+      "specification_sha256": "fecff2af72c8daf3ceefd61375b2eb7aff77dfb84abe1e126b529880fb9a9aca",
+      "artifact_sha256": "56ec0f8fe66770048380548f873868a4fd9559f2d24a6a8a2028769aedb0a22c",
+      "validation": "9/9 showcase, 0 errors, 0 warnings",
+      "viewport_containment": "passed at 1440x900, 1600x1000, 1920x1080, 2048x1320",
+      "visual_review": "passed",
+      "manual_inspection": [
+        "1440x900 light",
+        "2048x1320 dark"
+      ],
+      "visual_notes": "已阅读当前产物截图：标题、节点、关系与卡片可读，无截断或溢出。浏览器自动结果与人工阅读分开记录。",
+      "correction_rounds": 0,
+      "receipt": "05-delivery.receipt.json",
+      "visual_receipt": "05-delivery.visual-check.json"
+    }
+  ],
+  "verification": {
+    "documentation": "passed",
+    "source_code_tests": "not run; documentation-only task",
+    "formal_product_build_and_package": "not run",
+    "container_deployment": "not run",
+    "authenticated_business_acceptance": "not run"
+  },
+  "git_status": "本轮只新增 ref 目录材料，未提交或推送；其他并行源码改动保留并排除于本轮基线。",
+  "external_sharing": "not sent or published",
+  "portal": {
+    "output": "index.html",
+    "artifact_sha256": "01f653dd86184e531b3881d607588746b07ef5153ff0912c6ffeee1712f6fa8f",
+    "local_reference_check": "passed: 19 relative file or fragment references",
+    "navigation_check": "passed: Node VM DOM mock; five themes, previous/next bounds, deep links, hash navigation, metadata synchronization, modified clicks and duplicate-load avoidance",
+    "javascript_syntax": "passed: node --check",
+    "original_artifacts": "all five diagram HTML files and five JSON specifications match existing SHA-256 records",
+    "browser_rendering": "not run for the portal; existing diagram visual receipts remain separate",
+    "sharing": "copy the complete ref directory and open index.html; no network dependencies added"
+  }
+}
