@@ -1223,6 +1223,7 @@ public class ModelReleaseCandidateApplicationService {
         String actorId,
         Set<DeliveryActorRole> duties
     ) {
+        if (!canOperate(candidate, actorId)) return List.of();
         if (candidate.status() == DeliveryStatus.DRAFT) {
             return visibleActions(
                 candidate,
@@ -1607,7 +1608,7 @@ public class ModelReleaseCandidateApplicationService {
     private Access authorizeRead(String tenantId, String actorId, UUID planId) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
-        if (planId == null || !planReadAccess.canReadPlan(planId)) {
+        if (planId == null || !planAccess.canReadPlan(tenant, planId) || !planReadAccess.canReadPlan(planId)) {
             throw planForbidden();
         }
         Set<DeliveryActorRole> duties = dutyResolver.currentDuties();
@@ -1874,9 +1875,17 @@ public class ModelReleaseCandidateApplicationService {
         );
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ModelSpecAccessService modelAccess;
+    private boolean canOperate(CandidateView candidate, String actor) {
+        var ids = candidate.entries().stream().map(ModelReleaseCandidateContract.EntryView::modelSpecId).distinct().toList();
+        var capabilities = modelAccess.capabilities(candidate.tenantId(), ids);
+        return !ids.isEmpty() && capabilities.size() == ids.size() && capabilities.values().stream().allMatch(ModelSpecAccessService.Capabilities::canEdit);
+    }
+
     private CommandResult roleAware(CommandResult result, Access access) {
         CandidateView candidate = result.candidate();
-        List<DeliveryAction> allowedActions = candidate.entries().isEmpty()
+        List<DeliveryAction> allowedActions = candidate.entries().isEmpty() || !canOperate(candidate, access.actorId())
             ? List.of()
             : preferSelfServicePublication(
                 candidate
@@ -1923,6 +1932,7 @@ public class ModelReleaseCandidateApplicationService {
         Set<DeliveryActorRole> duties,
         List<WorkspaceAction> proposed
     ) {
+        if (!canOperate(candidate, actorId)) return List.of();
         return proposed
             .stream()
             .filter(action -> {

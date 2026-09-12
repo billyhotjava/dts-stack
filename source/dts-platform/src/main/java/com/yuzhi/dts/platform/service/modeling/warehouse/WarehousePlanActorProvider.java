@@ -8,9 +8,8 @@ import org.springframework.stereotype.Component;
 public class WarehousePlanActorProvider {
 
     public WarehousePlanActor currentActor() {
-        String login = SecurityUtils.getCurrentUserLogin().orElse(null);
-        String ownerId = SecurityUtils.getCurrentUserId().orElse(login);
-        return new WarehousePlanActor(ownerId, SecurityUtils.getCurrentUserDept().orElse(null));
+        var identity = com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current();
+        return new WarehousePlanActor(identity.id(), identity.deptCode());
     }
 
     public record WarehousePlanActor(String ownerId, String ownerDepartmentId) {}

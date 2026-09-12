@@ -191,6 +191,9 @@ public class ModelMaterializationDispatchService {
         }
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ModelingExecutionAuthorization executionAuthorization;
+
     public Optional<DispatchResult> dispatchNext() {
         Instant now = clock.instant();
         Optional<DispatchRecord> claimed = dispatches.claimNext(
@@ -199,8 +202,8 @@ public class ModelMaterializationDispatchService {
         );
         if (claimed.isEmpty()) return Optional.empty();
         DispatchRecord dispatch = claimed.orElseThrow();
-        boolean externalBoundaryCrossed = false;
-        try {
+        boolean externalBoundaryCrossed = dispatch.runtimeTokenDigest() != null;
+        try (var identity = executionAuthorization.candidate(dispatch.tenantId(), dispatch.candidateId(), dispatch.candidateVersion(), "BUILDING")) {
             CandidateBuildScope scope =
                 builds.loadCandidateBuildScope(
                     dispatch.tenantId(),
@@ -246,9 +249,9 @@ public class ModelMaterializationDispatchService {
 
             List<ModelMaterializationBuildRepository.BuildArtifact> pinnedDependencies =
                 builds.loadPinnedDependencyArtifacts(scope);
-            ScopedCandidateProject project = scopedProjects.prepareCandidate(
-                toArtifacts(scope, pinnedDependencies, pinnedSources)
-            );
+            var artifacts = toArtifacts(scope, pinnedDependencies, pinnedSources);
+            ModelingSqlReadSetGuard.requireArtifacts(toArtifacts(scope, List.of(), pinnedSources), pinnedSources);
+            ScopedCandidateProject project = scopedProjects.prepareCandidate(artifacts);
             ModelRuntimeSpecTokenCodec.IssuedToken runtimeToken =
                 runtimeToken(dispatch, now);
             if (!runtimeToken.expiresAt().isAfter(now)) {

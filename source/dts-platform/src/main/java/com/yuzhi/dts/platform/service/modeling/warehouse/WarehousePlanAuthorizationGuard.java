@@ -23,10 +23,9 @@ public class WarehousePlanAuthorizationGuard {
     }
 
     public boolean canReadPlan(WarehousePlanHeader current, WarehousePlanActor actor) {
-        return current != null && actor != null && StringUtils.hasText(actor.ownerId()) &&
-            SecurityUtils.isAuthenticated() && SecurityContextHolder.getContext().getAuthentication().isAuthenticated() &&
-            (SecurityUtils.getCurrentUserId().filter(actor.ownerId()::equals).isPresent() ||
-             SecurityUtils.getCurrentUserLogin().filter(actor.ownerId()::equals).isPresent());
+        return current != null && actor != null &&
+            com.yuzhi.dts.platform.security.modeling.ModelingIdentity.matchesActor(actor.ownerId()) &&
+            com.yuzhi.dts.platform.security.modeling.ModelingIdentity.department(current.ownerDepartmentId());
     }
 
     public void requirePlanRead(WarehousePlanHeader current, WarehousePlanActor actor) {
@@ -50,53 +49,10 @@ public class WarehousePlanAuthorizationGuard {
         WarehousePlanActor actor
     ) {
         requirePlanMaintenance(current, actor);
-        if (!StringUtils.hasText(requestedOwnerId)) {
-            return;
+        if (!Objects.equals(current.ownerDepartmentId(), requestedOwnerDepartmentId) ||
+            (StringUtils.hasText(requestedOwnerId) && !Objects.equals(current.ownerId(), requestedOwnerId))) {
+            throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException("MODELING_CONTEXT_DEPARTMENT_IMMUTABLE",
+                "部门公共层归属不可变更", com.yuzhi.dts.platform.service.modeling.ModelSpecException.Kind.CONFLICT);
         }
-        if (
-            Objects.equals(current.ownerId(), requestedOwnerId.trim()) &&
-            sameOptionalDepartment(current.ownerDepartmentId(), requestedOwnerDepartmentId)
-        ) {
-            return;
-        }
-        UserSummary target = directoryGateway
-            .findUserByPrincipalKey(requestedOwnerId.trim())
-            .orElseThrow(() ->
-                new WarehousePlanException(
-                    "WAREHOUSE_PLAN_OWNER_FORBIDDEN",
-                    "The requested warehouse plan owner is not present in the directory",
-                    null
-                )
-            );
-        if (!sameDepartment(target.deptCode(), requestedOwnerDepartmentId)) {
-            throw new WarehousePlanException(
-                "WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN",
-                "The requested owner department does not match the directory",
-                null
-            );
-        }
-        if (SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES)) {
-            return;
-        }
-        if (!sameDepartment(target.deptCode(), actor.ownerDepartmentId())) {
-            throw new WarehousePlanException(
-                "WAREHOUSE_PLAN_OWNER_DEPARTMENT_FORBIDDEN",
-                "Department maintainers can transfer plans only inside their authenticated department",
-                null
-            );
-        }
-    }
-
-    private static boolean sameDepartment(String left, String right) {
-        String canonicalLeft = DepartmentUtils.normalize(left);
-        String canonicalRight = DepartmentUtils.normalize(right);
-        return StringUtils.hasText(canonicalLeft) && canonicalLeft.equals(canonicalRight);
-    }
-
-    private static boolean sameOptionalDepartment(String left, String right) {
-        if (!StringUtils.hasText(left) && !StringUtils.hasText(right)) {
-            return true;
-        }
-        return sameDepartment(left, right);
     }
 }

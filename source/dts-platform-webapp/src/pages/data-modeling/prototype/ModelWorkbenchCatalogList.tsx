@@ -1,3 +1,4 @@
+import { useModelAccess } from "./useModelingAccess";
 import { Space } from "antd";
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -90,6 +91,11 @@ export function ModelWorkbenchCatalogList({
 	onRemoveDimension,
 	onRemoveModel,
 }: ModelWorkbenchCatalogListProps) {
+	const permissions = useModelAccess(models.map((model) => model.id));
+	const objectAccess = useMemo(
+		() => (permissions.isError ? {} : permissions.data || {}),
+		[permissions.data, permissions.isError],
+	);
 	const router = useRouter();
 	const [createOpen, setCreateOpen] = useState(false);
 	const [query, setQuery] = useState("");
@@ -163,13 +169,17 @@ export function ModelWorkbenchCatalogList({
 				layer: model.layer,
 				status: model.status,
 				revision: model.revision,
-				editable: canMaintain && model.status === "DRAFT" && model.compatibilityMode === "CANONICAL",
+				editable:
+					canMaintain &&
+					objectAccess[model.id]?.canEdit === true &&
+					model.status === "DRAFT" &&
+					model.compatibilityMode === "CANONICAL",
 				dimension: null,
 				model,
 				open: () => onChooseModel(model),
 			})),
 		],
-		[canMaintain, dimensions, models, onChooseDimension, onChooseModel],
+		[objectAccess, canMaintain, dimensions, models, onChooseDimension, onChooseModel],
 	);
 
 	const filteredLocalRows = useMemo(
@@ -243,14 +253,17 @@ export function ModelWorkbenchCatalogList({
 					editable: Boolean(
 						canMaintain &&
 							((dimension && dimension.status !== "RETIRED") ||
-								(model && model.status === "DRAFT" && model.compatibilityMode === "CANONICAL")),
+								(model &&
+									objectAccess[model.id]?.canEdit === true &&
+									model.status === "DRAFT" &&
+									model.compatibilityMode === "CANONICAL")),
 					),
 					dimension,
 					model,
 					open: dimension ? () => onChooseDimension(dimension) : model ? () => onChooseModel(model) : null,
 				};
 			}),
-		[catalogPage, canMaintain, dimensionById, modelById, onChooseDimension, onChooseModel],
+		[objectAccess, catalogPage, canMaintain, dimensionById, modelById, onChooseDimension, onChooseModel],
 	);
 	const localPageCount = Math.ceil(filteredLocalRows.length / PAGE_SIZE);
 	const pageRows = compatibilityFallback
@@ -481,21 +494,36 @@ export function ModelWorkbenchCatalogList({
 						key: "materialize",
 						label: row.model && deliveryByModel.has(row.model.id) ? "构建历史 / 再次构建" : "构建详情",
 						hidden: !row.model,
-						disabled: busy || !detailsReady || !canMaintain || row.model?.status === "ARCHIVED",
+						disabled:
+							busy ||
+							!detailsReady ||
+							!canMaintain ||
+							!objectAccess[row.id]?.canEdit ||
+							row.model?.status === "ARCHIVED",
 						onClick: () => onMaterialize([row.model as ModelSpecView]),
 					},
 					{
 						key: "model-remove",
 						label: "删除",
 						hidden: !row.model || row.model.status !== "DRAFT",
-						disabled: busy || !detailsReady || !canMaintain || row.model?.compatibilityMode !== "CANONICAL",
+						disabled:
+							busy ||
+							!detailsReady ||
+							!canMaintain ||
+							!objectAccess[row.id]?.canEdit ||
+							row.model?.compatibilityMode !== "CANONICAL",
 						onClick: () => onRemoveModel(row.model as ModelSpecView),
 					},
 					{
 						key: "model-archive",
 						label: "归档",
 						hidden: !row.model || row.model.status === "DRAFT" || row.model.status === "ARCHIVED",
-						disabled: busy || !detailsReady || !canMaintain || row.model?.compatibilityMode !== "CANONICAL",
+						disabled:
+							busy ||
+							!detailsReady ||
+							!canMaintain ||
+							!objectAccess[row.id]?.canEdit ||
+							row.model?.compatibilityMode !== "CANONICAL",
 						onClick: () => onArchiveModel(row.model as ModelSpecView),
 					},
 					{
@@ -597,7 +625,13 @@ export function ModelWorkbenchCatalogList({
 					</span>
 					{selectedModels.length ? <Button onClick={() => setSelectedIds(new Set())}>清空已选</Button> : null}
 					<Button
-						disabled={busy || !detailsReady || !canMaintain || !selectedModels.length}
+						disabled={
+							busy ||
+							!detailsReady ||
+							!canMaintain ||
+							!selectedModels.length ||
+							selectedModels.some((model) => !objectAccess[model.id]?.canEdit)
+						}
 						onClick={() => onMaterialize(selectedModels)}
 						primary
 					>

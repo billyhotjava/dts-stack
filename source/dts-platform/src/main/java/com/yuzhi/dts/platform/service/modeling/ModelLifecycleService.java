@@ -701,7 +701,8 @@ public class ModelLifecycleService {
             throw new ModelSpecException("MODEL_SPEC_ACTOR_REQUIRED", "Authenticated actor is required", ModelSpecException.Kind.FORBIDDEN);
         }
         PlanState plan = modelSpecRepository.lockPlan(tenantId, model.planId()).orElseThrow(() -> notFound("Warehouse plan was not found"));
-        if ("ARCHIVED".equals(plan.lifecycleStatus()) || !writeAccess.canMaintain(tenantId, model.planId(), actorId)) {
+        writeAccess.requireEdit(tenantId, model.id(), actorId);
+        if ("ARCHIVED".equals(plan.lifecycleStatus()) || !writeAccess.canEdit(tenantId, model.id(), actorId)) {
             throw new ModelSpecException(
                 "MODEL_SPEC_PLAN_FORBIDDEN",
                 "Warehouse plan is not available for lifecycle maintenance",
@@ -916,7 +917,7 @@ public class ModelLifecycleService {
         PlanState plan = modelSpecRepository
             .lockPlan(tenantId, result.planId())
             .orElseThrow(() -> notFound("Warehouse plan was not found"));
-        if ("ARCHIVED".equals(plan.lifecycleStatus()) || !writeAccess.canMaintain(tenantId, result.planId(), actorId)) {
+        if ("ARCHIVED".equals(plan.lifecycleStatus()) || !writeAccess.canEdit(tenantId, result.id(), actorId)) {
             throw new ModelSpecException(
                 "MODEL_SPEC_PLAN_FORBIDDEN",
                 "Warehouse plan is not available for lifecycle maintenance",

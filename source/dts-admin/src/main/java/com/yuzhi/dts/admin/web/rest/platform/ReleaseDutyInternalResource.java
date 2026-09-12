@@ -96,27 +96,11 @@ public class ReleaseDutyInternalResource {
         }
         try {
             String token = adminAccessToken();
-            Optional<KeycloakUserDTO> user =
-                keycloakAdminClient
-                    .findById(actor, token)
-                    .or(() ->
-                        keycloakAdminClient.findByUsernameStrict(actor, token)
-                    );
-            if (user.isEmpty()) {
-                return ResponseEntity.notFound().build();
-            }
-            KeycloakUserDTO current = user.orElseThrow();
-            boolean active = !Boolean.FALSE.equals(current.getEnabled());
-            List<String> roles = active
-                ? Optional
-                    .ofNullable(
-                        keycloakAdminClient.listUserRealmRoles(
-                            current.getId(),
-                            token
-                        )
-                    )
-                    .orElse(List.of())
-                : List.of();
+            var identity = keycloakAdminClient.currentUser(actor, token);
+            if (identity.isEmpty()) return ResponseEntity.notFound().build();
+            var current = identity.orElseThrow();
+            boolean active = Boolean.TRUE.equals(current.user().getEnabled());
+            List<String> roles = active ? current.roles().stream().map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase(Locale.ROOT)).toList() : List.of();
             boolean hasDuty = roles.stream().anyMatch(requiredRoles::contains);
             return ResponseEntity.ok(
                 ApiResponse.ok(

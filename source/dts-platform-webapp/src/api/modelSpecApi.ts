@@ -1,4 +1,5 @@
 import api from "@/api/apiClient";
+import { selectedModelingDepartment } from "./modelingAccessApi";
 import type {
 	CreateDimensionDefinitionCommand,
 	DimensionDefinitionView,
@@ -355,19 +356,31 @@ export const getModelSpecDependencies = (id: string) =>
 	} as any);
 
 /** Read the server-selected default without initializing it. */
-export const getModelSpecCreationContext = () =>
-	api.get<{ planId: string | null }>({ url: `${MODEL_SPEC_RESOURCE}/creation-context`, _skipErrorToast: true } as any);
+export const getModelSpecCreationContext = (departmentCode = selectedModelingDepartment()) =>
+	api.get<{ planId: string | null; departmentCode: string; writable: boolean }>({
+		url: `${MODEL_SPEC_RESOURCE}/creation-context`,
+		params: { departmentCode },
+		_skipErrorToast: true,
+	} as any);
 
 export const createModelSpec = (data: CreateModelSpecCommand) =>
-	api.post<CanonicalModelSpecView>({ url: MODEL_SPEC_RESOURCE, data, _skipErrorToast: true } as any);
+	api.post<CanonicalModelSpecView>({
+		url: MODEL_SPEC_RESOURCE,
+		data: { ...data, departmentCode: selectedModelingDepartment() },
+		_skipErrorToast: true,
+	} as any);
 
 export const saveModelDraftOperation = (data: ModelDraftOperationCommand) =>
 	api.post<ModelDraftOperationResult>({
 		url: `${MODEL_SPEC_RESOURCE}/draft-operations`,
 		data: {
 			...data,
-			create: { ...data.create, planId: data.create.planId || undefined },
-			modelSpec: { ...data.modelSpec, planId: data.modelSpec.planId || undefined },
+			create: { ...data.create, planId: data.create.planId || undefined, departmentCode: selectedModelingDepartment() },
+			modelSpec: {
+				...data.modelSpec,
+				planId: data.modelSpec.planId || undefined,
+				departmentCode: selectedModelingDepartment(),
+			},
 		},
 		_skipErrorToast: true,
 	} as any);
@@ -375,7 +388,7 @@ export const saveModelDraftOperation = (data: ModelDraftOperationCommand) =>
 export const createDimensionModel = (data: CreateDimensionModelCommand, signal?: AbortSignal) =>
 	api.post<CreateDimensionModelResult>({
 		url: `${MODEL_SPEC_RESOURCE}/dimension`,
-		data,
+		data: { ...data, modelSpec: { ...data.modelSpec, departmentCode: selectedModelingDepartment() } },
 		signal,
 		_skipErrorToast: true,
 	} as any);

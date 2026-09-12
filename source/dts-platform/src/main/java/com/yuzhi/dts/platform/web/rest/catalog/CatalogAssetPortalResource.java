@@ -436,7 +436,23 @@ public class CatalogAssetPortalResource {
         return ApiResponses.ok(result);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper governanceMapper;
+
     @PatchMapping("/{id}/governance")
+    @Transactional
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<CatalogAssetPortalService.AssetDetail> updateGovernanceJson(
+        @PathVariable UUID id, @RequestBody com.fasterxml.jackson.databind.JsonNode body,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) throws com.fasterxml.jackson.core.JsonProcessingException {
+        if (body.has("classification") && (!body.get("classification").isTextual() ||
+            com.yuzhi.dts.common.security.SecurityLevelCatalog.normalizeDataCode(body.get("classification").asText()) == null)) {
+            throw new com.yuzhi.dts.platform.security.modeling.ModelingIdentityException(400, "CLASSIFICATION_INVALID", "请选择有效密级，不能清空密级");
+        }
+        return updateGovernance(id, governanceMapper.treeToValue(body, CatalogAssetPortalService.GovernanceUpdate.class), activeDept);
+    }
+
     @Transactional
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogAssetPortalService.AssetDetail> updateGovernance(

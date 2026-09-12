@@ -279,6 +279,10 @@ public class PortalMenuService {
     }
 
     private PortalMenu filterMenu(PortalMenu menu, Set<String> roleCodes, Set<String> permissionCodes, String maxDataLevel) {
+        String path = Objects.toString(menu.getPath(), "");
+        String component = Objects.toString(menu.getComponent(), "");
+        if (("modeling".equals(resolveRootKey(menu)) || path.contains("data-modeling") || component.contains("data-modeling")) &&
+            (roleCodes == null || java.util.Arrays.stream(AuthoritiesConstants.MODEL_AUTHORS).noneMatch(roleCodes::contains))) return null;
         if (isDisabledMenu(menu)) {
             return null;
         }

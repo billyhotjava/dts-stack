@@ -210,10 +210,10 @@ public class PlanOperationalRunRepository {
                     id, tenant_id, binding_id, binding_version,
                     trigger_type, logical_date, execution_target_key,
                     target_name, airflow_dag_id, airflow_run_id,
-                    scope_checksum, status, dispatch_attempts,
+                    scope_checksum, initiator_id, status, dispatch_attempts,
                     next_attempt_at, created_at, last_modified_at
                 ) values (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     'PENDING', 0, ?, ?, ?
                 )
                 """,
@@ -230,6 +230,7 @@ public class PlanOperationalRunRepository {
                 binding.dagId(),
                 dagRunId,
                 binding.desiredScopeChecksum(),
+                "MANUAL".equals(trigger) ? com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id() : null,
                 Timestamp.from(now),
                 Timestamp.from(now),
                 Timestamp.from(now)

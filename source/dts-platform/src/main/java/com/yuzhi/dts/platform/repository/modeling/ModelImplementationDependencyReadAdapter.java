@@ -56,6 +56,9 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
         this.objectMapper = objectMapper;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.yuzhi.dts.platform.service.modeling.ModelingSourceScopeGuard sourceScope;
+
     @Override
     public DependencyFacts readFacts(String tenantId, ModelSpecView owner) {
         if (tenantId == null || tenantId.isBlank() || owner == null || owner.id() == null || owner.planId() == null) {
@@ -149,7 +152,8 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
             .map(ModelFact::model)
             .anyMatch(model -> owner.id().equals(model.id()) && owner.revision() == model.revision());
         if (!ownerPresent) throw stale("The owning ModelSpec revision is unavailable", owner.id());
-        return new DependencyFacts(models, readPhysicalSources(tenantId, List.of(owner)));
+        sourceScope.requireModels(tenantId, owner.planId(), models.stream().map(fact -> fact.model().id()).toList());
+        return new DependencyFacts(models, readPhysicalSources(tenantId, models.stream().map(ModelFact::model).toList()));
     }
 
     @Override
@@ -248,6 +252,7 @@ public class ModelImplementationDependencyReadAdapter implements ModelImplementa
             throw stale("The dependency graph exceeds the supported bounded size", MAX_GRAPH_NODES);
         }
         List<ModelFact> models = rows.stream().map(this::modelFact).toList();
+        sourceScope.requireModels(tenantId, planId, models.stream().map(fact -> fact.model().id()).toList());
         Set<UUID> foundRoots = models
             .stream()
             .map(ModelFact::model)

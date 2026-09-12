@@ -87,6 +87,9 @@ public class WarehousePlanApplicationService {
     private final TransactionOperations transactions;
     private final TransactionOperations withoutTransactions;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.yuzhi.dts.platform.service.modeling.ModelingDepartmentScope departmentScope;
+
     public WarehousePlanApplicationService(
         JdbcTemplate jdbcTemplate,
         ObjectMapper objectMapper,
@@ -113,6 +116,22 @@ public class WarehousePlanApplicationService {
     @Transactional
     public CreateWarehousePlanResult create(String serverTenantId, CreateWarehousePlanCommand command) {
         requireServerTenant(serverTenantId);
+        if (command == null) throw new WarehousePlanException("WAREHOUSE_PLAN_REQUEST_INVALID", "公共层参数不能为空", null);
+        String department = departmentScope.resolve(command.ownerDepartmentId());
+        String actor = com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id();
+        String contextKey = "modeling-context:dept:" + department + ":v1";
+        jdbcTemplate.query("select pg_advisory_xact_lock(hashtextextended(?, 0))", rs -> { }, "modeling-context:" + serverTenantId + ":" + department);
+        var contexts = jdbcTemplate.query("select id, lifecycle_status from modeling_warehouse_plan where tenant_id = ? and idempotency_key = ?",
+            (rs, n) -> java.util.Map.entry(rs.getObject(1, UUID.class), rs.getString(2)), serverTenantId, contextKey);
+        if (!contexts.isEmpty()) {
+            var context = contexts.getFirst();
+            if (java.util.Set.of("PUBLISHED", "ARCHIVED").contains(context.getValue())) {
+                throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException("MODELING_CONTEXT_NOT_WRITABLE", "部门公共层当前不可写，请联系管理员恢复", com.yuzhi.dts.platform.service.modeling.ModelSpecException.Kind.CONFLICT);
+            }
+            return createResult(serverTenantId, context.getKey(), true);
+        }
+        command = new CreateWarehousePlanCommand(command.name(), command.objective(), command.scope(), actor, department,
+            command.onboardingMode(), command.initialSourceRefs(), contextKey);
         List<DomainIssue> issues = WarehousePlanContract.validateCreate(command);
         if (!issues.isEmpty()) {
             DomainIssue issue = issues.getFirst();
@@ -209,7 +228,9 @@ public class WarehousePlanApplicationService {
         if (planId == null) {
             throw notFound();
         }
-        return find(serverTenantId, planId).stream().findFirst().orElseThrow(WarehousePlanApplicationService::notFound);
+        WarehousePlanHeader plan = find(serverTenantId, planId).stream().findFirst().orElseThrow(WarehousePlanApplicationService::notFound);
+        if (!com.yuzhi.dts.platform.security.modeling.ModelingIdentity.department(plan.ownerDepartmentId())) throw notFound();
+        return plan;
     }
 
     @Transactional(readOnly = true)
@@ -217,9 +238,10 @@ public class WarehousePlanApplicationService {
         requireServerTenant(serverTenantId);
         if (lifecycleStatus == null || lifecycleStatus.isBlank()) {
             return jdbcTemplate.query(
-                HEADER_COLUMNS + " where tenant_id = ? order by created_date desc, id",
+                HEADER_COLUMNS + " where tenant_id = ? and (? or owner_department_id = ?) order by created_date desc, id",
                 WarehousePlanApplicationService::mapHeader,
-                serverTenantId
+                serverTenantId, com.yuzhi.dts.platform.security.modeling.ModelingIdentity.institute(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current()),
+                com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().deptCode()
             );
         }
         LifecycleStatus status;
@@ -233,10 +255,11 @@ public class WarehousePlanApplicationService {
             );
         }
         return jdbcTemplate.query(
-            HEADER_COLUMNS + " where tenant_id = ? and lifecycle_status = ? order by created_date desc, id",
+            HEADER_COLUMNS + " where tenant_id = ? and lifecycle_status = ? and (? or owner_department_id = ?) order by created_date desc, id",
             WarehousePlanApplicationService::mapHeader,
             serverTenantId,
-            status.name()
+            status.name(), com.yuzhi.dts.platform.security.modeling.ModelingIdentity.institute(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current()),
+            com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().deptCode()
         );
     }
 
@@ -248,6 +271,11 @@ public class WarehousePlanApplicationService {
         UpdatePlanHeaderCommand command
     ) {
         requireServerTenant(serverTenantId);
+        var current = get(serverTenantId, planId);
+        if (command != null && (!java.util.Objects.equals(command.ownerDepartmentId(), current.ownerDepartmentId()) ||
+            !java.util.Objects.equals(command.ownerId(), current.ownerId()))) {
+            throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException("MODELING_CONTEXT_DEPARTMENT_IMMUTABLE", "部门公共层归属不可变更", com.yuzhi.dts.platform.service.modeling.ModelSpecException.Kind.CONFLICT);
+        }
         if (command == null || command.name() == null || command.name().isBlank() || command.ownerId() == null || command.ownerId().isBlank()) {
             throw new WarehousePlanException(
                 "WAREHOUSE_PLAN_HEADER_INVALID",
@@ -288,144 +316,8 @@ public class WarehousePlanApplicationService {
 
     @Transactional
     public WarehousePlanHeader archive(String serverTenantId, UUID planId, int expectedVersion) {
-        requireServerTenant(serverTenantId);
-        int updated = jdbcTemplate.update(
-            """
-            update modeling_warehouse_plan
-               set lifecycle_status = 'ARCHIVED', status = 'ARCHIVED', version = version + 1,
-                   last_modified_date = current_timestamp
-             where tenant_id = ? and id = ? and version = ? and lifecycle_status <> 'ARCHIVED'
-            """,
-            serverTenantId,
-            planId,
-            expectedVersion
-        );
-        if (updated == 0) {
-            resolveWriteFailure(serverTenantId, planId, expectedVersion);
-        }
-        WarehousePlanHeader result = get(serverTenantId, planId);
-        auditService.auditAction(
-            "MODELING_WAREHOUSE_PLAN_ARCHIVE",
-            AuditStage.SUCCESS,
-            planId.toString(),
-            Map.of("version", result.version(), "lifecycleStatus", result.lifecycleStatus().name())
-        );
-        return result;
-    }
-
-    public Versioned<CategoryScopeView> getCategoryScope(String serverTenantId, UUID planId) {
-        requireServerTenant(serverTenantId);
-        CategoryScopeSnapshot snapshot = Objects.requireNonNull(
-            transactions.execute(status -> {
-                get(serverTenantId, planId);
-                return new CategoryScopeSnapshot(
-                    loadDomainBindings(serverTenantId, planId),
-                    readEditUnitVersion(serverTenantId, planId, EditUnit.CATEGORY_SCOPE)
-                );
-            }),
-            "Category scope snapshot is required"
-        );
-        CategoryScopeView resolved = withoutTransactions.execute(status -> resolveCategoryScope(snapshot.bindings()));
-        return new Versioned<>(Objects.requireNonNull(resolved, "Category scope resolution is required"), snapshot.version());
-    }
-
-    public Versioned<CategoryScopeView> saveCategoryScope(
-        String serverTenantId,
-        UUID planId,
-        int expectedVersion,
-        CategoryScopeCommand command
-    ) {
-        requireServerTenant(serverTenantId);
-        List<DomainBinding> bindings = validateCategoryScope(command);
-        int observedVersion = Objects.requireNonNull(
-            transactions.execute(status -> {
-                get(serverTenantId, planId);
-                return readEditUnitVersion(serverTenantId, planId, EditUnit.CATEGORY_SCOPE);
-            }),
-            "Category scope version is required"
-        );
-        requireExpectedEditVersion(observedVersion, expectedVersion, EditUnit.CATEGORY_SCOPE);
-        CategoryScopeView validated = Objects.requireNonNull(
-            withoutTransactions.execute(status -> resolveCategoryScope(bindings)),
-            "Category scope resolution is required"
-        );
-        if (
-            validated
-                .domainBindings()
-                .stream()
-                .anyMatch(binding ->
-                    binding.confirmationStatus() != ConfirmationStatus.EXCLUDED &&
-                    binding.resolutionStatus() == CatalogDomainResolutionPort.ResolutionStatus.FORBIDDEN
-                )
-        ) {
-            throw new WarehousePlanException(
-                "WAREHOUSE_PLAN_CATEGORY_FORBIDDEN",
-                "A requested business category is not accessible",
-                null,
-                EditUnit.CATEGORY_SCOPE
-            );
-        }
-        if (
-            validated
-                .domainBindings()
-                .stream()
-                .anyMatch(binding ->
-                    binding.confirmationStatus() != ConfirmationStatus.EXCLUDED &&
-                    (binding.resolutionStatus() == CatalogDomainResolutionPort.ResolutionStatus.MISSING ||
-                        binding.resolutionStatus() == CatalogDomainResolutionPort.ResolutionStatus.ARCHIVED)
-                )
-        ) {
-            throw new WarehousePlanException(
-                "WAREHOUSE_PLAN_CATEGORY_INVALID",
-                "A requested business category is missing or archived",
-                null,
-                EditUnit.CATEGORY_SCOPE
-            );
-        }
-
-        return Objects.requireNonNull(
-            transactions.execute(status -> {
-                casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.CATEGORY_SCOPE);
-                jdbcTemplate.update(
-                    "delete from modeling_warehouse_plan_domain where tenant_id = ? and plan_id = ?",
-                    serverTenantId,
-                    planId
-                );
-                for (DomainBinding binding : bindings) {
-                    jdbcTemplate.update(
-                        """
-                        insert into modeling_warehouse_plan_domain
-                            (id, tenant_id, plan_id, domain_id, confirmation_status, last_validated_at,
-                             created_date, last_modified_date)
-                        values (?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
-                        """,
-                        UUID.randomUUID(),
-                        serverTenantId,
-                        planId,
-                        binding.domainId(),
-                        binding.confirmationStatus().name(),
-                        Timestamp.from(validated.lastValidatedAt())
-                    );
-                }
-                auditService.auditAction(
-                    "MODELING_WAREHOUSE_CATEGORY_SCOPE_SAVE",
-                    AuditStage.SUCCESS,
-                    planId.toString(),
-                    Map.of(
-                        "version",
-                        expectedVersion + 1,
-                        "bindingCount",
-                        bindings.size(),
-                        "readiness",
-                        validated.readiness().name(),
-                        "lastValidatedAt",
-                        validated.lastValidatedAt().toString()
-                    )
-                );
-                return new Versioned<>(validated, expectedVersion + 1);
-            }),
-            "Saved category scope is required"
-        );
+        get(serverTenantId, planId);
+        throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException("MODELING_CONTEXT_LIFECYCLE_FORBIDDEN", "部门公共层不能整体归档", com.yuzhi.dts.platform.service.modeling.ModelSpecException.Kind.CONFLICT);
     }
 
     @Transactional(readOnly = true)
@@ -717,7 +609,7 @@ public class WarehousePlanApplicationService {
         );
         PreparedSourceInventory prepared = Objects.requireNonNull(
             withoutTransactions.execute(status ->
-                prepareSourceInventory(serverTenantId, snapshot.rows(), command, accessContext)
+                prepareSourceInventory(serverTenantId, planId, snapshot.rows(), command, accessContext)
             ),
             "Resolved source inventory is required"
         );
@@ -751,8 +643,12 @@ public class WarehousePlanApplicationService {
         );
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.yuzhi.dts.platform.service.modeling.ModelingSourceScopeGuard sourceScope;
+
     private PreparedSourceInventory prepareSourceInventory(
         String serverTenantId,
+        UUID targetPlanId,
         List<SourceRow> existingRows,
         SourceInventoryCommand command,
         SourceReferenceResolver.AccessContext accessContext
@@ -797,6 +693,7 @@ public class WarehousePlanApplicationService {
                 throw invalidSourceInventory("SOURCE_BINDING_IDENTITY_IMMUTABLE", "A binding cannot be reassigned to another source");
             }
 
+            sourceScope.requireSource(serverTenantId, targetPlanId, sourceType, locator);
             UUID bindingId = existing == null ? UUID.randomUUID() : existing.bindingId();
             if (!retainedIds.add(bindingId)) {
                 throw invalidSourceInventory("SOURCE_BINDING_DUPLICATE", "A source binding may only appear once");

@@ -39,6 +39,7 @@ public class PortalOpaqueTokenIntrospector implements OpaqueTokenIntrospector {
         attributes.put(OAuth2TokenIntrospectionClaimNames.USERNAME, session.username());
         attributes.put("preferred_username", session.username());
         attributes.put("sub", session.username());
+        if (session.directoryUserId() != null) attributes.put("directory_user_id", session.directoryUserId());
         attributes.put("roles", session.roles());
         attributes.put("permissions", session.permissions());
         if (session.displayName() != null && !session.displayName().isBlank()) {

@@ -65,6 +65,7 @@ public class CandidateGovernanceQualityRerunService {
         CandidateView candidate = candidates.find(tenant, candidateId).orElseThrow(() -> notFound(candidateId));
         if (!planId.equals(candidate.planId())) throw notFound(candidateId);
 
+        planAccess.requireOperation(tenant, candidate.entries().stream().map(entry -> entry.modelSpecId()).toList(), actor);
         RerunReceipt replay = reruns.findReplay(candidate.id(), key).orElse(null);
         if (replay != null) return result(candidate.id(), replay);
         if (candidate.version() != expectedVersion) {

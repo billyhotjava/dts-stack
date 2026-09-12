@@ -81,20 +81,11 @@ class ReleaseDutyInternalResourceTest {
         user.setId("kc-alice");
         user.setUsername("alice");
         user.setEnabled(true);
-        when(keycloakAdminClient.findById("kc-alice", "management-token"))
-            .thenReturn(Optional.of(user));
-        when(
-            keycloakAdminClient.listUserRealmRoles(
-                "kc-alice",
-                "management-token"
-            )
-        )
-            .thenReturn(
-                List.of(
+        when(keycloakAdminClient.currentUser("kc-alice", "management-token"))
+            .thenReturn(Optional.of(new KeycloakAdminClient.CurrentUser(user, List.of(
                     "ROLE_INST_DATA_OWNER",
                     "ROLE_CATALOG_MAINTAINER"
-                )
-            );
+                ))));
 
         var response = resource.check(
             "kc-alice",
@@ -151,15 +142,8 @@ class ReleaseDutyInternalResourceTest {
         user.setId("kc-leader");
         user.setUsername("leader");
         user.setEnabled(true);
-        when(keycloakAdminClient.findById("kc-leader", "management-token"))
-            .thenReturn(Optional.of(user));
-        when(
-            keycloakAdminClient.listUserRealmRoles(
-                "kc-leader",
-                "management-token"
-            )
-        )
-            .thenReturn(List.of("ROLE_INST_LEADER"));
+        when(keycloakAdminClient.currentUser("kc-leader", "management-token"))
+            .thenReturn(Optional.of(new KeycloakAdminClient.CurrentUser(user, List.of("ROLE_INST_LEADER"))));
 
         for (String duty : List.of("MODEL_MAINTAINER", "RELEASE_REVIEWER", "RELEASE_OPERATOR")) {
             var response = resource.check("kc-leader", duty, request);
@@ -195,15 +179,8 @@ class ReleaseDutyInternalResourceTest {
         user.setId("kc-dept-owner");
         user.setUsername("dept-owner");
         user.setEnabled(true);
-        when(keycloakAdminClient.findById("kc-dept-owner", "management-token"))
-            .thenReturn(Optional.of(user));
-        when(
-            keycloakAdminClient.listUserRealmRoles(
-                "kc-dept-owner",
-                "management-token"
-            )
-        )
-            .thenReturn(List.of("ROLE_DEPT_DATA_OWNER"));
+        when(keycloakAdminClient.currentUser("kc-dept-owner", "management-token"))
+            .thenReturn(Optional.of(new KeycloakAdminClient.CurrentUser(user, List.of("ROLE_DEPT_DATA_OWNER"))));
 
         var maintainer = resource.check(
             "kc-dept-owner",

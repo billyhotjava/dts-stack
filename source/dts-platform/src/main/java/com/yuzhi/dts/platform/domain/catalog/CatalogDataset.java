@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "catalog_dataset")
 public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Serializable {
 
@@ -132,7 +133,14 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
         return classification;
     }
 
+    @jakarta.persistence.Transient
+    private boolean classificationProvided;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isClassificationProvided() { return classificationProvided; }
+
     public void setClassification(String classification) {
+        this.classificationProvided = true;
         this.classification = classification;
     }
 

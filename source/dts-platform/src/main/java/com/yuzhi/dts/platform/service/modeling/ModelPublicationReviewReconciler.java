@@ -81,6 +81,9 @@ public class ModelPublicationReviewReconciler {
         }
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ModelingExecutionAuthorization executionAuthorization;
+
     public ReconcileResult reconcile(PendingReviewSubmission item) {
         if (
             item == null ||
@@ -112,6 +115,14 @@ public class ModelPublicationReviewReconciler {
             );
         }
         String requester = item.requesterActorId().trim();
+        try (var identity = executionAuthorization.actor(candidate.tenantId(), requester, candidate.entries().stream().map(ModelReleaseCandidateContract.EntryView::modelSpecId).toList())) {
+            return reconcileAuthorized(item, candidate, requester);
+        } catch (com.yuzhi.dts.platform.security.modeling.ModelingIdentityException | ModelSpecException denied) {
+            return blocked(item.candidateId(), "MODELING_EXECUTION_PERMISSION_REVOKED");
+        }
+    }
+
+    private ReconcileResult reconcileAuthorized(PendingReviewSubmission item, CandidateView candidate, String requester) {
         try {
             if (
                 !dutyDirectory.hasDuty(

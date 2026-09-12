@@ -39,6 +39,8 @@ public class ModelMaterializationPlanService {
     public static final String STALE_ERROR_CODE = "MODEL_MATERIALIZATION_PLAN_STALE";
     public static final String BLOCKED_ERROR_CODE = "MODEL_MATERIALIZATION_PLAN_BLOCKED";
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ModelSpecPlanWriteAccessPort access;
     private final ModelImplementationDependencyService dependencies;
     private final ModelMaterializationPlanRelationPort relations;
     private final ModelMaterializationProperties properties;
@@ -69,6 +71,7 @@ public class ModelMaterializationPlanService {
         }
         String executionTargetKey = requiredTarget(properties.getExecutionTargetKey(), "executionTargetKey");
         String adapter = requiredTarget(properties.getAdapter(), "adapter").toLowerCase(Locale.ROOT);
+        if (!access.canReadPlan(tenantId, command.planId())) throw new ModelSpecException("MODEL_SPEC_NOT_FOUND", "模型不存在或不可见", ModelSpecException.Kind.NOT_FOUND);
         PlanResolution resolution;
         try {
             resolution = dependencies.resolvePlan(tenantId, command.planId(), command.requestedModelSpecIds());
@@ -235,6 +238,7 @@ public class ModelMaterializationPlanService {
             ScopeEntryCommand entry = buildEntries.get(index);
             ordered.add(new ScopeEntryCommand(entry.modelSpecId(), index, entry.selectedReason()));
         }
+        access.requireOperation(tenantId, ordered.stream().map(ScopeEntryCommand::modelSpecId).toList(), com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id());
         return new ValidatedPlan(current, ordered);
     }
 

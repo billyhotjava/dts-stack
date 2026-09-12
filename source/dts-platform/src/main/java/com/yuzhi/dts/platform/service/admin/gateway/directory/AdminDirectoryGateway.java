@@ -52,6 +52,30 @@ public class AdminDirectoryGateway {
         this.properties = properties;
     }
 
+    public record ModelingUser(String id, String username, String displayName, String deptCode, String deptName,
+        List<String> roles, Boolean enabled, String personnelLevel) {}
+    public record ModelingDepartment(String code, String name) {}
+
+    public ModelingUser currentModelingUser(String id) {
+        if (!properties.isEnabled()) throw new IllegalStateException("Directory is disabled");
+        return transport.currentDirectory(UriComponentsBuilder.fromPath("/platform/directory/users/resolve").queryParam("purpose", "modeling").queryParam("principalKey", id).build().encode().toUriString(),
+            new ParameterizedTypeReference<AdminGatewayEnvelope<ModelingUser>>() {});
+    }
+
+    public List<ModelingUser> modelingCandidates(String keyword, String departmentCode) {
+        if (!properties.isEnabled()) throw new IllegalStateException("Directory is disabled");
+        String path = UriComponentsBuilder.fromPath("/platform/directory/users").queryParam("purpose", "modeling")
+            .queryParam("keyword", keyword == null ? "" : keyword).queryParam("departmentCode", departmentCode).build().encode().toUriString();
+        return transport.currentDirectory(path,
+            new ParameterizedTypeReference<AdminGatewayEnvelope<List<ModelingUser>>>() {});
+    }
+
+    public List<ModelingDepartment> modelingDepartments() {
+        if (!properties.isEnabled()) throw new IllegalStateException("Directory is disabled");
+        return transport.currentDirectory("/platform/directory/departments?purpose=modeling",
+            new ParameterizedTypeReference<AdminGatewayEnvelope<List<ModelingDepartment>>>() {});
+    }
+
     public List<OrgNode> fetchOrgTree() {
         if (!properties.isEnabled()) {
             return List.of();

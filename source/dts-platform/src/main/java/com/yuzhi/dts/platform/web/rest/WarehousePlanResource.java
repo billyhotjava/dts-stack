@@ -534,7 +534,7 @@ public class WarehousePlanResource {
     ) {
         List<DomainIssue> issues = WarehousePlanContract.validateRequestedActor(
             requestedOwnerId,
-            requestedOwnerDepartmentId,
+            com.yuzhi.dts.platform.security.modeling.ModelingIdentity.institute(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current()) ? null : requestedOwnerDepartmentId,
             actor == null ? null : actor.ownerId(),
             actor == null ? null : actor.ownerDepartmentId()
         );
@@ -600,7 +600,7 @@ public class WarehousePlanResource {
                 objective,
                 scope,
                 actor.ownerId(),
-                actor.ownerDepartmentId(),
+                ownerDepartmentId == null ? actor.ownerDepartmentId() : ownerDepartmentId,
                 onboardingMode,
                 initialSourceRefs,
                 idempotencyKey

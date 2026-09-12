@@ -49,7 +49,8 @@ public class SecurityConfiguration {
         AuditLoggingFilter auditLoggingFilter,
         ServiceDependencyAuthenticationFilter serviceDependencyAuthenticationFilter,
         PortalSessionInactivityFilter sessionInactivityFilter,
-        PortalSessionBearerTokenResolver portalSessionBearerTokenResolver
+        PortalSessionBearerTokenResolver portalSessionBearerTokenResolver,
+        com.yuzhi.dts.platform.security.modeling.ModelingIdentityFilter modelingIdentityFilter
     )
         throws Exception {
         http
@@ -106,6 +107,7 @@ public class SecurityConfiguration {
                 oauth2.bearerTokenResolver(portalSessionBearerTokenResolver).opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector))
             )
             .oauth2Client(withDefaults());
+        http.addFilterAfter(modelingIdentityFilter, org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter.class);
         http.addFilterBefore(serviceDependencyAuthenticationFilter, AnonymousAuthenticationFilter.class);
         http.addFilterAfter(auditLoggingFilter, AnonymousAuthenticationFilter.class);
         http.addFilterAfter(sessionInactivityFilter, AuditLoggingFilter.class);

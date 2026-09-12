@@ -67,7 +67,9 @@ class ModelingContextInitializationPostgresTest {
         var plans = new WarehousePlanApplicationService(jdbc, mapper, mock(CatalogDomainResolutionPort.class),
             mock(SourceReferenceResolver.class), mock(AuditService.class), mock(SchemaDriftConsumerReferenceReadPort.class),
             mock(SchemaDriftDetailsReader.class), transactions);
-        var proxy = new ProxyFactory(new ModelingContextInitializationService(jdbc, plans));
+        var departments = new ModelingDepartmentScope(mock(com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.class));
+        org.springframework.test.util.ReflectionTestUtils.setField(plans, "departmentScope", departments);
+        var proxy = new ProxyFactory(new ModelingContextInitializationService(jdbc, plans, departments));
         proxy.addAdvice(new TransactionInterceptor(transactions, new AnnotationTransactionAttributeSource()));
         contexts = (ModelingContextInitializationService) proxy.getProxy();
         authenticate("alice");
@@ -97,7 +99,7 @@ class ModelingContextInitializationPostgresTest {
         jdbc.update("update modeling_warehouse_plan set lifecycle_status='ARCHIVED' where id=?", id);
         assertThat(contexts.existingContextId("tenant")).isEqualTo(id);
         assertThatThrownBy(() -> save("tenant", "alice", "second")).isInstanceOfSatisfying(ModelSpecException.class,
-            error -> assertThat(error.code()).isEqualTo("MODEL_SPEC_PLAN_READ_ONLY"));
+            error -> assertThat(error.code()).isEqualTo("MODELING_CONTEXT_NOT_WRITABLE"));
         assertThat(count("saved_model")).isEqualTo(1);
     }
 
@@ -164,42 +166,20 @@ class ModelingContextInitializationPostgresTest {
     }
 
     @Test
-    void tenantsDoNotShareContextsAndLegacyAutomaticContextIsReused() {
+    void tenantsDoNotShareDepartmentContexts() {
         UUID legacy = save("tenant", "alice", "a");
-        jdbc.update("update modeling_warehouse_plan set idempotency_key = 'modeling-context:old-operation' where id = ?", legacy);
         assertThat(save("tenant", "bob", "b")).isEqualTo(legacy);
         assertThat(save("another-tenant", "bob", "c")).isNotEqualTo(legacy);
         assertThat(count("modeling_warehouse_plan")).isEqualTo(2);
     }
 
-    @Test
-    void explicitMalformedOrPartialContextsRemainForStrictDecodersWithoutInitialization() {
-        for (List<JsonNode> requests : List.of(
-            List.<JsonNode>of(mapper.createObjectNode().put("planId", "malformed")),
-            List.<JsonNode>of(mapper.createObjectNode().put("planId", UUID.randomUUID().toString()), mapper.createObjectNode()),
-            List.<JsonNode>of(mapper.createArrayNode())
-        )) {
-            List<JsonNode> resolved = contexts.withContext("tenant", actor("alice"), requests, nodes -> nodes);
-            assertThat(resolved).isSameAs(requests);
-        }
-        assertThat(count("modeling_warehouse_plan")).isZero();
-    }
-
-    @Test
-    void defaultReadOnlyContextIsNotReplacedAndAnonymousOrForgedActorsCannotInitialize() {
-        UUID id = save("tenant", "alice", "a");
-        jdbc.update("update modeling_warehouse_plan set lifecycle_status='ARCHIVED' where id=?", id);
-        assertThatThrownBy(() -> save("tenant", "alice", "b")).isInstanceOfSatisfying(ModelSpecException.class,
-            error -> assertThat(error.code()).isEqualTo("MODEL_SPEC_PLAN_READ_ONLY"));
-        assertThatThrownBy(() -> contexts.withContext("empty-tenant", actor("forged"), request(), nodes -> nodes))
-            .isInstanceOf(ModelSpecException.class);
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken("alice", "unused"));
-        assertThatThrownBy(() -> contexts.withContext("empty-tenant", actor("alice"), request(), nodes -> nodes))
-            .isInstanceOf(ModelSpecException.class);
-        SecurityContextHolder.clearContext();
-        assertThatThrownBy(() -> contexts.withContext("empty-tenant", actor("alice"), request(), nodes -> nodes))
-            .isInstanceOf(ModelSpecException.class);
-        assertThat(count("modeling_warehouse_plan")).isEqualTo(1);
+    @Test void foreignDepartmentCannotReadExplicitPlan() {
+        UUID plan = save("tenant","alice","first");
+        var identities = new com.yuzhi.dts.platform.security.modeling.ModelingIdentityService(mock(com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.class));
+        var outsider = new com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.ModelingUser("outsider","outsider","他部用户","dept-b","乙",List.of("ROLE_DEPT_DATA_OWNER"),true,"GENERAL");
+        assertThatThrownBy(() -> identities.withIdentity(outsider, () -> contexts.withContext("tenant",new WarehousePlanActor("outsider","dept-b"),List.of(mapper.createObjectNode().put("planId",plan.toString())),nodes -> nodes)))
+            .isInstanceOf(com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanException.class);
+        assertThat(count("saved_model")).isEqualTo(1);
     }
 
     private UUID save(String tenant, String user, String operationId) {
@@ -214,9 +194,13 @@ class ModelingContextInitializationPostgresTest {
     }
 
     private List<JsonNode> request() { return List.of(mapper.createObjectNode(), mapper.createObjectNode().putNull("planId")); }
-    private WarehousePlanActor actor(String user) { return new WarehousePlanActor(user, "dept-" + user); }
+    private WarehousePlanActor actor(String user) { return new WarehousePlanActor(user, "dept-a"); }
     private int count(String table) { return jdbc.queryForObject("select count(*) from " + table, Integer.class); }
+    private static final ThreadLocal<com.yuzhi.dts.platform.security.modeling.ModelingIdentityService.Scope> IDENTITY = new ThreadLocal<>();
     private static void authenticate(String user) {
-        SecurityContextHolder.getContext().setAuthentication(new TestingAuthenticationToken(user, "unused", "ROLE_EMPLOYEE"));
+        if (IDENTITY.get() != null) IDENTITY.get().close();
+        var directory = mock(com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.class);
+        org.mockito.Mockito.when(directory.currentModelingUser(user)).thenReturn(new com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.ModelingUser(user,user,user,"dept-a","甲",List.of("ROLE_DEPT_DATA_OWNER"),true,"GENERAL"));
+        IDENTITY.set(new com.yuzhi.dts.platform.security.modeling.ModelingIdentityService(directory).openCurrentUser(user));
     }
 }

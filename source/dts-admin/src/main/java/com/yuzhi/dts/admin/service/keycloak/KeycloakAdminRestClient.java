@@ -335,6 +335,39 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
     }
 
     @Override
+    public Optional<KeycloakAdminClient.CurrentUser> currentUser(String stableId, String accessToken) {
+        try {
+            var response = exchange(userUri(stableId), HttpMethod.GET, accessToken, null);
+            if (response.getBody() == null || !response.getStatusCode().is2xxSuccessful()) throw new IllegalStateException("Incomplete user response");
+            KeycloakUserDTO user = toUserDto(objectMapper.readValue(response.getBody(), MAP_TYPE));
+            if (!stableId.equals(user.getId()) || user.getEnabled() == null) throw new IllegalStateException("Incomplete stable identity");
+            var roleResponse = exchange(userUri(stableId, "role-mappings", "realm", "composite"), HttpMethod.GET, accessToken, null);
+            if (roleResponse.getBody() == null || !roleResponse.getStatusCode().is2xxSuccessful()) throw new IllegalStateException("Incomplete role response");
+            List<Map<String,Object>> roleObjects = objectMapper.readValue(roleResponse.getBody(), LIST_OF_MAP);
+            List<String> roles = roleObjects.stream().map(role -> stringValue(role.get("name"))).toList();
+            if (roles.stream().anyMatch(role -> role == null || role.isBlank())) throw new IllegalStateException("Incomplete role identity");
+            return Optional.of(new KeycloakAdminClient.CurrentUser(user, roles));
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound missing) {
+            return Optional.empty();
+        } catch (Exception unavailable) {
+            throw new IllegalStateException("Authoritative directory unavailable", unavailable);
+        }
+    }
+
+    @Override
+    public List<KeycloakUserDTO> currentRoleMembers(String role, String accessToken) {
+        URI uri = UriComponentsBuilder.fromUri(rolesEndpoint).pathSegment(role, "users")
+            .queryParam("first", 0).queryParam("max", 1001).queryParam("briefRepresentation", false).build().encode().toUri();
+        try {
+            var response = exchange(uri, HttpMethod.GET, accessToken, null);
+            if (response.getBody() == null || !response.getStatusCode().is2xxSuccessful()) throw new IllegalStateException("Incomplete membership");
+            List<Map<String,Object>> body = objectMapper.readValue(response.getBody(), LIST_OF_MAP);
+            if (body.size() > 1000) throw new IllegalStateException("Directory selection exceeds bounded capacity");
+            return body.stream().map(this::toUserDto).toList();
+        } catch (Exception unavailable) { throw new IllegalStateException("Authoritative membership unavailable", unavailable); }
+    }
+
+    @Override
     public Optional<KeycloakUserDTO> findById(String userId, String accessToken) {
         return fetchById(userId, accessToken);
     }

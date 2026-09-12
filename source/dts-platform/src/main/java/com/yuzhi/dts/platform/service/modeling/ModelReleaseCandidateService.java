@@ -57,6 +57,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ModelReleaseCandidateService {
 
+    @Autowired
+    private ModelSpecPlanWriteAccessPort modelAccess;
+
     private static final String NOT_FOUND = "MODEL_RELEASE_CANDIDATE_NOT_FOUND";
     private static final String SCOPE_STALE = "MODEL_RELEASE_CANDIDATE_SCOPE_STALE";
     private static final String WRITE_CONFLICT = "MODEL_RELEASE_CANDIDATE_WRITE_CONFLICT";
@@ -263,6 +266,7 @@ public class ModelReleaseCandidateService {
         String actor = requiredText(actorId, "actorId");
         if (command == null) throw invalid("create command is required");
         if (origin == null) throw invalid("candidate origin is required");
+        modelAccess.requireOperation(tenant, command.entries().stream().map(ScopeEntryCommand::modelSpecId).toList(), actor);
         if (origin == CandidateOrigin.SCHEMA_ONLY_INTENT && command.entries().size() != 1) {
             throw invalid("Structure candidate requires one model");
         }
@@ -448,6 +452,7 @@ public class ModelReleaseCandidateService {
         if (expectedVersion < 1) throw invalid("expectedVersion must be positive");
         if (rootCommand == null) throw invalid("create command is required");
         CandidateView source = repository.find(tenant, sourceCandidateId).orElseThrow(() -> notFound(sourceCandidateId));
+        modelAccess.requireOperation(tenant, java.util.stream.Stream.concat(source.entries().stream().map(EntryView::modelSpecId), expandedEntries.stream().map(ScopeEntryCommand::modelSpecId)).distinct().toList(), actor);
         requireExpectedVersion(source, expectedVersion);
         if (!isReplacementSource(source.status())) {
             throw new ModelReleaseCandidateException(
@@ -518,6 +523,8 @@ public class ModelReleaseCandidateService {
         String actor = requiredText(actorId, "actorId");
         if (candidateId == null) throw notFound(null);
         if (command == null) throw invalid("replace-scope command is required");
+        CandidateView authorized = repository.find(tenant, candidateId).orElseThrow(() -> notFound(candidateId));
+        modelAccess.requireOperation(tenant, java.util.stream.Stream.concat(authorized.entries().stream().map(EntryView::modelSpecId), command.entries().stream().map(ScopeEntryCommand::modelSpecId)).distinct().toList(), actor);
         String requestHash = hash(command);
         CommandResult replay = replayCommand(
             tenant,
@@ -761,6 +768,12 @@ public class ModelReleaseCandidateService {
         String actor = requiredText(actorId, "actorId");
         if (candidateId == null) throw notFound(null);
         if (command == null) throw invalid("transition command is required");
+        // Machine observations may record completed work after revocation. Initiating new work always needs a current user.
+        if (com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional().isPresent() ||
+            Set.of(DeliveryStatus.BUILDING, DeliveryStatus.REVIEW_PENDING, DeliveryStatus.PUBLISHING, DeliveryStatus.CANCELLED, DeliveryStatus.ROLLED_BACK).contains(command.targetStatus())) {
+            CandidateView authorized = repository.find(tenant, candidateId).orElseThrow(() -> notFound(candidateId));
+            modelAccess.requireOperation(tenant, authorized.entries().stream().map(EntryView::modelSpecId).toList(), actor);
+        }
         String requestHash = hash(command);
         CommandResult replay = replayCommand(
             tenant,
@@ -1090,6 +1103,8 @@ public class ModelReleaseCandidateService {
                 .without(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
                 .readValue(existing.responseSnapshot());
             CandidateView candidate = original.candidate();
+            if (com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional().isPresent())
+                modelAccess.requireOperation(tenantId, candidate.entries().stream().map(EntryView::modelSpecId).toList(), actorId);
             if (
                 !existing.tenantId().equals(candidate.tenantId()) ||
                 !existing.candidateId().equals(candidate.id()) ||

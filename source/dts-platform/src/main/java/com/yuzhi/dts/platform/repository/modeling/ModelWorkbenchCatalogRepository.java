@@ -92,6 +92,7 @@ public class ModelWorkbenchCatalogRepository {
                  where s.tenant_id = ?
                    and s.contract_version = 2
                    and s.domain_id in (%s)
+                   and exists(select 1 from modeling_warehouse_plan p where p.tenant_id=s.tenant_id and p.id=s.plan_id and (? or p.owner_department_id=?))
             )
             """.formatted(placeholders, placeholders);
         ArrayList<Object> arguments = new ArrayList<>();
@@ -100,6 +101,9 @@ public class ModelWorkbenchCatalogRepository {
         arguments.add(tenantId);
         arguments.addAll(domains);
 
+        var actor = com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current();
+        arguments.add(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.institute(actor));
+        arguments.add(java.util.Objects.toString(actor.deptCode(), ""));
         StringBuilder where = new StringBuilder(" where 1 = 1");
         if (query.query() != null) {
             where.append(" and (position(? in lower(name)) > 0 or position(? in lower(code)) > 0)");

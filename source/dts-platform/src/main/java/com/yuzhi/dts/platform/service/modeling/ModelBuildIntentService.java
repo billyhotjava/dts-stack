@@ -98,6 +98,7 @@ public class ModelBuildIntentService {
         candidates.lockPlanForCandidate(tenant, planId);
 
         ModelSpecView model = modelSpecs.get(tenant, modelSpecId);
+        planAccess.requireEdit(tenant, modelSpecId, actor);
         requireCurrentModel(model, planId, expected);
         var implementation = implementations.findImplementation(tenant, modelSpecId).orElse(null);
         if (implementation != null && !implementations.lockImplementation(tenant, modelSpecId, implementation)) {

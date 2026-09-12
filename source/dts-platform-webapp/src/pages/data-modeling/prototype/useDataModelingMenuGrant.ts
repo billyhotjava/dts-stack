@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useModelingAuthorization } from "./useModelingAccess";
 import { useLocation } from "react-router";
 import type { MenuTree } from "#/entity";
 import { useMenuStore } from "@/store/menuStore";
@@ -13,7 +14,11 @@ export const hasDataModelingMenuGrant = (menus: MenuTree[], pathname: string): b
  * still perform the final server-side authorization check.
  */
 export function useDataModelingMenuGrant(): boolean {
+	const authorization = useModelingAuthorization();
 	const menus = useMenuStore((state) => state.menus);
 	const { pathname } = useLocation();
-	return useMemo(() => hasDataModelingMenuGrant(menus, pathname), [menus, pathname]);
+	return useMemo(
+		() => !authorization.isError && authorization.data?.canModel === true && hasDataModelingMenuGrant(menus, pathname),
+		[menus, pathname, authorization.data, authorization.isError],
+	);
 }

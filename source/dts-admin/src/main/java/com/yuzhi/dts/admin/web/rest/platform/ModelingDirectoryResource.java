@@ -1,0 +1,146 @@
+package com.yuzhi.dts.admin.web.rest.platform;
+
+import com.yuzhi.dts.admin.domain.OrganizationNode;
+import com.yuzhi.dts.admin.repository.OrganizationRepository;
+import com.yuzhi.dts.admin.security.AdminInboundServiceAuthenticator;
+import com.yuzhi.dts.admin.security.AuthoritiesConstants;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
+import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
+import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
+import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.*;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+/** Strict, service-authenticated view of the existing directory. Never uses local snapshots. */
+@RestController
+@RequestMapping("/api/platform/directory")
+public class ModelingDirectoryResource {
+    private final AdminInboundServiceAuthenticator authenticator;
+    private final KeycloakAuthService auth;
+    private final KeycloakAdminClient users;
+    private final OrganizationRepository organizations;
+
+    @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}")
+    private String clientId;
+    @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}")
+    private String clientSecret;
+
+    public ModelingDirectoryResource(AdminInboundServiceAuthenticator authenticator, KeycloakAuthService auth,
+        KeycloakAdminClient users, OrganizationRepository organizations) {
+        this.authenticator = authenticator;
+        this.auth = auth;
+        this.users = users;
+        this.organizations = organizations;
+    }
+
+    @GetMapping(value = "/users/resolve", params = "purpose=modeling")
+    public ApiResponse<Identity> resolve(@RequestParam String principalKey, HttpServletRequest request) {
+        requireService(request);
+        if (principalKey == null || principalKey.isBlank() || principalKey.length() > 128) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        }
+        try {
+            String token = token();
+            var current = users.currentUser(principalKey, token).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+            KeycloakUserDTO user = current.user();
+            List<String> roles = current.roles();
+            if (roles == null || user.getEnabled() == null) throw new IllegalStateException("Incomplete identity");
+            return ApiResponse.ok(identity(user, roles, organizations.findAll()));
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "当前用户目录不可用");
+        }
+    }
+
+    @GetMapping(value = "/departments", params = "purpose=modeling")
+    public ApiResponse<List<Department>> departments(HttpServletRequest request) {
+        requireService(request);
+        return ApiResponse.ok(organizations.findAll().stream().filter(this::activeDepartment)
+            .map(node -> new Department(code(node), node.getName())).sorted(Comparator.comparing(Department::code)).toList());
+    }
+
+    @GetMapping(value = "/users", params = "purpose=modeling")
+    public ApiResponse<List<Identity>> candidates(@RequestParam(defaultValue = "") String keyword,
+        @RequestParam String departmentCode, HttpServletRequest request) {
+        requireService(request);
+        if (keyword.length() > 128 || departmentCode.length() > 128) throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        try {
+            String token = token();
+            List<OrganizationNode> departments = organizations.findAll();
+            Map<String, KeycloakUserDTO> candidates = new LinkedHashMap<>();
+            Map<String, Set<String>> rolesById = new HashMap<>();
+            // Bounded by the role set, never a roles lookup for each candidate.
+            for (String role : List.of(AuthoritiesConstants.DEPT_DATA_OWNER, AuthoritiesConstants.DEPT_LEADER,
+                AuthoritiesConstants.INST_DATA_OWNER, AuthoritiesConstants.INST_LEADER)) {
+                List<KeycloakUserDTO> members = users.currentRoleMembers(role, token);
+                if (members == null) throw new IllegalStateException("Incomplete membership");
+                for (KeycloakUserDTO user : members) {
+                    if (user.getId() == null) continue;
+                    candidates.put(user.getId(), user);
+                    rolesById.computeIfAbsent(user.getId(), ignored -> new HashSet<>()).add(role);
+                }
+            }
+            String query = keyword.trim().toLowerCase(Locale.ROOT);
+            return ApiResponse.ok(candidates.values().stream()
+                .filter(user -> Boolean.TRUE.equals(user.getEnabled()))
+                .map(user -> identity(user, List.copyOf(rolesById.get(user.getId())), departments))
+                .filter(user -> departmentCode.equals(user.deptCode()))
+                .filter(user -> (user.username() + " " + user.displayName()).toLowerCase(Locale.ROOT).contains(query))
+                .sorted(Comparator.comparing(Identity::username)).limit(100).toList());
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "当前用户目录不可用");
+        }
+    }
+
+    private Identity identity(KeycloakUserDTO user, List<String> roles, List<OrganizationNode> nodes) {
+        String rawDepartment = attribute(user, "dept_code", "deptCode", "department");
+        // A numeric node ID is a verified directory alias only; no suffix/ancestor matching.
+        OrganizationNode department = nodes.stream().filter(this::activeDepartment)
+            .filter(node -> Objects.equals(code(node), rawDepartment)).findFirst().orElse(null);
+        if (department == null && rawDepartment != null) {
+            department = nodes.stream().filter(this::activeDepartment)
+                .filter(node -> Objects.equals(String.valueOf(node.getId()), rawDepartment)).findFirst().orElse(null);
+        }
+        return new Identity(user.getId(), user.getUsername(),
+            user.getFullName() == null ? user.getUsername() : user.getFullName(),
+            department == null ? null : code(department), department == null ? null : department.getName(),
+            roles.stream().map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase(Locale.ROOT)).distinct().toList(),
+            user.getEnabled(), attribute(user, "personnel_level", "person_security_level", "person_level"));
+    }
+
+    private static String code(OrganizationNode node) {
+        return node.getDeptCode() == null || node.getDeptCode().isBlank() ? String.valueOf(node.getId()) : node.getDeptCode();
+    }
+
+    private boolean activeDepartment(OrganizationNode node) {
+        return node.getId() != null && !node.isRoot() &&
+            !Set.of("DISABLED", "INACTIVE", "DELETED").contains(Objects.toString(node.getStatus(), "").toUpperCase(Locale.ROOT));
+    }
+
+    private static String attribute(KeycloakUserDTO user, String... keys) {
+        for (String key : keys) {
+            List<String> values = user.getAttributes() == null ? null : user.getAttributes().get(key);
+            if (values != null && !values.isEmpty() && values.getFirst() != null && !values.getFirst().isBlank()) return values.getFirst().trim();
+        }
+        return null;
+    }
+
+    private String token() {
+        var response = auth.obtainClientCredentialsToken(clientId, clientSecret);
+        if (response == null || response.accessToken() == null || response.accessToken().isBlank()) throw new IllegalStateException("No directory token");
+        return response.accessToken();
+    }
+
+    private void requireService(HttpServletRequest request) {
+        if (!authenticator.authenticate(request, "dts-platform").accepted()) throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+    }
+
+    public record Identity(String id, String username, String displayName, String deptCode, String deptName,
+        List<String> roles, Boolean enabled, String personnelLevel) {}
+    public record Department(String code, String name) {}
+}

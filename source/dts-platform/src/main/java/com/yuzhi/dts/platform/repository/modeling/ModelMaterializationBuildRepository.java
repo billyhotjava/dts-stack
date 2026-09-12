@@ -1492,6 +1492,8 @@ public class ModelMaterializationBuildRepository
                     );
                 }
                 String content = pinnedDependencySql(dependency);
+                com.yuzhi.dts.platform.service.modeling.ModelingSqlReadSetGuard.requireDeclared(content,
+                    List.of("\"" + dependency.databaseName() + "\".\"" + dependency.schemaName() + "\".\"" + dependency.identifier() + "\""));
                 artifacts.add(
                     new BuildArtifact(
                         "models/.dts-pinned-dependencies/" + selector + ".sql",
@@ -1555,11 +1557,16 @@ public class ModelMaterializationBuildRepository
         });
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.yuzhi.dts.platform.service.modeling.ModelingSourceScopeGuard sourceScope;
+
     private PinnedDependencyRow loadPinnedDependency(
         CandidateBuildScope scope,
         UUID modelSpecId,
         int revision
     ) {
+        UUID planId = jdbcTemplate.queryForObject("select plan_id from modeling_model_release_candidate where tenant_id=? and id=?", UUID.class, scope.tenantId(), scope.candidateId());
+        sourceScope.requireModels(scope.tenantId(), planId, List.of(modelSpecId));
         List<PinnedDependencyRow> rows = jdbcTemplate.query(
             """
             select sr.model_spec_id, sr.revision, sr.content_checksum,

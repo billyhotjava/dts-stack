@@ -208,6 +208,9 @@ public class CandidatePublicationCommitService {
         this.assetObservation = assetObservation;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ModelingExecutionAuthorization executionAuthorization;
+
     @Transactional
     public CommandResult commit(
         String tenantId,
@@ -216,6 +219,13 @@ public class CandidatePublicationCommitService {
         String publishRequestKey,
         String reason
     ) {
+        if (candidate == null) throw new IllegalArgumentException("candidate is required");
+        try (var identity = executionAuthorization.actor(tenantId, actorId, candidate.entries().stream().map(com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView::modelSpecId).toList())) {
+            return commitAuthorized(tenantId, actorId, candidate, publishRequestKey, reason);
+        }
+    }
+
+    private CommandResult commitAuthorized(String tenantId, String actorId, CandidateView candidate, String publishRequestKey, String reason) {
         if (
             candidate == null ||
             (

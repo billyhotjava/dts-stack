@@ -27,11 +27,12 @@ public final class AuthoritiesConstants {
     public static final String DEPT_LEADER = "ROLE_DEPT_LEADER";
     public static final String EMPLOYEE = "ROLE_EMPLOYEE";
 
-    // Temporary projection used while feature authorization is controlled by portal menus.
-    // Institute data administrators and institute leaders have every modeling release duty.
+    // F9: definition capability and release duties are separate; ADMIN has no release duty.
+    public static final String[] MODEL_AUTHORS = { DEPT_DATA_OWNER, DEPT_LEADER, INST_DATA_OWNER, INST_LEADER, ADMIN, OP_ADMIN };
     public static final String[] MODEL_MAINTAINERS = new String[] {
         INST_DATA_OWNER,
         DEPT_DATA_OWNER,
+        DEPT_LEADER,
         INST_LEADER,
         OP_ADMIN
     };
@@ -43,6 +44,7 @@ public final class AuthoritiesConstants {
     public static final String[] MODEL_RELEASE_OPERATORS = new String[] {
         INST_DATA_OWNER,
         DEPT_DATA_OWNER,
+        DEPT_LEADER,
         INST_LEADER,
         OP_ADMIN
     };

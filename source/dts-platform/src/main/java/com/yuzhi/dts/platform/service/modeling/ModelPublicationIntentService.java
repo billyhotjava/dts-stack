@@ -83,6 +83,7 @@ public class ModelPublicationIntentService {
         ) {
             throw forbidden();
         }
+        planAccess.requireOperation(tenant, candidate.entries().stream().map(entry -> entry.modelSpecId()).toList(), actor);
         requireSingleModelScope(candidate, modelSpecId);
 
         CommandEventView receipt = repository

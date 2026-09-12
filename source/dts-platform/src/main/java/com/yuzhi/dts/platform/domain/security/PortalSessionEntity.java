@@ -83,6 +83,12 @@ public class PortalSessionEntity implements Serializable {
     @Column(name = "admin_refresh_token_expires_at")
     private Instant adminRefreshTokenExpiresAt;
 
+    @Column(name = "directory_user_id", length = 128)
+    private String directoryUserId;
+
+    public String getDirectoryUserId() { return directoryUserId; }
+    public void setDirectoryUserId(String value) { directoryUserId = value; }
+
     public PortalSessionEntity() {}
 
     public UUID getId() {

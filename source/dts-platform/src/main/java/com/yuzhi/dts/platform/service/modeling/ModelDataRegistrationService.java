@@ -22,6 +22,7 @@ public class ModelDataRegistrationService {
     @Transactional
     public List<UUID> register(String tenant, String actor, UUID modelId, Command command) {
         var model = models.get(tenant, modelId);
+        access.requireEdit(tenant, modelId, actor);
         if (!access.canMaintain(tenant, model.planId(), actor)) throw failure("MODEL_DATA_REGISTRATION_FORBIDDEN", Kind.FORBIDDEN);
         if (command == null || command.candidateId() == null || command.modelRevision() != model.revision() || !Objects.equals(command.modelChecksum(), model.checksum()))
             throw failure("MODEL_DATA_REGISTRATION_STALE", Kind.CONFLICT);
@@ -30,6 +31,7 @@ public class ModelDataRegistrationService {
         if (!candidate.planId().equals(model.planId()) || candidate.version() != command.candidateVersion() ||
             candidate.entries().stream().noneMatch(entry -> entry.modelSpecId().equals(modelId) && entry.revision() == model.revision() && entry.checksum().equals(model.checksum())))
             throw failure("MODEL_DATA_REGISTRATION_STALE", Kind.CONFLICT);
+        access.requireOperation(tenant, candidate.entries().stream().map(entry -> entry.modelSpecId()).toList(), actor);
         return registration.ensureRegistered(candidate);
     }
     private static ModelReleaseCandidateException failure(String code, Kind kind) {

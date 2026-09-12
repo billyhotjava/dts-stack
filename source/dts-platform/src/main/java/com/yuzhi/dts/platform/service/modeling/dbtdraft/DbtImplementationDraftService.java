@@ -308,6 +308,7 @@ public class DbtImplementationDraftService {
         if (seed != null) {
             requestHash = DbtImplementationDraftContract.requiredChecksum(seed.requestHash(), "requestHash");
         }
+        writeAccess.requireEdit(tenantId, modelSpecId, actorId);
         if (!writeAccess.canMaintain(tenantId, request.planId(), actorId)) {
             throw DbtImplementationDraftContract.forbidden(
                 "DBT_DRAFT_MAINTAINER_FORBIDDEN",
@@ -457,7 +458,7 @@ public class DbtImplementationDraftService {
         if (found.isEmpty()) return Optional.empty();
         DraftRow row = found.orElseThrow();
         if (row.modelSpecSnapshot() == null || row.modelSpecSnapshot().isBlank()) return Optional.empty();
-        if (!writeAccess.canMaintain(tenantId, row.planId(), actorId)) return Optional.empty();
+        if (!writeAccess.canEdit(tenantId, modelSpecId, actorId)) return Optional.empty();
         return Optional.of(view(row, workingSourceBundle(row)));
     }
 
@@ -1524,6 +1525,11 @@ public class DbtImplementationDraftService {
         } catch (ModelSpecException failure) {
             throw dependencyFailure(failure.code(), failure.getMessage(), failure.details());
         }
+        var physicalReferences = current.physicalSourceFacts().values().stream()
+            .filter(PhysicalSourceFact::current).map(PhysicalSourceFact::executableRef).filter(Objects::nonNull).toList();
+        for (var node : validated.nodes()) {
+            com.yuzhi.dts.platform.service.modeling.ModelingSqlReadSetGuard.requireDeclared(node.sql(), physicalReferences);
+        }
         return new DependencyValidationView(
             current.snapshot().dependencyChecksum(),
             reconciliation.matched(),
@@ -2042,6 +2048,7 @@ public class DbtImplementationDraftService {
                 "The requested plan does not own this ModelSpec"
             );
         }
+        writeAccess.requireEdit(tenantId, modelSpecId, actorId);
         if (!writeAccess.canMaintain(tenantId, planId, actorId)) {
             throw DbtImplementationDraftContract.forbidden(
                 "DBT_DRAFT_MAINTAINER_FORBIDDEN",
@@ -2072,6 +2079,7 @@ public class DbtImplementationDraftService {
             }
             throw new DraftException("DBT_DRAFT_NOT_FOUND", "Draft was not found", ErrorKind.NOT_FOUND);
         }
+        writeAccess.requireEdit(tenantId, modelSpecId, actorId);
         if (!writeAccess.canMaintain(tenantId, row.planId(), actorId)) {
             throw DbtImplementationDraftContract.forbidden(
                 "DBT_DRAFT_MAINTAINER_FORBIDDEN",

@@ -470,6 +470,9 @@ public class ModelSpecImportPreviewService {
         return second < 0 ? null : uniqueId.substring(0, second);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.yuzhi.dts.platform.service.modeling.ModelingSourceScopeGuard sourceScope;
+
     private ResolvedContext resolveContext(ValidatedInput input, PlanSnapshot plan, WarehousePlanActor actor) {
         List<ResolvedDomain> domains = repository
             .findPlatformDomainBindings()
@@ -485,7 +488,10 @@ public class ModelSpecImportPreviewService {
         List<ResolvedBinding> sources = repository
             .findSourceBindings(serverTenantId, plan.id())
             .stream()
-            .map(binding -> resolveSource(binding, accessContext))
+            .map(binding -> {
+                sourceScope.requireSource(serverTenantId, plan.id(), parseSourceType(binding.sourceType()), parseLocator(binding.locatorJson()));
+                return resolveSource(binding, accessContext);
+            })
             .sorted(
                 Comparator.comparing(ResolvedBinding::sourceType, Comparator.nullsLast(String::compareTo))
                     .thenComparing(ResolvedBinding::sourceId, Comparator.nullsLast(String::compareTo))

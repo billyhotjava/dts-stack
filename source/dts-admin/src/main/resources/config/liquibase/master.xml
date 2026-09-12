@@ -158,4 +158,5 @@
     <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
     <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->
     <include file="config/liquibase/changelog/20260910_01_indicator_analysis_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260912_01_modeling_permission_audit.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

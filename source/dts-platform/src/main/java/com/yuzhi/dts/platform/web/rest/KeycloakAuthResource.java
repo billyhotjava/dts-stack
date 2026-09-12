@@ -193,7 +193,7 @@ public class KeycloakAuthResource {
             );
             PortalSession session;
             try {
-                session = sessionRegistry.createSession(
+                session = sessionRegistry.createVerifiedSession(
                     username,
                     mappedRoles,
                     permissions,
@@ -201,7 +201,8 @@ public class KeycloakAuthResource {
                     personnelLevel,
                     displayName,
                     browserId,
-                    keycloakTokens
+                    keycloakTokens,
+                    stringValue(kcResult.user().get("id"))
                 );
             } catch (PortalSessionRegistry.ActiveSessionExistsException ex) {
                 log.warn("[login] denied username={} reason=race-active-session", username);
@@ -645,6 +646,7 @@ public class KeycloakAuthResource {
             // Obtain Keycloak JWT via Token Exchange using platform's own client
             AdminTokens keycloakTokens = null;
             KeycloakAuthService.TokenResponse kcTokens = null;
+            String directoryUserId = null;
             try {
                 var kcResult = keycloakAuthService.loginByTokenExchange(username);
                 kcTokens = kcResult.tokens();
@@ -657,6 +659,7 @@ public class KeycloakAuthResource {
                 );
                 // Enrich roles from Keycloak token if upstream provided more
                 Map<String, Object> kcUser = kcResult.user();
+                directoryUserId = stringValue(kcUser.get("id"));
                 List<String> kcRoles = toStringList(kcUser.get("roles"));
                 if (!kcRoles.isEmpty()) {
                     List<String> merged = new java.util.ArrayList<>(new java.util.LinkedHashSet<>(mappedRoles));
@@ -671,7 +674,7 @@ public class KeycloakAuthResource {
             }
             PortalSession session;
             try {
-                session = sessionRegistry.createSession(
+                session = sessionRegistry.createVerifiedSession(
                     username,
                     mappedRoles,
                     permissions,
@@ -679,7 +682,8 @@ public class KeycloakAuthResource {
                     personnelLevel,
                     displayName,
                     browserId,
-                    keycloakTokens
+                    keycloakTokens,
+                    directoryUserId
                 );
             } catch (PortalSessionRegistry.ActiveSessionExistsException ex) {
                 log.warn("[pki-login] denied username={} reason=race-active-session", username);

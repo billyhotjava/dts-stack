@@ -344,6 +344,7 @@ public class ModelSpecApplicationService {
             }
             return replay(concurrent, requestHash);
         }
+        planWriteAccess.initializeOwner(serverTenantId, modelSpecId, actorId);
         repository.insertV2Revision(serverTenantId, actorId, view, responseSnapshot);
         return new CreateResult(view, false);
     }
@@ -399,6 +400,7 @@ public class ModelSpecApplicationService {
 
         StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
         ModelSpecView current = compatibilityReader.read(stored);
+        planWriteAccess.requireEdit(serverTenantId, modelSpecId, actorId);
         DomainResolution currentDomain = validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
         if (ModelSpecContract.hasHistoricalTypeBoundaryViolation(current)) {
@@ -530,6 +532,7 @@ public class ModelSpecApplicationService {
 
         StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
         ModelSpecView current = compatibilityReader.read(stored);
+        planWriteAccess.requireEdit(serverTenantId, modelSpecId, actorId);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
         if (ModelSpecContract.hasHistoricalTypeBoundaryViolation(current)) {
@@ -595,6 +598,7 @@ public class ModelSpecApplicationService {
 
         StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
         ModelSpecView current = compatibilityReader.read(stored);
+        planWriteAccess.requireEdit(serverTenantId, modelSpecId, actorId);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
         if (ModelSpecContract.hasHistoricalTypeBoundaryViolation(current)) {
@@ -653,6 +657,7 @@ public class ModelSpecApplicationService {
 
         StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
         ModelSpecView current = compatibilityReader.read(stored);
+        planWriteAccess.requireEdit(serverTenantId, modelSpecId, actorId);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
         if (ModelSpecContract.hasHistoricalTypeBoundaryViolation(current)) {
@@ -973,6 +978,7 @@ public class ModelSpecApplicationService {
 
         ModelSpecView current = currentForReclassification(serverTenantId, actorId, modelSpecId);
         requireExpected(current, expected);
+        planWriteAccess.reclassifyAccess(serverTenantId, modelSpecId, actorId, current.modelType(), command.targetType());
         ReclassificationPreview preview = previewReclassification(
             serverTenantId,
             current,
@@ -1049,6 +1055,7 @@ public class ModelSpecApplicationService {
     private ModelSpecView currentForReclassification(String tenantId, String actorId, UUID modelSpecId) {
         StoredModelSpec stored = repository.findCurrent(tenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
         ModelSpecView current = compatibilityReader.read(stored);
+        planWriteAccess.requireEdit(tenantId, modelSpecId, actorId);
         validateWriteContext(tenantId, actorId, current.planId(), current.domainId());
         return current;
     }
@@ -1237,6 +1244,7 @@ public class ModelSpecApplicationService {
 
         StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
         ModelSpecView current = compatibilityReader.read(stored);
+        planWriteAccess.requireEdit(serverTenantId, modelSpecId, actorId);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
         if (current.status() != ModelStatus.DRAFT) {
@@ -1300,6 +1308,7 @@ public class ModelSpecApplicationService {
 
         StoredModelSpec stored = repository.findCurrent(serverTenantId, modelSpecId).orElseThrow(() -> notFound(modelSpecId));
         ModelSpecView current = compatibilityReader.read(stored);
+        planWriteAccess.requireEdit(serverTenantId, modelSpecId, actorId);
         validateWriteContext(serverTenantId, actorId, current.planId(), current.domainId());
         requireExpected(current, expected);
         if (
@@ -1427,7 +1436,7 @@ public class ModelSpecApplicationService {
                 afterId,
                 limit
             );
-        return compatibilityReader.readForRelationshipGraph(stored);
+        return compatibilityReader.readForRelationshipGraph(stored).stream().filter(this::canRead).toList();
     }
 
     @Transactional(readOnly = true)
@@ -1469,7 +1478,7 @@ public class ModelSpecApplicationService {
             visibleDomainIds == null ? Set.of() : visibleDomainIds,
             limit
         );
-        return compatibilityReader.readForRelationshipGraph(stored);
+        return compatibilityReader.readForRelationshipGraph(stored).stream().filter(this::canRead).toList();
     }
 
     @Transactional(readOnly = true)
@@ -1520,6 +1529,7 @@ public class ModelSpecApplicationService {
                 : current.revision() == reference.revision() ? DependencyState.CURRENT : DependencyState.STALE;
             ModelSpecView referenced = pinned == null ? null : compatibilityReader.read(pinned);
             boolean restricted = referenced == null || !canRead(referenced);
+            if (restricted) continue;
             nodes.putIfAbsent(
                 nodeKey(reference.modelSpecId(), reference.revision()),
                 new DependencyNode(
@@ -1561,6 +1571,12 @@ public class ModelSpecApplicationService {
         List<ModelSpecContract.ModelRevisionRef> dependencies,
         List<ModelSpecContract.ModelRevisionRef> dimensions
     ) {
+        var allReferences = new ArrayList<ModelSpecContract.ModelRevisionRef>();
+        allReferences.addAll(dependencies); allReferences.addAll(dimensions);
+        for (var reference : allReferences) {
+            var referenced = repository.findRevision(tenantId, reference.modelSpecId(), reference.revision()).orElseThrow(ModelSpecApplicationService::referenceNotFound);
+            if (!canRead(compatibilityReader.read(referenced))) throw referenceNotFound();
+        }
         validateReferenceSet(tenantId, planId, dependencies, false, modelType);
         validateReferenceSet(tenantId, planId, dimensions, true, null);
         validateNoDependencyCycle(tenantId, modelSpecId, modelType, dependencies);
@@ -1807,6 +1823,10 @@ public class ModelSpecApplicationService {
                 .orElseThrow(ModelSpecApplicationService::referenceNotFound);
             ModelSpecView referenced = compatibilityReader.read(stored);
             if (!canRead(referenced)) throw referenceNotFound();
+            // There is exactly one public layer per department. All other plans are other departments.
+            if (!Objects.equals(planId, referenced.planId())) {
+                throw new ModelSpecException("MODEL_SPEC_CROSS_DEPARTMENT_REF_PENDING_APPROVAL", "跨部门引用暂未开放", ModelSpecException.Kind.UNPROCESSABLE);
+            }
             if (dimensionOnly && !ModelSpecContract.isCanonicalDimension(referenced)) {
                 throw new ModelSpecException(
                     "MODEL_SPEC_DIMENSION_REF_TYPE_INVALID",
@@ -1842,6 +1862,7 @@ public class ModelSpecApplicationService {
     private boolean canRead(ModelSpecView view) {
         return (
             view != null &&
+            planWriteAccess.canReadPlan(view.planId()) &&
             view.contractVersion() == ModelSpecContract.CONTRACT_VERSION &&
             view.compatibilityMode() == ModelSpecContract.CompatibilityMode.CANONICAL &&
             view.legacyRefs() == null &&
@@ -1914,6 +1935,7 @@ public class ModelSpecApplicationService {
     }
 
     private DomainResolution validateWriteContext(String tenantId, String actorId, UUID planId, UUID domainId) {
+        if (!planWriteAccess.canReadPlan(tenantId, planId)) throw notFound(null);
         PlanState plan = repository
             .lockPlan(tenantId, planId)
             .orElseThrow(() ->
@@ -1959,7 +1981,8 @@ public class ModelSpecApplicationService {
     }
 
     private void validateReplayAccess(String tenantId, String actorId, StoredModelSpec stored) {
-        boolean planVisible = planWriteAccess.canMaintain(tenantId, stored.planId(), actorId);
+        planWriteAccess.requireEdit(tenantId, stored.id(), actorId);
+        boolean planVisible = planWriteAccess.canReadPlan(tenantId, stored.planId());
         boolean domainVisible = stored.domainId() == null || domainReadAccess.canRead(stored.domainId());
         if (!planVisible || !domainVisible) throw notFound(stored.id());
     }
@@ -2162,7 +2185,7 @@ public class ModelSpecApplicationService {
             "MODEL_SPEC_NOT_FOUND",
             "ModelSpec was not found",
             ModelSpecException.Kind.NOT_FOUND,
-            id == null ? Map.of() : Map.of("modelSpecId", id)
+            Map.of()
         );
     }
 

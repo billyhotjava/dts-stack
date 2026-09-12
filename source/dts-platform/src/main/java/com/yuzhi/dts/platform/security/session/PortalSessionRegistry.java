@@ -88,7 +88,13 @@ public class PortalSessionRegistry {
         String browserId,
         AdminTokens adminTokens
     ) {
-        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, displayName, browserId, adminTokens);
+        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, displayName, browserId, adminTokens, null);
+    }
+
+    public PortalSession createVerifiedSession(String username, List<String> roles, List<String> permissions,
+        String deptCode, String personnelLevel, String displayName, String browserId, AdminTokens tokens, String directoryUserId) {
+        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, displayName, browserId, tokens,
+            StringUtils.hasText(directoryUserId) ? directoryUserId.trim() : null);
     }
 
     public PortalSession refreshSession(String refreshToken, Function<PortalSession, AdminTokens> adminTokenProvider) {
@@ -238,6 +244,20 @@ public class PortalSessionRegistry {
         String browserId,
         AdminTokens adminTokens
     ) {
+        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, displayName, browserId, adminTokens, null);
+    }
+
+    private PortalSession createSessionInternal(
+        String username,
+        List<String> roles,
+        List<String> permissions,
+        String deptCode,
+        String personnelLevel,
+        String displayName,
+        String browserId,
+        AdminTokens adminTokens,
+        String directoryUserId
+    ) {
         String sanitizedUsername = requireUsername(username);
         String normalizedUsername = normalizeUsername(sanitizedUsername);
         // Row locks cannot serialize absent rows or a row replaced while a login waits.
@@ -256,7 +276,8 @@ public class PortalSessionRegistry {
             personnelLevel,
             sanitizedBrowserId,
             adminTokens,
-            sessionTtl
+            sessionTtl,
+            directoryUserId
         );
 
         Instant now = Instant.now();
@@ -302,6 +323,7 @@ public class PortalSessionRegistry {
         existing.setPermissions(new ArrayList<>(session.permissions()));
         existing.setDeptCode(session.deptCode());
         existing.setPersonnelLevel(session.personnelLevel());
+        existing.setDirectoryUserId(session.directoryUserId());
         existing.setExpiresAt(session.expiresAt());
         existing.setLastSeenAt(now);
         AdminTokens tokens = session.adminTokens();
@@ -369,6 +391,7 @@ public class PortalSessionRegistry {
         entity.setPermissions(new ArrayList<>(session.permissions()));
         entity.setDeptCode(session.deptCode());
         entity.setPersonnelLevel(session.personnelLevel());
+        entity.setDirectoryUserId(session.directoryUserId());
         entity.setExpiresAt(session.expiresAt());
         Instant effectiveNow = now == null ? Instant.now() : now;
         entity.setLastSeenAt(effectiveNow);
@@ -407,7 +430,8 @@ public class PortalSessionRegistry {
             entity.getRefreshToken(),
             entity.getExpiresAt(),
             entity.getBrowserId(),
-            adminTokens
+            adminTokens,
+            entity.getDirectoryUserId()
         );
     }
 
@@ -468,8 +492,14 @@ public class PortalSessionRegistry {
         String refreshToken,
         Instant expiresAt,
         String browserId,
-        AdminTokens adminTokens
+        AdminTokens adminTokens,
+        String directoryUserId
     ) {
+        public PortalSession(String sessionId, String username, String displayName, List<String> roles, List<String> permissions,
+            String deptCode, String personnelLevel, String accessToken, String refreshToken, Instant expiresAt, String browserId, AdminTokens adminTokens) {
+            this(sessionId, username, displayName, roles, permissions, deptCode, personnelLevel, accessToken, refreshToken, expiresAt, browserId, adminTokens, null);
+        }
+
         public PortalSession(
             String sessionId,
             String username,
@@ -508,7 +538,8 @@ public class PortalSessionRegistry {
             String personnelLevel,
             String browserId,
             AdminTokens adminTokens,
-            Duration ttl
+            Duration ttl,
+            String directoryUserId
         ) {
             String sessionId = UUID.randomUUID().toString();
             String accessToken = "demo-" + UUID.randomUUID();
@@ -532,12 +563,13 @@ public class PortalSessionRegistry {
                 refreshToken,
                 expiresAt,
                 browserId,
-                tokens
+                tokens,
+                directoryUserId
             );
         }
 
         private PortalSession renew(Duration ttl, AdminTokens adminTokens) {
-            return create(username, displayName, roles, permissions, deptCode, personnelLevel, browserId, adminTokens, ttl);
+            return create(username, displayName, roles, permissions, deptCode, personnelLevel, browserId, adminTokens, ttl, directoryUserId);
         }
     }
 

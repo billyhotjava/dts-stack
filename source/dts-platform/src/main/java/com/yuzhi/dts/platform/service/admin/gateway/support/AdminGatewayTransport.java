@@ -24,6 +24,7 @@ public class AdminGatewayTransport {
     private static final Logger LOG = LoggerFactory.getLogger(AdminGatewayTransport.class);
 
     private final RestTemplate restTemplate;
+    private final RestTemplate currentDirectoryTemplate;
     private final PlatformOutboundAdminProperties properties;
     private final AdminGatewayHeaders gatewayHeaders;
 
@@ -34,6 +35,10 @@ public class AdminGatewayTransport {
 
     public AdminGatewayTransport(RestTemplateBuilder builder, PlatformOutboundAdminProperties properties, AdminGatewayHeaders gatewayHeaders) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
+        var factory = new org.springframework.http.client.JdkClientHttpRequestFactory(
+            java.net.http.HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build());
+        factory.setReadTimeout(Duration.ofSeconds(2));
+        this.currentDirectoryTemplate = builder.requestFactory(() -> factory).build();
         this.properties = properties;
         this.gatewayHeaders = gatewayHeaders;
     }
@@ -99,6 +104,26 @@ public class AdminGatewayTransport {
             throw ex;
         } catch (Exception ex) {
             throw new AdminGatewayException("Admin gateway call failed: " + uri, null, uri.toString(), ex);
+        }
+    }
+
+    /** Current authorization facts: one HTTP request, two second deadline, no fallback or retry. */
+    public <T> T currentDirectory(String suffix, ParameterizedTypeReference<AdminGatewayEnvelope<T>> type) {
+        URI uri = buildUri(AdminGatewayTarget.API, suffix);
+        try {
+            var headers = gatewayHeaders.createJsonHeaders(AdminGatewayRequestOptions.defaults(), false);
+            var response = currentDirectoryTemplate.exchange(uri, HttpMethod.GET, new HttpEntity<>(headers), type);
+            var envelope = response.getBody();
+            if (envelope == null || !envelope.isSuccess() || envelope.data() == null) {
+                throw new AdminGatewayException("Current directory response is incomplete", 503, uri.toString());
+            }
+            return envelope.data();
+        } catch (HttpStatusCodeException ex) {
+            throw upstreamFailure(uri, ex);
+        } catch (AdminGatewayException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new AdminGatewayException("Current directory unavailable", 503, uri.toString(), ex);
         }
     }
 

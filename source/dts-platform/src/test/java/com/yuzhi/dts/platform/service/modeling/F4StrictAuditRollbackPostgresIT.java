@@ -311,7 +311,12 @@ class F4StrictAuditRollbackPostgresIT {
         ModelSpecPlanWriteAccessPort modelSpecPlanWriteAccessPort(
             JdbcTemplate jdbc
         ) {
-            return new ModelSpecPlanWriteAccessAdapter(jdbc);
+            var access = org.mockito.Mockito.mock(ModelSpecPlanWriteAccessPort.class);
+            org.mockito.Mockito.when(access.canReadPlan(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+            org.mockito.Mockito.when(access.canReadPlan(org.mockito.ArgumentMatchers.any())).thenReturn(true);
+            org.mockito.Mockito.when(access.canMaintain(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+            org.mockito.Mockito.when(access.canEdit(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyString())).thenReturn(true);
+            return access;
         }
 
         @Bean

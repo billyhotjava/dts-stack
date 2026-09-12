@@ -805,6 +805,11 @@ public class CatalogAssetPortalService {
         );
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private CatalogClassificationWriteLock classificationWriteLock;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.yuzhi.dts.platform.service.modeling.ModelingPermissionAudit permissionAudit;
+
     private String sealGovernanceClassification(
         UUID resourceId,
         CatalogAssetContract contract,
@@ -815,13 +820,14 @@ public class CatalogAssetPortalService {
         if (!StringUtils.hasText(candidate)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "资产密级无效");
         }
+        classificationWriteLock.lock("ASSET", contract.assetKey());
         String current = highestKnownClassification(currentClassifications);
-        rejectClassificationDowngrade(current, candidate);
+        rejectClassificationDowngrade(resourceId, current, candidate);
         String sealedClassification = classificationService
             .resolve("ASSET", contract.assetKey())
             .map(CatalogClassificationSnapshot::getEffectiveLevel)
             .orElse(null);
-        rejectClassificationDowngrade(highestKnownClassification(current, sealedClassification), candidate);
+        rejectClassificationDowngrade(resourceId, highestKnownClassification(current, sealedClassification), candidate);
         String originRef = "catalog-assets-v2:" + resourceId;
         String evidenceJson =
             "{\"assetId\":\"" + resourceId + "\",\"classification\":\"" + candidate + "\"}";
@@ -872,9 +878,10 @@ public class CatalogAssetPortalService {
         return highest;
     }
 
-    private void rejectClassificationDowngrade(String current, String candidate) {
+    private void rejectClassificationDowngrade(UUID resourceId, String current, String candidate) {
         if (StringUtils.hasText(current) && SecurityLevelCatalog.isDataDowngrade(current, candidate)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "资产密级只允许升高，不能降级");
+            permissionAudit.denied(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserId().orElse("unknown"), "CATALOG_CLASSIFICATION_DOWNGRADE_REJECTED", resourceId.toString(), "CLASSIFICATION_DOWNGRADE_FORBIDDEN");
+            throw new com.yuzhi.dts.platform.security.modeling.ModelingIdentityException(409, "CLASSIFICATION_DOWNGRADE_FORBIDDEN", "资产密级只能调高，不能降低");
         }
     }
 

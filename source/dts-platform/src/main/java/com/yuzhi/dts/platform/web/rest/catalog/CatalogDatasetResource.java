@@ -58,6 +58,8 @@ public class CatalogDatasetResource {
     private final GovIndicatorDefinitionRepository indicatorRepo;
     private final CatalogDbtLineageService dbtLineageService;
     private final AccessChecker accessChecker;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.yuzhi.dts.platform.service.catalog.CatalogClassificationEditService classificationEdits;
 
     public CatalogDatasetResource(
         CatalogDatasetRepository datasetRepo,
@@ -611,15 +613,17 @@ public class CatalogDatasetResource {
         CatalogDataset existing = datasetRepo.findById(id).orElseThrow();
         helper.ensureDatasetEditPermission(existing);
         requireAction(existing, AssetAction.UPDATE);
+        classificationEdits.lockCurrent(existing);
+        helper.ensureDatasetEditPermission(existing);
         requireDatasetEtag(existing, ifMatch);
         Map<String, Object> before = helper.datasetSnapshot(existing);
+        classificationEdits.apply(existing, patch.getClassification(), patch.isClassificationProvided());
         try {
             String previousOwnerDept = existing.getOwnerDept();
             existing.setName(patch.getName());
             existing.setType(patch.getType());
             helper.applySourcePolicy(existing);
-            existing.setClassification(patch.getClassification());
-            helper.normalizeClassification(existing);
+
             existing.setOwnerDept(patch.getOwnerDept());
             helper.applyOwnerDepartmentPolicy(existing, previousOwnerDept, true);
             existing.setOwner(patch.getOwner());

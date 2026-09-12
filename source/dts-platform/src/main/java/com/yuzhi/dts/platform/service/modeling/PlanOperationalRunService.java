@@ -35,6 +35,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class PlanOperationalRunService {
 
+    @Autowired
+    private ModelingExecutionAuthorization executionAuthorization;
     private final PlanOperationalRunRepository runs;
     private final DbtScopedProjectService scopedProjects;
     private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
@@ -119,6 +121,7 @@ public class PlanOperationalRunService {
         String idempotencyKey
     ) {
         requireOperator(tenantId, actorId, planId);
+        planAccess.requireBindingOperation(tenantId, planId, bindingId, actorId);
         String key = required(idempotencyKey, "Idempotency-Key");
         Target target = currentTarget();
         Instant now = clock.instant();
@@ -146,11 +149,13 @@ public class PlanOperationalRunService {
         ) {
             return view(opened, opened.status());
         }
+        try (var identity = executionAuthorization.operational(opened)) {
         Prepared prepared = prepare(opened, target, false, now);
         if (!"SUBMITTED".equals(opened.status())) {
             submitManual(opened, prepared, now);
         }
         return view(opened, "SUBMITTED");
+        }
     }
 
     public ScheduledOpenView openScheduled(
@@ -193,7 +198,7 @@ public class PlanOperationalRunService {
                 Kind.CONFLICT
             );
         }
-        try {
+        try (var identity = executionAuthorization.system(opened)) {
             Prepared prepared = prepare(opened, target, true, now);
             return new ScheduledOpenView(
                 opened.pipelineRunGroupId(),
@@ -232,7 +237,7 @@ public class PlanOperationalRunService {
 
     private void reconcileManual(OpenedRun opened) {
         Instant now = clock.instant();
-        try {
+        try (var identity = executionAuthorization.operational(opened)) {
             if (!"PENDING".equals(opened.status())) {
                 Optional<Map<String, Object>> actual =
                     airflow.getDagRun(
@@ -350,6 +355,8 @@ public class PlanOperationalRunService {
                 Kind.CONFLICT
             );
         }
+        var pinnedSources = sourceAvailability.pinnedOperationalSources(opened.pipelineRunGroupId());
+        ModelingSqlReadSetGuard.requireArtifacts(scope.entries(), pinnedSources);
         Optional<PreparedDispatch> existing = runs.findPrepared(
             opened.pipelineRunGroupId()
         );
@@ -400,7 +407,7 @@ public class PlanOperationalRunService {
         }
         ScopedCandidateProject project =
             scopedProjects.prepareCandidate(PinnedDbtSourceArtifacts.attach(
-                scope.entries(), sourceAvailability.pinnedOperationalSources(opened.pipelineRunGroupId())
+                scope.entries(), pinnedSources
             ));
         ModelRuntimeSpecTokenCodec.IssuedToken issued =
             tokens.issue(opened.pipelineRunGroupId(), now);

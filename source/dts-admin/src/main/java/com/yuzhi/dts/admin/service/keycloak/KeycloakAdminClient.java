@@ -10,6 +10,15 @@ public interface KeycloakAdminClient {
 
     List<KeycloakUserDTO> listUsers(int first, int max, String accessToken);
 
+    /** Authoritative authorization facts: implementations must not use username/snapshot fallbacks. */
+    default Optional<CurrentUser> currentUser(String stableId, String accessToken) {
+        throw new IllegalStateException("Authoritative directory is unavailable");
+    }
+    default List<KeycloakUserDTO> currentRoleMembers(String role, String accessToken) {
+        throw new IllegalStateException("Authoritative directory is unavailable");
+    }
+    record CurrentUser(KeycloakUserDTO user, List<String> roles) {}
+
     /**
      * Fuzzy search users by keyword (username/fullName/email depending on Keycloak implementation).
      */

@@ -30,6 +30,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
 
     private static final Logger LOG = LoggerFactory.getLogger(ModelSpecSourceValidationAdapter.class);
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ModelingSourceScopeGuard sourceScope;
     private final ModelSpecRepository repository;
     private final SourceReferenceResolver resolver;
     private final WarehousePlanActorProvider actorProvider;
@@ -76,7 +78,7 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
             SourceBindingState binding = repository
                 .findSourceBinding(tenantId, planId, sourceRef.sourceBindingId())
                 .orElse(null);
-            if (binding == null || isBlank(binding.planOwnerId())) return false;
+            if (binding == null) return false;
             return isCurrentResolvedBinding(
                 tenantId,
                 binding.planOwnerId(),
@@ -85,6 +87,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
                 binding,
                 false
             );
+        } catch (ModelSpecException | com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            throw denied;
         } catch (RuntimeException exception) {
             LOG.warn("ModelSpec gate source validation failed ({})", exception.getClass().getSimpleName());
             return false;
@@ -96,7 +100,7 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
         if (isBlank(tenantId) || planId == null || sourceBindingId == null || isBlank(resolvedVersion)) return false;
         try {
             SourceBindingState binding = repository.findSourceBinding(tenantId, planId, sourceBindingId).orElse(null);
-            if (binding == null || isBlank(binding.planOwnerId())) return false;
+            if (binding == null) return false;
             SourceKind kind = sourceKind(binding.sourceType());
             if (kind == null) return false;
             SourceRef reference = new SourceRef(
@@ -119,6 +123,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
                 binding,
                 false
             );
+        } catch (ModelSpecException | com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            throw denied;
         } catch (RuntimeException exception) {
             LOG.warn("Model implementation source validation failed ({})", exception.getClass().getSimpleName());
             return false;
@@ -135,7 +141,7 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
         if (isBlank(tenantId) || planId == null || sourceBindingId == null || isBlank(resolvedVersion)) return false;
         try {
             SourceBindingState binding = repository.findSourceBinding(tenantId, planId, sourceBindingId).orElse(null);
-            if (binding == null || isBlank(binding.planOwnerId())) return false;
+            if (binding == null) return false;
             SourceKind kind = sourceKind(binding.sourceType());
             if (kind == null) return false;
             SourceRef reference = new SourceRef(
@@ -158,6 +164,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
                 binding,
                 true
             );
+        } catch (ModelSpecException | com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            throw denied;
         } catch (RuntimeException exception) {
             LOG.warn("Model materialization source validation failed ({})", exception.getClass().getSimpleName());
             return false;
@@ -191,6 +199,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
                     source.resolvedVersion()
                 )
             );
+        } catch (ModelSpecException | com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            throw denied;
         } catch (RuntimeException exception) {
             LOG.warn("Model implementation compiler source resolution failed ({})", exception.getClass().getSimpleName());
             return Optional.empty();
@@ -226,6 +236,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
                     source.resolvedVersion()
                 )
             );
+        } catch (ModelSpecException | com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            throw denied;
         } catch (RuntimeException exception) {
             LOG.warn("Model execution compiler source resolution failed ({})", exception.getClass().getSimpleName());
             return Optional.empty();
@@ -259,7 +271,14 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
             return false;
         }
 
-        AccessContext context = new AccessContext(tenantId, ownerId, ownerDepartmentId);
+        UUID targetPlan = repositoryPlanId(tenantId, binding.id());
+        sourceScope.requireSource(tenantId, targetPlan, sourceType, locator);
+        var current = com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional();
+        if (current.isEmpty() && !ModelingSystemExecution.permits(tenantId, targetPlan)) return false;
+        AccessContext context = current.isPresent()
+            ? new AccessContext(tenantId, current.orElseThrow().id(), current.orElseThrow().deptCode())
+            : new AccessContext(tenantId, "SYSTEM", ownerDepartmentId);
+        backgroundExecution = current.isEmpty();
         ResolvedSource resolved = backgroundExecution
             ? resolveForExecution(sourceType, locator, context)
             : resolve(sourceType, locator, context);
@@ -283,9 +302,17 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
         return resolver.readFields(type, locator, new AccessContext(tenantId, actor.ownerId(), actor.ownerDepartmentId()), version);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbc;
+    private UUID repositoryPlanId(String tenant, UUID binding) {
+        return jdbc.queryForObject("select plan_id from modeling_warehouse_plan_source where tenant_id=? and id=?", UUID.class, tenant, binding);
+    }
+
     private WarehousePlanActor currentActor() {
         try {
             return actorProvider.currentActor();
+        } catch (ModelSpecException | com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            throw denied;
         } catch (RuntimeException exception) {
             LOG.warn("ModelSpec source validation could not read the authenticated actor ({})", exception.getClass().getSimpleName());
             return null;
@@ -295,6 +322,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
     private ResolvedSource resolve(SourceType sourceType, SourceLocator locator, AccessContext context) {
         try {
             return resolver.resolve(sourceType, locator, context);
+        } catch (ModelSpecException | com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            throw denied;
         } catch (RuntimeException exception) {
             LOG.warn(
                 "ModelSpec live source resolution failed for type {} ({})",
@@ -312,6 +341,8 @@ public class ModelSpecSourceValidationAdapter implements ModelSpecSourceValidati
     ) {
         try {
             return resolver.resolveForExecution(sourceType, locator, context);
+        } catch (ModelSpecException | com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            throw denied;
         } catch (RuntimeException exception) {
             LOG.warn(
                 "Model materialization live source resolution failed for type {} ({})",

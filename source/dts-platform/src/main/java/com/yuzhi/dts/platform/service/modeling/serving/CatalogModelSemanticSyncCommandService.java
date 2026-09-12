@@ -89,11 +89,12 @@ public class CatalogModelSemanticSyncCommandService {
 
     @Transactional
     public RetryResult retry(String tenantId, String actorId, UUID modelSpecId, long expectedVersion) {
+        writeAccess.requireEdit(tenantId, modelSpecId, actorId);
         ModelSpecView model = modelSpecs.get(tenantId, modelSpecId);
         if (
             actorId == null ||
             actorId.isBlank() ||
-            !writeAccess.canMaintain(tenantId, model.planId(), actorId)
+            !writeAccess.canEdit(tenantId, model.id(), actorId)
         ) {
             throw error(
                 "MODEL_SEMANTIC_SYNC_RETRY_FORBIDDEN",

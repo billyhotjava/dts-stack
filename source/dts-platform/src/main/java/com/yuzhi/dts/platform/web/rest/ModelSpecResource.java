@@ -112,9 +112,9 @@ public class ModelSpecResource {
 
     @GetMapping("/creation-context")
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
-    public ResponseEntity<ApiResponse<CreationContext>> creationContext() {
+    public ResponseEntity<ApiResponse<ModelingContextInitializationService.CreationContext>> creationContext(@RequestParam(required = false) String departmentCode) {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore())
-            .body(ApiResponses.ok(new CreationContext(contexts.existingContextId(serverTenantId))));
+            .body(ApiResponses.ok(contexts.context(serverTenantId, departmentCode)));
     }
 
     @JsonInclude(JsonInclude.Include.ALWAYS)

@@ -38,6 +38,8 @@ public class CatalogClassificationService {
     private final CatalogClassificationSnapshotRepository snapshotRepository;
     private final CatalogClassificationEventRepository eventRepository;
     private final List<CatalogClassificationProjection> projections;
+    @org.springframework.beans.factory.annotation.Autowired
+    private CatalogClassificationWriteLock writeLock;
 
     public CatalogClassificationService(
         CatalogClassificationSnapshotRepository snapshotRepository,
@@ -78,6 +80,7 @@ public class CatalogClassificationService {
         Objects.requireNonNull(command, "command");
         String subjectType = normalizeSubjectType(command.subjectType());
         String subjectKey = requireText(command.subjectKey(), "subjectKey", 512);
+        writeLock.lock(subjectType, subjectKey);
         String assetType = optionalUpper(command.assetType(), 32);
         String declared = optionalDataCode(command.declaredLevel());
         String detected = optionalDataCode(command.detectedLevel());
@@ -142,6 +145,7 @@ public class CatalogClassificationService {
         Objects.requireNonNull(command, "command");
         String subjectType = normalizeSubjectType(command.subjectType());
         String subjectKey = requireText(command.subjectKey(), "subjectKey", 512);
+        writeLock.lock(subjectType, subjectKey);
         Optional<CatalogClassificationSnapshot> existing = snapshotRepository.findBySubjectTypeAndSubjectKey(
             subjectType,
             subjectKey
@@ -228,6 +232,7 @@ public class CatalogClassificationService {
         Objects.requireNonNull(command, "command");
         String subjectType = normalizeSubjectType(command.subjectType());
         String subjectKey = requireText(command.subjectKey(), "subjectKey", 512);
+        writeLock.lock(subjectType, subjectKey);
         String candidate = SecurityLevelCatalog.requireDataLevel(command.candidateLevel()).code();
         CatalogClassificationSnapshot snapshot = lockRequired(subjectType, subjectKey);
         String previousEffective = snapshot.getEffectiveLevel();

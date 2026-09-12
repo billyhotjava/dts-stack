@@ -57,7 +57,13 @@ public class ModelImplementationInputPolicy {
         this.inspection = null;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ModelingSourceScopeGuard sourceScope;
+
     public ValidationResult validate(String tenantId, ModelSpecView owner, SaveImplementationCommand command) {
+        if (owner != null && command != null && command.inputs() != null) {
+            sourceScope.requireModels(tenantId, owner.planId(), command.inputs().stream().filter(UpstreamModelInput.class::isInstance).map(UpstreamModelInput.class::cast).map(UpstreamModelInput::modelSpecId).toList());
+        }
         if (command != null && ModelSchemaOnlySupport.isSchemaOnly(command.inputMode(), command.inputs())) {
             return owner != null && !owner.fields().isEmpty() && ModelSchemaOnlySupport.valid(command)
                 ? ValidationResult.ok() : ValidationResult.invalid("MODEL_SCHEMA_ONLY_CONFIGURATION_INVALID");

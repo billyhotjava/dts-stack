@@ -45,7 +45,7 @@ import org.springframework.util.StringUtils;
  * table sources, and verifies every physical table discovered by the AST against the bound data
  * asset.</p>
  */
-final class QualitySqlScopeValidator {
+public final class QualitySqlScopeValidator {
 
     private static final int PARSE_TIMEOUT_MILLIS = 2_000;
     private static final Set<String> SAFE_FUNCTIONS = Set.of(
@@ -157,6 +157,20 @@ final class QualitySqlScopeValidator {
         }
     }
 
+    /** Physical read set for modeling SQL. Unsupported syntax is rejected, never partially accepted. */
+    public static Set<String> modelingReadTables(String sql) {
+        try {
+            Statements statements = CCJSqlParserUtil.parseStatements(sql, parser -> configureParser(parser, IdentifierDialect.HIVE));
+            if (statements.size() != 1 || !(statements.get(0) instanceof Select)) throw new IllegalArgumentException();
+            SecurityTablesFinder finder = new SecurityTablesFinder(IdentifierDialect.HIVE, false);
+            Set<String> tables = finder.getTables(statements.get(0));
+            if (finder.rejected()) throw new IllegalArgumentException();
+            return Set.copyOf(tables);
+        } catch (Exception failure) {
+            throw new IllegalArgumentException("SQL_READ_SET_UNVERIFIABLE");
+        }
+    }
+
     private static void configureParser(CCJSqlParser parser, IdentifierDialect identifierDialect) {
         parser
             .withTimeOut(PARSE_TIMEOUT_MILLIS)
@@ -259,11 +273,18 @@ final class QualitySqlScopeValidator {
     private static final class SecurityTablesFinder extends TablesNamesFinder<Void> {
 
         private final IdentifierDialect identifierDialect;
+        private final boolean qualityPolicy;
+        private static final Set<String> MODEL_FUNCTIONS = Set.of("avg", "min", "max", "coalesce", "lower", "upper", "concat", "substring", "substr", "length", "abs", "ceil", "floor", "date_trunc", "date_format", "to_date", "year", "month", "day", "greatest", "least");
         private String reasonCode;
         private String detail;
 
         private SecurityTablesFinder(IdentifierDialect identifierDialect) {
+            this(identifierDialect, true);
+        }
+
+        private SecurityTablesFinder(IdentifierDialect identifierDialect, boolean qualityPolicy) {
             this.identifierDialect = identifierDialect;
+            this.qualityPolicy = qualityPolicy;
         }
 
         boolean rejected() {
@@ -460,7 +481,7 @@ final class QualitySqlScopeValidator {
         public <S> Void visit(Function function, S context) {
             List<String> nameParts = function.getMultipartName();
             String name = nameParts != null && nameParts.size() == 1 ? nameParts.get(0) : null;
-            if (!StringUtils.hasText(name) || !SAFE_FUNCTIONS.contains(name.toLowerCase(Locale.ROOT))) {
+            if (!StringUtils.hasText(name) || !(SAFE_FUNCTIONS.contains(name.toLowerCase(Locale.ROOT)) || (!qualityPolicy && MODEL_FUNCTIONS.contains(name.toLowerCase(Locale.ROOT))))) {
                 reject(
                     "UNSUPPORTED_FUNCTION",
                     StringUtils.hasText(name) ? name.toLowerCase(Locale.ROOT) : String.valueOf(function.getName())
@@ -523,7 +544,7 @@ final class QualitySqlScopeValidator {
             if (
                 !StringUtils.hasText(typeName) ||
                 !typeName.matches("^[A-Za-z][A-Za-z0-9_]*$") ||
-                !SAFE_CAST_TYPES.contains(typeName.toLowerCase(Locale.ROOT)) ||
+                !(SAFE_CAST_TYPES.contains(typeName.toLowerCase(Locale.ROOT)) || (!qualityPolicy && Set.of("integer", "int", "bigint", "double", "float", "boolean", "date", "timestamp", "varchar", "decimal").contains(typeName.toLowerCase(Locale.ROOT)))) ||
                 StringUtils.hasText(dataType.getCharacterSet()) ||
                 (dataType.getArgumentsStringList() != null && !dataType.getArgumentsStringList().isEmpty()) ||
                 (dataType.getArrayData() != null && !dataType.getArrayData().isEmpty()) ||

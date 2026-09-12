@@ -1,3 +1,8 @@
+import { Alert, Select, Space, Button as AntButton } from "antd";
+import { selectedModelingDepartment, selectModelingDepartment } from "@/api/modelingAccessApi";
+import { useModelingAuthorization, useModelAccess } from "./useModelingAccess";
+import { ModelAccessDrawer } from "./ModelAccessDrawer";
+import { confirmSimilarModel } from "./confirmSimilarModel";
 import { normalizeModelWizardStep } from "@/api/modelDeliveryStatusApi";
 import type { UnsavedEditorHandle } from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
 import { ModelWizardFrame } from "./ModelWizardFrame";
@@ -70,8 +75,59 @@ const ownerIdOf = (userInfo: unknown) => {
 };
 
 export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
+	const authorization = useModelingAuthorization();
+	const [department, setDepartment] = useState(selectedModelingDepartment() || "");
+	const current = authorization.data;
+	const validSelection = current?.departments.some((item) => item.code === department);
+	const selected = current?.canSelectDepartment ? (validSelection ? department : "") : current?.departmentCode || "";
+	if (authorization.isPending)
+		return <RequestState kind="loading" title="正在核验建模权限" description="正在读取当前用户和部门信息。" />;
+	if (authorization.isError || !current?.canModel)
+		return (
+			<RequestState
+				kind="permission"
+				title="无法进入数据建模"
+				description="请确认账号有效并具有建模角色；若刚完成权限调整，请重新登录。"
+			/>
+		);
+	return (
+		<>
+			<Space wrap style={{ marginBottom: 12 }}>
+				<span>部门公共层：</span>
+				{current.canSelectDepartment ? (
+					<Select
+						aria-label="建模所属部门"
+						placeholder="请选择部门"
+						value={selected || undefined}
+						style={{ width: 240 }}
+						options={current.departments.map((item) => ({ value: item.code, label: item.name }))}
+						onChange={(value) => {
+							if (selected && !window.confirm("切换部门将关闭当前编辑器，请先确认修改已保存。是否继续？")) return;
+							selectModelingDepartment(value);
+							setDepartment(value);
+						}}
+					/>
+				) : (
+					<strong>
+						{current.departments.find((item) => item.code === selected)?.name || selected || "尚未分配部门"}
+					</strong>
+				)}
+				<AntButton disabled title="跨部门引用与共享审批尚未开放">
+					申请跨部门引用
+				</AntButton>
+			</Space>
+			{selected ? (
+				<ModelingWorkbenchBody key={selected} route={route} />
+			) : (
+				<Alert type="info" showIcon message="请选择所属部门后继续；部门公共层将在首次保存时创建。" />
+			)}
+		</>
+	);
+}
+
+function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 	const navigate = useNavigate();
-	const canMaintain = useDataModelingMenuGrant();
+	const canModel = useDataModelingMenuGrant();
 	const userInfo = useUserInfo();
 	const requestEpoch = useRef(0);
 	const savingRef = useRef(false);
@@ -105,6 +161,10 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	const [dimensionDefinitions, setDimensionDefinitions] = useState<DimensionDefinitionView[]>([]);
 	const [dimensionDefinitionFailure, setDimensionDefinitionFailure] = useState("");
 	const [selectedModelId, setSelectedModelId] = useState("");
+	const modelAccess = useModelAccess(selectedModelId ? [selectedModelId] : []);
+	const selectedAccess = modelAccess.isError ? undefined : modelAccess.data?.[selectedModelId];
+	const canMaintain = canModel && (!selectedModelId || selectedAccess?.canEdit === true);
+	const [sharingOpen, setSharingOpen] = useState(false);
 	const [selectedDimensionId, setSelectedDimensionId] = useState("");
 	const [dialog, setDialog] = useState<WorkbenchDialog>(null);
 	const [batchMaterializationModels, setBatchMaterializationModels] = useState<ModelSpecView[]>([]);
@@ -413,6 +473,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		savingRef.current = true;
 		setSaving(true);
 		try {
+			if (!(await confirmSimilarModel(preparedDraft))) return false;
 			const persistDraft = !preparedDraft.base ? saveModelDefinitionDraft : saveExistingModelDefinition;
 			const saved = await persistDraft(preparedDraft, {
 				ownerId: ownerIdOf(userInfo),
@@ -554,6 +615,20 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 	return (
 		<main className="dmx-workbench-page">
 			<PageHeader description={route.description} title="维度建模" trail="数据建模 / 维度建模" />
+			{selectedModel?.modelType === "APPLICATION" && (
+				<Space wrap style={{ marginBottom: 12 }}>
+					<span>负责人：{selectedAccess?.ownerName || "暂无显示名称"}</span>
+					<AntButton onClick={() => setSharingOpen(true)}>编辑共享</AntButton>
+				</Space>
+			)}
+			{selectedModel?.modelType === "APPLICATION" && (
+				<ModelAccessDrawer
+					modelId={selectedModel.id}
+					access={selectedAccess}
+					open={sharingOpen}
+					onClose={() => setSharingOpen(false)}
+				/>
+			)}
 			{loading && !showEarlyList ? (
 				<RequestState description="正在读取模型列表和数据域。" kind="loading" title="正在加载模型工作台" />
 			) : failure?.kind === "permission" ? (

@@ -35,6 +35,8 @@ public class ModelWorkbenchCatalogQueryService {
         "ARCHIVED"
     );
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private ModelSpecPlanWriteAccessPort plans;
     private final ModelWorkbenchCatalogRepository repository;
     private final ModelSpecDomainReadAccessPort domainReadAccess;
 
@@ -54,6 +56,7 @@ public class ModelWorkbenchCatalogQueryService {
             throw invalidWindow("A server tenant is required");
         }
 
+        if (normalized.planId() != null && !plans.canReadPlan(effectiveTenantId, normalized.planId())) throw new ModelSpecException("MODEL_SPEC_NOT_FOUND", "模型不存在或不可见", ModelSpecException.Kind.NOT_FOUND);
         Set<UUID> visibleDomainIds = domainReadAccess.visibleDomainIds();
         Set<UUID> effectiveVisibleDomainIds = visibleDomainIds == null
             ? Set.of()

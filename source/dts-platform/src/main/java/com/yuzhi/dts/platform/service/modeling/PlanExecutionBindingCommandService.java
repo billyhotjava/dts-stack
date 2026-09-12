@@ -76,6 +76,7 @@ public class PlanExecutionBindingCommandService {
                 Kind.FORBIDDEN
             );
         }
+        planAccess.requireBindingOperation(tenant, planId, bindingId, actor);
         RepairResult repaired = bindings
             .requestRedeployment(
                 tenant,

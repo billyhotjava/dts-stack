@@ -106,7 +106,7 @@ public class ModelAuthoringDraftService {
         AuthoringProjection projection = open
             .map(this::project)
             .orElseGet(() -> AuthoringProjection.unknown("MODEL_AUTHORING_PROJECTION_NOT_PREPARED"));
-        boolean maintainer = writeAccess.canMaintain(tenantId, model.planId(), actorId);
+        boolean maintainer = writeAccess.canEdit(tenantId, model.id(), actorId);
         var allowed = capabilities
             .authoringActions(
                 model.status(),
@@ -425,7 +425,8 @@ public class ModelAuthoringDraftService {
     }
 
     private void requireMaintainer(String tenantId, String actorId, ModelSpecView model) {
-        if (actorId == null || actorId.isBlank() || !writeAccess.canMaintain(tenantId, model.planId(), actorId)) {
+        writeAccess.requireEdit(tenantId, model.id(), actorId);
+        if (actorId == null || actorId.isBlank() || !writeAccess.canEdit(tenantId, model.id(), actorId)) {
             throw error("MODEL_AUTHORING_MAINTAINER_FORBIDDEN", "The current actor cannot maintain this model", ModelAuthoringException.Kind.FORBIDDEN);
         }
     }
