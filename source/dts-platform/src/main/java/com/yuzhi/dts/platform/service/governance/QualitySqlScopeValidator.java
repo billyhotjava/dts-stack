@@ -467,7 +467,7 @@ public final class QualitySqlScopeValidator {
 
         @Override
         public <S> Void visit(TableFunction tableFunction, S context) {
-            if (qualityPolicy || !"generate_series".equalsIgnoreCase(tableFunction.getName()) ||
+            if (qualityPolicy || !"generate_series".equalsIgnoreCase(tableFunction.getFunction().getName()) ||
                 StringUtils.hasText(tableFunction.getPrefix()) || StringUtils.hasText(tableFunction.getWithClause())) {
                 rejectSyntax("表函数"); return null;
             }
@@ -584,7 +584,7 @@ public final class QualitySqlScopeValidator {
                 expression.getExpression() != null || expression.getOffset() != null || expression.getDefaultValue() != null ||
                 expression.getKeep() != null || expression.getHavingClause() != null || expression.getLimit() != null ||
                 expression.getFilterExpression() != null || expression.getWindowElement() != null ||
-                StringUtils.hasText(expression.getWindowName()) || expression.getFuncOrderBy() != null) {
+                StringUtils.hasText(expression.getWindowName()) || (expression.getFuncOrderBy() != null && !expression.getFuncOrderBy().isEmpty())) {
                 rejectSyntax("窗口/分析函数"); return null;
             }
             inspectExpression(expression.getPartitionExpressionList(), context);
