@@ -1,5 +1,4 @@
 import api from "@/api/apiClient";
-import { selectedModelingDepartment } from "./modelingAccessApi";
 import type {
 	CreateDimensionDefinitionCommand,
 	DimensionDefinitionView,
@@ -24,6 +23,7 @@ import type {
 	UpdateModelSpecCommand,
 } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { toModelSpecEtag } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { selectedModelingDepartment } from "./modelingAccessApi";
 
 const MODEL_SPEC_RESOURCE = "/modeling/model-specs";
 

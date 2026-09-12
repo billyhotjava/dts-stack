@@ -1,6 +1,6 @@
 import { Modal, message } from "antd";
 import { findSimilarModels } from "@/api/modelingAccessApi";
-import { modelDraftToUpdateCommand, type ModelSpecDraft } from "./services/modelWorkbenchService";
+import { type ModelSpecDraft, modelDraftToUpdateCommand } from "./services/modelWorkbenchService";
 export async function confirmSimilarModel(draft: ModelSpecDraft): Promise<boolean> {
 	const model = modelDraftToUpdateCommand(draft);
 	if (!draft.planId || model.modelType === "APPLICATION") return true;

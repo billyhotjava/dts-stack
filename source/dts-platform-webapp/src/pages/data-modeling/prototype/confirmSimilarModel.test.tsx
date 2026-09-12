@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
 const mocks = vi.hoisted(() => ({ find: vi.fn(), confirm: vi.fn(), warn: vi.fn() }));
 vi.mock("@/api/modelingAccessApi", () => ({ findSimilarModels: mocks.find }));
 vi.mock("antd", () => ({ Modal: { confirm: mocks.confirm }, message: { warning: mocks.warn } }));
@@ -11,8 +12,10 @@ vi.mock("./services/modelWorkbenchService", () => ({
 		grain: { keys: ["id"] },
 	}),
 }));
+
 import { confirmSimilarModel } from "./confirmSimilarModel";
 import type { ModelSpecDraft } from "./services/modelWorkbenchService";
+
 const draft = { planId: "dept-plan" } as ModelSpecDraft;
 beforeEach(() => vi.clearAllMocks());
 describe("public model similarity prompt", () => {

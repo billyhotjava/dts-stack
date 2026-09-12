@@ -1,9 +1,9 @@
 import { useMemo } from "react";
-import { useModelingAuthorization } from "./useModelingAccess";
 import { useLocation } from "react-router";
 import type { MenuTree } from "#/entity";
 import { useMenuStore } from "@/store/menuStore";
 import { findMenuByPath } from "@/utils/menuTree";
+import { useModelingAuthorization } from "./useModelingAccess";
 
 export const hasDataModelingMenuGrant = (menus: MenuTree[], pathname: string): boolean =>
 	Boolean(findMenuByPath(Array.isArray(menus) ? menus : [], pathname));
