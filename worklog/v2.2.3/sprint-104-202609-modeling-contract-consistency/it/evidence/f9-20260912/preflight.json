@@ -1,0 +1,30 @@
+{
+  "capturedAt": "2026-09-12T15:05:47.271503+00:00",
+  "readOnly": true,
+  "organization": {
+    "departments": [
+      "1152",
+      "1153",
+      "1154"
+    ],
+    "nodeIdFallbackCount": 3
+  },
+  "platform": {
+    "planCount": 1,
+    "departments": [
+      "1153"
+    ],
+    "duplicateDepartments": 0,
+    "unwritablePlans": 0,
+    "adsCount": 0,
+    "modelTypes": {
+      "FACT": 3,
+      "SUMMARY": 1
+    },
+    "crossPlanReferences": 0,
+    "sessionsMissingDepartment": 0
+  },
+  "migrationBlockers": [],
+  "customerHistoricalDowngradeScan": "NOT_RUN",
+  "customerNote": "客户现场访问与历史密级恢复不在本次本机只读扫描的证据范围内。"
+}
