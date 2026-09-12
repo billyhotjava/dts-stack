@@ -16,12 +16,13 @@
 | [F5-建模状态语义与上游引用准入收敛](sprint-104-202609-modeling-contract-consistency/features/F5-建模状态语义与上游引用准入收敛/README.md) | P0 | 7 | IN_PROGRESS |
 | [F6-指标计算口径与资产BI协作闭环](sprint-104-202609-modeling-contract-consistency/features/F6-指标计算口径与资产BI协作闭环/README.md) | P1 | 8 | IN_PROGRESS |
 | [F7-首次建模初始化与菜单授权一致性](sprint-104-202609-modeling-contract-consistency/features/F7-首次建模初始化与菜单授权一致性/README.md) | P0 | 4 | IN_PROGRESS |
-| [F8-质量规则运行契约与失败反馈重构](sprint-104-202609-modeling-contract-consistency/features/F8-质量规则运行契约与失败反馈重构/README.md) | P0 | 7 | DRAFT |
+| [F8-质量规则运行契约与失败反馈重构](sprint-104-202609-modeling-contract-consistency/features/F8-质量规则运行契约与失败反馈重构/README.md) | P0 | 7 | IN_PROGRESS |
+| [F9-部门公共层与ADS共享权限链收敛](sprint-104-202609-modeling-contract-consistency/features/F9-部门公共层与ADS共享权限链收敛/README.md) | P0 | 9 | DRAFT |
 
 **F7 增量**: S10DC-80；T40 服务端原子初始化、T41 菜单授权对齐、T42 单次保存、T43 回归与正式验收。契约已冻结并开始修复；浏览器 GAP 单列。
 **F7 当前证据**: 编码修复已推送，默认上下文读写一致、新建不继承旧规划、业务维度菜单准入均已补齐。后端主回归 58/58、补充专项 29/29、前端 87/87 和前端源码构建通过；[最新证据](sprint-104-202609-modeling-contract-consistency/assests/F7-implementation-20260910.md)。本轮镜像/离线包、部署及真实空库页面验收未执行；F7/T40–T43 保持 IN_PROGRESS。
 
-**统计**: DRAFT=7，READY=0，IN_PROGRESS=41，DONE=2，BLOCKED=0；8 个 Feature、50 个 Task。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成；F5/T25 契约冻结完成，其余六项编码完成、正式构建部署及外部 Chrome 分项验收中。
+**统计**: DRAFT=9，READY=0，IN_PROGRESS=47，DONE=3，BLOCKED=0；9 个 Feature、59 个 Task（2026-09-12 按任务文件状态重新统计，F9 全部 DRAFT）。按当前任务文件统计；T15仅代表契约冻结完成，不代表F3整体验收完成；F5/T25 契约冻结完成，其余六项编码完成、正式构建部署及外部 Chrome 分项验收中。
 **执行顺序**: T01 归因 → T07 保存/执行边界冻结 → T02 契约 → T05/T06/T03/T04 → T07 一致性验证 → T08 集成验收。
 **F2 执行顺序**: T09 契约/基线 → T10 四步向导与统一交付状态 → T11 质量闭环、T12 资产维护、T13 分析恢复 → T14 端到端与离线交付。
 **F3 执行顺序**: T15 契约/副作用冻结 → T16 ODS 与逻辑引用 → T17 结构物化/完成判定 → T18 三步页面 → T19 接入绑定与数据接手 → T20 集成验收。
@@ -37,6 +38,8 @@
 **F8 增量（2026-09-10）**: 来源为两次真实运行失败（DATASET_SCOPE_BLOCKED、RESULT_ID_REQUIRED）。T44 契约/基线→T45 失败统计去 id 依赖→T46 业务结论与执行故障分离→T48 保存前静态校验→T47 文案与原因透出→T49 工单准入→T50 正式验收。全部 DRAFT，G0/G1 待 T44 冻结；IT-48–IT-54 未执行。
 **F8 关键决策**: 约束按性质分三类——安全边界保留并前移到保存期、函数白名单修正粒度、`id` 列要求（纯实现泄漏）去除；业务结论与执行故障拆为两个维度，平台故障不压制违规结论也不建待认领工单；试跑复用既有 dry-run 接口不新建预检服务；存量规则处置以 T44 计数为据不预设。
 **F8 先行修复**: 提交 `4c58ce207` 已补 btrim/ltrim/rtrim 并将作用域校验结果结构化，源码专项 8/8 与 18/18 通过；构建/部署/页面验收未执行，不代表任何 Task 完成。
+**F9 增量（2026-09-12）**: 来源为用户关于研究所—部门—员工层级下连接、模型共享与 DWD 重复建设的讨论。F9-T01 权限链基线/契约冻结→T02 资产密级只升不降→T03 建模角色服务端准入→T04 部门公共层上下文与可见范围→T05 公共层维护范围与跨部门引用暂停→T06 ADS 归属与编辑共享→T07 跨部门入口与大屏密级链核对→T08 同部门重复建设提示→T09 正式验收。全部 DRAFT；IT-55–IT-63 未执行。
+**F9 关键决策**: 每部门一个公共层；仅部门数据管理员、部门领导、所级数据管理员与所级领导可建模，普通员工不可，opadmin 仅应急；服务端强制角色与资源判定，替代 F7 契约“菜单即权限”与租户级默认上下文；ADS 归创建人、默认他人只读、可授编辑权、领导与所级保留管理权；密级只升不降；跨部门引用与共享暂停并保留入口。契约见 [F9 权限链契约](sprint-104-202609-modeling-contract-consistency/assests/F9-permission-chain-contract.md)。
 
 **F4 当前证据**: 73697f73a已正式构建并直接替换原platform/webapp；前端83项、后端30项通过，实际36个交付请求全部200/P95约0.522s。刷新/分页/详情正常；Chrome95与固定并发验收由T24继续跟踪，不出补丁包。
 
