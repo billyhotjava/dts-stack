@@ -62,9 +62,9 @@ class CatalogClassificationVersionVisibilityPostgresIT {
             var low = pool.submit(() -> {
                 barrier.await(5, java.util.concurrent.TimeUnit.SECONDS);
                 try { return service.sealOrRaise(command(key,"INTERNAL")); }
-                catch (CatalogClassificationService.CatalogClassificationException denied) {
+                catch (CatalogClassificationException denied) {
                     // If the higher classification committed first, rejecting the lower request is required.
-                    assertThat(denied.code()).isEqualTo("CLASSIFICATION_DOWNGRADE_FORBIDDEN"); return null;
+                    assertThat(denied.getCode()).isEqualTo("CLASSIFICATION_DOWNGRADE_FORBIDDEN"); return null;
                 }
             });
             var high = pool.submit(() -> { barrier.await(5, java.util.concurrent.TimeUnit.SECONDS); return service.sealOrRaise(command(key,"SECRET")); });
