@@ -13,7 +13,6 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-@Component
 public class ModelingIdentityFilter extends OncePerRequestFilter {
     private final ModelingIdentityService identities;
     private final ObjectMapper mapper;
@@ -24,12 +23,6 @@ public class ModelingIdentityFilter extends OncePerRequestFilter {
         this.mapper = mapper;
         this.audit = audit;
         this.access = access;
-    }
-    @Bean
-    FilterRegistrationBean<ModelingIdentityFilter> modelingFilterRegistration() {
-        var registration = new FilterRegistrationBean<>(this);
-        registration.setEnabled(false);
-        return registration;
     }
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {

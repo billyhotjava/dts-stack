@@ -766,6 +766,7 @@ class ModelMaterializationDispatchServiceTest {
             Clock.fixed(NOW, ZoneOffset.UTC),
             new TransactionTemplate(transactions)
         );
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "executionAuthorization", mock(ModelingExecutionAuthorization.class));
         return new Fixture(
             service,
             dispatches,

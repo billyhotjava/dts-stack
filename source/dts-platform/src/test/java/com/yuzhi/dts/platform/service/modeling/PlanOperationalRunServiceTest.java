@@ -380,13 +380,7 @@ class PlanOperationalRunServiceTest {
         when(duties.currentDuties()).thenReturn(
             Set.of(DeliveryActorRole.RELEASE_OPERATOR)
         );
-        return new Fixture(
-            runs,
-            scoped,
-            sources,
-            tokens,
-            airflow,
-            new PlanOperationalRunService(
+        var service = new PlanOperationalRunService(
                 runs,
                 scoped,
                 sources,
@@ -397,7 +391,15 @@ class PlanOperationalRunServiceTest {
                 access,
                 duties,
                 Clock.fixed(NOW, ZoneOffset.UTC)
-            )
+            );
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "executionAuthorization", mock(ModelingExecutionAuthorization.class));
+        return new Fixture(
+            runs,
+            scoped,
+            sources,
+            tokens,
+            airflow,
+            service
         );
     }
 

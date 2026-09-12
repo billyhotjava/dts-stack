@@ -105,7 +105,7 @@ class KeycloakAuthResourceTest {
         when(ticketService.clearTicketCookie(any())).thenReturn(ResponseCookie.from("pki_session_ticket", "").path("/").maxAge(0).build());
         when(keycloakAuthService.loginByTokenExchange("alice")).thenThrow(new IllegalStateException("kc unavailable"));
         when(registry.hasActiveSession(eq("alice"), anyString())).thenReturn(false);
-        when(registry.createSession(eq("alice"), anyList(), anyList(), eq(null), eq(null), eq("alice"), anyString(), eq(null)))
+        when(registry.createVerifiedSession(eq("alice"), anyList(), anyList(), eq(null), eq(null), eq("alice"), anyString(), eq(null), eq(null)))
             .thenReturn(
                 new PortalSession(
                     "session-1",
@@ -141,7 +141,7 @@ class KeycloakAuthResourceTest {
         Map<String, Object> user = (Map<String, Object>) response.getBody().getData().get("user");
         assertThat(user.get("roles")).isEqualTo(List.of("ROLE_USER"));
         verify(registry)
-            .createSession(eq("alice"), eq(List.of("ROLE_USER")), eq(List.of("portal.view")), eq(null), eq(null), eq("alice"), anyString(), eq(null));
+            .createVerifiedSession(eq("alice"), eq(List.of("ROLE_USER")), eq(List.of("portal.view")), eq(null), eq(null), eq("alice"), anyString(), eq(null), eq(null));
         verifyNoInteractions(gateway);
     }
 

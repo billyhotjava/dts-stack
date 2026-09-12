@@ -76,6 +76,7 @@ class ModelLifecycleServiceTest {
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
         when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        when(writeAccess.canEdit("tenant-a", MODEL_ID, "alice")).thenReturn(true);
         ModelImplementationInputPolicy adapter = new ModelImplementationInputPolicy(
             modelSpecs, modelSpecRepository, lifecycle, mock(ModelSpecSourceValidationPort.class)
         );
@@ -132,6 +133,7 @@ class ModelLifecycleServiceTest {
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
         when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        when(writeAccess.canEdit("tenant-a", MODEL_ID, "alice")).thenReturn(true);
         ModelImplementationInputPolicy adapter = new ModelImplementationInputPolicy(
             modelSpecs, modelSpecRepository, lifecycle, mock(ModelSpecSourceValidationPort.class)
         );
@@ -240,6 +242,7 @@ class ModelLifecycleServiceTest {
         when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID))
             .thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
         when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        when(writeAccess.canEdit("tenant-a", MODEL_ID, "alice")).thenReturn(true);
         when(receipts.payloadHash(any())).thenReturn("e".repeat(64));
 
         String projectKey = "prjdemo";
@@ -726,6 +729,7 @@ class ModelLifecycleServiceTest {
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
         when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        when(writeAccess.canEdit("tenant-a", MODEL_ID, "alice")).thenReturn(true);
         ImplementationView owner = new ImplementationView(
             UUID.randomUUID(), MODEL_ID, PLAN_ID, 7, CHECKSUM, ImplementationMode.DBT_MANAGED, "pjm", "model.pjm.fact", "ACTIVE",
             1, CHECKSUM, InputMode.GENERATED, List.of(new GeneratedInput("DBT", Map.of())), List.of(), Map.of(), "table"
@@ -831,6 +835,7 @@ class ModelLifecycleServiceTest {
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
         when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        when(writeAccess.canEdit("tenant-a", MODEL_ID, "alice")).thenReturn(true);
         ImplementationView owner = new ImplementationView(
             UUID.randomUUID(), MODEL_ID, PLAN_ID, 7, CHECKSUM, ImplementationMode.DBT_MANAGED, "pjm", "model.pjm.fact", "ACTIVE",
             1, CHECKSUM, InputMode.GENERATED, List.of(new GeneratedInput("DBT", Map.of())), List.of(), Map.of(), "table"
@@ -918,6 +923,7 @@ class ModelLifecycleServiceTest {
         when(modelSpecs.get("tenant-a", MODEL_ID)).thenReturn(model);
         when(modelSpecRepository.lockPlan("tenant-a", PLAN_ID)).thenReturn(Optional.of(new PlanState(PLAN_ID, "DRAFT")));
         when(writeAccess.canMaintain("tenant-a", PLAN_ID, "alice")).thenReturn(true);
+        when(writeAccess.canEdit("tenant-a", MODEL_ID, "alice")).thenReturn(true);
         return model;
     }
 

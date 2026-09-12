@@ -86,6 +86,7 @@ class ModelReleaseCandidateServiceTest {
             retryDriftGate,
             auditService
         );
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "modelAccess", org.mockito.Mockito.mock(ModelSpecPlanWriteAccessPort.class));
     }
 
     @Test

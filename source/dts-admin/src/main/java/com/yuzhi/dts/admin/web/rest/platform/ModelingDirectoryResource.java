@@ -23,6 +23,7 @@ public class ModelingDirectoryResource {
     private final KeycloakAuthService auth;
     private final KeycloakAdminClient users;
     private final OrganizationRepository organizations;
+    private final com.yuzhi.dts.admin.repository.PersonProfileRepository profiles;
 
     @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}")
     private String clientId;
@@ -30,11 +31,12 @@ public class ModelingDirectoryResource {
     private String clientSecret;
 
     public ModelingDirectoryResource(AdminInboundServiceAuthenticator authenticator, KeycloakAuthService auth,
-        KeycloakAdminClient users, OrganizationRepository organizations) {
+        KeycloakAdminClient users, OrganizationRepository organizations, com.yuzhi.dts.admin.repository.PersonProfileRepository profiles) {
         this.authenticator = authenticator;
         this.auth = auth;
         this.users = users;
         this.organizations = organizations;
+        this.profiles = profiles;
     }
 
     @GetMapping(value = "/users/resolve", params = "purpose=modeling")
@@ -49,7 +51,7 @@ public class ModelingDirectoryResource {
             KeycloakUserDTO user = current.user();
             List<String> roles = current.roles();
             if (roles == null || user.getEnabled() == null) throw new IllegalStateException("Incomplete identity");
-            return ApiResponse.ok(identity(user, roles, organizations.findAll()));
+            return ApiResponse.ok(identity(user, roles, organizations.findAll(), currentProfiles(List.of(user))));
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -85,11 +87,12 @@ public class ModelingDirectoryResource {
                     rolesById.computeIfAbsent(user.getId(), ignored -> new HashSet<>()).add(role);
                 }
             }
+            var currentProfiles = currentProfiles(candidates.values());
             String query = keyword.trim().toLowerCase(Locale.ROOT);
             return ApiResponse.ok(candidates.values().stream()
                 .filter(user -> Boolean.TRUE.equals(user.getEnabled()))
-                .map(user -> identity(user, List.copyOf(rolesById.get(user.getId())), departments))
-                .filter(user -> departmentCode.equals(user.deptCode()))
+                .map(user -> identity(user, List.copyOf(rolesById.get(user.getId())), departments, currentProfiles))
+                .filter(user -> Boolean.TRUE.equals(user.enabled()) && departmentCode.equals(user.deptCode()))
                 .filter(user -> (user.username() + " " + user.displayName()).toLowerCase(Locale.ROOT).contains(query))
                 .sorted(Comparator.comparing(Identity::username)).limit(100).toList());
         } catch (RuntimeException ex) {
@@ -97,8 +100,13 @@ public class ModelingDirectoryResource {
         }
     }
 
-    private Identity identity(KeycloakUserDTO user, List<String> roles, List<OrganizationNode> nodes) {
-        String rawDepartment = attribute(user, "dept_code", "deptCode", "department");
+    private Identity identity(KeycloakUserDTO user, List<String> roles, List<OrganizationNode> nodes,
+        Map<String, com.yuzhi.dts.admin.domain.PersonProfile> currentProfiles) {
+        var matches = identifiers(user).stream().map(currentProfiles::get).filter(Objects::nonNull).distinct().toList();
+        if (matches.size() > 1) throw new IllegalStateException("Ambiguous current personnel identity");
+        var profile = matches.isEmpty() ? null : matches.getFirst();
+        String rawDepartment = profile != null && profile.getDeptCode() != null && !profile.getDeptCode().isBlank()
+            ? profile.getDeptCode().trim() : attribute(user, "dept_code", "deptCode", "department");
         // A numeric node ID is a verified directory alias only; no suffix/ancestor matching.
         OrganizationNode department = nodes.stream().filter(this::activeDepartment)
             .filter(node -> Objects.equals(code(node), rawDepartment)).findFirst().orElse(null);
@@ -107,10 +115,29 @@ public class ModelingDirectoryResource {
                 .filter(node -> Objects.equals(String.valueOf(node.getId()), rawDepartment)).findFirst().orElse(null);
         }
         return new Identity(user.getId(), user.getUsername(),
-            user.getFullName() == null ? user.getUsername() : user.getFullName(),
+            profile != null && profile.getFullName() != null && !profile.getFullName().isBlank() ? profile.getFullName() : (user.getFullName() == null ? user.getUsername() : user.getFullName()),
             department == null ? null : code(department), department == null ? null : department.getName(),
             roles.stream().map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role.toUpperCase(Locale.ROOT)).distinct().toList(),
-            user.getEnabled(), attribute(user, "personnel_level", "person_security_level", "person_level"));
+            Boolean.TRUE.equals(user.getEnabled()) && (profile == null || profile.getLifecycleStatus() == com.yuzhi.dts.admin.domain.enumeration.PersonLifecycleStatus.ACTIVE), attribute(user, "personnel_level", "person_security_level", "person_level"));
+    }
+
+    /** Same personnel-directory priority as the existing directory API, with no swallowed lookup failure. */
+    private Map<String, com.yuzhi.dts.admin.domain.PersonProfile> currentProfiles(Collection<KeycloakUserDTO> candidates) {
+        var keys = candidates.stream().flatMap(user -> identifiers(user).stream()).collect(java.util.stream.Collectors.toSet());
+        if (keys.isEmpty()) return Map.of();
+        Map<String, com.yuzhi.dts.admin.domain.PersonProfile> result = new HashMap<>();
+        for (var profile : profiles.findByAnyIdentifierLowerIn(keys)) {
+            for (String key : java.util.stream.Stream.of(profile.getAccount(), profile.getPersonCode(), profile.getExternalId())
+                .filter(Objects::nonNull).map(String::trim).filter(value -> !value.isBlank()).map(value -> value.toLowerCase(Locale.ROOT)).toList()) {
+                var previous = result.putIfAbsent(key, profile);
+                if (previous != null && !Objects.equals(previous.getId(), profile.getId())) throw new IllegalStateException("Ambiguous personnel directory identifier");
+            }
+        }
+        return result;
+    }
+    private static Set<String> identifiers(KeycloakUserDTO user) {
+        return java.util.stream.Stream.of(user.getId(), user.getUsername(), attribute(user,"person_code","personCode"), attribute(user,"external_id","externalId"))
+            .filter(Objects::nonNull).map(String::trim).filter(value -> !value.isBlank()).map(value -> value.toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
     }
 
     private static String code(OrganizationNode node) {

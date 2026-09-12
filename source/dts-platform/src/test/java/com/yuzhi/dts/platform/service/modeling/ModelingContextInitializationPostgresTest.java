@@ -76,7 +76,7 @@ class ModelingContextInitializationPostgresTest {
     }
 
     @AfterEach
-    void cleanup() { SecurityContextHolder.clearContext(); }
+    void cleanup() { if (IDENTITY.get() != null) IDENTITY.get().close(); IDENTITY.remove(); SecurityContextHolder.clearContext(); }
 
     @Test
     void readingAnEmptyDefaultDoesNotCreateAnythingOrAdoptAnOrdinaryPlan() {

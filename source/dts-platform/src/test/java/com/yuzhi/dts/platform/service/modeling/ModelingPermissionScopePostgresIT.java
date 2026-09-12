@@ -38,7 +38,7 @@ class ModelingPermissionScopePostgresIT {
     private final UUID planA = UUID.randomUUID(), planB = UUID.randomUUID(), domain = UUID.randomUUID();
     private final UUID shared = UUID.randomUUID(), ads = UUID.randomUUID(), foreign = UUID.randomUUID();
 
-    @Configuration @EnableTransactionManagement static class Transactions {}
+    @Configuration @EnableTransactionManagement(proxyTargetClass = true) static class Transactions {}
 
     @BeforeEach void prepare() throws Exception {
         var ds = new DriverManagerDataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());

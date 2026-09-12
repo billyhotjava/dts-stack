@@ -14,7 +14,7 @@ class CatalogClassificationEditServiceTest {
     private final CatalogClassificationService classification=mock(CatalogClassificationService.class);
     private final ModelingPermissionAudit audit=mock(ModelingPermissionAudit.class);
     private final CatalogClassificationEditService service=new CatalogClassificationEditService(classification,mock(CatalogClassificationWriteLock.class),mock(EntityManager.class),audit);
-    private CatalogDataset dataset(){var value=new CatalogDataset();value.setId(UUID.randomUUID());value.setClassification("SECRET");return value;}
+    private CatalogDataset dataset(){var value=new CatalogDataset();value.setId(UUID.randomUUID());value.setName("test-dataset");value.setClassification("SECRET");return value;}
     @Test void omissionPreservesClassificationAndExplicitNullIsInvalid(){
         var dataset=dataset();service.apply(dataset,null,false);assertThat(dataset.getClassification()).isEqualTo("SECRET");
         assertThatThrownBy(()->service.apply(dataset,null,true)).isInstanceOfSatisfying(ModelingIdentityException.class,ex->assertThat(ex.status()).isEqualTo(400));

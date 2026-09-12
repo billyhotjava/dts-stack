@@ -42,6 +42,23 @@ public class SecurityConfiguration {
     }
 
     @Bean
+    public com.yuzhi.dts.platform.security.modeling.ModelingIdentityFilter modelingIdentityFilter(
+        com.yuzhi.dts.platform.security.modeling.ModelingIdentityService identities,
+        com.fasterxml.jackson.databind.ObjectMapper mapper,
+        com.yuzhi.dts.platform.service.modeling.ModelingPermissionAudit audit,
+        com.yuzhi.dts.platform.service.modeling.ModelSpecAccessService access) {
+        return new com.yuzhi.dts.platform.security.modeling.ModelingIdentityFilter(identities, mapper, audit, access);
+    }
+
+    @Bean
+    public org.springframework.boot.web.servlet.FilterRegistrationBean<com.yuzhi.dts.platform.security.modeling.ModelingIdentityFilter> modelingFilterRegistration(
+        com.yuzhi.dts.platform.security.modeling.ModelingIdentityFilter filter) {
+        var registration = new org.springframework.boot.web.servlet.FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
     public SecurityFilterChain filterChain(
         HttpSecurity http,
         MvcRequestMatcher.Builder mvc,
