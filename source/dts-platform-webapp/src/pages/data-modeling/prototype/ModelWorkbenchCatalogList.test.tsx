@@ -32,6 +32,10 @@ const apiMocks = vi.hoisted(() => ({
 	getDeliveryStatus: vi.fn(),
 	listWorkbenchCatalogPage: vi.fn(),
 }));
+const accessState = vi.hoisted(() => ({ denied: false, unavailable: false }));
+vi.mock("./useModelingAccess", () => ({
+    useModelAccess: (ids: string[]) => ({ isError: accessState.unavailable, data: Object.fromEntries(ids.map(id => [id, {canEdit: !accessState.denied, canManage: !accessState.denied}])) }),
+}));
 const routerPush = vi.hoisted(() => vi.fn());
 
 vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
@@ -88,6 +92,7 @@ const currentDimension = {
 } as DimensionDefinitionView;
 
 beforeEach(() => {
+    accessState.denied = false; accessState.unavailable = false;
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	container = document.createElement("div");
 	document.body.appendChild(container);
@@ -551,4 +556,12 @@ it("keeps refresh available while editor options are unavailable", async () => {
 	expect(buttons.find((button) => label(button) === "新建模型")?.disabled).toBe(true);
 	expect(buttons.find((button) => label(button) === "刷新")?.disabled).toBe(false);
 	expect(buttons.find((button) => label(button) === "编辑")?.disabled).toBe(true);
+});
+
+it.each(["denied", "unavailable"] as const)("disables model edits when object authorization is %s", async (failure) => {
+    accessState[failure] = true;
+    await renderPerformanceList([draftModel]);
+    const edits = Array.from(container.querySelectorAll("button")).filter(button => button.textContent?.replace(/\s/g, "") === "编辑");
+    expect(edits.length).toBeGreaterThan(0);
+    expect(edits.every(button => button.disabled)).toBe(true);
 });

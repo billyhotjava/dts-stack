@@ -320,6 +320,121 @@ public class WarehousePlanApplicationService {
         throw new com.yuzhi.dts.platform.service.modeling.ModelSpecException("MODELING_CONTEXT_LIFECYCLE_FORBIDDEN", "部门公共层不能整体归档", com.yuzhi.dts.platform.service.modeling.ModelSpecException.Kind.CONFLICT);
     }
 
+    public Versioned<CategoryScopeView> getCategoryScope(String serverTenantId, UUID planId) {
+        requireServerTenant(serverTenantId);
+        CategoryScopeSnapshot snapshot = Objects.requireNonNull(
+            transactions.execute(status -> {
+                get(serverTenantId, planId);
+                return new CategoryScopeSnapshot(
+                    loadDomainBindings(serverTenantId, planId),
+                    readEditUnitVersion(serverTenantId, planId, EditUnit.CATEGORY_SCOPE)
+                );
+            }),
+            "Category scope snapshot is required"
+        );
+        CategoryScopeView resolved = withoutTransactions.execute(status -> resolveCategoryScope(snapshot.bindings()));
+        return new Versioned<>(Objects.requireNonNull(resolved, "Category scope resolution is required"), snapshot.version());
+    }
+
+    public Versioned<CategoryScopeView> saveCategoryScope(
+        String serverTenantId,
+        UUID planId,
+        int expectedVersion,
+        CategoryScopeCommand command
+    ) {
+        requireServerTenant(serverTenantId);
+        List<DomainBinding> bindings = validateCategoryScope(command);
+        int observedVersion = Objects.requireNonNull(
+            transactions.execute(status -> {
+                get(serverTenantId, planId);
+                return readEditUnitVersion(serverTenantId, planId, EditUnit.CATEGORY_SCOPE);
+            }),
+            "Category scope version is required"
+        );
+        requireExpectedEditVersion(observedVersion, expectedVersion, EditUnit.CATEGORY_SCOPE);
+        CategoryScopeView validated = Objects.requireNonNull(
+            withoutTransactions.execute(status -> resolveCategoryScope(bindings)),
+            "Category scope resolution is required"
+        );
+        if (
+            validated
+                .domainBindings()
+                .stream()
+                .anyMatch(binding ->
+                    binding.confirmationStatus() != ConfirmationStatus.EXCLUDED &&
+                    binding.resolutionStatus() == CatalogDomainResolutionPort.ResolutionStatus.FORBIDDEN
+                )
+        ) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_CATEGORY_FORBIDDEN",
+                "A requested business category is not accessible",
+                null,
+                EditUnit.CATEGORY_SCOPE
+            );
+        }
+        if (
+            validated
+                .domainBindings()
+                .stream()
+                .anyMatch(binding ->
+                    binding.confirmationStatus() != ConfirmationStatus.EXCLUDED &&
+                    (binding.resolutionStatus() == CatalogDomainResolutionPort.ResolutionStatus.MISSING ||
+                        binding.resolutionStatus() == CatalogDomainResolutionPort.ResolutionStatus.ARCHIVED)
+                )
+        ) {
+            throw new WarehousePlanException(
+                "WAREHOUSE_PLAN_CATEGORY_INVALID",
+                "A requested business category is missing or archived",
+                null,
+                EditUnit.CATEGORY_SCOPE
+            );
+        }
+
+        return Objects.requireNonNull(
+            transactions.execute(status -> {
+                casEditUnit(serverTenantId, planId, expectedVersion, EditUnit.CATEGORY_SCOPE);
+                jdbcTemplate.update(
+                    "delete from modeling_warehouse_plan_domain where tenant_id = ? and plan_id = ?",
+                    serverTenantId,
+                    planId
+                );
+                for (DomainBinding binding : bindings) {
+                    jdbcTemplate.update(
+                        """
+                        insert into modeling_warehouse_plan_domain
+                            (id, tenant_id, plan_id, domain_id, confirmation_status, last_validated_at,
+                             created_date, last_modified_date)
+                        values (?, ?, ?, ?, ?, ?, current_timestamp, current_timestamp)
+                        """,
+                        UUID.randomUUID(),
+                        serverTenantId,
+                        planId,
+                        binding.domainId(),
+                        binding.confirmationStatus().name(),
+                        Timestamp.from(validated.lastValidatedAt())
+                    );
+                }
+                auditService.auditAction(
+                    "MODELING_WAREHOUSE_CATEGORY_SCOPE_SAVE",
+                    AuditStage.SUCCESS,
+                    planId.toString(),
+                    Map.of(
+                        "version",
+                        expectedVersion + 1,
+                        "bindingCount",
+                        bindings.size(),
+                        "readiness",
+                        validated.readiness().name(),
+                        "lastValidatedAt",
+                        validated.lastValidatedAt().toString()
+                    )
+                );
+                return new Versioned<>(validated, expectedVersion + 1);
+            }),
+            "Saved category scope is required"
+        );
+    }
+
     @Transactional(readOnly = true)
     public Versioned<PlanningPolicyView> getPlanningPolicy(String serverTenantId, UUID planId) {
         requireServerTenant(serverTenantId);

@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({ find: vi.fn(), confirm: vi.fn(), warn: vi.fn() }));
 vi.mock("@/api/modelingAccessApi", () => ({ findSimilarModels: mocks.find }));

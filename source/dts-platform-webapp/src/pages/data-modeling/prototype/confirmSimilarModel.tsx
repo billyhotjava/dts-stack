@@ -9,7 +9,7 @@ export async function confirmSimilarModel(draft: ModelSpecDraft): Promise<boolea
 			planId: draft.planId,
 			modelType: model.modelType,
 			businessProcessId: model.businessProcessId,
-			sourceKeys: model.sourceRefs.map((source) => source.ref).join(",") || undefined,
+			sourceKeys: (model.sourceRefs || []).map((source) => source.ref).join(",") || undefined,
 			grainKeys: model.grain?.keys.join(",") || undefined,
 			excludeModelSpecId: draft.base?.id,
 		});

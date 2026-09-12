@@ -39,7 +39,7 @@ public class ModelingIdentityService {
     private Scope openIdentity(ModelingUser user) {
         var previous = SecurityContextHolder.getContext();
         var previousUser = ModelingIdentity.optional().orElse(null);
-        var authorities = user.roles().stream().map(SimpleGrantedAuthority::new).toList();
+        java.util.Collection<org.springframework.security.core.GrantedAuthority> authorities = user.roles().stream().<org.springframework.security.core.GrantedAuthority>map(SimpleGrantedAuthority::new).toList();
         Map<String, Object> attributes = new HashMap<>();
         attributes.put("sub", user.id());
         attributes.put("directory_user_id", user.id());

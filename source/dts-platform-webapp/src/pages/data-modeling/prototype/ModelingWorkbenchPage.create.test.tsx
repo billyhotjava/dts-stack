@@ -14,6 +14,11 @@ vi.mock("./services/modelWorkbenchService", async (importOriginal) => ({
 	loadModelWorkbenchContext: mocks.loadContext,
 }));
 vi.mock("@/store/userStore", () => ({ useUserInfo: () => ({ id: "test-owner" }) }));
+vi.mock("./useModelingAccess", () => ({
+    useModelingAuthorization: () => ({isPending: false, isError: false, data: {canModel: true, canSelectDepartment: false, departmentCode: "dept-test", departments: [{code: "dept-test", name: "测试部门"}]}}),
+    useModelAccess: (ids: string[]) => ({isError: false, data: Object.fromEntries(ids.map(id => [id, {canEdit: true, canManage: true}]))}),
+}));
+vi.mock("./ModelAccessDrawer", () => ({ModelAccessDrawer: () => null}));
 vi.mock("./useDataModelingMenuGrant", () => ({ useDataModelingMenuGrant: () => true }));
 vi.mock("./useModelDeliveryStatus", () => ({ useModelDeliveryStatus: () => ({ data: null, loading: false }) }));
 vi.mock("./useModelAuthoringSession", () => ({ useModelAuthoringSession: () => ({}) }));

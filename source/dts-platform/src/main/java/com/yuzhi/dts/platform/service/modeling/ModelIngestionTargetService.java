@@ -30,7 +30,7 @@ public class ModelIngestionTargetService {
     @Transactional(readOnly = true)
     public Target resolveForUser(String tenant, String actor, UUID id, String environment) {
         var model = models.get(tenant, id);
-        access.requireEdit(tenant, modelId, actor);
+        access.requireEdit(tenant, id, actor);
         if (!access.canMaintain(tenant, model.planId(), actor)) throw failure("MODEL_INGESTION_TARGET_FORBIDDEN", Kind.FORBIDDEN);
         return current(tenant, id, environment);
     }
