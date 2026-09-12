@@ -1,15 +1,15 @@
-import { Alert, Select, Space, Button as AntButton } from "antd";
-import { selectedModelingDepartment, selectModelingDepartment } from "@/api/modelingAccessApi";
-import { useModelingAuthorization, useModelAccess } from "./useModelingAccess";
-import { ModelAccessDrawer } from "./ModelAccessDrawer";
-import { confirmSimilarModel } from "./confirmSimilarModel";
+import { Alert, Button as AntButton, Select, Space } from "antd";
 import { normalizeModelWizardStep } from "@/api/modelDeliveryStatusApi";
+import { selectedModelingDepartment, selectModelingDepartment } from "@/api/modelingAccessApi";
 import type { UnsavedEditorHandle } from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
+import { confirmSimilarModel } from "./confirmSimilarModel";
+import { ModelAccessDrawer } from "./ModelAccessDrawer";
 import { ModelWizardFrame } from "./ModelWizardFrame";
 import { ModelWorkbenchNavigationGuard } from "./ModelWorkbenchNavigationGuard";
 import { resolveRequestedModelSelection } from "./modelingWorkbenchNavigation";
 import { useModelDeliveryStatus } from "./useModelDeliveryStatus";
 import { useModelDraftFields } from "./useModelDraftFields";
+import { useModelAccess, useModelingAuthorization } from "./useModelingAccess";
 
 export { resolveRequestedModelSelection, shouldBlockWorkbenchNavigation } from "./modelingWorkbenchNavigation";
 
@@ -48,8 +48,8 @@ import {
 	type ModelDraft,
 	ModelDraftPartialSaveError,
 	type ModelDraftValidationErrors,
-	type ModelWorkbenchContext,
 	type ModelWorkbenchCatalogContext,
+	type ModelWorkbenchContext,
 	modelDraftFromView,
 	modelDraftNeedsImplementationRecovery,
 	normalizeModelDraftImplementation,
@@ -332,6 +332,7 @@ function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 	const unsavedChanges = dirty || authoringCodeDirty || Boolean(assetGuard?.dirty);
 	const confirmDiscard = useCallback(() => !unsavedChanges || window.confirm(DISCARD_PROMPT), [unsavedChanges]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: load reads the current route IDs through refs and must rerun on navigation.
 	useEffect(() => {
 		void load();
 		return () => {
@@ -636,6 +637,7 @@ function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 			) : listContext && !draft && !editorLoading ? (
 				<ModelWorkbenchCatalogList
 					busy={saving}
+					scopePlanId={context?.planId || null}
 					detailsReady={contextReady}
 					canMaintain={canMaintain}
 					dimensions={listContext.dimensions}

@@ -156,6 +156,38 @@ afterEach(async () => {
 });
 
 describe("ModelWorkbenchCatalogList", () => {
+	it.each(["selected-plan", null])("keeps department catalog queries within %s", async (scopePlanId) => {
+		await act(async () =>
+			root.render(
+				<ModelWorkbenchCatalogList
+					busy={false}
+					scopePlanId={scopePlanId}
+					canMaintain
+					dimensions={[]}
+					domains={[]}
+					failureMessage=""
+					models={[]}
+					onArchiveModel={vi.fn()}
+					onCloneDimension={vi.fn()}
+					onChooseDimension={vi.fn()}
+					onChooseModel={vi.fn()}
+					onCreate={vi.fn()}
+					onGoToGraphDimension={vi.fn()}
+					onGoToGraphModel={vi.fn()}
+					onImport={vi.fn()}
+					onMaterialize={vi.fn()}
+					onRefresh={vi.fn()}
+					onRemoveDimension={vi.fn()}
+					onRemoveModel={vi.fn()}
+				/>,
+			),
+		);
+		if (scopePlanId)
+			expect(apiMocks.listWorkbenchCatalogPage).toHaveBeenCalledWith(expect.objectContaining({ planId: scopePlanId }));
+		else expect(apiMocks.listWorkbenchCatalogPage).not.toHaveBeenCalled();
+		expect(container.querySelector('[aria-label="按规划筛选"]')).toBeNull();
+	});
+
 	it("shows searchable records with explicit edit and view actions", async () => {
 		const onChooseModel = vi.fn();
 		const onChooseDimension = vi.fn();

@@ -1,4 +1,3 @@
-import { useModelAccess } from "./useModelingAccess";
 import { Space } from "antd";
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -18,6 +17,7 @@ import { ModelDeliveryStatusCell, resolveModelDeliveryCell } from "./ModelDelive
 import { ModelWorkbenchCreateMenu } from "./ModelWorkbenchCreateMenu";
 import { Button, RequestState, Status } from "./PrototypePrimitives";
 import type { ModelCreateKind } from "./services/modelWorkbenchService";
+import { useModelAccess } from "./useModelingAccess";
 import "./modeling-workbench.css";
 
 const MODEL_TYPE_LABEL: Record<string, string> = {
@@ -50,6 +50,7 @@ type CatalogRow = {
 
 export type ModelWorkbenchCatalogListProps = {
 	busy: boolean;
+	scopePlanId?: string | null;
 	detailsReady?: boolean;
 	canMaintain: boolean;
 	dimensions: DimensionDefinitionView[];
@@ -72,6 +73,7 @@ export type ModelWorkbenchCatalogListProps = {
 
 export function ModelWorkbenchCatalogList({
 	busy,
+	scopePlanId,
 	detailsReady = true,
 	canMaintain,
 	dimensions,
@@ -205,12 +207,18 @@ export function ModelWorkbenchCatalogList({
 
 	useEffect(() => {
 		let active = true;
+		if (scopePlanId === null) {
+			setCatalogPage(null);
+			setCatalogLoading(false);
+			setCompatibilityFallback(true);
+			return;
+		}
 		setCatalogLoading(true);
 		void listModelWorkbenchCatalogPage({
 			page: page - 1,
 			size: PAGE_SIZE,
 			query: query.trim() || undefined,
-			planId: planFilter || undefined,
+			planId: scopePlanId || planFilter || undefined,
 			domainId: domainFilter || undefined,
 			objectType: typeFilter || undefined,
 			layer: layerFilter || undefined,
@@ -232,7 +240,7 @@ export function ModelWorkbenchCatalogList({
 		return () => {
 			active = false;
 		};
-	}, [domainFilter, layerFilter, page, planFilter, query, statusFilter, typeFilter]);
+	}, [domainFilter, layerFilter, page, planFilter, query, scopePlanId, statusFilter, typeFilter]);
 
 	const serverRows = useMemo<CatalogRow[]>(
 		() =>
@@ -280,6 +288,7 @@ export function ModelWorkbenchCatalogList({
 		deliveryResult.identity === pageModelIdsKey
 			? deliveryResult.pending
 			: new Set(pageRows.flatMap((row) => (row.model ? [row.model.id] : [])));
+	// biome-ignore lint/correctness/useExhaustiveDependencies: refresh delivery facts when model revisions change, even when page IDs stay the same.
 	useEffect(() => {
 		const modelSpecIds = pageModelIdsKey
 			.split(",")
@@ -553,6 +562,7 @@ export function ModelWorkbenchCatalogList({
 		],
 		[
 			busy,
+			objectAccess,
 			detailsReady,
 			canMaintain,
 			domainById,
@@ -607,7 +617,7 @@ export function ModelWorkbenchCatalogList({
 					saving={busy || !detailsReady}
 				/>
 			) : null}
-			{!detailsReady && !failureMessage && <p role="status">正在准备编辑资料，模型列表可先浏览。</p>}
+			{!detailsReady && !failureMessage && <output>正在准备编辑资料，模型列表可先浏览。</output>}
 			{failureMessage ? <output className="dmx-inline-error">{failureMessage}</output> : null}
 			<div className="dmx-model-list-toolbar">
 				<label>
@@ -640,14 +650,16 @@ export function ModelWorkbenchCatalogList({
 				</div>
 			</div>
 			<fieldset className="dmx-model-list-filters" aria-label="模型组合筛选">
-				<select aria-label="按规划筛选" onChange={(event) => setPlanFilter(event.target.value)} value={planFilter}>
-					<option value="">全部规划</option>
-					{planOptions.map((planId) => (
-						<option key={planId} value={planId}>
-							规划 {planId.slice(0, 8)}
-						</option>
-					))}
-				</select>
+				{scopePlanId === undefined ? (
+					<select aria-label="按规划筛选" onChange={(event) => setPlanFilter(event.target.value)} value={planFilter}>
+						<option value="">全部规划</option>
+						{planOptions.map((planId) => (
+							<option key={planId} value={planId}>
+								规划 {planId.slice(0, 8)}
+							</option>
+						))}
+					</select>
+				) : null}
 				<select
 					aria-label="按数据域筛选"
 					onChange={(event) => setDomainFilter(event.target.value)}

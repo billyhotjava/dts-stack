@@ -1,16 +1,16 @@
 import { Alert, Button, Collapse, Descriptions, Form, Input, message, Select, Tag } from "antd";
 import { useEffect, useMemo, useState } from "react";
-import { listDepartments, type DeptDto } from "@/api/services/deptService";
-import { searchUsers, type UserDirectoryEntry } from "@/api/services/userDirectoryService";
-import { useUserInfo } from "@/store/userStore";
 import {
 	type ClassificationFactView,
 	getCatalogClassificationFacts,
 	raiseCatalogClassificationManualFloor,
 	updateCatalogAssetV2Governance,
 } from "@/api/platformApi";
+import { type DeptDto, listDepartments } from "@/api/services/deptService";
+import { searchUsers, type UserDirectoryEntry } from "@/api/services/userDirectoryService";
 import { AssetTagPanel } from "@/components/catalog/tags/AssetTagPanel";
 import type { CatalogDomainOption } from "@/hooks/useCatalogDomainOptions";
+import { useUserInfo } from "@/store/userStore";
 import { classificationText } from "./assets/assetPageShared";
 import {
 	defaultOwnerFields,
@@ -112,7 +112,10 @@ export function OpenMetadataGovernanceTab({
 			const dept = deptForOwner(directoryUsers, changed.businessOwner as string | undefined);
 			if (dept) form.setFieldValue("ownerDept", dept);
 		}
-		if ("ownerDept" in changed && ownerLeavesDept(directoryUsers, form.getFieldValue("businessOwner"), changed.ownerDept as string)) {
+		if (
+			"ownerDept" in changed &&
+			ownerLeavesDept(directoryUsers, form.getFieldValue("businessOwner"), changed.ownerDept as string)
+		) {
 			form.setFieldValue("businessOwner", undefined);
 		}
 	};
@@ -208,7 +211,23 @@ export function OpenMetadataGovernanceTab({
 			}));
 			onChanged({ ...dataset, classification: result.effectiveLevel });
 			setFloorReason("");
-			message.success(`人工密级下限已提升，有效密级为 ${result.effectiveLevel}`);
+			message.success(`人工密级下限已提升，有效密级为 ${classificationText(result.effectiveLevel)}`);
+		} catch (error) {
+			if ((error as { response?: { status?: number } })?.response?.status === 409) {
+				try {
+					const facts = await getCatalogClassificationFacts([{ subjectType: "ASSET", subjectKey: assetKey }]);
+					const current = facts[0] || null;
+					setFact(current);
+					setFloorDraft(current?.effectiveLevel || "");
+					message.warning("密级已发生变化，请按当前有效密级重新选择；其他输入已保留。");
+				} catch {
+					setFact(null);
+					setFloorDraft("");
+					message.error("当前密级读取失败，请刷新后重试。");
+				}
+			} else {
+				message.error("人工密级下限保存失败，请检查权限后重试。");
+			}
 		} finally {
 			setRaisingFloor(false);
 		}

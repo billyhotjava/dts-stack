@@ -43,13 +43,13 @@ import {
 	emptyModelDraft,
 	loadModelWorkbenchContext,
 	loadModelWorkbenchDraft,
-	normalizeModelDraftImplementation,
 	modelDraftFromAuthoringSnapshot,
 	modelDraftFromView,
 	modelDraftNeedsImplementationRecovery,
 	modelDraftToAuthoringSnapshot,
 	modelDraftToUpdateCommand,
 	modelSourceRefFromBinding,
+	normalizeModelDraftImplementation,
 	prepareModelDraftForSave,
 	reconcileModelDraftSources,
 	saveDimensionDefinitionDraft,
@@ -355,12 +355,13 @@ describe("concept dimension draft", () => {
 });
 
 describe("model workbench draft preparation", () => {
-    it("reopens an unimplemented source model with the structure generator selected", () => {
-        const model = { ...canonicalFactView(), modelType: "SOURCE" as const, layer: "ODS" as const };
-        expect(modelDraftFromView(model, null)).toMatchObject({
-            implementationInputMode: "GENERATED", generationStrategyType: "SCHEMA_ONLY",
-        });
-    });
+	it("reopens an unimplemented source model with the structure generator selected", () => {
+		const model = { ...canonicalFactView(), modelType: "SOURCE" as const, layer: "ODS" as const };
+		expect(modelDraftFromView(model, null)).toMatchObject({
+			implementationInputMode: "GENERATED",
+			generationStrategyType: "SCHEMA_ONLY",
+		});
+	});
 
 	it("recognizes a saved generated model whose implementation save must be retried", () => {
 		const model = {
@@ -543,9 +544,17 @@ describe("model workbench draft preparation", () => {
 
 describe("model workbench draft validation", () => {
 	it("preserves TYPE2 history bindings when saving an existing dimension", () => {
-		const policy = { type: "TYPE2" as const, effectiveFromField: "valid_from", effectiveToField: "valid_to", currentFlagField: "is_current" };
-		const base = { ...canonicalFactView(), modelType: "DIMENSION" as const,
-			dimensionProfile: { hierarchies: [], scdPolicy: policy } };
+		const policy = {
+			type: "TYPE2" as const,
+			effectiveFromField: "valid_from",
+			effectiveToField: "valid_to",
+			currentFlagField: "is_current",
+		};
+		const base = {
+			...canonicalFactView(),
+			modelType: "DIMENSION" as const,
+			dimensionProfile: { hierarchies: [], scdPolicy: policy },
+		};
 		const draft = modelDraftFromView(base) as ModelSpecDraft;
 		expect(modelDraftToUpdateCommand(draft).dimensionProfile?.scdPolicy).toEqual(policy);
 		draft.scdType = "TYPE1";
@@ -554,8 +563,20 @@ describe("model workbench draft validation", () => {
 
 	it("allows full-refresh keyless outputs but keeps dimension and incremental keys required", () => {
 		for (const createKind of ["fact", "summary", "application"] as const) {
-			const draft = { ...modelDraftFromView(canonicalFactView()), createKind, loadStrategy: "FULL" as const,
-				fields: [{ name: "total_amount", displayName: "总金额", dataType: "DECIMAL", nullable: true, role: "MEASURE" as const }] } as ModelSpecDraft;
+			const draft = {
+				...modelDraftFromView(canonicalFactView()),
+				createKind,
+				loadStrategy: "FULL" as const,
+				fields: [
+					{
+						name: "total_amount",
+						displayName: "总金额",
+						dataType: "DECIMAL",
+						nullable: true,
+						role: "MEASURE" as const,
+					},
+				],
+			} as ModelSpecDraft;
 			expect(validateModelDraftInput(draft).fields).toBeUndefined();
 			draft.loadStrategy = "INCREMENTAL";
 			expect(validateModelDraftInput(draft).fields).toBeTruthy();
@@ -577,19 +598,28 @@ describe("model workbench draft validation", () => {
 		draft.implementationInputMode = "PHYSICAL_ASSET";
 		draft.sourceRefs = [modelSourceRefFromBinding(physicalSource, 0)!];
 		draft.loadStrategy = "FULL";
-		draft.fields = [{ name: "total_amount", displayName: "总金额", dataType: "DECIMAL", nullable: true, role: "MEASURE" }];
+		draft.fields = [
+			{ name: "total_amount", displayName: "总金额", dataType: "DECIMAL", nullable: true, role: "MEASURE" },
+		];
 		draft.fieldMappings = [{ sourceField: "src_0.amount", targetField: "total_amount" }];
 		draft.groupBy = [];
-		draft.aggregations = [{ sourceField: "src_0.amount", targetField: "total_amount", function: "SUM", distinct: false }];
+		draft.aggregations = [
+			{ sourceField: "src_0.amount", targetField: "total_amount", function: "SUM", distinct: false },
+		];
 		expect(validateModelDraftInput(draft).transformations).toBeUndefined();
 		await saveModelDraft(draft, { ownerId: "owner-1", dimensionDefinitions: [] });
-		expect(saveModelImplementation).toHaveBeenCalledWith(expect.anything(), null,
-			expect.objectContaining({ settings: expect.objectContaining({ aggregations: draft.aggregations }) }));
+		expect(saveModelImplementation).toHaveBeenCalledWith(
+			expect.anything(),
+			null,
+			expect.objectContaining({ settings: expect.objectContaining({ aggregations: draft.aggregations }) }),
+		);
 	});
 
 	it("accepts a keyless full-refresh grain through the shared model contract", () => {
 		const draft = modelDraftFromView(canonicalFactView()) as ModelSpecDraft;
-		draft.fields = [{ name: "total_amount", displayName: "总金额", dataType: "DECIMAL", nullable: true, role: "MEASURE" }];
+		draft.fields = [
+			{ name: "total_amount", displayName: "总金额", dataType: "DECIMAL", nullable: true, role: "MEASURE" },
+		];
 		const codes = validateModelSpecUpdate(modelDraftToUpdateCommand(draft)).map((issue) => issue.code);
 		expect(codes).not.toContain("MODEL_SPEC_GRAIN_INVALID");
 		expect(codes).not.toContain("MODEL_SPEC_GRAIN_REQUIRED");
@@ -839,12 +869,15 @@ describe("model workbench draft validation", () => {
 		expect(emptyModelDraft("application", context)).toMatchObject({ implementationInputMode: "UPSTREAM_MODEL" });
 	});
 
-	it.each(["source", "dimension-table", "fact", "summary", "application"] as const)("leaves %s context resolution to the server", (kind) => {
-		const context = { planId: "legacy-plan", domains: [], implementationCapabilities } as never;
-		const draft = emptyModelDraft(kind, context) as ModelSpecDraft;
-		expect(draft.planId).toBe("");
-		expect(draft.creationOperationId).toBeTruthy();
-	});
+	it.each(["source", "dimension-table", "fact", "summary", "application"] as const)(
+		"leaves %s context resolution to the server",
+		(kind) => {
+			const context = { planId: "legacy-plan", domains: [], implementationCapabilities } as never;
+			const draft = emptyModelDraft(kind, context) as ModelSpecDraft;
+			expect(draft.planId).toBe("");
+			expect(draft.creationOperationId).toBeTruthy();
+		},
+	);
 
 	it("uses the canonical domain id for new draft domain binding", () => {
 		const context = {
@@ -886,6 +919,7 @@ describe("model workbench draft validation", () => {
 		const context = await loadModelWorkbenchContext();
 
 		expect(context.warehouseLayers).toEqual([customLayer]);
+		expect(listModelSpecs).toHaveBeenCalledWith({ planId: "plan-1" });
 		expect(context.planId).toBe("plan-1");
 		expect(context.sources).toEqual([physicalSource]);
 		expect(context.dimensions).toEqual([]);
@@ -1642,79 +1676,81 @@ describe("model workbench draft validation", () => {
 		expect(saveModelImplementation).not.toHaveBeenCalled();
 	});
 
-	it.each(["explicit", "automatic"])("creates a DBT-managed dimension with %s context through one save", async (contextMode) => {
-		const initial = {
-			...canonicalFactView(),
-			modelType: "DIMENSION" as const,
-			businessProcessId: null,
-			factShape: null,
-			timeSemantics: null,
-			name: "节点完成状态维度表",
-			description: "统一节点完成状态口径",
-			dimensionDefinitionRef: { dimensionDefinitionId: definitionView.id, revision: definitionView.revision },
-			dimensionProfile: {
-				dimensionCode: null,
-				hierarchies: [],
-				scdPolicy: { type: "TYPE1" as const },
-				reuseScope: null,
-			},
-		};
-		const saved = {
-			...initial,
-			implementationMode: "DBT_MANAGED" as const,
-			revision: 2,
-			checksum: "f".repeat(64),
-		};
-		vi.mocked(saveModelDraftOperation).mockResolvedValue({ model: saved, implementation: null, replayed: false });
-		const draft: ModelSpecDraft = {
-			...(validDimensionDraft() as ModelSpecDraft),
-			planId: contextMode === "automatic" ? "" : initial.planId,
-			domainId: initial.domainId,
-			name: initial.name,
-			description: initial.description,
-			implementationMode: "DBT_MANAGED",
-			implementationInputMode: "PHYSICAL_ASSET",
-			generationStrategyType: "",
-			sourceRefs: [
-				{
-					kind: "TABLE",
-					ref: physicalSource.displayName || physicalSource.sourceId,
-					layer: "ODS",
-					role: "PRIMARY",
-					alias: null,
-					joinType: null,
-					joinExpression: null,
-					sortOrder: 0,
-					sourceBindingId: physicalSource.bindingId,
-					resolvedVersion: physicalSource.resolvedVersion || physicalSource.confirmedVersion,
+	it.each(["explicit", "automatic"])(
+		"creates a DBT-managed dimension with %s context through one save",
+		async (contextMode) => {
+			const initial = {
+				...canonicalFactView(),
+				modelType: "DIMENSION" as const,
+				businessProcessId: null,
+				factShape: null,
+				timeSemantics: null,
+				name: "节点完成状态维度表",
+				description: "统一节点完成状态口径",
+				dimensionDefinitionRef: { dimensionDefinitionId: definitionView.id, revision: definitionView.revision },
+				dimensionProfile: {
+					dimensionCode: null,
+					hierarchies: [],
+					scdPolicy: { type: "TYPE1" as const },
+					reuseScope: null,
 				},
-			],
-		};
+			};
+			const saved = {
+				...initial,
+				implementationMode: "DBT_MANAGED" as const,
+				revision: 2,
+				checksum: "f".repeat(64),
+			};
+			vi.mocked(saveModelDraftOperation).mockResolvedValue({ model: saved, implementation: null, replayed: false });
+			const draft: ModelSpecDraft = {
+				...(validDimensionDraft() as ModelSpecDraft),
+				planId: contextMode === "automatic" ? "" : initial.planId,
+				domainId: initial.domainId,
+				name: initial.name,
+				description: initial.description,
+				implementationMode: "DBT_MANAGED",
+				implementationInputMode: "PHYSICAL_ASSET",
+				generationStrategyType: "",
+				sourceRefs: [
+					{
+						kind: "TABLE",
+						ref: physicalSource.displayName || physicalSource.sourceId,
+						layer: "ODS",
+						role: "PRIMARY",
+						alias: null,
+						joinType: null,
+						joinExpression: null,
+						sortOrder: 0,
+						sourceBindingId: physicalSource.bindingId,
+						resolvedVersion: physicalSource.resolvedVersion || physicalSource.confirmedVersion,
+					},
+				],
+			};
 
-		const result = await saveModelDraft(draft, {
-			ownerId: "owner-1",
-			dimensionDefinitions: [definitionView],
-			models: [],
-			implementationCapabilities,
-		});
+			const result = await saveModelDraft(draft, {
+				ownerId: "owner-1",
+				dimensionDefinitions: [definitionView],
+				models: [],
+				implementationCapabilities,
+			});
 
-		expect(saveModelDraftOperation).toHaveBeenCalledWith(
-			expect.objectContaining({
-				create: expect.objectContaining({
-					modelType: "DIMENSION",
-					dimensionDefinitionRef: { dimensionDefinitionId: definitionView.id, revision: definitionView.revision },
+			expect(saveModelDraftOperation).toHaveBeenCalledWith(
+				expect.objectContaining({
+					create: expect.objectContaining({
+						modelType: "DIMENSION",
+						dimensionDefinitionRef: { dimensionDefinitionId: definitionView.id, revision: definitionView.revision },
+					}),
+					modelSpec: expect.objectContaining({ implementationMode: "DBT_MANAGED", sourceRefs: draft.sourceRefs }),
+					implementation: null,
 				}),
-				modelSpec: expect.objectContaining({ implementationMode: "DBT_MANAGED", sourceRefs: draft.sourceRefs }),
-				implementation: null,
-			}),
-		);
-		expect(createModelSpec).not.toHaveBeenCalled();
-		expect(updateModelSpec).not.toHaveBeenCalled();
-		expect(saveModelImplementation).not.toHaveBeenCalled();
-		expect(result).toEqual({ model: saved, implementation: null });
-	});
+			);
+			expect(createModelSpec).not.toHaveBeenCalled();
+			expect(updateModelSpec).not.toHaveBeenCalled();
+			expect(saveModelImplementation).not.toHaveBeenCalled();
+			expect(result).toEqual({ model: saved, implementation: null });
+		},
+	);
 });
-
 
 describe("sprint-104 draft configuration round trips", () => {
 	it("restores new TYPE2 bindings and complete hierarchy without aliasing the baseline or snapshot", () => {

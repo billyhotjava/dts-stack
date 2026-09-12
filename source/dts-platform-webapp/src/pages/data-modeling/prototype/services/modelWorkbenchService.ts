@@ -584,9 +584,10 @@ export type ModelWorkbenchCatalogContext = Pick<ModelWorkbenchContext, "domains"
 export async function loadModelWorkbenchContext(
 	onCatalogReady?: (catalog: ModelWorkbenchCatalogContext) => void,
 ): Promise<ModelWorkbenchContext> {
+	const selectedPlan = resolveDefaultModelingContextId();
 	const catalog = Promise.all([
 		catalogDomainService.list(),
-		listModelSpecs(),
+		selectedPlan.then((planId) => (planId ? listModelSpecs({ planId }) : [])),
 		listDimensionDefinitions({ offset: 0, limit: 100 }),
 	]).then(([domains, models, dimensions]) => {
 		const result = {
@@ -597,7 +598,7 @@ export async function loadModelWorkbenchContext(
 		onCatalogReady?.(result);
 		return result;
 	});
-	const sourcesWithPlan = resolveDefaultModelingContextId().then(async (planId) => ({
+	const sourcesWithPlan = selectedPlan.then(async (planId) => ({
 		planId,
 		sources: planId ? await collectCurrentWarehousePlanSources(planId) : [],
 	}));

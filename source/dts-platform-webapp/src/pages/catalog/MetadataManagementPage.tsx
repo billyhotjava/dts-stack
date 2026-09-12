@@ -9,6 +9,7 @@ import { Alert, App, Button, Card, Dropdown, Input, Modal, Select, Space, Spin, 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import {
+	getCatalogAssetV2,
 	listCatalogAssetsV2,
 	listCatalogGovernanceIntakeAssets,
 	updateCatalogAssetV2Governance,
@@ -234,8 +235,20 @@ export default function MetadataManagementPage() {
 			setClassificationAsset(null);
 			setClassificationValue(undefined);
 			await loadAssetsImmediately(pageState.page, pageState.size);
-		} catch {
-			toast.error("资产密级保存失败，请检查治理权限后重试");
+		} catch (error) {
+			if ((error as { response?: { status?: number } })?.response?.status === 409) {
+				try {
+					const current = (await getCatalogAssetV2(classificationAsset.id)) as MetadataAssetRow;
+					setClassificationAsset({ ...classificationAsset, classification: current.classification });
+					setClassificationValue(current.classification);
+					toast.warning("密级已发生变化，已恢复当前密级；只能保持或提高。");
+				} catch {
+					setClassificationValue(undefined);
+					toast.error("当前密级读取失败，请刷新后重试。");
+				}
+			} else {
+				toast.error("资产密级保存失败，请检查治理权限后重试");
+			}
 		} finally {
 			setClassificationSaving(false);
 		}
