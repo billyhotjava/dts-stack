@@ -24,7 +24,7 @@ export function ModifierDefinitionEditor({
 			<section className="dmx-metric-section">
 				<h3>{values.category === "TIME_PERIOD" ? "时间周期" : "修饰词"}基本信息</h3>
 				<p className="dmx-capability-note">
-					修饰词用于限定指标统计范围，例如“境内”或“已验收”；时间周期使用明确起止区间。它维护可复用的业务含义和适用范围，不绑定模型度量字段，也不独立提交计算。
+					修饰词用于限定指标统计范围，例如“境内”或“已验收”；时间周期使用明确起止区间。它维护可复用的业务含义和适用范围，不关联模型度量字段，也不独立提交计算。
 				</p>
 				<div>
 					<ModifierField label="英文缩写" required>

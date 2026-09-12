@@ -187,7 +187,7 @@ export function ModelImplementationBindingFields({
 	if (definitionOnly && draft.createKind !== "fact" && draft.createKind !== "application") return null;
 	return (
 		<section className="dmx-editor-panel">
-			<h3>{definitionOnly ? "业务语义" : "数据来源与加工方式"}</h3>
+			<h3>{definitionOnly ? "业务说明" : "数据来源与加工方式"}</h3>
 			<div className="dmx-workbench-editor__basic-grid">
 				{!definitionOnly ? (
 					<>
@@ -266,14 +266,14 @@ export function ModelImplementationBindingFields({
 											type="checkbox"
 										/>
 										<span>{source.ref}</span>
-										<small>已绑定输入源表，当前规划中不可用；请取消后重新选择。</small>
+										<small>已关联输入源表，当前规划中不可用；请取消后重新选择。</small>
 									</label>
 								))}
 								{!context.sources.length && !staleSources.length ? (
 									<small>
 										{context.planId
 											? "当前暂无已确认且有效的输入源表，请从资产目录登记。"
-											: "当前尚未建立建模上下文，请从资产目录登记第一张输入源表。"}
+											: "当前尚未建立建模空间，请从资产目录登记第一张输入源表。"}
 									</small>
 								) : null}
 							</div>
@@ -311,7 +311,7 @@ export function ModelImplementationBindingFields({
 									type="checkbox"
 								/>
 								<span>{dimension.modelSpecId}</span>
-								<small>已绑定第 {dimension.revision} 版，当前不可用；请取消后重新选择。</small>
+								<small>已关联第 {dimension.revision} 版，当前不可用；请取消后重新选择。</small>
 							</label>
 						))}
 						{!dimensionCandidates.length && !staleDimensionRefs.length ? (
@@ -339,9 +339,9 @@ export function ModelImplementationBindingFields({
 							<ValidationMessage message={validationErrors.factShape} />
 						</label>
 						<label>
-							<span>时间语义（普通明细可不配置）</span>
+							<span>时间字段（普通明细可不配置）</span>
 							<select
-								aria-label="时间语义"
+								aria-label="时间字段"
 								onChange={(event) =>
 									patch({
 										timeSemanticsType: event.target.value as ModelSpecTimeSemanticsType | "",
@@ -350,7 +350,7 @@ export function ModelImplementationBindingFields({
 								}
 								value={draft.timeSemanticsType}
 							>
-								<option value="">不配置时间语义</option>
+								<option value="">不配置时间字段</option>
 								{TIME_SEMANTICS.map((item) => (
 									<option key={item.value} value={item.value}>
 										{item.label}

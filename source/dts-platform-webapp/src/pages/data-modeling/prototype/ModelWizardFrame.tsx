@@ -14,12 +14,12 @@ import "./model-wizard.css";
 
 const STEP_LABELS: Record<ModelWizardStep, string> = {
 	definition: "模型设计",
-	implementation: "实现配置",
-	verification: "物化",
+	implementation: "加工配置",
+	verification: "构建",
 	delivery: "发布与交付",
 };
 const RESULT_LABELS = {
-	materialization: "物化",
+	materialization: "构建",
 	quality: "质量检查",
 	publication: "发布",
 	catalog: "资产登记",
@@ -110,7 +110,7 @@ export function ModelWizardFrame({
 				<RequestState
 					title="请先完成前置步骤"
 					kind="empty"
-					description={model ? "请先完成实现配置" : "请先保存模型设计"}
+					description={model ? "请先完成加工配置" : "请先保存模型设计"}
 					onRetry={() => navigateStep(model ? "implementation" : "definition")}
 				/>
 			) : step === "definition" || step === "implementation" ? (
@@ -133,14 +133,14 @@ export function ModelWizardFrame({
 					{step === "delivery" || completed ? (
 						<section className="dmx-wizard-completion" aria-label={completed ? "建模完成" : "历史交付结果"}>
 							<h3>{completed ? "建模已完成" : "历史交付结果"}</h3>
-							<p>{completed ? `当前版本已物化到 ${delivery?.modelingResult?.targetRelation || "目标表"}。` : "此页保留交付结果回看，资产治理和发布请进入数据管理。"}</p>
+							<p>{completed ? `当前版本已构建到 ${delivery?.modelingResult?.targetRelation || "目标表"}。` : "此页保留交付结果回看，资产治理和发布请进入数据管理。"}</p>
 							<div className="dmx-dialog-actions">
 								<Button primary onClick={onBack}>返回模型列表</Button>
 								<Link className="dmx-wizard-completion__link" to={`/catalog/search?view=table&modelSpecId=${encodeURIComponent(model.id)}&environment=${encodeURIComponent(environment)}${delivery?.candidate?.id ? `&candidateId=${encodeURIComponent(delivery.candidate.id)}` : ""}`}>去数据管理</Link>
 							</div>
 						</section>
 					) : loading && !delivery ? (
-						<RequestState kind="loading" title="正在读取物化结果" description="" />
+						<RequestState kind="loading" title="正在读取构建结果" description="" />
 					) : (
 						<ModelPublishDialog
 							key={`${model.id}:${model.revision}:${environment}:${step}`}

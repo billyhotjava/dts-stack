@@ -23,7 +23,7 @@ const emptyStateByView: Record<string, { title: string; description: string }> =
 	},
 	standards: {
 		title: "暂无标准关系",
-		description: "当前规划中的模型字段尚未绑定可展示的数据标准。",
+		description: "当前规划中的模型字段尚未关联可展示的数据标准。",
 	},
 	metrics: {
 		title: "暂无指标血缘",
@@ -147,7 +147,7 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 				) : null}
 			</div>
 			{loading ? (
-				<RequestState description="正在读取模型关系投影。" kind="loading" title="正在加载关系图" />
+				<RequestState description="正在读取模型关系数据。" kind="loading" title="正在加载关系图" />
 			) : failure ? (
 				<RequestState
 					description={failure.message}
@@ -156,7 +156,7 @@ export function RelationshipGraphPage({ route }: { route: DataModelingRoute }) {
 					title={failure.kind === "permission" ? "无权访问关系图" : "关系图加载失败"}
 				/>
 			) : !graph ? (
-				<RequestState description="服务端尚未返回可用的模型关系投影。" kind="empty" title="暂无关系数据" />
+				<RequestState description="服务端尚未返回可用的模型关系数据。" kind="empty" title="暂无关系数据" />
 			) : !projection?.nodes.length ? (
 				<RequestState
 					description={query.trim() ? "当前搜索没有命中已建立的关系，请调整关键词后重试。" : emptyState.description}

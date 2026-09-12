@@ -132,13 +132,13 @@ export function ModelPublishDialog({
 	const selectionProblem = !selection.length
 		? "请至少选择一个模型。"
 		: selection.length > MAX_MATERIALIZATION_MODELS
-			? `一次最多物化 ${MAX_MATERIALIZATION_MODELS} 个模型。`
+			? `一次最多构建 ${MAX_MATERIALIZATION_MODELS} 个模型。`
 			: selection.some((model) => !canonical(model))
-				? "历史只读模型不能进入发布与物化链路。"
+				? "历史只读模型不能进入发布与构建链路。"
 				: selection.some((model) => !model.planId)
-					? "所选模型尚未归属建模规划，不能启动物化。"
+					? "所选模型尚未归属建模规划，不能启动构建。"
 					: new Set(selection.map((model) => model.planId)).size !== 1
-						? "批量物化只能选择同一规划下的模型。"
+						? "批量构建只能选择同一规划下的模型。"
 						: "";
 	const planId = selectionProblem ? "" : primary?.planId || "";
 	const selectionIdentity = selection.map((model) => `${model.id}:${model.revision}:${model.checksum}`).join(",");
@@ -205,7 +205,7 @@ export function ModelPublishDialog({
 			setExecutionWorkspace(nextExecutionWorkspace);
 		} catch (error) {
 			if (sequence !== loadSequence.current) return;
-			setFailure(normalizeModelingRequestFailure(error, "发布候选读取失败。").message);
+			setFailure(normalizeModelingRequestFailure(error, "发布单读取失败。").message);
 		} finally {
 			if (sequence === loadSequence.current) setBusy("");
 		}
@@ -242,7 +242,7 @@ export function ModelPublishDialog({
 		: materializations.length === 1
 			? `${materializations[0].candidateStatus} · v${materializations[0].candidateVersion}`
 			: materializations.length > 1
-				? `${materializations.length} 个模型有历史物化`
+				? `${materializations.length} 个模型有历史构建`
 				: "所选模型尚无";
 	const evidenceIsHistorical =
 		!candidateScopeMatches ||
@@ -309,7 +309,7 @@ export function ModelPublishDialog({
 			setPlanState(preview.canStart ? "ready" : "blocked");
 			return preview;
 		} catch (error) {
-			const normalized = normalizeModelingRequestFailure(error, "物化计划预览失败。");
+			const normalized = normalizeModelingRequestFailure(error, "构建计划预览失败。");
 			setMaterializationPlan(null);
 			setPlanState("error");
 			setPlanFailure(normalized.message);
@@ -321,16 +321,16 @@ export function ModelPublishDialog({
 	}, [refreshMaterializationPlan]);
 	const requiresPlan = Boolean(buildAction && PLAN_BOUND_BUILD_ACTIONS.has(buildAction));
 	const materializationBlocker = planState === "loading"
-		? "正在核对物化计划"
+		? "正在核对构建计划"
 		: planState === "error"
-			? planFailure || "物化计划加载失败，请刷新计划后重试"
+			? planFailure || "构建计划加载失败，请刷新计划后重试"
 			: materializationPlan?.blockers[0]
 				? `${materializationPlan.blockers[0].code}：${materializationPlan.blockers[0].message}`
 				: planState === "blocked"
-					? "当前物化计划不允许开始，请刷新计划并核对实现配置"
+					? "当前构建计划不允许开始，请刷新计划并核对加工配置"
 					: candidateScopeMatches && workspace?.primaryBlocker
 						? `${workspace.primaryBlocker.code}：${workspace.primaryBlocker.message}`
-						: planState === "idle" ? "物化计划尚未核对" : "无";
+						: planState === "idle" ? "构建计划尚未核对" : "无";
 	const currentOnlyAvailable = Boolean(
 		materializationPlan?.canStart &&
 			materializationPlan.orderedEntries.every((entry) => entry.dependencyRole === "ROOT" || entry.action === "REUSE"),
@@ -404,7 +404,7 @@ export function ModelPublishDialog({
 				const created = await createReleaseCandidate(planId, crypto.randomUUID(), {
 					environment,
 					entries,
-					reason: batch ? "从模型列表创建批量物化候选" : "从模型工作台创建单模型候选",
+					reason: batch ? "从模型列表创建批量构建发布单" : "从模型工作台创建单模型发布单",
 					...planFence,
 				});
 				await lockReleaseCandidate(planId, created.candidate, crypto.randomUUID(), "从模型工作台启动构建");
@@ -412,7 +412,7 @@ export function ModelPublishDialog({
 				await rematerializeReleaseCandidate(planId, candidate, crypto.randomUUID(), {
 					environment,
 					entries: materializationRequestEntries,
-					reason: batch ? "从模型列表重新物化所选模型" : "从模型工作台重新物化",
+					reason: batch ? "从模型列表重新构建所选模型" : "从模型工作台重新构建",
 					...planFence,
 				});
 			} else if (
@@ -422,11 +422,11 @@ export function ModelPublishDialog({
 				candidate
 			) {
 				if (buildAction === "REFRESH_AND_CREATE")
-					await refreshReleaseCandidate(planId, candidate, crypto.randomUUID(), "模型已发生新修订，废弃旧候选");
+					await refreshReleaseCandidate(planId, candidate, crypto.randomUUID(), "模型已发生新修订，废弃旧发布单");
 				else if (buildAction === "CANCEL_AND_CREATE")
-					await cancelReleaseCandidate(planId, candidate, crypto.randomUUID(), "所选模型范围已变化，关闭旧候选");
+					await cancelReleaseCandidate(planId, candidate, crypto.randomUUID(), "所选模型范围已变化，关闭旧发布单");
 				if (buildAction !== "CREATE_AFTER_TERMINAL") {
-					checkedPlan = await requireCurrentMaterializationPlan("候选更新后依赖计划存在阻断。");
+					checkedPlan = await requireCurrentMaterializationPlan("发布单更新后依赖计划存在阻断。");
 					planFence = {
 						materializationPlanChecksum: checkedPlan.planChecksum,
 						strategy: checkedPlan.strategy,
@@ -435,7 +435,7 @@ export function ModelPublishDialog({
 				const created = await createReleaseCandidate(planId, crypto.randomUUID(), {
 					environment,
 					entries,
-					reason: batch ? "从模型列表按新范围创建候选" : "从模型工作台按新范围创建候选",
+					reason: batch ? "从模型列表按新范围创建发布单" : "从模型工作台按新范围创建发布单",
 					...planFence,
 				});
 				await lockReleaseCandidate(planId, created.candidate, crypto.randomUUID(), "从模型工作台启动新范围构建");
@@ -443,9 +443,9 @@ export function ModelPublishDialog({
 				let source = candidate;
 				if (buildAction === "REFRESH_AND_REPLACE") {
 					source = (
-						await refreshReleaseCandidate(planId, candidate, crypto.randomUUID(), "模型已发生新修订，废弃旧候选")
+						await refreshReleaseCandidate(planId, candidate, crypto.randomUUID(), "模型已发生新修订，废弃旧发布单")
 					).candidate;
-					checkedPlan = await requireCurrentMaterializationPlan("候选刷新后依赖计划存在阻断。");
+					checkedPlan = await requireCurrentMaterializationPlan("发布单刷新后依赖计划存在阻断。");
 					planFence = {
 						materializationPlanChecksum: checkedPlan.planChecksum,
 						strategy: checkedPlan.strategy,
@@ -454,7 +454,7 @@ export function ModelPublishDialog({
 				const replacement = await createReplacementReleaseCandidate(planId, source, crypto.randomUUID(), {
 					environment,
 					entries,
-					reason: batch ? "从模型列表按新修订创建替代候选" : "从模型工作台按新修订创建替代候选",
+					reason: batch ? "从模型列表按新修订创建替代发布单" : "从模型工作台按新修订创建替代发布单",
 					...planFence,
 				});
 				await lockReleaseCandidate(planId, replacement.candidate, crypto.randomUUID(), "从模型工作台启动新修订构建");
@@ -474,7 +474,7 @@ export function ModelPublishDialog({
 			if (!batch) setTab("publish");
 			return true;
 		} catch (error) {
-			const normalized = normalizeModelingRequestFailure(error, "物化构建未能启动。");
+			const normalized = normalizeModelingRequestFailure(error, "数据构建未能启动。");
 			await Promise.all([load(), refreshMaterializationPlan()]);
 			if (normalized.code === "MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS") {
 				const sequence = loadSequence.current;
@@ -491,14 +491,14 @@ export function ModelPublishDialog({
 				} catch {
 					// Keep the original conflict visible if the recovery projection cannot be read.
 				}
-				setFailure("所选模型在当前环境已有未结束的物化候选。请先处理占用候选，再开始当前模型的物化。（错误码 MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS）");
+				setFailure("所选模型在当前环境已有未结束的构建发布单。请先处理占用发布单，再开始当前模型的构建。（错误码 MODEL_RELEASE_CANDIDATE_ACTIVE_EXISTS）");
 				return false;
 			}
 			setFailure(
 				normalized.code === "MODEL_MATERIALIZATION_PLAN_STALE"
 					? "依赖计划已自动刷新，请确认后重试。"
 					: normalized.code === "MODEL_RELEASE_CANDIDATE_VERSION_CONFLICT"
-						? "候选状态已发生变化，页面已自动刷新，请确认后重试。"
+						? "发布单状态已发生变化，页面已自动刷新，请确认后重试。"
 						: normalized.message,
 			);
 			return false;
@@ -511,12 +511,12 @@ export function ModelPublishDialog({
 		if (busy || !canMaintain || !occupied || occupied.planId !== planId || !blockingWorkspace?.allowedActions.includes("CANCEL_CANDIDATE")) return;
 		setBusy("build");
 		try {
-			await cancelReleaseCandidate(planId, occupied, crypto.randomUUID(), "用户确认关闭占用规划的旧候选，保留现有物化结果");
+			await cancelReleaseCandidate(planId, occupied, crypto.randomUUID(), "用户确认关闭占用规划的旧发布单，保留现有构建结果");
 			setBlockingWorkspace(null);
 			await Promise.all([load(), refreshMaterializationPlan()]);
-			setFailure("旧候选已关闭。请点击开始物化，为当前模型创建新的候选。");
+			setFailure("旧发布单已关闭。请点击开始构建，为当前模型创建新的发布单。");
 		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "关闭占用候选失败，请刷新页面后核对状态。").message);
+			setFailure(normalizeModelingRequestFailure(error, "关闭占用发布单失败，请刷新页面后核对状态。").message);
 		} finally {
 			setBusy("");
 		}
@@ -594,7 +594,7 @@ export function ModelPublishDialog({
 	};
 	const { materializationPlanColumns, evidenceColumns } = useModelMaterializationColumns();
 	return (
-		<DeliveryContainer embedded={embedded} onClose={onClose} title={batch ? "批量物化" : "发布与物化"}>
+		<DeliveryContainer embedded={embedded} onClose={onClose} title={batch ? "批量构建" : "发布与构建"}>
 			{!canMaintain && !embedded ? (
 				<RequestState
 					description="当前账号不能维护所选数据范围；所级数据管理员可维护全局模型，部门数据管理员仅可维护所属部门模型。"
@@ -610,7 +610,7 @@ export function ModelPublishDialog({
 							onClick={() => setTab("materialize")}
 							type="button"
 						>
-							{batch ? "批量物化" : "生成物化任务"}
+							{batch ? "批量构建" : "生成构建任务"}
 						</button>
 						<button className={tab === "publish" ? "active" : ""} onClick={() => setTab("publish")} type="button">
 							{batch ? "批量发布流程" : "发布模型"}
@@ -625,24 +625,24 @@ export function ModelPublishDialog({
 					) : null}
 					{blockingWorkspace?.candidate ? (
 						<div role="alert" className="dmx-request-state">
-							<p>所选模型范围被候选 {blockingWorkspace.candidate.id} 占用（{blockingWorkspace.candidate.status}）。涉及模型：{blockingWorkspace.candidate.entries.map((entry) => blockingWorkspace.entryEvidence?.find((evidence) => evidence.modelSpecId === entry.modelSpecId)?.modelName || entry.modelSpecId).join("、")}。</p>
-							<p>关闭会结束该候选的后续发布流程，保留已有物化结果。确认不再继续该候选后，再关闭并重新开始物化。</p>
+							<p>所选模型范围被发布单 {blockingWorkspace.candidate.id} 占用（{blockingWorkspace.candidate.status}）。涉及模型：{blockingWorkspace.candidate.entries.map((entry) => blockingWorkspace.entryEvidence?.find((evidence) => evidence.modelSpecId === entry.modelSpecId)?.modelName || entry.modelSpecId).join("、")}。</p>
+							<p>关闭会结束该发布单的后续发布流程，保留已有构建结果。确认不再继续该发布单后，再关闭并重新开始构建。</p>
 							{blockingWorkspace.allowedActions.includes("CANCEL_CANDIDATE") ? (
-								<Button disabled={!canMaintain || Boolean(busy)} onClick={() => void closeBlockingCandidate()}>确认关闭占用候选</Button>
-							) : <p>该候选当前不能关闭，请先在原模型中处理正在进行的构建或发布流程。</p>}
+								<Button disabled={!canMaintain || Boolean(busy)} onClick={() => void closeBlockingCandidate()}>确认关闭占用发布单</Button>
+							) : <p>该发布单当前不能关闭，请先在原模型中处理正在进行的构建或发布流程。</p>}
 						</div>
 					) : null}
 					{!embedded && !selectionProblem ? (
 						<ModelAssetDeliveryResult key={workspace?.candidate?.status || "none"} models={selection} />
 					) : null}
 					{selectionProblem ? (
-						<RequestState description={selectionProblem} kind="empty" title="当前选择不可物化" />
+						<RequestState description={selectionProblem} kind="empty" title="当前选择不可构建" />
 					) : tab === "materialize" ? (
 						<>
 							<h3>构建与检查</h3>
 							{candidateScopeMatches && selectedEvidence.filter((entry) => entry.failureMessage).map((entry) => (
 								<div key={entry.candidateEntryId} role="alert" className="dmx-request-state">
-									<strong>{entry.modelName}：物化未完成</strong>
+									<strong>{entry.modelName}：构建未完成</strong>
 									<p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{entry.failureMessage}</p>
 									<p>错误码：{entry.repairCode || "未提供"}；执行编号：{entry.pipelineRunGroupId}</p>
 								</div>
@@ -674,7 +674,7 @@ export function ModelPublishDialog({
 								</select>
 							</label>
 							<div className="dmx-materialization-plan-toolbar">
-								<strong>依赖物化计划</strong>
+								<strong>依赖构建计划</strong>
 								<Button
 									disabled={planState === "loading" || Boolean(busy)}
 									onClick={() => void refreshMaterializationPlan()}
@@ -707,7 +707,7 @@ export function ModelPublishDialog({
 										</ul>
 									) : null}
 									<p className="dmx-materialization-plan-checksum">
-										计划校验和：{materializationPlan.planChecksum.slice(0, 12)}…
+										计划校验码：{materializationPlan.planChecksum.slice(0, 12)}…
 									</p>
 								</>
 							) : planState === "loading" ? (
@@ -716,9 +716,9 @@ export function ModelPublishDialog({
 							<dl className="dmx-summary-list">
 								<dt>模型范围</dt>
 								<dd>{selection.map((model) => `${model.name} · r${model.revision}`).join("；")}</dd>
-								<dt>物化方式</dt>
-								<dd>{batch ? "按各模型实现策略" : primary?.materialization || "由实现策略决定"}</dd>
-								<dt>{evidenceIsHistorical ? "历史候选" : "当前候选"}</dt>
+								<dt>存储方式</dt>
+								<dd>{batch ? "按各模型代码策略" : primary?.materialization || "由加工策略决定"}</dd>
+								<dt>{evidenceIsHistorical ? "历史发布单" : "当前发布单"}</dt>
 								<dd>{selectedCandidateSummary}</dd>
 								<dt>主要阻断</dt>
 								<dd>
@@ -738,7 +738,7 @@ export function ModelPublishDialog({
 									/>
 								</div>
 							) : (
-								<p className="dmx-capability-note">当前候选尚无逐表执行证据。</p>
+								<p className="dmx-capability-note">当前发布单尚无逐表执行记录。</p>
 							)}
 							<ModelMaterializationActions
 								embedded={embedded}
@@ -786,13 +786,13 @@ export function ModelPublishDialog({
 								<input onChange={(event) => setReason(event.target.value)} value={reason} />
 							</label>
 							<dl className="dmx-summary-list dmx-summary-list--compact">
-								<dt>候选状态</dt>
+								<dt>发布单状态</dt>
 								<dd>
 									{busy === "load"
-										? "正在读取候选状态…"
+										? "正在读取发布单状态…"
 										: failure
-											? "候选状态读取失败"
-											: scopedCandidate?.status || (candidate ? "当前计划候选不包含所选模型" : "当前模型暂无发布候选")}
+											? "发布单状态读取失败"
+											: scopedCandidate?.status || (candidate ? "当前计划发布单不包含所选模型" : "当前模型暂无发布单")}
 								</dd>
 								<dt>允许动作</dt>
 								<dd>

@@ -11,9 +11,9 @@ describe("model quality entry contract", () => {
 		const workflow = read("ModelWorkflowToolbar.tsx");
 		const dialog = read("ModelWorkbenchDialog.tsx");
 
-		expect(workflow).toContain("质量门禁");
+		expect(workflow).toContain("质量检查");
 		expect(editor).not.toMatch(/>\s*质量规则\s*</);
-		expect(dialog).toContain('quality: "质量门禁"');
+		expect(dialog).toContain('quality: "质量检查"');
 		expect(dialog).toContain("<ModelQualityConstraintPanel");
 	});
 	it("keeps governed quality editing outside the modeling steps", () => {

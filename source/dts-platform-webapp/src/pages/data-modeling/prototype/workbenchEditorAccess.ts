@@ -25,7 +25,7 @@ export function resolveWorkbenchEditorAccess(canMaintain: boolean, draft: ModelD
 			return {
 				mode: "EDIT_DRAFT",
 				readOnly: false,
-				message: "当前维度定义为当前有效版本；保存修改将生成新的当前有效修订，已绑定模型继续使用原修订。",
+				message: "当前维度定义为当前有效版本；保存修改将生成新的当前有效修订，已关联模型继续使用原修订。",
 			};
 		}
 		return {
@@ -39,7 +39,7 @@ export function resolveWorkbenchEditorAccess(canMaintain: boolean, draft: ModelD
 		return {
 			mode: "LEGACY_READONLY",
 			readOnly: true,
-			message: "该模型使用历史兼容契约，只能查看，不能在当前工作台修改。",
+			message: "该模型使用历史兼容格式，只能查看，不能在当前工作台修改。",
 		};
 	}
 	if (draft.base.status === "DRAFT") return { mode: "EDIT_DRAFT", readOnly: false, message: "" };

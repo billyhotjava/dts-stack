@@ -103,11 +103,11 @@ const STAGE_ACTION_LABELS: Record<WarehousePlanStageCode, string> = {
 	DATA_CONNECTION: "检查数据连接",
 	SOURCE_INVENTORY: "继续来源盘点",
 	WAREHOUSE_PLANNING: "完善数仓规划",
-	DATA_STANDARD: "绑定数据标准",
+	DATA_STANDARD: "关联数据标准",
 	MODEL_DESIGN: "继续模型设计",
-	BUILD_QUALITY_RELEASE: "检查构建与发布门禁",
+	BUILD_QUALITY_RELEASE: "检查构建与发布条件",
 	DATA_ASSET: "查看资产登记",
-	METRIC_SYSTEM: "检查指标绑定",
+	METRIC_SYSTEM: "检查指标关联",
 	DATA_SERVICE_OPERATIONS: "查看服务与运行",
 };
 
@@ -118,8 +118,8 @@ const BLOCKER_MESSAGES: Record<string, string> = {
 	SOURCE_INVENTORY_INCOMPLETE: "来源盘点尚未完成",
 	SOURCE_BUSINESS_MAPPING_INCOMPLETE: "来源关联尚未完成",
 	PLANNING_POLICY_INCOMPLETE: "数仓分层尚未确认",
-	EVIDENCE_STALE: "完成证据已过期，需要重新核验",
-	EVIDENCE_UNAVAILABLE: "完成证据暂时不可用",
+	EVIDENCE_STALE: "完成记录已过期，需要重新核验",
+	EVIDENCE_UNAVAILABLE: "完成记录暂时不可用",
 };
 
 const PLANNING_ISSUE_MESSAGES: Record<string, string> = {
@@ -131,9 +131,9 @@ const PLANNING_ISSUE_MESSAGES: Record<string, string> = {
 	CATEGORY_DOMAIN_MISSING: "该业务分类已删除，请替换",
 	LAYER_SCHEME_REQUIRED: "请选择数仓分层方案",
 	LAYER_SCHEME_UNSUPPORTED: "当前分层方案不受支持，请重新选择",
-	NAMING_POLICY_REQUIRED: "进入模型实现前请选择命名规则",
+	NAMING_POLICY_REQUIRED: "进入模型加工前请选择命名规则",
 	NAMING_POLICY_UNSUPPORTED: "当前命名规则不受支持，请重新选择",
-	HISTORY_POLICY_REQUIRED: "进入模型实现前请选择历史保留策略",
+	HISTORY_POLICY_REQUIRED: "进入模型加工前请选择历史保留策略",
 	HISTORY_POLICY_UNSUPPORTED: "当前历史保留策略不受支持，请重新选择",
 	DEFAULT_TIME_ZONE_INVALID: "请输入有效的 IANA 时区名称",
 };
@@ -159,9 +159,9 @@ export const warehouseStageActionLabel = (code: WarehousePlanStageCode): string 
 
 export const warehouseBlockerMessage = (code: string, fallback?: string | null): string => {
 	if (BLOCKER_MESSAGES[code]) return BLOCKER_MESSAGES[code];
-	if (code.endsWith("_NOT_STARTED")) return "本阶段尚未产生可核验的完成证据";
-	if (code.endsWith("_UNKNOWN")) return "本阶段的完成证据暂时无法核验";
-	if (code.endsWith("_IN_PROGRESS")) return "本阶段仍在进行，尚未形成完整证据";
+	if (code.endsWith("_NOT_STARTED")) return "本阶段尚未产生可核验的完成记录";
+	if (code.endsWith("_UNKNOWN")) return "本阶段的完成记录暂时无法核验";
+	if (code.endsWith("_IN_PROGRESS")) return "本阶段仍在进行，尚未形成完整记录";
 	if (code.endsWith("_BLOCKED")) return "本阶段存在尚未处理的阻塞";
 	if (fallback && /[\u3400-\u9fff]/.test(fallback)) return fallback;
 	return "本阶段存在尚未处理的阻塞";
@@ -220,15 +220,15 @@ export const stageStatusLabel = (
 	status: WarehousePlanStageStatus,
 	freshness: WarehousePlanEvidenceFreshness,
 ): string => {
-	if (freshness === "STALE") return "证据已过期";
-	if (status === "UNKNOWN" || freshness === "UNAVAILABLE") return "证据未知";
+	if (freshness === "STALE") return "记录已过期";
+	if (status === "UNKNOWN" || freshness === "UNAVAILABLE") return "记录未知";
 	return (
 		{
 			NOT_STARTED: "未开始",
 			IN_PROGRESS: "进行中",
 			BLOCKED: "有阻塞",
 			COMPLETE: "已完成",
-			UNKNOWN: "证据未知",
+			UNKNOWN: "记录未知",
 		} satisfies Record<WarehousePlanStageStatus, string>
 	)[status];
 };

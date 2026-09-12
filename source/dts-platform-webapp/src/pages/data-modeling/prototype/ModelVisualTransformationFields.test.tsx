@@ -191,7 +191,7 @@ describe("ModelVisualTransformationFields", () => {
 		current.implementationInputMode = "";
 		act(() => root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={vi.fn()} />));
 
-		expect(container.textContent).toContain("当前实现保留原始代码");
+		expect(container.textContent).toContain("当前模型保留原始代码");
 		expect(container.querySelector('[aria-label="来源字段 record_id"]')).toBeNull();
 	});
 });

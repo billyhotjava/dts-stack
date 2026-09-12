@@ -158,9 +158,9 @@ export function AdvancedDbtWorkspace({
 				</div>
 			) : null}
 			{busy === "load" && !context ? (
-				<RequestState description="正在读取模型定义、实现和已有草稿。" kind="loading" title="正在打开代码视图" />
+				<RequestState description="正在读取模型定义、加工配置和已有草稿。" kind="loading" title="正在打开代码视图" />
 			) : !context ? (
-				<RequestState description={failure || "服务端未返回模型创作上下文。"} kind="error" title="代码视图读取失败" />
+				<RequestState description={failure || "服务端未返回模型编辑环境。"} kind="error" title="代码视图读取失败" />
 			) : !draft ? (
 				<div className="dmx-advanced-dbt-intro">
 					<p className="dmx-capability-note">
@@ -188,7 +188,7 @@ export function AdvancedDbtWorkspace({
 					<div className="dmx-model-context">
 						<span>状态 {draft.state}</span>
 						<span>来源 {provenanceLabel(context)}</span>
-						<span>投影 {projection?.coverage || "UNKNOWN"}</span>
+						<span>字段覆盖率 {projection?.coverage || "UNKNOWN"}</span>
 						<span>原始代码节点 {projection?.rawNodes.length || 0}</span>
 					</div>
 					{projection?.reasons.length ? (
@@ -336,7 +336,7 @@ export function AdvancedDbtWorkspace({
 			) : null}
 			{commit ? (
 				<div className="dmx-capability-note">
-					实现已提交：模型 r{commit.receipt.modelRevision}，实现 r{commit.receipt.implementationRevision}，制品{" "}
+					加工已提交：模型 r{commit.receipt.modelRevision}，加工 r{commit.receipt.implementationRevision}，制品{" "}
 					{commit.receipt.artifactCount} 个。
 				</div>
 			) : null}

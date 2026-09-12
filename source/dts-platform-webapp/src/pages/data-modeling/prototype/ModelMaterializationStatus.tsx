@@ -16,7 +16,7 @@ export function resolveMaterializationPresentation(
 	currentModelRevision: number,
 	currentImplementationRevision?: number | null,
 ): MaterializationPresentation {
-	if (!status) return { key: "NOT_MATERIALIZED", label: "未物化", tone: "neutral" };
+	if (!status) return { key: "NOT_MATERIALIZED", label: "未构建", tone: "neutral" };
 	const evidence = status.evidence;
 	const effectiveImplementationRevision = currentImplementationRevision ?? status.currentImplementationRevision;
 	if (
@@ -24,22 +24,22 @@ export function resolveMaterializationPresentation(
 		(effectiveImplementationRevision != null && evidence.implementationRevision !== effectiveImplementationRevision) ||
 		status.candidateStatus === "STALE"
 	)
-		return { key: "STALE", label: "待重新物化", tone: "warning" };
+		return { key: "STALE", label: "待重新构建", tone: "warning" };
 	if (
 		status.candidateStatus === "BUILDING" ||
 		["QUEUED", "RUNNING", "DBT_SUCCEEDED"].includes(evidence.runStatus || "")
 	)
-		return { key: "MATERIALIZING", label: "物化中", tone: "info" };
+		return { key: "MATERIALIZING", label: "构建中", tone: "info" };
 	if (
 		status.candidateStatus === "BUILD_FAILED" ||
 		evidence.relationState === "FAILED" ||
 		["FAILED", "BLOCKED"].includes(evidence.runStatus || "")
 	)
-		return { key: "FAILED", label: "物化失败", tone: "danger" };
+		return { key: "FAILED", label: "构建失败", tone: "danger" };
 	if (evidence.runStatus === "BUILT" && evidence.relationState === "VERIFIED")
-		return { key: "MATERIALIZED", label: "已物化", tone: "success" };
+		return { key: "MATERIALIZED", label: "已构建", tone: "success" };
 	if (status.candidateStatus === "DRAFT" || evidence.relationState === "NOT_STARTED")
-		return { key: "PENDING", label: "待物化", tone: "neutral" };
+		return { key: "PENDING", label: "待构建", tone: "neutral" };
 	return { key: "VERIFYING", label: "待核验", tone: "warning" };
 }
 
@@ -80,7 +80,7 @@ export function ModelMaterializationStatusCard({
 				if (active) setStatus(items.find((item) => item.modelSpecId === model.id) || null);
 			})
 			.catch((error) => {
-				if (active) setFailure(normalizeModelingRequestFailure(error, "物化状态读取失败。").message);
+				if (active) setFailure(normalizeModelingRequestFailure(error, "构建状态读取失败。").message);
 			})
 			.finally(() => {
 				if (active) setLoading(false);
@@ -93,16 +93,16 @@ export function ModelMaterializationStatusCard({
 	const evidence = status?.evidence;
 
 	return (
-		<section className="dmx-materialization-card" aria-label="物化状态">
+		<section className="dmx-materialization-card" aria-label="构建状态">
 			<header>
 				<div>
 					<Database size={17} />
-					<strong>物化状态</strong>
+					<strong>构建状态</strong>
 					<Status tone={presentation.tone}>{loading ? "读取中" : presentation.label}</Status>
 				</div>
 				{onOpen ? (
 					<Button disabled={!canMaintain || loading} onClick={onOpen}>
-						{presentation.key === "MATERIALIZED" || presentation.key === "STALE" ? "重新物化" : "物化"}
+						{presentation.key === "MATERIALIZED" || presentation.key === "STALE" ? "重新构建" : "构建"}
 					</Button>
 				) : null}
 			</header>
@@ -112,8 +112,8 @@ export function ModelMaterializationStatusCard({
 				<dd>{evidence?.targetRelation || "—"}</dd>
 				<dt>执行环境</dt>
 				<dd>{status?.environment || "—"}</dd>
-				<dt>候选</dt>
-				<dd>{status ? `${status.candidateStatus} · 候选 v${status.candidateVersion}` : "尚无"}</dd>
+				<dt>发布单</dt>
+				<dd>{status ? `${status.candidateStatus} · 发布单 v${status.candidateVersion}` : "尚无"}</dd>
 				<dt>实现版本</dt>
 				<dd>{evidence?.implementationRevision ? `r${evidence.implementationRevision}` : "—"}</dd>
 				<dt>执行尝试</dt>

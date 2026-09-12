@@ -14,7 +14,7 @@ export async function compileSelectedModels(
 		const batch = await Promise.all(
 			plannedIds.slice(offset, offset + COMPILE_CONCURRENCY).map(async (modelSpecId) => {
 				const resolved = known.get(modelSpecId) || (await getModelSpec(modelSpecId));
-				if (!canonical(resolved)) throw new Error("物化计划包含不可编译的历史模型，请刷新计划后重试。");
+				if (!canonical(resolved)) throw new Error("构建计划包含不可编译的历史模型，请刷新计划后重试。");
 				return resolved;
 			}),
 		);
@@ -24,8 +24,8 @@ export async function compileSelectedModels(
 				if (!lifecycle.implementation)
 					throw new Error(
 						plannedIds.length === 1
-							? "当前模型尚未保存可编译的数据实现，请先保存数据实现后重试。"
-							: `${model.name} 尚未保存可编译的数据实现，请先保存数据实现后重试。`,
+							? "当前模型尚未保存可编译的加工配置，请先保存加工配置后重试。"
+							: `${model.name} 尚未保存可编译的加工配置，请先保存加工配置后重试。`,
 					);
 				await compileModelLifecycle(model, lifecycle.implementation, crypto.randomUUID());
 			}),

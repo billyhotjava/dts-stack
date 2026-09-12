@@ -78,7 +78,7 @@ describe("reverse modeling preview readiness", () => {
 				semanticOverrides: {},
 			}),
 		).toEqual([
-			"请选择规划上下文",
+			"请选择数仓规划",
 			"请映射数据域：PRJ",
 			"dim_risk_level_v2：请确认发布密级",
 			"dim_risk_level_v2：请选择业务过程",
@@ -88,7 +88,7 @@ describe("reverse modeling preview readiness", () => {
 	it("explains models whose package carries no typed field contract", () => {
 		const issues = previewReadinessIssues({ ...base, inspection: inspection([]), semanticOverrides: {} });
 		expect(issues).toHaveLength(1);
-		expect(issues[0]).toContain("dim_risk_level_v2：dbt 包未提供带类型的字段契约");
+		expect(issues[0]).toContain("dim_risk_level_v2：dbt 包未提供带类型的字段定义");
 	});
 
 	it("is ready once the selected model classification is confirmed", () => {

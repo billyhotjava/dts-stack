@@ -103,7 +103,7 @@ describe("Sprint-92 unified authoring source contracts", () => {
 		expect(refreshContext).toBeGreaterThan(commitStart);
 		expect(session).toContain("setAuthoringContext(refreshed)");
 		expect(session).toContain("setFiles(authoringFilesOf(refreshed.openDraft))");
-		expect(session).toContain("模型实现已提交，但页面状态刷新失败。请刷新后继续。");
+		expect(session).toContain("模型代码已提交，但页面状态刷新失败。请刷新后继续。");
 	});
 
 	it("reloads the authoring session explicitly and keeps request failures in one display lane", () => {
@@ -142,7 +142,7 @@ describe("Sprint-92 unified authoring source contracts", () => {
 
 	it("keeps release evidence customer-facing while retaining the authoritative error code", () => {
 		const release = source("ModelReleaseWorkflowPanel.tsx");
-		expect(release).toContain('BUILD_RUN: "物化构建"');
+		expect(release).toContain('BUILD_RUN: "数据构建"');
 		expect(release).toContain("错误码 ${item.code}");
 		expect(release).not.toContain("item.message || item.code || item.state");
 	});

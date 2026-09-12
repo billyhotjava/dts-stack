@@ -7,7 +7,7 @@ describe("normalizeModelingRequestFailure", () => {
 		const failure = normalizeModelingRequestFailure({ response: { status: 422, data: {
 			errorCode: "MODEL_LIFECYCLE_GATE_BLOCKED", correlationId: "req-fact-1",
 			data: { blockers: [{ code: "MODEL_SPEC_BUSINESS_PROCESS_REQUIRED", message: "FACT requires a stable business process reference" }] },
-		} } }, "物化构建未能启动。");
+		} } }, "数据构建未能启动。");
 		expect(failure.message).toContain("模型设计");
 		expect(failure.message).toContain("选择业务过程并保存模型");
 		expect(failure.message).toContain("数仓规划");
@@ -42,7 +42,7 @@ describe("normalizeModelingRequestFailure", () => {
 					},
 				},
 			},
-			"物化构建未能启动。",
+			"数据构建未能启动。",
 		);
 		expect(failure.message).toContain("业务时间与事实形态不匹配");
 		expect(failure.message).toContain("请至少选择已确认的上游输入来源");

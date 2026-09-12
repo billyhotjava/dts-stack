@@ -54,7 +54,7 @@ it("implementation submits once through the pipeline", async () => {
 		context: { allowedActions: ["SAVE", "VALIDATE"], openDraft: { state: "EDITING" } } as any,
 	});
 	await render(p);
-	expect(main().textContent).toBe("提交实现并继续");
+	expect(main().textContent).toBe("提交加工配置并继续");
 	act(() => main().click());
 	expect(p.onSubmit).toHaveBeenCalledOnce();
 	expect(p.onNext).not.toHaveBeenCalled();
@@ -90,7 +90,7 @@ it("a prior model revision must submit its implementation before advancing", asy
 			implementation: { modelSpecId: "model", revision: 2, modelChecksum: "old" },
 			openDraft: null, allowedActions: ["EDIT_IMPLEMENTATION"] } as any });
 	await render(p);
-	expect(main().textContent).toBe("提交实现并继续");
+	expect(main().textContent).toBe("提交加工配置并继续");
 	act(() => main().click());
 	expect(p.onSubmit).toHaveBeenCalledOnce();
 	expect(p.onNext).not.toHaveBeenCalled();

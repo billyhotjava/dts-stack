@@ -59,7 +59,7 @@ const ROUTES: Record<string, Omit<DataModelingRoute, "workspace" | "view">> = {
 	},
 	"dimensions/reverse": {
 		title: "逆向建模",
-		description: "导入外部 dbt 项目 ZIP，识别结构证据并生成可视化模型草稿。",
+		description: "导入外部 dbt 项目 ZIP，识别结构记录并生成可视化模型草稿。",
 	},
 	"metrics/composite": {
 		title: "复合指标",
@@ -83,7 +83,7 @@ const ROUTES: Record<string, Omit<DataModelingRoute, "workspace" | "view">> = {
 	},
 	"tools/toolbox": {
 		title: "工具箱",
-		description: "使用建模导入、导出、校验和辅助生成工具。",
+		description: "使用建模导入、导出、校验及辅助生成工具。",
 	},
 	"tools/imports": {
 		title: "导入记录",

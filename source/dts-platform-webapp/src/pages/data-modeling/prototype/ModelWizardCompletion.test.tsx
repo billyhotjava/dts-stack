@@ -6,7 +6,7 @@ import { MemoryRouter } from "react-router";
 import type { ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelWizardFrame } from "./ModelWizardFrame";
-vi.mock("./ModelPublishDialog", () => ({ ModelPublishDialog: () => <div>物化操作</div> }));
+vi.mock("./ModelPublishDialog", () => ({ ModelPublishDialog: () => <div>构建操作</div> }));
 let root: Root;
 let container: HTMLDivElement;
 beforeEach(() => {
@@ -31,7 +31,7 @@ it("offers exactly three modeling steps and lets a verified model finish even fo
 	mount("SUCCEEDED");
 	expect(container.querySelectorAll("nav button")).toHaveLength(3);
 	expect(container.textContent).toContain("建模已完成");
-	expect(container.textContent).not.toContain("物化操作");
+	expect(container.textContent).not.toContain("构建操作");
 	expect(container.querySelector("a")?.getAttribute("href")).toContain("modelSpecId=model-1&environment=dev");
 	act(() => Array.from(container.querySelectorAll("button")).find(button => button.textContent === "返回模型列表")!.click());
 	expect(back).toHaveBeenCalledOnce();
@@ -39,11 +39,11 @@ it("offers exactly three modeling steps and lets a verified model finish even fo
 it("never treats unknown evidence as completion", () => {
 	mount("UNKNOWN");
 	expect(container.textContent).not.toContain("建模已完成");
-	expect(container.textContent).toContain("物化操作");
+	expect(container.textContent).toContain("构建操作");
 });
 it("keeps old delivery links read-only with an explicit data-module destination", () => {
 	mount("UNKNOWN", "delivery");
 	expect(container.querySelector("h3")?.textContent).toBe("历史交付结果");
-	expect(container.textContent).not.toContain("物化操作");
+	expect(container.textContent).not.toContain("构建操作");
 	expect(container.querySelector("a")?.textContent).toBe("去数据管理");
 });

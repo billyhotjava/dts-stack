@@ -46,7 +46,7 @@ export function ConceptDimensionRecordDialog({
 			</div>
 			{dialog === "versions" ? (
 				<p>
-					{definition.status === "DRAFT" ? "确认后，该定义将成为维度表可绑定的当前定义。" : "当前定义可供维度表绑定。"}
+					{definition.status === "DRAFT" ? "确认后，该定义将成为维度表可关联的当前定义。" : "当前定义可供维度表关联。"}
 				</p>
 			) : (
 				<RequestState

@@ -11,9 +11,9 @@ export function ModelImplementationForm(props: ModelingWorkbenchEditorProps & { 
 	if (draft.implementationBase?.ownership === "DBT_MANAGED" && !draft.implementationInputMode) {
 		const implementation = draft.implementationBase;
 		return (
-			<section className="dmx-editor-panel" aria-label="已导入的模型实现">
-				<h3>已导入的模型实现</h3>
-				<p>已保留导入的 SQL 和实现配置，可进入代码模式编辑，或继续构建与检查。</p>
+			<section className="dmx-editor-panel" aria-label="已导入的模型代码">
+				<h3>已导入的模型代码</h3>
+				<p>已保留导入的 SQL 和加工配置，可进入代码模式编辑，或继续构建与检查。</p>
 				<div className="dmx-workbench-editor__basic-grid">
 					<label>
 						产出表英文名
@@ -51,7 +51,7 @@ export function ModelImplementationForm(props: ModelingWorkbenchEditorProps & { 
 						<p key={input.config.resourcePath}>模型文件：{input.config.resourcePath}</p>
 					) : null,
 				)}
-				<Button onClick={() => props.onViewChange("code")}>编辑 SQL 实现</Button>
+				<Button onClick={() => props.onViewChange("code")}>编辑 SQL 代码</Button>
 			</section>
 		);
 	}

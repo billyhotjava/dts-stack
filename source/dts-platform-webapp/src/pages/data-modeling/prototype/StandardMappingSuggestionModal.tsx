@@ -29,7 +29,7 @@ export function StandardMappingSuggestionModal({
 				setSelectedIds(next.map((item) => item.id));
 			})
 			.catch((cause) => {
-				if (active) setError(cause instanceof Error ? cause.message : "候选标准映射读取失败");
+				if (active) setError(cause instanceof Error ? cause.message : "推荐标准映射读取失败");
 			})
 			.finally(() => {
 				if (active) setLoading(false);
@@ -65,7 +65,7 @@ export function StandardMappingSuggestionModal({
 			},
 			{ title: "数据类型", dataIndex: "fieldDataType" },
 			{
-				title: "候选数据元",
+				title: "推荐数据元",
 				key: "standard",
 				render: (_, row) => `${row.standardName}（${row.standardCode}，v${row.standardVersion}）`,
 			},
@@ -83,7 +83,7 @@ export function StandardMappingSuggestionModal({
 			const failureCount = results.length - successCount;
 			await onComplete(successCount, failureCount);
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : "候选标准映射保存失败");
+			setError(cause instanceof Error ? cause.message : "推荐标准映射保存失败");
 		} finally {
 			setSaving(false);
 		}
@@ -102,7 +102,7 @@ export function StandardMappingSuggestionModal({
 				</>
 			}
 			onClose={onClose}
-			title="候选标准映射"
+			title="推荐标准映射"
 			wide
 		>
 			<div className="dmx-capability-note">
@@ -110,9 +110,9 @@ export function StandardMappingSuggestionModal({
 				{publishedModelCount} 个已发布模型将生成新的草稿修订，原发布版本保持不变。
 			</div>
 			{loading ? (
-				<RequestState description="正在比对模型字段与数据元标准。" kind="loading" title="正在生成候选" />
+				<RequestState description="正在比对模型字段与数据元标准。" kind="loading" title="正在生成推荐" />
 			) : error ? (
-				<RequestState description={error} kind="error" title="候选处理失败" />
+				<RequestState description={error} kind="error" title="推荐处理失败" />
 			) : suggestions.length ? (
 				<div className="dmx-table-scroll">
 					<CompactTable<StandardMappingSuggestion>
@@ -128,7 +128,7 @@ export function StandardMappingSuggestionModal({
 				</div>
 			) : (
 				<RequestState
-					description="当前模型字段没有唯一且类型兼容的未绑定数据元候选。"
+					description="当前模型字段没有唯一且类型兼容、可匹配的数据元。"
 					kind="empty"
 					title="暂无可补全映射"
 				/>

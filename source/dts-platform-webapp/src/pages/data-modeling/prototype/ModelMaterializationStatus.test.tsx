@@ -72,10 +72,10 @@ describe("model materialization status", () => {
 		);
 		await act(async () => Promise.resolve());
 
-		expect(container.textContent).toContain("已物化");
+		expect(container.textContent).toContain("已构建");
 		expect(container.textContent).toContain("public.it_demo_dwd_dim_date");
-		expect(container.textContent).toContain("候选 v6");
-		const rebuild = Array.from(container.querySelectorAll("button")).find((item) => item.textContent === "重新物化");
+		expect(container.textContent).toContain("发布单 v6");
+		const rebuild = Array.from(container.querySelectorAll("button")).find((item) => item.textContent === "重新构建");
 		await act(async () => rebuild?.click());
 		expect(onOpen).toHaveBeenCalledOnce();
 	});

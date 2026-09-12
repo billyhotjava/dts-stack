@@ -46,11 +46,11 @@ test("warehouse planning exposes one stable nine-stage vocabulary", () => {
 	assert.equal(warehouseBlockerMessage("CATEGORY_SCOPE_INCOMPLETE", "fallback"), "业务分类尚未确认");
 	assert.equal(
 		warehouseBlockerMessage("DATA_CONNECTION_NOT_STARTED", "No completion evidence is available for this stage"),
-		"本阶段尚未产生可核验的完成证据",
+		"本阶段尚未产生可核验的完成记录",
 	);
 	assert.equal(
 		warehouseBlockerMessage("METRIC_SYSTEM_UNKNOWN", "This stage has not produced current completion evidence"),
-		"本阶段的完成证据暂时无法核验",
+		"本阶段的完成记录暂时无法核验",
 	);
 });
 
@@ -231,8 +231,8 @@ test("mutation errors map stable response codes and never expose technical detai
 
 test("unknown and stale evidence remain visibly non-complete", () => {
 	assert.equal(stageStatusLabel("COMPLETE", "CURRENT"), "已完成");
-	assert.equal(stageStatusLabel("COMPLETE", "STALE"), "证据已过期");
-	assert.equal(stageStatusLabel("UNKNOWN", "UNAVAILABLE"), "证据未知");
+	assert.equal(stageStatusLabel("COMPLETE", "STALE"), "记录已过期");
+	assert.equal(stageStatusLabel("UNKNOWN", "UNAVAILABLE"), "记录未知");
 	assert.notEqual(stageStatusLabel("COMPLETE", "STALE"), "已完成");
 });
 

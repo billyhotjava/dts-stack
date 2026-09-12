@@ -74,7 +74,7 @@ export function ModelDimensionHistoryFields({ draft, onChange }: Props) {
 							);
 						})}
 						<p className="dmx-workbench-editor__wide-field">
-							可保存历史字段配置。当前全量或增量物化不提供历史版本维护，保存配置不代表已启用该能力。
+							可保存历史字段配置。当前全量或增量构建不提供历史版本维护，保存配置不代表已启用该能力。
 						</p>
 					</>
 				) : null}

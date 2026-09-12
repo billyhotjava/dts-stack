@@ -11,7 +11,7 @@ const SECURITY_LEVELS = [
 	{ value: "SECRET", label: "秘密" },
 	{ value: "CONFIDENTIAL", label: "机密" },
 ];
-const IMPORT_UNAVAILABLE_REASON = "当前版本尚无字段级表结构导入契约";
+const IMPORT_UNAVAILABLE_REASON = "当前版本暂不支持从表/视图导入字段结构";
 
 export type ModelFieldEditorTableProps = {
 	fields: ModelSpecField[];
@@ -202,10 +202,10 @@ export function ModelFieldEditorTable({
 								onChange={(event) => onStandardChange(index, event.target.value)}
 								value={standardValue}
 							>
-								<option value="">不绑定</option>
+								<option value="">不关联</option>
 								{bindingUnavailable ? (
 									<option value={standardValue} disabled>
-										{currentStandard?.name || "已绑定标准"} · v{binding?.standardElementVersion}
+										{currentStandard?.name || "已关联标准"} · v{binding?.standardElementVersion}
 										{currentStandard ? `（当前 v${currentStandard.version}，请核对）` : "（当前列表未找到，请核对）"}
 									</option>
 								) : null}

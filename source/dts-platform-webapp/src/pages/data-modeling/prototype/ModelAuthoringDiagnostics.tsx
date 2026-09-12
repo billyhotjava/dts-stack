@@ -7,7 +7,7 @@ export function ModelAuthoringDiagnostics({ validation }: { validation: ModelAut
 	];
 	if (!issues.length) return null;
 	return (
-		<section className="dmx-dbt-diagnostics" aria-label="实现校验结果">
+		<section className="dmx-dbt-diagnostics" aria-label="加工校验结果">
 			{issues.map((issue, index) => (
 				<div
 					key={`${issue.code}:${issue.path || ""}:${index}`}

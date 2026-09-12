@@ -100,7 +100,7 @@ describe("ModelStageGatePanel", () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0]?.textContent).toContain("RELEASE_READY");
 		expect(rows[0]?.textContent).toContain("MODEL_SPEC_PERMISSION_EVIDENCE_STALE");
-		expect(container.textContent).toContain("模型版本交付证据仍需处理");
+		expect(container.textContent).toContain("模型版本交付记录仍需处理");
 	});
 
 	it("wraps long release blockers and exposes compact repair links instead of raw routes", async () => {

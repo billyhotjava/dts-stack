@@ -362,7 +362,7 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 			}
 			if (!String(values.measureField ?? "").trim()) issues.push("原子指标必须选择度量字段");
 			if (!sourceRefs.length) {
-				issues.push("原子指标必须绑定固定模型版本或物理资产");
+				issues.push("原子指标必须关联固定模型版本或物理资产");
 			} else if (sourceRefs.some((ref) => ref.sourceType === "INDICATOR_VERSION")) {
 				issues.push("原子指标来源不能是指标版本");
 			}
@@ -383,7 +383,7 @@ export function validateIndicatorDefinition(values: IndicatorEditValues): string
 		if (!String(values.expressionSql ?? "").trim()) issues.push("派生/复合指标必须填写受控计算公式");
 		if (!values.executionMode) issues.push("请选择公式计算或预计算结果");
 		if (values.executionMode === "PRECOMPUTED") {
-			if (!values.implementationRef) issues.push("预计算指标必须选择固定实现模型版本");
+			if (!values.implementationRef) issues.push("预计算指标必须选择固定加工模型版本");
 			if (!String(values.measureField ?? "").trim()) issues.push("预计算指标必须选择结果字段");
 		}
 		if (!sourceRefs.length) {

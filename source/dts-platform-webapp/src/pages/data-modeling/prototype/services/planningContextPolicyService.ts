@@ -28,7 +28,7 @@ export function resolveBusinessProcessBinding(
 			processes,
 			selectedId: processes[0].id,
 			showSelector: false,
-			message: `已自动绑定业务过程：${processes[0].name}`,
+			message: `已自动选择业务过程：${processes[0].name}`,
 		};
 	}
 	return {

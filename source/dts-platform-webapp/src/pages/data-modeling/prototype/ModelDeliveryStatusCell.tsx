@@ -21,19 +21,19 @@ export function resolveModelDeliveryCell(
 		status.modelRevision !== model.revision ||
 		!status.candidate.matchesCurrentModel
 	) {
-		return { label: "暂无当前证据", tone: "default", assetId: null };
+		return { label: "暂无当前记录", tone: "default", assetId: null };
 	}
 	const step = status.steps.find((item) => item.key === key);
-	if (!step || !step.matchesCurrentTarget) return { label: "暂无当前证据", tone: "default", assetId: null };
+	if (!step || !step.matchesCurrentTarget) return { label: "暂无当前记录", tone: "default", assetId: null };
 	const assetId = key === "catalog" ? step.resourceId : null;
 	const labels: Record<DeliveryKey, Record<string, string>> = {
 		materialization: {
-			NOT_STARTED: "尚未物化",
-			WAITING_INPUT: "等待物化",
-			RUNNING: "物化中",
-			SUCCEEDED: "已物化",
-			FAILED: "物化失败",
-			UNKNOWN: "暂无当前证据",
+			NOT_STARTED: "尚未构建",
+			WAITING_INPUT: "等待构建",
+			RUNNING: "构建中",
+			SUCCEEDED: "已构建",
+			FAILED: "构建失败",
+			UNKNOWN: "暂无当前记录",
 		},
 		catalog: {
 			NOT_STARTED: "尚未登记",
@@ -41,7 +41,7 @@ export function resolveModelDeliveryCell(
 			RUNNING: "登记中",
 			SUCCEEDED: "资产已登记",
 			FAILED: "目录登记失败",
-			UNKNOWN: "暂无当前证据",
+			UNKNOWN: "暂无当前记录",
 		},
 		analysis: {
 			NOT_STARTED: "尚未开始",
@@ -49,7 +49,7 @@ export function resolveModelDeliveryCell(
 			RUNNING: "分析准备中",
 			SUCCEEDED: "分析准备完成",
 			FAILED: "分析准备失败",
-			UNKNOWN: "暂无当前证据",
+			UNKNOWN: "暂无当前记录",
 		},
 	};
 	const tones: Record<string, DeliveryCellPresentation["tone"]> = {
@@ -60,7 +60,7 @@ export function resolveModelDeliveryCell(
 		NOT_STARTED: "default",
 		UNKNOWN: "default",
 	};
-	return { label: labels[key][step.state] || "暂无当前证据", tone: tones[step.state] || "default", assetId };
+	return { label: labels[key][step.state] || "暂无当前记录", tone: tones[step.state] || "default", assetId };
 }
 
 export function ModelDeliveryStatusCell({

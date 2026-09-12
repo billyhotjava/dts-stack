@@ -81,7 +81,7 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 		await act(async () => button?.click());
 		expect(rerun).toHaveBeenCalledTimes(1);
 		expect(container.textContent).toContain("工程验证");
-		expect(container.textContent).toContain("治理数据质量证据");
+		expect(container.textContent).toContain("治理数据质量记录");
 	});
 
 	it("keeps unbound missing evidence on the configuration path", async () => {
@@ -160,7 +160,7 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 			);
 		});
 
-		expect(container.textContent).toContain("物化构建未通过（错误码 DBT_RUNTIME_NOT_CERTIFIED）");
+		expect(container.textContent).toContain("数据构建未通过（错误码 DBT_RUNTIME_NOT_CERTIFIED）");
 		expect(container.textContent).not.toContain("Current build or physical relation verification failed");
 	});
 });

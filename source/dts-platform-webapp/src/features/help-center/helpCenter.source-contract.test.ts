@@ -53,7 +53,7 @@ test("modeling stable guidance moves to help while live validation remains inlin
 	const fields = read("../../pages/data-modeling/prototype/ModelImplementationBindingFields.tsx");
 	assert.doesNotMatch(fields, /仅选择有业务时间含义的字段|固定当前维度模型修订，用于关系图|sourceModeDescription/);
 	assert.match(fields, /ValidationMessage message=\{validationErrors.timeSemantics\}/);
-	assert.match(fields, /已绑定输入源表，当前规划中不可用/);
+	assert.match(fields, /已关联输入源表，当前规划中不可用/);
 	assert.match(fields, /请先在字段管理中新增字段/);
 	assert.match(LAUNCHER, /get\("step"\)/);
 	assert.match(LAUNCHER, /onSelectTopic=/);

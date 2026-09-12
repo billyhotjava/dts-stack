@@ -16,21 +16,21 @@ export const inputReasonText = (reason?: string | null): string =>
 	(
 		({
 			NOT_AVAILABLE: "来源不可读取或已不存在",
-			IMPLEMENTATION_MISSING: "上游尚未提交实现",
-			IMPLEMENTATION_INACTIVE: "上游实现不可用",
-			IMPLEMENTATION_DESIGN_MISMATCH: "上游设计已更新，需要重新提交实现",
+			IMPLEMENTATION_MISSING: "上游尚未提交加工配置",
+			IMPLEMENTATION_INACTIVE: "上游加工不可用",
+			IMPLEMENTATION_DESIGN_MISMATCH: "上游设计已更新，需要重新提交加工配置",
 			DESIGN_REVISION_DRIFT: "上游设计版本已变化",
 			DESIGN_CHECKSUM_DRIFT: "上游设计内容已变化",
-			IMPLEMENTATION_REVISION_DRIFT: "上游实现版本已变化",
-			IMPLEMENTATION_CHECKSUM_DRIFT: "上游实现内容已变化",
-			DBT_ID_DRIFT: "上游实现标识已变化",
+			IMPLEMENTATION_REVISION_DRIFT: "上游加工版本已变化",
+			IMPLEMENTATION_CHECKSUM_DRIFT: "上游加工内容已变化",
+			DBT_ID_DRIFT: "上游加工标识已变化",
 			CROSS_PLAN_UNPUBLISHED: "跨方案引用需要上游先发布",
 			LAYER_NOT_ALLOWED: "不符合当前模型的引用范围",
 			SELF_REFERENCE: "不能引用当前模型",
 			DEPENDENCY_CYCLE: "该引用会形成循环",
 			ARCHIVED: "上游版本已归档",
 			CONTEXT_LIMIT_EXCEEDED: "依赖范围过大，请缩小查询范围",
-			PIN_REQUIRED: "请明确选择上游实现版本",
+			PIN_REQUIRED: "请明确选择上游加工版本",
 			SOURCE_SCHEMA_UNAVAILABLE: "来源字段目录尚不可确认",
 		}) as Record<string, string>
 	)[reason || ""] || (reason ? "来源暂不可用，请刷新后检查" : "可引用");
@@ -251,18 +251,18 @@ export function ModelUpstreamSelector({ draft, candidates, onChange }: Props) {
 									? inputReasonText(selected ? item.referenceReason || item.blockReason : item.blockReason)
 									: "尚未确认可用性"}
 								{item?.currentPin
-									? ` · 设计 r${item.currentPin.revision} / 实现 i${item.currentPin.implementationRevision}`
+									? ` · 设计 r${item.currentPin.revision} / 加工 i${item.currentPin.implementationRevision}`
 									: ""}
 							</small>
 						</label>
 						{selected && item?.selectedPin && (
 							<small>
-								当前引用：设计 r{item.selectedPin.revision} / 实现 i{item.selectedPin.implementationRevision}
+								当前引用：设计 r{item.selectedPin.revision} / 加工 i{item.selectedPin.implementationRevision}
 							</small>
 						)}
 						{selected && item?.selectable && (item.referenceReason || !item.selectedPin) && (
 							<Button onClick={() => setPendingUpdate(model.id)}>
-								{item.selectedPin ? "更新引用" : "选择实现版本"}
+								{item.selectedPin ? "更新引用" : "选择加工版本"}
 							</Button>
 						)}
 						{readable && (

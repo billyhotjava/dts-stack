@@ -183,7 +183,7 @@ export class ModelDraftPartialSaveError extends Error {
 	readonly failure: unknown;
 
 	constructor(savedModel: CanonicalModelSpecView, failure: unknown) {
-		super(failure instanceof Error && failure.message.trim() ? failure.message : "模型实现保存失败");
+		super(failure instanceof Error && failure.message.trim() ? failure.message : "模型代码保存失败");
 		this.name = "ModelDraftPartialSaveError";
 		this.savedModel = savedModel;
 		this.failure = failure;
@@ -243,7 +243,7 @@ export function emptyModelDraft(kind: ModelCreateKind, context: ModelWorkbenchCo
 		? context.implementationCapabilities.materializationsByLoadStrategy[loadStrategy]?.[0]
 		: undefined;
 	if ((!implementationInputMode && kind !== "source") || !loadStrategy || !materialization) {
-		throw new Error("服务端未提供可用的数据实现能力，请联系管理员检查建模配置");
+		throw new Error("服务端未提供可用的数据加工能力，请联系管理员检查建模配置");
 	}
 	return {
 		createKind: kind,
@@ -717,8 +717,8 @@ export function applyModelDraftFieldPatch(
 }
 
 /**
- * 维度表可绑定的维度选项：返回数据域下全部未退役定义（DRAFT/CURRENT），
- * 由编辑器区分“现行（可绑定）”与“草稿（需先确认定义）”。
+ * 维度表可关联的维度选项：返回数据域下全部未退役定义（DRAFT/CURRENT），
+ * 由编辑器区分“现行（可关联）”与“草稿（需先确认定义）”。
  */
 export const loadDimensionDefinitionOptions = (domainId: string) =>
 	domainId
@@ -882,7 +882,7 @@ export function validateModelDraftInput(
 		const snapshot = draft.factShape === "PERIODIC_SNAPSHOT" || draft.factShape === "ACCUMULATING_SNAPSHOT";
 		const hasTimeSemanticsInput = Boolean(draft.timeSemanticsType) || draft.timeSemanticsFields.length > 0;
 		if ((snapshot || hasTimeSemanticsInput) && (!draft.timeSemanticsType || !draft.timeSemanticsFields.length)) {
-			errors.timeSemantics = "请选择时间语义和至少一个时间字段";
+			errors.timeSemantics = "请选择时间字段和至少一个时间字段";
 		} else if (
 			hasTimeSemanticsInput &&
 			((draft.factShape === "TRANSACTION" && draft.timeSemanticsType !== "EVENT_TIME") ||
@@ -981,7 +981,7 @@ const validateDesignerTransformations = (draft: ModelSpecDraft): string | null =
 	if (inputCount > 1 && [...outputFields].some((field) => !mappings.has(field))) {
 		return "多输入模型必须为每个目标字段配置来源字段";
 	}
-	if (Object.keys(casts).some((field) => !outputFields.has(field))) return "类型转换只能绑定目标字段";
+	if (Object.keys(casts).some((field) => !outputFields.has(field))) return "类型转换只能用于目标字段";
 	if (deduplicateBy.some((field) => !outputFields.has(field))) return "去重键只能选择目标字段";
 	if (inputCount > 1) {
 		const ordered = [...joins].sort((left, right) => left.inputIndex - right.inputIndex);
@@ -1090,7 +1090,7 @@ const validateDraft = (
 	capabilities?: ModelImplementationCapabilities,
 ) => {
 	const missing: string[] = [];
-	if (draft.base && !draft.planId) missing.push("可写建模上下文");
+	if (draft.base && !draft.planId) missing.push("可编辑的建模空间");
 	if (!draft.warehouseLayerCode) missing.push("请选择数仓分层");
 	const validationErrors = validateModelDraftInput(draft, capabilities);
 	missing.push(...Object.values(validationErrors));
@@ -1238,7 +1238,7 @@ const buildImplementationCommand = (
 	const materialization = draft.materialization.trim();
 	const allowedMaterializations = capabilities?.materializationsByLoadStrategy[draft.loadStrategy];
 	if (!materialization || (allowedMaterializations && !allowedMaterializations.includes(materialization))) {
-		throw new Error("当前加载策略不支持所选物化方式，请重新选择");
+		throw new Error("当前加载策略不支持所选存储方式，请重新选择");
 	}
 	const controlledSettingKeys = new Set([
 		"casts",

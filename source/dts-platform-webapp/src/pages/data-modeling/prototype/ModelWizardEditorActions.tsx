@@ -69,7 +69,7 @@ export function ModelWizardEditorActions({
 							? "保存并继续"
 							: canProceed
 								? "下一步"
-								: "提交实现并继续"}
+								: "提交加工配置并继续"}
 			</Button>
 		</div>
 	);

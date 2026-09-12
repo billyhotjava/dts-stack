@@ -20,12 +20,12 @@ const WIZARD_LABELS: Record<string, string> = {
 	RETRY_BUILD: "重试构建",
 };
 const BUILD_LABELS: Partial<Record<MaterializationBuildAction, string>> = {
-	REFRESH_AND_REPLACE: "按新修订重新物化",
-	CREATE_REPLACEMENT: "按新修订重新物化",
-	REFRESH_AND_CREATE: "按新范围重新物化",
-	CREATE_AFTER_TERMINAL: "按新范围重新物化",
-	CANCEL_AND_CREATE: "替换候选并物化",
-	REMATERIALIZE: "重新物化",
+	REFRESH_AND_REPLACE: "按新修订重新构建",
+	CREATE_REPLACEMENT: "按新修订重新构建",
+	REFRESH_AND_CREATE: "按新范围重新构建",
+	CREATE_AFTER_TERMINAL: "按新范围重新构建",
+	CANCEL_AND_CREATE: "替换发布单并构建",
+	REMATERIALIZE: "重新构建",
 	RETRY_BUILD: "重试构建",
 	START_BUILD: "开始构建",
 };
@@ -71,7 +71,7 @@ export function ModelMaterializationActions({
 	const label = embedded
 		? blockedByBusy
 			? "处理中…"
-			: WIZARD_LABELS[pageAction?.code || ""] || "开始物化"
+			: WIZARD_LABELS[pageAction?.code || ""] || "开始构建"
 		: busy === "build" || busy === "run"
 			? "处理中…"
 			: operationalAction === "REPAIR_DEPLOYMENT"
@@ -92,8 +92,8 @@ export function ModelMaterializationActions({
 					!disabled
 						? undefined
 						: configureQuality
-							? "请确认维护权限、保存模型和实现修改，并等待当前操作完成"
-							: buildBlocker || "当前候选不允许执行此操作"
+							? "请确认维护权限、保存模型和加工配置修改，并等待当前操作完成"
+							: buildBlocker || "当前发布单不允许执行此操作"
 				}
 			>
 				{label}

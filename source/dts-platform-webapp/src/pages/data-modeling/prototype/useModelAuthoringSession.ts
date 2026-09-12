@@ -312,7 +312,7 @@ export function useModelAuthoringSession({
 		setCommit(committed);
 		setValidation(null);
 		setCodeDirty(false);
-		show(`模型实现已提交：模型 r${committed.receipt.modelRevision}`);
+		show(`模型代码已提交：模型 r${committed.receipt.modelRevision}`);
 		await loadWorkbench(modelId);
 		const refreshed = await getModelAuthoringContext(modelId);
 		setAuthoringContext(refreshed);
@@ -328,7 +328,7 @@ export function useModelAuthoringSession({
 			await finishCommit(authoringContext.model.id, open.draftId, checked);
 			return true;
 		} catch (error) {
-			recordFailure(error, "模型实现提交失败，请刷新确认当前版本。");
+			recordFailure(error, "模型代码提交失败，请刷新确认当前版本。");
 			return false;
 		} finally {
 			setBusy("");
@@ -361,13 +361,13 @@ export function useModelAuthoringSession({
 				!hasCurrentAuthoringValidation(current, checked) ||
 				!checked.implementationValidation
 			) {
-				throw new Error("实现检查未通过，请处理当前诊断后重新提交");
+				throw new Error("加工检查未通过，请处理当前诊断后重新提交");
 			}
 			setBusy("commit");
 			await finishCommit(selectedModelId, open.draftId, checked.implementationValidation);
 			return true;
 		} catch (error) {
-			recordFailure(error, "提交实现失败，请修复后重试。");
+			recordFailure(error, "提交加工配置失败，请修复后重试。");
 			return false;
 		} finally {
 			submitting.current = false;
@@ -430,19 +430,19 @@ export function useModelAuthoringSession({
 							}),
 						);
 						setAuthoringFailure(
-							"模型定义已更新，已保留实现配置与 SQL。请核对后重新提交，系统将按当前模型版本重新校验。",
+							"模型定义已更新，已保留加工配置与 SQL。请核对后重新提交，系统将按当前模型版本重新校验。",
 						);
 					} else {
 						setConflict(true);
 						setAuthoringFailure(
-							"实现草稿基于旧模型版本，已保留当前模型设计。请核对旧草稿后重新开始编辑，不可直接提交旧版本实现。",
+							"加工草稿基于旧模型版本，已保留当前模型设计。请核对旧草稿后重新开始编辑，不可直接提交旧版本加工配置。",
 						);
 					}
 				}
 				return true;
 			} catch (error) {
 				if (loadEpoch.current !== epoch) return false;
-				recordFailure(error, "模型创作上下文读取失败。");
+				recordFailure(error, "模型编辑环境读取失败。");
 				return false;
 			} finally {
 				if (loadEpoch.current === epoch) setBusy("");

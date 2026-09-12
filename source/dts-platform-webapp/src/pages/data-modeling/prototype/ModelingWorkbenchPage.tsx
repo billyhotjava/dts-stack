@@ -205,7 +205,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 					} catch (error) {
 						if (requestEpoch.current !== epoch) return null;
 						replaceDraft(modelDraftFromView(selectedModel));
-						setFailure(normalizeModelingRequestFailure(error, "模型实现信息读取失败。"));
+						setFailure(normalizeModelingRequestFailure(error, "模型代码信息读取失败。"));
 					}
 				} else replaceDraft(null);
 				if (normalizedModelId !== requestedModelIdRef.current) {
@@ -311,7 +311,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 		} catch (error) {
 			if (requestEpoch.current === epoch) {
 				replaceDraft(modelDraftFromView(model));
-				setFailure(normalizeModelingRequestFailure(error, "模型实现信息读取失败。"));
+				setFailure(normalizeModelingRequestFailure(error, "模型代码信息读取失败。"));
 			}
 		} finally {
 			if (requestEpoch.current === epoch) setEditorLoading(false);
@@ -614,7 +614,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 							commandsBlocked={unsavedChanges}
 						>
 							{editorLoading ? (
-								<RequestState description="正在读取所选模型的版本与实现信息。" kind="loading" title="正在打开模型" />
+								<RequestState description="正在读取所选模型的版本与加工信息。" kind="loading" title="正在打开模型" />
 							) : wizardStep === "implementation" && requestedView === "code" && selectedModel ? (
 								<AdvancedDbtWorkspace
 									busy={authoringBusy}
@@ -740,7 +740,7 @@ export function ModelingWorkbenchPage({ route }: { route: DataModelingRoute }) {
 				</div>
 			) : (
 				<RequestState
-					description={failure?.message || "服务端未返回模型工作台上下文。"}
+					description={failure?.message || "服务端未返回模型工作台数据。"}
 					kind="error"
 					onRetry={() => void load()}
 					title="模型工作台加载失败"

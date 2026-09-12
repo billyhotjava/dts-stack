@@ -26,7 +26,7 @@ type ModelWorkflowToolbarProps = {
 const ACTION_LABELS: Record<ModelWorkflowAction, string> = {
 	save: "保存草稿",
 	validate: "校验",
-	commit: "提交实现",
+	commit: "提交加工配置",
 	deliver: "构建与交付",
 	fork: "创建新草稿版本",
 };
@@ -40,7 +40,7 @@ const BUSY_LABELS: Record<string, string> = {
 const INSPECTIONS = [
 	["准入详情", "gates"],
 	["关联关系", "association"],
-	["质量门禁", "quality"],
+	["质量检查", "quality"],
 	["运行日志", "logs"],
 ] as const;
 

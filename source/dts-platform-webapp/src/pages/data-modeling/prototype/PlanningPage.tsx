@@ -349,7 +349,7 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 					const cell = record.cells[index];
 					return ["已发布", "已确认", "启用"].includes(cell) ? (
 						<Status tone="success">{cell}</Status>
-					) : ["草稿", "候选"].includes(cell) ? (
+					) : ["草稿", "未确认"].includes(cell) ? (
 						<Status tone="warning">{cell}</Status>
 					) : (
 						cell

@@ -23,8 +23,8 @@ describe("resolveModelDeliveryCell", () => {
 	});
 
 	it("does not display cross-revision or stale candidate evidence as complete", () => {
-		expect(resolveModelDeliveryCell(model, delivery(3), "catalog").label).toBe("暂无当前证据");
-		expect(resolveModelDeliveryCell(model, delivery(4, false), "catalog").label).toBe("暂无当前证据");
-		expect(resolveModelDeliveryCell(model, { ...delivery(), candidate: null }, "catalog").label).toBe("暂无当前证据");
+		expect(resolveModelDeliveryCell(model, delivery(3), "catalog").label).toBe("暂无当前记录");
+		expect(resolveModelDeliveryCell(model, delivery(4, false), "catalog").label).toBe("暂无当前记录");
+		expect(resolveModelDeliveryCell(model, { ...delivery(), candidate: null }, "catalog").label).toBe("暂无当前记录");
 	});
 });

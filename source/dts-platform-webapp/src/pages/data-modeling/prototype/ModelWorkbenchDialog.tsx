@@ -93,10 +93,10 @@ export function ModelWorkbenchDialog({
 
 	const title = {
 		association: "模型关联关系",
-		versions: "版本证据",
+		versions: "版本记录",
 		releases: "发布记录",
 		logs: "生命周期日志",
-		quality: "质量门禁",
+		quality: "质量检查",
 		gates: "设计提交检查",
 	}[dialog];
 	return (
@@ -215,7 +215,7 @@ function DialogContent({
 			<>
 				<p className="dmx-capability-note">
 					{dialog === "versions"
-						? "当前接口提供生命周期事件和制品修订证据，不伪造完整版本清单。"
+						? "当前接口提供生命周期事件和制品修订记录，不伪造完整版本清单。"
 						: "记录来自模型生命周期审计事实。"}
 				</p>
 				{!events.length ? (
@@ -322,7 +322,7 @@ function PhysicalPreviewDialog({
 			{failure ? (
 				<RequestState description={failure} kind="error" title="预览失败" />
 			) : busy && !representation ? (
-				<RequestState description="正在读取服务端签发的关系证据。" kind="loading" title="正在加载预览能力" />
+				<RequestState description="正在读取服务端签发的关系数据。" kind="loading" title="正在加载预览能力" />
 			) : (
 				<>
 					<p className="dmx-capability-note">
@@ -340,7 +340,7 @@ function PhysicalPreviewDialog({
 							>
 								<option value="SERVING">现行服务版本</option>
 								<option disabled={!canMaintain} value="CANDIDATE">
-									候选版本（维护者）
+									待发布版本（维护者）
 								</option>
 							</select>
 						</label>
@@ -367,7 +367,7 @@ function PhysicalPreviewDialog({
 						<RequestState
 							description={
 								(representation?.previewCapability.reasons || []).join("；") ||
-								`当前${scope === "SERVING" ? "现行" : "候选"}版本没有可用关系证据。`
+								`当前${scope === "SERVING" ? "现行" : "待发布"}版本没有可用关系数据。`
 							}
 							kind="empty"
 							title="暂不可预览"
@@ -376,7 +376,7 @@ function PhysicalPreviewDialog({
 					{preview ? (
 						<>
 							<dl className="dmx-summary-list">
-								<dt>证据状态</dt>
+								<dt>结构状态</dt>
 								<dd>{preview.driftStatus}</dd>
 								<dt>观测时间</dt>
 								<dd>{preview.observedAt}</dd>

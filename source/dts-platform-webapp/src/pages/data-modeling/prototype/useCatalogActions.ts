@@ -93,7 +93,7 @@ export function useCatalogActions(options: CatalogActionOptions) {
 					if (failure.code !== "MODEL_SPEC_DELETE_IN_USE") throw error;
 					if (
 						!window.confirm(
-							`模型「${model.name}」已有实现或运行记录，无法永久删除。是否改为归档？归档后从默认列表隐藏，保留历史记录和物理表，可通过“已归档”筛选查看。`,
+							`模型「${model.name}」已有加工或运行记录，无法永久删除。是否改为归档？归档后从默认列表隐藏，保留历史记录和物理表，可通过“已归档”筛选查看。`,
 						)
 					)
 						return;

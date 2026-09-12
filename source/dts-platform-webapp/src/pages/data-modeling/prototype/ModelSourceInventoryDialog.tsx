@@ -216,7 +216,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 			acceptSavedInventory(saved, bootstrapPlanId, assetId);
 		} catch (error) {
 			if (bootstrapPlanId) setCreatedPlanId(bootstrapPlanId);
-			setFailure(failureMessage(error, "建模上下文或来源保存失败，请重新加载后再试。"));
+			setFailure(failureMessage(error, "建模空间或来源保存失败，请重新加载后再试。"));
 		} finally {
 			setSaving(false);
 		}
@@ -241,7 +241,7 @@ export function ModelSourceInventoryDialog({ planId, onClose, onSourcesChanged }
 	const reconfirm = (binding: WarehousePlanSourceBindingView) => {
 		if (!inventory) return;
 		if (!binding.confirmedVersion || !binding.currentVersion) {
-			setFailure("来源版本证据不完整，请重新加载后再试。");
+			setFailure("来源版本记录不完整，请重新加载后再试。");
 			return;
 		}
 		void save(

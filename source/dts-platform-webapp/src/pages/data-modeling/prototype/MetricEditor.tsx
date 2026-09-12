@@ -168,7 +168,7 @@ export function MetricEditor({
 				</div>
 			</section>
 			<section className="dmx-metric-section">
-				<h3>业务计算语义</h3>
+				<h3>计算口径</h3>
 				<p className="dmx-capability-note">
 					公式计算复用固定版本的上游指标；预计算模式读取已完成加工的结果字段。请明确计算方式和统计范围。
 				</p>

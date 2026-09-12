@@ -146,12 +146,12 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 							))}
 							{missingPersistedDomain ? (
 								<option disabled value={draft.domainId}>
-									{invalidCategory && draft.domainId === invalidCategory.id ? `误绑定业务分类：${invalidCategory.name}` : `已保存数据域 · ${draft.domainId}`}
+									{invalidCategory && draft.domainId === invalidCategory.id ? `误选业务分类：${invalidCategory.name}` : `已保存数据域 · ${draft.domainId}`}
 								</option>
 							) : null}
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
-						{invalidCategory ? <small role="alert">原模型误绑定了业务分类，请选择该分类下的数据域并保存设计，再重新保存实现配置；已有执行或候选记录的模型不能直接修正。</small> : null}
+						{invalidCategory ? <small role="alert">原模型误选了业务分类，请选择该分类下的数据域并保存设计，再重新保存加工配置；已有执行或发布单记录的模型不能直接修正。</small> : null}
 						{!missingPersistedDomain && !domainOptions.length ? (
 							<small>当前规划暂无数据域，请先在数仓规划中创建数据域。</small>
 						) : null}
@@ -193,7 +193,7 @@ function DimensionDraftForm(props: ModelSpecFormProps) {
 						) : !dimensionDefinitions.length && !missingPersistedDefinition ? (
 							<small>当前数据域暂无维度，请先创建维度。</small>
 						) : dimensionDefinitions.every((item) => item.status !== "CURRENT") ? (
-							<small>当前数据域有 {dimensionDefinitions.length} 个未确认维度，请先“确认定义”后再绑定。</small>
+							<small>当前数据域有 {dimensionDefinitions.length} 个未确认维度，请先“确认定义”后再选择。</small>
 						) : null}
 					</label>
 					{!props.definitionOnly ? (
@@ -347,12 +347,12 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 								))}
 							{missingPersistedDomain ? (
 								<option disabled value={draft.domainId}>
-									{invalidCategory && draft.domainId === invalidCategory.id ? `误绑定业务分类：${invalidCategory.name}` : `已保存数据域 · ${draft.domainId}`}
+									{invalidCategory && draft.domainId === invalidCategory.id ? `误选业务分类：${invalidCategory.name}` : `已保存数据域 · ${draft.domainId}`}
 								</option>
 							) : null}
 						</select>
 						<ValidationMessage message={validationErrors.domainId} />
-						{invalidCategory ? <small role="alert">原模型误绑定了业务分类，请选择该分类下的数据域并保存设计，再重新保存实现配置；已有执行或候选记录的模型不能直接修正。</small> : null}
+						{invalidCategory ? <small role="alert">原模型误选了业务分类，请选择该分类下的数据域并保存设计，再重新保存加工配置；已有执行或发布单记录的模型不能直接修正。</small> : null}
 					</label>
 					{factMode ? (
 						// biome-ignore lint/a11y/noLabelWithoutControl: the select is conditional while its status text stays in the same labeled field.
@@ -374,11 +374,11 @@ function CompatibilityDraftForm(props: ModelSpecFormProps) {
 									))}
 								</select>
 							) : (
-								<small>{processFailure ? "暂时无法核验业务过程，已保留原绑定。" : processLoaded ? (props.readOnly && !draft.businessProcessId ? "尚未绑定业务过程" : processBinding.message) : "正在读取业务过程…"}</small>
+								<small>{processFailure ? "暂时无法核验业务过程，已保留原选择。" : processLoaded ? (props.readOnly && !draft.businessProcessId ? "尚未选择业务过程" : processBinding.message) : "正在读取业务过程…"}</small>
 							)}
 							<ValidationMessage message={validationErrors.businessProcessId} />
 							{missingProcess ? <ValidationMessage message="已保存的业务过程不在当前可选列表中，请核对数仓规划或重新选择后保存。" /> : null}
-							{!draft.businessProcessId ? <small>草稿可暂不选择；物化前请在数仓规划中确认本数据域的业务过程，再在此选择并保存模型。</small> : null}
+							{!draft.businessProcessId ? <small>草稿可暂不选择；构建前请在数仓规划中确认本数据域的业务过程，再在此选择并保存模型。</small> : null}
 							{processFailure ? <ValidationMessage message={processFailure} /> : null}
 						</label>
 					) : null}

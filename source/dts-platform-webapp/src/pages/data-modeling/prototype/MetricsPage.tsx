@@ -233,7 +233,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 				if (active) setArchitecture(items);
 			})
 			.catch(() => {
-				if (active) setContextFailure("业务分类与数据域读取失败；已有指标仍可查看，但稳定上下文暂不可修改。");
+				if (active) setContextFailure("业务分类与数据域读取失败；已有指标仍可查看，但基础信息暂不可修改。");
 			});
 		return () => {
 			active = false;
@@ -446,7 +446,7 @@ export function MetricsPage({ route }: { route: DataModelingRoute }) {
 			render: (value) => (value === "MODEL_FIELD" ? "模型字段" : value === "FORMULA" ? "受控公式" : "—"),
 		},
 		{
-			title: "物理实现",
+			title: "物理加工",
 			key: "implementation",
 			width: 260,
 			render: (_, row) => (row.relation && row.field ? `${row.relation}.${row.field}` : "—"),

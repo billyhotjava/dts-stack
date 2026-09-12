@@ -314,21 +314,21 @@ describe("release and materialization dispatch", () => {
 		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
 		await flush();
 		await act(async () => button("创建并运行")?.click());
-		expect(container.textContent).toContain("所选模型在当前环境已有未结束的物化候选");
+		expect(container.textContent).toContain("所选模型在当前环境已有未结束的构建发布单");
 		expect(container.textContent).toContain(model.id);
 		expect(apiMocks.cancelCandidate).not.toHaveBeenCalled();
 		expect(button("创建并运行")?.disabled).toBe(true);
 		if (canCancel) {
-			await act(async () => button("确认关闭占用候选")?.click());
+			await act(async () => button("确认关闭占用发布单")?.click());
 			expect(apiMocks.cancelCandidate).toHaveBeenCalledWith(model.planId, occupied, "idem-1", expect.any(String));
-			expect(container.textContent).toContain("旧候选已关闭");
+			expect(container.textContent).toContain("旧发布单已关闭");
 			expect(button("创建并运行")?.disabled).toBe(false);
 			// Cancellation does not automatically create or start another build.
 			expect(apiMocks.createCandidate).toHaveBeenCalledTimes(1);
 			expect(apiMocks.lockCandidate).not.toHaveBeenCalled();
 		} else {
-			expect(button("确认关闭占用候选")).toBeUndefined();
-			expect(container.textContent).toContain("该候选当前不能关闭");
+			expect(button("确认关闭占用发布单")).toBeUndefined();
+			expect(container.textContent).toContain("该发布单当前不能关闭");
 		}
 	});
 
@@ -401,7 +401,7 @@ describe("release and materialization dispatch", () => {
 
 	it("does not create a release candidate when lifecycle compilation fails", async () => {
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
-		apiMocks.compileLifecycle.mockRejectedValue(new Error("当前模型实现编译失败"));
+		apiMocks.compileLifecycle.mockRejectedValue(new Error("当前模型代码编译失败"));
 
 		await act(async () =>
 			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
@@ -411,7 +411,7 @@ describe("release and materialization dispatch", () => {
 
 		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
 		expect(apiMocks.lockCandidate).not.toHaveBeenCalled();
-		expect(container.textContent).toContain("当前模型实现编译失败");
+		expect(container.textContent).toContain("当前模型代码编译失败");
 	});
 
 	it("renders the server-owned BUILD and REUSE dependency plan before candidate creation", async () => {
@@ -436,7 +436,7 @@ describe("release and materialization dispatch", () => {
 		);
 		await flush();
 
-		expect(container.textContent).toContain("依赖物化计划");
+		expect(container.textContent).toContain("依赖构建计划");
 		expect(container.textContent).toContain("REUSE");
 		expect(container.textContent).toContain("BUILD");
 		expect(container.textContent).toContain("public.dim_budget_subject");
@@ -510,7 +510,7 @@ describe("release and materialization dispatch", () => {
 
 		expect(apiMocks.compileLifecycle).not.toHaveBeenCalled();
 		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
-		expect(container.textContent).toContain("当前模型尚未保存可编译的数据实现");
+		expect(container.textContent).toContain("当前模型尚未保存可编译的加工配置");
 	});
 
 	it("uses retry for a failed candidate instead of replaying the single-model build intent", async () => {
@@ -557,7 +557,7 @@ describe("release and materialization dispatch", () => {
 
 		expect(container.textContent).toContain("public.dim_budget_date");
 		expect(container.textContent).toContain("关系已核验");
-		await act(async () => button("重新物化")?.click());
+		await act(async () => button("重新构建")?.click());
 
 		expect(apiMocks.rematerializeCandidate).toHaveBeenCalledWith(
 			model.planId,
@@ -595,7 +595,7 @@ describe("release and materialization dispatch", () => {
 			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("重新物化")?.click());
+		await act(async () => button("重新构建")?.click());
 
 		expect(apiMocks.previewMaterializationPlan).toHaveBeenLastCalledWith(model.planId, {
 			environment: "dev",
@@ -682,7 +682,7 @@ describe("release and materialization dispatch", () => {
 			apiMocks.getWorkbench.mockResolvedValue({
 				...workspace(["ROLLBACK"], current),
 				evidence: [{ type: "QUALITY_RUN", state: "PASSED" }],
-				primaryBlocker: { code: "EVIDENCE_BLOCKER", message: "当前候选的专属阻断" },
+				primaryBlocker: { code: "EVIDENCE_BLOCKER", message: "当前发布单的专属阻断" },
 				governanceQuality: {
 					required: true,
 					state: qualityState,
@@ -708,8 +708,8 @@ describe("release and materialization dispatch", () => {
 				"candidate-specific-asset",
 				"candidate-rule-version",
 				"candidate-quality-run",
-				"1/1 项证据已通过",
-				"当前候选的专属阻断",
+				"1/1 项记录已通过",
+				"当前发布单的专属阻断",
 			]) {
 				if (matching) expect(container.textContent).toContain(text);
 				else expect(container.textContent).not.toContain(text);
@@ -723,15 +723,15 @@ describe("release and materialization dispatch", () => {
 				expect(apiMocks.rerunGovernanceQuality).not.toHaveBeenCalled();
 			}
 			if (!matching) {
-				expect(container.textContent).toContain("尚无发布证据");
-				expect(container.textContent).not.toContain("规则版本、资产绑定和有效运行证据均已通过");
+				expect(container.textContent).toContain("尚无发布记录");
+				expect(container.textContent).not.toContain("规则版本、资产关联和有效运行记录均已通过");
 				expect(container.querySelector('a[href*="candidate-quality-run"]')).toBeNull();
 			}
 			if (matching) {
 				await act(async () => root.render(<ModelPublishDialog canMaintain models={[secondModel]} onClose={vi.fn()} />));
 				await flush();
 				expect(container.textContent).not.toContain("candidate-quality-run");
-				expect(container.textContent).not.toContain("1/1 项证据已通过");
+				expect(container.textContent).not.toContain("1/1 项记录已通过");
 				expect(button("重新运行治理质量")).toBeUndefined();
 			}
 		},
@@ -773,7 +773,7 @@ describe("release and materialization dispatch", () => {
 			apiMocks.lockCandidate.mockResolvedValue({ candidate: { ...replacement, status: "BUILDING" } });
 			await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
 			await flush();
-			expect(container.textContent).toContain("历史候选");
+			expect(container.textContent).toContain("历史发布单");
 			expect(container.textContent).toContain("不代表当前模型修订的核验结果");
 			expect(container.textContent).toContain("未完成核验");
 			expect(container.textContent).toContain("执行任务尚未就绪，构建未启动");
@@ -840,13 +840,13 @@ describe("release and materialization dispatch", () => {
 
 		await act(async () => root.render(<ModelPublishDialog canMaintain models={[secondModel]} onClose={vi.fn()} />));
 		await flush();
-		await act(async () => button("替换候选并物化")?.click());
+		await act(async () => button("替换发布单并构建")?.click());
 
 		expect(apiMocks.cancelCandidate).toHaveBeenCalledWith(
 			model.planId,
 			built,
 			"idem-1",
-			"所选模型范围已变化，关闭旧候选",
+			"所选模型范围已变化，关闭旧发布单",
 		);
 		expect(apiMocks.createCandidate).toHaveBeenCalledWith(
 			model.planId,
@@ -881,13 +881,13 @@ describe("release and materialization dispatch", () => {
 
 		await act(async () => root.render(<ModelPublishDialog canMaintain models={[secondModel]} onClose={vi.fn()} />));
 		await flush();
-		await act(async () => button("按新范围重新物化")?.click());
+		await act(async () => button("按新范围重新构建")?.click());
 
 		expect(apiMocks.refreshCandidate).toHaveBeenCalledWith(
 			model.planId,
 			reviewPending,
 			"idem-1",
-			"模型已发生新修订，废弃旧候选",
+			"模型已发生新修订，废弃旧发布单",
 		);
 		expect(apiMocks.createCandidate).toHaveBeenCalledWith(
 			model.planId,
@@ -924,13 +924,13 @@ describe("release and materialization dispatch", () => {
 			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("按新修订重新物化")?.click());
+		await act(async () => button("按新修订重新构建")?.click());
 
 		expect(apiMocks.refreshCandidate).toHaveBeenCalledWith(
 			model.planId,
 			reviewPending,
 			"idem-1",
-			"模型已发生新修订，废弃旧候选",
+			"模型已发生新修订，废弃旧发布单",
 		);
 		expect(apiMocks.createReplacementCandidate).toHaveBeenCalledWith(
 			model.planId,
@@ -966,20 +966,20 @@ describe("release and materialization dispatch", () => {
 			.mockResolvedValueOnce(workspace(["REFRESH_CANDIDATE"], reviewPending))
 			.mockResolvedValue(workspace(["CREATE_REPLACEMENT_CANDIDATE"], stale));
 		apiMocks.refreshCandidate.mockResolvedValue({ candidate: stale });
-		apiMocks.createReplacementCandidate.mockRejectedValue(new Error("替代候选创建失败"));
+		apiMocks.createReplacementCandidate.mockRejectedValue(new Error("替代发布单创建失败"));
 
 		await act(async () =>
 			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("按新修订重新物化")?.click());
+		await act(async () => button("按新修订重新构建")?.click());
 		await flush();
 
 		expect(apiMocks.refreshCandidate).toHaveBeenCalled();
 		expect(apiMocks.createReplacementCandidate).toHaveBeenCalled();
 		expect(apiMocks.getWorkbench).toHaveBeenCalledTimes(2);
 		expect(apiMocks.previewMaterializationPlan.mock.calls.length).toBeGreaterThanOrEqual(5);
-		expect(container.textContent).toContain("替代候选创建失败");
+		expect(container.textContent).toContain("替代发布单创建失败");
 	});
 
 	it("publishes a batch candidate through the plan-owned endpoint", async () => {
@@ -1066,7 +1066,7 @@ describe("release and materialization dispatch", () => {
 		await flush();
 		await act(async () => button("发布模型")?.click());
 
-		expect(container.textContent).toContain("候选发布流程");
+		expect(container.textContent).toContain("发布流程");
 		expect(container.textContent).toContain("工程验证");
 		expect(container.textContent).toContain("治理数据质量");
 		expect(container.textContent).toContain("发布登记");
@@ -1492,7 +1492,7 @@ describe.skip("legacy advanced dbt draft lifecycle (replaced by the unified auth
 		await act(async () => button("校验")?.click());
 		await flush();
 		expect(container.textContent).toContain("依赖关系已匹配 1 项");
-		await act(async () => button("提交实现")?.click());
+		await act(async () => button("提交加工配置")?.click());
 		await flush();
 		expect(apiMocks.commitDbtDraft).toHaveBeenCalledWith(
 			model.id,
@@ -1657,7 +1657,7 @@ describe.skip("legacy advanced dbt draft lifecycle (replaced by the unified auth
 		await flush();
 		await act(async () => button("校验")?.click());
 		await flush();
-		await act(async () => button("提交实现")?.click());
+		await act(async () => button("提交加工配置")?.click());
 		await flush();
 
 		expect(button("创建新草稿")).toBeDefined();
@@ -1697,7 +1697,7 @@ describe("model-scoped historical release workspace", () => {
 		expect(container.textContent).toContain("PUBLISHED · v7");
 		await act(async () => button("发布模型")?.click());
 		expect(button("回滚发布")).toBeDefined();
-		expect(container.textContent).not.toContain("尚无候选");
+		expect(container.textContent).not.toContain("暂无发布单");
 	});
 
 	it("does not let a late old-environment response replace the new candidate", async () => {

@@ -110,22 +110,22 @@ const handoffText = (
 	actions: ReleaseWorkflowAction[],
 	governanceQuality: ReleaseCandidateGovernanceQuality | null,
 ) => {
-	if (!candidate) return "先完成物化构建，系统才会开放工程验证。";
+	if (!candidate) return "先完成数据构建，系统才会开放工程验证。";
 	if (actions.includes("RUN_QUALITY")) return "当前由模型维护者运行工程验证。";
 	if (governanceQuality?.required && governanceQuality.state !== "PASSED" && reached(candidate, "QUALITY_PASSED"))
-		return governanceQuality.message || "工程验证已通过，请先补齐治理数据质量证据。";
+		return governanceQuality.message || "工程验证已通过，请先补齐治理数据质量记录。";
 	if (actions.includes("PUBLISH") && !candidate.audit?.approvedBy)
 		return "工程验证与治理数据质量均已通过，数据管理员可在职责范围内直接发布，无需另行审批。";
 	if (actions.includes("SUBMIT_REVIEW")) return "工程验证与治理数据质量均已通过，请提交发布评审。";
 	if (candidate.status === "REVIEW_PENDING" && !actions.some((action) => action === "APPROVE" || action === "REJECT"))
-		return "等待独立发布审核人处理；提交人不能审核自己的候选。";
+		return "等待独立发布审核人处理；提交人不能审核自己的发布单。";
 	if (actions.includes("APPROVE") || actions.includes("REJECT")) return "当前由独立发布审核人通过或驳回。";
 	if (candidate.status === "APPROVED" && !actions.includes("PUBLISH"))
 		return "评审已通过，等待独立发布操作员登记上线。";
 	if (actions.includes("PUBLISH")) return "评审已通过，当前由发布操作员完成发布登记。";
 	if (actions.includes("RETRY_PUBLICATION")) return "发布未完整提交，请重试发布或回滚。";
-	if (candidate.status === "PUBLISHED") return "发布登记已完成；上线状态继续以执行绑定和物理关系为准。";
-	if (candidate.status === "ROLLED_BACK") return "本次发布已回滚，可按新修订创建替代候选。";
+	if (candidate.status === "PUBLISHED") return "发布登记已完成；上线状态继续以执行关联和物理关系为准。";
+	if (candidate.status === "ROLLED_BACK") return "本次发布已回滚，可按新修订创建替代发布单。";
 	return "服务端正在推进当前阶段，刷新后查看下一步。";
 };
 
@@ -142,7 +142,7 @@ const onlineText = (candidate: ReleaseCandidate | null, binding: PlanExecutionBi
 
 const EVIDENCE_TYPE_LABEL: Record<ReleaseCandidateEvidenceSummary["type"], string> = {
 	ARTIFACT: "发布产物",
-	BUILD_RUN: "物化构建",
+	BUILD_RUN: "数据构建",
 	QUALITY_RUN: "工程验证",
 	REVIEW: "发布审核",
 	PUBLICATION: "发布登记",
@@ -160,13 +160,13 @@ const evidenceText = (evidence: ReleaseCandidateEvidenceSummary[]) => {
 	const failed = evidence.filter((item) => item.state === "FAILED" || item.state === "STALE");
 	if (failed.length) return failed.map(failedEvidenceText).join("；");
 	const passed = evidence.filter((item) => item.state === "PASSED").length;
-	return evidence.length ? `${passed}/${evidence.length} 项证据已通过` : "尚无发布证据";
+	return evidence.length ? `${passed}/${evidence.length} 项记录已通过` : "尚无发布记录";
 };
 
 const governanceQualityText = (governanceQuality: ReleaseCandidateGovernanceQuality | null) => {
-	if (!governanceQuality) return "工程验证通过后读取规则版本、绑定和运行证据。";
-	if (governanceQuality.state === "PASSED") return "规则版本、资产绑定和有效运行证据均已通过。";
-	return governanceQuality.message || governanceQuality.code || "治理数据质量证据尚未就绪。";
+	if (!governanceQuality) return "工程验证通过后读取规则版本、关联关系和运行记录。";
+	if (governanceQuality.state === "PASSED") return "规则版本、资产关联和有效运行记录均已通过。";
+	return governanceQuality.message || governanceQuality.code || "治理数据质量记录尚未就绪。";
 };
 
 const canRerunGovernanceQuality = (governanceQuality: ReleaseCandidateGovernanceQuality | null) =>
@@ -231,13 +231,13 @@ export function ModelReleaseWorkflowPanel({
 		<div className="dmx-release-workflow">
 			<div className="dmx-release-workflow__heading">
 				<div>
-					<strong>候选发布流程</strong>
+					<strong>发布流程</strong>
 					<span>数据管理员按职责范围自助发布；报表和数据服务访问仍单独授权。</span>
 				</div>
 				<Status
 					tone={candidate?.status === "PUBLISHED" ? "success" : candidate?.status === "PARTIAL" ? "danger" : "info"}
 				>
-					{candidate?.status ? statusLabel(candidate.status) : "尚无候选"}
+					{candidate?.status ? statusLabel(candidate.status) : "暂无发布单"}
 				</Status>
 			</div>
 			<ol className="dmx-release-steps">
@@ -264,8 +264,8 @@ export function ModelReleaseWorkflowPanel({
 			<div className="dmx-governance-quality">
 				<div className="dmx-governance-quality__heading">
 					<div>
-						<span>治理数据质量证据</span>
-						<strong>{governanceQuality?.required ? "发布门禁" : "提示项"}</strong>
+						<span>治理数据质量记录</span>
+						<strong>{governanceQuality?.required ? "发布检查" : "提示项"}</strong>
 					</div>
 					<div className="dmx-governance-quality__actions">
 						{governanceQuality?.evidence[0]?.runId ? (
@@ -295,10 +295,10 @@ export function ModelReleaseWorkflowPanel({
 								<strong>{statusLabel(item.status)}</strong>
 								<span>资产 {item.assetKey}</span>
 								<span>规则版本 {item.ruleVersionId || "—"}</span>
-								<span>绑定 {item.bindingId || "—"}</span>
+								<span>关联 {item.bindingId || "—"}</span>
 								<span>运行 {item.runId || "—"}</span>
 								<span>完成 {formatTime(item.finishedAt)}</span>
-								<span>校验和 {item.evidenceChecksum || "—"}</span>
+								<span>校验码 {item.evidenceChecksum || "—"}</span>
 								{item.violations.length ? <em>{item.violations.join("、")}</em> : null}
 							</li>
 						))}
@@ -307,7 +307,7 @@ export function ModelReleaseWorkflowPanel({
 			</div>
 			<div className="dmx-release-readiness">
 				<div>
-					<span>证据摘要</span>
+					<span>记录摘要</span>
 					<strong>{evidenceText(evidence)}</strong>
 				</div>
 				<div>

@@ -406,7 +406,7 @@ export function ModelWorkbenchCatalogList({
 				render: (value: number) => `r${value}`,
 			},
 			{
-				title: "物化状态",
+				title: "构建状态",
 				key: "materialization",
 				render: (_, row) =>
 					row.model ? (
@@ -479,7 +479,7 @@ export function ModelWorkbenchCatalogList({
 					},
 					{
 						key: "materialize",
-						label: row.model && deliveryByModel.has(row.model.id) ? "物化历史 / 再次物化" : "物化详情",
+						label: row.model && deliveryByModel.has(row.model.id) ? "构建历史 / 再次构建" : "构建详情",
 						hidden: !row.model,
 						disabled: busy || !detailsReady || !canMaintain || row.model?.status === "ARCHIVED",
 						onClick: () => onMaterialize([row.model as ModelSpecView]),
@@ -601,7 +601,7 @@ export function ModelWorkbenchCatalogList({
 						onClick={() => onMaterialize(selectedModels)}
 						primary
 					>
-						生成物化候选（{selectedModels.length}）
+						生成构建发布单（{selectedModels.length}）
 					</Button>
 				</div>
 			</div>

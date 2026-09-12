@@ -15,13 +15,13 @@ const stageCopy: Record<
 > = {
 	DESIGNED: {
 		note: "本次提交只校验当前逻辑设计。构建、模型测试、标准、权限和字段分类分级属于模型版本交付检查，不会阻断逻辑设计提交。",
-		ready: "逻辑设计提交检查已通过，可以继续配置或验证数据实现。",
+		ready: "逻辑设计提交检查已通过，可以继续配置或验证数据加工。",
 		blocked: "逻辑设计仍有阻断项，请按修复入口补齐后重新检查。",
 	},
 	RELEASE_READY: {
-		note: "模型版本交付检查校验构建、模型测试、标准、权限和字段分类分级；治理质量将在物理构建后的候选发布流程按资产规则运行证据核验。",
-		ready: "模型版本交付检查已通过，可以进入候选发布流程。",
-		blocked: "模型版本交付证据仍需处理；这些阻断项不会回溯影响已完成的逻辑设计提交。",
+		note: "模型版本交付检查校验构建、模型测试、标准、权限和字段分类分级；治理质量将在物理构建后的发布流程按资产规则运行记录核验。",
+		ready: "模型版本交付检查已通过，可以进入发布流程。",
+		blocked: "模型版本交付记录仍需处理；这些阻断项不会回溯影响已完成的逻辑设计提交。",
 	},
 };
 
@@ -84,9 +84,9 @@ export function ModelStageGatePanel({ gates, targetStage }: { gates: ModelSpecSt
 	if (!gate) {
 		return (
 			<RequestState
-				description={`服务端未返回 ${targetStage} 门禁，已按失败关闭处理。`}
+				description={`服务端未返回 ${targetStage} 检查，已按失败关闭处理。`}
 				kind="error"
-				title="门禁数据不完整"
+				title="检查数据不完整"
 			/>
 		);
 	}

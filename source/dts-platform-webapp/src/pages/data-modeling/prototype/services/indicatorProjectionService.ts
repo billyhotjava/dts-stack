@@ -241,10 +241,10 @@ async function modelFieldDraftRequest(payload: IndicatorUpsertPayload): Promise<
 		model = await getModelSpecRevision(modelSource.sourceId, Number(revisionMatch[1]));
 	} else {
 		const ref = payload.implementationRef;
-		if (!ref) throw new Error("请选择明确的实现模型版本，旧记录不能自动升级到最新版本");
+		if (!ref) throw new Error("请选择明确的加工模型版本，旧记录不能自动升级到最新版本");
 		model = await getModelSpecRevision(ref.modelSpecId, ref.modelRevision);
 		if (model.id !== ref.modelSpecId || model.revision !== ref.modelRevision) {
-			throw new Error("实现模型版本不匹配，请重新选择");
+			throw new Error("加工模型版本不匹配，请重新选择");
 		}
 	}
 	const fieldName = String(payload.measureField || "");

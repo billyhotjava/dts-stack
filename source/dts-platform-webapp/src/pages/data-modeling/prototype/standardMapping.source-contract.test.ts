@@ -12,6 +12,6 @@ describe("standard-mapping page contract", () => {
 		expect(page).toMatch(/智能补全标准|StandardMappingSuggestionModal/);
 		expect(page).toContain('row.state !== "草稿"');
 		expect(service).toMatch(/listModelSpecs|updateModelSpec|standardElementId|standardElementVersion/);
-		expect(service).not.toContain("本页只读展示引用证据");
+		expect(service).not.toContain("本页只读展示引用记录");
 	});
 });

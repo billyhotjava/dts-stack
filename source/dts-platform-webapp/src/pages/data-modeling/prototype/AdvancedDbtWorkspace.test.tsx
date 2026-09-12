@@ -173,7 +173,7 @@ describe("AdvancedDbtWorkspace unified authoring view", () => {
 		act(() => byText("校验")?.click());
 		expect(value.onSave).toHaveBeenCalledTimes(1);
 		expect(value.onValidate).toHaveBeenCalledTimes(1);
-		expect(byText("提交实现")?.hasAttribute("disabled")).toBe(true);
+		expect(byText("提交加工配置")?.hasAttribute("disabled")).toBe(true);
 	});
 
 	it("shows one published fork action and never exposes ownership takeover", async () => {
@@ -220,7 +220,7 @@ describe("AdvancedDbtWorkspace unified authoring view", () => {
 		expect(container.textContent).toContain("请填写模型名称");
 		expect(container.textContent).toContain("MODEL_AUTHORING_PROJECTION_ALIAS_UNAVAILABLE");
 		const commit = Array.from(container.querySelectorAll("button")).find((item) =>
-			item.textContent?.includes("提交实现"),
+			item.textContent?.includes("提交加工配置"),
 		);
 		expect(commit?.hasAttribute("disabled")).toBe(true);
 	});

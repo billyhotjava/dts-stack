@@ -109,7 +109,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 			if (requestEpoch.current !== epoch) return;
 			setPlans([]);
 			setPlanId("");
-			setFailure(normalizeModelingRequestFailure(error, "模型导入上下文读取失败。"));
+			setFailure(normalizeModelingRequestFailure(error, "模型导入环境读取失败。"));
 		} finally {
 			if (requestEpoch.current === epoch) setLoading(false);
 		}
@@ -397,7 +397,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 			<PageHeader
 				description={
 					advancedIntent
-						? "导入与逆向建模共用同一 dbt ZIP 检查、预览和应用链路；DBT_BACKED 结果进入模型级高级实现。"
+						? "导入与逆向建模共用同一 dbt ZIP 检查、预览和应用链路；DBT_BACKED 结果进入模型级高级加工配置。"
 						: route.description
 				}
 				title={advancedIntent ? "高级 dbt 包导入" : "逆向建模"}
@@ -419,7 +419,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 						快速开始
 					</Button>
 					{!loading && !plans.length ? (
-						<p className="dmx-capability-note">可以先检查 dbt 包；生成导入预览前需初始化规划上下文。</p>
+						<p className="dmx-capability-note">可以先检查 dbt 包；生成导入预览前需初始化数仓规划。</p>
 					) : null}
 					{!canMaintain ? <p className="dmx-capability-note">当前账号只有查看权限，不能发起 dbt 包导入。</p> : null}
 				</section>
@@ -558,7 +558,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 						{step === 3 && result && result.status !== "RUNNING" && !undoStarted ? (
 							<Button
 								disabled={!canMaintain || Boolean(busy) || !canForwardUndo}
-								title={canForwardUndo ? "追加恢复修订，不删除历史" : "结果缺少完整修订固定证据，不能安全撤销"}
+								title={canForwardUndo ? "追加恢复修订，不删除历史" : "结果缺少完整修订固定记录，不能安全撤销"}
 								onClick={() => void forwardUndo()}
 							>
 								{busy === "undo" ? "撤销中…" : "前向撤销本次导入"}
@@ -594,7 +594,7 @@ function GenerateStep({
 			<div className="dmx-wizard-heading">
 				<div>
 					<h3>导入预览</h3>
-					<p>这是服务端预检查结果；应用后只生成或更新草稿，不自动发布和物化。</p>
+					<p>这是服务端预检查结果；应用后只生成或更新草稿，不自动发布和构建。</p>
 				</div>
 				<Status tone={preview.summary.blocked ? "danger" : "success"}>
 					可处理 {preview.summary.ready} / {preview.summary.total}

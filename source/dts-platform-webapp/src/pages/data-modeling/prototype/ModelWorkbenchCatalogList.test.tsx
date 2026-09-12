@@ -276,13 +276,13 @@ describe("ModelWorkbenchCatalogList", () => {
 		);
 		await act(async () => Promise.resolve());
 
-		expect(container.textContent).toContain("已物化");
+		expect(container.textContent).toContain("已构建");
 		const dateSelection = container.querySelector<HTMLInputElement>('input[aria-label="选择 日期维度表"]');
 		const orderSelection = container.querySelector<HTMLInputElement>('input[aria-label="选择 订单明细表"]');
 		await act(async () => dateSelection?.click());
 		await act(async () => orderSelection?.click());
 		const materialize = Array.from(container.querySelectorAll("button")).find((item) =>
-			item.textContent?.includes("生成物化候选（2）"),
+			item.textContent?.includes("生成构建发布单（2）"),
 		);
 		await act(async () => materialize?.click());
 
@@ -419,7 +419,7 @@ describe("ModelWorkbenchCatalogList", () => {
 		const last = container.querySelector<HTMLInputElement>('input[aria-label="选择 模型 11"]');
 		await act(async () => last?.click());
 		const materialize = Array.from(container.querySelectorAll("button")).find((button) =>
-			button.textContent?.includes("生成物化候选（11）"),
+			button.textContent?.includes("生成构建发布单（11）"),
 		);
 		await act(async () => materialize?.click());
 

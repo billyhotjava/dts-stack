@@ -68,7 +68,7 @@ export function ModelImplementationExecutionFields({
 	return (
 		<>
 			<label>
-				<span>物化方式</span>
+				<span>存储方式</span>
 				<select onChange={(event) => onChange({ materialization: event.target.value })} value={draft.materialization}>
 					{!materializations.includes(draft.materialization) ? (
 						<option value={draft.materialization}>已保存：{draft.materialization || "未设置"}</option>
@@ -105,7 +105,7 @@ export function ModelImplementationExecutionFields({
 					))}
 				</select>
 			</label>
-			{!supported ? <p role="alert">当前执行目标不支持已保存的加载与物化组合，请重新选择。</p> : null}
+			{!supported ? <p role="alert">当前执行目标不支持已保存的加载与构建组合，请重新选择。</p> : null}
 			{capabilities.partitionFieldsSupported ? (
 				<ModelPartitionFieldSelector
 					error={partitionError}

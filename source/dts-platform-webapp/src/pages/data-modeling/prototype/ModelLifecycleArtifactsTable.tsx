@@ -11,9 +11,9 @@ export function ModelLifecycleArtifactsTable({ artifacts }: { artifacts: ModelLi
 				dataIndex: "implementationRevision",
 				render: (value: number) => `r${value}`,
 			},
-			{ title: "物化方式", dataIndex: "materialization" },
+			{ title: "存储方式", dataIndex: "materialization" },
 			{ title: "状态", dataIndex: "status" },
-			{ title: "校验和", dataIndex: "checksum" },
+			{ title: "校验码", dataIndex: "checksum" },
 		],
 		[],
 	);

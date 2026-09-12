@@ -33,7 +33,7 @@ const relationLabel: Record<string, string> = {
 	DEPENDS_ON: "依赖",
 	DIMENSION_REFERENCE: "引用维度",
 	DIMENSION_DEFINITION_REFERENCE: "引用维度定义",
-	STANDARD_BINDING: "绑定标准",
+	STANDARD_BINDING: "关联标准",
 	INDICATOR_REFERENCE: "引用指标",
 	INDICATOR_DEPENDS_ON: "指标依赖",
 };

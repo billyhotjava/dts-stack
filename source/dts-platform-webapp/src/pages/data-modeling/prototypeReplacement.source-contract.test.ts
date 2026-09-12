@@ -140,7 +140,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(editor).not.toContain("<span>业务分类</span>");
 		expect(fieldTable).toMatch(/"序号".*"字段名称".*"类型".*"字段显示名".*"主键".*"非空".*"维度属性编码"/s);
 		expect(fieldTable).not.toContain("安全等级");
-		expect(fieldTable).toContain("当前版本尚无字段级表结构导入契约");
+		expect(fieldTable).toContain("当前版本暂不支持从表/视图导入字段结构");
 		expect(modeling).toMatch(/import \{ ModelingWorkbenchEditor \} from "\.\/ModelingWorkbenchEditor"/);
 		expect(modeling).toMatch(/import \{[^}]*modelDraftFingerprint[^}]*\} from "\.\/modelWorkbenchPresentation"/s);
 		expect(modeling).toMatch(/saveDimensionDefinitionDraft/);
@@ -167,7 +167,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(partitionFieldSelector).toContain('aria-label="分区字段"');
 		expect(partitionFieldSelector).toContain("已选分区字段");
 		expect(editor).toContain("validationErrors.partitionFields");
-		for (const label of ["数据来源方式", "输入源表", "上游模型", "事实类型", "时间语义", "应用场景"])
+		for (const label of ["数据来源方式", "输入源表", "上游模型", "事实类型", "时间字段", "应用场景"])
 			expect(implementationBinding).toContain(label);
 		expect(editor).toContain("产出表英文名");
 		expect(workbenchService).toMatch(
@@ -286,7 +286,7 @@ describe("prototype-owned data modeling frontend", () => {
 		expect(modelPublishDialog).toMatch(/getPlanExecutionWorkspace|ModelReleaseWorkflowPanel/);
 		expect(modelSpecApi).toMatch(/ReleaseCandidateGovernanceQuality|governanceQuality/);
 		expect(modelPublishDialog).toMatch(/governanceQuality=\{candidateScopeMatches \? workspace\?\.governanceQuality \|\| null : null\}/);
-		expect(modelReleaseWorkflow).toMatch(/候选发布流程|工程验证|治理数据质量|发布登记|上线就绪|无需另行审批/);
+		expect(modelReleaseWorkflow).toMatch(/发布流程|工程验证|治理数据质量|发布登记|上线就绪|无需另行审批/);
 		expect(modelReleaseWorkflow).toMatch(/ruleVersionId|bindingId|runId|evidenceChecksum|violations/);
 		expect(modelReleaseWorkflow).toMatch(/PUBLISHED|ONLINE|latestRelation/);
 		expect(modelDialogs.trimEnd().split("\n").length).toBeLessThanOrEqual(850);

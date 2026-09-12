@@ -236,7 +236,7 @@ const mappingRows = (
 			const field = fieldsByName.get(binding.fieldName);
 			const standardId = text(binding.standardElementId);
 			const standard = standardId ? standardsById.get(standardId) : undefined;
-			const referenceLabel = binding.referenceCode ? `码表 ${binding.referenceCode}` : "未绑定数据元";
+			const referenceLabel = binding.referenceCode ? `码表 ${binding.referenceCode}` : "未关联数据元";
 			const version = binding.standardElementVersion || binding.referenceCodeVersion;
 			return {
 				id: `${model.id}:${binding.fieldName}`,
@@ -290,7 +290,7 @@ export function standardsCapability(view: StandardsView): StandardsCapability {
 			edit: true,
 			archive: false,
 			importPackage: true,
-			archiveDisabledReason: "命名词条 owner 目前只有永久删除契约；为避免数据丢失，归档入口已关闭。",
+			archiveDisabledReason: "命名词条负责人 目前只有永久删除入口；为避免数据丢失，归档入口已关闭。",
 		};
 	}
 	return {
@@ -593,6 +593,6 @@ export async function archiveStandardsRow(view: StandardsView, row: StandardsRow
 			),
 		);
 	}
-	if (view === "dictionary") throw new Error("命名词条没有可恢复的归档契约，已禁止执行永久删除");
-	throw new Error(standardsCapability(view).disabledReason || "当前目录没有归档契约");
+	if (view === "dictionary") throw new Error("命名词条暂不支持恢复归档，已禁止执行永久删除");
+	throw new Error(standardsCapability(view).disabledReason || "当前目录不支持归档");
 }

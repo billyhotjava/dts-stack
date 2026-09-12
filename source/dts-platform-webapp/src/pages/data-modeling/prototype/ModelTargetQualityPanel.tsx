@@ -71,7 +71,7 @@ export function ModelTargetQualityPanel({
 			.then((value) => {
 				if (!active) return;
 				if (value.candidateId !== delivery.candidate?.id || value.candidateVersion !== delivery.candidate.version)
-					throw new Error("候选版本已变化，请刷新后继续");
+					throw new Error("待发布版本已变化，请刷新后继续");
 				if (value.governanceQualityCode === "MODEL_SPEC_GOVERNANCE_QUALITY_CONTEXT_UNAVAILABLE")
 					throw new Error(value.governanceQualityMessage || "质量目标读取失败");
 				setAssets(
@@ -104,7 +104,7 @@ export function ModelTargetQualityPanel({
 	return (
 		<section className="dmx-target-quality" id="model-target-quality" aria-label="目标表质量规则" ref={panelRef}>
 			<h3>目标表质量规则</h3>
-			<p className="dmx-target-quality__hint">为物化后的目标表配置检查规则，保存并发布后即可执行质量检查。</p>
+			<p className="dmx-target-quality__hint">为构建后的目标表配置检查规则，保存并发布后即可执行质量检查。</p>
 			{failure ? (
 				<div className="dmx-inline-error" role="alert">
 					{failure}
@@ -120,9 +120,9 @@ export function ModelTargetQualityPanel({
 			) : null}
 			{loading ? <span>读取中…</span> : null}
 			{!canMaintain ? (
-				<p className="dmx-target-quality__hint">规则当前只读，请确认维护权限并先保存模型和实现修改。</p>
+				<p className="dmx-target-quality__hint">规则当前只读，请确认维护权限并先保存模型和加工配置修改。</p>
 			) : null}
-			{!loading && !failure && !assets.length ? <span>完成物化后配置质量规则</span> : null}
+			{!loading && !failure && !assets.length ? <span>完成构建后配置质量规则</span> : null}
 			{assets.map((asset) => (
 				<div className="dmx-target-quality__asset" key={asset.datasetId}>
 					<strong>{asset.qualifiedName}</strong>

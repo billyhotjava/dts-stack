@@ -309,7 +309,7 @@ describe("ModelingWorkbenchEditor", () => {
 		const select = container.querySelector<HTMLSelectElement>('select[aria-label="数据域"]')!;
 		expect(select.disabled).toBe(false);
 		expect(select.value).toBe(categoryId);
-		expect(select.selectedOptions[0].textContent).toContain("误绑定业务分类");
+		expect(select.selectedOptions[0].textContent).toContain("误选业务分类");
 		expect(Array.from(select.options).filter((option) => !option.disabled && option.value).map((option) => option.value)).toEqual([childId]);
 		await act(async () => { select.value = childId; select.dispatchEvent(new Event("change", { bubbles: true })); });
 		expect(props.onChange).toHaveBeenLastCalledWith(expect.objectContaining({ domainId: childId, businessProcessId: "" }));
@@ -321,7 +321,7 @@ describe("ModelingWorkbenchEditor", () => {
 		await render(props);
 		expect(props.onChange).not.toHaveBeenCalled();
 		expect(container.textContent).toContain("业务过程读取失败");
-		expect(container.textContent).toContain("已保留原绑定");
+		expect(container.textContent).toContain("已保留原选择");
 		expect(container.textContent).not.toContain("已自动绑定业务过程");
 	});
 
@@ -409,13 +409,13 @@ describe("ModelingWorkbenchEditor", () => {
 		expect(container.querySelector<HTMLInputElement>('[aria-label="产出表英文名"]')?.readOnly).toBe(true);
 		expect(container.querySelector<HTMLInputElement>('[aria-label="加载策略"]')?.value).toBe("全量");
 		expect(container.textContent).toContain("models/dim_status.sql");
-		expect(container.textContent).not.toContain("实现投影尚未生成");
+		expect(container.textContent).not.toContain("加工配置尚未生成");
 		expect(container.querySelector('select[aria-label="数据来源方式"]')).toBeNull();
 		expect(button("下一步").disabled).toBe(false);
 		await act(async () => button("下一步").click());
 		expect(props.onNext).toHaveBeenCalledOnce();
 		const edit = Array.from(container.querySelectorAll("button")).find((button) =>
-			button.textContent?.includes("编辑 SQL 实现"),
+			button.textContent?.includes("编辑 SQL 代码"),
 		);
 		await act(async () => edit?.click());
 		expect(props.onViewChange).toHaveBeenCalledWith("code");
@@ -552,7 +552,7 @@ describe("ModelingWorkbenchEditor", () => {
 			}),
 		);
 
-		for (const label of ["事实类型", "时间语义", "时间字段"])
+		for (const label of ["事实类型", "时间字段", "时间字段"])
 			expect(container.textContent).toContain(label);
 		expect(container.textContent).not.toContain("数据来源方式");
 
@@ -716,7 +716,7 @@ describe("ModelingWorkbenchEditor", () => {
 			"关联关系",
 			"发布",
 			"日志",
-			"质量门禁",
+			"质量检查",
 			"高级 dbt 工作区",
 			"导出",
 		])
@@ -905,7 +905,7 @@ describe("ModelingWorkbenchEditor", () => {
 
 	it("keeps W2 actions separate from delivery dialogs", async () => {
 		const unpublished = await render();
-		expect(button("提交实现并继续")).toHaveProperty("disabled", false);
+		expect(button("提交加工配置并继续")).toHaveProperty("disabled", false);
 		expect(button("暂存草稿")).toBeDefined();
 		expect(unpublished.onDialog).not.toHaveBeenCalled();
 
@@ -915,7 +915,7 @@ describe("ModelingWorkbenchEditor", () => {
 			selectedModel: { ...selectedModel, status: "DRAFT", revision: 1, checksum: "a".repeat(64) },
 		});
 		await render(persisted);
-		expect(button("提交实现并继续")).toHaveProperty("disabled", true);
+		expect(button("提交加工配置并继续")).toHaveProperty("disabled", true);
 		expect(button("可视化模式")).toBeDefined();
 		expect(button("代码模式")).toBeDefined();
 	});
@@ -1006,7 +1006,7 @@ describe("ModelingWorkbenchEditor", () => {
 		);
 
 		expect(container.textContent).toContain("请填写模型名称");
-		expect(Array.from(container.querySelectorAll("button")).some((item) => item.textContent === "提交实现")).toBe(
+		expect(Array.from(container.querySelectorAll("button")).some((item) => item.textContent === "提交加工配置")).toBe(
 			false,
 		);
 	});
@@ -1044,7 +1044,7 @@ describe("ModelingWorkbenchEditor", () => {
 
 		expect(container.querySelector("fieldset")).toHaveProperty("disabled", true);
 		expect(container.textContent).toContain("发布版本只读");
-		expect(container.textContent).not.toContain("实现投影尚未生成");
+		expect(container.textContent).not.toContain("加工配置尚未生成");
 		act(() => button("创建新草稿版本").click());
 		expect(props.onForkPublished).toHaveBeenCalledTimes(1);
 	});
@@ -1213,7 +1213,7 @@ describe("initial definition save", () => {
 	it("keeps fact time semantics in definition and blocks save while busy", async () => {
 		await render(makeProps({ definitionOnly: true, saving: true, draft: makeDraft({ createKind: "fact" }) }));
 		expect(container.querySelector('[aria-label="事实类型"]')).not.toBeNull();
-		expect(container.querySelector('[aria-label="时间语义"]')).not.toBeNull();
+		expect(container.querySelector('[aria-label="时间字段"]')).not.toBeNull();
 		expect(button("处理中…").disabled).toBe(true);
 	});
 });

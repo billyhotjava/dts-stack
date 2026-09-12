@@ -69,7 +69,7 @@ export function MetricDefinitionBindingFields({
 							</option>
 						))}
 					</select>
-					{!availableModels.length ? <small>暂无可绑定的已发布模型，请先完成模型发布。</small> : null}
+					{!availableModels.length ? <small>暂无可关联的已发布模型，请先完成模型发布。</small> : null}
 				</BindingField>
 				<BindingField label="度量字段" required>
 					<select
@@ -168,9 +168,9 @@ export function MetricDefinitionBindingFields({
 			</BindingField>
 			{values.executionMode === "PRECOMPUTED" ? (
 				<>
-					<BindingField label="实现模型" required>
+					<BindingField label="加工模型" required>
 						<select
-							aria-label="实现模型"
+							aria-label="加工模型"
 							onChange={(event) =>
 								onChange(
 									bindMetricImplementationModel(
@@ -181,7 +181,7 @@ export function MetricDefinitionBindingFields({
 							}
 							value={selectedImplementationKey}
 						>
-							<option value="">请选择已发布的指标实现模型</option>
+							<option value="">请选择已发布的指标加工模型</option>
 							{availableModels.map((model) => (
 								<option key={metricModelKey(model)} value={metricModelKey(model)}>
 									{model.name}（{model.layer} · r{model.revision}）

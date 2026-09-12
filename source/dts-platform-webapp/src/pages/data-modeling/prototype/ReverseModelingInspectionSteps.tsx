@@ -55,7 +55,7 @@ export function modelSecurityLevel(override: ModelSpecImportSemanticOverride, fi
 	return levels.every((level) => level && level === levels[0]) ? levels[0] : "";
 }
 
-const NO_FIELD_CONTRACT_HINT = "dbt 包未提供带类型的字段契约（需 contract.enforced 且各列声明 data_type），无法确认字段发布密级";
+const NO_FIELD_CONTRACT_HINT = "dbt 包未提供带类型的字段定义（需 contract.enforced 且各列声明 data_type），无法确认字段发布密级";
 
 type PreviewReadinessInput = {
 	inspection: DbtArchiveInspection | null;
@@ -77,7 +77,7 @@ export function previewReadinessIssues({
 }: PreviewReadinessInput): string[] {
 	if (!inspection) return ["请先完成包检查"];
 	const issues: string[] = [];
-	if (!planId) issues.push("请选择规划上下文");
+	if (!planId) issues.push("请选择数仓规划");
 	const unmapped = packageDomains.filter((code) => !domainMappings[code]);
 	if (unmapped.length) issues.push(`请映射数据域：${unmapped.join("、")}`);
 	if (!selected.length) issues.push("请至少勾选一个可导入模型");
@@ -107,7 +107,7 @@ export function StrategyStep({ archive, onArchive }: { archive: File | null; onA
 					<FileArchive size={22} />
 					<span>
 						<strong>导入 dbt ZIP</strong>
-						<small>识别包类型、结构证据与可导入范围</small>
+						<small>识别包类型、结构记录与可导入范围</small>
 					</span>
 				</button>
 			</div>
@@ -121,7 +121,7 @@ export function StrategyStep({ archive, onArchive }: { archive: File | null; onA
 				/>
 				<FileArchive size={30} />
 				<strong>选择 dbt 项目 ZIP</strong>
-				<p>先检查包内容，不执行其中的 SQL 或宏；检查完成后再选择规划上下文并生成预览。</p>
+				<p>先检查包内容，不执行其中的 SQL 或宏；检查完成后再选择数仓规划并生成预览。</p>
 				{archive ? <small>已选择：{archive.name}</small> : null}
 			</div>
 		</>
@@ -245,7 +245,7 @@ export function ConfirmStep(props: ConfirmStepProps) {
 			<div className="dmx-wizard-heading">
 				<div>
 					<h3>检查报告与模型映射</h3>
-					<p>导入只生成模型草稿；是否可以物化，将在“构建与检查”阶段确认。</p>
+					<p>导入只生成模型草稿；是否可以构建，将在“构建与检查”阶段确认。</p>
 				</div>
 				<Status tone={inspection.compatibility.importProjection === "BLOCKED" ? "danger" : "info"}>
 					{packageProfileLabel(profile)}
@@ -273,14 +273,14 @@ export function ConfirmStep(props: ConfirmStepProps) {
 					</strong>
 				</div>
 				<div>
-					<small>后续物化环境</small>
+					<small>后续构建环境</small>
 					<strong>
 						{inspection.compatibility.materialization === "CERTIFIED"
 							? "已认证"
 							: inspection.compatibility.materialization === "NOT_CERTIFIED"
 								? "尚未认证"
 								: inspection.compatibility.materialization === "UNSUPPORTED"
-									? "不支持物化"
+									? "不支持构建"
 									: "待确认"}
 					</strong>
 				</div>
@@ -294,7 +294,7 @@ export function ConfirmStep(props: ConfirmStepProps) {
 			</div>
 			<p>
 				{canImport
-					? "可以继续导入草稿。请完成下方模型映射并生成预览；导入不会自动发布或物化。"
+					? "可以继续导入草稿。请完成下方模型映射并生成预览；导入不会自动发布或构建。"
 					: "请处理受阻模型或补充映射，最终可导入范围以预览结果为准。"}
 			</p>
 			{sqlNotices.length > 0 ? (
@@ -349,16 +349,16 @@ export function ConfirmStep(props: ConfirmStepProps) {
 			) : null}
 			<div className="dmx-mapping-grid">
 				<label className="dmx-reverse-plan">
-					<span>规划上下文</span>
+					<span>数仓规划</span>
 					<select disabled={plansLoading} onChange={(event) => onPlanId(event.target.value)} value={planId}>
-						<option value="">请选择已确认的规划上下文</option>
+						<option value="">请选择已确认的数仓规划</option>
 						{plans.map((plan) => (
 							<option key={plan.id} value={plan.id}>
 								{plan.name || plan.id}
 							</option>
 						))}
 					</select>
-					{!plansLoading && !plans.length ? <small>当前环境尚未初始化模型导入上下文。</small> : null}
+					{!plansLoading && !plans.length ? <small>当前环境尚未初始化模型导入环境。</small> : null}
 				</label>
 				{packageDomains.map((code) => (
 					<label key={code}>

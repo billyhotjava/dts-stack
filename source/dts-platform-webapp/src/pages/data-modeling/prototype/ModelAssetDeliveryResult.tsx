@@ -96,7 +96,7 @@ export function ModelAssetDeliveryResult({ models }: { models: ModelSpecView[] }
 					{loading ? "读取中…" : "刷新资产状态"}
 				</Button>
 			</div>
-			<p className="dmx-capability-note">目录登记与分析准备分别以当前模型版本的交付证据展示。</p>
+			<p className="dmx-capability-note">目录登记与分析准备分别以当前模型版本的交付结果展示。</p>
 			<div className="dmx-table-scroll">
 				<CompactTable<DeliveryRow> columns={columns} dataSource={rows} pagination={false} rowKey="id" />
 			</div>

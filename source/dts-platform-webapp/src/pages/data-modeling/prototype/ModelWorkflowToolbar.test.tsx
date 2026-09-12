@@ -90,7 +90,7 @@ describe("single primary authoring action", () => {
 	it("uses the latest rendered permission and prevents duplicate commands while busy", async () => {
 		const p = props();
 		await render(p);
-		expect(primary().textContent).toBe("提交实现");
+		expect(primary().textContent).toBe("提交加工配置");
 		act(() => primary().click());
 		expect(p.onCommit).toHaveBeenCalledTimes(1);
 		await render({ ...p, busy: true });

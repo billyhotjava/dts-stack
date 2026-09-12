@@ -153,6 +153,6 @@ describe("ModelFieldEditorTable", () => {
 			item.textContent?.includes("从表/视图导入"),
 		);
 		expect(importButton).toHaveProperty("disabled", true);
-		expect(importButton?.getAttribute("title")).toBe("当前版本尚无字段级表结构导入契约");
+		expect(importButton?.getAttribute("title")).toBe("当前版本暂不支持从表/视图导入字段结构");
 	});
 });
