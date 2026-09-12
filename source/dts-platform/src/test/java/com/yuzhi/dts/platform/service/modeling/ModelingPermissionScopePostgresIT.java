@@ -170,7 +170,7 @@ class ModelingPermissionScopePostgresIT {
         var execution = execution();
         try (var scope = execution.candidate("tenant",candidate,2,"BUILDING")) { assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id()).isEqualTo("editor"); }
         as("owner",()->{access.revoke("tenant",ads,grant.id());return null;});
-        assertThatThrownBy(()->execution.candidate("tenant",candidate,2,"BUILDING")).isInstanceOf(ModelSpecException.class);
+        assertThatThrownBy(()->execution.candidate("tenant",candidate,2,"BUILDING")).isInstanceOfSatisfying(ModelingIdentityException.class, ex -> assertThat(ex.code()).isEqualTo("MODEL_EXECUTION_AUTHORIZATION_REVOKED"));
         assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional()).isEmpty();
         assertThatThrownBy(()->execution.candidate("tenant",candidate,3,"BUILDING")).isInstanceOf(ModelingIdentityException.class);
     }
@@ -184,7 +184,7 @@ class ModelingPermissionScopePostgresIT {
         try(var scope = execution.operational(manual)) { assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id()).isEqualTo("editor"); }
         assertThatThrownBy(()->execution.system(manual)).isInstanceOf(ModelingIdentityException.class);
         directory.put("editor",user("editor","dept-b",AuthoritiesConstants.DEPT_DATA_OWNER));
-        assertThatThrownBy(()->execution.operational(manual)).isInstanceOf(ModelSpecException.class);
+        assertThatThrownBy(()->execution.operational(manual)).isInstanceOfSatisfying(ModelingIdentityException.class, ex -> assertThat(ex.code()).isEqualTo("MODEL_EXECUTION_AUTHORIZATION_REVOKED"));
         var cron = new com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.OpenedRun(group,"tenant",planA,binding,1,"CRON","dag","run","scope","bundle","QUEUED",false);
         try(var scope = execution.system(cron)) {
             assertThat(ModelingSystemExecution.permits("tenant",planA)).isTrue();

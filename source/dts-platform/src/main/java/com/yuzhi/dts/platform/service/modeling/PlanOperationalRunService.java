@@ -155,6 +155,9 @@ public class PlanOperationalRunService {
             submitManual(opened, prepared, now);
         }
         return view(opened, "SUBMITTED");
+        } catch (com.yuzhi.dts.platform.security.modeling.ModelingIdentityException failure) {
+            runs.markUnknown(opened.pipelineRunGroupId(), failure.code(), now);
+            throw failure;
         }
     }
 
@@ -298,6 +301,10 @@ public class PlanOperationalRunService {
             );
             submitManual(opened, prepared, now);
         } catch (RuntimeException unavailable) {
+            if (unavailable instanceof com.yuzhi.dts.platform.security.modeling.ModelingIdentityException identity) {
+                runs.markUnknown(opened.pipelineRunGroupId(), identity.code(), now);
+                return;
+            }
             if (unavailable instanceof PlanExecutionException execution) {
                 if ("MODEL_OPERATIONAL_AIRFLOW_SUBMISSION_UNKNOWN".equals(execution.code())) return;
                 if (Set.of("MODEL_OPERATIONAL_SOURCE_SNAPSHOT_MISSING", "MODEL_OPERATIONAL_SOURCE_SNAPSHOT_MISMATCH")

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
@@ -55,6 +57,28 @@ class ModelMaterializationDispatchServiceTest {
         "dts_rc_20000000000000000000000000000002_v3_a1";
     private static final String ARTIFACT_CHECKSUM = "a".repeat(64);
     private static final String SCOPED_CHECKSUM = "b".repeat(64);
+
+    @Test void directoryOutageRemainsRetryableAndDoesNotSubmitOrFailTheCandidate() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.claimNext(eq(NOW),eq(Duration.ofMinutes(2)))).thenReturn(Optional.of(dispatch()));
+        var authorization = (ModelingExecutionAuthorization) org.springframework.test.util.ReflectionTestUtils.getField(fixture.service,"executionAuthorization");
+        when(authorization.candidate(anyString(),any(),anyInt(),anyString())).thenThrow(new com.yuzhi.dts.platform.security.modeling.ModelingIdentityException(503,"MODELING_IDENTITY_UNAVAILABLE","目录不可用"));
+        var result = fixture.service.dispatchNext().orElseThrow();
+        assertThat(result.status()).isEqualTo("UNKNOWN");
+        assertThat(result.errorCode()).isEqualTo("MODELING_IDENTITY_UNAVAILABLE");
+        verify(fixture.gateway,never()).submitReleaseBuild(any());
+        verify(fixture.candidates,never()).transition(any(),any(),any(),any());
+    }
+    @Test void revokedUserIsBlockedBeforeExternalSubmission() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.claimNext(eq(NOW),eq(Duration.ofMinutes(2)))).thenReturn(Optional.of(dispatch()));
+        var authorization = (ModelingExecutionAuthorization) org.springframework.test.util.ReflectionTestUtils.getField(fixture.service,"executionAuthorization");
+        when(authorization.candidate(anyString(),any(),anyInt(),anyString())).thenThrow(new com.yuzhi.dts.platform.security.modeling.ModelingIdentityException(403,"MODEL_EXECUTION_AUTHORIZATION_REVOKED","授权失效"));
+        var result = fixture.service.dispatchNext().orElseThrow();
+        assertThat(result.status()).isEqualTo("BLOCKED");
+        assertThat(result.errorCode()).isEqualTo("MODEL_EXECUTION_AUTHORIZATION_REVOKED");
+        verify(fixture.gateway,never()).submitReleaseBuild(any());
+    }
 
     @Test
     void oneMultiEntryCandidateProducesOneAirflowSubmission() {

@@ -301,6 +301,19 @@ public class ModelMaterializationDispatchService {
             return Optional.of(
                 applySubmission(dispatch, submitted, now)
             );
+        } catch (com.yuzhi.dts.platform.security.modeling.ModelingIdentityException failure) {
+            // An unavailable directory is retryable. A sealed runtime token may already have crossed the external boundary.
+            if (failure.status() == 503 || externalBoundaryCrossed) {
+                markUnknown(dispatch, failure.code(), now);
+                return Optional.of(new DispatchResult(dispatch.id(), "UNKNOWN", dispatch.airflowRunId(), false, failure.code()));
+            }
+            return Optional.of(block(dispatch, failure.code(), now));
+        } catch (ModelSpecException failure) {
+            if (externalBoundaryCrossed) {
+                markUnknown(dispatch, failure.code(), now);
+                return Optional.of(new DispatchResult(dispatch.id(), "UNKNOWN", dispatch.airflowRunId(), false, failure.code()));
+            }
+            return Optional.of(block(dispatch, failure.code(), now));
         } catch (
             DbtScopedProjectService.ScopedProjectException failure
         ) {
