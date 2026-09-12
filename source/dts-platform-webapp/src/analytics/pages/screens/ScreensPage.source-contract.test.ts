@@ -22,13 +22,11 @@ test("ScreensPage opens editor in a new window from the management list", async 
 	);
 });
 
-test("ScreensPage links screen names to the preview page from the management list", async () => {
+test("ScreensPage previews screen names in one shared side panel from the management list", async () => {
 	const source = await readFile(screensPagePath, "utf8");
-
-	assert.match(source, /data-testid=\{`analytics-screen-name-link-\$\{screen\.id\}`\}/);
-	assert.match(source, /href=\{resolveRouteForOpen\(`\/bi\/screens\/\$\{screen\.id\}\/preview`\)\}/);
-	assert.match(source, /target="_blank"/);
-	assert.match(source, /rel="noopener noreferrer"/);
+	assert.match(source, /<ScreenListPreview>/);
+	assert.match(source, /<ScreenPreviewName screen=\{screen\}/);
+	assert.doesNotMatch(source, /href=\{resolveRouteForOpen\(`\/bi\/screens\/\$\{screen\.id\}\/preview`\)\}/);
 });
 
 test("ScreensPage hides management actions when row permissions do not allow them", async () => {
@@ -183,7 +181,8 @@ test("ScreensPage prioritizes long screen names and descriptions in the manageme
 	assert.equal(source.includes("{screen.width || 1920} × {screen.height || 1080}"), false);
 	assert.match(source, /title:\s*"名称"[\s\S]*dataIndex:\s*"name"[\s\S]*ellipsis:/);
 	assert.match(source, /title:\s*"描述"[\s\S]*dataIndex:\s*"description"[\s\S]*ellipsis:/);
-	assert.match(source, /title=\{screen\.name \|\| "未命名大屏"\}/);
+	const preview = await readFile(new URL("./components/ScreenListPreview.tsx", import.meta.url), "utf8");
+	assert.match(preview, /title=\{screen\.name \|\| "未命名大屏"\}/);
 	assert.match(source, /title=\{screen\.description \|\| "无描述"\}/);
 	assert.doesNotMatch(source, /min-width:\s*1200px|width:\s*280px/);
 });

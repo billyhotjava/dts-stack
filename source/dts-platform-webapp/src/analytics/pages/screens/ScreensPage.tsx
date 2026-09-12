@@ -8,13 +8,13 @@ import { getDomainTree } from "@/api/platformApi";
 import { actionColumn, CompactTable } from "@/components/table";
 import { useUserRoles } from "@/store/userStore";
 import { analyticsApi, type ScreenAiGenerationResponse, type ScreenListItem } from "../../api/analyticsApi";
-import { PageContainer } from "../../components/PageContainer/PageContainer";
 import { resolveRouteForOpen } from "../../helpers/resolveAnalyticsUrl";
 import { writeTextToClipboard } from "../../hooks/clipboard";
 import { ScreenAclPanel, TemplateGallery, type TemplateSelection } from "./components";
 import { ClassificationTag } from "./components/ClassificationTag";
 import { CreateScreenIntakeModal, type CreateScreenIntakePayload } from "./components/CreateScreenIntakeModal";
 import { ImportPreviewModal } from "./components/ImportPreviewModal";
+import { ScreenListPreview, ScreenPreviewName } from "./components/ScreenListPreview";
 import { UnclassifiedScreensModal } from "./components/UnclassifiedScreensModal";
 import { createConfigFromTemplate } from "./screenTemplates";
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from "./screenSpec";
@@ -905,18 +905,7 @@ export default function ScreensPage() {
 			key: "name",
 			ellipsis: { showTitle: false },
 			sorter: (left, right) => String(left.name || "").localeCompare(String(right.name || ""), "zh-CN"),
-			render: (_value, screen) => (
-				<a
-					className="font-medium text-brand hover:underline"
-					data-testid={`analytics-screen-name-link-${screen.id}`}
-					href={resolveRouteForOpen(`/bi/screens/${screen.id}/preview`)}
-					rel="noopener noreferrer"
-					target="_blank"
-					title={screen.name || "未命名大屏"}
-				>
-					{screen.name || "未命名大屏"}
-				</a>
-			),
+			render: (_value, screen) => <ScreenPreviewName screen={screen} />,
 		},
 		{
 			title: "创建者",
@@ -1013,7 +1002,7 @@ export default function ScreensPage() {
 	];
 
 	return (
-		<PageContainer>
+		<ScreenListPreview>
 			<div className="space-y-4" data-testid="analytics-screens-page">
 				<div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
 					<h1 className="m-0 text-xl font-semibold text-text-primary">大屏管理</h1>
@@ -1529,6 +1518,6 @@ export default function ScreensPage() {
 					onConfirm={handleImportConfirm}
 				/>
 			)}
-		</PageContainer>
+		</ScreenListPreview>
 	);
 }
