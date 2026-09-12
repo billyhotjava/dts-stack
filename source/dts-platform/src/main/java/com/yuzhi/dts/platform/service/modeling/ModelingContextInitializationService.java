@@ -33,7 +33,7 @@ public class ModelingContextInitializationService {
     }
     @Transactional(timeout = 30)
     public <T> T withContext(String tenant, WarehousePlanActor actor, List<JsonNode> requests, Function<List<JsonNode>, T> save) {
-        if (!ModelingIdentity.matchesActor(actor.ownerId())) throw new ModelSpecException("MODELING_ROLE_REQUIRED", "当前建模身份无效", ModelSpecException.Kind.FORBIDDEN);
+        if (actor == null || !ModelingIdentity.matchesActor(actor.ownerId())) throw new ModelSpecException("MODELING_ROLE_REQUIRED", "当前建模身份无效", ModelSpecException.Kind.FORBIDDEN);
         if (requests.isEmpty() || requests.stream().anyMatch(node -> node == null || !node.isObject())) return save.apply(requests);
         Set<String> selected = new HashSet<>();
         Set<String> planIds = new HashSet<>();

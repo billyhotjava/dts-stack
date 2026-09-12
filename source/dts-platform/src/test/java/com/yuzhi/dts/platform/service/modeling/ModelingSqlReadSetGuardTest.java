@@ -29,4 +29,10 @@ class ModelingSqlReadSetGuardTest {
             assertThatThrownBy(() -> ModelingSqlReadSetGuard.requireDeclared("{{ config(" + config + ") }} select 1", List.of())).isInstanceOf(ModelSpecException.class);
         }
     }
+    @Test void acceptsCompilerDateDimensionAndDeduplicationWithoutHidingNestedSources() {
+        assertThatCode(() -> ModelingSqlReadSetGuard.requireDeclared("select to_char(day_value,'YYYYMMDD')::integer, extract(year from day_value) from generate_series(date '2025-01-01',date '2025-12-31',interval '1 day') as calendar(day_value)",List.of())).doesNotThrowAnyException();
+        assertThatCode(() -> ModelingSqlReadSetGuard.requireDeclared("select row_number() over(partition by id order by id) as n from ods.orders",List.of("ods.orders"))).doesNotThrowAnyException();
+        assertThatThrownBy(() -> ModelingSqlReadSetGuard.requireDeclared("select row_number() over(order by (select id from secret.payroll)) from ods.orders",List.of("ods.orders"))).isInstanceOf(ModelSpecException.class);
+        assertThatThrownBy(() -> ModelingSqlReadSetGuard.requireDeclared("select * from generate_series(1,(select id from secret.payroll))",List.of())).isInstanceOf(ModelSpecException.class);
+    }
 }

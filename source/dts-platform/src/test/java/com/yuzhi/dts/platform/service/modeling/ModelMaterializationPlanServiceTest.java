@@ -44,6 +44,9 @@ class ModelMaterializationPlanServiceTest {
     private ModelMaterializationPlanRelationPort relations;
     private ModelMaterializationPlanService service;
     private PlanResolution resolution;
+    private com.yuzhi.dts.platform.security.modeling.ModelingIdentityService.Scope identity;
+    @org.junit.jupiter.api.AfterEach void closeIdentity() { if (identity != null) identity.close(); }
+
 
     @BeforeEach
     void setUp() {
@@ -53,6 +56,12 @@ class ModelMaterializationPlanServiceTest {
         properties.setExecutionTargetKey("postgres-primary");
         properties.setAdapter("postgres");
         service = new ModelMaterializationPlanService(dependencies, relations, properties);
+        var access = mock(ModelSpecPlanWriteAccessPort.class);
+        when(access.canReadPlan(TENANT, PLAN_ID)).thenReturn(true);
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "access", access);
+        var directory = mock(com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.class);
+        when(directory.currentModelingUser("modeler")).thenReturn(new com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.ModelingUser("modeler","modeler","Modeler","dept-a","甲",List.of("ROLE_DEPT_DATA_OWNER"),true,"GENERAL"));
+        identity = new com.yuzhi.dts.platform.security.modeling.ModelingIdentityService(directory).openCurrentUser("modeler");
         resolution = chain();
         when(dependencies.resolvePlan(TENANT, PLAN_ID, List.of(ADS_ID))).thenReturn(resolution);
     }

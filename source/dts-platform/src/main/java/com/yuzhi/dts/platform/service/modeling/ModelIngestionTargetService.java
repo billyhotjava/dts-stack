@@ -40,7 +40,7 @@ public class ModelIngestionTargetService {
 
     @Transactional(readOnly = true)
     public Target validateForExecution(String tenant, Target expected) {
-        if (expected == null || expected.schemaVersion() != 1 || expected.modelSpecId() == null) {
+        if (expected == null || expected.schemaVersion() != 1 || expected.modelSpecId() == null || expected.environment() == null || expected.environment().isBlank()) {
             throw failure("MODEL_INGESTION_TARGET_INVALID", Kind.BAD_REQUEST);
         }
         // Service-authenticated endpoint validates an existing exact physical target; it never creates a model or borrows an owner.

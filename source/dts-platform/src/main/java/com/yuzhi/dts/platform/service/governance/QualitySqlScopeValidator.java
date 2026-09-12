@@ -274,7 +274,7 @@ public final class QualitySqlScopeValidator {
 
         private final IdentifierDialect identifierDialect;
         private final boolean qualityPolicy;
-        private static final Set<String> MODEL_FUNCTIONS = Set.of("avg", "min", "max", "coalesce", "lower", "upper", "concat", "substring", "substr", "length", "abs", "ceil", "floor", "date_trunc", "date_format", "to_date", "year", "month", "day", "greatest", "least");
+        private static final Set<String> MODEL_FUNCTIONS = Set.of("avg", "min", "max", "coalesce", "lower", "upper", "concat", "substring", "substr", "length", "abs", "ceil", "floor", "date_trunc", "date_format", "to_date", "year", "month", "day", "greatest", "least", "to_char", "generate_series");
         private String reasonCode;
         private String detail;
 
@@ -467,8 +467,12 @@ public final class QualitySqlScopeValidator {
 
         @Override
         public <S> Void visit(TableFunction tableFunction, S context) {
-            rejectSyntax("表函数");
-            return null;
+            if (qualityPolicy || !"generate_series".equalsIgnoreCase(tableFunction.getName()) ||
+                StringUtils.hasText(tableFunction.getPrefix()) || StringUtils.hasText(tableFunction.getWithClause())) {
+                rejectSyntax("表函数"); return null;
+            }
+            inspectFromItem(tableFunction);
+            return visit(tableFunction.getFunction(), context);
         }
 
         @Override
@@ -576,13 +580,22 @@ public final class QualitySqlScopeValidator {
 
         @Override
         public <S> Void visit(AnalyticExpression expression, S context) {
-            rejectSyntax("窗口/分析函数");
+            if (qualityPolicy || !"row_number".equalsIgnoreCase(expression.getName()) ||
+                expression.getExpression() != null || expression.getOffset() != null || expression.getDefaultValue() != null ||
+                expression.getKeep() != null || expression.getHavingClause() != null || expression.getLimit() != null ||
+                expression.getFilterExpression() != null || expression.getWindowElement() != null ||
+                StringUtils.hasText(expression.getWindowName()) || expression.getFuncOrderBy() != null) {
+                rejectSyntax("窗口/分析函数"); return null;
+            }
+            inspectExpression(expression.getPartitionExpressionList(), context);
+            if (expression.getOrderByElements() != null) expression.getOrderByElements().forEach(order -> inspectExpression(order.getExpression(), context));
             return null;
         }
 
         @Override
         public <S> Void visit(ExtractExpression expression, S context) {
-            rejectSyntax("EXTRACT 表达式");
+            if (qualityPolicy) { rejectSyntax("EXTRACT 表达式"); return null; }
+            inspectExpression(expression.getExpression(), context);
             return null;
         }
 

@@ -27,13 +27,16 @@ class ModelSpecReservedIdempotencyBoundaryTest {
         when(command.idempotencyKey()).thenReturn("dm:v2:model:reserved");
         when(createDecoder.decode(org.mockito.ArgumentMatchers.any()))
             .thenReturn(new ModelSpecCreateRequestDecoder.DecodeResult(command, List.of()));
+        var contexts = mock(com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService.class);
+        when(contexts.withContext(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyList(), org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(call -> { java.util.function.Function<java.util.List<com.fasterxml.jackson.databind.JsonNode>, ?> save = call.getArgument(3); return save.apply(call.getArgument(2)); });
         ModelSpecResource resource = new ModelSpecResource(
             service,
             createDecoder,
             mock(ModelSpecUpdateRequestDecoder.class),
             mock(ModelSpecStageGateService.class),
             mock(WarehousePlanActorProvider.class),
-            new com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationService(null, null, null),
+            contexts,
             "server-tenant"
         );
 
