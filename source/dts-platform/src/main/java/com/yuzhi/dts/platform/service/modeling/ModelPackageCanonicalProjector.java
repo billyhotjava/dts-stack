@@ -75,6 +75,23 @@ public class ModelPackageCanonicalProjector {
         this.implementationCodec = implementationCodec;
     }
 
+    /** Recheck the final reconciled command before it becomes an applicable import candidate. */
+    public List<CanonicalIssue> validateModelSpecProjection(JsonNode projection) {
+        try {
+            CreateModelSpecCommand command = objectMapper.convertValue(projection, CreateModelSpecCommand.class);
+            return ModelSpecContract.validateDeliverableCreate(command)
+                .stream()
+                .map(issue -> new CanonicalIssue(issue.code(), issue.field(), issue.message()))
+                .toList();
+        } catch (IllegalArgumentException exception) {
+            return List.of(new CanonicalIssue(
+                "MODEL_IMPORT_RECONCILED_SPEC_INVALID",
+                "$",
+                "合并后的模型定义无法解析，请检查保留的业务语义与本次字段变更"
+            ));
+        }
+    }
+
     public Projection project(ProjectRequest request) {
         List<CanonicalIssue> issues = new ArrayList<>();
         PackageModel model = request.model();

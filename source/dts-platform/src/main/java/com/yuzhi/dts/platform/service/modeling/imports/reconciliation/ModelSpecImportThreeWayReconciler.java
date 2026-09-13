@@ -9,6 +9,7 @@ import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecI
 import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.DriftInput;
 import com.yuzhi.dts.platform.service.modeling.imports.reconciliation.ModelSpecImportReconciliationContract.RenameMapping;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -36,7 +37,6 @@ public class ModelSpecImportThreeWayReconciler {
         "timeSemantics",
         "dimensionRefs",
         "metricRefs",
-        "standardBindings",
         "generationStrategy",
         "dimensionProfile",
         "dimensionDefinitionRef",
@@ -126,7 +126,41 @@ public class ModelSpecImportThreeWayReconciler {
             if (value != null) merged.set(field, value.deepCopy());
         }
         preserveFieldSemantics(business, merged);
+        preserveStandardBindings(business, merged);
         return merged;
+    }
+
+    private void preserveStandardBindings(ObjectNode current, ObjectNode incoming) {
+        JsonNode currentFields = current.path("fields");
+        JsonNode incomingFields = incoming.path("fields");
+        JsonNode currentBindings = current.path("standardBindings");
+        JsonNode incomingBindings = incoming.path("standardBindings");
+        if (!currentFields.isArray() || !incomingFields.isArray() || !currentBindings.isArray() || !incomingBindings.isArray()) {
+            if (current.has("standardBindings")) incoming.set("standardBindings", currentBindings.deepCopy());
+            return;
+        }
+        Set<String> currentNames = new LinkedHashSet<>();
+        Set<String> incomingNames = new LinkedHashSet<>();
+        currentFields.forEach(field -> currentNames.add(field.path("name").asText(null)));
+        incomingFields.forEach(field -> incomingNames.add(field.path("name").asText(null)));
+        ArrayNode bindings = objectMapper.createArrayNode();
+        Set<String> retainedNames = new LinkedHashSet<>();
+        currentBindings.forEach(binding -> {
+            String name = binding.path("fieldName").asText(null);
+            // Remove bindings only for fields actually removed by this import. Keep malformed
+            // existing bindings visible to the final contract validation instead of hiding them.
+            if (name == null || incomingNames.contains(name) || !currentNames.contains(name)) {
+                bindings.add(binding.deepCopy());
+                retainedNames.add(name);
+            }
+        });
+        incomingBindings.forEach(binding -> {
+            String name = binding.path("fieldName").asText(null);
+            // The preview resolver supplies explicitly confirmed bindings for added/unbound
+            // fields. Existing field governance always takes precedence over package metadata.
+            if (name == null || !retainedNames.contains(name)) bindings.add(binding.deepCopy());
+        });
+        incoming.set("standardBindings", bindings);
     }
 
     private void preserveFieldSemantics(ObjectNode current, ObjectNode incoming) {

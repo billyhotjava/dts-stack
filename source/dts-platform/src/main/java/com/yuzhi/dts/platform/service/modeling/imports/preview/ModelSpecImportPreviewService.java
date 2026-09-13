@@ -821,6 +821,9 @@ public class ModelSpecImportPreviewService {
             }
         }
         proposedModelSpec = restoreDraftDimensionPins(current, proposedModelSpec, incomingModelSpec);
+        if (current != null) {
+            addCanonicalIssues(model, canonicalProjector.validateModelSpecProjection(proposedModelSpec), issues);
+        }
         if (modelSpecChecksum != null) {
             modelSpecChecksum = checksumModelSpecProjection(proposedModelSpec);
             if (
