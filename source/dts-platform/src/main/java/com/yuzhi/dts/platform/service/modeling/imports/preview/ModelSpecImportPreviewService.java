@@ -836,9 +836,11 @@ public class ModelSpecImportPreviewService {
         }
         String expectedOwnership = canonical.modelSpecCommand().implementationMode().name();
         boolean ownershipConflict = current != null &&
+        (!plan.id().equals(current.planId()) || !expectedOwnership.equals(current.ownership()));
+        // Editing model semantics leaves the imported implementation pinned to the prior model
+        // revision. Reconciliation owns mapping revalidation; this is not a change of ownership.
+        boolean implementationMappingChanged = current != null &&
         (
-            !plan.id().equals(current.planId()) ||
-            !expectedOwnership.equals(current.ownership()) ||
             current.implementationModelRevision() != current.currentRevision() ||
             !Objects.equals(current.implementationModelChecksum(), current.currentChecksum())
         );
@@ -868,7 +870,7 @@ public class ModelSpecImportPreviewService {
         !Objects.equals(current.effectiveSqlChecksum(), canonical.effectiveSqlChecksum());
         boolean modelStatusConflict = current != null &&
         !"DRAFT".equals(current.currentModelStatus()) &&
-        (modelChanged || implementationChanged || effectiveSqlChanged);
+        (modelChanged || implementationChanged || effectiveSqlChanged || implementationMappingChanged);
         if (ownershipConflict) {
             issues.add(
                 issue(
@@ -922,7 +924,7 @@ public class ModelSpecImportPreviewService {
             action = Action.CREATE;
         } else if (reconciliation != null) {
             action = switch (reconciliation.action()) {
-                case SKIP -> modelChanged || implementationChanged || effectiveSqlChanged
+                case SKIP -> modelChanged || implementationChanged || effectiveSqlChanged || implementationMappingChanged
                     ? Action.UPDATE
                     : Action.SKIP;
                 case UPDATE -> Action.UPDATE;
@@ -930,6 +932,7 @@ public class ModelSpecImportPreviewService {
                 case BLOCKED_REMAP -> BLOCKED;
             };
         } else if (
+            !implementationMappingChanged &&
             Objects.equals(current.currentChecksum(), modelSpecChecksum) &&
             Objects.equals(current.currentImplementationChecksum(), canonical.implementationChecksum()) &&
             (
