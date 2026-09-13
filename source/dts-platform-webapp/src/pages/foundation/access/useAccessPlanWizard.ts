@@ -201,8 +201,10 @@ export async function saveAccessPlan(
 		throw new Error("已保存的草稿读取失败，请从任务列表重新进入");
 	let context: AccessPlanPayloadContext = input;
 	if (input.kind === "database" && input.values.tableSelectionMode === "all") {
+		const sourceDataSourceId = normalizeText(input.values.sourceDataSourceId);
+		if (!sourceDataSourceId) throw new Error("请选择数据库连接");
 		const tables = await ingestionTaskAPI.discoverTables({
-			source: { dataSourceId: input.values.sourceDataSourceId },
+			source: { dataSourceId: sourceDataSourceId },
 			filter: {
 				schema: input.values.readerSchema || undefined,
 				tablePattern: input.values.readerTablePattern || undefined,

@@ -102,6 +102,19 @@ describe("safeAccessPlanErrorMessage", () => {
 });
 
 describe("database save recovery", () => {
+	it("rejects a missing source before all-table discovery", async () => {
+		await expect(
+			saveAccessPlan({
+				kind: "database",
+				values: { ...values, sourceDataSourceId: undefined, tableSelectionMode: "all" },
+				defaultDestination: destination,
+				existingTask: null,
+			}),
+		).rejects.toThrow("请选择数据库连接");
+		expect(mocks.discoverTables).not.toHaveBeenCalled();
+		expect(mocks.createTask).not.toHaveBeenCalled();
+	});
+
 	it("reuses the persisted draft after admission fails", async () => {
 		mocks.createTask.mockResolvedValue({ taskId: 31 });
 		mocks.admitTask.mockRejectedValueOnce(new Error("TARGET_ASSET_UNRESOLVED")).mockResolvedValueOnce({ id: 31 });
