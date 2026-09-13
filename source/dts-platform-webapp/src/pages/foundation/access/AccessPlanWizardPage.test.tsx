@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it, vi } from "vitest";
@@ -64,7 +65,7 @@ describe("AccessPlanWizardPage", () => {
 
 	it("acquires a synchronous submit lock before validation and reports a saved active plan", () => {
 		expect(SOURCE).toMatch(
-			/if \(!acquireSingleFlight\(submitLockRef\)\) return;\s*try \{\s*await validateCurrentStep\(\)/,
+			/if \(!acquireSingleFlight\(submitLockRef\)\) return;\s*setSubmitError\(""\);\s*try \{\s*await validateCurrentStep\(\)/,
 		);
 		expect(SOURCE).toContain("接入计划已更新并生效");
 		expect(SOURCE).toContain("接入计划已保存并生效");

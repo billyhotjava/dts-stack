@@ -17,6 +17,8 @@
 | 重试产生重复草稿 | 创建已提交，准入失败后前端丢失任务 ID | 准入前保存 ID；当前向导重试先读取并更新已保存草稿，读取失败不回退新建 |
 | 编辑误扩大源表范围 | 更新逻辑合并 reader 表和 writer 表作为来源列表 | 数据库更新只用 reader 表，保留文件路径的既有行为 |
 | 多表静默漏表及目标冲突 | 映射按 Math.min 截断；去除 Schema 后可能同名 | 拒绝数量不一致、重复目标、未解析占位符及超过 1000 张表的计划 |
+| 调度格式误判 | 创建/更新保存 manual、cron:、interval:，设计校验却把它们全部当裸 Cron | 按已持久化的调度格式校验，保持无效间隔拒绝 |
+| 改为手动仍保留旧调度 | 更新 DTO 对手动调度省略字段，partialUpdate 保留原值 | 显式提交 manual，确保后续准入使用手动调度 |
 
 ## 不变量与边界
 
@@ -32,3 +34,9 @@
 - 复现提交 `c5f40bf68`：IngestionFlowProjectionServiceTest 的新增数据库首次落地用例稳定触发原始 422 TARGET_ASSET_UNRESOLVED。
 - 基线 IngestionTaskResourceTest 存在既有 HTTP 状态断言与统一异常处理不一致；分别记录，不能当成本次修复造成的回归。
 - 修复测试、正式构建、交付包、部署与真实业务验收：待执行并补证据，当前不宣称通过。
+
+## 扩展检查发现的未闭合项
+
+- **定时全量接入**：`stageAdmissionArtifacts` 仅对无已有 DAG 的手动 full_refresh 延迟生成作业；定时分支仍在执行记录产生之前调用 Addax 作业生成，而 `applyFullRefreshPreSql` 必须绑定真实 executionId。该路径存在制品生成时序冲突，需通过按次执行上下文驱动调度作业解决，不能伪造执行 ID 或退回预清空。此项仅完成源码定位，尚未修复或验证，不能宣称定时全量闭环通过。
+- **旧全量执行测试夹具**：`IngestionTaskFullRefreshExecutionTest` 有 5 个用例只桩定 findById，现有执行入口已使用 findByIdForUpdate，因此报 Task not found，未到达执行主体。该类失败不证明实际运行失败，也不算已通过；本次另用准入事务与目标表处理的针对性用例记录有效证据。
+- **真实业务验收入口**：本轮浏览器工具返回无可用浏览器，构建目录也无现成 e2e/.auth/user.json。不能用匿名探测或服务身份替代花卉业务的实际操作验收。

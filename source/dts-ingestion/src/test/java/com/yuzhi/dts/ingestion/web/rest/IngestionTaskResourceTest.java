@@ -517,8 +517,9 @@ class IngestionTaskResourceTest {
             "mysqlreader", Map.of("readerType", "mysqlreader"), null
         );
         when(ingestionSourceResolver.resolve(eq(sourceId), anyList())).thenReturn(source);
-        JdbcMetadataService.JdbcConnectionInfo info = org.mockito.Mockito.mock(JdbcMetadataService.JdbcConnectionInfo.class);
-        when(info.jdbcUrl()).thenReturn("jdbc:mysql://source/prs");
+        JdbcMetadataService.JdbcConnectionInfo info = new JdbcMetadataService.JdbcConnectionInfo(
+            "jdbc:mysql://source/prs", "test", "", null, null, Map.of()
+        );
         when(ingestionSourceResolver.resolveJdbcInfo(sourceId)).thenReturn(info);
         when(jdbcMetadataService.listTables(info, "prs", "c%", 0)).thenReturn(List.of(
             new JdbcMetadataService.TableMeta("prs", "customer", "TABLE"),

@@ -73,6 +73,20 @@ class IngestionTaskDesignServiceTest {
     }
 
     @Test
+    void designValidationAcceptsPersistedScheduleFormatsAndRejectsInvalidIntervals() {
+        IngestionTaskDTO task = taskDto();
+        when(taskQueryService.findOne(13L)).thenReturn(Optional.of(task));
+        for (String schedule : java.util.List.of("manual", "interval:15", "cron:0 0 2 * * *", "0 0 2 * * *")) {
+            task.setSyncSchedule(schedule);
+            assertThat(service.getDesign(13L).validation().valid()).as(schedule).isTrue();
+        }
+        for (String schedule : java.util.List.of("interval:0", "interval:abc", "cron:invalid")) {
+            task.setSyncSchedule(schedule);
+            assertThat(service.getDesign(13L).validation().valid()).as(schedule).isFalse();
+        }
+    }
+
+    @Test
     void getDesignUsesVersionedTaskAsSingleSourceAndGeneratesReadonlyTopology() {
         IngestionTaskDTO task = taskDto();
         when(taskQueryService.findOne(13L)).thenReturn(Optional.of(task));

@@ -353,7 +353,16 @@ public class IngestionTaskDesignService {
         }
         if (StringUtils.hasText(syncSchedule)) {
             try {
-                CronExpression.parse(syncSchedule.trim());
+                String schedule = syncSchedule.trim();
+                String normalizedSchedule = schedule.toLowerCase(Locale.ROOT);
+                if (normalizedSchedule.startsWith("interval:")) {
+                    if (Integer.parseInt(schedule.substring("interval:".length()).trim()) <= 0) {
+                        throw new IllegalArgumentException("调度间隔必须为正整数");
+                    }
+                } else if (!"manual".equals(normalizedSchedule)) {
+                    CronExpression.parse(normalizedSchedule.startsWith("cron:")
+                        ? schedule.substring("cron:".length()).trim() : schedule);
+                }
             } catch (IllegalArgumentException ex) {
                 issues.add(issue("SCHEDULE_INVALID", "syncSchedule", "调度表达式格式不正确"));
             }

@@ -355,7 +355,7 @@ export const buildAccessPlanUpdateDTO = (
 		destinationType: request.destination.type,
 		destinationConfig: request.destination.config,
 		syncMode: String(request.sync.mode || "full_refresh"),
-		syncSchedule: buildSyncScheduleText(context.values),
+		syncSchedule: buildSyncScheduleText(context.values) || "manual",
 		syncConfig,
 		syncPrefix: normalizeText(context.values.syncPrefix) || undefined,
 		tableMapping: sourceTables.map((source, index) => ({ source, target: targetTables[index] || source })),

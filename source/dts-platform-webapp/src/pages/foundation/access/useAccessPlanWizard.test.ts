@@ -162,6 +162,7 @@ describe("database save recovery", () => {
 					{ source: "prs.customer", target: "customer" },
 					{ source: "prs.contract", target: "contract" },
 				],
+				syncSchedule: "manual",
 			}),
 		);
 	});
