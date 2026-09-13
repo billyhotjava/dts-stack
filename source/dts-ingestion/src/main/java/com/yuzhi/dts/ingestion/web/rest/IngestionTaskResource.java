@@ -480,6 +480,13 @@ public class IngestionTaskResource {
             applySyncPrefixToWriterConfig(writerConfig, syncPrefix);
 
             if (isDraft) {
+                List<Map<String, String>> databaseMappings = List.of();
+                if (!isFileSource && !isApiSource) {
+                    databaseMappings = prepareDatabaseTableMapping(request, sourceOverrides, mergedReaderConfig, writerConfig);
+                    if (!StringUtils.hasText(writerType) || writerConfig.isEmpty()) {
+                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少目标数据库配置");
+                    }
+                }
                 AirflowAdapter.AirflowRequest airflowRequest = buildAirflowRequest(request.airflow());
                 com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO taskDTO =
                     new com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO();
@@ -510,6 +517,9 @@ public class IngestionTaskResource {
                 taskDTO.setAddaxConfig(toJsonNode(request.jobConfig()));
                 taskDTO.setAirflowEnabled(airflowRequest == null ? null : airflowRequest.enabled());
                 taskDTO.setAirflowDagId(airflowRequest == null ? null : normalize(airflowRequest.dagId()));
+                if (!databaseMappings.isEmpty()) {
+                    taskDTO.setTableMapping(toJsonNode(databaseMappings));
+                }
                 if (isApiSource) {
                     List<Map<String, String>> apiTableMapping = ApiSourceConfigNormalizer.deriveOdsMappings(
                         sourceOverrides,
@@ -1220,7 +1230,18 @@ public class IngestionTaskResource {
             }
             targets = computedTargets;
         }
-        int size = Math.min(sources.size(), targets.size());
+        if (sources.size() != targets.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "源表与目标表数量不一致，请逐表配置映射");
+        }
+        java.util.Set<String> uniqueTargets = new java.util.HashSet<>();
+        for (String target : targets) {
+            String key = normalize(target);
+            if (!StringUtils.hasText(key) || hasTablePlaceholder(key)
+                || !uniqueTargets.add(key.toLowerCase(java.util.Locale.ROOT))) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "目标表名称重复或未确定，请调整表映射或分开接入");
+            }
+        }
+        int size = sources.size();
         List<Map<String, String>> mappings = new java.util.ArrayList<>();
         for (int i = 0; i < size; i++) {
             String source = sources.get(i);
@@ -1235,6 +1256,32 @@ public class IngestionTaskResource {
             }
             mappings.add(mapping);
         }
+        return mappings;
+    }
+
+    private List<Map<String, String>> prepareDatabaseTableMapping(
+        IngestionTaskRequest request, Map<String, Object> sourceOverrides,
+        Map<String, Object> readerConfig, Map<String, Object> writerConfig
+    ) {
+        String selection = resolveStreamSelection(request.streams());
+        List<String> tables = isAllSelection(selection)
+            ? discoverAllTables(request.source().dataSourceId(), readerConfig, request.streams())
+            : resolveStreamTables(request.streams());
+        if (tables.isEmpty() && !isAllSelection(selection)) {
+            tables = stripTablePlaceholders(extractTables(sourceOverrides));
+        }
+        tables = applyExcludes(tables, request.streams()).stream().distinct().toList();
+        if (tables.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "未发现可用表，请重新发现并选择源表");
+        }
+        if (tables.size() > 1000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "单个任务最多接入 1000 张表，请分批配置");
+        }
+        // Persist only the safe overrides, never the resolved connection credentials.
+        applyTables(sourceOverrides, tables);
+        applyTables(readerConfig, tables);
+        List<Map<String, String>> mappings = deriveTableMapping(readerConfig, writerConfig, request.sync());
+        applyTables(writerConfig, mappings.stream().map(mapping -> mapping.get("target")).toList());
         return mappings;
     }
 
@@ -2573,7 +2620,10 @@ public class IngestionTaskResource {
                 readerConfig.putIfAbsent("readerType", taskDTO.getSourceType());
             }
             Map<String, Object> writerConfig = jsonNodeToMap(taskDTO.getDestinationConfig());
-            List<String> configuredSelectionTables = mergeTables(extractTables(readerConfig), extractTables(writerConfig));
+            // Target names must never expand the source read scope on a database edit.
+            List<String> configuredSelectionTables = isFileSourceUpdate
+                ? mergeTables(extractTables(readerConfig), extractTables(writerConfig))
+                : extractTables(readerConfig);
             List<String> selectionTables = stripTablePlaceholders(configuredSelectionTables);
             boolean dynamicTableSelection = selectionTables.isEmpty()
                 && configuredSelectionTables.stream().anyMatch(this::hasTablePlaceholder);

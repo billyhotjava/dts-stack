@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 	updateTask: vi.fn(),
 	admitTask: vi.fn(),
 	createTask: vi.fn(),
+	discoverTables: vi.fn(),
 }));
 
 vi.mock("@/api/services/dataSourcesService", () => ({
@@ -26,6 +27,7 @@ vi.mock("@/api/ingestion", async (importOriginal) => {
 			getTask: mocks.getTask,
 			updateTask: mocks.updateTask,
 			admitTask: mocks.admitTask,
+			discoverTables: mocks.discoverTables,
 		},
 	};
 });
@@ -88,10 +90,7 @@ describe("resolveUserClassificationRank", () => {
 describe("safeAccessPlanErrorMessage", () => {
 	it("shows the safe database authentication guidance and rejects raw JDBC details", () => {
 		expect(
-			safeAccessPlanErrorMessage(
-				new Error("数据库认证失败，请检查用户名、密码及来源 IP 授权"),
-				"源表发现失败",
-			),
+			safeAccessPlanErrorMessage(new Error("数据库认证失败，请检查用户名、密码及来源 IP 授权"), "源表发现失败"),
 		).toBe("数据库认证失败，请检查用户名、密码及来源 IP 授权");
 		expect(
 			safeAccessPlanErrorMessage(
@@ -99,6 +98,93 @@ describe("safeAccessPlanErrorMessage", () => {
 				"源表发现失败",
 			),
 		).toBe("源表发现失败");
+	});
+});
+
+describe("database save recovery", () => {
+	it("reuses the persisted draft after admission fails", async () => {
+		mocks.createTask.mockResolvedValue({ taskId: 31 });
+		mocks.admitTask.mockRejectedValueOnce(new Error("TARGET_ASSET_UNRESOLVED")).mockResolvedValueOnce({ id: 31 });
+		const onTaskSaved = vi.fn();
+		const input = {
+			kind: "database" as const,
+			values,
+			defaultDestination: destination,
+			existingTask: null,
+			onTaskSaved,
+		};
+		await expect(saveAccessPlan(input)).rejects.toThrow("任务草稿 31 已保存，但尚未生效");
+		expect(onTaskSaved).toHaveBeenCalledWith(31);
+		mocks.getTask.mockResolvedValue({
+			id: 31,
+			name: "客户表入湖",
+			sourceType: "mysqlreader",
+			sourceDataSourceId: "source-1",
+			sourceConfig: {},
+		});
+		mocks.updateTask.mockResolvedValue({ id: 31 });
+		await expect(saveAccessPlan({ ...input, resumeTaskId: 31 })).resolves.toEqual({ taskId: 31, updated: true });
+		expect(mocks.createTask).toHaveBeenCalledTimes(1);
+		expect(mocks.updateTask).toHaveBeenCalledTimes(1);
+	});
+
+	it("freezes all-table discovery on both create and edit", async () => {
+		mocks.discoverTables.mockResolvedValue([
+			{ schema: "prs", name: "customer" },
+			{ schema: "prs", name: "contract" },
+		]);
+		mocks.createTask.mockResolvedValue({ taskId: 32 });
+		mocks.admitTask.mockResolvedValue({ id: 32 });
+		const input = {
+			kind: "database" as const,
+			values: {
+				...values,
+				tableSelectionMode: "all" as const,
+				selectedTables: [],
+				readerSchema: "prs",
+				readerTablePattern: "c%",
+			},
+			defaultDestination: destination,
+			existingTask: null,
+		};
+		await saveAccessPlan(input);
+		expect(mocks.createTask).toHaveBeenCalledWith(
+			expect.objectContaining({
+				streams: expect.objectContaining({ selection: "manual", include: ["prs.customer", "prs.contract"] }),
+			}),
+		);
+		mocks.updateTask.mockResolvedValue({ id: 32 });
+		await saveAccessPlan({ ...input, editId: 32, existingTask: { id: 32 } as IngestionTaskDTO });
+		expect(mocks.updateTask).toHaveBeenCalledWith(
+			32,
+			expect.objectContaining({
+				tableMapping: [
+					{ source: "prs.customer", target: "customer" },
+					{ source: "prs.contract", target: "contract" },
+				],
+			}),
+		);
+	});
+
+	it("does not save an empty or colliding source selection", async () => {
+		mocks.discoverTables.mockResolvedValue([]);
+		await expect(
+			saveAccessPlan({
+				kind: "database",
+				values: { ...values, tableSelectionMode: "all" },
+				defaultDestination: destination,
+				existingTask: null,
+			}),
+		).rejects.toThrow("未发现可用表");
+		await expect(
+			saveAccessPlan({
+				kind: "database",
+				values: { ...values, selectedTables: ["a.customer", "b.customer"] },
+				defaultDestination: destination,
+				existingTask: null,
+			}),
+		).rejects.toThrow("目标表名称重复");
+		expect(mocks.createTask).not.toHaveBeenCalled();
 	});
 });
 
@@ -132,10 +218,7 @@ describe("loadAccessPlanBootstrap", () => {
 		expect(result.targetDataSources[0].id).toBe("target-1");
 		expect(result.defaultTargetDataSourceId).toBe("target-1");
 		expect(result.defaultDestination?.destinationName).toBe("默认湖");
-		expect(mocks.selections.mock.calls).toEqual([
-			[{ capability: "INGESTION_SOURCE" }],
-			[{ capability: "DBT_TARGET" }],
-		]);
+		expect(mocks.selections.mock.calls).toEqual([[{ capability: "INGESTION_SOURCE" }], [{ capability: "DBT_TARGET" }]]);
 	});
 });
 

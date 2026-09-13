@@ -119,17 +119,38 @@ const SAFE_ACCESS_PLAN_MESSAGES = new Set([
 	"目标字段名不能重复",
 	"全量重建必须使用已选择的原表名",
 	"请确认全量重建原表",
+	"未发现可用表，请重新发现并选择源表",
+	"单个任务最多接入 1000 张表，请分批配置",
+	"目标表名称重复或未确定，请调整表映射或分开接入",
+	"源表与目标表数量不一致，请逐表配置映射",
+	"已保存的草稿读取失败，请从任务列表重新进入",
 ]);
 
 export const safeAccessPlanErrorMessage = (error: unknown, fallback: string) => {
+	if (error instanceof AccessPlanAdmissionError) return error.message;
 	const message = error instanceof Error ? normalizeText(error.message) : "";
 	const detail = (error as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail;
-	if (/\bCLASSIFICATION_SEAL_STALE\b/.test(message) || (typeof detail === "string" && /\bCLASSIFICATION_SEAL_STALE\b/.test(detail))) {
+	if (
+		/\bCLASSIFICATION_SEAL_STALE\b/.test(message) ||
+		(typeof detail === "string" && /\bCLASSIFICATION_SEAL_STALE\b/.test(detail))
+	) {
 		return "文件密级证据已变化，本次配置尚未生效。请重新进入编辑页核对配置；如更换文件或调整字段密级，请重新上传并确认封存后保存。";
 	}
 	const knownTaskKindMessage = /^任务类型为(?:数据库|API|离线文件)，请从对应入口编辑$/.test(message);
 	return message && (SAFE_ACCESS_PLAN_MESSAGES.has(message) || knownTaskKindMessage) ? message : fallback;
 };
+
+export class AccessPlanAdmissionError extends Error {
+	constructor(
+		readonly taskId: number,
+		cause: unknown,
+	) {
+		super(
+			`任务草稿 ${taskId} 已保存，但尚未生效。${safeAccessPlanErrorMessage(cause, "请核对配置后重试。")} 再次保存将更新此草稿。`,
+		);
+		this.name = "AccessPlanAdmissionError";
+	}
+}
 
 export class AccessPlanInitializationError extends Error {
 	constructor(
@@ -161,6 +182,8 @@ export async function loadAccessPlanInitialization(editId: number | undefined, e
 type SaveAccessPlanInput = AccessPlanPayloadContext & {
 	existingTask: IngestionTaskDTO | null;
 	editId?: number;
+	resumeTaskId?: number;
+	onTaskSaved?: (taskId: number) => void;
 };
 
 export async function saveAccessPlan(
@@ -172,21 +195,41 @@ export async function saveAccessPlan(
 	if (input.editId === undefined && input.existingTask !== null) {
 		throw new Error("新建任务上下文尚未初始化，不能更新旧任务");
 	}
-	if (input.existingTask?.id) {
-		const payload = buildAccessPlanUpdateDTO(input.existingTask, input);
-		const updated = await ingestionTaskAPI.updateTask(input.existingTask.id, payload);
-		const taskId = Number(updated?.id ?? input.existingTask.id);
-		if (!Number.isSafeInteger(taskId) || taskId <= 0) throw new Error("接入任务编号无效");
-		await ingestionTaskAPI.admitTask(taskId);
-		return { taskId, updated: true };
+	const existingTask =
+		input.existingTask || (input.resumeTaskId ? await ingestionTaskAPI.getTask(input.resumeTaskId) : null);
+	if (input.resumeTaskId && existingTask?.id !== input.resumeTaskId)
+		throw new Error("已保存的草稿读取失败，请从任务列表重新进入");
+	let context: AccessPlanPayloadContext = input;
+	if (input.kind === "database" && input.values.tableSelectionMode === "all") {
+		const tables = await ingestionTaskAPI.discoverTables({
+			source: { dataSourceId: input.values.sourceDataSourceId },
+			filter: {
+				schema: input.values.readerSchema || undefined,
+				tablePattern: input.values.readerTablePattern || undefined,
+				limit: 0,
+				includeColumns: false,
+			},
+		});
+		const selectedTables = tables.map((table) => (table.schema ? `${table.schema}.${table.name}` : table.name));
+		if (!selectedTables.length) throw new Error("未发现可用表，请重新发现并选择源表");
+		context = { ...input, values: { ...input.values, tableSelectionMode: "manual", selectedTables } };
 	}
-	const payload = buildAccessPlanCreateRequest(input);
-	const created = await createIngestionTask(payload);
-	const resolvedTaskId = resolveCreatedTaskId(created);
-	const taskId = Number(resolvedTaskId);
+	let taskId: number;
+	if (existingTask?.id) {
+		const updated = await ingestionTaskAPI.updateTask(existingTask.id, buildAccessPlanUpdateDTO(existingTask, context));
+		taskId = Number(updated?.id ?? existingTask.id);
+	} else {
+		const created = await createIngestionTask(buildAccessPlanCreateRequest(context));
+		taskId = Number(resolveCreatedTaskId(created));
+	}
 	if (!Number.isSafeInteger(taskId) || taskId <= 0) throw new Error("接入任务编号无效");
-	await ingestionTaskAPI.admitTask(taskId);
-	return { taskId, updated: false };
+	input.onTaskSaved?.(taskId);
+	try {
+		await ingestionTaskAPI.admitTask(taskId);
+	} catch (error: unknown) {
+		throw new AccessPlanAdmissionError(taskId, error);
+	}
+	return { taskId, updated: existingTask !== null };
 }
 
 const INITIAL_STATE: AccessPlanRuntimeState = {
@@ -312,8 +355,10 @@ export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardI
 	const discoveryRequestIdRef = useRef(0);
 	const apiPreviewRequestIdRef = useRef(0);
 	const fileUploadRequestIdRef = useRef(0);
+	const savedTaskIdRef = useRef<number>();
 
 	useEffect(() => {
+		savedTaskIdRef.current = undefined;
 		let active = true;
 		discoveryRequestIdRef.current += 1;
 		apiPreviewRequestIdRef.current += 1;
@@ -531,13 +576,18 @@ export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardI
 		if (fileUploadResult === null) fileUploadRequestIdRef.current += 1;
 		const baseline = classificationFileRef.current;
 		let nextFile = fileUploadResult;
-		if (fileUploadResult && baseline?.fileId === fileUploadResult.fileId &&
+		if (
+			fileUploadResult &&
+			baseline?.fileId === fileUploadResult.fileId &&
 			!validateFileTargetColumns(fileUploadResult.columns).length &&
-			baseline.columns.some((column, index) => column.name !== fileUploadResult.columns[index]?.name)) {
+			baseline.columns.some((column, index) => column.name !== fileUploadResult.columns[index]?.name)
+		) {
 			// Read every level from the immutable baseline before assigning any new
 			// keys. This also handles swaps without overwriting another column.
 			const fields = { ...baseline.fieldClassifications };
-			baseline.columns.forEach((column) => { delete fields[column.name]; });
+			baseline.columns.forEach((column) => {
+				delete fields[column.name];
+			});
 			baseline.columns.forEach((column, index) => {
 				const next = fileUploadResult.columns[index];
 				const level = baseline.fieldClassifications?.[column.name];
@@ -588,6 +638,10 @@ export function useAccessPlanWizard({ kind, editId, form }: UseAccessPlanWizardI
 				fileUploadResult: state.fileUploadResult,
 				existingTask: state.existingTask,
 				editId,
+				resumeTaskId: editId === undefined ? savedTaskIdRef.current : undefined,
+				onTaskSaved: (taskId) => {
+					savedTaskIdRef.current = taskId;
+				},
 			});
 		} finally {
 			setState((previous) => ({ ...previous, saving: false }));

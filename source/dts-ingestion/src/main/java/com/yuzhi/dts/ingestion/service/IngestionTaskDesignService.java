@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.service;
 
+import com.yuzhi.dts.common.ingestion.ManagedDatabaseLandingPlan;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -300,7 +301,20 @@ public class IngestionTaskDesignService {
         if (destinationConfig == null || !destinationConfig.isObject()) {
             issues.add(issue("DESTINATION_CONFIG_REQUIRED", "destination.config", "目标配置不能为空"));
         }
-        if (targetDatasetId == null) {
+        List<String> plannedSources = new ArrayList<>();
+        List<String> plannedTargets = new ArrayList<>();
+        if (tableMapping != null && tableMapping.isArray()) {
+            tableMapping.forEach(mapping -> {
+                plannedSources.add(mapping.path("source").asText(""));
+                plannedTargets.add(mapping.path("target").asText(""));
+            });
+        }
+        boolean managedLanding = ManagedDatabaseLandingPlan.isConfigured(
+            sourceType, sourceDataSourceId == null ? null : sourceDataSourceId.toString(), destinationType,
+            destinationConfig == null ? null : destinationConfig.path("targetDataSourceId").asText(null),
+            syncMode, plannedSources, plannedTargets
+        );
+        if (targetDatasetId == null && (qualityEnabled || StringUtils.hasText(policyRef) || !managedLanding)) {
             issues.add(issue("TARGET_ASSET_UNRESOLVED", "targetDatasetId", "请选择唯一的目标数据资产"));
         }
         requireText(issues, syncMode, "SYNC_MODE_REQUIRED", "syncMode", "同步模式不能为空");

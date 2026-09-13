@@ -178,6 +178,11 @@ const buildDatabaseRequest = (context: AccessPlanPayloadContext): AccessPlanCrea
 	const sourceDataSourceId = requireText(values.sourceDataSourceId, "请选择数据库连接");
 	const selectedTables = values.selectedTables.map(normalizeText).filter(Boolean);
 	if (values.tableSelectionMode === "manual" && !selectedTables.length) throw new Error("请选择需要接入的表");
+	if (selectedTables.length > 1000) throw new Error("单个任务最多接入 1000 张表，请分批配置");
+	const targetNames = selectedTables.map((table) => (table.split(".").pop() || table).toLowerCase());
+	if (new Set(targetNames).size !== targetNames.length) {
+		throw new Error("目标表名称重复或未确定，请调整表映射或分开接入");
+	}
 	const readerType =
 		normalizeText(values.readerType) || resolveReaderTypeFromDataSource(context.selectedSource) || "rdbmsreader";
 	const readerConfig = buildReaderConfig({

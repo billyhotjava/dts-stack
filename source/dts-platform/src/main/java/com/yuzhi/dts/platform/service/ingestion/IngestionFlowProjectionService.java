@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.ingestion;
 
+import com.yuzhi.dts.common.ingestion.ManagedDatabaseLandingPlan;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.governance.GovQualityWorkflowRun;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
@@ -234,9 +235,10 @@ public class IngestionFlowProjectionService {
         UUID policyDatasetId = parseDatasetId(policyRef);
         UUID destinationDatasetId = destinationDatasetId(payload);
         if (destinationDatasetId == null) {
-            // A create-new file landing has no physical catalog asset until its first
-            // successful execution is observed. Quality remains unavailable meanwhile.
-            if (!qualityEnabled && isNewManagedFileTarget(payload)) {
+            // Initial physical landing precedes catalog observation. A complete
+            // managed plan can run without claiming asset or quality readiness.
+            if (!qualityEnabled && !StringUtils.hasText(policyRef) && !hasExplicitTargetAsset(payload)
+                && (isNewManagedFileTarget(payload) || isManagedDatabaseTarget(payload))) {
                 return unresolvedAssetProjection();
             }
             throw unprocessable("TARGET_ASSET_UNRESOLVED");
@@ -283,6 +285,37 @@ public class IngestionFlowProjectionService {
             destinationConfig = map(map(design.get("destination")).get("config"));
         }
         return StringUtils.hasText(text(destinationConfig.get("targetDataSourceId")));
+    }
+
+    private boolean isManagedDatabaseTarget(Map<String, Object> design) {
+        Map<String, Object> source = map(design.get("source"));
+        Map<String, Object> destination = map(design.get("destination"));
+        Map<String, Object> config = map(design.get("destinationConfig"));
+        if (config.isEmpty()) config = map(destination.get("config"));
+        List<String> sources = new java.util.ArrayList<>();
+        List<String> targets = new java.util.ArrayList<>();
+        if (design.get("tableMapping") instanceof Iterable<?> mappings) {
+            for (Object entry : mappings) {
+                Map<String, Object> mapping = map(entry);
+                sources.add(text(mapping.get("source")));
+                targets.add(text(mapping.get("target")));
+            }
+        }
+        return ManagedDatabaseLandingPlan.isConfigured(
+            text(design.getOrDefault("sourceType", source.get("type"))),
+            text(design.getOrDefault("sourceDataSourceId", source.get("dataSourceId"))),
+            text(design.getOrDefault("destinationType", destination.get("type"))),
+            text(config.get("targetDataSourceId")), text(design.get("syncMode")), sources, targets
+        );
+    }
+
+    private boolean hasExplicitTargetAsset(Map<String, Object> design) {
+        Map<String, Object> destination = map(design.get("destination"));
+        Map<String, Object> config = map(design.get("destinationConfig"));
+        if (config.isEmpty()) config = map(destination.get("config"));
+        return StringUtils.hasText(text(design.get("targetDatasetId")))
+            || StringUtils.hasText(text(map(destination.get("assetRef")).get("datasetId")))
+            || StringUtils.hasText(text(map(config.get("assetRef")).get("datasetId")));
     }
 
     private AssetProjection unresolvedAssetProjection() {

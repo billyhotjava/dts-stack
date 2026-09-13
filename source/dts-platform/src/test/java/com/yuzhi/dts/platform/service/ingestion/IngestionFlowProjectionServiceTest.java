@@ -247,6 +247,9 @@ class IngestionFlowProjectionServiceTest {
         verify(datasetRepository, never()).findById(org.mockito.ArgumentMatchers.any());
         design.put("postIngestionQualityEnabled", true);
         assertThatThrownBy(() -> service.validateDesignReferences(design, null)).hasMessageContaining("TARGET_ASSET_UNRESOLVED");
+        design.put("postIngestionQualityEnabled", false);
+        design.put("targetDatasetId", "invalid-existing-reference");
+        assertThatThrownBy(() -> service.validateDesignReferences(design, null)).hasMessageContaining("TARGET_ASSET_UNRESOLVED");
     }
 
     @Test

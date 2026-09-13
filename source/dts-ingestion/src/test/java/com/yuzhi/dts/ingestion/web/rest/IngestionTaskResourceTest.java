@@ -489,7 +489,11 @@ class IngestionTaskResourceTest {
         );
         when(ingestionSourceResolver.resolve(eq(sourceId), anyList())).thenReturn(source);
         when(connectorCapabilityService.normalizeSyncMode(any())).thenReturn("full_refresh");
-        when(ingestionTaskService.create(any(), eq(source), eq(true))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(ingestionTaskService.create(any(), eq(source), eq(true))).thenAnswer(invocation -> {
+            IngestionTaskDTO task = invocation.getArgument(0);
+            task.setId(110L);
+            return task;
+        });
 
         mockMvc.perform(post("/api/ingestion/tasks").contentType(MediaType.APPLICATION_JSON).content("""
             {"name":"花卉接入","source":{"dataSourceId":"11111111-2222-3333-4444-555555555555","type":"mysqlreader","config":{}},
@@ -504,6 +508,76 @@ class IngestionTaskResourceTest {
             .andExpect(jsonPath("$.data.task.tableMapping[1].target").value("ods_prs_contract"))
             .andExpect(jsonPath("$.data.task.destinationConfig.table[1]").value("ods_prs_contract"));
         verify(addaxJobService, never()).createJob(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createTask_databaseAllSelectionIsDiscoveredAndFrozen() throws Exception {
+        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        IngestionSourceResolver.ResolvedSource source = new IngestionSourceResolver.ResolvedSource(
+            "mysqlreader", Map.of("readerType", "mysqlreader"), null
+        );
+        when(ingestionSourceResolver.resolve(eq(sourceId), anyList())).thenReturn(source);
+        JdbcMetadataService.JdbcConnectionInfo info = org.mockito.Mockito.mock(JdbcMetadataService.JdbcConnectionInfo.class);
+        when(info.jdbcUrl()).thenReturn("jdbc:mysql://source/prs");
+        when(ingestionSourceResolver.resolveJdbcInfo(sourceId)).thenReturn(info);
+        when(jdbcMetadataService.listTables(info, "prs", "c%", 0)).thenReturn(List.of(
+            new JdbcMetadataService.TableMeta("prs", "customer", "TABLE"),
+            new JdbcMetadataService.TableMeta("prs", "contract", "TABLE")
+        ));
+        when(connectorCapabilityService.normalizeSyncMode(any())).thenReturn("full_refresh");
+        when(ingestionTaskService.create(any(), eq(source), eq(true))).thenAnswer(invocation -> {
+            IngestionTaskDTO task = invocation.getArgument(0);
+            task.setId(111L);
+            return task;
+        });
+        mockMvc.perform(post("/api/ingestion/tasks").contentType(MediaType.APPLICATION_JSON).content("""
+            {"name":"花卉全部表","source":{"dataSourceId":"11111111-2222-3333-4444-555555555555","type":"mysqlreader","config":{}},
+             "destination":{"type":"postgresqlwriter","config":{"targetDataSourceId":"a0000000-0000-0000-0000-000000000001"}},
+             "sync":{"mode":"full_refresh","prefix":"ods_prs_"},
+             "streams":{"selection":"all","schema":"prs","tablePattern":"c%","exclude":["contract"]}}
+            """))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.task.sourceConfig.table.length()").value(1))
+            .andExpect(jsonPath("$.data.task.tableMapping[0].source").value("prs.customer"))
+            .andExpect(jsonPath("$.data.task.tableMapping[0].target").value("ods_prs_customer"));
+    }
+
+    @Test
+    void createTask_databaseRejectsCollidingTargetsAndUnequalMappingCountsBeforeSaving() throws Exception {
+        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        when(ingestionSourceResolver.resolve(eq(sourceId), anyList())).thenReturn(
+            new IngestionSourceResolver.ResolvedSource("mysqlreader", Map.of("readerType", "mysqlreader"), null)
+        );
+        when(connectorCapabilityService.normalizeSyncMode(any())).thenReturn("full_refresh");
+        for (String writerTables : List.of("[]", "[\"ods_only_one\"]")) {
+            mockMvc.perform(post("/api/ingestion/tasks").contentType(MediaType.APPLICATION_JSON).content("""
+                {"name":"不能漏表","source":{"dataSourceId":"11111111-2222-3333-4444-555555555555","type":"mysqlreader","config":{}},
+                 "destination":{"type":"postgresqlwriter","config":{"table":%s}},
+                 "sync":{"mode":"full_refresh"},"streams":{"selection":"manual","include":["a.customer","b.customer"]}}
+                """.formatted(writerTables)))
+                .andExpect(status().isBadRequest());
+        }
+        verify(ingestionTaskService, never()).create(any(), any(), eq(true));
+    }
+
+    @Test
+    void updateTask_databaseTargetNamesNeverBecomeSourceTables() throws Exception {
+        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        when(ingestionSourceResolver.resolve(eq(sourceId), anyList())).thenReturn(
+            new IngestionSourceResolver.ResolvedSource("mysqlreader", Map.of("readerType", "mysqlreader"), null)
+        );
+        when(connectorCapabilityService.normalizeSyncMode(any())).thenReturn("full_refresh");
+        when(ingestionTaskService.update(eq(112L), any())).thenAnswer(invocation -> invocation.getArgument(1));
+        mockMvc.perform(put("/api/ingestion/tasks/112").contentType(MediaType.APPLICATION_JSON).content("""
+            {"id":112,"name":"花卉编辑","sourceType":"mysqlreader","sourceDataSourceId":"11111111-2222-3333-4444-555555555555",
+             "sourceConfig":{"table":["prs.customer","prs.contract"]},"destinationType":"postgresqlwriter",
+             "destinationConfig":{"table":["ods_prs_customer","ods_prs_contract"]},"syncMode":"full_refresh","syncSchedule":"manual",
+             "tableMapping":[{"source":"prs.customer","target":"ods_prs_customer"},{"source":"prs.contract","target":"ods_prs_contract"}]}
+            """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.tableMapping.length()").value(2))
+            .andExpect(jsonPath("$.tableMapping[1].source").value("prs.contract"))
+            .andExpect(jsonPath("$.tableMapping[1].target").value("ods_prs_contract"));
     }
 
     @Test
