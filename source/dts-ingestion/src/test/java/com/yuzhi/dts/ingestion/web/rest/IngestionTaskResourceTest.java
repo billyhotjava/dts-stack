@@ -482,6 +482,31 @@ class IngestionTaskResourceTest {
     }
 
     @Test
+    void createTask_databaseDraftFreezesSelectedTablesAndMappingsWithoutCreatingJobs() throws Exception {
+        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        IngestionSourceResolver.ResolvedSource source = new IngestionSourceResolver.ResolvedSource(
+            "mysqlreader", Map.of("readerType", "mysqlreader", "password", "runtime-only"), null
+        );
+        when(ingestionSourceResolver.resolve(eq(sourceId), anyList())).thenReturn(source);
+        when(connectorCapabilityService.normalizeSyncMode(any())).thenReturn("full_refresh");
+        when(ingestionTaskService.create(any(), eq(source), eq(true))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        mockMvc.perform(post("/api/ingestion/tasks").contentType(MediaType.APPLICATION_JSON).content("""
+            {"name":"花卉接入","source":{"dataSourceId":"11111111-2222-3333-4444-555555555555","type":"mysqlreader","config":{}},
+             "destination":{"type":"postgresqlwriter","config":{"targetDataSourceId":"a0000000-0000-0000-0000-000000000001","table":["${table}"]}},
+             "sync":{"mode":"full_refresh","prefix":"ods_prs_"},
+             "streams":{"selection":"manual","include":["prs.customer","prs.contract"]}}
+            """))
+            .andExpect(status().isOk()).andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.task.sourceConfig.table[1]").value("prs.contract"))
+            .andExpect(jsonPath("$.data.task.sourceConfig.password").doesNotExist())
+            .andExpect(jsonPath("$.data.task.tableMapping[0].target").value("ods_prs_customer"))
+            .andExpect(jsonPath("$.data.task.tableMapping[1].target").value("ods_prs_contract"))
+            .andExpect(jsonPath("$.data.task.destinationConfig.table[1]").value("ods_prs_contract"));
+        verify(addaxJobService, never()).createJob(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
     void createTask_jdbcFlagsCannotBypassDraftAdmission() throws Exception {
         UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
         Map<String, Object> readerConfig = new java.util.LinkedHashMap<>();

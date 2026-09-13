@@ -57,6 +57,22 @@ class IngestionTaskDesignServiceTest {
     }
 
     @Test
+    void databaseLandingDesignDoesNotRequireAnAssetBeforeItsFirstExecution() {
+        IngestionTaskDTO task = taskDto();
+        task.setSourceType("mysqlreader");
+        task.setTargetDatasetId(null);
+        task.setQualityPolicyRef(null);
+        task.setDestinationConfig(objectMapper.createObjectNode()
+            .put("targetDataSourceId", "a0000000-0000-0000-0000-000000000001"));
+        when(taskQueryService.findOne(13L)).thenReturn(Optional.of(task));
+
+        IngestionTaskDesignDTO design = service.getDesign(13L);
+        assertThat(design.validation().valid()).isTrue();
+        assertThat(design.destination().assetRef().datasetId()).isNull();
+        assertThat(design.postIngestionQuality().enabled()).isFalse();
+    }
+
+    @Test
     void getDesignUsesVersionedTaskAsSingleSourceAndGeneratesReadonlyTopology() {
         IngestionTaskDTO task = taskDto();
         when(taskQueryService.findOne(13L)).thenReturn(Optional.of(task));

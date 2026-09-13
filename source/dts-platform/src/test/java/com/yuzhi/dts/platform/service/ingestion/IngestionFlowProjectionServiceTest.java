@@ -231,6 +231,25 @@ class IngestionFlowProjectionServiceTest {
     }
 
     @Test
+    void designReferenceValidationAllowsCompleteDatabaseLandingBeforeCatalogObservation() {
+        Map<String, Object> design = new java.util.LinkedHashMap<>(Map.of(
+            "sourceType", "mysqlreader",
+            "sourceDataSourceId", "11111111-2222-3333-4444-555555555555",
+            "destinationType", "postgresqlwriter",
+            "syncMode", "full_refresh",
+            "destinationConfig", Map.of("targetDataSourceId", "a0000000-0000-0000-0000-000000000001"),
+            "tableMapping", List.of(
+                Map.of("source", "prs.customer", "target", "ods_prs_customer"),
+                Map.of("source", "prs.contract", "target", "ods_prs_contract")
+            )
+        ));
+        assertThat(service.validateDesignReferences(design, null).resolutionState()).isEqualTo("UNRESOLVED");
+        verify(datasetRepository, never()).findById(org.mockito.ArgumentMatchers.any());
+        design.put("postIngestionQualityEnabled", true);
+        assertThatThrownBy(() -> service.validateDesignReferences(design, null)).hasMessageContaining("TARGET_ASSET_UNRESOLVED");
+    }
+
+    @Test
     void designReferenceValidationStillRejectsUnresolvedNonFileTarget() {
         Map<String, Object> design = Map.of(
             "sourceType", "mysqlreader",
