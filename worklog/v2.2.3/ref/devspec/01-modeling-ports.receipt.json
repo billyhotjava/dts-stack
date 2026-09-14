@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/01-modeling-ports.architecture.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/01-modeling-ports.html",
+  "specification": {
+    "sha256": "712d9504741e34a0505b615fa71474d6956dc42df0ac900016e5b79a8d45b585",
+    "bytes": 3398
+  },
+  "artifact": {
+    "sha256": "d91b1e79241f2880d76a1abf981db55d918f4e5f4e5b68284e2b9c242e5a902c",
+    "bytes": 712026
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

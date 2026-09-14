@@ -1,0 +1,150 @@
+{
+  "date": "2026-09-14",
+  "scope": "DTS v2.2.3 接口级设计文档（T1 四条主链）",
+  "source_commit": "915097e220817313ac313091d9c22fb21763796c",
+  "archify_version": "2.16.0",
+  "entry": "index.html",
+  "reading_guide": "README.md",
+  "call_graph_atlas": "assets/call-graph-and-dispatch.md",
+  "portal_sha256": "a3db54e2555b79ac37125162aae88b57e75beff62b093d727ddd5ac3b9213ba3",
+  "diagrams": [
+    {
+      "id": "00-t1-overview",
+      "diagram_type": "architecture",
+      "specification": "diagrams/00-t1-overview.architecture.json",
+      "output": "00-t1-overview.html",
+      "specification_sha256": "584422aad11cdf94722312cd3608a22a554b172d0bd19b7105a7c713fcba7619",
+      "artifact_sha256": "480860770ae7ce7be44892acd5989cccc9e51b1cb53486919e0bb980131d2802",
+      "validation": "showcase pass, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读 2048x1320 light 截图：标签与节点可读，无截断/遮挡。",
+      "receipt": "00-t1-overview.receipt.json",
+      "validation_receipt": "00-t1-overview.validation.json",
+      "visual_receipt": "00-t1-overview.visual-check.json"
+    },
+    {
+      "id": "01-modeling-ports",
+      "diagram_type": "architecture",
+      "specification": "diagrams/01-modeling-ports.architecture.json",
+      "output": "01-modeling-ports.html",
+      "specification_sha256": "712d9504741e34a0505b615fa71474d6956dc42df0ac900016e5b79a8d45b585",
+      "artifact_sha256": "d91b1e79241f2880d76a1abf981db55d918f4e5f4e5b68284e2b9c242e5a902c",
+      "validation": "showcase pass, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [],
+      "visual_notes": "仅机器包含与可读性检查通过；未逐张人工阅读。",
+      "receipt": "01-modeling-ports.receipt.json",
+      "validation_receipt": "01-modeling-ports.validation.json",
+      "visual_receipt": "01-modeling-ports.visual-check.json"
+    },
+    {
+      "id": "01-modeling-publish",
+      "diagram_type": "sequence",
+      "specification": "diagrams/01-modeling-publish.sequence.json",
+      "output": "01-modeling-publish.html",
+      "specification_sha256": "f16fde7fba38664586ebfb48a10debce5586a1026aea9128cc0696f46d346503",
+      "artifact_sha256": "816bee1ca9564ddee1e2f1eeac1421f39bad63b107e29a5aa53b5c293a59b3af",
+      "validation": "showcase pass, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [],
+      "visual_notes": "仅机器包含与可读性检查通过；未逐张人工阅读。",
+      "receipt": "01-modeling-publish.receipt.json",
+      "validation_receipt": "01-modeling-publish.validation.json",
+      "visual_receipt": "01-modeling-publish.visual-check.json"
+    },
+    {
+      "id": "02-ingestion-execution",
+      "diagram_type": "sequence",
+      "specification": "diagrams/02-ingestion-execution.sequence.json",
+      "output": "02-ingestion-execution.html",
+      "specification_sha256": "fa9914ce674b72cd43595dc85c23490e96b2e9142ad833789a8e21102646016f",
+      "artifact_sha256": "b7be595928f6c48f170710ec4ca0113f7ea00dd18782ff1a5851bc7995d687f4",
+      "validation": "showcase pass, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读 2048x1320 light 截图：标签与节点可读，无截断/遮挡。",
+      "receipt": "02-ingestion-execution.receipt.json",
+      "validation_receipt": "02-ingestion-execution.validation.json",
+      "visual_receipt": "02-ingestion-execution.visual-check.json"
+    },
+    {
+      "id": "03-admin-approval",
+      "diagram_type": "sequence",
+      "specification": "diagrams/03-admin-approval.sequence.json",
+      "output": "03-admin-approval.html",
+      "specification_sha256": "88aa745aa2f796c43db6a2883653392dd2a361b28f9afa602e49b7776e300bea",
+      "artifact_sha256": "f6f790e94c7ae0f69f5af4b9f0169e70d44653a42ce00c5b4bf9637ee37c9578",
+      "validation": "showcase pass, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [],
+      "visual_notes": "仅机器包含与可读性检查通过；未逐张人工阅读。",
+      "receipt": "03-admin-approval.receipt.json",
+      "validation_receipt": "03-admin-approval.validation.json",
+      "visual_receipt": "03-admin-approval.visual-check.json"
+    },
+    {
+      "id": "04-analytics-consumption",
+      "diagram_type": "sequence",
+      "specification": "diagrams/04-analytics-consumption.sequence.json",
+      "output": "04-analytics-consumption.html",
+      "specification_sha256": "7afab0825bdb6551085eaeaed4b4d9de157435a607e8134ddcf75c5a302069da",
+      "artifact_sha256": "940630388e5afd443025a1b7722adb4fa7cf5335956785a4c645c2ec838927da",
+      "validation": "showcase pass, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [],
+      "visual_notes": "仅机器包含与可读性检查通过；未逐张人工阅读。",
+      "receipt": "04-analytics-consumption.receipt.json",
+      "validation_receipt": "04-analytics-consumption.validation.json",
+      "visual_receipt": "04-analytics-consumption.visual-check.json"
+    }
+  ],
+  "documents": [
+    "README.md",
+    "01-modeling-mainline.md",
+    "02-ingestion-execution.md",
+    "03-admin-approval.md",
+    "04-analytics-consumption.md"
+  ],
+  "assets": [
+    "assets/call-graph-and-dispatch.md",
+    "assets/interface-impl-inventory.md",
+    "assets/error-code-inventory.md",
+    "assets/rest-inventory-dts-platform.md",
+    "assets/rest-inventory-dts-ingestion.md",
+    "assets/rest-inventory-dts-admin.md",
+    "assets/rest-inventory-dts-analytics.md"
+  ],
+  "evidence_checks": {
+    "prefixed_file_line_refs": 239,
+    "error_code_refs": 719,
+    "problems": 0
+  },
+  "verification": {
+    "documentation": "passed",
+    "archify_showcase_validation": "6/6 passed",
+    "browser_containment": "6/6 passed at 1440x900,1600x1000,1920x1080,2048x1320",
+    "manual_visual_inspection": "2/6 diagrams inspected (00-t1-overview, 02-ingestion-execution); others machine-only",
+    "source_code_tests": "not run for this documentation task",
+    "formal_product_build_and_package": "not run",
+    "container_deployment": "not run",
+    "authenticated_business_acceptance": "not run"
+  },
+  "git_status": "待提交"
+}

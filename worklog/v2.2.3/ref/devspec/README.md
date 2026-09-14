@@ -3,6 +3,7 @@
 本目录是交付文档套件（`worklog/v2.2.3/spec/`，尤其 02-设计方案、04-集成接口说明）的**工程源**：
 先用可核对的方式把 T1 主链写到接口与关键调用级别，评审通过后再汇总进正式正文。
 
+- 阅读入口：**[index.html](index.html)**（门户，链接全部 Archify 图与工程源；可离线打开）
 - 日期：2026-09-14
 - 源码基线：`915097e220817313ac313091d9c22fb21763796c`（每篇文档头部重复记录）
 - 上层门面材料：`worklog/v2.2.3/ref/intro/`（Archify 高层图，服务级）
@@ -58,11 +59,20 @@
 
 ```
 ref/devspec/
+├── index.html                   阅读门户（主题切换、图与文档导航）
+├── handoff.json                 图表交付/校验/尺寸检查与人工阅读记录
 ├── README.md                    本文件
 ├── 01-modeling-mainline.md
 ├── 02-ingestion-execution.md
 ├── 03-admin-approval.md
 ├── 04-analytics-consumption.md
+├── 00-t1-overview.html + .receipt/.validation/.visual-check.json
+├── 01-modeling-ports.html + ...
+├── 01-modeling-publish.html + ...
+├── 02-ingestion-execution.html + ...
+├── 03-admin-approval.html + ...
+├── 04-analytics-consumption.html + ...
+├── diagrams/                    Archify 图源 JSON（架构/关系/时序）
 └── assets/
     ├── rest-inventory-<service>.md      脚本生成的接口清单
     ├── interface-impl-inventory.md       接口/实现/抽象类关系清单
@@ -73,15 +83,29 @@ ref/devspec/
 
 ## 6 当前状态（2026-09-14）
 
-- 已完成 T1 四篇主链文档与 Mermaid 图（15 张）、四份 REST 接口清单、接口/实现清单、调用分派图谱、错误码清单（719 条首次出现）和生成脚本。
+- 已完成 T1 四篇主链文档（内嵌 15 张 Mermaid 作为工程源）与 6 张 Archify 图（2 架构/关系 + 4 时序），四份 REST 接口清单、接口/实现清单、调用分派图谱、错误码清单（719 条首次出现）和生成脚本。
+- 6 张 Archify 图全部通过 showcase 校验（0 诊断）、deliver 交付与四档桌面尺寸包含检查；门户见 index.html；记录见 handoff.json。
 - 四篇文档均补齐主链动作矩阵（端点 → 应用服务 → 关键下游）与关键链路方法级时序。
 - 239 处 `文件:行号` 引用已用脚本核对（存在且行号在范围内），并抽样人工比对行内容。
 - Mermaid 仅通过基础语法检查（围栏、图类型、常见语法），**未做真实渲染**；评审前建议在支持 Mermaid 的查看器中过一遍。
 - 未完成：spec/02、04 正式正文汇总；T2（治理质量/标签、BI 编排、数据服务、PKI/MDM）。
 
-## 7 维护方式
+## 7 Archify 图表与再生成
+
+图源在 `diagrams/`，门户为 `index.html`，交接记录为 `handoff.json`。命令（从本目录执行）：
+
+```bash
+archify_cli="${HOME}/.agents/skills/archify/bin/archify.mjs"
+ARCHIFY_UPDATE_CHECK_DISABLED=1 node "$archify_cli" validate architecture diagrams/00-t1-overview.architecture.json --quality showcase --json > 00-t1-overview.validation.json
+ARCHIFY_UPDATE_CHECK_DISABLED=1 node "$archify_cli" deliver architecture diagrams/00-t1-overview.architecture.json 00-t1-overview.html --quality showcase --json > 00-t1-overview.receipt.json
+ARCHIFY_UPDATE_CHECK_DISABLED=1 node "$archify_cli" visual-check 00-t1-overview.html --json > 00-t1-overview.visual-check.json
+```
+
+其余图替换类型（architecture/sequence）与文件名即可。Archify 只承载架构/关系/时序视图；Markdown 中的 Mermaid 与 file:line 证据仍是内容源，二者随基线一起更新。
+
+## 8 维护方式
 
 1. 基线变更后重跑 `assets/scripts/` 中的清点脚本，更新文档中的行号与 SHA。
 2. 只修改有证据变化的内容；新增接口方法必须在清单和对应链路中同步。
 3. Mermaid 图须能通过渲染校验；时序图只覆盖关键链路，避免退化为全量调用图。
-4. 评审通过后，按 spec 套件模板汇总为 02/04 正文，devspec 保留为可追溯工程源。
+4. 评审通过后，按 spec 套件模板汇总为 02/04 正文，devspec 保留为可追溯工程源；整理正文前不改动 spec 目录。

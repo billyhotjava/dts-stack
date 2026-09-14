@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/04-analytics-consumption.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/04-analytics-consumption.html",
+  "specification": {
+    "sha256": "7afab0825bdb6551085eaeaed4b4d9de157435a607e8134ddcf75c5a302069da",
+    "bytes": 3943
+  },
+  "artifact": {
+    "sha256": "940630388e5afd443025a1b7722adb4fa7cf5335956785a4c645c2ec838927da",
+    "bytes": 714092
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

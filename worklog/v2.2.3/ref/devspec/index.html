@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DTS 接口级设计文档（devspec）</title>
+<style>
+  :root{
+    --bg:#f6f8fa; --panel:#ffffff; --text:#1f2328; --muted:#57606a; --border:#d0d7de;
+    --accent:#0969da; --accent-soft:#ddf4ff; --shadow:0 1px 3px rgba(27,31,36,.08);
+    --pill:#eff2f5; --pill-text:#57606a;
+  }
+  [data-theme="dark"]{
+    --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#8b949e; --border:#30363d;
+    --accent:#58a6ff; --accent-soft:#12283f; --shadow:0 1px 3px rgba(0,0,0,.4);
+    --pill:#21262d; --pill-text:#8b949e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  .wrap{max-width:1180px;margin:0 auto;padding:32px 20px 64px}
+  header{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start;justify-content:space-between;margin-bottom:8px}
+  .badge{display:inline-block;font-size:12px;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);margin-bottom:10px}
+  h1{font-size:26px;margin:0 0 6px}
+  .meta{color:var(--muted);font-size:13px}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--panel);color:var(--text);text-decoration:none;font-size:13px;cursor:pointer;box-shadow:var(--shadow)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  .lead{color:var(--muted);margin:14px 0 28px;max-width:900px}
+  h2{font-size:17px;margin:34px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px}
+  .card h3{margin:0;font-size:16px}
+  .card h3 a{color:var(--text);text-decoration:none}
+  .card h3 a:hover{color:var(--accent)}
+  .pill{align-self:flex-start;font-size:12px;padding:1px 9px;border-radius:999px;background:var(--pill);color:var(--pill-text)}
+  .card p{margin:0;color:var(--muted);font-size:13.5px;flex:1}
+  .links{display:flex;flex-wrap:wrap;gap:10px;font-size:13px}
+  .links a{color:var(--accent);text-decoration:none}
+  .links a:hover{text-decoration:underline}
+  ul.docs{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:8px}
+  ul.docs li{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:10px 14px;box-shadow:var(--shadow)}
+  ul.docs a{color:var(--accent);text-decoration:none}
+  ul.docs a:hover{text-decoration:underline}
+  ul.docs small{display:block;color:var(--muted)}
+  footer{margin-top:42px;padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font-size:12.5px}
+  code{background:var(--pill);padding:1px 5px;border-radius:5px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <div class="badge">devspec · 接口级</div>
+      <h1>DTS 接口级设计文档</h1>
+      <div class="meta">源码基线 <code>915097e22</code> · 2026-09-14 · 图由 Archify 2.16 生成，可离线打开</div>
+    </div>
+    <div class="controls">
+      <button class="btn" id="theme-toggle" type="button">切换深色 / 浅色</button>
+      <a class="btn" href="../intro/index.html">高层总览（ref/intro）</a>
+    </div>
+  </header>
+
+  <p class="lead">
+    本目录是交付文档套件 <code>spec/02-设计方案</code>、<code>spec/04-集成接口说明</code> 的工程源：
+    先用可核对的方式把 T1 四条主链写到接口与关键调用级别，评审通过后再汇总进正式正文。
+    Markdown 是证据源（含 file:line），Archify 图是阅读入口；两者基线一致。
+  </p>
+
+  <h2>架构与关系图</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="pill">architecture · 总览</span>
+      <h3><a href="00-t1-overview.html">DTS T1 主链接口总览</a></h3>
+      <p>四条 T1 主链的服务、入口、外部依赖与主要调用方向；共享数据库与边界以卡片说明。</p>
+      <div class="links">
+        <a href="00-t1-overview.html">打开图</a>
+        <a href="diagrams/00-t1-overview.architecture.json">图源 JSON</a>
+        <a href="00-t1-overview.validation.json">校验</a>
+        <a href="00-t1-overview.receipt.json">交付回执</a>
+      </div>
+    </div>
+    <div class="card">
+      <span class="pill">architecture · 关系</span>
+      <h3><a href="01-modeling-ports.html">建模主链：接口与实现关系</a></h3>
+      <p>六个端口接口与实现类、注入位置的对应关系；对应"父类/子类"在本项目的实际形态（接口→单实现）。</p>
+      <div class="links">
+        <a href="01-modeling-ports.html">打开图</a>
+        <a href="diagrams/01-modeling-ports.architecture.json">图源 JSON</a>
+        <a href="01-modeling-ports.validation.json">校验</a>
+        <a href="01-modeling-ports.receipt.json">交付回执</a>
+      </div>
+    </div>
+  </div>
+
+  <h2>关键链路时序</h2>
+  <div class="grid">
+    <div class="card">
+      <span class="pill">sequence · 01 建模</span>
+      <h3><a href="01-modeling-publish.html">发布、语义同步与契约读取</a></h3>
+      <p>发布提交 → serving 投影 → 定时语义同步 → QueryDataset 发布 → 分析端契约读取。</p>
+      <div class="links">
+        <a href="01-modeling-publish.html">打开图</a>
+        <a href="diagrams/01-modeling-publish.sequence.json">图源 JSON</a>
+        <a href="01-modeling-publish.validation.json">校验</a>
+        <a href="01-modeling-publish.receipt.json">交付回执</a>
+      </div>
+    </div>
+    <div class="card">
+      <span class="pill">sequence · 02 接入</span>
+      <h3><a href="02-ingestion-execution.html">异步执行与状态回写</a></h3>
+      <p>幂等提交 → 两阶段执行 → Addax/目标表守卫/DAG → Airflow 触发 → 15s 轮询回写与重试。</p>
+      <div class="links">
+        <a href="02-ingestion-execution.html">打开图</a>
+        <a href="diagrams/02-ingestion-execution.sequence.json">图源 JSON</a>
+        <a href="02-ingestion-execution.validation.json">校验</a>
+        <a href="02-ingestion-execution.receipt.json">交付回执</a>
+      </div>
+    </div>
+    <div class="card">
+      <span class="pill">sequence · 03 管理</span>
+      <h3><a href="03-admin-approval.html">提交、同意执行与审计</a></h3>
+      <p>草稿与提交、审批通知、事务内 applyChangeRequest 分派、APPLIED/FAILED 回写与审计 V2。</p>
+      <div class="links">
+        <a href="03-admin-approval.html">打开图</a>
+        <a href="diagrams/03-admin-approval.sequence.json">图源 JSON</a>
+        <a href="03-admin-approval.validation.json">校验</a>
+        <a href="03-admin-approval.receipt.json">交付回执</a>
+      </div>
+    </div>
+    <div class="card">
+      <span class="pill">sequence · 04 分析</span>
+      <h3><a href="04-analytics-consumption.html">契约读取与查询执行</a></h3>
+      <p>契约缓存 → 平台 HTTP 校验 → SQL 编译与策略 → QueryExecutionFacade 执行与返回。</p>
+      <div class="links">
+        <a href="04-analytics-consumption.html">打开图</a>
+        <a href="diagrams/04-analytics-consumption.sequence.json">图源 JSON</a>
+        <a href="04-analytics-consumption.validation.json">校验</a>
+        <a href="04-analytics-consumption.receipt.json">交付回执</a>
+      </div>
+    </div>
+  </div>
+
+  <h2>主链文档（Markdown 工程源）</h2>
+  <ul class="docs">
+    <li><a href="01-modeling-mainline.md">01 建模主链（dts-platform）</a><small>REST、端口与实现、发布单动作矩阵、方法级时序</small></li>
+    <li><a href="02-ingestion-execution.md">02 接入执行链（dts-ingestion）</a><small>任务/准入/两阶段执行/目标表守卫/重试</small></li>
+    <li><a href="03-admin-approval.md">03 管理审批链（dts-admin）</a><small>变更单状态、分派、事务与已确认缺口</small></li>
+    <li><a href="04-analytics-consumption.md">04 分析消费链（dts-analytics）</a><small>契约缓存、查询执行、公共分享校验</small></li>
+    <li><a href="README.md">README：范围、证据规范与术语表</a><small>代码 ↔ 旧文档 ↔ 当前界面用语</small></li>
+  </ul>
+
+  <h2>接口与清单（核对附录）</h2>
+  <ul class="docs">
+    <li><a href="assets/call-graph-and-dispatch.md">调用关系与分派图谱</a><small>接口→实现→注入点、多实现分派、抽象类继承</small></li>
+    <li><a href="assets/interface-impl-inventory.md">接口 / 实现 / 抽象类清单</a><small>四大服务全量扫描</small></li>
+    <li><a href="assets/rest-inventory-dts-platform.md">REST 清单：dts-platform</a><small>脚本生成，需人工核对</small></li>
+    <li><a href="assets/rest-inventory-dts-ingestion.md">REST 清单：dts-ingestion</a><small>脚本生成，需人工核对</small></li>
+    <li><a href="assets/rest-inventory-dts-admin.md">REST 清单：dts-admin</a><small>脚本生成，需人工核对</small></li>
+    <li><a href="assets/rest-inventory-dts-analytics.md">REST 清单：dts-analytics</a><small>脚本生成，需人工核对</small></li>
+    <li><a href="assets/error-code-inventory.md">错误码清单</a><small>719 条首次出现位置</small></li>
+  </ul>
+
+  <footer>
+    <p>证据边界：全部结论以源码基线 <code>915097e22</code> 为准，已做行号范围校验与抽样人工比对；Archify 图通过 showcase 校验（0 诊断）与 1440×900 / 1600×1000 / 1920×1080 / 2048×1320 浏览器尺寸检查。未执行正式构建、容器部署与真实登录业务验收。</p>
+    <p>图表由 Archify 生成；重新生成方式见 README「用 Archify 继续维护」。机器回执中的 <code>visualReview</code> 固定为 pending，人工阅读结论记录在 handoff.json。</p>
+  </footer>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement;
+    var saved = localStorage.getItem('devspec-theme');
+    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = saved || (prefersDark ? 'dark' : 'light');
+    document.getElementById('theme-toggle').addEventListener('click', function () {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('devspec-theme', root.dataset.theme);
+    });
+  })();
+</script>
+</body>
+</html>

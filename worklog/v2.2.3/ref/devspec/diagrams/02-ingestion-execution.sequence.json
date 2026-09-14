@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "接入执行链：异步执行与状态回写",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [
+      1080,
+      620
+    ]
+  },
+  "participants": [
+    {
+      "id": "resource",
+      "type": "backend",
+      "label": "接入接口",
+      "sublabel": "TaskResource"
+    },
+    {
+      "id": "submit",
+      "type": "backend",
+      "label": "幂等提交",
+      "sublabel": "提交门面"
+    },
+    {
+      "id": "service",
+      "type": "backend",
+      "label": "两阶段执行",
+      "sublabel": "IngestionTaskService"
+    },
+    {
+      "id": "addax",
+      "type": "backend",
+      "label": "作业生成",
+      "sublabel": "AddaxJobService"
+    },
+    {
+      "id": "target",
+      "type": "database",
+      "label": "目标表守卫",
+      "sublabel": "目标表与守卫"
+    },
+    {
+      "id": "dag",
+      "type": "backend",
+      "label": "DAG 构建",
+      "sublabel": "AirflowDagService"
+    },
+    {
+      "id": "airflow",
+      "type": "external",
+      "label": "Airflow",
+      "sublabel": "DAG 触发与运行"
+    },
+    {
+      "id": "sync",
+      "type": "backend",
+      "label": "状态轮询",
+      "sublabel": "15s 回写"
+    }
+  ],
+  "segments": [
+    {
+      "from": 246,
+      "to": 510,
+      "label": "执行与回写"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-submit",
+      "from": "resource",
+      "to": "submit",
+      "y": 168,
+      "label": "execute/async + Idempotency-Key",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-command",
+      "from": "submit",
+      "to": "service",
+      "y": 196,
+      "label": "executeWithBatchId"
+    },
+    {
+      "id": "m-accepted",
+      "from": "submit",
+      "to": "resource",
+      "y": 224,
+      "label": "202 + executionId",
+      "variant": "return"
+    },
+    {
+      "id": "m-addax",
+      "from": "service",
+      "to": "addax",
+      "y": 252,
+      "label": "阶段二：createJobFromTask",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-target",
+      "from": "service",
+      "to": "target",
+      "y": 280,
+      "label": "ensureTargetTables"
+    },
+    {
+      "id": "m-target-back",
+      "from": "target",
+      "to": "service",
+      "y": 308,
+      "label": "结构校验结果",
+      "variant": "return"
+    },
+    {
+      "id": "m-dag",
+      "from": "service",
+      "to": "dag",
+      "y": 336,
+      "label": "rebuildDagForTask"
+    },
+    {
+      "id": "m-trigger",
+      "from": "service",
+      "to": "airflow",
+      "y": 364,
+      "label": "triggerDag（AirflowAdapter）",
+      "variant": "security"
+    },
+    {
+      "id": "m-dagrun",
+      "from": "airflow",
+      "to": "service",
+      "y": 392,
+      "label": "dagRunId → status=running",
+      "variant": "return"
+    },
+    {
+      "id": "m-poll",
+      "from": "sync",
+      "to": "airflow",
+      "y": 420,
+      "label": "轮询 dagRun 状态"
+    },
+    {
+      "id": "m-status",
+      "from": "airflow",
+      "to": "sync",
+      "y": 448,
+      "label": "状态与结束时间",
+      "variant": "return"
+    },
+    {
+      "id": "m-mark",
+      "from": "sync",
+      "to": "service",
+      "y": 476,
+      "label": "markExecution（去重/血缘/重试）",
+      "variant": "emphasis"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "执行约定",
+      "items": [
+        "阶段一事务内建 preparing 记录，阶段二在 afterCommit 新事务",
+        "Idempotency-Key 生成 idem-task-{taskId}-{sha256}",
+        "目标表由 Provisioner 供给，模型绑定走 ModelTargetGuard"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "失败与恢复",
+      "items": [
+        "失败分类后写 failureCategory/failureAdvice 并安排退避重试",
+        "取消先置 cancel_requested 再停 Airflow",
+        "Airflow 关闭时只记录 running，不提交作业"
+      ]
+    }
+  ]
+}

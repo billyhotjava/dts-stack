@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/01-modeling-publish.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/01-modeling-publish.html",
+  "specification": {
+    "sha256": "f16fde7fba38664586ebfb48a10debce5586a1026aea9128cc0696f46d346503",
+    "bytes": 4174
+  },
+  "artifact": {
+    "sha256": "816bee1ca9564ddee1e2f1eeac1421f39bad63b107e29a5aa53b5c293a59b3af",
+    "bytes": 714703
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

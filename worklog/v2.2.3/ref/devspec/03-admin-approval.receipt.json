@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/03-admin-approval.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/03-admin-approval.html",
+  "specification": {
+    "sha256": "88aa745aa2f796c43db6a2883653392dd2a361b28f9afa602e49b7776e300bea",
+    "bytes": 3893
+  },
+  "artifact": {
+    "sha256": "f6f790e94c7ae0f69f5af4b9f0169e70d44653a42ce00c5b4bf9637ee37c9578",
+    "bytes": 714373
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

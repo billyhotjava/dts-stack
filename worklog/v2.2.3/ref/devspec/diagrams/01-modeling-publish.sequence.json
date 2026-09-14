@@ -1,0 +1,191 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "建模主链：发布、语义同步与契约读取",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [
+      1080,
+      620
+    ]
+  },
+  "participants": [
+    {
+      "id": "candidate",
+      "type": "backend",
+      "label": "发布单应用服务",
+      "sublabel": "发布单编排"
+    },
+    {
+      "id": "commit",
+      "type": "backend",
+      "label": "发布提交",
+      "sublabel": "发布提交与投影"
+    },
+    {
+      "id": "serving",
+      "type": "database",
+      "label": "serving 投影",
+      "sublabel": "平台持久化"
+    },
+    {
+      "id": "sync",
+      "type": "backend",
+      "label": "语义同步",
+      "sublabel": "定时器 + 租约"
+    },
+    {
+      "id": "analytics",
+      "type": "backend",
+      "label": "分析服务",
+      "sublabel": "dts-analytics"
+    },
+    {
+      "id": "dataset",
+      "type": "database",
+      "label": "QueryDataset",
+      "sublabel": "PUBLISHED 版本"
+    },
+    {
+      "id": "contract",
+      "type": "backend",
+      "label": "契约端点",
+      "sublabel": "契约读取端点"
+    },
+    {
+      "id": "client",
+      "type": "external",
+      "label": "分析端引用",
+      "sublabel": "缓存未命中时读取"
+    }
+  ],
+  "segments": [
+    {
+      "from": 246,
+      "to": 410,
+      "label": "后台语义同步"
+    },
+    {
+      "from": 420,
+      "to": 505,
+      "label": "后续契约读取"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-publish",
+      "from": "candidate",
+      "to": "commit",
+      "y": 168,
+      "label": "publish → commit",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-project",
+      "from": "commit",
+      "to": "serving",
+      "y": 196,
+      "label": "projectLatestPublication"
+    },
+    {
+      "id": "m-promote",
+      "from": "commit",
+      "to": "serving",
+      "y": 224,
+      "label": "promoteSuccessfulServing（物理就绪）",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-pub-return",
+      "from": "commit",
+      "to": "candidate",
+      "y": 252,
+      "label": "发布登记结果",
+      "variant": "return"
+    },
+    {
+      "id": "m-claim",
+      "from": "sync",
+      "to": "serving",
+      "y": 280,
+      "label": "领取到期候选与租约"
+    },
+    {
+      "id": "m-claim-back",
+      "from": "serving",
+      "to": "sync",
+      "y": 308,
+      "label": "返回模型发布候选",
+      "variant": "return"
+    },
+    {
+      "id": "m-http",
+      "from": "sync",
+      "to": "analytics",
+      "y": 336,
+      "label": "HTTP 发布语义 + 服务凭据",
+      "variant": "security"
+    },
+    {
+      "id": "m-http-back",
+      "from": "analytics",
+      "to": "sync",
+      "y": 364,
+      "label": "发布调用返回",
+      "variant": "return"
+    },
+    {
+      "id": "m-project-dataset",
+      "from": "sync",
+      "to": "dataset",
+      "y": 392,
+      "label": "project → READY/PUBLISHED",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-cache-miss",
+      "from": "client",
+      "to": "contract",
+      "y": 424,
+      "label": "GET versions/{version}"
+    },
+    {
+      "id": "m-read-version",
+      "from": "contract",
+      "to": "dataset",
+      "y": 452,
+      "label": "runtimeContract 读取"
+    },
+    {
+      "id": "m-version-back",
+      "from": "dataset",
+      "to": "contract",
+      "y": 480,
+      "label": "契约（ID/版本/校验和/PUBLISHED）",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "关键契约",
+      "items": [
+        "物理产物、发布版本与消费引用分别校验",
+        "同步服务按模型版本记录结果，失败按租约重试",
+        "分析端缓存键为 datasetId:version:checksum"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "失败与恢复",
+      "items": [
+        "远端发布与本地投影没有分布式事务",
+        "缓存仅 5 分钟自然过期，撤销无主动失效调用",
+        "永久错误或重试耗尽停止自动重试"
+      ]
+    }
+  ]
+}

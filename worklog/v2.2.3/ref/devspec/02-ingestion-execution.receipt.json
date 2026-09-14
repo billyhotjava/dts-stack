@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/02-ingestion-execution.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/02-ingestion-execution.html",
+  "specification": {
+    "sha256": "fa9914ce674b72cd43595dc85c23490e96b2e9142ad833789a8e21102646016f",
+    "bytes": 4002
+  },
+  "artifact": {
+    "sha256": "b7be595928f6c48f170710ec4ca0113f7ea00dd18782ff1a5851bc7995d687f4",
+    "bytes": 713896
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

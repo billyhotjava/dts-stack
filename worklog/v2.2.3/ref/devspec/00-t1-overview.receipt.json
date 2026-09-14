@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/00-t1-overview.architecture.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/00-t1-overview.html",
+  "specification": {
+    "sha256": "584422aad11cdf94722312cd3608a22a554b172d0bd19b7105a7c713fcba7619",
+    "bytes": 5008
+  },
+  "artifact": {
+    "sha256": "480860770ae7ce7be44892acd5989cccc9e51b1cb53486919e0bb980131d2802",
+    "bytes": 713994
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}
