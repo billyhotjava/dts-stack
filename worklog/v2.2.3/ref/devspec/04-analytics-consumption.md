@@ -94,10 +94,11 @@ sequenceDiagram
 
 | 步骤 | 类#方法 | 定位 |
 |---|---|---|
-| 1 | PlatformAnalysisDatasetContractClient#get | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:53` |
-| 2 | 缓存读取（Caffeine，最多 2000 条，写入后 5 分钟过期） | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:33-36,58-59` |
-| 3 | HTTP GET 路径 `/versions/{version}` | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:113` |
-| 4 | 发布状态校验 `PUBLISHED` | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:76` |
+| 1 | PlatformAnalysisDatasetContractClient#get（参数不全抛 `ANALYSIS_DATASET_REF_INVALID`） | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:53,55` |
+| 2 | 缓存键 `datasetId:version:checksum`；Caffeine 最多 2000 条、写入后 5 分钟过期 | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:33-36,57-59` |
+| 3 | HTTP GET 路径 `/versions/{version}`（带出站配置与请求头） | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:113` |
+| 4 | 响应校验：datasetId、version、contractChecksum 必须一致且 `status=PUBLISHED` | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:73-76` |
+| 4a | 平台返回 404 时抛 `ANALYSIS_DATASET_NOT_FOUND` | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:86` |
 | 5 | 缓存写入 / 显式失效 `invalidate(datasetId)` | `G/service/analysis/PlatformAnalysisDatasetContractClient.java:80,97` |
 | 6 | 契约使用点：分析创建校验、查询前解析数据库绑定 | `G/service/analysis/AnalysisApplicationService.java:154`、`G/service/analysis/AnalysisQueryGateway.java:75` |
 

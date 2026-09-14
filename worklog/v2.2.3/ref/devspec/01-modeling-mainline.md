@@ -119,7 +119,7 @@ sequenceDiagram
 
     FE->>R: POST /model-specs/draft-operations
     R->>C: withContext(tenant, actor, requests, save)
-    C->>C: 定位/创建默认规划上下文（事务内）
+    C->>C: 校验身份；按部门定位或创建"部门公共层"规划（事务内）
     C-->>R: resolved(create, modelSpec)
     R->>D: save/saveDefinition
     D->>S: create / updateDefinition
@@ -130,7 +130,9 @@ sequenceDiagram
 | 步骤 | 类#方法 | 定位 |
 |---|---|---|
 | 1 | ModelDraftOperationResource#save | `P/web/rest/ModelDraftOperationResource.java:57` |
-| 2 | ModelingContextInitializationService#withContext | `P/service/modeling/ModelingContextInitializationService.java:35` |
+| 2 | ModelingContextInitializationService#withContext（身份校验 `MODELING_ROLE_REQUIRED`） | `P/service/modeling/ModelingContextInitializationService.java:35,36` |
+| 2a | 指定 `planId` 时校验部门一致与可写（`MODELING_CONTEXT_DEPARTMENT_MISMATCH`/`MODELING_CONTEXT_NOT_WRITABLE`） | `P/service/modeling/ModelingContextInitializationService.java:47-53,69,70` |
+| 2b | 无 `planId` 时按部门创建"部门公共层"规划（幂等键 `modeling-context:dept:{department}:v1`） | `P/service/modeling/ModelingContextInitializationService.java:55-58,68`、`P/service/modeling/warehouse/WarehousePlanApplicationService.java:117` |
 | 3 | ModelDraftSaveApplicationService#save / saveDefinition | `P/service/modeling/ModelDraftSaveApplicationService.java:40,86` |
 | 4 | ModelSpecApplicationService#create / updateDefinition | `P/service/modeling/ModelSpecApplicationService.java:225,365` |
 | 5 | ModelLifecycleService#saveImplementation | `P/service/modeling/ModelLifecycleService.java:211` |
@@ -280,7 +282,7 @@ sequenceDiagram
 ## 4 事务、幂等与错误语义
 
 - 事务边界：`ModelSpecApplicationService` 与 `ModelLifecycleService` 的写方法均为 `@Transactional`（`ModelSpecApplicationService.java:224,352,364,1220,1284`）；`ModelDraftSaveApplicationService` 在一个事务内同时落模型与首个加工配置（类注释 `P/service/modeling/ModelDraftSaveApplicationService.java:21`）。
-- 上下文初始化：`withContext` 在事务内定位/创建默认规划（`P/service/modeling/ModelingContextInitializationService.java:35`）；规划处于 `PUBLISHED/ARCHIVED` 时模型写入被 `MODEL_SPEC_PLAN_READONLY` 拒绝（`P/service/modeling/ModelSpecApplicationService.java:1948-1953`），规划不存在为 `MODEL_SPEC_PLAN_INVALID`（:1942）。
+- 上下文初始化：`withContext` 先校验建模身份，再按部门定位/创建"部门公共层"规划，并把 `planId` 注入保存请求（`P/service/modeling/ModelingContextInitializationService.java:35-66`）；`creation-context` 只读返回 `(planId, departmentCode, writable)`（:71）。规划处于 `PUBLISHED/ARCHIVED` 时模型写入被 `MODEL_SPEC_PLAN_READONLY` 拒绝（`P/service/modeling/ModelSpecApplicationService.java:1948-1953`），规划不存在为 `MODEL_SPEC_PLAN_INVALID`（:1942）。
 - 幂等：模型创建带 `idempotencyKey`（服务端保留命名空间 `MODEL_SPEC_IDEMPOTENCY_KEY_RESERVED`）；生命周期命令使用 `IdempotencyRequest` + `ModelLifecycleCommandReceiptRepository` 回执；请求并发用 ETag（`model-spec:{id}:{rev}:{checksum}`、`model-implementation:{id}:{rev}:{checksum}`，`P/web/rest/ModelLifecycleResource.java:50-56`）。
 - 错误码（节选）：`MODEL_SPEC_*`（校验/状态/引用）、`MODEL_RELEASE_CANDIDATE_*`、`MODEL_SPEC_GOVERNANCE_QUALITY_*`、`MODEL_SPEC_DELETE_*`。
 - 异步/事件：`PlatformEventOutboxService.publishInternal` 由 serving 投影发事件（`P/service/modeling/serving/CatalogModelServingService.java:177`）；语义同步靠工作表租约 + 定时器自愈，**没有跨服务分布式事务**（`CatalogModelSemanticSyncService` 类注释 `:20`）。
