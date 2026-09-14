@@ -1,30 +1,44 @@
-# DTS 接口级设计文档（devspec）
+# DTS 原理与设计方案（devspec）
 
-本目录是交付文档套件（`worklog/v2.2.3/spec/`，尤其 02-设计方案、04-集成接口说明）的**工程源**：
-先用可核对的方式把 T1 主链写到接口与关键调用级别，评审通过后再汇总进正式正文。
+本目录用 Archify 展示 DTS 的原理与设计方案，**粒度到模块**：先按服务拆出功能模块并画出模块之间的调用关系，
+再沿关键业务链路给出模块间的方法级调用时序。图是阅读入口，Markdown 设计文档记录每条关系的源码依据（`文件:行号` 或类名）。
 
-- 阅读入口：**https://dev.yuzhicloud.com/**（服务端登录后进入 index.html 门户，部署与账号见 [deploy/README.md](deploy/README.md)）；本地直接打开 [index.html](index.html)
+- 阅读入口：**https://dev.yuzhicloud.com/**（登录后进入门户 `index.html`，左侧导航、右侧图示；部署与账号见 [deploy/README.md](deploy/README.md)）
+- 本地阅读：静态服务器打开 `index.html`；Markdown 通过 `doc.html?f=<文件>` 渲染（含 Mermaid）
 - 日期：2026-09-14
-- 源码基线：`915097e220817313ac313091d9c22fb21763796c`（每篇文档头部重复记录）
-- 上层门面材料：`worklog/v2.2.3/ref/intro/`（Archify 高层图，服务级）
-- 本目录不执行构建、部署或页面验收；只记录源码与配置事实，运行事实与验收结果另行留证。
+- 源码基线：模块图 `da531fb16`；链路图与链路文档 `915097e22`（每篇文档头部记录）
+- 服务级高层材料：`worklog/v2.2.3/ref/intro/`
+- 本目录只记录源码与配置事实，不代表运行、部署或业务验收结论。
 
-## 1 范围（首批 T1 四条主链）
+## 1 内容组织
 
-| 编号 | 主链 | 服务 | 文档 |
+### 1.1 模块架构（服务 → 模块 → 模块间调用）
+
+| 编号 | 图 | 内容 | 依据 |
 |---|---|---|---|
-| 01 | 建模主链：规划 → 模型定义 → 加工配置 → 构建计划 → 分发 → serving → 语义同步 → 查询数据集 | dts-platform | [01-modeling-mainline.md](01-modeling-mainline.md) |
-| 02 | 接入执行链：任务定义 → 执行 → Addax/Airflow → reader/writer → 目录/血缘 | dts-ingestion | [02-ingestion-execution.md](02-ingestion-execution.md) |
-| 03 | 管理审批链：安全入口 → 变更单 → 提交/同意/拒绝 → 分派执行 → 审计 | dts-admin | [03-admin-approval.md](03-admin-approval.md) |
-| 04 | 分析消费链：数据集定义缓存 → 引用校验 → 查询执行 → 图表/看板 | dts-analytics | [04-analytics-consumption.md](04-analytics-consumption.md) |
-| 05 | 数据质量与工作流：规则版本 → 触发 → 编排 → 执行 → 状态收敛（T2） | dts-platform | [05-quality-workflow.md](05-quality-workflow.md) |
-| 06 | 分类分级与标签：统一密级 → 封存投影 → 传播 → 标签/脱敏（T2） | dts-platform | [06-classification-tagging.md](06-classification-tagging.md) |
-| 07 | BI 编排：卡片/看板/大屏 → 发布快照 → 平台登记 Outbox（T2） | dts-analytics | [07-bi-orchestration.md](07-bi-orchestration.md) |
-| 08 | 数据服务与推送：API/令牌/限流/脱敏 → 数据产品 → 交换与对账（T2） | dts-platform | [08-data-services-push.md](08-data-services-push.md) |
-| 09 | PKI 与 MDM 集成：双证书登录 → 验签会话 → MDM 握手/回调（T2 收尾） | admin/platform | [09-pki-mdm-integration.md](09-pki-mdm-integration.md) |
+| 01 | [10-system-modules.html](10-system-modules.html) | 系统模块全景：四个后端服务的主要模块与跨服务调用 | [10-module-architecture.md](10-module-architecture.md) §3 |
+| 02 | [11-platform-modules.html](11-platform-modules.html) | dts-platform 核心业务模块：建模、目录、治理、SQL、构建、数据服务、权限安全 | §4 |
+| 03 | [12-platform-support-modules.html](12-platform-support-modules.html) | dts-platform 支撑模块：审计、事件、查询网关、数据源、元数据、回滚、报表登记 | §5 |
+| 04 | [13-ingestion-modules.html](13-ingestion-modules.html) | dts-ingestion：任务编排核心、执行层、平台回调 | §6 |
+| 05 | [14-admin-modules.html](14-admin-modules.html) | dts-admin：审批、用户角色、组织人员、双证书、审计 | §7 |
+| 06 | [15-analytics-modules.html](15-analytics-modules.html) | dts-analytics：受治理查询网关、发布登记、语义、大屏 | §8 |
 
-首批不包含：数据治理质量/标签、BI 编排、数据服务与推送、PKI/MDM、前端页面内部结构。
-`dts-metrics` 未出现在标准 Compose 运行时，标注为 legacy，不纳入首批。
+### 1.2 关键链路（模块间调用时序）
+
+| 编号 | 链路 | 服务 | 设计文档 | 图 |
+|---|---|---|---|---|
+| 07 | T1 主链服务总览 | 全部 | [assets/call-graph-and-dispatch.md](assets/call-graph-and-dispatch.md) | 00-t1-overview |
+| 08—09 | 建模主链：规划 → 模型定义 → 加工配置 → 构建 → 发布 → 数据集 → 契约读取 | dts-platform | [01-modeling-mainline.md](01-modeling-mainline.md) | 01-modeling-ports、01-modeling-publish |
+| 10 | 接入执行：任务 → Addax/Airflow → 目标表 → 目录/血缘 | dts-ingestion | [02-ingestion-execution.md](02-ingestion-execution.md) | 02-ingestion-execution |
+| 11 | 管理审批：变更单 → 同意 → 分派执行 → 审计 | dts-admin | [03-admin-approval.md](03-admin-approval.md) | 03-admin-approval |
+| 12 | 分析消费：契约缓存 → 查询执行 → 图表/看板 | dts-analytics | [04-analytics-consumption.md](04-analytics-consumption.md) | 04-analytics-consumption |
+| 13 | 数据质量：规则版本 → 触发 → 执行 → 状态收敛 | dts-platform | [05-quality-workflow.md](05-quality-workflow.md) | 05-quality-run |
+| 14 | 分类分级：统一密级 → 封存投影 → 传播 → 标签/脱敏 | dts-platform | [06-classification-tagging.md](06-classification-tagging.md) | 06-classification-seal |
+| 15 | BI 编排：看板/大屏 → 发布快照 → 平台登记 Outbox | dts-analytics | [07-bi-orchestration.md](07-bi-orchestration.md) | 07-bi-publish |
+| 16 | 数据服务：API/令牌/限流/脱敏 → 数据产品 → 交换与对账 | dts-platform | [08-data-services-push.md](08-data-services-push.md) | 08-data-api-invoke |
+| 17 | PKI 与 MDM：双证书登录 → 验签会话 → MDM 握手/回调 | admin/platform | [09-pki-mdm-integration.md](09-pki-mdm-integration.md) | 09-pki-login |
+
+`dts-metrics` 未出现在标准 Compose 运行时，标注为 legacy，不纳入。
 
 ## 2 每篇文档的固定结构
 
@@ -64,65 +78,47 @@
 
 ```
 ref/devspec/
-├── login.html                   登录页（静态门禁；未登录访问 index.html 会自动跳转）
-├── index.html                   阅读门户（主题切换、图与文档导航、退出登录）
-├── handoff.json                 图表交付/校验/尺寸检查与人工阅读记录
+├── index.html                   门户：左侧导航（模块架构 / 关键链路 / 配套材料），右侧图示
+├── doc.html                     Markdown 设计文档阅读页（markdown-it + Mermaid，离线可用）
+├── login.html                   登录页（由 nginx /api/login 服务端校验）
 ├── README.md                    本文件
-├── 01-modeling-mainline.md
-├── 02-ingestion-execution.md
-├── 03-admin-approval.md
-├── 04-analytics-consumption.md
-├── 05-quality-workflow.md
-├── 06-classification-tagging.md
-├── 07-bi-orchestration.md
-├── 08-data-services-push.md
-├── 09-pki-mdm-integration.md
-├── 00-t1-overview.html + .receipt/.validation/.visual-check.json
-├── 01-modeling-ports.html + ...
-├── 01-modeling-publish.html + ...
-├── 02-ingestion-execution.html + ...
-├── 03-admin-approval.html + ...
-├── 04-analytics-consumption.html + ...
-├── 05-quality-run.html + ...
-├── 06-classification-seal.html + ...
-├── 07-bi-publish.html + ...
-├── 08-data-api-invoke.html + ...
-├── 09-pki-login.html + ...
-├── diagrams/                    Archify 图源 JSON（架构/关系/时序）
+├── handoff.json                 图表交付、校验与人工阅读记录
+├── 10-module-architecture.md    模块划分与模块间调用依据（图 01—06）
+├── 01-…09-*.md                  关键链路设计文档（接口、时序、事务与错误语义、证据表）
+├── 10-…15-*-modules.html        模块架构图（Archify architecture）
+├── 00-…09-*.html                链路总览、端口关系与调用时序图（Archify architecture/sequence）
+├── diagrams/                    Archify 图源 JSON
+├── receipts/                    每张图的 validate / deliver / visual-check 回执与截图
+├── deploy/                      nginx 配置样例与发布说明
 └── assets/
     ├── rest-inventory-<service>.md      脚本生成的接口清单
     ├── interface-impl-inventory.md       接口/实现/抽象类关系清单
     ├── call-graph-and-dispatch.md        接口→实现→注入点与分派形态图谱
     ├── error-code-inventory.md           按模块的错误码首次出现位置（脚本生成）
-    └── scripts/                          生成脚本（随基线重跑）
+    ├── scripts/                          清点脚本与 rebuild-diagram.sh
+    └── vendor/                           markdown-it、Mermaid（固定版本，含 LICENSE）
 ```
 
 ## 6 当前状态（2026-09-14）
 
-- 已完成 T1 四篇主链文档（内嵌 15 张 Mermaid 作为工程源）与 6 张 Archify 图（2 架构/关系 + 4 时序），四份 REST 接口清单、接口/实现清单、调用分派图谱、错误码清单（719 条首次出现）和生成脚本。
-- 6 张 T1 Archify 图 + T2 首图（05 质量链）全部通过 showcase 校验（0 诊断）、deliver 交付与四档桌面尺寸包含检查；门户见 index.html；记录见 handoff.json。
-- T2 完成：05 数据质量与工作流、06 分类分级与标签、07 BI 编排、08 数据服务与推送、09 PKI/MDM 均已完成（接口级文档 + 时序图）。
-- 四篇文档均补齐主链动作矩阵（端点 → 应用服务 → 关键下游）与关键链路方法级时序。
-- 239 处 `文件:行号` 引用已用脚本核对（存在且行号在范围内），并抽样人工比对行内容。
-- Mermaid 仅通过基础语法检查（围栏、图类型、常见语法），**未做真实渲染**；评审前建议在支持 Mermaid 的查看器中过一遍。
-- 未完成：spec/02、04 正式正文汇总；T2（治理质量/标签、BI 编排、数据服务、PKI/MDM）。
+- 模块架构：6 张 Archify 模块图（系统全景 + platform 2 张 + ingestion/admin/analytics 各 1 张），全部通过 showcase 校验（9/9 检查、0 诊断）、deliver 交付与四档桌面尺寸包含检查，已人工查看截图；依据见 `10-module-architecture.md`。
+- 关键链路：9 篇链路设计文档与 11 张链路图（2 架构/关系 + 9 时序），均通过 showcase 校验；482 处带前缀的 `文件:行号` 引用已脚本核对（handoff.json）。
+- 链路文档内嵌的 Mermaid 由 `doc.html` 在浏览器渲染；渲染失败会在图下方提示。
+- 模块图按 `import` 与构造注入统计关系，未区分运行期开关（Kafka、OpenMetadata 同步等）。
 
 ## 7 Archify 图表与再生成
 
-图源在 `diagrams/`，门户为 `index.html`，交接记录为 `handoff.json`。命令（从本目录执行）：
+图源在 `diagrams/`，回执在 `receipts/`。单张图重建（校验 → 交付 → 尺寸检查，并把回执移入 `receipts/`）：
 
 ```bash
-archify_cli="${HOME}/.agents/skills/archify/bin/archify.mjs"
-ARCHIFY_UPDATE_CHECK_DISABLED=1 node "$archify_cli" validate architecture diagrams/00-t1-overview.architecture.json --quality showcase --json > 00-t1-overview.validation.json
-ARCHIFY_UPDATE_CHECK_DISABLED=1 node "$archify_cli" deliver architecture diagrams/00-t1-overview.architecture.json 00-t1-overview.html --quality showcase --json > 00-t1-overview.receipt.json
-ARCHIFY_UPDATE_CHECK_DISABLED=1 node "$archify_cli" visual-check 00-t1-overview.html --json > 00-t1-overview.visual-check.json
+assets/scripts/rebuild-diagram.sh architecture 10-system-modules
+assets/scripts/rebuild-diagram.sh sequence 01-modeling-publish
 ```
 
-其余图替换类型（architecture/sequence）与文件名即可。Archify 只承载架构/关系/时序视图；Markdown 中的 Mermaid 与 file:line 证据仍是内容源，二者随基线一起更新。
+新增图后在 `index.html` 导航中加一项（`data-source` 指向图源，`data-doc` 指向设计文档），并更新 `handoff.json`。
 
 ## 8 维护方式
 
-1. 基线变更后重跑 `assets/scripts/` 中的清点脚本，更新文档中的行号与 SHA。
-2. 只修改有证据变化的内容；新增接口方法必须在清单和对应链路中同步。
-3. Mermaid 图须能通过渲染校验；时序图只覆盖关键链路，避免退化为全量调用图。
-4. 评审通过后，按 spec 套件模板汇总为 02/04 正文，devspec 保留为可追溯工程源；整理正文前不改动 spec 目录。
+1. 基线变更后重跑 `assets/scripts/` 中的清点脚本，更新文档中的行号与 SHA；模块结构变化时同步更新模块图与 `10-module-architecture.md`。
+2. 只修改有证据变化的内容；新增模块间关系必须在设计文档中写明依据。
+3. 每张图不超过 12 个模块，次要依赖写入图下方卡片，避免退化为全量依赖图。

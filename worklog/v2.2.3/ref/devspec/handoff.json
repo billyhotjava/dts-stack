@@ -1,13 +1,133 @@
 {
   "date": "2026-09-14",
-  "scope": "DTS v2.2.3 接口级设计文档（T1 四条主链 + T2 五个模块）",
+  "scope": "DTS v2.2.3 原理与设计方案（Archify，粒度到模块）：6 张模块架构图 + 11 张关键链路图",
   "source_commit": "915097e220817313ac313091d9c22fb21763796c",
   "archify_version": "2.16.0",
-  "entry": "login.html",
+  "entry": "index.html",
   "reading_guide": "README.md",
   "call_graph_atlas": "assets/call-graph-and-dispatch.md",
-  "portal_sha256": "fb21e468915dc6c821e71b76ede5ba45da4fccd1620ea83f91a4430c88b3f0a6",
+  "portal_sha256": "1e492e9ec33cab11407f7d98ee8b90011402c2e228eb55c861c1fd45c8a9f41b",
   "diagrams": [
+    {
+      "id": "10-system-modules",
+      "title": "系统模块全景",
+      "diagram_type": "architecture",
+      "specification": "diagrams/10-system-modules.architecture.json",
+      "output": "10-system-modules.html",
+      "specification_sha256": "efde8f87b42b490e967ec1b0d88e3bb24701eeb6309f80e58b55cf158bcef330",
+      "artifact_sha256": "806a583b16fc00f00978ffb85b0387057e028865b82c64cf105c6bd403f3c325",
+      "validation": "showcase pass, 9/9 checks, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读截图：模块、连线标签与边界可读，无截断或遮挡。",
+      "receipt": "receipts/10-system-modules.receipt.json",
+      "validation_receipt": "receipts/10-system-modules.validation.json",
+      "visual_receipt": "receipts/10-system-modules.visual-check.json"
+    },
+    {
+      "id": "11-platform-modules",
+      "title": "dts-platform 核心业务模块",
+      "diagram_type": "architecture",
+      "specification": "diagrams/11-platform-modules.architecture.json",
+      "output": "11-platform-modules.html",
+      "specification_sha256": "cd6e999c70c95c6b9844d2d0d62f2a86ae480f891e4eda13b22c3fa0971a3fa1",
+      "artifact_sha256": "a3b991e9825473666fbe25058d20e5556ab851cde5710b558d40c987a0955428",
+      "validation": "showcase pass, 9/9 checks, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "1440x900 light"
+      ],
+      "visual_notes": "已阅读截图：模块、连线标签与边界可读，无截断或遮挡。",
+      "receipt": "receipts/11-platform-modules.receipt.json",
+      "validation_receipt": "receipts/11-platform-modules.validation.json",
+      "visual_receipt": "receipts/11-platform-modules.visual-check.json"
+    },
+    {
+      "id": "12-platform-support-modules",
+      "title": "dts-platform 支撑模块",
+      "diagram_type": "architecture",
+      "specification": "diagrams/12-platform-support-modules.architecture.json",
+      "output": "12-platform-support-modules.html",
+      "specification_sha256": "5d3ab5a87ff02632ee32af35c4db1d28a97f7a75a9b8d946aeff5d589c3a90f2",
+      "artifact_sha256": "efb46bb02b8f4ad4c9328a1cf43a3452053e300d94d082b3721c80a4fcb5f056",
+      "validation": "showcase pass, 9/9 checks, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "1440x900 light"
+      ],
+      "visual_notes": "已阅读截图：模块、连线标签与边界可读，无截断或遮挡。",
+      "receipt": "receipts/12-platform-support-modules.receipt.json",
+      "validation_receipt": "receipts/12-platform-support-modules.validation.json",
+      "visual_receipt": "receipts/12-platform-support-modules.visual-check.json"
+    },
+    {
+      "id": "13-ingestion-modules",
+      "title": "dts-ingestion 模块",
+      "diagram_type": "architecture",
+      "specification": "diagrams/13-ingestion-modules.architecture.json",
+      "output": "13-ingestion-modules.html",
+      "specification_sha256": "8688b49f2e19f0bed8ab12e31e9945329515408e419ef429815d6ff9504d2796",
+      "artifact_sha256": "18b014f8b19246e31e3ed05b8e6077110f9565e606d718d1f5350c47c8e08b7b",
+      "validation": "showcase pass, 9/9 checks, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "1440x900 light"
+      ],
+      "visual_notes": "已阅读截图：模块、连线标签与边界可读，无截断或遮挡。",
+      "receipt": "receipts/13-ingestion-modules.receipt.json",
+      "validation_receipt": "receipts/13-ingestion-modules.validation.json",
+      "visual_receipt": "receipts/13-ingestion-modules.visual-check.json"
+    },
+    {
+      "id": "14-admin-modules",
+      "title": "dts-admin 模块",
+      "diagram_type": "architecture",
+      "specification": "diagrams/14-admin-modules.architecture.json",
+      "output": "14-admin-modules.html",
+      "specification_sha256": "7e0018b473744f952133cdd8f0fef9dc53d8d77f9afeca0aac902e5f33459b9d",
+      "artifact_sha256": "ecb398c12a351efbffbbbfc5474f3d3de279b9d9d7eb34954ae51eb6f4da2493",
+      "validation": "showcase pass, 9/9 checks, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "1440x900 light"
+      ],
+      "visual_notes": "已阅读截图：模块、连线标签与边界可读，无截断或遮挡。",
+      "receipt": "receipts/14-admin-modules.receipt.json",
+      "validation_receipt": "receipts/14-admin-modules.validation.json",
+      "visual_receipt": "receipts/14-admin-modules.visual-check.json"
+    },
+    {
+      "id": "15-analytics-modules",
+      "title": "dts-analytics 模块",
+      "diagram_type": "architecture",
+      "specification": "diagrams/15-analytics-modules.architecture.json",
+      "output": "15-analytics-modules.html",
+      "specification_sha256": "ef2e789aef3c455adad30e6a800c471307dc1aab34190548bde36429828e8757",
+      "artifact_sha256": "56f259fd1c1e9c4563a7c26a5ba2a77d02b7bfa78396a4a479462170f51041ee",
+      "validation": "showcase pass, 9/9 checks, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "1440x900 light"
+      ],
+      "visual_notes": "已阅读截图：模块、连线标签与边界可读，无截断或遮挡。",
+      "receipt": "receipts/15-analytics-modules.receipt.json",
+      "validation_receipt": "receipts/15-analytics-modules.validation.json",
+      "visual_receipt": "receipts/15-analytics-modules.visual-check.json"
+    },
     {
       "id": "00-t1-overview",
       "diagram_type": "architecture",
@@ -23,9 +143,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "00-t1-overview.receipt.json",
-      "validation_receipt": "00-t1-overview.validation.json",
-      "visual_receipt": "00-t1-overview.visual-check.json"
+      "receipt": "receipts/00-t1-overview.receipt.json",
+      "validation_receipt": "receipts/00-t1-overview.validation.json",
+      "visual_receipt": "receipts/00-t1-overview.visual-check.json"
     },
     {
       "id": "01-modeling-ports",
@@ -42,9 +162,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "01-modeling-ports.receipt.json",
-      "validation_receipt": "01-modeling-ports.validation.json",
-      "visual_receipt": "01-modeling-ports.visual-check.json"
+      "receipt": "receipts/01-modeling-ports.receipt.json",
+      "validation_receipt": "receipts/01-modeling-ports.validation.json",
+      "visual_receipt": "receipts/01-modeling-ports.visual-check.json"
     },
     {
       "id": "01-modeling-publish",
@@ -61,9 +181,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "01-modeling-publish.receipt.json",
-      "validation_receipt": "01-modeling-publish.validation.json",
-      "visual_receipt": "01-modeling-publish.visual-check.json"
+      "receipt": "receipts/01-modeling-publish.receipt.json",
+      "validation_receipt": "receipts/01-modeling-publish.validation.json",
+      "visual_receipt": "receipts/01-modeling-publish.visual-check.json"
     },
     {
       "id": "02-ingestion-execution",
@@ -80,9 +200,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "02-ingestion-execution.receipt.json",
-      "validation_receipt": "02-ingestion-execution.validation.json",
-      "visual_receipt": "02-ingestion-execution.visual-check.json"
+      "receipt": "receipts/02-ingestion-execution.receipt.json",
+      "validation_receipt": "receipts/02-ingestion-execution.validation.json",
+      "visual_receipt": "receipts/02-ingestion-execution.visual-check.json"
     },
     {
       "id": "03-admin-approval",
@@ -99,9 +219,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "03-admin-approval.receipt.json",
-      "validation_receipt": "03-admin-approval.validation.json",
-      "visual_receipt": "03-admin-approval.visual-check.json"
+      "receipt": "receipts/03-admin-approval.receipt.json",
+      "validation_receipt": "receipts/03-admin-approval.validation.json",
+      "visual_receipt": "receipts/03-admin-approval.visual-check.json"
     },
     {
       "id": "04-analytics-consumption",
@@ -118,9 +238,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "04-analytics-consumption.receipt.json",
-      "validation_receipt": "04-analytics-consumption.validation.json",
-      "visual_receipt": "04-analytics-consumption.visual-check.json"
+      "receipt": "receipts/04-analytics-consumption.receipt.json",
+      "validation_receipt": "receipts/04-analytics-consumption.validation.json",
+      "visual_receipt": "receipts/04-analytics-consumption.visual-check.json"
     },
     {
       "id": "05-quality-run",
@@ -137,9 +257,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "05-quality-run.receipt.json",
-      "validation_receipt": "05-quality-run.validation.json",
-      "visual_receipt": "05-quality-run.visual-check.json"
+      "receipt": "receipts/05-quality-run.receipt.json",
+      "validation_receipt": "receipts/05-quality-run.validation.json",
+      "visual_receipt": "receipts/05-quality-run.visual-check.json"
     },
     {
       "id": "06-classification-seal",
@@ -156,9 +276,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "06-classification-seal.receipt.json",
-      "validation_receipt": "06-classification-seal.validation.json",
-      "visual_receipt": "06-classification-seal.visual-check.json"
+      "receipt": "receipts/06-classification-seal.receipt.json",
+      "validation_receipt": "receipts/06-classification-seal.validation.json",
+      "visual_receipt": "receipts/06-classification-seal.visual-check.json"
     },
     {
       "id": "07-bi-publish",
@@ -175,9 +295,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "07-bi-publish.receipt.json",
-      "validation_receipt": "07-bi-publish.validation.json",
-      "visual_receipt": "07-bi-publish.visual-check.json"
+      "receipt": "receipts/07-bi-publish.receipt.json",
+      "validation_receipt": "receipts/07-bi-publish.validation.json",
+      "visual_receipt": "receipts/07-bi-publish.visual-check.json"
     },
     {
       "id": "08-data-api-invoke",
@@ -194,9 +314,9 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "08-data-api-invoke.receipt.json",
-      "validation_receipt": "08-data-api-invoke.validation.json",
-      "visual_receipt": "08-data-api-invoke.visual-check.json"
+      "receipt": "receipts/08-data-api-invoke.receipt.json",
+      "validation_receipt": "receipts/08-data-api-invoke.validation.json",
+      "visual_receipt": "receipts/08-data-api-invoke.visual-check.json"
     },
     {
       "id": "09-pki-login",
@@ -213,12 +333,13 @@
         "2048x1320 light"
       ],
       "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
-      "receipt": "09-pki-login.receipt.json",
-      "validation_receipt": "09-pki-login.validation.json",
-      "visual_receipt": "09-pki-login.visual-check.json"
+      "receipt": "receipts/09-pki-login.receipt.json",
+      "validation_receipt": "receipts/09-pki-login.validation.json",
+      "visual_receipt": "receipts/09-pki-login.visual-check.json"
     }
   ],
   "documents": [
+    "10-module-architecture.md",
     "README.md",
     "01-modeling-mainline.md",
     "02-ingestion-execution.md",
@@ -246,20 +367,22 @@
   },
   "verification": {
     "documentation": "passed",
-    "archify_showcase_validation": "11/11 passed",
-    "browser_containment": "11/11 passed at 1440x900,1600x1000,1920x1080,2048x1320",
-    "manual_visual_inspection": "11/11 diagrams inspected at 2048x1320 light",
+    "archify_showcase_validation": "17/17 passed",
+    "browser_containment": "17/17 passed at 1440x900,1600x1000,1920x1080,2048x1320",
+    "manual_visual_inspection": "17/17 diagrams inspected",
     "source_code_tests": "not run for this documentation task",
     "formal_product_build_and_package": "not run",
     "container_deployment": "not run",
     "authenticated_business_acceptance": "not run"
   },
-  "git_status": "待提交（新增登录页）",
   "login": {
     "page": "login.html",
     "username": "admin",
-    "note": "静态门禁，非安全认证；口令以 Base64 编码内置，对外分享前请修改",
-    "auth_scope": "sessionStorage（当前标签页会话），未登录访问 index.html 自动跳转"
+    "auth_scope": "nginx /api/login 按 htpasswd 服务端校验，成功下发 HttpOnly 会话 Cookie；页面不含口令",
+    "deployment": "deploy/README.md"
   },
-  "login_sha256": "f54eb19bf1a9e6a0f1663a5aa16f2b9c7e6936cb9fb330e00e06b1079429d961"
+  "login_sha256": "243fb1b14dedfa87482c3a8ec773d1a901ef245d66050986407d62aef8936d92",
+  "document_viewer": "doc.html",
+  "module_evidence": "10-module-architecture.md",
+  "module_source_commit": "da531fb161413fc07917d8075ed0d767118f1734"
 }

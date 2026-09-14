@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/14-admin-modules.architecture.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/14-admin-modules.html",
+  "specification": {
+    "sha256": "7e0018b473744f952133cdd8f0fef9dc53d8d77f9afeca0aac902e5f33459b9d",
+    "bytes": 5366
+  },
+  "artifact": {
+    "sha256": "ecb398c12a351efbffbbbfc5474f3d3de279b9d9d7eb34954ae51eb6f4da2493",
+    "bytes": 718328
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

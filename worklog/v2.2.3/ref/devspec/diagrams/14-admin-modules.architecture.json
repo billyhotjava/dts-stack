@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dts-admin 模块关系",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [
+      1300,
+      600
+    ]
+  },
+  "components": [
+    {
+      "id": "change",
+      "type": "database",
+      "label": "变更单",
+      "sublabel": "ChangeRequestService",
+      "pos": [
+        37,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "admin_api",
+      "type": "frontend",
+      "label": "管理审批 API",
+      "sublabel": "AdminApiResource",
+      "pos": [
+        377,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "auth_api",
+      "type": "frontend",
+      "label": "登录与会话 API",
+      "sublabel": "KeycloakApiResource",
+      "pos": [
+        718,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "pki",
+      "type": "security",
+      "label": "双证书验签",
+      "sublabel": "service/pki",
+      "pos": [
+        1058,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "audit",
+      "type": "security",
+      "label": "审计 V2",
+      "sublabel": "service/audit",
+      "pos": [
+        37,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "user",
+      "type": "backend",
+      "label": "用户与角色",
+      "sublabel": "AdminUserService",
+      "pos": [
+        377,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "org",
+      "type": "backend",
+      "label": "组织机构",
+      "sublabel": "OrganizationService",
+      "pos": [
+        718,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "mdm",
+      "type": "external",
+      "label": "MDM 网关",
+      "sublabel": "MdmGatewayService",
+      "pos": [
+        1058,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "audit_ingest",
+      "type": "frontend",
+      "label": "审计接收",
+      "sublabel": "AuditIngestResource",
+      "pos": [
+        37,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "platform_api",
+      "type": "frontend",
+      "label": "平台目录接口",
+      "sublabel": "web/rest/platform",
+      "pos": [
+        377,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "keycloak",
+      "type": "security",
+      "label": "Keycloak 客户端",
+      "sublabel": "service/keycloak",
+      "pos": [
+        718,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "personnel",
+      "type": "backend",
+      "label": "人员主数据",
+      "sublabel": "service/personnel",
+      "pos": [
+        1058,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    }
+  ],
+  "boundaries": [],
+  "connections": [
+    {
+      "id": "admin_api-change",
+      "from": "admin_api",
+      "to": "change",
+      "label": "提交 · 审批",
+      "variant": "emphasis"
+    },
+    {
+      "id": "admin_api-user",
+      "from": "admin_api",
+      "to": "user",
+      "label": "用户操作",
+      "labelAt": [
+        477,
+        179
+      ]
+    },
+    {
+      "id": "admin_api-audit",
+      "from": "admin_api",
+      "to": "audit",
+      "label": "审计写入"
+    },
+    {
+      "id": "admin_api-org",
+      "from": "admin_api",
+      "to": "org",
+      "label": "组织变更"
+    },
+    {
+      "id": "auth_api-pki",
+      "from": "auth_api",
+      "to": "pki",
+      "label": "挑战与验签"
+    },
+    {
+      "id": "user-keycloak",
+      "from": "user",
+      "to": "keycloak",
+      "label": "用户 · 角色",
+      "variant": "emphasis"
+    },
+    {
+      "id": "platform_api-keycloak",
+      "from": "platform_api",
+      "to": "keycloak",
+      "label": "目录查询",
+      "labelAt": [
+        610,
+        460
+      ]
+    },
+    {
+      "id": "org-keycloak",
+      "from": "org",
+      "to": "keycloak",
+      "label": "组织同步",
+      "labelAt": [
+        818,
+        349
+      ]
+    },
+    {
+      "id": "personnel-keycloak",
+      "from": "personnel",
+      "to": "keycloak",
+      "label": "账号开通"
+    },
+    {
+      "id": "mdm-org",
+      "from": "mdm",
+      "to": "org",
+      "label": "组织拉取"
+    },
+    {
+      "id": "mdm-personnel",
+      "from": "mdm",
+      "to": "personnel",
+      "label": "人员导入",
+      "labelAt": [
+        1158,
+        349
+      ]
+    },
+    {
+      "id": "audit_ingest-audit",
+      "from": "audit_ingest",
+      "to": "audit",
+      "label": "外部审计入库"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "未画出的次要依赖",
+      "items": [
+        "user → change：用户变更生成草稿",
+        "admin_api → notify：审批通知（dts-common）",
+        "infra → platform / ingestion：数据源同步"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "审批分派为 AdminApiResource 私有 if/else",
+        "pki 对端为厂商验签网关（外部）",
+        "平台目录接口服务于 platform 管理端网关"
+      ]
+    }
+  ]
+}

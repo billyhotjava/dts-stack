@@ -1,0 +1,353 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DTS 系统模块全景",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [
+      1300,
+      700
+    ]
+  },
+  "components": [
+    {
+      "id": "an_analysis",
+      "type": "backend",
+      "label": "分析查询与发布",
+      "sublabel": "analysis · publication",
+      "pos": [
+        37,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "a_approval",
+      "type": "backend",
+      "label": "变更审批与审计",
+      "sublabel": "AdminApiResource · audit",
+      "pos": [
+        718,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "a_identity",
+      "type": "security",
+      "label": "组织人员与目录",
+      "sublabel": "personnel · keycloak · pki",
+      "pos": [
+        1058,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "p_sql",
+      "type": "backend",
+      "label": "查询数据集",
+      "sublabel": "service/sql",
+      "pos": [
+        37,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "p_model",
+      "type": "backend",
+      "label": "建模与发布",
+      "sublabel": "service/modeling",
+      "pos": [
+        377,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "p_catalog",
+      "type": "database",
+      "label": "资产目录与分类",
+      "sublabel": "service/catalog",
+      "pos": [
+        718,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "p_gov",
+      "type": "backend",
+      "label": "治理与质量",
+      "sublabel": "service/governance",
+      "pos": [
+        37,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "p_etl",
+      "type": "backend",
+      "label": "构建调度",
+      "sublabel": "service/etl · dbt",
+      "pos": [
+        377,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "p_ingest",
+      "type": "backend",
+      "label": "接入准入与代理",
+      "sublabel": "service/ingestion",
+      "pos": [
+        718,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "airflow",
+      "type": "cloud",
+      "label": "调度与计算",
+      "sublabel": "Airflow / dbt / Addax",
+      "pos": [
+        377,
+        570
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "i_task",
+      "type": "backend",
+      "label": "接入任务与执行",
+      "sublabel": "IngestionTaskService",
+      "pos": [
+        718,
+        570
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "i_etl",
+      "type": "backend",
+      "label": "执行编排",
+      "sublabel": "service/etl · Addax/Airflow",
+      "pos": [
+        1058,
+        570
+      ],
+      "size": [
+        200,
+        68
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "dts-analytics",
+      "wraps": [
+        "an_analysis"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "dts-admin",
+      "wraps": [
+        "a_approval",
+        "a_identity"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "dts-platform",
+      "wraps": [
+        "p_sql",
+        "p_model",
+        "p_catalog",
+        "p_gov",
+        "p_etl",
+        "p_ingest"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "dts-ingestion",
+      "wraps": [
+        "i_task",
+        "i_etl"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "model-sql",
+      "from": "p_model",
+      "to": "p_sql",
+      "label": "数据集投影",
+      "variant": "emphasis"
+    },
+    {
+      "id": "model-catalog",
+      "from": "p_model",
+      "to": "p_catalog",
+      "label": "资产键 · 分类门禁",
+      "variant": "emphasis"
+    },
+    {
+      "id": "model-etl",
+      "from": "p_model",
+      "to": "p_etl",
+      "label": "构建计划",
+      "labelAt": [
+        474,
+        349
+      ]
+    },
+    {
+      "id": "model-gov",
+      "from": "p_model",
+      "to": "p_gov",
+      "label": "指标 · 质量复跑"
+    },
+    {
+      "id": "model-analysis",
+      "from": "p_model",
+      "to": "an_analysis",
+      "label": "语义发布 HTTP",
+      "fromSide": "top",
+      "toSide": "right"
+    },
+    {
+      "id": "analysis-sql",
+      "from": "an_analysis",
+      "to": "p_sql",
+      "label": "契约读取 HTTP",
+      "labelAt": [
+        133,
+        179
+      ]
+    },
+    {
+      "id": "model-directory",
+      "from": "p_model",
+      "to": "a_identity",
+      "label": "部门 · 人员目录",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "approval-identity",
+      "from": "a_approval",
+      "to": "a_identity",
+      "label": "变更分派"
+    },
+    {
+      "id": "ingest-catalog",
+      "from": "p_ingest",
+      "to": "p_catalog",
+      "label": "分类准入"
+    },
+    {
+      "id": "ingest-task",
+      "from": "p_ingest",
+      "to": "i_task",
+      "label": "任务代理 HTTP",
+      "labelAt": [
+        814,
+        519
+      ]
+    },
+    {
+      "id": "task-etl",
+      "from": "i_task",
+      "to": "i_etl",
+      "label": "两阶段执行"
+    },
+    {
+      "id": "etl-airflow",
+      "from": "i_etl",
+      "to": "airflow",
+      "label": "Addax / DAG 触发",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "id": "petl-airflow",
+      "from": "p_etl",
+      "to": "airflow",
+      "label": "dbt DAG 触发",
+      "labelAt": [
+        474,
+        519
+      ]
+    },
+    {
+      "id": "etl-lineage",
+      "from": "i_etl",
+      "to": "p_catalog",
+      "label": "执行血缘回写",
+      "fromSide": "top",
+      "toSide": "right"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "模块划分口径",
+      "items": [
+        "模块 = 服务内 service/ 子包或内聚类组",
+        "实线箭头 = 调用方 → 被调用方",
+        "各服务内部细节见 dts-* 模块图"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "依据 import 统计与 HTTP 客户端路径",
+        "浏览器入口、审计上报、Kafka 未画出",
+        "服务声明不等于运行与验收"
+      ]
+    }
+  ]
+}

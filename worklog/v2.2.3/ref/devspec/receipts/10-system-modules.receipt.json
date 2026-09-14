@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/10-system-modules.architecture.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/10-system-modules.html",
+  "specification": {
+    "sha256": "efde8f87b42b490e967ec1b0d88e3bb24701eeb6309f80e58b55cf158bcef330",
+    "bytes": 6473
+  },
+  "artifact": {
+    "sha256": "806a583b16fc00f00978ffb85b0387057e028865b82c64cf105c6bd403f3c325",
+    "bytes": 719832
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

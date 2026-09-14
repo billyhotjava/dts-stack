@@ -241,7 +241,7 @@ sequenceDiagram
     SY->>AN: publish(payload)（HTTP + 服务凭据）
     SY->>PR: project(candidate, semantic)
     PR-->>SY: READY/ PUBLISHED 版本
-    Note later
+    Note over AR: 之后分析端按需读取契约
     AR->>AR: GET /api/internal/analysis-datasets/{id}/versions/{v}
 ```
 

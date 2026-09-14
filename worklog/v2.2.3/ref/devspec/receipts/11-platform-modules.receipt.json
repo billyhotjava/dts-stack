@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/11-platform-modules.architecture.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/11-platform-modules.html",
+  "specification": {
+    "sha256": "cd6e999c70c95c6b9844d2d0d62f2a86ae480f891e4eda13b22c3fa0971a3fa1",
+    "bytes": 5643
+  },
+  "artifact": {
+    "sha256": "a3b991e9825473666fbe25058d20e5556ab851cde5710b558d40c987a0955428",
+    "bytes": 718824
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

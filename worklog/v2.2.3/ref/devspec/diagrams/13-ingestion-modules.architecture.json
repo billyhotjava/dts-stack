@@ -1,0 +1,288 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dts-ingestion 模块关系",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [
+      1300,
+      560
+    ]
+  },
+  "components": [
+    {
+      "id": "rest",
+      "type": "frontend",
+      "label": "任务与回滚入口",
+      "sublabel": "IngestionTaskResource 等",
+      "pos": [
+        37,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "submit",
+      "type": "backend",
+      "label": "执行提交",
+      "sublabel": "ExecutionSubmissionService",
+      "pos": [
+        377,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "quality",
+      "type": "backend",
+      "label": "入湖后质量",
+      "sublabel": "PostIngestionQualityWorkflow",
+      "pos": [
+        718,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "client",
+      "type": "external",
+      "label": "平台集成客户端",
+      "sublabel": "PlatformInfraClient",
+      "pos": [
+        1058,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "rollback",
+      "type": "backend",
+      "label": "数据回滚",
+      "sublabel": "DataRollbackService",
+      "pos": [
+        37,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "task",
+      "type": "backend",
+      "label": "任务编排核心",
+      "sublabel": "IngestionTaskService",
+      "pos": [
+        377,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "guard",
+      "type": "security",
+      "label": "目标表守卫",
+      "sublabel": "ModelTargetGuard",
+      "pos": [
+        718,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "API 连接器",
+      "sublabel": "SourceConnectorRegistry",
+      "pos": [
+        37,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "addax",
+      "type": "backend",
+      "label": "Addax 作业",
+      "sublabel": "AddaxJobService",
+      "pos": [
+        377,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "dag",
+      "type": "backend",
+      "label": "DAG 生成与触发",
+      "sublabel": "AirflowDagService · Adapter",
+      "pos": [
+        718,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "sync",
+      "type": "backend",
+      "label": "执行同步与重试",
+      "sublabel": "AirflowExecutionSyncService",
+      "pos": [
+        1058,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "service/etl 执行层",
+      "wraps": [
+        "api",
+        "addax",
+        "dag",
+        "sync"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "rest-submit",
+      "from": "rest",
+      "to": "submit",
+      "label": "提交执行",
+      "variant": "emphasis"
+    },
+    {
+      "id": "submit-task",
+      "from": "submit",
+      "to": "task",
+      "label": "两阶段执行",
+      "variant": "emphasis",
+      "labelAt": [
+        477,
+        179
+      ]
+    },
+    {
+      "id": "rest-rollback",
+      "from": "rest",
+      "to": "rollback",
+      "label": "回滚请求",
+      "labelAt": [
+        137,
+        179
+      ]
+    },
+    {
+      "id": "task-api",
+      "from": "task",
+      "to": "api",
+      "label": "API 源执行"
+    },
+    {
+      "id": "task-addax",
+      "from": "task",
+      "to": "addax",
+      "label": "生成作业",
+      "labelAt": [
+        477,
+        349
+      ]
+    },
+    {
+      "id": "task-dag",
+      "from": "task",
+      "to": "dag",
+      "label": "DAG 触发"
+    },
+    {
+      "id": "task-guard",
+      "from": "task",
+      "to": "guard",
+      "label": "目标表校验",
+      "labelAt": [
+        610,
+        290
+      ]
+    },
+    {
+      "id": "task-quality",
+      "from": "task",
+      "to": "quality",
+      "label": "质量工作流"
+    },
+    {
+      "id": "guard-client",
+      "from": "guard",
+      "to": "client",
+      "label": "目标校验 HTTP"
+    },
+    {
+      "id": "quality-client",
+      "from": "quality",
+      "to": "client",
+      "label": "质量运行 HTTP"
+    },
+    {
+      "id": "sync-client",
+      "from": "sync",
+      "to": "client",
+      "label": "执行血缘 HTTP"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "未画出的次要依赖",
+      "items": [
+        "sync → quality：执行成功后触发质量",
+        "IngestionRetryService → task：失败重试（30s）",
+        "dag / sync → Airflow REST；rollback → addax / dag"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "箭头 = 构造注入方向（调用方 → 被依赖方）",
+        "平台客户端对端为 dts-platform 内部接口",
+        "AuditService 当前仅写日志，未画出"
+      ]
+    }
+  ]
+}
