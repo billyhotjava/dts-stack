@@ -129,7 +129,7 @@ class PersonnelImportHistoryRegressionTest {
             assertThat(second.successRecords()).isEqualTo(1);
             outer.setRollbackOnly(); // Already committed import history must remain after the caller rolls back.
         });
-        assertThat(jdbc.queryForObject("SELECT count(*) FROM person_import_batch WHERE status='SUCCESS'", Integer.class)).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM person_import_batch WHERE status='COMPLETED'", Integer.class)).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM person_import_record WHERE keycloak_user_id='kc-alice'", Integer.class)).isEqualTo(2);
     }
 
