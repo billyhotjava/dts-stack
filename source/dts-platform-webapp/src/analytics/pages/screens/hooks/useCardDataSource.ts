@@ -377,6 +377,21 @@ export function useCardDataSource(
             return;
         }
 
+        if (sourceType === 'sql') {
+            const sqlConfig = resolveSqlConfig(dataSource);
+            const available = new Set(mergeBindingsWithRuntime(
+                sqlConfig?.parameterBindings, paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined,
+            ).map((item) => item.name));
+            const required = Array.from((sqlConfig?.query ?? '').matchAll(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}/g), (match) => match[1]);
+            const missing = required.filter((name) => !available.has(name));
+            if (missing.length > 0) {
+                setData(null);
+                setLoading(false);
+                setError(`等待查询参数：${Array.from(new Set(missing)).join('、')}`);
+                return;
+            }
+        }
+
         const cached = getCached(cacheKey);
         if (cached) {
             if (requestSeqRef.current === requestSeq) {

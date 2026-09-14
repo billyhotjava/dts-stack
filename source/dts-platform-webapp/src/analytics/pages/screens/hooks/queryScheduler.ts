@@ -16,7 +16,8 @@ type RetryOptions = {
     baseDelayMs?: number;
 };
 
-const DEFAULT_MAX_CONCURRENCY = 8;
+// Match the default per-user analysis query budget.
+const DEFAULT_MAX_CONCURRENCY = 3;
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_BASE_DELAY_MS = 350;
 
