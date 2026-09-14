@@ -4,6 +4,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>DTS 接口级设计文档（devspec）</title>
+<script>
+  try {
+    if (sessionStorage.getItem('devspec-auth') !== '1') location.replace('login.html');
+  } catch (ignored) {}
+</script>
 <style>
   :root{
     --bg:#f6f8fa; --panel:#ffffff; --text:#1f2328; --muted:#57606a; --border:#d0d7de;
@@ -57,6 +62,7 @@
     <div class="controls">
       <button class="btn" id="theme-toggle" type="button">切换深色 / 浅色</button>
       <a class="btn" href="../intro/index.html">高层总览（ref/intro）</a>
+      <button class="btn" id="logout" type="button">退出</button>
     </div>
   </header>
 
@@ -234,6 +240,10 @@
     document.getElementById('theme-toggle').addEventListener('click', function () {
       root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
       localStorage.setItem('devspec-theme', root.dataset.theme);
+    });
+    document.getElementById('logout').addEventListener('click', function () {
+      try { sessionStorage.removeItem('devspec-auth'); } catch (ignored) {}
+      location.replace('login.html');
     });
   })();
 </script>

@@ -3,7 +3,7 @@
 本目录是交付文档套件（`worklog/v2.2.3/spec/`，尤其 02-设计方案、04-集成接口说明）的**工程源**：
 先用可核对的方式把 T1 主链写到接口与关键调用级别，评审通过后再汇总进正式正文。
 
-- 阅读入口：**[index.html](index.html)**（门户，链接全部 Archify 图与工程源；可离线打开）
+- 阅读入口：**[login.html](login.html)**（登录后进入 index.html 门户；默认用户 `admin`，初始口令 `Devops123@`，对外分享前请修改）
 - 日期：2026-09-14
 - 源码基线：`915097e220817313ac313091d9c22fb21763796c`（每篇文档头部重复记录）
 - 上层门面材料：`worklog/v2.2.3/ref/intro/`（Archify 高层图，服务级）
@@ -64,7 +64,8 @@
 
 ```
 ref/devspec/
-├── index.html                   阅读门户（主题切换、图与文档导航）
+├── login.html                   登录页（静态门禁；未登录访问 index.html 会自动跳转）
+├── index.html                   阅读门户（主题切换、图与文档导航、退出登录）
 ├── handoff.json                 图表交付/校验/尺寸检查与人工阅读记录
 ├── README.md                    本文件
 ├── 01-modeling-mainline.md

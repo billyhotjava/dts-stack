@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>登录 · DTS 接口级设计文档</title>
+<style>
+  :root{
+    --bg:#f6f8fa; --panel:#ffffff; --text:#1f2328; --muted:#57606a; --border:#d0d7de;
+    --accent:#0969da; --accent-soft:#ddf4ff; --shadow:0 8px 24px rgba(27,31,36,.12);
+  }
+  [data-theme="dark"]{
+    --bg:#0d1117; --panel:#161b22; --text:#e6edf3; --muted:#8b949e; --border:#30363d;
+    --accent:#58a6ff; --accent-soft:#12283f; --shadow:0 8px 24px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);
+       font:15px/1.6 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  .card{width:min(420px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:30px 28px;box-shadow:var(--shadow)}
+  .badge{display:inline-block;font-size:12px;padding:2px 10px;border-radius:999px;background:var(--accent-soft);color:var(--accent);margin-bottom:12px}
+  h1{font-size:20px;margin:0 0 6px}
+  .meta{color:var(--muted);font-size:13px;margin:0 0 20px}
+  label{display:block;font-size:13px;color:var(--muted);margin-bottom:14px}
+  input{display:block;width:100%;margin-top:6px;padding:9px 12px;font-size:14px;color:var(--text);
+        background:var(--bg);border:1px solid var(--border);border-radius:8px;outline:none}
+  input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  button{width:100%;padding:10px 14px;font-size:14px;border:0;border-radius:8px;background:var(--accent);color:#fff;cursor:pointer}
+  button:hover{filter:brightness(1.05)}
+  #error{min-height:20px;color:#d1242f;font-size:13px;margin:10px 0 4px}
+  .note{margin-top:16px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);padding-top:12px}
+</style>
+</head>
+<body>
+  <form class="card" id="login-form" autocomplete="on">
+    <span class="badge">devspec · 接口级</span>
+    <h1>DTS 接口级设计文档</h1>
+    <p class="meta">请登录后阅读（本地静态门禁）</p>
+    <label>用户名
+      <input id="username" name="username" autocomplete="username" autofocus required />
+    </label>
+    <label>密码
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
+    </label>
+    <div id="error" role="alert"></div>
+    <button type="submit">登录</button>
+    <p class="note">默认用户 admin；这是静态文档门禁，不是安全认证。对外分享前请修改口令与账号。</p>
+  </form>
+
+<script>
+  (function () {
+    var AUTH_KEY = 'devspec-auth';
+    var EXPECTED_B64 = 'YWRtaW46RGV2b3BzMTIzQA==';
+    var theme = localStorage.getItem('devspec-theme');
+    var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.dataset.theme = theme || (prefersDark ? 'dark' : 'light');
+
+    try {
+      if (sessionStorage.getItem(AUTH_KEY) === '1') {
+        location.replace('index.html');
+        return;
+      }
+    } catch (ignored) {}
+
+    document.getElementById('login-form').addEventListener('submit', function (event) {
+      event.preventDefault();
+      var username = document.getElementById('username').value.trim();
+      var password = document.getElementById('password').value;
+      var encoded = btoa(unescape(encodeURIComponent(username + ':' + password)));
+      if (encoded === EXPECTED_B64) {
+        try { sessionStorage.setItem(AUTH_KEY, '1'); } catch (ignored) {}
+        location.replace('index.html');
+      } else {
+        document.getElementById('error').textContent = '用户名或密码错误';
+      }
+    });
+  })();
+</script>
+</body>
+</html>

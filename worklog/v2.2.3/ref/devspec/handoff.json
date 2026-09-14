@@ -3,10 +3,10 @@
   "scope": "DTS v2.2.3 接口级设计文档（T1 四条主链 + T2 五个模块）",
   "source_commit": "915097e220817313ac313091d9c22fb21763796c",
   "archify_version": "2.16.0",
-  "entry": "index.html",
+  "entry": "login.html",
   "reading_guide": "README.md",
   "call_graph_atlas": "assets/call-graph-and-dispatch.md",
-  "portal_sha256": "7808d8503ef4ee2a584db72a1cf99537d8164b99d307bc844151c3024c3908b9",
+  "portal_sha256": "fb21e468915dc6c821e71b76ede5ba45da4fccd1620ea83f91a4430c88b3f0a6",
   "diagrams": [
     {
       "id": "00-t1-overview",
@@ -254,5 +254,12 @@
     "container_deployment": "not run",
     "authenticated_business_acceptance": "not run"
   },
-  "git_status": "待提交"
+  "git_status": "待提交（新增登录页）",
+  "login": {
+    "page": "login.html",
+    "username": "admin",
+    "note": "静态门禁，非安全认证；口令以 Base64 编码内置，对外分享前请修改",
+    "auth_scope": "sessionStorage（当前标签页会话），未登录访问 index.html 自动跳转"
+  },
+  "login_sha256": "f54eb19bf1a9e6a0f1663a5aa16f2b9c7e6936cb9fb330e00e06b1079429d961"
 }
