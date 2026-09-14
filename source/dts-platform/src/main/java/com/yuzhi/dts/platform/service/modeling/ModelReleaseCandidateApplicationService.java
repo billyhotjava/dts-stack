@@ -1164,12 +1164,7 @@ public class ModelReleaseCandidateApplicationService {
                 WorkbenchState.BLOCKED,
                 "MODEL_RELEASE_CANDIDATE_QUALITY_FAILED",
                 "The latest quality run failed and must be rerun",
-                visibleActions(
-                    candidate,
-                    actorId,
-                    duties,
-                    List.of(WorkspaceAction.RUN_QUALITY, WorkspaceAction.CANCEL_CANDIDATE)
-                )
+                actions(candidate, actorId, duties)
             );
         }
         if (
@@ -1268,7 +1263,7 @@ public class ModelReleaseCandidateApplicationService {
                 .toList();
         }
         if (
-            candidate.status() == DeliveryStatus.BUILT &&
+            Set.of(DeliveryStatus.BUILT, DeliveryStatus.QUALITY_RUNNING, DeliveryStatus.QUALITY_FAILED).contains(candidate.status()) &&
             duties.contains(DeliveryActorRole.MODEL_MAINTAINER)
         ) {
             return java.util.stream.Stream

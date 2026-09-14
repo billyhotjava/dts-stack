@@ -40,7 +40,7 @@ import { ModelAssetDeliveryResult } from "./ModelAssetDeliveryResult";
 import { type MaterializationBuildAction, ModelMaterializationActions } from "./ModelMaterializationActions";
 import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 import { ModelReleaseScopeNotice, ModelReleaseScopeSummary } from "./ModelReleaseScopeSummary";
-import { resolveReleaseCandidateScope } from "./modelReleaseCandidateScope";
+import { materializationScopeEntries, resolveMaterializationBuildAction, resolveReleaseCandidateScope } from "./modelReleaseCandidateScope";
 import { Button, Modal, RequestState } from "./PrototypePrimitives";
 import { compileSelectedModels } from "./services/compileSelectedModels";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
@@ -244,27 +244,7 @@ export function ModelPublishDialog({
 		selectedEvidence.some((entry) =>
 			selection.some((model) => model.id === entry.modelSpecId && model.revision !== entry.modelRevision),
 		);
-	const buildAction: MaterializationBuildAction | null = workspace?.allowedActions.includes("CREATE_CANDIDATE")
-		? "CREATE_CANDIDATE"
-		: candidate && !candidateScopeMatches
-			? workspace?.allowedActions.includes("REFRESH_CANDIDATE")
-				? "REFRESH_AND_CREATE"
-				: workspace?.allowedActions.includes("CREATE_REPLACEMENT_CANDIDATE")
-					? "CREATE_AFTER_TERMINAL"
-					: workspace?.allowedActions.includes("CANCEL_CANDIDATE")
-						? "CANCEL_AND_CREATE"
-						: null
-			: candidate && workspace?.allowedActions.includes("REFRESH_CANDIDATE")
-				? "REFRESH_AND_REPLACE"
-				: candidate && workspace?.allowedActions.includes("CREATE_REPLACEMENT_CANDIDATE")
-					? "CREATE_REPLACEMENT"
-					: candidateScopeMatches && candidate && workspace?.allowedActions.includes("REMATERIALIZE")
-						? "REMATERIALIZE"
-						: candidateScopeMatches && workspace?.allowedActions.includes("RETRY_BUILD")
-							? "RETRY_BUILD"
-							: candidateScopeMatches && workspace?.allowedActions.includes("START_BUILD")
-								? "START_BUILD"
-								: null;
+	const buildAction = resolveMaterializationBuildAction(workspace, candidateContainsSelection, candidateScopeMatches);
 	const releaseActions = RELEASE_WORKFLOW_ACTIONS.filter(
 		(action) => candidateCommandScopeAllowed && workspace?.allowedActions.includes(action),
 	);
@@ -277,13 +257,12 @@ export function ModelPublishDialog({
 				? "RUN_NOW"
 				: null
 		: null;
-	const entries = selection.map((model, sortOrder) => ({
-		modelSpecId: model.id,
-		sortOrder,
-		selectedReason: "从模型工作台选择",
-	}));
-	const materializationRequestEntries = entries;
-	const materializationRequestedIds = useMemo(() => selection.map((entry) => entry.id), [selection]);
+	const materializationRequestEntries = useMemo(
+		() => materializationScopeEntries(candidate, selection, buildAction), [candidate, selection, buildAction],
+	);
+	const materializationRequestedIds = useMemo(
+		() => materializationRequestEntries.map((entry) => entry.modelSpecId), [materializationRequestEntries],
+	);
 	const refreshMaterializationPlan = useCallback(async () => {
 		if (!canMaintain || !planId || !materializationRequestedIds.length) {
 			setMaterializationPlan(null);
@@ -331,6 +310,7 @@ export function ModelPublishDialog({
 	);
 	const canBuild = Boolean(
 		!selectionProblem && !blockingWorkspace?.candidate &&
+			(buildAction !== "REMATERIALIZE" || candidateCommandScopeAllowed) &&
 			(operationalAction ||
 				(buildAction && (!requiresPlan || (planState === "ready" && materializationPlan?.canStart)))),
 	);
@@ -378,11 +358,13 @@ export function ModelPublishDialog({
 			let checkedPlan: MaterializationPlanPreview | null = null;
 			if (requiresPlan) {
 				checkedPlan = await requireCurrentMaterializationPlan("当前依赖计划存在阻断。");
-				await compileSelectedModels(
-					selection,
-					checkedPlan.orderedEntries.filter((entry) => entry.action === "BUILD").map((entry) => entry.modelSpecId),
-				);
-				checkedPlan = await requireCurrentMaterializationPlan("编译后依赖计划发生变化，请确认阻断后重试。");
+				if (buildAction !== "REMATERIALIZE") {
+					await compileSelectedModels(
+						selection,
+						checkedPlan.orderedEntries.filter((entry) => entry.action === "BUILD").map((entry) => entry.modelSpecId),
+					);
+					checkedPlan = await requireCurrentMaterializationPlan("编译后依赖计划发生变化，请确认阻断后重试。");
+				}
 			} else if (buildAction === "START_BUILD" && candidate) {
 				await compileSelectedModels(
 					selection,
@@ -397,7 +379,7 @@ export function ModelPublishDialog({
 			if (buildAction === "CREATE_CANDIDATE") {
 				const created = await createReleaseCandidate(planId, crypto.randomUUID(), {
 					environment,
-					entries,
+					entries: materializationRequestEntries,
 					reason: batch ? "从模型列表创建批量构建发布单" : "从模型工作台创建单模型发布单",
 					...planFence,
 				});
@@ -428,7 +410,7 @@ export function ModelPublishDialog({
 				}
 				const created = await createReleaseCandidate(planId, crypto.randomUUID(), {
 					environment,
-					entries,
+					entries: materializationRequestEntries,
 					reason: batch ? "从模型列表按新范围创建发布单" : "从模型工作台按新范围创建发布单",
 					...planFence,
 				});
@@ -447,7 +429,7 @@ export function ModelPublishDialog({
 				}
 				const replacement = await createReplacementReleaseCandidate(planId, source, crypto.randomUUID(), {
 					environment,
-					entries,
+					entries: materializationRequestEntries,
 					reason: batch ? "从模型列表按新修订创建替代发布单" : "从模型工作台按新修订创建替代发布单",
 					...planFence,
 				});
@@ -748,7 +730,7 @@ export function ModelPublishDialog({
 								canBuild={canBuild}
 								buildAction={buildAction}
 								operationalAction={operationalAction}
-								modelCount={selection.length}
+								modelCount={materializationRequestedIds.length}
 								buildBlocker={
 									materializationBlocker === "无" ? undefined : materializationBlocker
 								}

@@ -22,13 +22,15 @@ RUN echo "${ADDAX_SHA256}  /tmp/addax.tar.gz" | sha256sum -c - \
  && mkdir -p /opt/addax/log && chmod 777 /opt/addax/log
 
 COPY patches/main/com/wgzhao/addax/plugin/reader/excelreader/ExcelHelper.java /tmp/addax-patch/main/com/wgzhao/addax/plugin/reader/excelreader/ExcelHelper.java
+COPY patches/main/com/wgzhao/addax/plugin/writer/postgresqlwriter/PostgresqlWriter.java /tmp/addax-patch/main/com/wgzhao/addax/plugin/writer/postgresqlwriter/PostgresqlWriter.java
 COPY patches/test/ExcelHelperSparseCellTest.java /tmp/addax-patch/test/ExcelHelperSparseCellTest.java
 
 RUN mkdir -p /tmp/addax-patch/classes /tmp/addax-patch/test-classes \
  && javac -proc:none --release 17 -encoding UTF-8 \
-      -cp "/opt/addax/lib/*:/opt/addax/shared/*:/opt/addax/plugin/reader/excelreader/excelreader-${ADDAX_VERSION}.jar" \
+      -cp "/opt/addax/lib/*:/opt/addax/shared/*:/opt/addax/plugin/reader/excelreader/excelreader-${ADDAX_VERSION}.jar:/opt/addax/plugin/writer/postgresqlwriter/*" \
       -d /tmp/addax-patch/classes \
       /tmp/addax-patch/main/com/wgzhao/addax/plugin/reader/excelreader/ExcelHelper.java \
+      /tmp/addax-patch/main/com/wgzhao/addax/plugin/writer/postgresqlwriter/PostgresqlWriter.java \
  && javac -proc:none --release 17 -encoding UTF-8 \
       -cp "/tmp/addax-patch/classes:/opt/addax/lib/*:/opt/addax/shared/*:/opt/addax/plugin/reader/excelreader/excelreader-${ADDAX_VERSION}.jar" \
       -d /tmp/addax-patch/test-classes \
@@ -37,6 +39,10 @@ RUN mkdir -p /tmp/addax-patch/classes /tmp/addax-patch/test-classes \
       --file "/opt/addax/plugin/reader/excelreader/excelreader-${ADDAX_VERSION}.jar" \
       -C /tmp/addax-patch/classes \
       com/wgzhao/addax/plugin/reader/excelreader/ExcelHelper.class \
+ && jar --update \
+      --file "/opt/addax/plugin/writer/postgresqlwriter/postgresqlwriter-${ADDAX_VERSION}.jar" \
+      -C /tmp/addax-patch/classes \
+      com/wgzhao/addax/plugin/writer/postgresqlwriter \
  && java \
       -cp "/tmp/addax-patch/test-classes:/opt/addax/lib/*:/opt/addax/shared/*:/opt/addax/plugin/reader/excelreader/excelreader-${ADDAX_VERSION}.jar" \
       com.yuzhi.dts.addax.patch.ExcelHelperSparseCellTest

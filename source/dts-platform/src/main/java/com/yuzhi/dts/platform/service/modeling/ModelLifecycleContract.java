@@ -113,8 +113,9 @@ public final class ModelLifecycleContract {
             result.put(BUILDING, EnumSet.of(BUILD_FAILED, BUILT));
             result.put(BUILD_FAILED, EnumSet.of(BUILDING, CANCELLED));
             result.put(BUILT, EnumSet.of(BUILDING, QUALITY_RUNNING, CANCELLED));
-            result.put(QUALITY_RUNNING, EnumSet.of(QUALITY_FAILED, QUALITY_PASSED));
-            result.put(QUALITY_FAILED, EnumSet.of(QUALITY_RUNNING, CANCELLED));
+            // An explicit rebuild invalidates the pending quality round and creates a new build attempt.
+            result.put(QUALITY_RUNNING, EnumSet.of(BUILDING, QUALITY_FAILED, QUALITY_PASSED));
+            result.put(QUALITY_FAILED, EnumSet.of(BUILDING, QUALITY_RUNNING, CANCELLED));
             result.put(QUALITY_PASSED, EnumSet.of(REVIEW_PENDING, PUBLISHING));
             result.put(REVIEW_PENDING, EnumSet.of(REJECTED, APPROVED, PUBLISHING, CANCELLED));
             result.put(APPROVED, EnumSet.of(PUBLISHING));

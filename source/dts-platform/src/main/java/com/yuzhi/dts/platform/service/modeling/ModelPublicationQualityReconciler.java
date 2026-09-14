@@ -92,7 +92,8 @@ public class ModelPublicationQualityReconciler {
             .orElse(null);
         if (
             candidate == null ||
-            candidate.status() != DeliveryStatus.QUALITY_RUNNING
+            candidate.status() != DeliveryStatus.QUALITY_RUNNING ||
+            candidate.version() != item.candidateVersion()
         ) {
             return ignored(item.candidateId());
         }

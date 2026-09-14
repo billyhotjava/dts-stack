@@ -22,7 +22,7 @@ export function ModelReleaseScopeNotice({
 		<section aria-label="所属发布单操作范围" className="dmx-request-state">
 			<p>
 				当前查看 {selectedCount} 个模型，所属发布单包含 {candidate.entries.length}{" "}
-				个模型。质量验证、评审和发布操作作用于整个发布单。
+				个模型。重新构建、质量验证、评审和发布操作作用于整个发布单。重新构建后需重新完成质量检查。
 			</p>
 			<details>
 				<summary>查看本发布单全部 {candidate.entries.length} 个模型</summary>
@@ -43,7 +43,7 @@ export function ModelReleaseScopeNotice({
 						disabled={disabled}
 						onChange={(event) => onConfirm(event.target.checked)}
 					/>
-					<span>我确认按以上全部模型执行质量验证、评审和发布操作</span>
+					<span>我确认按以上全部模型执行重新构建、质量验证、评审和发布操作</span>
 				</label>
 			) : null}
 		</section>
