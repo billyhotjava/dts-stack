@@ -1,0 +1,50 @@
+# DTS devspec 静态站点 nginx 示例（阿里云 39.106.43.56）
+# 方案 A（推荐）：把 ref/ 下的 devspec 与 intro 同步到本机静态目录后直接托管。
+# 方案 B（临时）：注释中的 proxy 段把请求转发到开发机 8090 静态服务。
+
+server {
+    listen 80;
+    server_name devspec.example.com;          # 换成你的域名或直接用 39.106.43.56
+
+    # 方案 A 的静态根目录：
+    #   /var/www/dts-ref/devspec/  <- worklog/v2.2.3/ref/devspec/
+    #   /var/www/dts-ref/intro/    <- worklog/v2.2.3/ref/intro/（保留 ../intro 链接）
+    root /var/www/dts-ref;
+    index devspec/login.html;
+
+    # 站点级 Basic Auth（比页面内置口令可靠，建议保留）
+    auth_basic "DTS devspec";
+    auth_basic_user_file /etc/nginx/.htpasswd-devspec;
+
+    location = / {
+        return 302 /devspec/login.html;
+    }
+
+    location /devspec/ {
+        try_files $uri $uri/ =404;
+    }
+
+    location /intro/ {
+        try_files $uri $uri/ =404;
+    }
+
+    # ---- 方案 B：反向代理到开发机静态服务（需阿里云能访问该地址）----
+    # location /devspec/ {
+    #     proxy_pass http://<开发机隧道IP或公网IP>:8090/;
+    #     proxy_http_version 1.1;
+    #     proxy_set_header Host $host;
+    #     proxy_set_header X-Real-IP $remote_addr;
+    #     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    # }
+    # location /intro/ {
+    #     proxy_pass http://<开发机隧道IP或公网IP>:8090/../intro/;   # 建议改为隧道根 + 路径重写
+    # }
+}
+
+# 启用步骤（阿里云侧）：
+#   sudo mkdir -p /var/www/dts-ref
+#   sudo htpasswd -c /etc/nginx/.htpasswd-devspec admin     # 或 openssl passwd -apr1
+#   sudo nginx -t && sudo systemctl reload nginx
+# HTTPS：
+#   sudo certbot --nginx -d devspec.example.com
+# 安全组：仅放行 80/443；不要额外暴露开发机端口。
