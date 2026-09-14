@@ -6,7 +6,9 @@ import com.yuzhi.dts.platform.service.governance.dto.QualityRunDto;
 import com.yuzhi.dts.platform.service.modeling.GovernanceQualityRerunPort;
 import com.yuzhi.dts.platform.service.modeling.QualityEvidencePort.QualityEvidence;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -63,19 +65,25 @@ public class GovernanceQualityRerunAdapter implements GovernanceQualityRerunPort
             throw new IllegalArgumentException("governance quality rerun must contain between 1 and 100 bindings");
         }
         String prefix = triggerPrefix(candidateId, idempotencyKey);
-        var workflow = workflows.startPinnedModelQuality(
-            scope
-                .stream()
-                .map(item -> new PinnedQualityBinding(item.ruleId(), item.ruleVersionId(), item.bindingId()))
-                .toList(),
-            actorId,
-            activeDepartmentId,
-            prefix,
-            prefix
-        );
-        List<QualityRunDto> runs = workflow.ruleRuns();
-        if (runs.size() != scope.size()) {
-            throw new IllegalStateException("all pinned quality bindings must create one run in the same workflow");
+        var groups = new LinkedHashMap<String, List<QualityEvidence>>();
+        for (QualityEvidence item : scope) {
+            groups.computeIfAbsent(item.assetKey(), ignored -> new ArrayList<>()).add(item);
+        }
+        List<QualityRunDto> runs = new ArrayList<>();
+        for (var group : groups.entrySet()) {
+            // One workflow owns one asset. Keep the release command prefix for replay,
+            // and derive a stable per-asset key so retries cannot duplicate workflows.
+            String assetKey = prefix + DigestUtils.sha256Hex(group.getKey());
+            var workflow = workflows.startPinnedModelQuality(
+                group.getValue().stream()
+                    .map(item -> new PinnedQualityBinding(item.ruleId(), item.ruleVersionId(), item.bindingId()))
+                    .toList(),
+                actorId, activeDepartmentId, assetKey, assetKey
+            );
+            if (workflow.ruleRuns().size() != group.getValue().size()) {
+                throw new IllegalStateException("Each pinned quality binding must create one run for its asset");
+            }
+            runs.addAll(workflow.ruleRuns());
         }
         return new RerunReceipt(false, runs.stream().map(GovernanceQualityRerunAdapter::toRef).toList());
     }

@@ -67,6 +67,7 @@ public class ModelReleaseCandidateApplicationService {
     private final ModelMaterializationPlanService materializationPlans;
     private final ModelReleaseCandidatePreflightService preflight;
     private final CandidateGovernanceQualityEvidenceService governanceQuality;
+    private CandidateQualityAssetRegistrationService qualityAssets;
 
     public ModelReleaseCandidateApplicationService(
         ModelReleaseCandidateRepository repository,
@@ -96,6 +97,29 @@ public class ModelReleaseCandidateApplicationService {
         this.materializationPlans = materializationPlans;
         this.preflight = preflight;
         this.governanceQuality = governanceQuality;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ModelReleaseCandidateApplicationService(
+        ModelReleaseCandidateRepository repository,
+        ModelReleaseCandidateService commands,
+        ModelMaterializationStartService materializationStarts,
+        ModelSpecPlanWriteAccessPort planAccess,
+        WarehousePlanOperationsReadPort planReadAccess,
+        ReleaseDutyResolver dutyResolver,
+        CandidatePublicationAdmissionService publicationAdmission,
+        CandidatePublicationCoordinator publicationCoordinator,
+        CandidateRollbackCommitService rollbackCommits,
+        ReleaseCandidateWorkbenchEvidencePort workbenchEvidence,
+        ModelMaterializationPlanService materializationPlans,
+        ModelReleaseCandidatePreflightService preflight,
+        CandidateGovernanceQualityEvidenceService governanceQuality,
+        CandidateQualityAssetRegistrationService qualityAssets
+    ) {
+        this(repository, commands, materializationStarts, planAccess, planReadAccess, dutyResolver,
+            publicationAdmission, publicationCoordinator, rollbackCommits, workbenchEvidence,
+            materializationPlans, preflight, governanceQuality);
+        this.qualityAssets = qualityAssets;
     }
 
     @Transactional(readOnly = true)
@@ -1300,18 +1324,22 @@ public class ModelReleaseCandidateApplicationService {
         GovernanceQualitySummaryView governance = evaluated == null
             ? GovernanceQualitySummaryView.notEvaluated()
             : evaluated;
+        BlockerView registrationBlocker = qualityAssets != null && view.candidate() != null &&
+            view.candidate().status() == DeliveryStatus.QUALITY_RUNNING
+            ? qualityAssets.previewBlocker(view.candidate()) : null;
         boolean publicationBlocked = governance.required() && !governance.passed() && publicationReady(view.candidate());
         List<WorkspaceAction> actions = publicationBlocked
             ? view.allowedActions().stream().filter(action -> action != WorkspaceAction.PUBLISH).toList()
             : view.allowedActions();
         return new WorkbenchView(
             view.planId(),
-            publicationBlocked ? WorkbenchState.BLOCKED : view.state(),
+            publicationBlocked || registrationBlocker != null ? WorkbenchState.BLOCKED : view.state(),
             view.candidate(),
             evidence(view.candidate(), entries),
             entries,
             governance,
-            publicationBlocked ? new BlockerView(governance.code(), governance.message()) : view.primaryBlocker(),
+            registrationBlocker != null ? registrationBlocker :
+                publicationBlocked ? new BlockerView(governance.code(), governance.message()) : view.primaryBlocker(),
             actions,
             view.etag()
         );

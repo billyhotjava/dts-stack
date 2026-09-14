@@ -27,6 +27,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -97,21 +98,13 @@ public class CandidateQualityAssetRegistrationService {
         requireBuildVerified(candidate);
         try {
             ResolvedCatalogTarget target = targets.resolve(candidate);
+            PreparedScope scope = prepareScope(candidate);
             List<UUID> registered = new ArrayList<>();
-            for (PublicationEntryEvidence physical : evidence.requireCurrent(candidate, false)) {
-                ModelSpecView model = models.revision(
-                    candidate.tenantId(),
-                    new ModelRevisionRef(
-                        physical.modelSpecId(),
-                        physical.modelRevision()
-                    )
-                );
-                requirePinnedModel(candidate, physical, model);
-                Decision classification = classifications.evaluate(
-                    candidate.tenantId(),
-                    model.id(),
-                    model.revision(),
-                    model.checksum()
+            for (PublicationEntryEvidence physical : scope.physical()) {
+                ModelSpecView model = scope.models().get(physical.modelSpecId());
+                Decision classification = classifications.admitAndSeal(
+                    candidate.tenantId(), model.id(), model.revision(), model.checksum(),
+                    "candidate-quality:" + candidate.id(), scope.levels()
                 );
                 requireClassification(candidate, model, classification);
                 Instant now = clock.instant();
@@ -153,6 +146,39 @@ public class CandidateQualityAssetRegistrationService {
             );
         }
     }
+
+    /** Read the same registration prerequisites used by the reconciler, without writing assets. */
+    @Transactional(readOnly = true, noRollbackFor = ModelReleaseCandidateException.class)
+    public ModelReleaseCandidateContract.BlockerView previewBlocker(CandidateView candidate) {
+        try {
+            prepareScope(candidate);
+            return null;
+        } catch (ModelReleaseCandidateException blocked) {
+            return new ModelReleaseCandidateContract.BlockerView(blocked.code(), blocked.getMessage());
+        }
+    }
+
+    private PreparedScope prepareScope(CandidateView candidate) {
+        requireBuildVerified(candidate);
+        List<PublicationEntryEvidence> physical = evidence.requireCurrent(candidate, false);
+        Map<UUID, ModelSpecView> modelViews = new LinkedHashMap<>();
+        for (PublicationEntryEvidence item : physical) {
+            ModelSpecView model = models.revision(candidate.tenantId(),
+                new ModelRevisionRef(item.modelSpecId(), item.modelRevision()));
+            requirePinnedModel(candidate, item, model);
+            modelViews.put(model.id(), model);
+        }
+        Map<String, String> levels = new LinkedHashMap<>();
+        for (Decision decision : classifications.evaluateVerifiedScope(candidate.tenantId(), List.copyOf(modelViews.values()))) {
+            ModelSpecView model = modelViews.get(decision.modelSpecId());
+            requireClassification(candidate, model, decision);
+            levels.put(decision.outputSubjectKey(), decision.effectiveLevel());
+        }
+        return new PreparedScope(physical, modelViews, levels);
+    }
+
+    private record PreparedScope(List<PublicationEntryEvidence> physical, Map<UUID, ModelSpecView> models,
+        Map<String, String> levels) {}
 
     private static void requireBuildVerified(CandidateView candidate) {
         if (
@@ -201,7 +227,7 @@ public class CandidateQualityAssetRegistrationService {
             : decision.blockers().stream().map(Blocker::code).toList();
         throw new ModelReleaseCandidateException(
             "MODEL_SPEC_GOVERNANCE_CLASSIFICATION_REQUIRED",
-            "Verified physical output requires a resolved classification before quality execution",
+            "模型“" + model.name() + "”的密级证据未满足：" + String.join("、", blockerCodes),
             Kind.UNPROCESSABLE,
             Map.of(
                 "candidateId",

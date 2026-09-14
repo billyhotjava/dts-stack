@@ -4,12 +4,15 @@
 
 ## 方案 A（已部署）：静态同步到阿里云，nginx 直接托管
 
-- 入口：`http://dev.yuzhicloud.com/devspec/login.html`（DNS 已解析到 39.106.43.56）
+- 入口：**https://dev.yuzhicloud.com/devspec/login.html**（HTTP 301 到 HTTPS）
+- 证书：Let's Encrypt 生产证书，certbot.timer 自动续期
 - 访问控制：nginx Basic Auth `admin` + 页面登录 `admin`
 - 阿里云新增文件（未修改任何既有配置）：
-  - `/etc/nginx/conf.d/dev.yuzhicloud.com.conf`（80 + 备用 8099）
+  - `/etc/nginx/conf.d/dev.yuzhicloud.com.conf`（80 重定向 + 443 TLS + 备用 8099）
   - `/etc/nginx/.htpasswd-devspec`
   - `/var/www/dts-ref/devspec`、`/var/www/dts-ref/intro`（rsync 同步）
+  - `/etc/letsencrypt/live/dev.yuzhicloud.com/`（certbot 签发）
+- 验证：HTTPS 带认证 200、无认证 401；`http` 301；概览页与 intro 200；bi/jira 不受影响
 
 ```bash
 # 开发机 -> 阿里云（需要 SSH 权限）

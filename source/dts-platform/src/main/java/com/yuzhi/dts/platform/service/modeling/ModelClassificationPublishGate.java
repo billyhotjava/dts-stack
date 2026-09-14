@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +52,7 @@ public class ModelClassificationPublishGate {
     private final CatalogSourceReferenceReadPort catalogSources;
     private final CatalogClassificationBoundary classifications;
     private final ObjectMapper objectMapper;
+    private final ModelImplementationDependencyService dependencies;
 
     public ModelClassificationPublishGate(
         ModelSpecApplicationService modelSpecs,
@@ -60,15 +62,33 @@ public class ModelClassificationPublishGate {
         CatalogClassificationBoundary classifications,
         ObjectMapper objectMapper
     ) {
+        this(modelSpecs, modelSpecRepository, lifecycleRepository, catalogSources, classifications, objectMapper, null);
+    }
+
+    @Autowired
+    public ModelClassificationPublishGate(
+        ModelSpecApplicationService modelSpecs,
+        ModelSpecRepository modelSpecRepository,
+        ModelLifecycleRepository lifecycleRepository,
+        CatalogSourceReferenceReadPort catalogSources,
+        CatalogClassificationBoundary classifications,
+        ObjectMapper objectMapper,
+        ModelImplementationDependencyService dependencies
+    ) {
         this.modelSpecs = modelSpecs;
         this.modelSpecRepository = modelSpecRepository;
         this.lifecycleRepository = lifecycleRepository;
         this.catalogSources = catalogSources;
         this.classifications = classifications;
         this.objectMapper = objectMapper;
+        this.dependencies = dependencies;
     }
 
     public Decision evaluate(String tenantId, UUID modelSpecId, int revision, String checksum) {
+        return evaluate(tenantId, modelSpecId, revision, checksum, Map.of());
+    }
+
+    private Decision evaluate(String tenantId, UUID modelSpecId, int revision, String checksum, Map<String, String> verifiedLevels) {
         ModelSpecView model = modelSpecs.get(tenantId, modelSpecId);
         List<Blocker> blockers = new ArrayList<>();
         if (model.revision() != revision || !Objects.equals(model.checksum(), checksum)) {
@@ -96,7 +116,7 @@ public class ModelClassificationPublishGate {
 
         LinkedHashMap<String, String> upstreamLevels = new LinkedHashMap<>();
         for (ImplementationInput input : implementation.inputs()) {
-            for (InputEvidence evidence : resolveInputEvidence(tenantId, model, input, blockers)) {
+            for (InputEvidence evidence : resolveInputEvidence(tenantId, model, implementation, input, blockers, verifiedLevels)) {
                 upstreamLevels.put(evidence.subjectKey(), evidence.level());
             }
         }
@@ -171,7 +191,13 @@ public class ModelClassificationPublishGate {
 
     @Transactional
     public Decision admitAndSeal(String tenantId, UUID modelSpecId, int revision, String checksum, String triggerRef) {
-        Decision decision = evaluate(tenantId, modelSpecId, revision, checksum);
+        return admitAndSeal(tenantId, modelSpecId, revision, checksum, triggerRef, Map.of());
+    }
+
+    @Transactional
+    public Decision admitAndSeal(String tenantId, UUID modelSpecId, int revision, String checksum, String triggerRef,
+        Map<String, String> verifiedLevels) {
+        Decision decision = evaluate(tenantId, modelSpecId, revision, checksum, verifiedLevels);
         if (!decision.ready()) {
             return decision;
         }
@@ -216,13 +242,26 @@ public class ModelClassificationPublishGate {
     private List<InputEvidence> resolveInputEvidence(
         String tenantId,
         ModelSpecView model,
+        ImplementationView implementation,
         ImplementationInput input,
-        List<Blocker> blockers
+        List<Blocker> blockers,
+        Map<String, String> verifiedLevels
     ) {
         if (!(input instanceof GeneratedInput generated)) {
-            return resolveInput(tenantId, model, input, blockers).stream().toList();
+            return resolveInput(tenantId, model, input, blockers, verifiedLevels).stream().toList();
         }
         Object snapshotValue = generated.config().get("dependencySnapshot");
+        if (snapshotValue == null && "DBT".equals(generated.generatorType()) && dependencies != null) {
+            try {
+                // Canonical ZIP/manual dbt paths store pinned dependencies on ModelSpec,
+                // not inside generator config. Reuse the same resolver as materialization.
+                snapshotValue = dependencies.resolveCurrent(tenantId, model, implementation,
+                    implementation.projectKey(), null).snapshot();
+            } catch (ModelSpecException invalid) {
+                blockers.add(new Blocker(invalid.code(), invalid.getMessage(), model.id().toString()));
+                return List.of();
+            }
+        }
         if (snapshotValue == null) {
             if (hasDeclaredDependencies(model)) {
                 blockers.add(
@@ -258,7 +297,7 @@ public class ModelClassificationPublishGate {
                     tenantId,
                     model,
                     new PhysicalAssetInput(source.sourceBindingId(), source.resolvedVersion()),
-                    blockers
+                    blockers, verifiedLevels
                 ).ifPresent(resolved::add);
             }
             for (var upstream : snapshot.modelInputs()) {
@@ -273,7 +312,7 @@ public class ModelClassificationPublishGate {
                         upstream.implementationChecksum(),
                         upstream.dbtUniqueId()
                     ),
-                    blockers
+                    blockers, verifiedLevels
                 ).ifPresent(resolved::add);
             }
             return List.copyOf(resolved);
@@ -289,6 +328,28 @@ public class ModelClassificationPublishGate {
         }
     }
 
+    /** Only call with models whose pinned candidate outputs have all been physically verified. */
+    public List<Decision> evaluateVerifiedScope(String tenantId, List<ModelSpecView> verifiedModels) {
+        Map<UUID, Decision> results = new LinkedHashMap<>();
+        Map<String, String> levels = new LinkedHashMap<>();
+        List<ModelSpecView> remaining = new ArrayList<>(verifiedModels);
+        while (!remaining.isEmpty()) {
+            int before = remaining.size();
+            var iterator = remaining.iterator();
+            while (iterator.hasNext()) {
+                ModelSpecView model = iterator.next();
+                Decision decision = evaluate(tenantId, model.id(), model.revision(), model.checksum(), levels);
+                results.put(model.id(), decision);
+                if (decision.ready()) {
+                    levels.put(decision.outputSubjectKey(), decision.effectiveLevel());
+                    iterator.remove();
+                }
+            }
+            if (remaining.size() == before) break;
+        }
+        return verifiedModels.stream().map(model -> results.get(model.id())).toList();
+    }
+
     private static boolean hasDeclaredDependencies(ModelSpecView model) {
         return (
             model.sourceRefs() != null && !model.sourceRefs().isEmpty() ||
@@ -301,7 +362,8 @@ public class ModelClassificationPublishGate {
         String tenantId,
         ModelSpecView model,
         ImplementationInput input,
-        List<Blocker> blockers
+        List<Blocker> blockers,
+        Map<String, String> verifiedLevels
     ) {
         if (input instanceof PhysicalAssetInput physical) {
             SourceBindingState binding = modelSpecRepository
@@ -325,13 +387,13 @@ public class ModelClassificationPublishGate {
             if (subjectKey == null) {
                 return Optional.empty();
             }
-            return sealedEvidence(subjectKey, blockers);
+            return sealedEvidence(subjectKey, blockers, Map.of());
         }
         if (input instanceof UpstreamModelInput upstream) {
             String subjectKey = upstream.implementationPinned()
                 ? CatalogAssetKey.dbtModel(upstream.dbtUniqueId(), null)
                 : modelRevisionKey(upstream.modelSpecId(), upstream.revision());
-            return sealedEvidence(subjectKey, blockers);
+            return sealedEvidence(subjectKey, blockers, verifiedLevels);
         }
         if (input instanceof GeneratedInput) {
             return Optional.empty();
@@ -346,8 +408,13 @@ public class ModelClassificationPublishGate {
         return Optional.empty();
     }
 
-    private Optional<InputEvidence> sealedEvidence(String subjectKey, List<Blocker> blockers) {
+    private Optional<InputEvidence> sealedEvidence(String subjectKey, List<Blocker> blockers, Map<String, String> verifiedLevels) {
         ClassificationFact snapshot = classifications.resolve("ASSET", subjectKey).orElse(null);
+        String verifiedLevel = verifiedLevels.get(subjectKey);
+        if (verifiedLevel != null) {
+            return Optional.of(new InputEvidence(subjectKey, SecurityLevelCatalog.maxDataCode(
+                verifiedLevel, snapshot == null ? null : snapshot.effectiveLevel())));
+        }
         if (snapshot == null) {
             blockers.add(
                 new Blocker(

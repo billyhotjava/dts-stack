@@ -91,6 +91,9 @@ public class CandidateGovernanceQualityRerunService {
             .stream()
             .filter(CandidateGovernanceQualityRerunService::rerunnable)
             .toList();
+        if (eligible.isEmpty() && current.passed()) {
+            return result(candidate.id(), new RerunReceipt(false, List.of()));
+        }
         if (eligible.isEmpty()) {
             throw new ModelReleaseCandidateException(
                 "MODEL_SPEC_GOVERNANCE_QUALITY_BINDING_REQUIRED",
