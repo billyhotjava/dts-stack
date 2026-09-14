@@ -2,9 +2,14 @@
 
 本目录内容为纯静态文件（HTML/Markdown/JSON/PNG），无需后端。两种访问方式：
 
-## 方案 A（推荐）：静态同步到阿里云，nginx 直接托管
+## 方案 A（已部署）：静态同步到阿里云，nginx 直接托管
 
-适用：所有同事访问、需要 HTTPS 和稳定的入口。
+- 入口：`http://dev.yuzhicloud.com/devspec/login.html`（DNS 已解析到 39.106.43.56）
+- 访问控制：nginx Basic Auth `admin` + 页面登录 `admin`
+- 阿里云新增文件（未修改任何既有配置）：
+  - `/etc/nginx/conf.d/dev.yuzhicloud.com.conf`（80 + 备用 8099）
+  - `/etc/nginx/.htpasswd-devspec`
+  - `/var/www/dts-ref/devspec`、`/var/www/dts-ref/intro`（rsync 同步）
 
 ```bash
 # 开发机 -> 阿里云（需要 SSH 权限）

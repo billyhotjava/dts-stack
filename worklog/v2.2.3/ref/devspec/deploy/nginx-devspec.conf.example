@@ -4,7 +4,7 @@
 
 server {
     listen 80;
-    server_name devspec.example.com;          # 换成你的域名或直接用 39.106.43.56
+    server_name dev.yuzhicloud.com;          # 换成你的域名或直接用 39.106.43.56
 
     # 方案 A 的静态根目录：
     #   /var/www/dts-ref/devspec/  <- worklog/v2.2.3/ref/devspec/
@@ -46,5 +46,5 @@ server {
 #   sudo htpasswd -c /etc/nginx/.htpasswd-devspec admin     # 或 openssl passwd -apr1
 #   sudo nginx -t && sudo systemctl reload nginx
 # HTTPS：
-#   sudo certbot --nginx -d devspec.example.com
+#   sudo certbot --nginx -d dev.yuzhicloud.com
 # 安全组：仅放行 80/443；不要额外暴露开发机端口。
