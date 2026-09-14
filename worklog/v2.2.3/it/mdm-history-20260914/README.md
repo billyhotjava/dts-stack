@@ -17,7 +17,7 @@
 - 最初新增测试在 `ce90a3b9a`。该提交因共享暂存区并行写入混入其他任务文件，已经推送并保留；后续回移测试应仅选取 `PersonnelImportHistoryRegressionTest.java`，不要整提交 cherry-pick。
 - 工作区其他改动未回退；后续六月初分支本轮未创建。
 
-## 验证
+## 源码回归（发布前）
 
 正式 Maven 入口在 `/data/dts-stack` 下执行。共享构建根目录有并行任务生成 root 所有者产物，初次测试遇到权限错误；修复验证改用 Git 隔离检出：
 
@@ -46,7 +46,47 @@ mvn -B -f source/pom.xml -pl dts-admin -am -Dskip.npm \
 - SHA-256：`07327c3240dcacae127f7581d5705ea7100d0c40a91ca777ed8b4ef0abdcf9dd`。
 - 已核对包内新迁移与检出源码逐字节一致，且包内主清单引用新迁移。
 - 完整日志和清单位于同一 target 的 `mdm-verification/`。
-- 本轮完成源码回归及 JAR 构建；未构建镜像、未生成完整离线交付包、未部署容器、未修改现场数据库或重放现场人员数据。
+- 上一阶段完成源码回归及 JAR 构建；本机镜像发布和联调结果见下节。未修改现场数据库或重放现场人员数据。
+
+## 本机模拟器与容器联调（2026-09-14 11:24）
+
+结论：真实模拟器 → admin 回调 → JSON 解析 → 部门同步 → Keycloak 人员同步 → 导入历史保存，两次连续同步通过。
+
+### 运行配置与发布
+
+- 以 Docker Compose 标签和挂载确认当前实际运行目录为 `/data/dts-stack`、项目 `dts-stack`。`/opt/dts/release/dts-stack` 本机不存在，未迁移运行环境。
+- 发布前 admin 运行旧 SHA `4d9fecbe3e2613e4625b8bf04da3165bae813ee0`，未包含本修复。容器内上游配置为 `http://localhost:28080`，不能连接宿主机模拟器；旧模拟器进程的样例路径也已不存在。
+- 仅更新运行目录 `.env` 的三项：`DTS_MDM_GATEWAY_UPSTREAM_BASE_URL=http://172.19.0.1:28080`、`DTS_MDM_GATEWAY_CALLBACK_URL=http://172.19.0.1:38012/api/mdm/receive`、`DTS_MDM_GATEWAY_STORAGE_PATH=/data/mdm`。保留鉴权和其他配置。
+- 构建检出再次 `git pull --ff-only origin 795355fb3dd36ea8c568340c50ca980671bb8ee4` 并核对 SHA。执行 `builds/dts-build.sh --image dts-admin` 正式入口，脚本默认预构建阶段重新 Maven 打包，随后构建并导出原标签 `dts-admin:1.0.0`。
+- 通过实际运行目录的 `docker-compose-app.yml`，指定原项目名、`.env`、`imgversion.conf`，执行 `up -d --no-deps --pull never dts-admin`；仅更新 admin，保持原挂载和网络。容器健康。
+- 新迁移 `20260914-01-person-import-history-constraints` 于 11:23:51 `EXECUTED`。同版本还包含两项待执行的建模审计/菜单角色迁移，已随正常启动执行。
+- 发布前已保存本机 `dts_admin` 数据库备份、旧 admin 镜像和原 `.env`，位于证据目录；不包含现场数据库。配置备份含凭据，仅本机受限目录保留，不提交 Git。
+
+### 样例与断言
+
+- 模拟器使用同一 SHA，在构建检出中 Maven 打包后重新启动，监听 `172.19.0.1:28080`，PID `359295`。页面：`http://172.19.0.1:28080/`。
+- 样例固定一名人员 `MDMTEST20260909U01`、一个部门 `MDMTEST20260909D01`。每次更新 `desp.sendTime` 以保留独立原始接收文件。测试账号保持禁用登录。
+- 两次均调用正式 admin 的 `POST /api/mdm/handshake`；模拟器接收拉取请求后通过 multipart 回调 `/api/mdm/receive`。上游与回调均 HTTP 200，日志两次 `users=1 depts=1`，接收文件 MD5 与批次 metadata 一致。
+
+| 次数 | 批次 ID / 状态 | 明细 ID / 状态 | 成功 / 失败 |
+| --- | --- | --- | --- |
+| 1 | 1601 / COMPLETED | 1701 / SUCCESS | 1 / 0 |
+| 2 | 1602 / COMPLETED | 1702 / SUCCESS | 1 / 0 |
+
+- 两条明细的 Keycloak ID 相同：`3c526739-b43c-41e3-9422-cc4a2a0c0519`。Keycloak 数据库确认只有一个测试账号，`enabled=false`；首次历史在第二次导入后保持不变。
+- 部门按 `dept_code` 查询仅一条，ID `1551`。首次验证脚本误用 `org_code` 导致断言失败，已用正确字段只读补验，没有再次推送。日志 `applied=6` 是现有组织循环的处理次数，不代表生成六个部门。
+- 主键和批次外键仍在，`keycloak_user_id` 保留普通索引；两次异步导入均 `success=1 failed=0`，无批次外键或重复历史唯一约束失败。
+- 本机测试前批次/明细为 0，且六月迁移已取消旧唯一约束。本次证明真实链路可重复导入；旧约束修复与 8,000 条存量保留由上节 PostgreSQL 回归覆盖。现场六月初版本与存量库仍需独立验证。
+
+### 发布标识与证据
+
+- 源码 SHA：`795355fb3dd36ea8c568340c50ca980671bb8ee4`。
+- 镜像 ID：`sha256:2cc982f86253b5cb928e5e2f165c5e55f27551c0b5e21d1b7bbf7ac0acdbfc0c`。
+- 正式脚本重建 JAR SHA-256：`8c1f9913f08db7113562e03dcab32325573e7b14af930966e93e3d25b30a05d7`。镜像内 `/app/app.jar` 哈希一致，新迁移及 master 引用已核对。
+- 镜像归档：`/data/dts-stack/.worktrees/mdm-f9b1c6a20/builds/dist/dts-admin_1.0.0-20260914-112100.tar`。
+- 镜像归档 SHA-256：`026316fc36b03d1a032f108844c2c52fcfeb0753c650b7b34290ba0f6329fc8a`。
+- 原始证据：`/data/dts-stack/data/mdm-integration-20260914/`，包括 `release-manifest.json`、`result.json`、两次握手/接收文件/数据库结果、迁移结果、网关日志及镜像/模拟器构建日志。
+- 本轮完成正式 admin 镜像构建与导出、现有容器发布、模拟器真实 API/数据库联调。未生成完整产品离线交付包，未做登录后的业务页面验收，未部署现场。
 
 ## 后续现场分支处理
 
