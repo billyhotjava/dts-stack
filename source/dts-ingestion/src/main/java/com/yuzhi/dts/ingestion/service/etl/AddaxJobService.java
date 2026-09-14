@@ -3615,6 +3615,41 @@ public class AddaxJobService {
         }
     }
 
+    /** Use the job writer's exact schema/prefix resolution for failed-table selection. */
+    public List<String> resolveMappedTargetTables(com.yuzhi.dts.ingestion.domain.IngestionTask task) {
+        Map<String, Object> reader = jsonNodeToMap(task.getSourceConfig());
+        Map<String, Object> writer = resolveManagedDestinationConfig(jsonNodeToMap(task.getDestinationConfig()));
+        applyTableMapping(task.getTableMapping(), reader, writer, normalizeWriterType(task.getDestinationType()));
+        return List.copyOf(extractTables(writer));
+    }
+
+    /** Narrow the detached runtime task, including configured writer tables used as mapping fallbacks. */
+    public void restrictRuntimeTables(com.yuzhi.dts.ingestion.domain.IngestionTask task, List<Integer> indices) {
+        Map<String, Object> reader = jsonNodeToMap(task.getSourceConfig());
+        Map<String, Object> writer = resolveManagedDestinationConfig(jsonNodeToMap(task.getDestinationConfig()));
+        applyTableMapping(task.getTableMapping(), reader, writer, normalizeWriterType(task.getDestinationType()));
+        List<String> sources = extractTables(reader);
+        List<String> targets = extractTables(writer);
+        if (sources.size() != task.getTableMapping().size() || targets.size() != sources.size()) {
+            throw new IllegalStateException("源表与目标表无法一一对应，请选择整批重跑");
+        }
+        var selected = objectMapper.createArrayNode();
+        for (int index : indices) {
+            var mapping = task.getTableMapping().get(index).deepCopy();
+            if (!(mapping instanceof com.fasterxml.jackson.databind.node.ObjectNode entry)) {
+                throw new IllegalStateException("表映射格式不完整，无法重试失败项");
+            }
+            entry.put("source", sources.get(index));
+            entry.put("target", targets.get(index));
+            selected.add(entry);
+        }
+        setTables(reader, indices.stream().map(sources::get).toList());
+        setTables(writer, indices.stream().map(targets::get).toList());
+        task.setSourceConfig(objectMapper.valueToTree(reader));
+        task.setDestinationConfig(objectMapper.valueToTree(writer));
+        task.setTableMapping(selected);
+    }
+
     private void applyTableMapping(JsonNode tableMapping, Map<String, Object> readerConfig, Map<String, Object> writerConfig, String writerType) {
         if (readerConfig == null || writerConfig == null) {
             return;

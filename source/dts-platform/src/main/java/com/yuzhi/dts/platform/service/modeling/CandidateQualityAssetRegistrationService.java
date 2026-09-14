@@ -148,7 +148,7 @@ public class CandidateQualityAssetRegistrationService {
     }
 
     /** Read the same registration prerequisites used by the reconciler, without writing assets. */
-    @Transactional(readOnly = true, noRollbackFor = ModelReleaseCandidateException.class)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
     public ModelReleaseCandidateContract.BlockerView previewBlocker(CandidateView candidate) {
         try {
             prepareScope(candidate);

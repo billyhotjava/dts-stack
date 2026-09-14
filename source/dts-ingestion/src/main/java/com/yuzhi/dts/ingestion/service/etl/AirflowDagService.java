@@ -868,16 +868,10 @@ public class AirflowDagService {
         sb.append(String.format("    tags=[\"addax\", \"etl\", \"ods\", \"%s\", \"%s\"],\n", sourceTag, nameTag));
         sb.append(") as dag:\n");
 
-        // Generate one DockerOperator per table, deduplicating task IDs
-        Set<String> usedIds = new LinkedHashSet<>();
-        for (AddaxJobService.PerTableJob job : perTableJobs) {
-            String baseId = "addax_" + slugify(job.tableName());
-            String opTaskId = baseId;
-            int suffix = 2;
-            while (usedIds.contains(opTaskId)) {
-                opTaskId = baseId + "_" + suffix++;
-            }
-            usedIds.add(opTaskId);
+        List<String> taskIds = taskIdsForTables(perTableJobs.stream().map(AddaxJobService.PerTableJob::tableName).toList());
+        for (int i = 0; i < perTableJobs.size(); i++) {
+            AddaxJobService.PerTableJob job = perTableJobs.get(i);
+            String opTaskId = taskIds.get(i);
             String jobPath = escapePythonString(job.containerJobPath());
             String lineageDatasets = pythonJsonLoads(lineageDatasetsJson(task, job.tableName()));
 
@@ -912,6 +906,20 @@ public class AirflowDagService {
         }
 
         return sb.toString();
+    }
+
+    /** Shared by DAG generation and failed-table retry selection. */
+    public List<String> taskIdsForTables(List<String> tables) {
+        Set<String> used = new LinkedHashSet<>();
+        List<String> result = new ArrayList<>();
+        for (String table : tables) {
+            String base = "addax_" + slugify(table);
+            String id = base;
+            int suffix = 2;
+            while (!used.add(id)) id = base + "_" + suffix++;
+            result.add(id);
+        }
+        return List.copyOf(result);
     }
 
     private String buildAddaxCredentialSupportBlock() {

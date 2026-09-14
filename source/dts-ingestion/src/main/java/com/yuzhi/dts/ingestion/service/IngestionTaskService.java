@@ -1174,6 +1174,7 @@ public class IngestionTaskService {
         boolean airflowTriggered = false;
         try {
             requireActiveProductionTask(task);
+            restrictFailedRetryScope(task, execution);
             // Governance queue wait (if applicable)
             if (StringUtils.hasText(governanceBlockedReason) && "QUEUE".equalsIgnoreCase(policy.rejectPolicy())) {
                 boolean ready = waitForGovernanceSlot(task, policy, execution.getId(), GOVERNANCE_QUEUE_MAX_WAIT, GOVERNANCE_QUEUE_POLL_INTERVAL);
@@ -1315,6 +1316,50 @@ public class IngestionTaskService {
             log.error("[async-trigger] failed for task {}: {}", taskId, e.getMessage(), e);
             markExecutionFailed(execution, task, extractFailureMessage(e));
         }
+    }
+
+    private void restrictFailedRetryScope(IngestionTask task, IngestionExecution execution) {
+        if (!"FAILED_ONLY".equals(execution.getTriggerMode()) || execution.getParentExecutionId() == null) return;
+        IngestionExecution parent = executionRepository.findById(execution.getParentExecutionId())
+            .orElseThrow(() -> new IllegalStateException("失败重试的原执行记录不存在"));
+        if (!java.util.Objects.equals(parent.getTaskRevisionId(), execution.getTaskRevisionId())) {
+            throw new IllegalStateException("接入配置版本已变化，请明确选择整批重跑");
+        }
+        JsonNode mappings = task.getTableMapping();
+        if (mappings == null || !mappings.isArray() || mappings.isEmpty() ||
+            !StringUtils.hasText(parent.getAirflowDagId()) || !StringUtils.hasText(parent.getExecutionId())) {
+            throw new IllegalStateException("缺少原执行的表级结果，无法确定失败范围，请选择整批重跑");
+        }
+        List<Map<String, Object>> instances = airflowClient.listTaskInstances(parent.getAirflowDagId(), parent.getExecutionId())
+            .orElseThrow(() -> new IllegalStateException("暂时无法读取原执行的表级结果，请稍后重试"));
+        Set<String> failed = new java.util.LinkedHashSet<>();
+        for (Map<String, Object> instance : instances) {
+            String state = toText(instance.get("state"));
+            if (state != null && Set.of("failed", "error", "upstream_failed").contains(state.toLowerCase(java.util.Locale.ROOT))) {
+                String id = toText(instance.get("task_id"));
+                if (StringUtils.hasText(id)) failed.add(id);
+            }
+        }
+        List<String> targets = addaxJobService.resolveMappedTargetTables(task);
+        if (targets.size() != mappings.size()) {
+            throw new IllegalStateException("目标表与映射数量不一致，请选择整批重跑");
+        }
+        if (targets.stream().map(table -> airflowDagService.taskIdsForTables(List.of(table)).get(0)).distinct().count() != targets.size()) {
+            throw new IllegalStateException("目标表对应的执行节点名称存在歧义，请选择整批重跑");
+        }
+        List<String> ids = airflowDagService.taskIdsForTables(targets);
+        List<Integer> selected = new ArrayList<>();
+        Set<String> matched = new java.util.LinkedHashSet<>();
+        for (int i = 0; i < ids.size(); i++) {
+            if (failed.contains(ids.get(i))) { selected.add(i); matched.add(ids.get(i)); }
+        }
+        if (selected.isEmpty() || !matched.containsAll(failed.stream().filter(id -> id.startsWith("addax_")).toList())) {
+            throw new IllegalStateException("原失败节点无法匹配当前表映射，请选择整批重跑");
+        }
+        addaxJobService.restrictRuntimeTables(task, selected);
+        IngestionExecutionLineageSnapshot.apply(execution, task);
+        log.info("Failed-only retry execution={} parent={} selectedTables={} totalTables={}",
+            execution.getId(), parent.getId(), selected.size(), mappings.size());
     }
 
     private void markExecutionFailed(IngestionExecution execution, IngestionTask task, String failureMessage) {
