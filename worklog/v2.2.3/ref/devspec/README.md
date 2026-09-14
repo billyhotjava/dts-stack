@@ -3,7 +3,7 @@
 本目录是交付文档套件（`worklog/v2.2.3/spec/`，尤其 02-设计方案、04-集成接口说明）的**工程源**：
 先用可核对的方式把 T1 主链写到接口与关键调用级别，评审通过后再汇总进正式正文。
 
-- 阅读入口：**[login.html](login.html)**（登录后进入 index.html 门户；默认用户 `admin`，初始口令 `Devops123@`，对外分享前请修改）
+- 阅读入口：**https://dev.yuzhicloud.com/**（服务端登录后进入 index.html 门户，部署与账号见 [deploy/README.md](deploy/README.md)）；本地直接打开 [index.html](index.html)
 - 日期：2026-09-14
 - 源码基线：`915097e220817313ac313091d9c22fb21763796c`（每篇文档头部重复记录）
 - 上层门面材料：`worklog/v2.2.3/ref/intro/`（Archify 高层图，服务级）

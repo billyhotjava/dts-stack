@@ -4,15 +4,19 @@
 
 ## 方案 A（已部署）：静态同步到阿里云，nginx 直接托管
 
-- 入口：**https://dev.yuzhicloud.com/devspec/login.html**（HTTP 301 到 HTTPS）
+- 入口：**https://dev.yuzhicloud.com/**（未登录 302 到 `/login.html`；HTTP 301 到 HTTPS；旧 `/devspec/*` 301 到根路径）
 - 证书：Let's Encrypt 生产证书，certbot.timer 自动续期
-- 访问控制：nginx Basic Auth `admin` + 页面登录 `admin`
+- 访问控制：只有登录页，无浏览器 Basic Auth 弹窗。登录页 fetch `/api/login`，nginx 按
+  `.htpasswd-devspec` 校验（失败返回 403，限流 10 次/分钟），成功下发 HttpOnly 会话 Cookie；
+  其余路径校验 Cookie，否则 302 到登录页；`/api/logout` 清除 Cookie。页面源码不含口令。
+  改口令：`htpasswd /etc/nginx/.htpasswd-devspec admin`；强制全部下线：更换配置中的会话令牌并 reload
 - 阿里云新增文件（未修改任何既有配置）：
   - `/etc/nginx/conf.d/dev.yuzhicloud.com.conf`（80 重定向 + 443 TLS + 备用 8099）
   - `/etc/nginx/.htpasswd-devspec`
   - `/var/www/dts-ref/devspec`、`/var/www/dts-ref/intro`（rsync 同步）
   - `/etc/letsencrypt/live/dev.yuzhicloud.com/`（certbot 签发）
-- 验证：HTTPS 带认证 200、无认证 401；`http` 301；概览页与 intro 200；bi/jira 不受影响
+- 验证（2026-09-14）：未登录各页 302 到登录页；错误口令 403、正确口令 204 + Cookie；带 Cookie
+  门户/图/md/intro 200；伪造 Cookie 302；退出后受保护页回到登录页；Chrome 全流程 0 个弹窗；bi/jira 不受影响
 
 ```bash
 # 开发机 -> 阿里云（需要 SSH 权限）
@@ -26,8 +30,9 @@ rsync -avz --delete \
   root@39.106.43.56:/var/www/dts-ref/intro/
 ```
 
-阿里云侧：拷入 `nginx-devspec.conf.example` 的 server 段、创建 Basic Auth、reload；建议
-`certbot --nginx` 配 HTTPS，安全组只放行 80/443。内容更新只需重复 rsync。
+阿里云侧：拷入 `nginx-devspec.conf.example`，把 `__DEVSPEC_SESSION_TOKEN__` 替换为
+`openssl rand -hex 32` 结果并 `chmod 600`，用 `htpasswd` 创建账号，`nginx -t` 后 reload；
+安全组只放行 80/443。内容更新只需重复 rsync。
 
 ## 方案 B（临时）：开发机起静态服务，阿里云反代
 
@@ -41,11 +46,11 @@ python3 -m http.server 8090 --bind 0.0.0.0 \
 ```
 
 阿里云 nginx 使用 `nginx-devspec.conf.example` 中被注释的 proxy 段，`proxy_pass` 指向
-开发机可达地址（推荐 frp/Tailscale 隧道，而不是路由器端口映射）。同样叠加 Basic Auth。
+开发机可达地址（推荐 frp/Tailscale 隧道，而不是路由器端口映射）。同样套用 `/api/login` 会话门禁。
 
 ## 安全说明
 
-- 页面内置登录（admin/Devops123@）只是静态门禁，口令在页面中可见；**真正对外访问必须加
-  nginx Basic Auth 或接入统一认证**。
+- 登录依赖 nginx 服务端校验；方案 B 或直接打开本地文件时没有 `/api/login`，登录页无法使用，
+  此时直接打开 `index.html` 阅读即可。
 - 只发布 `devspec`（与 `intro`）目录，不要暴露仓库其他内容。
 - `/api/mdm/**` 等运行时接口与本静态站点无关。

@@ -4,11 +4,6 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>DTS 接口级设计文档（devspec）</title>
-<script>
-  try {
-    if (sessionStorage.getItem('devspec-auth') !== '1') location.replace('login.html');
-  } catch (ignored) {}
-</script>
 <style>
   :root{
     --bg:#f6f8fa; --panel:#ffffff; --text:#1f2328; --muted:#57606a; --border:#d0d7de;
@@ -242,8 +237,7 @@
       localStorage.setItem('devspec-theme', root.dataset.theme);
     });
     document.getElementById('logout').addEventListener('click', function () {
-      try { sessionStorage.removeItem('devspec-auth'); } catch (ignored) {}
-      location.replace('login.html');
+      location.replace('api/logout');
     });
   })();
 </script>
