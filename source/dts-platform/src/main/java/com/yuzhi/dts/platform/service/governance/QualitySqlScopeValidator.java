@@ -538,7 +538,7 @@ public final class QualitySqlScopeValidator {
             }
             String doubledDelimiter = String.valueOf(delimiter) + delimiter;
             String decoded = raw.substring(1, raw.length() - 1).replace(doubledDelimiter, String.valueOf(delimiter));
-            return decoded.matches("^[A-Za-z_][A-Za-z0-9_$]*$");
+            return decoded.matches(qualityPolicy ? "^[A-Za-z_][A-Za-z0-9_$]*$" : "^[\\p{L}_][\\p{L}\\p{N}_$]*$");
         }
 
         @Override
