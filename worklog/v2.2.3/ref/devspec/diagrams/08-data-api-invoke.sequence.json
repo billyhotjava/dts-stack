@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "数据服务链：API 鉴权、限流与查询",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [1080, 620]
+  },
+  "participants": [
+    { "id": "caller", "type": "external", "label": "调用方", "sublabel": "Token 调用" },
+    { "id": "resource", "type": "backend", "label": "API 接口", "sublabel": "Resource" },
+    { "id": "catalog", "type": "backend", "label": "API 服务", "sublabel": "CatalogService" },
+    { "id": "auth", "type": "backend", "label": "令牌鉴权", "sublabel": "TokenAuth" },
+    { "id": "limiter", "type": "backend", "label": "限流", "sublabel": "QPS" },
+    { "id": "query", "type": "backend", "label": "查询服务", "sublabel": "QueryService" },
+    { "id": "datasource", "type": "database", "label": "查询数据源", "sublabel": "PG / JDBC" },
+    { "id": "metric", "type": "backend", "label": "调用指标", "sublabel": "小时聚合" }
+  ],
+  "segments": [
+    { "from": 246, "to": 510, "label": "鉴权、限流、查询与指标" }
+  ],
+  "messages": [
+    { "id": "m-try", "from": "caller", "to": "resource", "y": 168, "label": "POST /api/services/apis/{id}/try", "variant": "emphasis" },
+    { "id": "m-invoke", "from": "resource", "to": "catalog", "y": 196, "label": "tryInvoke / execute" },
+    { "id": "m-auth", "from": "catalog", "to": "auth", "y": 224, "label": "authenticate(token)" },
+    { "id": "m-principal", "from": "auth", "to": "catalog", "y": 256, "label": "TokenPrincipal（用户/部门/密级）", "variant": "return" },
+    { "id": "m-limit", "from": "catalog", "to": "limiter", "y": 284, "label": "allow(apiId, qpsLimit)" },
+    { "id": "m-allow", "from": "limiter", "to": "catalog", "y": 312, "label": "允许 / 拒绝", "variant": "return" },
+    { "id": "m-query", "from": "catalog", "to": "query", "y": 340, "label": "query(apiCode, request, principal)" },
+    { "id": "m-sql", "from": "query", "to": "datasource", "y": 368, "label": "执行 SQL（脱敏列）", "variant": "security" },
+    { "id": "m-rows", "from": "datasource", "to": "query", "y": 396, "label": "结果集", "variant": "return" },
+    { "id": "m-result", "from": "query", "to": "catalog", "y": 424, "label": "QueryResult（maskedColumns）", "variant": "return" },
+    { "id": "m-metric", "from": "catalog", "to": "metric", "y": 452, "label": "recordCall(masked, denied)" },
+    { "id": "m-back", "from": "catalog", "to": "caller", "y": 480, "label": "返回结果", "variant": "return" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "调用约定",
+      "items": [
+        "令牌哈希校验，带用户/部门/人员密级",
+        "秒级桶限流，超限记 denied",
+        "结果返回 maskedColumns 并写小时指标"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "已确认边界",
+      "items": [
+        "未发现独立推送执行器，只有链接/交换/运行记录与对账",
+        "对外 REST 无 publish 端点，发布入口待核对",
+        "代理层鉴权是否另有实现未核实"
+      ]
+    }
+  ]
+}

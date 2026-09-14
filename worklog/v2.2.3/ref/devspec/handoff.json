@@ -1,12 +1,12 @@
 {
   "date": "2026-09-14",
-  "scope": "DTS v2.2.3 接口级设计文档（T1 四条主链 + T2 质量/分类/BI）",
+  "scope": "DTS v2.2.3 接口级设计文档（T1 四条主链 + T2 质量/分类/BI/数据服务）",
   "source_commit": "915097e220817313ac313091d9c22fb21763796c",
   "archify_version": "2.16.0",
   "entry": "index.html",
   "reading_guide": "README.md",
   "call_graph_atlas": "assets/call-graph-and-dispatch.md",
-  "portal_sha256": "424d76a61d7bf64ad5d0712a646982b9f6b6bcd001c3905105d0c699987af52d",
+  "portal_sha256": "e46efe818a940e82aa855e4f4bfd560567a2a5db8b633bc4af1ff4dde3fbe363",
   "diagrams": [
     {
       "id": "00-t1-overview",
@@ -178,6 +178,25 @@
       "receipt": "07-bi-publish.receipt.json",
       "validation_receipt": "07-bi-publish.validation.json",
       "visual_receipt": "07-bi-publish.visual-check.json"
+    },
+    {
+      "id": "08-data-api-invoke",
+      "diagram_type": "sequence",
+      "specification": "diagrams/08-data-api-invoke.sequence.json",
+      "output": "08-data-api-invoke.html",
+      "specification_sha256": "96f746547d22b7173a6bd0eef180094004d38e23435b8e1e09e3f25b96465313",
+      "artifact_sha256": "d40f5d2d06e2408db025d6511b9ad701c32f79641f5efccb90eb6fbd7b7ae526",
+      "validation": "showcase pass, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
+      "receipt": "08-data-api-invoke.receipt.json",
+      "validation_receipt": "08-data-api-invoke.validation.json",
+      "visual_receipt": "08-data-api-invoke.visual-check.json"
     }
   ],
   "documents": [
@@ -188,7 +207,8 @@
     "04-analytics-consumption.md",
     "05-quality-workflow.md",
     "06-classification-tagging.md",
-    "07-bi-orchestration.md"
+    "07-bi-orchestration.md",
+    "08-data-services-push.md"
   ],
   "assets": [
     "assets/call-graph-and-dispatch.md",
@@ -200,15 +220,15 @@
     "assets/rest-inventory-dts-analytics.md"
   ],
   "evidence_checks": {
-    "prefixed_file_line_refs": 394,
+    "prefixed_file_line_refs": 440,
     "error_code_refs": 719,
     "problems": 0
   },
   "verification": {
     "documentation": "passed",
-    "archify_showcase_validation": "9/9 passed",
-    "browser_containment": "9/9 passed at 1440x900,1600x1000,1920x1080,2048x1320",
-    "manual_visual_inspection": "9/9 diagrams inspected at 2048x1320 light",
+    "archify_showcase_validation": "10/10 passed",
+    "browser_containment": "10/10 passed at 1440x900,1600x1000,1920x1080,2048x1320",
+    "manual_visual_inspection": "10/10 diagrams inspected at 2048x1320 light",
     "source_code_tests": "not run for this documentation task",
     "formal_product_build_and_package": "not run",
     "container_deployment": "not run",
