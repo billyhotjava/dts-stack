@@ -146,6 +146,11 @@ public class AnalyticsConsumerClassificationService {
         for (Long tableId : sources.tableIds()) {
             upstreams.add(tableSubject(tableId));
         }
+        if (!sources.sqlSources().isEmpty()) {
+            upstreams.addAll(client.resolveSqlSources(sources.sqlSources().stream()
+                .map(source -> new AnalyticsClassificationClient.SqlSource(platformSourceId(source.databaseId()), source.sql()))
+                .toList()));
+        }
         for (Long databaseId : sources.databaseIds()) {
             upstreams.add(databaseSubject(databaseId));
         }
@@ -571,6 +576,7 @@ public class AnalyticsConsumerClassificationService {
         private final LinkedHashSet<Long> metricIds = new LinkedHashSet<>();
         private final LinkedHashSet<Long> tableIds = new LinkedHashSet<>();
         private final LinkedHashSet<Long> databaseIds = new LinkedHashSet<>();
+        private final LinkedHashSet<ScreenSqlSource> sqlSources = new LinkedHashSet<>();
         private final LinkedHashSet<AnalyticsClassificationClient.SubjectRef> explicitSubjects =
             new LinkedHashSet<>();
         private final LinkedHashSet<String> unresolved = new LinkedHashSet<>();
@@ -610,7 +616,13 @@ public class AnalyticsConsumerClassificationService {
             addPositive(node, cardIds, "cardId", "card_id", "sourceCardId", "source_card_id");
             addPositive(node, metricIds, "metricId", "metric_id");
             addPositive(node, tableIds, "source-table", "source_table", "tableId", "table_id");
-            addPositive(node, databaseIds, "databaseId", "database_id");
+            long sqlDatabase = node.path("databaseId").asLong(node.path("database_id").asLong(0));
+            String sqlQuery = node.path("query").isTextual() ? node.path("query").asText() : null;
+            if (sqlDatabase > 0 && StringUtils.hasText(sqlQuery)) {
+                sqlSources.add(new ScreenSqlSource(sqlDatabase, sqlQuery));
+            } else {
+                addPositive(node, databaseIds, "databaseId", "database_id");
+            }
 
             String sourceType = firstText(
                 node.path("sourceType").asText(null),
@@ -670,6 +682,7 @@ public class AnalyticsConsumerClassificationService {
                 List.copyOf(metricIds),
                 List.copyOf(tableIds),
                 List.copyOf(databaseIds),
+                List.copyOf(sqlSources),
                 List.copyOf(explicitSubjects),
                 List.copyOf(unresolved)
             );
@@ -739,11 +752,14 @@ public class AnalyticsConsumerClassificationService {
         }
     }
 
+    private record ScreenSqlSource(long databaseId, String sql) {}
+
     private record ScreenSources(
         List<Long> cardIds,
         List<Long> metricIds,
         List<Long> tableIds,
         List<Long> databaseIds,
+        List<ScreenSqlSource> sqlSources,
         List<AnalyticsClassificationClient.SubjectRef> explicitSubjects,
         List<String> unresolved
     ) {}

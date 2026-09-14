@@ -63,6 +63,17 @@ public class AnalyticsClassificationClient {
         return result(post("/api/catalog/classifications/consumers/derive", body));
     }
 
+    public record SqlSource(java.util.UUID sourceId, String sql) {}
+
+    public List<SubjectRef> resolveSqlSources(List<SqlSource> sources) {
+        Object resolved = post("/api/catalog/classifications/consumers/sql-sources", Map.of("sources", sources)).get("data");
+        if (!(resolved instanceof List<?>)) {
+            throw new ClassificationContractException("SQL 数据来源解析未返回资产列表");
+        }
+        return objectMapper.convertValue(resolved,
+            new com.fasterxml.jackson.core.type.TypeReference<List<SubjectRef>>() {});
+    }
+
     public ClassificationResult requireCurrent(String consumerType, String consumerKey) {
         URI uri = UriComponentsBuilder.fromUri(uri("/api/catalog/classifications/consumers/guard"))
             .queryParam("consumerType", consumerType)

@@ -41,6 +41,38 @@ public class CatalogConsumerClassificationResource {
         return ApiResponses.ok(service.derive(command));
     }
 
+    /** Resolve read-only SQL to physical assets; never execute the query or infer a warehouse-wide level. */
+    @PostMapping("/sql-sources")
+    @PreAuthorize(WRITE)
+    public ApiResponse<List<SubjectRef>> sqlSources(@RequestBody SqlSourcesRequest request) {
+        if (request.sources() == null || request.sources().isEmpty() || request.sources().size() > 256) {
+            throw new IllegalArgumentException("SQL 数据来源数量必须在 1 到 256 之间");
+        }
+        var subjects = new java.util.LinkedHashSet<SubjectRef>();
+        for (SqlSource source : request.sources()) {
+            if (source.sourceId() == null || source.sql() == null || source.sql().length() > 100000) {
+                throw new IllegalArgumentException("SQL 数据来源缺少连接身份或查询过长");
+            }
+            String sql = source.sql().replaceAll("\\{\\{\\s*[A-Za-z_][A-Za-z0-9_]*\\s*}}", "NULL");
+            var tables = com.yuzhi.dts.platform.service.governance.QualitySqlScopeValidator.modelingReadTables(sql);
+            for (String table : tables) {
+                // Require explicit schema identity. Unknown or dynamic names fail closed.
+                String name = table.replace("\"", "").replace("`", "");
+                if (!name.matches("[A-Za-z_][A-Za-z0-9_$]*\\.[A-Za-z_][A-Za-z0-9_$]*")) {
+                    throw new IllegalArgumentException("SQL 数据来源需要明确的库表名称：" + table);
+                }
+                String[] parts = name.split("\\.");
+                subjects.add(new SubjectRef("ASSET",
+                    com.yuzhi.dts.platform.service.catalog.CatalogAssetKey.dataset(
+                        source.sourceId(), null, parts[0], parts[1], null)));
+            }
+        }
+        return ApiResponses.ok(List.copyOf(subjects));
+    }
+
+    public record SqlSource(java.util.UUID sourceId, String sql) {}
+    public record SqlSourcesRequest(List<SqlSource> sources) {}
+
     @GetMapping("/explain")
     @PreAuthorize("isAuthenticated()")
     public ApiResponse<DerivationResult> explain(
