@@ -1,12 +1,12 @@
 {
   "date": "2026-09-14",
-  "scope": "DTS v2.2.3 接口级设计文档（T1 四条主链 + T2 质量链）",
+  "scope": "DTS v2.2.3 接口级设计文档（T1 四条主链 + T2 质量链/分类分级）",
   "source_commit": "915097e220817313ac313091d9c22fb21763796c",
   "archify_version": "2.16.0",
   "entry": "index.html",
   "reading_guide": "README.md",
   "call_graph_atlas": "assets/call-graph-and-dispatch.md",
-  "portal_sha256": "0d513723a898c9a193496c3a0de4fe048e97e386624bbb01905c3c956fe91457",
+  "portal_sha256": "83926a0b77afe81052444a83e6471e911f60c4f80ec843402bb54d79bb63f0fc",
   "diagrams": [
     {
       "id": "00-t1-overview",
@@ -140,6 +140,25 @@
       "receipt": "05-quality-run.receipt.json",
       "validation_receipt": "05-quality-run.validation.json",
       "visual_receipt": "05-quality-run.visual-check.json"
+    },
+    {
+      "id": "06-classification-seal",
+      "diagram_type": "sequence",
+      "specification": "diagrams/06-classification-seal.sequence.json",
+      "output": "06-classification-seal.html",
+      "specification_sha256": "3c4d6b387e62d096f46bd76a4f7483ee834a532fe3a58aaf012c16c66a586603",
+      "artifact_sha256": "4e2b4e0343ad645ae9bda2df8daa126daa9116a8739426c76bfeb1d5b9c5ba30",
+      "validation": "showcase pass, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
+      "receipt": "06-classification-seal.receipt.json",
+      "validation_receipt": "06-classification-seal.validation.json",
+      "visual_receipt": "06-classification-seal.visual-check.json"
     }
   ],
   "documents": [
@@ -148,7 +167,8 @@
     "02-ingestion-execution.md",
     "03-admin-approval.md",
     "04-analytics-consumption.md",
-    "05-quality-workflow.md"
+    "05-quality-workflow.md",
+    "06-classification-tagging.md"
   ],
   "assets": [
     "assets/call-graph-and-dispatch.md",
@@ -160,15 +180,15 @@
     "assets/rest-inventory-dts-analytics.md"
   ],
   "evidence_checks": {
-    "prefixed_file_line_refs": 289,
+    "prefixed_file_line_refs": 353,
     "error_code_refs": 719,
     "problems": 0
   },
   "verification": {
     "documentation": "passed",
-    "archify_showcase_validation": "7/7 passed",
-    "browser_containment": "7/7 passed at 1440x900,1600x1000,1920x1080,2048x1320",
-    "manual_visual_inspection": "7/7 diagrams inspected at 2048x1320 light",
+    "archify_showcase_validation": "8/8 passed",
+    "browser_containment": "8/8 passed at 1440x900,1600x1000,1920x1080,2048x1320",
+    "manual_visual_inspection": "8/8 diagrams inspected at 2048x1320 light",
     "source_code_tests": "not run for this documentation task",
     "formal_product_build_and_package": "not run",
     "container_deployment": "not run",

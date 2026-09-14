@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/06-classification-seal.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/06-classification-seal.html",
+  "specification": {
+    "sha256": "3c4d6b387e62d096f46bd76a4f7483ee834a532fe3a58aaf012c16c66a586603",
+    "bytes": 3471
+  },
+  "artifact": {
+    "sha256": "4e2b4e0343ad645ae9bda2df8daa126daa9116a8739426c76bfeb1d5b9c5ba30",
+    "bytes": 711870
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}
