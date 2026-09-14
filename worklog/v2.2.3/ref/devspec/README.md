@@ -17,6 +17,7 @@
 | 02 | 接入执行链：任务定义 → 执行 → Addax/Airflow → reader/writer → 目录/血缘 | dts-ingestion | [02-ingestion-execution.md](02-ingestion-execution.md) |
 | 03 | 管理审批链：安全入口 → 变更单 → 提交/同意/拒绝 → 分派执行 → 审计 | dts-admin | [03-admin-approval.md](03-admin-approval.md) |
 | 04 | 分析消费链：数据集定义缓存 → 引用校验 → 查询执行 → 图表/看板 | dts-analytics | [04-analytics-consumption.md](04-analytics-consumption.md) |
+| 05 | 数据质量与工作流：规则版本 → 触发 → 编排 → 执行 → 状态收敛（T2 首个模块） | dts-platform | [05-quality-workflow.md](05-quality-workflow.md) |
 
 首批不包含：数据治理质量/标签、BI 编排、数据服务与推送、PKI/MDM、前端页面内部结构。
 `dts-metrics` 未出现在标准 Compose 运行时，标注为 legacy，不纳入首批。
@@ -66,12 +67,14 @@ ref/devspec/
 ├── 02-ingestion-execution.md
 ├── 03-admin-approval.md
 ├── 04-analytics-consumption.md
+├── 05-quality-workflow.md
 ├── 00-t1-overview.html + .receipt/.validation/.visual-check.json
 ├── 01-modeling-ports.html + ...
 ├── 01-modeling-publish.html + ...
 ├── 02-ingestion-execution.html + ...
 ├── 03-admin-approval.html + ...
 ├── 04-analytics-consumption.html + ...
+├── 05-quality-run.html + ...
 ├── diagrams/                    Archify 图源 JSON（架构/关系/时序）
 └── assets/
     ├── rest-inventory-<service>.md      脚本生成的接口清单
@@ -84,7 +87,8 @@ ref/devspec/
 ## 6 当前状态（2026-09-14）
 
 - 已完成 T1 四篇主链文档（内嵌 15 张 Mermaid 作为工程源）与 6 张 Archify 图（2 架构/关系 + 4 时序），四份 REST 接口清单、接口/实现清单、调用分派图谱、错误码清单（719 条首次出现）和生成脚本。
-- 6 张 Archify 图全部通过 showcase 校验（0 诊断）、deliver 交付与四档桌面尺寸包含检查；门户见 index.html；记录见 handoff.json。
+- 6 张 T1 Archify 图 + T2 首图（05 质量链）全部通过 showcase 校验（0 诊断）、deliver 交付与四档桌面尺寸包含检查；门户见 index.html；记录见 handoff.json。
+- T2 已启动：05 数据质量与工作流（接口级文档 + 时序图），其余 T2 模块（标签、BI 编排、数据服务、PKI/MDM）待续。
 - 四篇文档均补齐主链动作矩阵（端点 → 应用服务 → 关键下游）与关键链路方法级时序。
 - 239 处 `文件:行号` 引用已用脚本核对（存在且行号在范围内），并抽样人工比对行内容。
 - Mermaid 仅通过基础语法检查（围栏、图类型、常见语法），**未做真实渲染**；评审前建议在支持 Mermaid 的查看器中过一遍。

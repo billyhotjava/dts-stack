@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "数据质量链：触发、执行与状态收敛",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [1080, 620]
+  },
+  "participants": [
+    { "id": "caller", "type": "external", "label": "规则列表/调用方", "sublabel": "UI" },
+    { "id": "gov", "type": "backend", "label": "质量入口", "sublabel": "GovernanceResource" },
+    { "id": "workflow", "type": "backend", "label": "工作流入口", "sublabel": "WorkflowResource" },
+    { "id": "orchestrator", "type": "backend", "label": "编排服务", "sublabel": "Orchestrator" },
+    { "id": "runs", "type": "backend", "label": "运行服务", "sublabel": "QualityRunService" },
+    { "id": "executor", "type": "backend", "label": "执行器", "sublabel": "StatementExecutor" },
+    { "id": "datasource", "type": "database", "label": "目标数据源", "sublabel": "PG / JDBC" },
+    { "id": "reconciler", "type": "backend", "label": "状态收敛", "sublabel": "5s 调度" }
+  ],
+  "segments": [
+    { "from": 246, "to": 510, "label": "触发、执行与收敛" }
+  ],
+  "messages": [
+    { "id": "m-rule-trigger", "from": "caller", "to": "gov", "y": 168, "label": "POST /governance/quality/runs", "variant": "emphasis" },
+    { "id": "m-wf-trigger", "from": "caller", "to": "workflow", "y": 196, "label": "POST /workflows/trigger" },
+    { "id": "m-run", "from": "gov", "to": "runs", "y": 224, "label": "trigger（最新 PUBLISHED 版本）" },
+    { "id": "m-start", "from": "workflow", "to": "orchestrator", "y": 256, "label": "startAuthorizedRule", "variant": "emphasis" },
+    { "id": "m-dispatch", "from": "orchestrator", "to": "runs", "y": 284, "label": "triggerWorkflowAuthorized" },
+    { "id": "m-exec", "from": "runs", "to": "executor", "y": 312, "label": "execute（jobId=workflowRunId）" },
+    { "id": "m-sql", "from": "executor", "to": "datasource", "y": 340, "label": "执行检查 SQL", "variant": "security" },
+    { "id": "m-rows", "from": "datasource", "to": "executor", "y": 368, "label": "结果 / 失败行", "variant": "return" },
+    { "id": "m-outcome", "from": "executor", "to": "runs", "y": 396, "label": "Execution(outcome, counts)", "variant": "return" },
+    { "id": "m-reconcile", "from": "reconciler", "to": "runs", "y": 424, "label": "汇总子运行 → PASSED/FAILED/BLOCKED" },
+    { "id": "m-response", "from": "gov", "to": "caller", "y": 452, "label": "QualityRunDto（状态与失败行）", "variant": "return" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "版本与幂等",
+      "items": [
+        "规则列表执行最新 PUBLISHED 版本",
+        "模型门禁钉住候选证据版本（resolvePinnedVersion）",
+        "触发头：Idempotency-Key / X-Quality-Trigger-Ref / X-Active-Dept"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "已确认边界",
+      "items": [
+        "资产治理健康只读规则级 run，不读工作流聚合",
+        "质量面板走 OpenMetadata 质量结果",
+        "QualityStatementExecutor 仅 PG 实现；Hive 类未实现该接口"
+      ]
+    }
+  ]
+}

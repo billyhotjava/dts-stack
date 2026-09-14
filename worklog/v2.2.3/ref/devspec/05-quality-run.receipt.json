@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/05-quality-run.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/05-quality-run.html",
+  "specification": {
+    "sha256": "d9655f23c3f107ce8b30d4c25ed29fe23b206b244d2089055205d29168123fb3",
+    "bytes": 3193
+  },
+  "artifact": {
+    "sha256": "14218a1d8e6a4a89fc74b0c837a15b1d1e68401988013b07ca406080cb03e37e",
+    "bytes": 713289
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}
