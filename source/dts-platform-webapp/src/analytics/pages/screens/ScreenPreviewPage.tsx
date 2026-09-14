@@ -163,6 +163,10 @@ export default function ScreenPreviewPage() {
 	const previewMode = runtimeParams.get('mode') === 'published' ? 'published' : 'draft';
 	const isEmbedded = runtimeParams.get('embed') === '1';
 	const [screen, setScreen] = useState<ScreenConfig | null>(null);
+	const runtimeDefinitions = useMemo(() => (screen?.globalVariables ?? []).map((definition) => ({
+		...definition,
+		defaultValue: runtimeParams.get(`var_${definition.key}`) ?? definition.defaultValue,
+	})), [screen?.globalVariables, runtimeParams]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	// Sprint-17/F2 — record a leader-overview visit once the user has stayed
@@ -482,7 +486,7 @@ export default function ScreenPreviewPage() {
 
 	return (
 		<ScreenRuntimeProvider
-			definitions={screen.globalVariables ?? []}
+			definitions={runtimeDefinitions}
 			onDrillViewChange={handleDrillViewChange}
 		>
 		<SharedStoreProvider>

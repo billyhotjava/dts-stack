@@ -53,7 +53,7 @@ public class CatalogConsumerClassificationResource {
             if (source.sourceId() == null || source.sql() == null || source.sql().length() > 100000) {
                 throw new IllegalArgumentException("SQL 数据来源缺少连接身份或查询过长");
             }
-            String sql = source.sql().replaceAll("\\{\\{\\s*[A-Za-z_][A-Za-z0-9_]*\\s*}}", "NULL");
+            String sql = source.sql().replace("[[", "").replace("]]", "").replaceAll("\\{\\{\\s*[A-Za-z_][A-Za-z0-9_]*\\s*}}", "NULL");
             var tables = com.yuzhi.dts.platform.service.governance.QualitySqlScopeValidator.modelingReadTables(sql);
             for (String table : tables) {
                 // Require explicit schema identity. Unknown or dynamic names fail closed.

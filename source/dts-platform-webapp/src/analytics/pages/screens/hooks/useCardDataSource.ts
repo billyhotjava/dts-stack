@@ -381,8 +381,8 @@ export function useCardDataSource(
             const sqlConfig = resolveSqlConfig(dataSource);
             const available = new Set(mergeBindingsWithRuntime(
                 sqlConfig?.parameterBindings, paramsKey !== 'null' ? JSON.parse(paramsKey) : undefined,
-            ).map((item) => item.name));
-            const required = Array.from((sqlConfig?.query ?? '').matchAll(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}/g), (match) => match[1]);
+            ).filter((item) => item.value.trim().length > 0).map((item) => item.name));
+            const required = Array.from((sqlConfig?.query ?? '').replace(/\[\[[\s\S]*?\]\]/g, '').matchAll(/\{\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*}}/g), (match) => match[1]);
             const missing = required.filter((name) => !available.has(name));
             if (missing.length > 0) {
                 setData(null);

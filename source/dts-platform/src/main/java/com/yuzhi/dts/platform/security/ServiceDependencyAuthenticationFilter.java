@@ -305,6 +305,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
 
     private boolean isAnalyticsClassificationConsumer(String method, String path) {
         return isPost(method, path, "/api/catalog/classifications/consumers/derive")
+            || isPost(method, path, "/api/catalog/classifications/consumers/sql-sources")
             || isGet(method, path, "/api/catalog/classifications/consumers/guard")
             || isPost(method, path, "/api/catalog/classifications/consumers/access-bindings")
             || isGet(method, path, "/api/catalog/classifications/consumers/access-bindings/guard")
