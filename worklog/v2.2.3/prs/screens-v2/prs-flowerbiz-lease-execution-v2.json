@@ -1,0 +1,931 @@
+{
+  "schemaVersion": "1.0",
+  "id": "prs-v2-lease-execution",
+  "name": "花卉租赁报花执行 V2.2.3",
+  "description": "适配 DTS v2.2.3；内部。依据花卉 V2 模型及已登记 ODS 日志；空金额保留为空，不将未知值视为零。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "autoHeight": false,
+  "backgroundColor": "#0b2f5f",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2022-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectName",
+      "label": "项目",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "customerName",
+      "label": "客户",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "bg-base",
+      "type": "shape",
+      "name": "背景底色",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -20,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#0b2f5f",
+        "borderColor": "#0b2f5f",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "bg-grid",
+      "type": "richtext",
+      "name": "背景网格",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -19,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(12,68,126,.96),rgba(4,22,54,.98));\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px);background-size:28px 28px;opacity:.42\"></div><div style=\"position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(39,216,255,.22),transparent 58%);\"></div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "header-clock",
+      "type": "datetime",
+      "name": "当前时间",
+      "x": 1710,
+      "y": 24,
+      "width": 180,
+      "height": 22,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "format": "YYYY-MM-DD HH:mm:ss",
+        "fontSize": 12,
+        "color": "#e2ffff"
+      }
+    },
+    {
+      "id": "domain-label",
+      "type": "title",
+      "name": "PRS · Flowerbiz Command Center",
+      "x": 24,
+      "y": 26,
+      "width": 420,
+      "height": 20,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS · Flowerbiz Command Center",
+        "fontSize": 12,
+        "fontWeight": "500",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "screen-title",
+      "type": "title",
+      "name": "PRS 租赁报花执行看板",
+      "x": 560,
+      "y": 18,
+      "width": 800,
+      "height": 44,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS 租赁报花执行看板",
+        "fontSize": 30,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "filter-date-range",
+      "type": "filter-date-range",
+      "name": "统计周期",
+      "x": 1130,
+      "y": 24,
+      "width": 320,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "统计周期",
+        "startKey": "dateFrom",
+        "endKey": "dateTo",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "filter-project",
+      "type": "filter-select",
+      "name": "项目",
+      "x": 1468,
+      "y": 24,
+      "width": 160,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "项目",
+        "variableKey": "projectName",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "SELECT DISTINCT project_name::text AS label, project_name::text AS value FROM (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) options WHERE project_name IS NOT NULL ORDER BY label",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": []
+        }
+      }
+    },
+    {
+      "id": "filter-customer",
+      "type": "filter-select",
+      "name": "客户",
+      "x": 1640,
+      "y": 24,
+      "width": 160,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "客户",
+        "variableKey": "customerName",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "SELECT DISTINCT customer_name::text AS label, customer_name::text AS value FROM (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) options WHERE customer_name IS NOT NULL ORDER BY label",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": []
+        }
+      }
+    },
+    {
+      "id": "kpi-1",
+      "type": "number-card",
+      "name": "租赁单数",
+      "x": 44,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "租赁单数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "租赁单数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT COUNT(*) AS \"租赁单数\", COUNT(*) FILTER (WHERE order_type=2) AS \"加花单数\", COUNT(*) FILTER (WHERE order_type=3) AS \"减花单数\", COUNT(*) FILTER (WHERE order_type=1) AS \"换花单数\", COUNT(*) FILTER (WHERE order_type=4) AS \"调花单数\", ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) AS \"租金变动净额\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-2",
+      "type": "number-card",
+      "name": "加花单数",
+      "x": 350,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "加花单数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "加花单数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT COUNT(*) AS \"租赁单数\", COUNT(*) FILTER (WHERE order_type=2) AS \"加花单数\", COUNT(*) FILTER (WHERE order_type=3) AS \"减花单数\", COUNT(*) FILTER (WHERE order_type=1) AS \"换花单数\", COUNT(*) FILTER (WHERE order_type=4) AS \"调花单数\", ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) AS \"租金变动净额\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-3",
+      "type": "number-card",
+      "name": "减花单数",
+      "x": 656,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "减花单数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "减花单数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT COUNT(*) AS \"租赁单数\", COUNT(*) FILTER (WHERE order_type=2) AS \"加花单数\", COUNT(*) FILTER (WHERE order_type=3) AS \"减花单数\", COUNT(*) FILTER (WHERE order_type=1) AS \"换花单数\", COUNT(*) FILTER (WHERE order_type=4) AS \"调花单数\", ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) AS \"租金变动净额\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-4",
+      "type": "number-card",
+      "name": "换花单数",
+      "x": 962,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "换花单数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "换花单数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT COUNT(*) AS \"租赁单数\", COUNT(*) FILTER (WHERE order_type=2) AS \"加花单数\", COUNT(*) FILTER (WHERE order_type=3) AS \"减花单数\", COUNT(*) FILTER (WHERE order_type=1) AS \"换花单数\", COUNT(*) FILTER (WHERE order_type=4) AS \"调花单数\", ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) AS \"租金变动净额\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-5",
+      "type": "number-card",
+      "name": "调花单数",
+      "x": 1268,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "调花单数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "调花单数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT COUNT(*) AS \"租赁单数\", COUNT(*) FILTER (WHERE order_type=2) AS \"加花单数\", COUNT(*) FILTER (WHERE order_type=3) AS \"减花单数\", COUNT(*) FILTER (WHERE order_type=1) AS \"换花单数\", COUNT(*) FILTER (WHERE order_type=4) AS \"调花单数\", ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) AS \"租金变动净额\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-6",
+      "type": "number-card",
+      "name": "租金变动净额",
+      "x": 1574,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "租金变动净额",
+        "value": null,
+        "suffix": "元",
+        "precision": 2,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "租金变动净额"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT COUNT(*) AS \"租赁单数\", COUNT(*) FILTER (WHERE order_type=2) AS \"加花单数\", COUNT(*) FILTER (WHERE order_type=3) AS \"减花单数\", COUNT(*) FILTER (WHERE order_type=1) AS \"换花单数\", COUNT(*) FILTER (WHERE order_type=4) AS \"调花单数\", ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) AS \"租金变动净额\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-type-trend",
+      "type": "title",
+      "name": "租赁类型月度趋势",
+      "x": 44,
+      "y": 252,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "租赁类型月度趋势",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "bar-lease-type-month",
+      "type": "bar-chart",
+      "name": "租赁类型月度趋势",
+      "x": 44,
+      "y": 288,
+      "width": 575,
+      "height": 300,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "category",
+          "name": "月份"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": ""
+        },
+        "orientation": "vertical",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "categoryKey": "月份",
+        "series": [
+          {
+            "name": "换花",
+            "dataKey": "换花",
+            "color": "#27d8ff"
+          },
+          {
+            "name": "加花",
+            "dataKey": "加花",
+            "color": "#2ee6a6"
+          },
+          {
+            "name": "减花",
+            "dataKey": "减花",
+            "color": "#ffc645"
+          },
+          {
+            "name": "调花",
+            "dataKey": "调花",
+            "color": "#ff5d73"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff",
+        "stack": "total"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT to_char(business_time,'YYYY-MM') AS \"月份\", COUNT(*) FILTER (WHERE order_type=1) AS \"换花\", COUNT(*) FILTER (WHERE order_type=2) AS \"加花\", COUNT(*) FILTER (WHERE order_type=3) AS \"减花\", COUNT(*) FILTER (WHERE order_type=4) AS \"调花\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4) GROUP BY to_char(business_time,'YYYY-MM') ORDER BY to_char(business_time,'YYYY-MM')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-rent-trend",
+      "type": "title",
+      "name": "租金与成本趋势",
+      "x": 672,
+      "y": 252,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "租金与成本趋势",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "line-rent-cost",
+      "type": "line-chart",
+      "name": "租金与成本趋势",
+      "x": 650,
+      "y": 288,
+      "width": 560,
+      "height": 300,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "category",
+          "name": "月份"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": ""
+        },
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "categoryKey": "月份",
+        "series": [
+          {
+            "name": "租金变动净额",
+            "dataKey": "租金变动净额",
+            "color": "#27d8ff"
+          },
+          {
+            "name": "处理成本",
+            "dataKey": "处理成本",
+            "color": "#2ee6a6"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT to_char(business_time,'YYYY-MM') AS \"月份\", ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) AS \"租金变动净额\", ROUND(SUM(CASE WHEN is_finished THEN order_cost_amount END)::numeric,2) AS \"处理成本\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4) GROUP BY to_char(business_time,'YYYY-MM') ORDER BY to_char(business_time,'YYYY-MM')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-project-rent",
+      "type": "title",
+      "name": "项目租金变动净额 TOP",
+      "x": 1280,
+      "y": 252,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目租金变动净额 TOP",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "bar-project-rent",
+      "type": "bar-chart",
+      "name": "项目租金变动净额 TOP",
+      "x": 1266,
+      "y": 288,
+      "width": 590,
+      "height": 300,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "value",
+          "name": "项目"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": ""
+        },
+        "orientation": "horizontal",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "categoryKey": "项目",
+        "series": [
+          {
+            "name": "租金变动净额",
+            "dataKey": "租金变动净额",
+            "color": "#27d8ff"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT project_name AS \"项目\", ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) AS \"租金变动净额\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4) GROUP BY project_name ORDER BY ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) DESC LIMIT 15",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-lease-table",
+      "type": "title",
+      "name": "租赁项目明细",
+      "x": 44,
+      "y": 620,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "租赁项目明细",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-lease-summary",
+      "type": "table",
+      "name": "租赁项目明细",
+      "x": 44,
+      "y": 656,
+      "width": 1820,
+      "height": 360,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "项目",
+            "alias": "项目",
+            "width": 180
+          },
+          {
+            "source": "租赁单数",
+            "alias": "租赁单数",
+            "width": 120
+          },
+          {
+            "source": "在途单数",
+            "alias": "在途单数",
+            "width": 120
+          },
+          {
+            "source": "租金变动净额",
+            "alias": "租金变动净额",
+            "width": 120
+          },
+          {
+            "source": "处理成本",
+            "alias": "处理成本",
+            "width": 120
+          }
+        ],
+        "pageSize": 12,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) SELECT project_name AS \"项目\", COUNT(*) AS \"租赁单数\", COUNT(*) FILTER (WHERE NOT is_finished) AS \"在途单数\", ROUND(SUM(CASE WHEN is_finished THEN rent_change_amount END)::numeric,2) AS \"租金变动净额\", ROUND(SUM(CASE WHEN is_finished THEN order_cost_amount END)::numeric,2) AS \"处理成本\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] AND order_type IN (1,2,3,4) GROUP BY project_name ORDER BY COUNT(*) DESC LIMIT 100",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

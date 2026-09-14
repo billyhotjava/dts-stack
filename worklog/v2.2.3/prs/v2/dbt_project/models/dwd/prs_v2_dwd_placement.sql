@@ -1,0 +1,30 @@
+-- 项目当前摆放快照
+select
+    cast(s.id as bigint) as placement_id,
+    cast(s.project_id as bigint) as project_id,
+    cast(s.position_id as bigint) as position_id,
+    cast(s.good_price_id as bigint) as goods_price_id,
+    cast(s.good_name as text) as good_name,
+    cast(s.good_type as integer) as good_type,
+    cast(s.parent_id as bigint) as parent_id,
+    cast(s.status as integer) as placement_status,
+    cast(s.import_status as integer) as import_status,
+    cast(s.rent_mode as integer) as rent_mode,
+    cast(s.total_number as integer) as placement_quantity,
+    cast(s.good_number as integer) as good_number,
+    cast(s.rent as numeric) as unit_rent,
+    cast(s.cost as numeric) as unit_cost,
+    cast(s.pose_time as timestamp) as pose_time,
+    cast(s.del_flag as text) as del_flag,
+    cast(p.tenant_id as bigint) as tenant_id,
+    cast(p.customer_id as bigint) as customer_id,
+    cast(coalesce(s.del_flag = '0' and s.status = 1, false) as boolean) as is_placed,
+    cast(s._dts_import_time as timestamp) as snapshot_time,
+    cast(s._dts_source_system as text) as dts_source_system,
+    cast(s._dts_source_table as text) as dts_source_table,
+    cast(s._dts_import_time as timestamp) as dts_import_time,
+    cast(s._dts_batch_id as text) as dts_batch_id,
+    cast(s._dts_execution_id as text) as dts_execution_id,
+    cast(s._dts_task_id as text) as dts_task_id
+from {{ source('public', 'ods_prsp_project_green') }} s
+left join {{ ref('prs_v2_dwd_project') }} p on s.project_id = p.project_id

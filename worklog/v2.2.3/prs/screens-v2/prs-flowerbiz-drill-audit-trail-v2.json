@@ -1,0 +1,799 @@
+{
+  "schemaVersion": "1.0",
+  "id": "prs-v2-drill-audit-trail",
+  "name": "花卉租赁审批操作链路钻取 V2.2.3",
+  "description": "适配 DTS v2.2.3；内部。依据花卉 V2 模型及已登记 ODS 日志；空金额保留为空，不将未知值视为零。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "autoHeight": false,
+  "backgroundColor": "#0b2f5f",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2022-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectName",
+      "label": "项目",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "operationKind",
+      "label": "操作分类",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "bg-base",
+      "type": "shape",
+      "name": "背景底色",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -20,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#0b2f5f",
+        "borderColor": "#0b2f5f",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "bg-grid",
+      "type": "richtext",
+      "name": "背景网格",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -19,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(12,68,126,.96),rgba(4,22,54,.98));\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px);background-size:28px 28px;opacity:.42\"></div><div style=\"position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(39,216,255,.22),transparent 58%);\"></div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "header-clock",
+      "type": "datetime",
+      "name": "当前时间",
+      "x": 1710,
+      "y": 24,
+      "width": 180,
+      "height": 22,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "format": "YYYY-MM-DD HH:mm:ss",
+        "fontSize": 12,
+        "color": "#e2ffff"
+      }
+    },
+    {
+      "id": "domain-label",
+      "type": "title",
+      "name": "PRS · Flowerbiz Command Center",
+      "x": 24,
+      "y": 26,
+      "width": 420,
+      "height": 20,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS · Flowerbiz Command Center",
+        "fontSize": 12,
+        "fontWeight": "500",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "screen-title",
+      "type": "title",
+      "name": "PRS 审批操作链路钻取",
+      "x": 560,
+      "y": 18,
+      "width": 800,
+      "height": 44,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS 审批操作链路钻取",
+        "fontSize": 30,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "filter-date-range",
+      "type": "filter-date-range",
+      "name": "统计周期",
+      "x": 1130,
+      "y": 24,
+      "width": 320,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "统计周期",
+        "startKey": "dateFrom",
+        "endKey": "dateTo",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "filter-project",
+      "type": "filter-select",
+      "name": "项目",
+      "x": 1468,
+      "y": 24,
+      "width": 160,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "项目",
+        "variableKey": "projectName",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "SELECT DISTINCT project_name::text AS label, project_name::text AS value FROM (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) options WHERE project_name IS NOT NULL ORDER BY label",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": []
+        }
+      }
+    },
+    {
+      "id": "filter-op",
+      "type": "filter-select",
+      "name": "操作分类",
+      "x": 1640,
+      "y": 24,
+      "width": 140,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "操作分类",
+        "variableKey": "operationKind",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "SELECT DISTINCT operation_kind::text AS label, operation_kind::text AS value FROM (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) options WHERE operation_kind IS NOT NULL ORDER BY label",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": []
+        }
+      }
+    },
+    {
+      "id": "kpi-1",
+      "type": "number-card",
+      "name": "日志数",
+      "x": 130,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "日志数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "日志数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) SELECT COUNT(*) AS \"日志数\", COUNT(DISTINCT order_id) AS \"单据数\", COUNT(DISTINCT operation_user_id) AS \"操作人数\", ROUND(AVG(step_days) FILTER (WHERE step_days>=0)::numeric,2) AS \"平均步骤天数\" FROM b WHERE operation_time >= {{dateFrom}}::date AND operation_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND operation_kind = {{operationKind}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-2",
+      "type": "number-card",
+      "name": "单据数",
+      "x": 550,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "单据数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "单据数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) SELECT COUNT(*) AS \"日志数\", COUNT(DISTINCT order_id) AS \"单据数\", COUNT(DISTINCT operation_user_id) AS \"操作人数\", ROUND(AVG(step_days) FILTER (WHERE step_days>=0)::numeric,2) AS \"平均步骤天数\" FROM b WHERE operation_time >= {{dateFrom}}::date AND operation_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND operation_kind = {{operationKind}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-3",
+      "type": "number-card",
+      "name": "操作人数",
+      "x": 970,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "操作人数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "操作人数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) SELECT COUNT(*) AS \"日志数\", COUNT(DISTINCT order_id) AS \"单据数\", COUNT(DISTINCT operation_user_id) AS \"操作人数\", ROUND(AVG(step_days) FILTER (WHERE step_days>=0)::numeric,2) AS \"平均步骤天数\" FROM b WHERE operation_time >= {{dateFrom}}::date AND operation_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND operation_kind = {{operationKind}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-4",
+      "type": "number-card",
+      "name": "平均步骤天数",
+      "x": 1390,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "平均步骤天数",
+        "value": null,
+        "suffix": "天",
+        "precision": 2,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "平均步骤天数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) SELECT COUNT(*) AS \"日志数\", COUNT(DISTINCT order_id) AS \"单据数\", COUNT(DISTINCT operation_user_id) AS \"操作人数\", ROUND(AVG(step_days) FILTER (WHERE step_days>=0)::numeric,2) AS \"平均步骤天数\" FROM b WHERE operation_time >= {{dateFrom}}::date AND operation_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND operation_kind = {{operationKind}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-audit",
+      "type": "title",
+      "name": "操作流水明细",
+      "x": 44,
+      "y": 252,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "操作流水明细",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-audit",
+      "type": "table",
+      "name": "操作流水明细",
+      "x": 44,
+      "y": 288,
+      "width": 1820,
+      "height": 330,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "报花单号",
+            "alias": "报花单号",
+            "width": 180
+          },
+          {
+            "source": "项目",
+            "alias": "项目",
+            "width": 120
+          },
+          {
+            "source": "客户",
+            "alias": "客户",
+            "width": 120
+          },
+          {
+            "source": "操作动作",
+            "alias": "操作动作",
+            "width": 120
+          },
+          {
+            "source": "操作人",
+            "alias": "操作人",
+            "width": 120
+          },
+          {
+            "source": "操作时间",
+            "alias": "操作时间",
+            "width": 120
+          },
+          {
+            "source": "距上步天数",
+            "alias": "距上步天数",
+            "width": 120
+          },
+          {
+            "source": "操作内容",
+            "alias": "操作内容",
+            "width": 120
+          }
+        ],
+        "pageSize": 10,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) SELECT order_code AS \"报花单号\", project_name AS \"项目\", customer_name AS \"客户\", operation_kind AS \"操作动作\", operation_user_name AS \"操作人\", operation_time AS \"操作时间\", ROUND(step_days::numeric,2) AS \"距上步天数\", operation_content AS \"操作内容\" FROM b WHERE operation_time >= {{dateFrom}}::date AND operation_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND operation_kind = {{operationKind}}]] ORDER BY operation_time DESC,id DESC LIMIT 500",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-op-kind",
+      "type": "title",
+      "name": "操作分类分布",
+      "x": 44,
+      "y": 650,
+      "width": 300,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "操作分类分布",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-op-kind",
+      "type": "table",
+      "name": "操作分类分布",
+      "x": 44,
+      "y": 686,
+      "width": 580,
+      "height": 310,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "操作动作",
+            "alias": "操作动作",
+            "width": 180
+          },
+          {
+            "source": "日志数",
+            "alias": "日志数",
+            "width": 120
+          }
+        ],
+        "pageSize": 12,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) SELECT operation_kind AS \"操作动作\", COUNT(*) AS \"日志数\" FROM b WHERE operation_time >= {{dateFrom}}::date AND operation_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND operation_kind = {{operationKind}}]] GROUP BY operation_kind ORDER BY COUNT(*) DESC LIMIT 100",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-op-user",
+      "type": "title",
+      "name": "操作人 TOP",
+      "x": 672,
+      "y": 650,
+      "width": 300,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "操作人 TOP",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-op-user",
+      "type": "table",
+      "name": "操作人 TOP",
+      "x": 650,
+      "y": 686,
+      "width": 560,
+      "height": 310,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "操作人",
+            "alias": "操作人",
+            "width": 180
+          },
+          {
+            "source": "日志数",
+            "alias": "日志数",
+            "width": 120
+          }
+        ],
+        "pageSize": 12,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) SELECT operation_user_name AS \"操作人\", COUNT(*) AS \"日志数\" FROM b WHERE operation_time >= {{dateFrom}}::date AND operation_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND operation_kind = {{operationKind}}]] GROUP BY operation_user_name ORDER BY COUNT(*) DESC LIMIT 100",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-op-month",
+      "type": "title",
+      "name": "操作月度趋势",
+      "x": 1280,
+      "y": 650,
+      "width": 300,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "操作月度趋势",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "line-op-month",
+      "type": "line-chart",
+      "name": "操作月度趋势",
+      "x": 1266,
+      "y": 686,
+      "width": 590,
+      "height": 310,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "category",
+          "name": "月份"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": ""
+        },
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "categoryKey": "月份",
+        "series": [
+          {
+            "name": "日志数",
+            "dataKey": "日志数",
+            "color": "#27d8ff"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT l.id,l.biz_id AS order_id,l.sorts,l.operation_title AS operation_kind,l.operation_user_id,l.operation_user_name,l.operation_time,l.operation_content,o.order_code,o.project_name,o.customer_name,o.type_name,o.status_name,EXTRACT(EPOCH FROM (l.operation_time-LAG(l.operation_time) OVER (PARTITION BY l.biz_id ORDER BY l.operation_time,l.sorts,l.id)))/86400 AS step_days FROM public.ods_prst_flower_biz_log l JOIN (SELECT o.*,c.customer_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name,CASE o.order_status WHEN -1 THEN '已作废' WHEN 1 THEN '审核中' WHEN 2 THEN '备货中' WHEN 3 THEN '核算中' WHEN 4 THEN '待结算' WHEN 5 THEN '已结束' WHEN 20 THEN '草稿' WHEN 21 THEN '驳回' ELSE '未知' END AS status_name FROM public.prs_v2_dwd_flower_order o LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=o.customer_id AND c.tenant_id IS NOT DISTINCT FROM o.tenant_id WHERE o.is_effective) o ON o.order_id=l.biz_id) SELECT to_char(operation_time,'YYYY-MM') AS \"月份\", COUNT(*) AS \"日志数\" FROM b WHERE operation_time >= {{dateFrom}}::date AND operation_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND operation_kind = {{operationKind}}]] GROUP BY to_char(operation_time,'YYYY-MM') ORDER BY to_char(operation_time,'YYYY-MM')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

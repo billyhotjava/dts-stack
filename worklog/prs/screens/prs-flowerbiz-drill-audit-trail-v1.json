@@ -1,0 +1,873 @@
+{
+  "schemaVersion": "1.0",
+  "id": "prs-flowerbiz-drill-audit-trail-v1",
+  "name": "PRS 审批操作链路钻取",
+  "description": "审批、里程碑、物流、关闭和回退操作流水钻取。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "autoHeight": false,
+  "backgroundColor": "#0b2f5f",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2022-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectName",
+      "label": "项目",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "customerName",
+      "label": "客户",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "bizCategory",
+      "label": "业务大类",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "statusName",
+      "label": "状态",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "curingUser",
+      "label": "养护人",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "recoveryType",
+      "label": "回收类型",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "changeType",
+      "label": "变更类型",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "operationKind",
+      "label": "操作分类",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "bg-base",
+      "type": "shape",
+      "name": "背景底色",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -20,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#0b2f5f",
+        "borderColor": "#0b2f5f",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "bg-grid",
+      "type": "richtext",
+      "name": "背景网格",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -19,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(12,68,126,.96),rgba(4,22,54,.98));\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px);background-size:28px 28px;opacity:.42\"></div><div style=\"position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(39,216,255,.22),transparent 58%);\"></div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "header-clock",
+      "type": "datetime",
+      "name": "当前时间",
+      "x": 1710,
+      "y": 24,
+      "width": 180,
+      "height": 22,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "format": "YYYY-MM-DD HH:mm:ss",
+        "fontSize": 12,
+        "color": "#e2ffff"
+      }
+    },
+    {
+      "id": "domain-label",
+      "type": "title",
+      "name": "PRS · Flowerbiz Command Center",
+      "x": 24,
+      "y": 26,
+      "width": 420,
+      "height": 20,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS · Flowerbiz Command Center",
+        "fontSize": 12,
+        "fontWeight": "500",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "screen-title",
+      "type": "title",
+      "name": "PRS 审批操作链路钻取",
+      "x": 560,
+      "y": 18,
+      "width": 800,
+      "height": 44,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS 审批操作链路钻取",
+        "fontSize": 30,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "filter-date-range",
+      "type": "filter-date-range",
+      "name": "统计周期",
+      "x": 1130,
+      "y": 24,
+      "width": 320,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "统计周期",
+        "startKey": "dateFrom",
+        "endKey": "dateTo",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "filter-project",
+      "type": "filter-select",
+      "name": "项目",
+      "x": 1468,
+      "y": 24,
+      "width": 160,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "项目",
+        "variableKey": "projectName",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT project_name AS label, project_name AS value FROM public.xycyl_dwd_flowerbiz_main WHERE project_name IS NOT NULL AND project_name <> '' ORDER BY project_name",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 500
+        }
+      }
+    },
+    {
+      "id": "filter-op",
+      "type": "filter-select",
+      "name": "操作分类",
+      "x": 1640,
+      "y": 24,
+      "width": 140,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "操作分类",
+        "variableKey": "operationKind",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT \"操作分类\" AS label, \"操作分类\" AS value FROM public.xycyl_ads_flowerbiz_audit_trail WHERE \"操作分类\" IS NOT NULL AND \"操作分类\" <> '' ORDER BY \"操作分类\"",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 500
+        }
+      }
+    },
+    {
+      "id": "kpi-1",
+      "type": "number-card",
+      "name": "日志数",
+      "x": 130,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "日志数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "日志数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"日志数\", COUNT(DISTINCT a.\"报花单id\") AS \"单据数\", COUNT(DISTINCT a.\"操作人\") AS \"操作人数\", ROUND(AVG(a.\"距上一步天数\")::numeric,2) AS \"平均步骤耗时\" FROM public.xycyl_ads_flowerbiz_audit_trail a WHERE a.\"操作时间\" >= {{dateFrom}}::date AND a.\"操作时间\" <= {{dateTo}}::date [[AND a.\"项目\" = {{projectName}}]] [[AND a.\"操作分类\" = {{operationKind}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-2",
+      "type": "number-card",
+      "name": "单据数",
+      "x": 550,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "单据数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "单据数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"日志数\", COUNT(DISTINCT a.\"报花单id\") AS \"单据数\", COUNT(DISTINCT a.\"操作人\") AS \"操作人数\", ROUND(AVG(a.\"距上一步天数\")::numeric,2) AS \"平均步骤耗时\" FROM public.xycyl_ads_flowerbiz_audit_trail a WHERE a.\"操作时间\" >= {{dateFrom}}::date AND a.\"操作时间\" <= {{dateTo}}::date [[AND a.\"项目\" = {{projectName}}]] [[AND a.\"操作分类\" = {{operationKind}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-3",
+      "type": "number-card",
+      "name": "操作人数",
+      "x": 970,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "操作人数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "操作人数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"日志数\", COUNT(DISTINCT a.\"报花单id\") AS \"单据数\", COUNT(DISTINCT a.\"操作人\") AS \"操作人数\", ROUND(AVG(a.\"距上一步天数\")::numeric,2) AS \"平均步骤耗时\" FROM public.xycyl_ads_flowerbiz_audit_trail a WHERE a.\"操作时间\" >= {{dateFrom}}::date AND a.\"操作时间\" <= {{dateTo}}::date [[AND a.\"项目\" = {{projectName}}]] [[AND a.\"操作分类\" = {{operationKind}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-4",
+      "type": "number-card",
+      "name": "平均步骤耗时",
+      "x": 1390,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "平均步骤耗时",
+        "value": 0,
+        "suffix": "天",
+        "precision": 2,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "平均步骤耗时"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"日志数\", COUNT(DISTINCT a.\"报花单id\") AS \"单据数\", COUNT(DISTINCT a.\"操作人\") AS \"操作人数\", ROUND(AVG(a.\"距上一步天数\")::numeric,2) AS \"平均步骤耗时\" FROM public.xycyl_ads_flowerbiz_audit_trail a WHERE a.\"操作时间\" >= {{dateFrom}}::date AND a.\"操作时间\" <= {{dateTo}}::date [[AND a.\"项目\" = {{projectName}}]] [[AND a.\"操作分类\" = {{operationKind}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-audit",
+      "type": "title",
+      "name": "操作流水明细",
+      "x": 44,
+      "y": 252,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "操作流水明细",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-audit",
+      "type": "table",
+      "name": "操作流水明细",
+      "x": 44,
+      "y": 288,
+      "width": 1820,
+      "height": 330,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "报花单号",
+            "alias": "报花单号",
+            "width": 130
+          },
+          {
+            "source": "业务类型",
+            "alias": "业务类型",
+            "width": 100
+          },
+          {
+            "source": "项目",
+            "alias": "项目",
+            "width": 180
+          },
+          {
+            "source": "客户",
+            "alias": "客户",
+            "width": 180
+          },
+          {
+            "source": "状态",
+            "alias": "状态",
+            "width": 90
+          },
+          {
+            "source": "操作动作",
+            "alias": "操作动作",
+            "width": 140
+          },
+          {
+            "source": "操作分类",
+            "alias": "操作分类",
+            "width": 100
+          },
+          {
+            "source": "操作人",
+            "alias": "操作人",
+            "width": 100
+          },
+          {
+            "source": "操作时间",
+            "alias": "操作时间",
+            "width": 110
+          },
+          {
+            "source": "距上一步天数",
+            "alias": "距上一步天数",
+            "width": 120
+          },
+          {
+            "source": "操作内容",
+            "alias": "操作内容",
+            "width": 280
+          }
+        ],
+        "pageSize": 10,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT a.\"报花单号\", a.\"业务类型\", a.\"项目\", a.\"客户\", a.\"状态\", a.\"操作动作\", a.\"操作分类\", a.\"操作人\", to_char(a.\"操作时间\",'YYYY-MM-DD') AS \"操作时间\", a.\"距上一步天数\", a.\"操作内容\" FROM public.xycyl_ads_flowerbiz_audit_trail a WHERE a.\"操作时间\" >= {{dateFrom}}::date AND a.\"操作时间\" <= {{dateTo}}::date [[AND a.\"项目\" = {{projectName}}]] [[AND a.\"操作分类\" = {{operationKind}}]] ORDER BY a.\"操作时间\" DESC, a.\"报花单号\", a.\"顺序号\" LIMIT 500",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-op-kind",
+      "type": "title",
+      "name": "操作分类分布",
+      "x": 44,
+      "y": 650,
+      "width": 300,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "操作分类分布",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-op-kind",
+      "type": "table",
+      "name": "操作分类分布",
+      "x": 44,
+      "y": 686,
+      "width": 580,
+      "height": 310,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "操作分类",
+            "alias": "操作分类",
+            "width": 120
+          },
+          {
+            "source": "日志数",
+            "alias": "日志数",
+            "width": 90
+          },
+          {
+            "source": "单据数",
+            "alias": "单据数",
+            "width": 90
+          },
+          {
+            "source": "平均步骤耗时",
+            "alias": "平均步骤耗时",
+            "width": 120
+          }
+        ],
+        "pageSize": 12,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT a.\"操作分类\", COUNT(*) AS \"日志数\", COUNT(DISTINCT a.\"报花单id\") AS \"单据数\", ROUND(AVG(a.\"距上一步天数\")::numeric,2) AS \"平均步骤耗时\" FROM public.xycyl_ads_flowerbiz_audit_trail a WHERE a.\"操作时间\" >= {{dateFrom}}::date AND a.\"操作时间\" <= {{dateTo}}::date [[AND a.\"项目\" = {{projectName}}]] [[AND a.\"操作分类\" = {{operationKind}}]] GROUP BY a.\"操作分类\" ORDER BY COUNT(*) DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-op-user",
+      "type": "title",
+      "name": "操作人 TOP",
+      "x": 672,
+      "y": 650,
+      "width": 300,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "操作人 TOP",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-op-user",
+      "type": "table",
+      "name": "操作人 TOP",
+      "x": 650,
+      "y": 686,
+      "width": 560,
+      "height": 310,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "操作人",
+            "alias": "操作人",
+            "width": 120
+          },
+          {
+            "source": "日志数",
+            "alias": "日志数",
+            "width": 90
+          },
+          {
+            "source": "单据数",
+            "alias": "单据数",
+            "width": 90
+          },
+          {
+            "source": "平均步骤耗时",
+            "alias": "平均步骤耗时",
+            "width": 120
+          }
+        ],
+        "pageSize": 12,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(a.\"操作人\",'未填') AS \"操作人\", COUNT(*) AS \"日志数\", COUNT(DISTINCT a.\"报花单id\") AS \"单据数\", ROUND(AVG(a.\"距上一步天数\")::numeric,2) AS \"平均步骤耗时\" FROM public.xycyl_ads_flowerbiz_audit_trail a WHERE a.\"操作时间\" >= {{dateFrom}}::date AND a.\"操作时间\" <= {{dateTo}}::date [[AND a.\"项目\" = {{projectName}}]] [[AND a.\"操作分类\" = {{operationKind}}]] GROUP BY COALESCE(a.\"操作人\",'未填') ORDER BY COUNT(*) DESC LIMIT 30",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-op-month",
+      "type": "title",
+      "name": "操作月度趋势",
+      "x": 1280,
+      "y": 650,
+      "width": 300,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "操作月度趋势",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "line-op-month",
+      "type": "line-chart",
+      "name": "操作月度趋势",
+      "x": 1266,
+      "y": 686,
+      "width": 590,
+      "height": 310,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "category",
+          "name": "操作月份"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": ""
+        },
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "categoryKey": "操作月份",
+        "series": [
+          {
+            "name": "日志数",
+            "dataKey": "日志数",
+            "color": "#27d8ff"
+          },
+          {
+            "name": "单据数",
+            "dataKey": "单据数",
+            "color": "#2ee6a6"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT a.\"操作月份\", COUNT(*) AS \"日志数\", COUNT(DISTINCT a.\"报花单id\") AS \"单据数\" FROM public.xycyl_ads_flowerbiz_audit_trail a WHERE a.\"操作时间\" >= {{dateFrom}}::date AND a.\"操作时间\" <= {{dateTo}}::date [[AND a.\"项目\" = {{projectName}}]] [[AND a.\"操作分类\" = {{operationKind}}]] GROUP BY a.\"操作月份\" ORDER BY a.\"操作月份\"",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "operationKind",
+              "variableKey": "operationKind"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

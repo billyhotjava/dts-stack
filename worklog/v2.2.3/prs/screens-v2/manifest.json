@@ -1,0 +1,124 @@
+{
+  "version": "V2",
+  "dtsVersion": "2.2.3",
+  "classification": "INTERNAL",
+  "databaseId": 1,
+  "screens": [
+    {
+      "file": "prs-flowerbiz-overview-v2.json",
+      "name": "花卉租赁经营总览 V2.2.3",
+      "components": 24,
+      "screenId": 15,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/15/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-project-customer-v2.json",
+      "name": "花卉租赁项目客户分析 V2.2.3",
+      "components": 22,
+      "screenId": 16,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/16/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-finance-cost-v2.json",
+      "name": "花卉租赁销售坏账与费用 V2.2.3",
+      "components": 22,
+      "screenId": 17,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/17/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-lease-execution-v2.json",
+      "name": "花卉租赁报花执行 V2.2.3",
+      "components": 22,
+      "screenId": 18,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/18/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-change-board-v2.json",
+      "name": "花卉租赁变更与租期调整 V2.2.3",
+      "components": 22,
+      "screenId": 19,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/19/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-recovery-board-v2.json",
+      "name": "花卉租赁回收撤摆与去向 V2.2.3",
+      "components": 22,
+      "screenId": 20,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/20/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-curing-workload-v2.json",
+      "name": "花卉租赁养护工作量 V2.2.3",
+      "components": 22,
+      "screenId": 21,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/21/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-pending-approval-v2.json",
+      "name": "花卉租赁在途审批与操作监控 V2.2.3",
+      "components": 22,
+      "screenId": 22,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/22/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-drill-lease-detail-v2.json",
+      "name": "花卉租赁报花单明细钻取 V2.2.3",
+      "components": 20,
+      "screenId": 23,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/23/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-drill-change-detail-v2.json",
+      "name": "花卉租赁变更明细钻取 V2.2.3",
+      "components": 20,
+      "screenId": 24,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/24/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-drill-recovery-detail-v2.json",
+      "name": "花卉租赁回收明细钻取 V2.2.3",
+      "components": 20,
+      "screenId": 25,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/25/edit",
+      "state": "DRAFT"
+    },
+    {
+      "file": "prs-flowerbiz-drill-audit-trail-v2.json",
+      "name": "花卉租赁审批操作链路钻取 V2.2.3",
+      "components": 20,
+      "screenId": 26,
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/26/edit",
+      "state": "DRAFT"
+    }
+  ],
+  "status": "IMPORTED_DRAFT_PUBLICATION_BLOCKED",
+  "notes": [
+    "SQL筛选采用起始日含、终止日下一天不含，避免遗漏结束日数据。",
+    "经营金额仅汇总已结束有效单；租金变动净额不是月租收入。",
+    "数量缺失与真实零值分开；未确认金额不记为已确认金额。",
+    "养护以真实养护记录计量。",
+    "业务状态与变更、回收类型依据业务源码映射。",
+    "审批与租期日志暂直接读取已登记ODS，与V2订单关联；现有31个V2模型未覆盖日志模型。",
+    "库房维度未进入V2回收模型，改为项目/回收人完成量，不伪造库房数据。",
+    "7天仅为挂起观察阈值，不代表合同约定超期。",
+    "尚未完成数据运行与页面发布。",
+    "SQL保留NULL，但现有数值组件会将NULL转成0；发布前必须处理此显示限制。"
+  ],
+  "importedAt": "2026-09-14T09:36:00+08:00",
+  "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0",
+  "blockers": [
+    "源任务5自动建表前驱动加载失败：No suitable driver found for jdbc:mysql；修复确认待用户回复。",
+    "模型发布单QUALITY_RUNNING，31资产37规则，MODEL_SPEC_GOVERNANCE_QUALITY_FAILED。",
+    "首屏导入密级推导证据BLOCKED_UPSTREAM/CONSUMER_CLASSIFICATION_SOURCE_MISSING。"
+  ]
+}
