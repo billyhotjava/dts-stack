@@ -22,7 +22,7 @@
       "manual_inspection": [
         "2048x1320 light"
       ],
-      "visual_notes": "已阅读 2048x1320 light 截图：标签与节点可读，无截断/遮挡。",
+      "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
       "receipt": "00-t1-overview.receipt.json",
       "validation_receipt": "00-t1-overview.validation.json",
       "visual_receipt": "00-t1-overview.visual-check.json"
@@ -38,8 +38,10 @@
       "delivery_ok": true,
       "viewport_containment": "pass",
       "visual_review": "pending（机器回执固定值）",
-      "manual_inspection": [],
-      "visual_notes": "仅机器包含与可读性检查通过；未逐张人工阅读。",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
       "receipt": "01-modeling-ports.receipt.json",
       "validation_receipt": "01-modeling-ports.validation.json",
       "visual_receipt": "01-modeling-ports.visual-check.json"
@@ -55,8 +57,10 @@
       "delivery_ok": true,
       "viewport_containment": "pass",
       "visual_review": "pending（机器回执固定值）",
-      "manual_inspection": [],
-      "visual_notes": "仅机器包含与可读性检查通过；未逐张人工阅读。",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
       "receipt": "01-modeling-publish.receipt.json",
       "validation_receipt": "01-modeling-publish.validation.json",
       "visual_receipt": "01-modeling-publish.visual-check.json"
@@ -75,7 +79,7 @@
       "manual_inspection": [
         "2048x1320 light"
       ],
-      "visual_notes": "已阅读 2048x1320 light 截图：标签与节点可读，无截断/遮挡。",
+      "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
       "receipt": "02-ingestion-execution.receipt.json",
       "validation_receipt": "02-ingestion-execution.validation.json",
       "visual_receipt": "02-ingestion-execution.visual-check.json"
@@ -91,8 +95,10 @@
       "delivery_ok": true,
       "viewport_containment": "pass",
       "visual_review": "pending（机器回执固定值）",
-      "manual_inspection": [],
-      "visual_notes": "仅机器包含与可读性检查通过；未逐张人工阅读。",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
       "receipt": "03-admin-approval.receipt.json",
       "validation_receipt": "03-admin-approval.validation.json",
       "visual_receipt": "03-admin-approval.visual-check.json"
@@ -108,8 +114,10 @@
       "delivery_ok": true,
       "viewport_containment": "pass",
       "visual_review": "pending（机器回执固定值）",
-      "manual_inspection": [],
-      "visual_notes": "仅机器包含与可读性检查通过；未逐张人工阅读。",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
       "receipt": "04-analytics-consumption.receipt.json",
       "validation_receipt": "04-analytics-consumption.validation.json",
       "visual_receipt": "04-analytics-consumption.visual-check.json"
@@ -140,11 +148,11 @@
     "documentation": "passed",
     "archify_showcase_validation": "6/6 passed",
     "browser_containment": "6/6 passed at 1440x900,1600x1000,1920x1080,2048x1320",
-    "manual_visual_inspection": "2/6 diagrams inspected (00-t1-overview, 02-ingestion-execution); others machine-only",
+    "manual_visual_inspection": "6/6 diagrams inspected at 2048x1320 light",
     "source_code_tests": "not run for this documentation task",
     "formal_product_build_and_package": "not run",
     "container_deployment": "not run",
     "authenticated_business_acceptance": "not run"
   },
-  "git_status": "待提交"
+  "git_status": "待提交（人工检查补记）"
 }
