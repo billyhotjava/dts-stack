@@ -1,6 +1,6 @@
 # 04 分析消费链（dts-analytics）接口级设计
 
-- 源码基线：`72acb2d4d56667ed50bde899889b0e11ca327082`（2026-09-14）
+- 源码基线：`915097e220817313ac313091d9c22fb21763796c`（2026-09-14）
 - 全量接口清单：[assets/rest-inventory-dts-analytics.md](assets/rest-inventory-dts-analytics.md)（脚本生成，需人工核对）
 - 路径前缀 `G/` = `source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/`；平台侧路径前缀 `P/` 同 [01-modeling-mainline.md](01-modeling-mainline.md)
 - 类别：`[源码]` 代码事实、`[配置]` 配置声明、`[待确认]` 未证实。

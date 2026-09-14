@@ -1,6 +1,6 @@
 # 02 接入执行链（dts-ingestion）接口级设计
 
-- 源码基线：`72acb2d4d56667ed50bde899889b0e11ca327082`（2026-09-14）
+- 源码基线：`915097e220817313ac313091d9c22fb21763796c`（2026-09-14）
 - 全量接口清单：[assets/rest-inventory-dts-ingestion.md](assets/rest-inventory-dts-ingestion.md)（脚本生成，需人工核对）
 - 路径前缀 `I/` = `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/`
 - 类别：`[源码]` 代码事实、`[配置]` 配置声明、`[待确认]` 未证实。

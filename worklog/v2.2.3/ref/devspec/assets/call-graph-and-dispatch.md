@@ -1,6 +1,6 @@
 # 调用关系与分派图谱（T1）
 
-- 源码基线：`72acb2d4d56667ed50bde899889b0e11ca327082`
+- 源码基线：`915097e220817313ac313091d9c22fb21763796c`
 - 路径已省略模块前缀：`platform/` = `source/dts-platform/src/main/java/com/yuzhi/dts/platform/`，`ingestion/`、`admin/`、`analytics/` 同理。
 - 用途：回答"这个接口由谁实现、注入到哪里、运行时走哪个实现、父类/子类是什么"。
 - 口径：只记录源码事实；Spring 代理（`*Repository`）与 `@Primary` 选择结果以注解为准，运行期 Bean 覆盖情况未验证。
