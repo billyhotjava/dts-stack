@@ -3265,7 +3265,7 @@ public class AddaxJobService {
     /**
      * Workaround for Addax 6.0.8 bug: DataBaseType.quoteColumn() returns null for PostgreSQL,
      * causing dealColumnConf to corrupt column ["*"] into [null, null, ...] → invalid SQL.
-     * This method resolves actual column names from the target database and replaces ["*"]
+     * This method resolves omitted columns or ["*"] from the target database
      * in PostgreSQL writer configs so Addax skips its broken column resolution. When the
      * source is a DTS-managed ODS table, it also expands the reader columns without the
      * inherited DTS technical fields so reader and writer positions remain aligned.
@@ -3306,9 +3306,14 @@ public class AddaxJobService {
                 if (!(paramObj instanceof Map<?, ?> paramMap)) {
                     continue;
                 }
-                // Check if column is ["*"]
+                // Managed database plans omit columns; omission means automatic projection.
+                // An explicitly empty projection is invalid, not an instruction to write every column.
                 Object columnObj = paramMap.get("column");
-                if (!isWildcardColumn(columnObj)) {
+                if ((columnObj instanceof List<?> list && list.isEmpty())
+                    || (columnObj instanceof String text && text.isBlank())) {
+                    throw new IllegalStateException("目标字段列表不能为空，请省略字段配置以自动映射，或提供明确字段列表");
+                }
+                if (columnObj != null && !isWildcardColumn(columnObj)) {
                     continue;
                 }
                 // Extract writer connection info
@@ -3328,6 +3333,9 @@ public class AddaxJobService {
                 if (tables.isEmpty()) {
                     throw new IllegalStateException("无法解析目标表，拒绝保存未解析的 Addax 字段配置");
                 }
+                if (tables.size() != 1) {
+                    throw new IllegalStateException("字段自动映射要求每个作业节点仅包含一张目标表");
+                }
                 String tableName = tables.get(0);
                 // Query actual columns from target database
                 JdbcMetadataService.JdbcConnectionInfo connInfo = new JdbcMetadataService.JdbcConnectionInfo(
@@ -3345,7 +3353,7 @@ public class AddaxJobService {
                 if (columnNames.isEmpty()) {
                     throw new IllegalStateException("目标表没有可写入的业务字段: " + tableName);
                 }
-                // Replace ["*"] with actual column names
+                // Resolve both sides before persisting, so column-count failures cannot seal a partial projection.
                 resolveReaderColumnsForManagedOds(contentMap, columnNames);
                 ((Map<String, Object>) paramMap).put("column", columnNames);
                 modified = true;
@@ -3806,11 +3814,9 @@ public class AddaxJobService {
         }
         if (config.containsKey("table")) {
             config.put("table", tables);
-            return;
         }
         if (config.containsKey("tables")) {
             config.put("tables", tables);
-            return;
         }
         Object connection = config.get("connection");
         if (connection instanceof Map<?, ?> map) {
@@ -3821,7 +3827,7 @@ public class AddaxJobService {
                     setTableField(entryMap, tables);
                 }
             }
-        } else {
+        } else if (!config.containsKey("table") && !config.containsKey("tables")) {
             config.put("table", tables);
         }
     }

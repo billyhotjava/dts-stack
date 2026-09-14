@@ -302,6 +302,48 @@ afterEach(async () => {
 });
 
 describe("release and materialization dispatch", () => {
+	it("shows a member of a shared release and requires batch scope confirmation for commands", async () => {
+		const shared = { ...candidate("BATCH_WORKBENCH", "QUALITY_PASSED"), entries: [model, secondModel].map((item) => ({
+			modelSpecId: item.id, revision: item.revision, checksum: item.checksum, selectedReason: "MATERIALIZATION_ROOT",
+		})) } as ReleaseCandidate;
+		const current = workspace(["SUBMIT_REVIEW"], shared);
+		const status = { ...deliveryStatusFor(current), wizard: [{ key: "delivery", primaryAction: { code: "SUBMIT_REVIEW", enabled: true } }] } as ModelDeliveryStatus;
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} step="delivery" deliveryStatus={status} onClose={vi.fn()} />));
+		await flush();
+		expect(container.textContent).toContain("QUALITY_PASSED");
+		expect(container.textContent).toContain("所属发布单包含 2 个模型");
+		expect(container.textContent).not.toContain("不包含所选模型");
+		expect(button("提交发布评审")).toBeUndefined();
+		expect(apiMocks.submitReviewCandidate).not.toHaveBeenCalled();
+		const checkbox = container.querySelector<HTMLInputElement>('input[type="checkbox"]');
+		expect(checkbox).not.toBeNull();
+		await act(async () => checkbox?.click());
+		expect(button("提交发布评审")?.disabled).toBe(false);
+		await act(async () => button("提交发布评审")?.click());
+		expect(apiMocks.submitReviewCandidate).toHaveBeenCalledWith(model.planId, shared, "idem-1", "从模型工作台发布");
+
+		const changed = { ...status, workspace: workspace(["SUBMIT_REVIEW"], { ...shared, version: 5 }) };
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} step="delivery" deliveryStatus={changed} onClose={vi.fn()} />));
+		await flush();
+		expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(false);
+		expect(button("提交发布评审")).toBeUndefined();
+	});
+
+	it("keeps a shared release read-only when the server grants no release action", async () => {
+		const shared = { ...candidate("BATCH_WORKBENCH", "QUALITY_RUNNING"), entries: [model, secondModel].map((item) => ({
+			modelSpecId: item.id, revision: item.revision, checksum: item.checksum, selectedReason: "MATERIALIZATION_ROOT",
+		})) } as ReleaseCandidate;
+		const current = { ...workspace([], shared), governanceQuality: { required: true, state: "FAILED", message: "核心业务表为空", evidence: [], maxAgeSeconds: 86400 } } as ReleaseCandidateWorkbench;
+		const status = { ...deliveryStatusFor(current), wizard: [{ key: "delivery", primaryAction: { code: "NONE", enabled: false } }] } as ModelDeliveryStatus;
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} step="delivery" deliveryStatus={status} onClose={vi.fn()} />));
+		await flush();
+		expect(container.textContent).toContain("核心业务表为空");
+		await act(async () => container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click());
+		expect(button("确认发布")).toBeUndefined();
+		expect(button("提交发布评审")).toBeUndefined();
+		expect(apiMocks.publishCandidate).not.toHaveBeenCalled();
+	});
+
 	it.each([true, false])("recovers a plan occupancy conflict only through explicit permitted cancellation: %s", async (canCancel) => {
 		const empty = workspace(["CREATE_CANDIDATE"], null);
 		apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(empty));

@@ -1056,6 +1056,58 @@ class AddaxJobServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void shouldResolveOmittedWriterColumnsIndependentlyAfterDatabaseTableSplit() throws Exception {
+        Map<String, Object> reader = Map.of(
+            "jdbcUrl", "jdbc:mysql://source-db:3306/source", "table", java.util.List.of("orders", "customers"),
+            "column", java.util.List.of("*"), "username", "reader", "password", "fixture-reader"
+        );
+        Map<String, Object> writer = Map.of(
+            "jdbcUrl", "jdbc:postgresql://target-db:5432/lake", "table", java.util.List.of("ods_orders", "ods_customers"),
+            "username", "writer", "password", "fixture-writer"
+        );
+        when(jdbcMetadataService.getTableColumns(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("orders")))
+            .thenReturn(databaseColumns("id", "amount"));
+        when(jdbcMetadataService.getTableColumns(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("customers")))
+            .thenReturn(databaseColumns("id", "name"));
+        when(jdbcMetadataService.getTableColumns(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("ods_orders")))
+            .thenReturn(databaseColumns("id", "amount", "_dts_execution_id"));
+        when(jdbcMetadataService.getTableColumns(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq("ods_customers")))
+            .thenReturn(databaseColumns("id", "name", "_dts_execution_id"));
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "database-auto-columns", "mysqlreader", reader, "postgresqlwriter", writer, null
+        );
+        addaxJobService.resolveWriterColumnsIfNeeded(result.jobPath());
+        Map<String, Object> stored = addaxJobService.readManagedJob(Path.of(result.jobPath()));
+        Map<String, Object> job = (Map<String, Object>) stored.get("job");
+        java.util.List<Map<String, Object>> contents = (java.util.List<Map<String, Object>>) job.get("content");
+        assertThat(contents).hasSize(2);
+        for (int i = 0; i < contents.size(); i++) {
+            Map<String, Object> params = (Map<String, Object>) ((Map<String, Object>) contents.get(i).get("writer")).get("parameter");
+            String table = i == 0 ? "ods_orders" : "ods_customers";
+            assertThat((java.util.List<String>) params.get("table")).containsExactly(table);
+            java.util.List<Map<String, Object>> connections = (java.util.List<Map<String, Object>>) params.get("connection");
+            assertThat(connections).hasSize(1);
+            assertThat((java.util.List<String>) connections.getFirst().get("table")).containsExactly(table);
+            assertThat((java.util.List<String>) params.get("column")).containsExactly("id", i == 0 ? "amount" : "name");
+            Map<String, Object> readerParams = (Map<String, Object>) ((Map<String, Object>) contents.get(i).get("reader")).get("parameter");
+            assertThat(readerParams.get("column")).isEqualTo(params.get("column"));
+        }
+    }
+
+    @Test
+    void shouldRejectAnExplicitlyEmptyWriterProjectionBeforeDispatch() throws Exception {
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "empty-writer-columns", "mysqlreader", Map.of("table", java.util.List.of("orders"), "column", java.util.List.of("*")),
+            "postgresqlwriter", Map.of("table", java.util.List.of("ods_orders"), "column", java.util.List.of()), null
+        );
+        assertThatThrownBy(() -> addaxJobService.resolveWriterColumnsIfNeeded(result.jobPath()))
+            .isInstanceOf(IllegalStateException.class).hasMessageContaining("目标字段列表不能为空");
+        org.mockito.Mockito.verifyNoInteractions(jdbcMetadataService);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void shouldValidateExplicitReaderColumnsAgainstRenamedWriterColumns() throws Exception {
         String jobPath = addaxJobService.saveJobJson("""
             {

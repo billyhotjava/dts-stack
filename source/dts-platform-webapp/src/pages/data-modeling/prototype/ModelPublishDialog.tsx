@@ -39,6 +39,8 @@ import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/
 import { ModelAssetDeliveryResult } from "./ModelAssetDeliveryResult";
 import { type MaterializationBuildAction, ModelMaterializationActions } from "./ModelMaterializationActions";
 import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
+import { ModelReleaseScopeNotice, ModelReleaseScopeSummary } from "./ModelReleaseScopeSummary";
+import { resolveReleaseCandidateScope } from "./modelReleaseCandidateScope";
 import { Button, Modal, RequestState } from "./PrototypePrimitives";
 import { compileSelectedModels } from "./services/compileSelectedModels";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
@@ -124,6 +126,7 @@ export function ModelPublishDialog({
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
 	const [failure, setFailure] = useState<string>("");
 	const [blockingWorkspace, setBlockingWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
+	const [confirmedCandidateScope, setConfirmedCandidateScope] = useState("");
 	const loadSequence = useRef(0);
 	const selection = useMemo(() => Array.from(new Map(models.map((model) => [model.id, model])).values()), [models]);
 	const selectedIds = useMemo(() => new Set(selection.map((model) => model.id)), [selection]);
@@ -219,25 +222,16 @@ export function ModelPublishDialog({
 	const candidate = workspace?.candidate || null;
 	const pageAction = deliveryStatus?.wizard.find((page) => page.key === step)?.primaryAction;
 	const embedded = Boolean(step);
-	const explicitRootEntries =
-		candidate?.entries.filter((entry) => entry.selectedReason === "MATERIALIZATION_ROOT") || [];
-	const candidateRootEntries = explicitRootEntries.length
-		? explicitRootEntries
-		: candidate?.entries.filter((entry) => entry.selectedReason !== "AUTO_DEPENDENCY") || [];
-	const candidateScopeMatches = Boolean(
-		candidate &&
-			candidate.environment === environment &&
-			candidateRootEntries.length === selectedIds.size &&
-			candidateRootEntries.every((entry) => {
-				const model = selection.find((selected) => selected.id === entry.modelSpecId);
-				return model && model.revision === entry.revision && model.checksum === entry.checksum;
-			}),
-	);
-	const scopedCandidate = candidateScopeMatches ? candidate : null;
-	const selectedEvidence = candidateScopeMatches
-		? workspace?.entryEvidence || []
+	const { containsSelection: candidateContainsSelection, exactScope: candidateScopeMatches } =
+		resolveReleaseCandidateScope(candidate, selection, planId, environment);
+	const candidateScopeKey = `${candidate?.id}:${candidate?.version}:${environment}:${selectionIdentity}`;
+	const candidateCommandScopeAllowed = candidateScopeMatches ||
+		(candidateContainsSelection && confirmedCandidateScope === candidateScopeKey);
+	const scopedCandidate = candidateContainsSelection ? candidate : null;
+	const selectedEvidence = candidateContainsSelection
+		? (workspace?.entryEvidence || []).filter((entry) => selectedIds.has(entry.modelSpecId))
 		: materializations.map((item) => item.evidence);
-	const selectedCandidateSummary = candidateScopeMatches
+	const selectedCandidateSummary = candidateContainsSelection
 		? `${candidate?.status} · v${candidate?.version}`
 		: materializations.length === 1
 			? `${materializations[0].candidateStatus} · v${materializations[0].candidateVersion}`
@@ -245,7 +239,7 @@ export function ModelPublishDialog({
 				? `${materializations.length} 个模型有历史构建`
 				: "所选模型尚无";
 	const evidenceIsHistorical =
-		!candidateScopeMatches ||
+		!candidateContainsSelection ||
 		candidate?.status === "CANCELLED" ||
 		selectedEvidence.some((entry) =>
 			selection.some((model) => model.id === entry.modelSpecId && model.revision !== entry.modelRevision),
@@ -272,7 +266,7 @@ export function ModelPublishDialog({
 								? "START_BUILD"
 								: null;
 	const releaseActions = RELEASE_WORKFLOW_ACTIONS.filter(
-		(action) => candidateScopeMatches && workspace?.allowedActions.includes(action),
+		(action) => candidateCommandScopeAllowed && workspace?.allowedActions.includes(action),
 	);
 	const executionBinding = executionWorkspace?.bindings.find((binding) => binding.environment === environment) || null;
 	const publishedSelection = Boolean(selectionIsPublished && executionBinding);
@@ -554,7 +548,7 @@ export function ModelPublishDialog({
 		}
 	};
 	const rerunGovernanceQuality = async () => {
-		if (!canMaintain || !planId || !scopedCandidate) return;
+		if (!canMaintain || !planId || !scopedCandidate || !candidateCommandScopeAllowed) return;
 		setBusy("governance-quality");
 		setFailure("");
 		try {
@@ -635,12 +629,16 @@ export function ModelPublishDialog({
 					{!embedded && !selectionProblem ? (
 						<ModelAssetDeliveryResult key={workspace?.candidate?.status || "none"} models={selection} />
 					) : null}
+					<ModelReleaseScopeNotice candidate={scopedCandidate} evidence={workspace?.entryEvidence || []}
+						selectedCount={selection.length} exactScope={candidateScopeMatches}
+						confirmed={confirmedCandidateScope === candidateScopeKey} disabled={Boolean(busy)}
+						onConfirm={(confirmed) => setConfirmedCandidateScope(confirmed ? candidateScopeKey : "")} />
 					{selectionProblem ? (
 						<RequestState description={selectionProblem} kind="empty" title="当前选择不可构建" />
 					) : tab === "materialize" ? (
 						<>
 							<h3>构建与检查</h3>
-							{candidateScopeMatches && selectedEvidence.filter((entry) => entry.failureMessage).map((entry) => (
+							{candidateContainsSelection && selectedEvidence.filter((entry) => entry.failureMessage).map((entry) => (
 								<div key={entry.candidateEntryId} role="alert" className="dmx-request-state">
 									<strong>{entry.modelName}：构建未完成</strong>
 									<p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{entry.failureMessage}</p>
@@ -742,7 +740,8 @@ export function ModelPublishDialog({
 							)}
 							<ModelMaterializationActions
 								embedded={embedded}
-								pageAction={pageAction}
+								pageAction={pageAction && ["RUN_QUALITY", "RERUN_GOVERNANCE_QUALITY"].includes(pageAction.code) && !candidateCommandScopeAllowed
+									? { ...pageAction, enabled: false } : pageAction}
 								canMaintain={canMaintain}
 								canConfigureQuality={canConfigureQuality}
 								busy={busy}
@@ -772,11 +771,11 @@ export function ModelPublishDialog({
 								<ModelReleaseWorkflowPanel
 									binding={executionBinding}
 									candidate={scopedCandidate}
-									evidence={candidateScopeMatches ? workspace?.evidence || [] : []}
-									governanceQuality={candidateScopeMatches ? workspace?.governanceQuality || null : null}
+									evidence={candidateContainsSelection ? workspace?.evidence || [] : []}
+									governanceQuality={candidateContainsSelection ? workspace?.governanceQuality || null : null}
 									governanceQualityRerunning={busy === "governance-quality"}
 									onRerunGovernanceQuality={
-										canMaintain && scopedCandidate ? () => void rerunGovernanceQuality() : undefined
+										canMaintain && scopedCandidate && candidateCommandScopeAllowed ? () => void rerunGovernanceQuality() : undefined
 									}
 									releaseActions={releaseActions}
 								/>
@@ -785,27 +784,12 @@ export function ModelPublishDialog({
 								<span>操作说明</span>
 								<input onChange={(event) => setReason(event.target.value)} value={reason} />
 							</label>
-							<dl className="dmx-summary-list dmx-summary-list--compact">
-								<dt>发布单状态</dt>
-								<dd>
-									{busy === "load"
-										? "正在读取发布单状态…"
-										: failure
-											? "发布单状态读取失败"
-											: scopedCandidate?.status || (candidate ? "当前计划发布单不包含所选模型" : "当前模型暂无发布单")}
-								</dd>
-								<dt>允许动作</dt>
-								<dd>
-									{releaseActions.map((action) => RELEASE_ACTION_LABELS[action]).join("、") ||
-										"等待服务端推进或当前职责无可执行动作"}
-								</dd>
-								<dt>主要阻断</dt>
-								<dd>
-									{candidateScopeMatches && workspace?.primaryBlocker
-										? `${workspace.primaryBlocker.code}：${workspace.primaryBlocker.message}`
-										: "无"}
-								</dd>
-							</dl>
+							<ModelReleaseScopeSummary
+								status={busy === "load" ? "正在读取发布单状态…" : failure ? "发布单状态读取失败" :
+									scopedCandidate?.status || (candidate ? "当前发布单不包含所选模型的当前版本" : "当前模型暂无发布单")}
+								actions={releaseActions.map((action) => RELEASE_ACTION_LABELS[action])}
+								blocker={candidateContainsSelection ? workspace?.primaryBlocker?.message || workspace?.governanceQuality?.message : null}
+							/>
 							<div className="dmx-dialog-actions">
 								<Button
 									disabled={Boolean(busy)}
