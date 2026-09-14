@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "BI 发布链：看板发布与平台登记",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [
+      1080,
+      620
+    ]
+  },
+  "participants": [
+    {
+      "id": "editor",
+      "type": "frontend",
+      "label": "前端编辑",
+      "sublabel": "BI 编辑器"
+    },
+    {
+      "id": "resource",
+      "type": "backend",
+      "label": "看板接口",
+      "sublabel": "DashboardResource"
+    },
+    {
+      "id": "pub",
+      "type": "backend",
+      "label": "发布服务",
+      "sublabel": "PublicationService"
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "修订快照",
+      "sublabel": "AnalyticsRevision"
+    },
+    {
+      "id": "outbox",
+      "type": "backend",
+      "label": "登记 Outbox",
+      "sublabel": "30s 调度"
+    },
+    {
+      "id": "scheduler",
+      "type": "backend",
+      "label": "调度器",
+      "sublabel": "reconcile"
+    },
+    {
+      "id": "client",
+      "type": "backend",
+      "label": "登记客户端",
+      "sublabel": "RegistrationClient"
+    },
+    {
+      "id": "platform",
+      "type": "external",
+      "label": "平台登记接口",
+      "sublabel": "/internal/reports"
+    }
+  ],
+  "segments": [
+    {
+      "from": 246,
+      "to": 510,
+      "label": "发布与登记"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-publish",
+      "from": "editor",
+      "to": "resource",
+      "y": 168,
+      "label": "POST /dashboard/{id}/publish",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-service",
+      "from": "resource",
+      "to": "pub",
+      "y": 196,
+      "label": "publish（实体锁）"
+    },
+    {
+      "id": "m-revision",
+      "from": "pub",
+      "to": "store",
+      "y": 224,
+      "label": "旧版本作废 + 新建 PUBLISHED 修订"
+    },
+    {
+      "id": "m-enqueue",
+      "from": "pub",
+      "to": "outbox",
+      "y": 256,
+      "label": "enqueueDashboard"
+    },
+    {
+      "id": "m-result",
+      "from": "pub",
+      "to": "resource",
+      "y": 284,
+      "label": "PublicationResult",
+      "variant": "return"
+    },
+    {
+      "id": "m-reconcile",
+      "from": "scheduler",
+      "to": "outbox",
+      "y": 312,
+      "label": "reconcile 待登记（30s 轮询）"
+    },
+    {
+      "id": "m-register",
+      "from": "outbox",
+      "to": "client",
+      "y": 340,
+      "label": "register(command)"
+    },
+    {
+      "id": "m-http",
+      "from": "client",
+      "to": "platform",
+      "y": 368,
+      "label": "POST /internal/reports/registrations",
+      "variant": "security"
+    },
+    {
+      "id": "m-response",
+      "from": "platform",
+      "to": "client",
+      "y": 396,
+      "label": "registrationId / assetVersion",
+      "variant": "return"
+    },
+    {
+      "id": "m-status",
+      "from": "client",
+      "to": "outbox",
+      "y": 424,
+      "label": "更新登记状态 / 重试",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "发布约定",
+      "items": [
+        "实体锁保证同一看板发布串行",
+        "旧 PUBLISHED 修订先作废，新版本号自增",
+        "登记失败可手动 retry 或 Outbox 补偿"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "已确认边界",
+      "items": [
+        "大屏没有同构的 Outbox 登记链路",
+        "公共分享匿名访问受密级/部门校验（S10DC-87）",
+        "面板查询与合规细节见 04 分析消费链"
+      ]
+    }
+  ]
+}
