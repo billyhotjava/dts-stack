@@ -1,0 +1,77 @@
+# REST 接口清单：java
+
+- 控制器方法数：70
+- 生成脚本：`rest_inventory.py`（需人工核对）
+
+| 路径 | 方法 | 控制器#方法 | 定位 |
+|---|---|---|---|
+| `/api/infra/settings/{service}` | GET | `InfraSettingsResource#getSettings` | `com/yuzhi/dts/ingestion/web/rest/InfraSettingsResource.java:100` |
+| `/api/infra/settings/{service}` | POST | `InfraSettingsResource#upsertSettings` | `com/yuzhi/dts/ingestion/web/rest/InfraSettingsResource.java:113` |
+| `/api/infra/settings/{service}/test` | POST | `InfraSettingsResource#testSettings` | `com/yuzhi/dts/ingestion/web/rest/InfraSettingsResource.java:148` |
+| `/api/ingestion/access/default-policy` | GET | `IngestionTaskResource#getAccessDefaultPolicy` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2224` |
+| `/api/ingestion/api/auth-providers` | GET | `ApiConnectorContractResource#listAuthProviders` | `com/yuzhi/dts/ingestion/web/rest/ApiConnectorContractResource.java:99` |
+| `/api/ingestion/api/contract` | GET | `ApiConnectorContractResource#getContract` | `com/yuzhi/dts/ingestion/web/rest/ApiConnectorContractResource.java:76` |
+| `/api/ingestion/api/test-connection` | POST | `ApiConnectorContractResource#testConnection` | `com/yuzhi/dts/ingestion/web/rest/ApiConnectorContractResource.java:105` |
+| `/api/ingestion/connectors/capabilities` | GET | `IngestionTaskResource#listConnectorCapabilities` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3293` |
+| `/api/ingestion/connectors/capabilities/{connectorType}` | GET | `IngestionTaskResource#getConnectorCapability` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3302` |
+| `/api/ingestion/files/parse` | POST | `FileUploadResource#parseUploadedFile` | `com/yuzhi/dts/ingestion/web/rest/FileUploadResource.java:125` |
+| `/api/ingestion/files/upload` | POST | `FileUploadResource#uploadFile` | `com/yuzhi/dts/ingestion/web/rest/FileUploadResource.java:40` |
+| `/api/ingestion/files/upload-and-parse` | POST | `FileUploadResource#uploadAndParse` | `com/yuzhi/dts/ingestion/web/rest/FileUploadResource.java:73` |
+| `/api/ingestion/metadata/tables` | POST | `IngestionTaskResource#discoverTables` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:775` |
+| `/api/ingestion/operations/secret-compatibility/restore` | POST | `IngestionTaskSecretRestoreResource#restore` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskSecretRestoreResource.java:35` |
+| `/api/ingestion/operations/secret-compatibility/restore/dry-run` | POST | `IngestionTaskSecretRestoreResource#dryRun` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskSecretRestoreResource.java:28` |
+| `/api/ingestion/rollback/analyze` | POST | `RollbackResource#analyze` | `com/yuzhi/dts/ingestion/web/rest/RollbackResource.java:52` |
+| `/api/ingestion/rollback/audit-log` | GET | `RollbackResource#getAuditLog` | `com/yuzhi/dts/ingestion/web/rest/RollbackResource.java:100` |
+| `/api/ingestion/rollback/execute` | POST | `RollbackResource#execute` | `com/yuzhi/dts/ingestion/web/rest/RollbackResource.java:65` |
+| `/api/ingestion/tasks` | POST | `IngestionTaskResource#createTask` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:302` |
+| `/api/ingestion/tasks/by-source` | GET | `IngestionTaskResource#listTasksBySource` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2233` |
+| `/api/ingestion/tasks/changes` | GET | `IngestionTaskResource#listChangeLogs` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2754` |
+| `/api/ingestion/tasks/changes` | POST | `IngestionTaskResource#createChangeLog` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2779` |
+| `/api/ingestion/tasks/changes/{id}/transition` | POST | `IngestionTaskResource#transitionChangeLog` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2823` |
+| `/api/ingestion/tasks/dags/rebuild-api` | POST | `IngestionTaskResource#rebuildApiDags` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3157` |
+| `/api/ingestion/tasks/executions/governance-overview` | GET | `IngestionTaskResource#getGovernanceOverview` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3225` |
+| `/api/ingestion/tasks/executions/observability` | GET | `IngestionTaskResource#getExecutionObservability` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3202` |
+| `/api/ingestion/tasks/executions/trace` | GET | `IngestionTaskResource#traceExecution` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3236` |
+| `/api/ingestion/tasks/list` | GET | `IngestionTaskResource#getTasks` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2209` |
+| `/api/ingestion/tasks/{id}` | DELETE | `IngestionTaskResource#deleteTask` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2704` |
+| `/api/ingestion/tasks/{id}` | GET | `IngestionTaskResource#getTask` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2247` |
+| `/api/ingestion/tasks/{id}` | PUT | `IngestionTaskResource#updateTask` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2500` |
+| `/api/ingestion/tasks/{id}/admit` | POST | `IngestionTaskResource#admitTask` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2455` |
+| `/api/ingestion/tasks/{id}/backfill` | POST | `IngestionTaskResource#backfillTask` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2978` |
+| `/api/ingestion/tasks/{id}/dag/rebuild` | POST | `IngestionTaskResource#rebuildDag` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3120` |
+| `/api/ingestion/tasks/{id}/design` | GET | `IngestionTaskResource#getTaskDesign` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2284` |
+| `/api/ingestion/tasks/{id}/design` | PUT | `IngestionTaskResource#updateTaskDesign` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2301` |
+| `/api/ingestion/tasks/{id}/design/validate` | POST | `IngestionTaskResource#validateTaskDesign` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2354` |
+| `/api/ingestion/tasks/{id}/effective-config` | GET | `IngestionTaskResource#getTaskEffectiveConfig` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2269` |
+| `/api/ingestion/tasks/{id}/execute` | POST | `IngestionTaskResource#executeTask` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2875` |
+| `/api/ingestion/tasks/{id}/execute/async` | POST | `IngestionTaskResource#executeTaskAsync` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2915` |
+| `/api/ingestion/tasks/{id}/executions` | GET | `IngestionTaskResource#getExecutions` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3185` |
+| `/api/ingestion/tasks/{id}/executions/latest` | GET | `IngestionTaskResource#getLatestExecution` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3255` |
+| `/api/ingestion/tasks/{id}/executions/{executionId}` | GET | `IngestionTaskResource#getTaskExecution` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2404` |
+| `/api/ingestion/tasks/{id}/executions/{executionId}/cancel` | POST | `IngestionTaskResource#cancelTaskExecution` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2417` |
+| `/api/ingestion/tasks/{id}/executions/{executionId}/logs` | GET | `IngestionTaskResource#getExecutionLog` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3401` |
+| `/api/ingestion/tasks/{id}/executions/{executionId}/retry` | POST | `IngestionTaskResource#retryExecution` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3024` |
+| `/api/ingestion/tasks/{id}/executions/{executionId}/retry/async` | POST | `IngestionTaskResource#retryExecutionAsync` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3060` |
+| `/api/ingestion/tasks/{id}/incremental-audits` | GET | `IngestionTaskResource#getIncrementalAudits` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3338` |
+| `/api/ingestion/tasks/{id}/incremental-audits/page` | GET | `IngestionTaskResource#getIncrementalAuditsPage` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3354` |
+| `/api/ingestion/tasks/{id}/incremental-audits/summary` | GET | `IngestionTaskResource#getIncrementalAuditsSummary` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3378` |
+| `/api/ingestion/tasks/{id}/incremental-states` | GET | `IngestionTaskResource#getIncrementalStates` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3323` |
+| `/api/ingestion/tasks/{id}/parse` | POST | `IngestionPreCheckResource#parse` | `com/yuzhi/dts/ingestion/web/rest/IngestionPreCheckResource.java:116` |
+| `/api/ingestion/tasks/{id}/pre-check` | POST | `IngestionPreCheckResource#preCheck` | `com/yuzhi/dts/ingestion/web/rest/IngestionPreCheckResource.java:183` |
+| `/api/ingestion/tasks/{id}/re-check` | POST | `IngestionPreCheckResource#reCheck` | `com/yuzhi/dts/ingestion/web/rest/IngestionPreCheckResource.java:343` |
+| `/api/ingestion/tasks/{id}/realtime-status` | GET | `IngestionTaskResource#getRealtimeStatus` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3314` |
+| `/api/ingestion/tasks/{id}/revisions` | GET | `IngestionTaskResource#getTaskRevisions` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2257` |
+| `/api/ingestion/tasks/{id}/schedule/enable` | POST | `IngestionTaskResource#enableTaskSchedule` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2388` |
+| `/api/ingestion/tasks/{id}/schedule/pause` | POST | `IngestionTaskResource#pauseTaskSchedule` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2396` |
+| `/api/ingestion/tasks/{id}/staging` | DELETE | `IngestionPreCheckResource#dropStaging` | `com/yuzhi/dts/ingestion/web/rest/IngestionPreCheckResource.java:363` |
+| `/api/ingestion/tasks/{id}/staging` | GET | `IngestionPreCheckResource#getStagingRows` | `com/yuzhi/dts/ingestion/web/rest/IngestionPreCheckResource.java:297` |
+| `/api/ingestion/tasks/{id}/staging/errors/download` | GET | `IngestionPreCheckResource#downloadBadRows` | `com/yuzhi/dts/ingestion/web/rest/IngestionPreCheckResource.java:326` |
+| `/api/ingestion/tasks/{id}/staging/errors/summary` | GET | `IngestionPreCheckResource#getBadRowSummary` | `com/yuzhi/dts/ingestion/web/rest/IngestionPreCheckResource.java:312` |
+| `/api/ingestion/tasks/{id}/staging/{rowNum}` | PUT | `IngestionPreCheckResource#updateCell` | `com/yuzhi/dts/ingestion/web/rest/IngestionPreCheckResource.java:264` |
+| `/api/ingestion/tasks/{id}/submit` | POST | `IngestionPreCheckResource#submit` | `com/yuzhi/dts/ingestion/web/rest/IngestionPreCheckResource.java:350` |
+| `/api/ingestion/tasks/{id}/topology` | GET | `IngestionTaskResource#getTaskTopology` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:2370` |
+| `/api/ingestion/templates` | GET | `IngestionTaskResource#listIngestionTemplates` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3268` |
+| `/api/ingestion/templates/{templateId}/render` | POST | `IngestionTaskResource#renderIngestionTemplate` | `com/yuzhi/dts/ingestion/web/rest/IngestionTaskResource.java:3277` |
+| `/internal/api-ingestion/executions` | POST | `InternalApiIngestionResource#startExecution` | `com/yuzhi/dts/ingestion/web/rest/InternalApiIngestionResource.java:39` |
+| `/internal/api-ingestion/executions/{executionId}` | GET | `InternalApiIngestionResource#getExecution` | `com/yuzhi/dts/ingestion/web/rest/InternalApiIngestionResource.java:92` |
+| `/internal/api-ingestion/scheduled-executions` | POST | `InternalApiIngestionResource#registerScheduledExecution` | `com/yuzhi/dts/ingestion/web/rest/InternalApiIngestionResource.java:79` |
