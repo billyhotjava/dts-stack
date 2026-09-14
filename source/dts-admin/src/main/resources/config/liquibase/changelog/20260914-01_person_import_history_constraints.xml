@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
+
+    <!-- Forward repair: do not replay the historical dedup or change its checksum. -->
+    <changeSet id="20260914-01-person-import-history-constraints" author="codex" dbms="postgresql">
+        <comment>Preserve every import record while allowing repeated imports of the same Keycloak user.</comment>
+        <sql>SET LOCAL lock_timeout = '5s';</sql>
+        <sql splitStatements="false"><![CDATA[
+DO $$
+DECLARE
+    target_schema text := current_schema();
+    target_table regclass := to_regclass(format('%I.person_import_record', current_schema()));
+    kc_column smallint;
+    constraint_row record;
+    index_row record;
+BEGIN
+    IF target_table IS NULL THEN
+        RAISE EXCEPTION 'person_import_record is missing in schema %', target_schema;
+    END IF;
+    SELECT attnum INTO kc_column FROM pg_attribute
+    WHERE attrelid = target_table AND attname = 'keycloak_user_id' AND NOT attisdropped;
+    IF kc_column IS NULL THEN
+        RAISE EXCEPTION 'person_import_record.keycloak_user_id is missing in schema %', target_schema;
+    END IF;
+
+    -- Match the actual column, not a case-sensitive name or an unscoped catalog count.
+    -- Primary keys, composite constraints and all other schemas remain untouched.
+    FOR constraint_row IN
+        SELECT conname FROM pg_constraint
+        WHERE conrelid = target_table AND contype = 'u' AND conkey = ARRAY[kc_column]
+    LOOP
+        EXECUTE format('ALTER TABLE %I.person_import_record DROP CONSTRAINT %I', target_schema, constraint_row.conname);
+    END LOOP;
+
+    -- Some installations retained an independent unique index instead of a constraint.
+    FOR index_row IN
+        SELECT c.relname FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+        WHERE i.indrelid = target_table AND i.indisunique AND NOT i.indisprimary
+          AND i.indnkeyatts = 1 AND i.indkey[0] = kc_column
+          AND i.indpred IS NULL AND i.indexprs IS NULL
+          AND NOT EXISTS (SELECT 1 FROM pg_constraint pc WHERE pc.conindid = i.indexrelid)
+    LOOP
+        EXECUTE format('DROP INDEX %I.%I', target_schema, index_row.relname);
+    END LOOP;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_index
+        WHERE indrelid = target_table AND NOT indisunique AND indisvalid
+          AND indnkeyatts = 1 AND indkey[0] = kc_column AND indpred IS NULL AND indexprs IS NULL
+    ) THEN
+        EXECUTE format('CREATE INDEX idx_person_record_kc_id ON %I.person_import_record (keycloak_user_id)', target_schema);
+    END IF;
+END $$;
+        ]]></sql>
+        <!-- Reintroducing uniqueness would reject legitimate history after another import. -->
+        <rollback>
+            <sql splitStatements="false">DO $$ BEGIN RAISE EXCEPTION 'Forward-only repair: retain import history; do not restore keycloak_user_id uniqueness'; END $$;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

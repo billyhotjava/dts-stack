@@ -33,11 +33,14 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
-@Transactional
+// Batch saves must commit before a REQUIRES_NEW record transaction can reference them.
+// Suspend any caller transaction as well; a database rollback cannot undo Keycloak calls.
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
 public class PersonnelImportService {
 
     private static final Logger LOG = LoggerFactory.getLogger(PersonnelImportService.class);
