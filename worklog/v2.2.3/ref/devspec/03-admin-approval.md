@@ -4,6 +4,7 @@
 - 全量接口清单：[assets/rest-inventory-dts-admin.md](assets/rest-inventory-dts-admin.md)（脚本生成，需人工核对）
 - 路径前缀 `A/` = `source/dts-admin/src/main/java/com/yuzhi/dts/admin/`
 - 类别：`[源码]` 代码事实、`[配置]` 配置声明、`[待确认]` 未证实。
+- 接口实现与分派关系汇总：[assets/call-graph-and-dispatch.md](assets/call-graph-and-dispatch.md)
 
 主链：三员角色校验 → 变更单草稿（含差异计算/重复检查）→ 提交 PENDING → 通知审批人 → 同意（事务内执行，成功 APPLIED / 失败 FAILED）或拒绝 REJECTED → 审计 V2 留痕。
 
@@ -94,7 +95,7 @@ sequenceDiagram
 | 3 | 内置角色保护与差异计算 | `A/web/rest/AdminApiResource.java:2034,2046` |
 | 4 | 草稿审计 recordChangeRequestDraftV2 | `A/web/rest/AdminApiResource.java:5441` |
 | 5 | AdminApiResource#submitChangeRequest（置 PENDING） | `A/web/rest/AdminApiResource.java:2074` |
-| 6 | 审批通知 `notifyClient.trySend("approval_pending")` | `A/web/rest/AdminApiResource.java:2118-2130` |
+| 6 | 审批通知 `notifyClient.trySend("approval_pending")` | `A/web/rest/AdminApiResource.java:2121` |
 | 7 | 变更单实体状态字段 | `A/domain/ChangeRequest.java:34` |
 
 ### 3.2 同意并执行 / 拒绝
@@ -138,9 +139,20 @@ sequenceDiagram
 | 3 | AdminApiResource#applyChangeRequest（资源类型 if/else 分派） | `A/web/rest/AdminApiResource.java:3381` |
 | 4 | 各资源成功置 APPLIED | `A/web/rest/AdminApiResource.java:6470,6482,6516,6538,6572,6732,6818` |
 | 5 | 失败置 FAILED + lastError、`setRollbackOnly` | `A/web/rest/AdminApiResource.java:2152-2162` |
-| 6 | 同意审计 recordChangeRequestApproveV2 / 拒绝 recordChangeRequestRejectV2 | `A/web/rest/AdminApiResource.java:2180,2219` |
-| 7 | 审批通知 | `A/web/rest/AdminApiResource.java:2193,2202` |
+| 6 | 同意审计 recordChangeRequestApproveV2 / 拒绝 recordChangeRequestRejectV2 | `A/web/rest/AdminApiResource.java:2181,2224` |
+| 7 | 审批通知 | `A/web/rest/AdminApiResource.java:2193,2200` |
 | 8 | 分派实现：PORTAL_MENU/CONFIG/ORG/ROLE/CUSTOM_ROLE/ROLE_ASSIGNMENT | `A/web/rest/AdminApiResource.java:3384-3394` |
+
+### 3.3 列表、详情、清理与审计落库
+
+| 步骤 | 类#方法 | 定位 |
+|---|---|---|
+| 列表查询 | AdminApiResource#listChangeRequests（审计 `recordChangeRequestListV2`） | `A/web/rest/AdminApiResource.java:1909,5321` |
+| 我的申请 | AdminApiResource#myChangeRequests | `A/web/rest/AdminApiResource.java:1936` |
+| 详情查询 | AdminApiResource#getChangeRequest（审计 `recordChangeRequestViewV2`） | `A/web/rest/AdminApiResource.java:1952,5344` |
+| 历史清理 | AdminApiResource#purgeChangeRequests（审计 `recordChangeRequestPurgeV2`） | `A/web/rest/AdminApiResource.java:1982,5397` |
+| 审计落库（草稿/提交/同意/拒绝） | `recordChangeRequestDraftV2/SubmitV2/ApproveV2/RejectV2` → `AuditActionRequest.Builder` | `A/web/rest/AdminApiResource.java:5441,5510,5590,5665` |
+| 审计入站 | `/api/audit-events` 由 `AuditIngestPreAuthenticationFilter` 先校验成对凭据 | `A/web/filter/AuditIngestPreAuthenticationFilter.java:37`、`A/config/SecurityConfiguration.java:75-79` |
 
 ## 4 接口/实现与分派形态
 
@@ -176,5 +188,5 @@ sequenceDiagram
 | 资源类型分派（if/else） | `A/web/rest/AdminApiResource.java:3381-3394` |
 | APPLIED 状态设置 | `A/web/rest/AdminApiResource.java:6470,6482,6516,6538,6572,6732,6818` |
 | 审计 V2 | `A/web/rest/AdminApiResource.java:5441,5452` |
-| 通知客户端 | `A/service/notify/DtsCommonNotifyClient.java:16`、`A/web/rest/AdminApiResource.java:2118,2193,2202` |
+| 通知客户端 | `A/service/notify/DtsCommonNotifyClient.java:16`、`A/web/rest/AdminApiResource.java:2121,2193,2200` |
 | 实体与状态 | `A/domain/ChangeRequest.java:9,34` |

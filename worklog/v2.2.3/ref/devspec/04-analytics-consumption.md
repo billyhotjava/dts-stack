@@ -4,6 +4,7 @@
 - 全量接口清单：[assets/rest-inventory-dts-analytics.md](assets/rest-inventory-dts-analytics.md)（脚本生成，需人工核对）
 - 路径前缀 `G/` = `source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/`；平台侧路径前缀 `P/` 同 [01-modeling-mainline.md](01-modeling-mainline.md)
 - 类别：`[源码]` 代码事实、`[配置]` 配置声明、`[待确认]` 未证实。
+- 接口实现与分派关系汇总：[assets/call-graph-and-dispatch.md](assets/call-graph-and-dispatch.md)
 
 主链：平台发布契约读取（缓存 + 校验）→ 分析定义（Analysis）保存/发布 → 查询执行（编译 SQL → 绑定 → 执行）→ 结果返回/导出 → 公共分享读取（PublicLink 校验）。
 
@@ -174,6 +175,19 @@ sequenceDiagram
 
 > 匿名请求没有 `X-DTS-*` 请求头时 caller 为空，非 PUBLIC 链接必然 403；该行为已作为产品待决策项记录在 S10DC-87。
 
+### 3.4 分析发布、导出、取消与执行器内部
+
+| 动作 | 端点/入口 | 服务#方法 | 定位 |
+|---|---|---|---|
+| 发布校验 | `POST /api/analysis/{id}/validate` | `AnalysisPublicationService.validate` | Resource :133；Pub :115 |
+| 发布 | `POST /api/analysis/{id}/publish` | `AnalysisPublicationService.publish`（使用契约提供者校验数据集引用） | Resource :145；Pub :121 |
+| 版本列表 | `GET /api/analysis/{id}/versions` | `AnalysisPublicationService.versions` | Resource :157；Pub :176 |
+| 由版本建草稿 | `POST /api/analysis/{id}/versions/{revisionId}/draft` | `AnalysisPublicationService.createDraftFromVersion` | Resource :165；Pub :184 |
+| 导出 CSV / Excel | `POST /api/analysis/{id}/query/csv`、`.../xlsx` | `QueryExportService.exportToCsv/exportToExcel` | Resource :197,206；Export :52,83 |
+| 取消查询 | `POST /api/analysis/queries/{queryId}/cancel` | `AnalysisQueryGateway.cancelQuery` | Resource :281；Gateway :230 |
+| 查询准备/执行 | 内部 | `QueryExecutionFacade.prepare` / `executeRaw` / `executeWithCompliance` / `executeWithComplianceOutcome` | Facade :62,283,288,299 |
+| 数据集查询与合规 | 内部 | `DatasetQueryService`（`MbqlToSqlService`、`NativeQueryTemplateService`、`ScreenComplianceService`） | Facade :41-44 |
+
 ## 4 事务、缓存与安全语义
 
 - 缓存：Caffeine `maximumSize(2000)`、`expireAfterWrite(5min)`（`G/service/analysis/PlatformAnalysisDatasetContractClient.java:33-36`）；显式失效 `invalidate(datasetId)`（:97）。
@@ -184,7 +198,7 @@ sequenceDiagram
 
 ## 5 边界与待确认
 
-- `PlatformAnalysisDatasetContractClient` 的缓存 TTL 为 5 分钟，平台撤销发布后分析侧最长 5 分钟仍可命中旧契约；撤销链路是否有主动 `invalidate` 调用需另行核对。`[待确认]`
+- `PlatformAnalysisDatasetContractClient` 的缓存 TTL 为 5 分钟；主源码中 `invalidate(datasetId)` 只有定义（`G/service/analysis/PlatformAnalysisDatasetContractClient.java:97`）没有调用方，`grep -rn '\.invalidate('` 仅命中 `QueryCacheService` 自身，因此平台撤销发布后分析侧只能等缓存自然过期。`[源码]`
 - 公共分享的匿名访问策略（允许匿名/要求登录/仅公开级）待产品决策，当前非 PUBLIC 链接必然 403。`[待确认]`
 - `AnalysisQueryGateway` 与 `QueryExecutionFacade` 为具体类，无接口替换点；测试如何替换执行器未核对。`[待确认]`
 - 本文只核对源码（HEAD `72acb2d4d`），未执行查询性能、缓存有效期与权限撤销的真实环境验证。`[待确认]`

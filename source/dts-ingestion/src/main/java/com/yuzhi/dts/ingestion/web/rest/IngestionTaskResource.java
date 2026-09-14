@@ -797,24 +797,23 @@ public class IngestionTaskResource {
         Integer limit = filter == null ? null : filter.limit();
         boolean includeColumns = filter != null && Boolean.TRUE.equals(filter.includeColumns());
 
-        List<JdbcMetadataService.TableMeta> tables;
         try {
-            tables = jdbcMetadataService.listTables(info, schema, tablePattern, limit);
+            List<JdbcMetadataService.TableMeta> tables = jdbcMetadataService.listTables(info, schema, tablePattern, limit);
+            List<TableInfo> payload = new java.util.ArrayList<>();
+            for (JdbcMetadataService.TableMeta table : tables) {
+                List<ColumnInfo> columns = List.of();
+                if (includeColumns && StringUtils.hasText(table.name())) {
+                    List<JdbcMetadataService.ColumnMeta> cols = jdbcMetadataService.getTableColumns(info, buildTableName(table));
+                    columns = cols.stream()
+                        .map(col -> new ColumnInfo(col.name(), col.jdbcType(), col.typeName(), col.columnSize(), col.decimalDigits()))
+                        .toList();
+                }
+                payload.add(new TableInfo(table.schema(), table.name(), table.type(), columns));
+            }
+            return ApiResponses.ok(payload);
         } catch (JdbcMetadataService.MetadataDiscoveryException ex) {
             return new ApiResponse<>(HttpStatus.BAD_GATEWAY.value(), ex.getMessage(), ex.getCode(), null);
         }
-        List<TableInfo> payload = new java.util.ArrayList<>();
-        for (JdbcMetadataService.TableMeta table : tables) {
-            List<ColumnInfo> columns = List.of();
-            if (includeColumns && StringUtils.hasText(table.name())) {
-                List<JdbcMetadataService.ColumnMeta> cols = jdbcMetadataService.getTableColumns(info, buildTableName(table));
-                columns = cols.stream()
-                    .map(col -> new ColumnInfo(col.name(), col.jdbcType(), col.typeName(), col.columnSize(), col.decimalDigits()))
-                    .toList();
-            }
-            payload.add(new TableInfo(table.schema(), table.name(), table.type(), columns));
-        }
-        return ApiResponses.ok(payload);
     }
 
     private String resolvePlugin(String direct, Map<String, Object> config, List<String> keys) {

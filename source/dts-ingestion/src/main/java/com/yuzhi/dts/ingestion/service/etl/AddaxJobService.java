@@ -3322,9 +3322,6 @@ public class AddaxJobService {
                     if (k != null) params.put(k.toString(), v);
                 });
                 String jdbcUrl = resolveJdbcUrl(params);
-                String username = normalizeText(params.get("username"));
-                String password = normalizeText(params.get("password"));
-                String driver = normalizeText(params.get("driver"));
                 if (!StringUtils.hasText(jdbcUrl)) {
                     throw new IllegalStateException("无法解析目标数据库连接，拒绝保存未解析的 Addax 字段配置");
                 }
@@ -3338,9 +3335,7 @@ public class AddaxJobService {
                 }
                 String tableName = tables.get(0);
                 // Query actual columns from target database
-                JdbcMetadataService.JdbcConnectionInfo connInfo = new JdbcMetadataService.JdbcConnectionInfo(
-                    jdbcUrl, username, password, driver, null, null
-                );
+                JdbcMetadataService.JdbcConnectionInfo connInfo = metadataConnectionInfo(params, jdbcUrl);
                 List<JdbcMetadataService.ColumnMeta> columns = jdbcMetadataService.getTableColumns(connInfo, tableName);
                 if (columns.isEmpty()) {
                     throw new IllegalStateException("无法解析目标表字段，拒绝保存未解析的 Addax 字段配置: " + tableName);
@@ -3423,14 +3418,7 @@ public class AddaxJobService {
         if (!StringUtils.hasText(jdbcUrl) || tables.isEmpty()) {
             throw new IllegalStateException("无法解析数据库 Reader 连接或源表，拒绝保存不对齐的 Addax 字段配置");
         }
-        JdbcMetadataService.JdbcConnectionInfo sourceInfo = new JdbcMetadataService.JdbcConnectionInfo(
-            jdbcUrl,
-            normalizeText(params.get("username")),
-            normalizeText(params.get("password")),
-            normalizeText(params.get("driver")),
-            null,
-            null
-        );
+        JdbcMetadataService.JdbcConnectionInfo sourceInfo = metadataConnectionInfo(params, jdbcUrl);
         List<JdbcMetadataService.ColumnMeta> sourceColumns = jdbcMetadataService.getTableColumns(sourceInfo, tables.get(0));
         if (sourceColumns.isEmpty()) {
             throw new IllegalStateException("无法解析数据库 Reader 源字段，拒绝保存不对齐的 Addax 字段配置: " + tables.get(0));
@@ -3446,6 +3434,29 @@ public class AddaxJobService {
         }
         ((Map<String, Object>) parameterMap).put("column", readerColumns);
         LOG.info("Resolved {} reader columns for table {}", readerColumns.size(), tables.get(0));
+    }
+
+    private JdbcMetadataService.JdbcConnectionInfo metadataConnectionInfo(Map<String, Object> params, String jdbcUrl) {
+        String driver = normalizeText(params.get("driverClass"));
+        if (!StringUtils.hasText(driver)) {
+            driver = normalizeText(params.get("driver"));
+        }
+        Map<String, String> jdbcProperties = new LinkedHashMap<>();
+        if (params.get("jdbcProperties") instanceof Map<?, ?> configuredProperties) {
+            configuredProperties.forEach((key, value) -> {
+                if (key != null && value != null) {
+                    jdbcProperties.put(key.toString(), value.toString());
+                }
+            });
+        }
+        return new JdbcMetadataService.JdbcConnectionInfo(
+            jdbcUrl,
+            normalizeText(params.get("username")),
+            normalizeText(params.get("password")),
+            driver,
+            normalizeText(params.get("driverVersion")),
+            jdbcProperties
+        );
     }
 
     private boolean isJdbcReader(String readerName) {

@@ -4,6 +4,7 @@
 - 全量接口清单：[assets/rest-inventory-dts-platform.md](assets/rest-inventory-dts-platform.md)（脚本生成，需人工核对）
 - 路径前缀 `P/` = `source/dts-platform/src/main/java/com/yuzhi/dts/platform/`
 - 类别：`[源码]` 代码事实、`[配置]` 配置声明、`[待确认]` 未证实。
+- 接口实现与分派关系汇总：[assets/call-graph-and-dispatch.md](assets/call-graph-and-dispatch.md)
 
 主链：数仓规划 → 模型定义（ModelSpec v2）→ 加工配置（ModelImplementation）→ 交付检查（StageGate）→ 发布单（ReleaseCandidate）→ 构建计划（MaterializationPlan）→ 分发（Dispatch）→ serving 投影 → 语义同步 → 查询数据集（QueryDataset）→ 契约读取。
 
@@ -137,7 +138,41 @@ sequenceDiagram
 
 ### 3.2 加工配置保存与编译
 
-`PUT .../implementation/inputs` → `ModelLifecycleService.saveImplementation`（:211）→ 端口校验 `ModelImplementationInputPolicy`/`ModelSpecSourceValidationPort`；`POST .../lifecycle/compile` → `ModelLifecycleService.compile`（:497）经 `ModelLifecycleCompilerPort`（`CanonicalModelLifecycleCompilerAdapter`）产生编译事件与证据；ETag/`If-Match`、`If-Match-Implementation` 双重并发保护在资源层解析（`P/web/rest/ModelLifecycleResource.java:171-179`）。
+```mermaid
+sequenceDiagram
+    autonumber
+    participant FE as 前端
+    participant R as ModelLifecycleResource
+    participant L as ModelLifecycleService
+    participant IP as ModelImplementationInputPolicy
+    participant REPO as ModelLifecycleRepository
+    participant CP as ModelLifecycleCompilerPort
+    participant SG as ModelSpecStageGateService
+
+    FE->>R: PUT /{id}/implementation/inputs
+    R->>L: saveImplementation（解析 If-Match / If-Match-Implementation）
+    L->>IP: pinCurrentUpstreamImplementations
+    L->>REPO: findImplementation / saveImplementation
+    L->>L: auditImplementation("MODEL_IMPLEMENTATION_SAVE")
+    FE->>R: POST /{id}/implementation/inputs/validate
+    R->>L: validateImplementation
+    L-->>FE: 校验问题清单
+    FE->>R: POST /{id}/lifecycle/compile
+    R->>L: compile
+    L->>CP: compile（CanonicalModelLifecycleCompilerAdapter）
+    L->>REPO: saveArtifacts + recordEvent
+    L->>SG: 阶段门禁读取编译证据
+```
+
+| 步骤 | 类#方法 | 定位 |
+|---|---|---|
+| 1 | ModelLifecycleResource#saveImplementation（双重 ETag 并发保护） | `P/web/rest/ModelLifecycleResource.java:127,171-179` |
+| 2 | ModelLifecycleService#validateImplementation | `P/service/modeling/ModelLifecycleService.java:188` |
+| 3 | ModelLifecycleService#saveImplementation → `pinCurrentUpstreamImplementations` | `P/service/modeling/ModelLifecycleService.java:211,233` |
+| 4 | 仓库写入 `lifecycle.saveImplementation` + 审计 `MODEL_IMPLEMENTATION_SAVE` | `P/service/modeling/ModelLifecycleService.java:246,254` |
+| 5 | 编译实现：`compiler.compile`（端口实现 `CanonicalModelLifecycleCompilerAdapter`） | `P/service/modeling/ModelLifecycleService.java:534`、`P/service/modeling/CanonicalModelLifecycleCompilerAdapter.java` |
+| 6 | 编译产物与事件：`saveArtifacts` + `recordEvent` + 审计 | `P/service/modeling/ModelLifecycleService.java:535,538,551` |
+| 7 | 交付检查读取编译证据 | `P/web/rest/ModelSpecResource.java:170`（StageGate） |
 
 ### 3.3 发布单 → 构建计划 → 分发 → 执行网关
 
@@ -220,6 +255,27 @@ sequenceDiagram
 | 8 | 分析端发布客户端（校验开关/地址/令牌后 POST） | `P/service/modeling/serving/AnalyticsSemanticPublishClient.java:48` |
 | 9 | 数据集投影：组装契约、发布 PUBLISHED 版本、归档旧版本 | `P/service/modeling/serving/ModelQueryDatasetProjectionService.java:64,93-130` |
 | 10 | 契约读取端点：`GET /api/internal/analysis-datasets/{datasetId}/versions/{version}` | `P/web/rest/internal/AnalysisDatasetContractResource.java:30` → `P/service/sql/PublishedQueryDatasetService.java:88` |
+
+### 3.5 发布单动作矩阵（端点 → 应用服务 → 关键下游）
+
+| 动作 | 端点（`/api/modeling/plans/{planId}/release-candidates`） | 应用服务#方法 | 内部关键调用 | 定位 |
+|---|---|---|---|---|
+| 计划预览 | `POST .../materialization-plans/preview` | `previewMaterializationPlan` | `ModelMaterializationPlanService.preview` | Resource :45；App :236 |
+| 预检 | `POST .../preflight` | `preflight` | `ModelReleaseCandidatePreflightService` | Resource :141；App :343 |
+| 创建发布单 | `POST /release-candidates` | `create`（两个重载） | `materializationStarts.start` / `startWithBuild` | Resource :166；App :253,263 |
+| 锁定 | `POST /{id}/lock` | `lock` | `materializationStarts.start`、`materializationStarts.retry`、`commands.transition` | Resource :223；App :374 |
+| 重试 | `POST /{id}/retry` | `retry` | `materializationStarts.retry`、`commands.transition` | Resource :248；App :398 |
+| 刷新漂移 | `POST /{id}/refresh` | `refreshDrift` | `commands.transition` | Resource :273；App :437 |
+| 取消 | `POST /{id}/cancel` | `cancel` | `commands.transition` | Resource :298；App :459 |
+| 替换范围 | `POST /{id}/replacement` | `createReplacement` | `commands.createReplacement(WithExpandedScope)` | Resource :323；App :508 |
+| 重新构建 | `POST /{id}/rematerialize` | `rematerialize` | `materializationPlans.requireCurrent`、`repository.lockPlanForCandidate` | Resource :368；App :585 |
+| 工程验证 | `POST /{id}/quality` | `runQuality` | `QualityWorkflowOrchestrator.startPinnedModelQuality` | Resource :413；Orchestrator :189,208 |
+| 治理质量重跑 | `POST /{id}/governance-quality/runs` | `rerunGovernanceQuality` | `CandidateGovernanceQualityRerunService.rerun` → `GovernanceQualityRerunPort`（`GovernanceQualityRerunAdapter`）→ `startPinnedModelQuality` | Resource :462；Service :51 |
+| 提交审核 | `POST /{id}/reviews` | `submitReview` | `commands.transition` | Resource :483；App :740 |
+| 发布 | `POST /{id}/publish` | `publish` | `publicationAdmission.requireAllowed` → `publicationCoordinator.publish` | Resource :549；App :806 |
+| 发布重试 | `POST /{id}/publication/retry` | `retryPublication` | `commands.transition` | Resource :571；App :915 |
+
+> `commands` = `ModelReleaseCandidateService`；`materializationStarts` = `ModelMaterializationStartService`；`repository` = `ModelReleaseCandidateRepository`。动作矩阵来自方法体内的调用提取（见证据表），更细的分支条件以方法源码为准。
 
 ## 4 事务、幂等与错误语义
 

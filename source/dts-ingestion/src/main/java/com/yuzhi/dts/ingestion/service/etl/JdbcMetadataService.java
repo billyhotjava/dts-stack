@@ -141,20 +141,56 @@ public class JdbcMetadataService {
             }
             return tables;
         } catch (Exception ex) {
-            SQLException sqlException = findSqlException(ex);
-            boolean authenticationFailure = isAuthenticationFailure(sqlException);
-            LOG.warn(
-                "Failed to list tables category={} sqlState={} vendorCode={} exceptionType={}",
-                authenticationFailure ? "AUTHENTICATION" : "CONNECTION",
-                sqlException == null ? "unknown" : sqlException.getSQLState(),
-                sqlException == null ? 0 : sqlException.getErrorCode(),
-                ex.getClass().getSimpleName()
-            );
-            if (authenticationFailure) {
-                throw MetadataDiscoveryException.authenticationFailure(ex);
-            }
-            throw MetadataDiscoveryException.connectionFailure(ex);
+            throw metadataFailure("列举表", ex);
         }
+    }
+
+    private static MetadataDiscoveryException metadataFailure(String operation, Exception error) {
+        if (error instanceof MetadataDiscoveryException failure) {
+            return failure;
+        }
+        SQLException sqlException = findSqlException(error);
+        MetadataDiscoveryException failure;
+        if (isDriverLoadingFailure(error)) {
+            failure = new MetadataDiscoveryException(
+                "JDBC_METADATA_DRIVER_FAILED",
+                "数据库驱动加载失败，请检查接入服务的驱动配置与驱动文件",
+                error
+            );
+        } else if (isAuthenticationFailure(sqlException)) {
+            failure = MetadataDiscoveryException.authenticationFailure(error);
+        } else if (sqlException != null && StringUtils.hasText(sqlException.getSQLState())
+            && !sqlException.getSQLState().startsWith("08")) {
+            failure = new MetadataDiscoveryException(
+                "JDBC_METADATA_READ_FAILED",
+                "数据库元数据读取失败（" + operation + "），请检查数据库、表名与元数据访问权限",
+                error
+            );
+        } else {
+            failure = MetadataDiscoveryException.connectionFailure(error);
+        }
+        LOG.warn(
+            "JDBC metadata failure operation={} code={} sqlState={} vendorCode={} exceptionType={}",
+            operation,
+            failure.getCode(),
+            sqlException == null ? "unknown" : sqlException.getSQLState(),
+            sqlException == null ? 0 : sqlException.getErrorCode(),
+            error.getClass().getSimpleName()
+        );
+        return failure;
+    }
+
+    private static boolean isDriverLoadingFailure(Throwable error) {
+        Throwable current = error;
+        for (int depth = 0; current != null && depth < 8; depth++) {
+            if (current instanceof ReflectiveOperationException
+                || (current instanceof SQLException && current.getMessage() != null
+                    && current.getMessage().toLowerCase(Locale.ROOT).contains("no suitable driver"))) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static SQLException findSqlException(Throwable error) {
@@ -192,8 +228,7 @@ public class JdbcMetadataService {
             }
             return columns;
         } catch (Exception ex) {
-            LOG.warn("Failed to fetch columns for {}: {}", tableName, ex.getMessage());
-            return List.of();
+            throw metadataFailure("读取字段", ex);
         }
     }
 
@@ -277,7 +312,8 @@ public class JdbcMetadataService {
 
     private List<ColumnMeta> readColumns(DatabaseMetaData meta, String schema, String table) throws SQLException {
         List<ColumnMeta> columns = new ArrayList<>();
-        try (ResultSet rs = meta.getColumns(null, schema, table, null)) {
+        MetadataScope scope = metadataScope(meta, schema);
+        try (ResultSet rs = meta.getColumns(scope.catalog(), scope.schema(), table, null)) {
             while (rs.next()) {
                 String name = rs.getString("COLUMN_NAME");
                 int jdbcType = rs.getInt("DATA_TYPE");
@@ -302,7 +338,8 @@ public class JdbcMetadataService {
 
     private List<String> readPrimaryKeyColumns(DatabaseMetaData meta, String schema, String table) throws SQLException {
         List<KeyColumn> columns = new ArrayList<>();
-        try (ResultSet rs = meta.getPrimaryKeys(null, schema, table)) {
+        MetadataScope scope = metadataScope(meta, schema);
+        try (ResultSet rs = meta.getPrimaryKeys(scope.catalog(), scope.schema(), table)) {
             while (rs.next()) {
                 String column = rs.getString("COLUMN_NAME");
                 short seq = rs.getShort("KEY_SEQ");
@@ -319,7 +356,8 @@ public class JdbcMetadataService {
 
     private List<IndexMeta> readIndexes(DatabaseMetaData meta, String schema, String table) throws SQLException {
         Map<String, IndexBuilder> builders = new LinkedHashMap<>();
-        try (ResultSet rs = meta.getIndexInfo(null, schema, table, false, false)) {
+        MetadataScope scope = metadataScope(meta, schema);
+        try (ResultSet rs = meta.getIndexInfo(scope.catalog(), scope.schema(), table, false, false)) {
             while (rs.next()) {
                 String indexName = rs.getString("INDEX_NAME");
                 String columnName = rs.getString("COLUMN_NAME");
@@ -366,10 +404,8 @@ public class JdbcMetadataService {
 
     private List<TableMeta> readTables(DatabaseMetaData meta, String schema, String table, int limit) throws SQLException {
         List<TableMeta> tables = new ArrayList<>();
-        boolean databaseIsCatalog = usesCatalogForDatabase(meta);
-        String catalog = databaseIsCatalog ? schema : null;
-        String schemaPattern = databaseIsCatalog ? null : schema;
-        try (ResultSet rs = meta.getTables(catalog, schemaPattern, table, new String[] { "TABLE" })) {
+        MetadataScope scope = metadataScope(meta, schema);
+        try (ResultSet rs = meta.getTables(scope.catalog(), scope.schema(), table, new String[] { "TABLE" })) {
             while (rs.next()) {
                 String tableName = rs.getString("TABLE_NAME");
                 if (!StringUtils.hasText(tableName)) {
@@ -387,6 +423,19 @@ public class JdbcMetadataService {
             }
         }
         return tables;
+    }
+
+    private record MetadataScope(String catalog, String schema) {}
+
+    private MetadataScope metadataScope(DatabaseMetaData meta, String database) throws SQLException {
+        if (usesCatalogForDatabase(meta)) {
+            String catalog = normalize(database);
+            if (!StringUtils.hasText(catalog)) {
+                catalog = normalize(meta.getConnection().getCatalog());
+            }
+            return new MetadataScope(catalog, null);
+        }
+        return new MetadataScope(null, database);
     }
 
     private boolean usesCatalogForDatabase(DatabaseMetaData meta) throws SQLException {

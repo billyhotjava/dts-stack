@@ -4,6 +4,7 @@
 - 全量接口清单：[assets/rest-inventory-dts-ingestion.md](assets/rest-inventory-dts-ingestion.md)（脚本生成，需人工核对）
 - 路径前缀 `I/` = `source/dts-ingestion/src/main/java/com/yuzhi/dts/ingestion/`
 - 类别：`[源码]` 代码事实、`[配置]` 配置声明、`[待确认]` 未证实。
+- 接口实现与分派关系汇总：[assets/call-graph-and-dispatch.md](assets/call-graph-and-dispatch.md)
 
 ## 1 范围与入口
 
@@ -197,6 +198,26 @@ sequenceDiagram
 | 目标表策略 | 仅单目标表、必须 full_refresh；`create_new`/`recreate_existing` | `I/service/etl/TargetTableProvisioner.java:97,502` |
 | 技术列 | `_dts_source_file/_dts_source_sheet/_dts_file_hash/_dts_row_number` | `I/service/etl/DtsOdsTechnicalColumns.java:12` |
 | staging 预检 | parse/pre-check 只作用于 staging，非执行必经 | `I/web/rest/IngestionPreCheckResource.java:116,183` |
+
+### 4.4 执行管理动作矩阵（端点 → 服务）
+
+| 动作 | 端点 | 服务#方法 | 定位 |
+|---|---|---|---|
+| 读取设计 | `GET /api/ingestion/tasks/{id}/design` | `IngestionTaskDesignService.getDesign` | Resource :2284；Design :58 |
+| 保存设计 | `PUT /api/ingestion/tasks/{id}/design` | `IngestionTaskDesignService.saveDesign` | Resource :2301；Design :64 |
+| 校验设计 | `POST /api/ingestion/tasks/{id}/design/validate` | `IngestionTaskDesignService.validateDesign` | Resource :2354；Design :104 |
+| 拓扑投影 | `GET /api/ingestion/tasks/{id}/topology` | `IngestionTaskDesignService.getTopology` | Resource :2370；Design :123 |
+| 启用/暂停调度 | `POST .../schedule/enable`、`.../schedule/pause` | `IngestionTaskDesignService.setSchedulePaused` | Resource :2388,2396；Design :143 |
+| 重建 DAG | `POST /api/ingestion/tasks/{id}/dag/rebuild` | `IngestionTaskService.rebuildDag` | Resource :3120；Service :3406 |
+| 批量重建 API DAG | `POST /api/ingestion/tasks/dags/rebuild-api` | `IngestionTaskService.rebuildApiDags` | Resource :3157；Service :3425 |
+| 回填 | `POST /api/ingestion/tasks/{id}/backfill` | `IngestionTaskService.backfill` | Resource :2978；Service :731 |
+| 取消执行 | `POST .../executions/{executionId}/cancel` | `IngestionExecutionCommandService.cancel` | Resource :2417；Command :38 |
+| 异步重试 | `POST .../executions/{executionId}/retry/async` | `IngestionTaskService.retryExecutionAsync` | Resource :3060；Service :1761 |
+| 执行日志 | `GET .../executions/{executionId}/logs` | `IngestionExecutionQueryService.fetchExecutionLog` | Resource :3401；Query :148 |
+| 执行追踪 | `GET /tasks/executions/trace` | `IngestionExecutionQueryService.traceExecution` | Resource :3236；Query :51 |
+| 运行可观测 | `GET /tasks/executions/observability` | `IngestionTaskQueryService.getExecutionObservability` | Resource :3202；Query :271 |
+| 增量状态/审计 | `GET .../incremental-states`、`.../incremental-audits` | `IngestionTaskQueryService` | Resource :3323,3338 |
+| 最新执行 | `GET .../executions/latest` | `IngestionTaskService.getLatestExecution` | Resource :3255；Service :3272 |
 
 ## 5 事务、幂等与错误码
 

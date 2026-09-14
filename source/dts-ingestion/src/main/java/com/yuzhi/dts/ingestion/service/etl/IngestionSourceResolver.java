@@ -74,6 +74,7 @@ public class IngestionSourceResolver {
         String jdbcUrl = resolveJdbcUrl(detail, props);
         Map<String, Object> readerConfig = resolveReaderConfig(props);
         applyJdbcConnection(readerConfig, jdbcUrl);
+        applyJdbcDriverConfig(readerConfig, props);
         applyCredentials(readerConfig, detail);
         applySecrets(readerConfig, detail.secrets());
         applyTables(readerConfig, tables);
@@ -100,6 +101,27 @@ public class IngestionSourceResolver {
         String driverVersion = extractString(props, "driverVersion");
         Map<String, String> jdbcProps = resolveJdbcProperties(props);
         return new JdbcMetadataService.JdbcConnectionInfo(jdbcUrl, username, password, driver, driverVersion, jdbcProps);
+    }
+
+    private void applyJdbcDriverConfig(Map<String, Object> readerConfig, Map<String, Object> props) {
+        String driver = extractString(props, "driverClass", "driver");
+        if (!StringUtils.hasText(driver)) {
+            driver = extractString(readerConfig, "driverClass", "driver");
+        }
+        if (StringUtils.hasText(driver)) {
+            // Both aliases are consumed by JDBC metadata and Addax configuration readers.
+            readerConfig.put("driverClass", driver);
+            readerConfig.put("driver", driver);
+        }
+        String driverVersion = extractString(props, "driverVersion");
+        if (StringUtils.hasText(driverVersion)) {
+            readerConfig.put("driverVersion", driverVersion);
+        }
+        Map<String, String> jdbcProperties = new LinkedHashMap<>(resolveJdbcProperties(readerConfig));
+        jdbcProperties.putAll(resolveJdbcProperties(props));
+        if (!jdbcProperties.isEmpty()) {
+            readerConfig.put("jdbcProperties", jdbcProperties);
+        }
     }
 
     private Map<String, Object> resolveReaderConfig(Map<String, Object> props) {
