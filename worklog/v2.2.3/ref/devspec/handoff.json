@@ -1,12 +1,12 @@
 {
   "date": "2026-09-14",
-  "scope": "DTS v2.2.3 接口级设计文档（T1 四条主链 + T2 质量/分类/BI/数据服务）",
+  "scope": "DTS v2.2.3 接口级设计文档（T1 四条主链 + T2 五个模块）",
   "source_commit": "915097e220817313ac313091d9c22fb21763796c",
   "archify_version": "2.16.0",
   "entry": "index.html",
   "reading_guide": "README.md",
   "call_graph_atlas": "assets/call-graph-and-dispatch.md",
-  "portal_sha256": "e46efe818a940e82aa855e4f4bfd560567a2a5db8b633bc4af1ff4dde3fbe363",
+  "portal_sha256": "7808d8503ef4ee2a584db72a1cf99537d8164b99d307bc844151c3024c3908b9",
   "diagrams": [
     {
       "id": "00-t1-overview",
@@ -197,6 +197,25 @@
       "receipt": "08-data-api-invoke.receipt.json",
       "validation_receipt": "08-data-api-invoke.validation.json",
       "visual_receipt": "08-data-api-invoke.visual-check.json"
+    },
+    {
+      "id": "09-pki-login",
+      "diagram_type": "sequence",
+      "specification": "diagrams/09-pki-login.sequence.json",
+      "output": "09-pki-login.html",
+      "specification_sha256": "f6eae9e99309646911525372cadd1f609910c3d9af24b20aa3c8bcc980dc5b81",
+      "artifact_sha256": "d9f4b2f75910b82dc75ed7b9a8527c433f763bcc73fc2a84da254776f4da1b6b",
+      "validation": "showcase pass, 0 diagnostics",
+      "delivery_ok": true,
+      "viewport_containment": "pass",
+      "visual_review": "pending（机器回执固定值）",
+      "manual_inspection": [
+        "2048x1320 light"
+      ],
+      "visual_notes": "已阅读 2048x1320 light 截图：节点、消息与区段标签可读，无截断或遮挡。",
+      "receipt": "09-pki-login.receipt.json",
+      "validation_receipt": "09-pki-login.validation.json",
+      "visual_receipt": "09-pki-login.visual-check.json"
     }
   ],
   "documents": [
@@ -208,7 +227,8 @@
     "05-quality-workflow.md",
     "06-classification-tagging.md",
     "07-bi-orchestration.md",
-    "08-data-services-push.md"
+    "08-data-services-push.md",
+    "09-pki-mdm-integration.md"
   ],
   "assets": [
     "assets/call-graph-and-dispatch.md",
@@ -220,15 +240,15 @@
     "assets/rest-inventory-dts-analytics.md"
   ],
   "evidence_checks": {
-    "prefixed_file_line_refs": 440,
+    "prefixed_file_line_refs": 482,
     "error_code_refs": 719,
     "problems": 0
   },
   "verification": {
     "documentation": "passed",
-    "archify_showcase_validation": "10/10 passed",
-    "browser_containment": "10/10 passed at 1440x900,1600x1000,1920x1080,2048x1320",
-    "manual_visual_inspection": "10/10 diagrams inspected at 2048x1320 light",
+    "archify_showcase_validation": "11/11 passed",
+    "browser_containment": "11/11 passed at 1440x900,1600x1000,1920x1080,2048x1320",
+    "manual_visual_inspection": "11/11 diagrams inspected at 2048x1320 light",
     "source_code_tests": "not run for this documentation task",
     "formal_product_build_and_package": "not run",
     "container_deployment": "not run",

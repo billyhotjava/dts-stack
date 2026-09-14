@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/09-pki-login.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/09-pki-login.html",
+  "specification": {
+    "sha256": "f6eae9e99309646911525372cadd1f609910c3d9af24b20aa3c8bcc980dc5b81",
+    "bytes": 3085
+  },
+  "artifact": {
+    "sha256": "d9f4b2f75910b82dc75ed7b9a8527c433f763bcc73fc2a84da254776f4da1b6b",
+    "bytes": 713369
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}
