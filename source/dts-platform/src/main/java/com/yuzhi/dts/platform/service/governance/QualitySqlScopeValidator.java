@@ -580,13 +580,17 @@ public final class QualitySqlScopeValidator {
 
         @Override
         public <S> Void visit(AnalyticExpression expression, S context) {
-            if (qualityPolicy || !"row_number".equalsIgnoreCase(expression.getName()) ||
-                expression.getExpression() != null || expression.getOffset() != null || expression.getDefaultValue() != null ||
+            if (qualityPolicy || expression.getName() == null ||
+                !Set.of("row_number", "lag", "lead", "count", "sum", "avg", "min", "max").contains(expression.getName().toLowerCase(Locale.ROOT)) ||
                 expression.getKeep() != null || expression.getHavingClause() != null || expression.getLimit() != null ||
-                expression.getFilterExpression() != null || expression.getWindowElement() != null ||
+                expression.getWindowElement() != null ||
                 StringUtils.hasText(expression.getWindowName()) || (expression.getFuncOrderBy() != null && !expression.getFuncOrderBy().isEmpty())) {
                 rejectSyntax("窗口/分析函数"); return null;
             }
+            inspectExpression(expression.getExpression(), context);
+            inspectExpression(expression.getOffset(), context);
+            inspectExpression(expression.getDefaultValue(), context);
+            inspectExpression(expression.getFilterExpression(), context);
             inspectExpression(expression.getPartitionExpressionList(), context);
             if (expression.getOrderByElements() != null) expression.getOrderByElements().forEach(order -> inspectExpression(order.getExpression(), context));
             return null;
@@ -607,7 +611,9 @@ public final class QualitySqlScopeValidator {
 
         @Override
         public <S> Void visit(TimeKeyExpression expression, S context) {
-            rejectSyntax("时间关键字表达式");
+            if (qualityPolicy || !Set.of("CURRENT_DATE", "CURRENT_TIMESTAMP", "CURRENT_TIME").contains(expression.toString().toUpperCase(Locale.ROOT))) {
+                rejectSyntax("时间关键字表达式");
+            }
             return null;
         }
 
