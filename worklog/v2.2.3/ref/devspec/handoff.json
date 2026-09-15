@@ -6,7 +6,7 @@
   "entry": "index.html",
   "reading_guide": "README.md",
   "call_graph_atlas": "assets/call-graph-and-dispatch.md",
-  "portal_sha256": "1e492e9ec33cab11407f7d98ee8b90011402c2e228eb55c861c1fd45c8a9f41b",
+  "portal_sha256": "4ea3e850ad759af6f86fc97f06d502bb2557bce449f7b132b804a831301ab309",
   "diagrams": [
     {
       "id": "10-system-modules",
@@ -378,10 +378,10 @@
   "login": {
     "page": "login.html",
     "username": "admin",
-    "auth_scope": "nginx /api/login 按 htpasswd 服务端校验，成功下发 HttpOnly 会话 Cookie；页面不含口令",
+    "auth_scope": "nginx /api/login 按 htpasswd 服务端校验；会话令牌为带过期时间的 HMAC 签名（DevspecSession.pm），闲置 30 分钟自动退出",
     "deployment": "deploy/README.md"
   },
-  "login_sha256": "243fb1b14dedfa87482c3a8ec773d1a901ef245d66050986407d62aef8936d92",
+  "login_sha256": "f9f55a7149dc563f0a9d6d95b5fedd3a630e8a7c453e1306fea6cc9732e85f52",
   "document_viewer": "doc.html",
   "module_evidence": "10-module-architecture.md",
   "module_source_commit": "da531fb161413fc07917d8075ed0d767118f1734"

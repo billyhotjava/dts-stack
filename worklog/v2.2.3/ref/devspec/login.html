@@ -43,7 +43,7 @@
     </label>
     <div id="error" role="alert"></div>
     <button type="submit">登录</button>
-    <p class="note">账号由服务端校验，登录状态在关闭浏览器后失效。</p>
+    <p class="note">账号由服务端校验；闲置 30 分钟自动退出登录。</p>
   </form>
 
 <script>
@@ -55,6 +55,10 @@
     var form = document.getElementById('login-form');
     var errorBox = document.getElementById('error');
     var submit = form.querySelector('button[type="submit"]');
+
+    if (new URLSearchParams(window.location.search).get('reason') === 'timeout') {
+      errorBox.textContent = '登录已超时，请重新登录';
+    }
 
     // 口令由服务端（nginx /api/login）校验，页面不含任何凭据；成功后服务端下发 HttpOnly 会话 Cookie
     form.addEventListener('submit', function (event) {

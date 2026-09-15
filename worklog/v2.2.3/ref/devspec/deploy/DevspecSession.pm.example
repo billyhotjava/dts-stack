@@ -1,0 +1,65 @@
+# DTS devspec 会话令牌（nginx 内嵌 perl，libnginx-mod-http-perl）
+# 部署到 /etc/nginx/perl/DevspecSession.pm，把 __DEVSPEC_SESSION_SECRET__ 替换为 `openssl rand -hex 32`，chmod 600。
+# 令牌格式：<过期时间 epoch 秒>.<HMAC-SHA256(过期时间, 密钥)>；服务端校验签名与过期时间。
+# 闲置超时：每次访问受保护页面都会签发新令牌（滑动续期），闲置超过 $IDLE_SECONDS 秒即失效。
+# 更换密钥并 reload 即令全部会话失效。
+package DevspecSession;
+
+use strict;
+use warnings;
+use Digest::SHA qw(hmac_sha256_hex);
+
+our $SECRET = '__DEVSPEC_SESSION_SECRET__';
+our $IDLE_SECONDS = 1800;
+
+sub _sign {
+    my ($expires) = @_;
+    return hmac_sha256_hex($expires, $SECRET);
+}
+
+# 定长比较，避免按字节提前返回泄露签名前缀
+sub _equals {
+    my ($left, $right) = @_;
+    return 0 unless length($left) == length($right);
+    my $diff = 0;
+    $diff |= ord(substr($left, $_, 1)) ^ ord(substr($right, $_, 1)) for 0 .. length($left) - 1;
+    return $diff == 0;
+}
+
+sub _is_valid {
+    my ($r) = @_;
+    my $value = $r->variable('cookie_devspec_session');
+    return 0 unless defined $value;
+    my ($expires, $signature) = $value =~ /^(\d{10})\.([0-9a-f]{64})$/;
+    return 0 unless defined $signature;
+    return 0 if $expires < time();
+    return _equals($signature, _sign($expires));
+}
+
+sub _issue_cookie {
+    my ($r) = @_;
+    my $expires = time() + $IDLE_SECONDS;
+    my $secure = ($r->variable('scheme') // '') eq 'https' ? '; Secure' : '';
+    return "devspec_session=$expires." . _sign($expires)
+        . "; Path=/; Max-Age=$IDLE_SECONDS; HttpOnly; SameSite=Lax$secure";
+}
+
+# $devspec_authed：1 = 会话有效
+sub authed {
+    my ($r) = @_;
+    return _is_valid($r) ? '1' : '0';
+}
+
+# $devspec_refresh_cookie：会话有效时续期，否则为空（add_header 空值不输出）
+sub refresh_cookie {
+    my ($r) = @_;
+    return _is_valid($r) ? _issue_cookie($r) : '';
+}
+
+# $devspec_login_cookie：仅用于 auth_basic 校验通过后的 /api/login
+sub login_cookie {
+    my ($r) = @_;
+    return _issue_cookie($r);
+}
+
+1;

@@ -151,10 +151,16 @@
 
       fetch(file, { credentials: 'same-origin', cache: 'no-cache' })
         .then(response => {
+          // 会话失效时 nginx 302 到登录页，fetch 会跟随跳转；不能把登录页当 Markdown 渲染
+          if (response.redirected && new URL(response.url).pathname.endsWith('/login.html')) {
+            window.location.replace('login.html?reason=timeout');
+            return null;
+          }
           if (!response.ok) throw new Error('HTTP ' + response.status);
           return response.text();
         })
         .then(text => {
+          if (text === null) return;
           container.innerHTML = md.render(text);
           const heading = container.querySelector('h1');
           document.title = (heading ? heading.textContent : file) + ' · DTS 原理与设计';
@@ -170,5 +176,6 @@
         .catch(error => fail('文档加载失败：' + error.message));
     })();
   </script>
+  <script src="assets/session-watch.js"></script>
 </body>
 </html>

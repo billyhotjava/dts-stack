@@ -4,12 +4,20 @@
 # 备用：http://39.106.43.56:8099/     （需安全组放行 TCP 8099）
 # 证书：certbot (Let's Encrypt) dev.yuzhicloud.com，自动续期
 #
-# 认证：只保留登录页，不再使用浏览器 Basic Auth 弹窗。
+# 认证：只保留登录页，不使用浏览器 Basic Auth 弹窗。
 #   1. login.html 以 fetch 携带 Authorization 调用 /api/login，nginx 按 htpasswd 校验；
-#   2. 校验通过下发 HttpOnly 会话 Cookie（值为仅存在于本配置中的随机令牌）；
-#   3. 其余路径按 Cookie 放行，否则 302 到 /login.html；/api/logout 清除 Cookie。
-# 部署时将 __DEVSPEC_SESSION_TOKEN__ 替换为 `openssl rand -hex 32` 的结果，并 chmod 600 本文件；
-# 更换令牌即令全部会话失效。
+#   2. 校验通过下发 HttpOnly 会话 Cookie：带过期时间的 HMAC 签名令牌（DevspecSession.pm）；
+#   3. 其余路径校验签名与过期时间，否则 302 到 /login.html；每次访问滑动续期，闲置 30 分钟失效；
+#   4. /api/session 只查询不续期（门户定时检测超时），/api/session/touch 在用户操作时续期；
+#   5. /api/logout 清除 Cookie。
+# 依赖：apt install libnginx-mod-http-perl（与 nginx 同源同版本）；
+#       /etc/nginx/perl/DevspecSession.pm 由 DevspecSession.pm.example 生成（替换密钥，chmod 600）。
+
+perl_modules /etc/nginx/perl;
+perl_require DevspecSession.pm;
+perl_set $devspec_authed DevspecSession::authed;
+perl_set $devspec_refresh_cookie DevspecSession::refresh_cookie;
+perl_set $devspec_login_cookie DevspecSession::login_cookie;
 
 limit_req_zone $binary_remote_addr zone=devspec_login:1m rate=10r/m;
 
@@ -48,7 +56,7 @@ server {
         auth_basic "DTS devspec";
         auth_basic_user_file /etc/nginx/.htpasswd-devspec;
         error_page 401 = @devspec_login_denied;
-        add_header Set-Cookie "devspec_session=__DEVSPEC_SESSION_TOKEN__; Path=/; HttpOnly; Secure; SameSite=Lax";
+        add_header Set-Cookie $devspec_login_cookie;
         add_header Cache-Control "no-store";
         try_files /__devspec_login_ok__ =204;
     }
@@ -63,22 +71,39 @@ server {
         return 302 /login.html;
     }
 
+    # 只查询会话状态，不续期；401 不带 WWW-Authenticate，浏览器不会弹窗
+    location = /api/session {
+        add_header Cache-Control "no-store";
+        if ($devspec_authed != 1) { return 401; }
+        return 204;
+    }
+
+    # 用户在门户中操作时续期
+    location = /api/session/touch {
+        add_header Cache-Control "no-store";
+        if ($devspec_authed != 1) { return 401; }
+        add_header Set-Cookie $devspec_refresh_cookie;
+        return 204;
+    }
+
     location ^~ /devspec/ {
         rewrite ^/devspec/(.*)$ /$1 permanent;
     }
 
     location /intro/ {
         root /var/www/dts-ref;
-        if ($cookie_devspec_session != "__DEVSPEC_SESSION_TOKEN__") { return 302 /login.html; }
-        # 每次回源校验会话，避免退出后浏览器缓存仍展示受保护页面
+        if ($devspec_authed != 1) { return 302 /login.html; }
+        # 每次回源校验会话，避免退出后浏览器缓存仍展示受保护页面；有效访问滑动续期
         add_header Cache-Control "no-cache";
+        add_header Set-Cookie $devspec_refresh_cookie;
         try_files $uri $uri/ =404;
     }
 
     location / {
-        if ($cookie_devspec_session != "__DEVSPEC_SESSION_TOKEN__") { return 302 /login.html; }
-        # 每次回源校验会话，避免退出后浏览器缓存仍展示受保护页面
+        if ($devspec_authed != 1) { return 302 /login.html; }
+        # 每次回源校验会话，避免退出后浏览器缓存仍展示受保护页面；有效访问滑动续期
         add_header Cache-Control "no-cache";
+        add_header Set-Cookie $devspec_refresh_cookie;
         try_files $uri $uri/ =404;
     }
 }
@@ -100,7 +125,7 @@ server {
         auth_basic "DTS devspec";
         auth_basic_user_file /etc/nginx/.htpasswd-devspec;
         error_page 401 = @devspec_login_denied;
-        add_header Set-Cookie "devspec_session=__DEVSPEC_SESSION_TOKEN__; Path=/; HttpOnly; SameSite=Lax";
+        add_header Set-Cookie $devspec_login_cookie;
         add_header Cache-Control "no-store";
         try_files /__devspec_login_ok__ =204;
     }
@@ -114,22 +139,39 @@ server {
         return 302 /login.html;
     }
 
+    # 只查询会话状态，不续期；401 不带 WWW-Authenticate，浏览器不会弹窗
+    location = /api/session {
+        add_header Cache-Control "no-store";
+        if ($devspec_authed != 1) { return 401; }
+        return 204;
+    }
+
+    # 用户在门户中操作时续期
+    location = /api/session/touch {
+        add_header Cache-Control "no-store";
+        if ($devspec_authed != 1) { return 401; }
+        add_header Set-Cookie $devspec_refresh_cookie;
+        return 204;
+    }
+
     location ^~ /devspec/ {
         rewrite ^/devspec/(.*)$ /$1 permanent;
     }
 
     location /intro/ {
         root /var/www/dts-ref;
-        if ($cookie_devspec_session != "__DEVSPEC_SESSION_TOKEN__") { return 302 /login.html; }
-        # 每次回源校验会话，避免退出后浏览器缓存仍展示受保护页面
+        if ($devspec_authed != 1) { return 302 /login.html; }
+        # 每次回源校验会话，避免退出后浏览器缓存仍展示受保护页面；有效访问滑动续期
         add_header Cache-Control "no-cache";
+        add_header Set-Cookie $devspec_refresh_cookie;
         try_files $uri $uri/ =404;
     }
 
     location / {
-        if ($cookie_devspec_session != "__DEVSPEC_SESSION_TOKEN__") { return 302 /login.html; }
-        # 每次回源校验会话，避免退出后浏览器缓存仍展示受保护页面
+        if ($devspec_authed != 1) { return 302 /login.html; }
+        # 每次回源校验会话，避免退出后浏览器缓存仍展示受保护页面；有效访问滑动续期
         add_header Cache-Control "no-cache";
+        add_header Set-Cookie $devspec_refresh_cookie;
         try_files $uri $uri/ =404;
     }
 }
