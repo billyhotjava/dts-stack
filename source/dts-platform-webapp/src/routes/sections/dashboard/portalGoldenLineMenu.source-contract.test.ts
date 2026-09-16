@@ -78,7 +78,7 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 test("primary modules follow the warehouse lifecycle order and modeling stays outside studio", () => {
 	assert.deepEqual(
 		MENU_SEED.portalNavSections.map((item) => item.key),
-		["workbench", "resource", "data-architecture", "modeling", "studio", "governance", "consumption", "screens"],
+		["workbench", "data-architecture", "resource", "modeling", "studio", "governance", "consumption", "screens"],
 	);
 	assert.deepEqual(
 		section("studio").children?.map((item) => item.key),
@@ -91,12 +91,12 @@ test("primary modules follow the warehouse lifecycle order and modeling stays ou
 	assert.deepEqual(
 		modeling.children?.map((item) => item.key),
 		[
-			"modeling-home-workspace",
 			"standards",
 			"dimensional-modeling",
 			"data-metrics",
-			"modeling-tools",
 			"modeling-graphs",
+			"modeling-home-workspace",
+			"modeling-tools",
 		],
 	);
 	const overview = child(modeling, "modeling-home-workspace");
@@ -146,7 +146,7 @@ test("modeling excludes the retired plan-level strategy after warehouse planning
 	);
 	assert.deepEqual(
 		child(modeling, "data-metrics").children?.map((item) => item.key),
-		["metrics-composite", "metrics-derived", "metrics-atomic", "metrics-modifiers", "metrics-periods"],
+		["metrics-atomic", "metrics-derived", "metrics-composite", "metrics-modifiers", "metrics-periods"],
 	);
 	assert.deepEqual(
 		child(modeling, "modeling-tools").children?.map((item) => item.key),

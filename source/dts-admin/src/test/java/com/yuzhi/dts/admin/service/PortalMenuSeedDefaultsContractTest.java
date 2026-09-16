@@ -468,14 +468,15 @@ class PortalMenuSeedDefaultsContractTest {
 
         List<Map<String, Object>> modelingChildren = listOfMaps(modeling.get("children"));
         assertEquals(6, modelingChildren.size(), "modeling must expose one overview and five capability groups");
-        assertEquals("modeling-home-workspace", modelingChildren.get(0).get("key"));
-        assertEquals("建模概览", modelingChildren.get(0).get("title"));
-        assertEquals("/data-modeling/home/workspace", modelingChildren.get(0).get("externalLink"));
-        assertEquals("standards", modelingChildren.get(1).get("key"), "数据标准 should follow 建模概览");
-        assertEquals("dimensional-modeling", modelingChildren.get(2).get("key"), "维度建模 should follow 数据标准");
-        assertEquals("data-metrics", modelingChildren.get(3).get("key"), "数据指标 should follow 维度建模");
-        assertEquals("modeling-tools", modelingChildren.get(4).get("key"), "通用工具 should follow 数据指标");
-        assertEquals("modeling-graphs", modelingChildren.get(5).get("key"), "关系图 should be the final prototype group");
+        // Sprint-104 F10: modeling children follow the implementation order; overview and tools trail the main line.
+        assertEquals("standards", modelingChildren.get(0).get("key"), "数据标准 opens the modeling line");
+        assertEquals("dimensional-modeling", modelingChildren.get(1).get("key"), "维度建模 should follow 数据标准");
+        assertEquals("data-metrics", modelingChildren.get(2).get("key"), "数据指标 should follow 维度建模");
+        assertEquals("modeling-graphs", modelingChildren.get(3).get("key"), "关系图 should follow 数据指标");
+        assertEquals("modeling-home-workspace", modelingChildren.get(4).get("key"), "建模概览 should follow 关系图");
+        assertEquals("建模概览", modelingChildren.get(4).get("title"));
+        assertEquals("/data-modeling/home/workspace", modelingChildren.get(4).get("externalLink"));
+        assertEquals("modeling-tools", modelingChildren.get(5).get("key"), "通用工具 should be the final group");
         assertFalse(
             modelingChildren.stream().anyMatch(node -> "modeling-home".equals(node.get("key"))),
             "the redundant modeling home group must be removed"
