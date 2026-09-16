@@ -101,7 +101,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "PRS · Flowerbiz Command Center",
+        "text": "PRS · 花卉租赁业务分析",
         "fontSize": 12,
         "fontWeight": "500",
         "color": "#d9eeff",
@@ -125,7 +125,17 @@
         "fontWeight": "800",
         "color": "#ffffff",
         "textAlign": "center"
-      }
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "返回经营总览",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/15/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{runtime.projectName}}",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "filter-date-range",
@@ -145,7 +155,9 @@
         "labelColor": "#ffffff",
         "inputBackground": "rgba(88, 180, 255, 0.20)",
         "inputBorderColor": "rgba(39, 216, 255, 0.18)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "startVariableKey": "dateFrom",
+        "endVariableKey": "dateTo"
       }
     },
     {
@@ -172,7 +184,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -182,7 +206,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -209,7 +234,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -219,7 +256,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -243,7 +281,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "养护人数"
+        "valueField": "养护人数",
+        "_sourceColumns": [
+          {
+            "name": "养护人数",
+            "displayName": "养护人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护项目数",
+            "displayName": "养护项目数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护日期数",
+            "displayName": "养护日期数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "摆位巡护次数",
+            "displayName": "摆位巡护次数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "数量缺失记录",
+            "displayName": "数量缺失记录",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -270,7 +340,8 @@
               "variableKey": "projectName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -294,7 +365,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "养护记录数"
+        "valueField": "养护记录数",
+        "_sourceColumns": [
+          {
+            "name": "养护人数",
+            "displayName": "养护人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护项目数",
+            "displayName": "养护项目数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护日期数",
+            "displayName": "养护日期数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "摆位巡护次数",
+            "displayName": "摆位巡护次数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "数量缺失记录",
+            "displayName": "数量缺失记录",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -321,7 +424,8 @@
               "variableKey": "projectName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -345,7 +449,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "养护项目数"
+        "valueField": "养护项目数",
+        "_sourceColumns": [
+          {
+            "name": "养护人数",
+            "displayName": "养护人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护项目数",
+            "displayName": "养护项目数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护日期数",
+            "displayName": "养护日期数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "摆位巡护次数",
+            "displayName": "摆位巡护次数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "数量缺失记录",
+            "displayName": "数量缺失记录",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -372,7 +508,8 @@
               "variableKey": "projectName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -396,7 +533,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "养护日期数"
+        "valueField": "养护日期数",
+        "_sourceColumns": [
+          {
+            "name": "养护人数",
+            "displayName": "养护人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护项目数",
+            "displayName": "养护项目数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护日期数",
+            "displayName": "养护日期数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "摆位巡护次数",
+            "displayName": "摆位巡护次数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "数量缺失记录",
+            "displayName": "数量缺失记录",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -423,7 +592,8 @@
               "variableKey": "projectName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -447,7 +617,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "摆位巡护次数"
+        "valueField": "摆位巡护次数",
+        "_sourceColumns": [
+          {
+            "name": "养护人数",
+            "displayName": "养护人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护项目数",
+            "displayName": "养护项目数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护日期数",
+            "displayName": "养护日期数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "摆位巡护次数",
+            "displayName": "摆位巡护次数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "数量缺失记录",
+            "displayName": "数量缺失记录",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -474,7 +676,8 @@
               "variableKey": "projectName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -498,7 +701,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "数量缺失记录"
+        "valueField": "数量缺失记录",
+        "_sourceColumns": [
+          {
+            "name": "养护人数",
+            "displayName": "养护人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护项目数",
+            "displayName": "养护项目数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护日期数",
+            "displayName": "养护日期数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "摆位巡护次数",
+            "displayName": "摆位巡护次数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "数量缺失记录",
+            "displayName": "数量缺失记录",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -525,7 +760,8 @@
               "variableKey": "projectName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -587,12 +823,37 @@
           {
             "name": "养护记录数",
             "dataKey": "养护记录数",
-            "color": "#27d8ff"
+            "color": "#27d8ff",
+            "field": "养护记录数"
           }
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "xAxisField": "养护人",
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "horizontal": true,
+        "_sourceColumns": [
+          {
+            "name": "养护人",
+            "displayName": "养护人",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -619,7 +880,8 @@
               "variableKey": "projectName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -680,17 +942,47 @@
           {
             "name": "养护记录数",
             "dataKey": "养护记录数",
-            "color": "#27d8ff"
+            "color": "#27d8ff",
+            "field": "养护记录数"
           },
           {
             "name": "摆位巡护次数",
             "dataKey": "摆位巡护次数",
-            "color": "#2ee6a6"
+            "color": "#2ee6a6",
+            "field": "摆位巡护次数"
           }
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "xAxisField": "月份",
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "_sourceColumns": [
+          {
+            "name": "月份",
+            "displayName": "月份",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "摆位巡护次数",
+            "displayName": "摆位巡护次数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -717,7 +1009,8 @@
               "variableKey": "projectName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -732,7 +1025,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "业务大类占比",
+        "text": "养护项目记录占比",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -775,13 +1068,26 @@
         "categoryKey": "项目",
         "valueKey": "养护记录数",
         "pieInnerRadius": 45,
-        "pieOuterRadius": 78
+        "pieOuterRadius": 78,
+        "_sourceColumns": [
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
+        "sourceType": "sql",
         "sqlConfig": {
           "databaseId": 1,
-          "query": "WITH b AS (SELECT a.*,p.project_name FROM public.prs_v2_dwd_curing a LEFT JOIN public.prs_v2_dwd_project p ON a.project_id=p.project_id AND a.tenant_id IS NOT DISTINCT FROM p.tenant_id) SELECT project_name AS \"项目\", COUNT(*) AS \"养护记录数\" FROM b WHERE curing_time >= {{dateFrom}}::date AND curing_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND curing_user_name = {{curingUser}}]] [[AND project_name = {{projectName}}]] GROUP BY project_name ORDER BY project_name",
+          "query": "WITH b AS (SELECT a.*,p.project_name FROM public.prs_v2_dwd_curing a LEFT JOIN public.prs_v2_dwd_project p ON a.project_id=p.project_id AND a.tenant_id IS NOT DISTINCT FROM p.tenant_id), project_counts AS (SELECT COALESCE(project_name,'未归属项目') AS \"项目\", COUNT(*) AS \"养护记录数\" FROM b WHERE curing_time >= {{dateFrom}}::date AND curing_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND curing_user_name = {{curingUser}}]] [[AND project_name = {{projectName}}]] GROUP BY project_name), ranked AS (SELECT *,ROW_NUMBER() OVER (ORDER BY \"养护记录数\" DESC,\"项目\") AS rn FROM project_counts) SELECT CASE WHEN rn<=7 THEN \"项目\" ELSE '其他项目' END AS \"项目\",SUM(\"养护记录数\") AS \"养护记录数\" FROM ranked GROUP BY CASE WHEN rn<=7 THEN \"项目\" ELSE '其他项目' END ORDER BY SUM(\"养护记录数\") DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": [
@@ -877,7 +1183,42 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "月份",
+            "displayName": "月份",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "养护人",
+            "displayName": "养护人",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "养护记录数",
+            "displayName": "养护记录数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "养护日期数",
+            "displayName": "养护日期数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "摆位巡护次数",
+            "displayName": "摆位巡护次数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -904,8 +1245,12 @@
               "variableKey": "projectName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     }
-  ]
+  ],
+  "backgroundImage": null,
+  "pages": [],
+  "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0"
 }

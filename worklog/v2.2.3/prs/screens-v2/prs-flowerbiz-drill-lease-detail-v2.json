@@ -101,7 +101,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "PRS · Flowerbiz Command Center",
+        "text": "PRS · 花卉租赁业务分析",
         "fontSize": 12,
         "fontWeight": "500",
         "color": "#d9eeff",
@@ -125,7 +125,17 @@
         "fontWeight": "800",
         "color": "#ffffff",
         "textAlign": "center"
-      }
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "返回报花执行看板",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/18/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{runtime.projectName}}&var_customerName={{runtime.customerName}}",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "filter-date-range",
@@ -145,7 +155,9 @@
         "labelColor": "#ffffff",
         "inputBackground": "rgba(88, 180, 255, 0.20)",
         "inputBorderColor": "rgba(39, 216, 255, 0.18)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "startVariableKey": "dateFrom",
+        "endVariableKey": "dateTo"
       }
     },
     {
@@ -172,7 +184,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -182,7 +206,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -209,7 +234,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -219,7 +256,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -243,7 +281,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "明细行数"
+        "valueField": "明细行数",
+        "_sourceColumns": [
+          {
+            "name": "明细行数",
+            "displayName": "明细行数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -270,7 +330,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -294,7 +355,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "单据数"
+        "valueField": "单据数",
+        "_sourceColumns": [
+          {
+            "name": "明细行数",
+            "displayName": "明细行数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -321,7 +404,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -345,7 +429,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "申请数量"
+        "valueField": "申请数量",
+        "_sourceColumns": [
+          {
+            "name": "明细行数",
+            "displayName": "明细行数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -372,7 +478,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -389,14 +496,36 @@
       "config": {
         "title": "完成数量",
         "value": null,
-        "suffix": "元",
+        "suffix": "",
         "precision": 2,
         "titleFontSize": 16,
         "valueFontSize": 34,
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "完成数量"
+        "valueField": "完成数量",
+        "_sourceColumns": [
+          {
+            "name": "明细行数",
+            "displayName": "明细行数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -423,7 +552,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -508,7 +638,52 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "报花单号",
+            "displayName": "报花单号",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "客户",
+            "displayName": "客户",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "绿植",
+            "displayName": "绿植",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/Integer"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/Integer"
+          },
+          {
+            "name": "原始租金值",
+            "displayName": "原始租金值",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "原始成本值",
+            "displayName": "原始成本值",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -535,7 +710,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -595,7 +771,27 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "绿植",
+            "displayName": "绿植",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -622,7 +818,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -682,7 +879,27 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "摆位",
+            "displayName": "摆位",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "明细数",
+            "displayName": "明细数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -709,7 +926,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -769,7 +987,27 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "经手养护人",
+            "displayName": "经手养护人",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "报花单数",
+            "displayName": "报花单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "明细数",
+            "displayName": "明细数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -796,8 +1034,12 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     }
-  ]
+  ],
+  "backgroundImage": null,
+  "pages": [],
+  "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0"
 }

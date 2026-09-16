@@ -101,7 +101,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "PRS · Flowerbiz Command Center",
+        "text": "PRS · 花卉租赁业务分析",
         "fontSize": 12,
         "fontWeight": "500",
         "color": "#d9eeff",
@@ -125,7 +125,17 @@
         "fontWeight": "800",
         "color": "#ffffff",
         "textAlign": "center"
-      }
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "返回经营总览",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/15/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{runtime.projectName}}&var_customerName={{runtime.customerName}}",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "filter-date-range",
@@ -145,7 +155,9 @@
         "labelColor": "#ffffff",
         "inputBackground": "rgba(88, 180, 255, 0.20)",
         "inputBorderColor": "rgba(39, 216, 255, 0.18)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "startVariableKey": "dateFrom",
+        "endVariableKey": "dateTo"
       }
     },
     {
@@ -172,7 +184,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -182,7 +206,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -209,7 +234,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -219,7 +256,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -243,7 +281,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "销售金额"
+        "valueField": "销售金额",
+        "_sourceColumns": [
+          {
+            "name": "销售金额",
+            "displayName": "销售金额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "销售成本",
+            "displayName": "销售成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "赠送成本",
+            "displayName": "赠送成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单成本",
+            "displayName": "坏账单成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单租金变动",
+            "displayName": "坏账单租金变动",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "额外费用报价",
+            "displayName": "额外费用报价",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -270,7 +340,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -294,7 +365,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "销售成本"
+        "valueField": "销售成本",
+        "_sourceColumns": [
+          {
+            "name": "销售金额",
+            "displayName": "销售金额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "销售成本",
+            "displayName": "销售成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "赠送成本",
+            "displayName": "赠送成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单成本",
+            "displayName": "坏账单成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单租金变动",
+            "displayName": "坏账单租金变动",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "额外费用报价",
+            "displayName": "额外费用报价",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -321,7 +424,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -345,7 +449,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "赠送成本"
+        "valueField": "赠送成本",
+        "_sourceColumns": [
+          {
+            "name": "销售金额",
+            "displayName": "销售金额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "销售成本",
+            "displayName": "销售成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "赠送成本",
+            "displayName": "赠送成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单成本",
+            "displayName": "坏账单成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单租金变动",
+            "displayName": "坏账单租金变动",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "额外费用报价",
+            "displayName": "额外费用报价",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -372,7 +508,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -396,7 +533,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "坏账单成本"
+        "valueField": "坏账单成本",
+        "_sourceColumns": [
+          {
+            "name": "销售金额",
+            "displayName": "销售金额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "销售成本",
+            "displayName": "销售成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "赠送成本",
+            "displayName": "赠送成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单成本",
+            "displayName": "坏账单成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单租金变动",
+            "displayName": "坏账单租金变动",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "额外费用报价",
+            "displayName": "额外费用报价",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -423,7 +592,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -447,7 +617,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "坏账单租金变动"
+        "valueField": "坏账单租金变动",
+        "_sourceColumns": [
+          {
+            "name": "销售金额",
+            "displayName": "销售金额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "销售成本",
+            "displayName": "销售成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "赠送成本",
+            "displayName": "赠送成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单成本",
+            "displayName": "坏账单成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单租金变动",
+            "displayName": "坏账单租金变动",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "额外费用报价",
+            "displayName": "额外费用报价",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -474,7 +676,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -498,7 +701,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "额外费用报价"
+        "valueField": "额外费用报价",
+        "_sourceColumns": [
+          {
+            "name": "销售金额",
+            "displayName": "销售金额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "销售成本",
+            "displayName": "销售成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "赠送成本",
+            "displayName": "赠送成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单成本",
+            "displayName": "坏账单成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "坏账单租金变动",
+            "displayName": "坏账单租金变动",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "额外费用报价",
+            "displayName": "额外费用报价",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -525,7 +760,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -586,17 +822,47 @@
           {
             "name": "销售金额",
             "dataKey": "销售金额",
-            "color": "#27d8ff"
+            "color": "#27d8ff",
+            "field": "销售金额"
           },
           {
             "name": "赠送成本",
             "dataKey": "赠送成本",
-            "color": "#2ee6a6"
+            "color": "#2ee6a6",
+            "field": "赠送成本"
           }
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "xAxisField": "月份",
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "_sourceColumns": [
+          {
+            "name": "月份",
+            "displayName": "月份",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "销售金额",
+            "displayName": "销售金额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "赠送成本",
+            "displayName": "赠送成本",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -623,7 +889,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -638,7 +905,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "费用类型构成",
+        "text": "费用成本（明细状态待确认）",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -681,7 +948,19 @@
         "categoryKey": "费用名称",
         "valueKey": "费用成本",
         "pieInnerRadius": 45,
-        "pieOuterRadius": 78
+        "pieOuterRadius": 78,
+        "_sourceColumns": [
+          {
+            "name": "费用名称",
+            "displayName": "费用名称",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "费用成本",
+            "displayName": "费用成本",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -708,7 +987,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -770,12 +1050,37 @@
           {
             "name": "坏账单成本",
             "dataKey": "坏账单成本",
-            "color": "#27d8ff"
+            "color": "#27d8ff",
+            "field": "坏账单成本"
           }
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "xAxisField": "项目",
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "horizontal": true,
+        "_sourceColumns": [
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "坏账单成本",
+            "displayName": "坏账单成本",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -802,7 +1107,8 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -887,7 +1193,52 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "报花单号",
+            "displayName": "报花单号",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "客户",
+            "displayName": "客户",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "业务类型",
+            "displayName": "业务类型",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "销售金额",
+            "displayName": "销售金额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "处理成本",
+            "displayName": "处理成本",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "额外费用报价",
+            "displayName": "额外费用报价",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "业务时间",
+            "displayName": "业务时间",
+            "baseType": "type/DateTime"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -914,8 +1265,12 @@
               "variableKey": "customerName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     }
-  ]
+  ],
+  "backgroundImage": null,
+  "pages": [],
+  "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0"
 }

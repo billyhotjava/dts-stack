@@ -10,7 +10,10 @@
       "components": 24,
       "screenId": 15,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/15/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:09:54.451758867Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/15/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-project-customer-v2.json",
@@ -18,7 +21,10 @@
       "components": 22,
       "screenId": 16,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/16/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:09:03.423577316Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/16/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-finance-cost-v2.json",
@@ -26,7 +32,10 @@
       "components": 22,
       "screenId": 17,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/17/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T06:46:12.690140804Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/17/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-lease-execution-v2.json",
@@ -34,7 +43,10 @@
       "components": 22,
       "screenId": 18,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/18/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:08:02.235183908Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/18/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-change-board-v2.json",
@@ -42,7 +54,10 @@
       "components": 22,
       "screenId": 19,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/19/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:07:30.865011113Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/19/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-recovery-board-v2.json",
@@ -50,7 +65,10 @@
       "components": 22,
       "screenId": 20,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/20/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 3,
+      "publishedAt": "2026-09-14T06:42:54.228865038Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/20/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-curing-workload-v2.json",
@@ -58,7 +76,10 @@
       "components": 22,
       "screenId": 21,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/21/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T06:44:18.094375696Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/21/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-pending-approval-v2.json",
@@ -66,7 +87,10 @@
       "components": 22,
       "screenId": 22,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/22/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T06:44:52.630276602Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/22/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-drill-lease-detail-v2.json",
@@ -74,7 +98,10 @@
       "components": 20,
       "screenId": 23,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/23/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T05:11:15.796303198Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/23/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-drill-change-detail-v2.json",
@@ -82,7 +109,10 @@
       "components": 20,
       "screenId": 24,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/24/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T06:45:09.461478931Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/24/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-drill-recovery-detail-v2.json",
@@ -90,7 +120,10 @@
       "components": 20,
       "screenId": 25,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/25/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 3,
+      "publishedAt": "2026-09-14T06:45:26.869819825Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/25/preview?mode=published"
     },
     {
       "file": "prs-flowerbiz-drill-audit-trail-v2.json",
@@ -98,10 +131,13 @@
       "components": 20,
       "screenId": 26,
       "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/26/edit",
-      "state": "DRAFT"
+      "state": "PUBLISHED",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:03:36.406038877Z",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/26/preview?mode=published"
     }
   ],
-  "status": "IMPORTED_DRAFT_PUBLICATION_BLOCKED",
+  "status": "PUBLISHED",
   "notes": [
     "SQL筛选采用起始日含、终止日下一天不含，避免遗漏结束日数据。",
     "经营金额仅汇总已结束有效单；租金变动净额不是月租收入。",
@@ -111,14 +147,37 @@
     "审批与租期日志暂直接读取已登记ODS，与V2订单关联；现有31个V2模型未覆盖日志模型。",
     "库房维度未进入V2回收模型，改为项目/回收人完成量，不伪造库房数据。",
     "7天仅为挂起观察阈值，不代表合同约定超期。",
-    "尚未完成数据运行与页面发布。",
-    "SQL保留NULL，但现有数值组件会将NULL转成0；发布前必须处理此显示限制。"
+    "12个大屏已通过Chrome发布；保存配置来自页面发布响应。",
+    "跨屏地址绑定当前环境编号15–26；导入其他环境后需在页面调整目标编号。"
   ],
   "importedAt": "2026-09-14T09:36:00+08:00",
   "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0",
-  "blockers": [
-    "源任务5自动建表前驱动加载失败：No suitable driver found for jdbc:mysql；修复确认待用户回复。",
-    "模型发布单QUALITY_RUNNING，31资产37规则，MODEL_SPEC_GOVERNANCE_QUALITY_FAILED。",
-    "首屏导入密级推导证据BLOCKED_UPSTREAM/CONSUMER_CLASSIFICATION_SOURCE_MISSING。"
-  ]
+  "blockers": [],
+  "publishedCount": 12,
+  "publicationEvidence": "publication-receipts.json",
+  "remainingIssues": [
+    "数值字段转换仍可能将NULL变成0；不能用数值卡的零判断缺失金额已经确认。此通用缺陷尚未修复。",
+    "旧字段映射可运行，但编辑器仅统计_fieldMapping，可能显示待映射；提示一致性尚未修复。",
+    "费用构成暂无数据：655条ODS及DWD费用明细的del_flag均为NULL，现行有效条件为等于0。NULL是否代表未删除待业务确认，未擅自纳入统计。"
+  ],
+  "pageAcceptance": {
+    "account": "xiezm",
+    "date": "2026-09-14",
+    "mode": "published",
+    "screenIds": [
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26
+    ],
+    "scope": "默认日期2022-01-01至2026-12-31；逐页确认查询完成与可见结果。费用构成口径待确认；不等于全部业务口径验收。"
+  }
 }

@@ -101,7 +101,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "PRS · Flowerbiz Command Center",
+        "text": "PRS · 花卉租赁业务分析",
         "fontSize": 12,
         "fontWeight": "500",
         "color": "#d9eeff",
@@ -125,7 +125,17 @@
         "fontWeight": "800",
         "color": "#ffffff",
         "textAlign": "center"
-      }
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "返回回收看板",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/20/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{runtime.projectName}}&var_recoveryType={{runtime.recoveryType}}",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "filter-date-range",
@@ -145,7 +155,9 @@
         "labelColor": "#ffffff",
         "inputBackground": "rgba(88, 180, 255, 0.20)",
         "inputBorderColor": "rgba(39, 216, 255, 0.18)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "startVariableKey": "dateFrom",
+        "endVariableKey": "dateTo"
       }
     },
     {
@@ -172,7 +184,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -182,7 +206,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -209,7 +234,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -219,7 +256,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -243,7 +281,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "明细数"
+        "valueField": "明细数",
+        "_sourceColumns": [
+          {
+            "name": "明细数",
+            "displayName": "明细数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "计划回收数",
+            "displayName": "计划回收数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际回收数",
+            "displayName": "实际回收数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际数量缺失数",
+            "displayName": "实际数量缺失数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -270,7 +330,8 @@
               "variableKey": "recoveryType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -294,7 +355,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "计划回收数"
+        "valueField": "计划回收数",
+        "_sourceColumns": [
+          {
+            "name": "明细数",
+            "displayName": "明细数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "计划回收数",
+            "displayName": "计划回收数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际回收数",
+            "displayName": "实际回收数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际数量缺失数",
+            "displayName": "实际数量缺失数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -321,7 +404,8 @@
               "variableKey": "recoveryType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -345,7 +429,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "实际回收数"
+        "valueField": "实际回收数",
+        "_sourceColumns": [
+          {
+            "name": "明细数",
+            "displayName": "明细数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "计划回收数",
+            "displayName": "计划回收数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际回收数",
+            "displayName": "实际回收数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际数量缺失数",
+            "displayName": "实际数量缺失数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -372,7 +478,8 @@
               "variableKey": "recoveryType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -389,14 +496,36 @@
       "config": {
         "title": "实际数量缺失数",
         "value": null,
-        "suffix": "元",
+        "suffix": "",
         "precision": 2,
         "titleFontSize": 16,
         "valueFontSize": 34,
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "实际数量缺失数"
+        "valueField": "实际数量缺失数",
+        "_sourceColumns": [
+          {
+            "name": "明细数",
+            "displayName": "明细数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "计划回收数",
+            "displayName": "计划回收数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际回收数",
+            "displayName": "实际回收数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际数量缺失数",
+            "displayName": "实际数量缺失数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -423,7 +552,8 @@
               "variableKey": "recoveryType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -513,7 +643,57 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "报花单号",
+            "displayName": "报花单号",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "回收类型",
+            "displayName": "回收类型",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "绿植",
+            "displayName": "绿植",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "计划数量",
+            "displayName": "计划数量",
+            "baseType": "type/Integer"
+          },
+          {
+            "name": "实际数量",
+            "displayName": "实际数量",
+            "baseType": "type/Integer"
+          },
+          {
+            "name": "原始成本值",
+            "displayName": "原始成本值",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "回收人",
+            "displayName": "回收人",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "回收时间",
+            "displayName": "回收时间",
+            "baseType": "type/DateTime"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -540,7 +720,8 @@
               "variableKey": "recoveryType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -600,7 +781,27 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "绿植",
+            "displayName": "绿植",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "计划数量",
+            "displayName": "计划数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际数量",
+            "displayName": "实际数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -627,7 +828,8 @@
               "variableKey": "recoveryType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -642,7 +844,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "库房入库 TOP",
+        "text": "项目回收完成量 TOP",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -687,7 +889,27 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "计划数量",
+            "displayName": "计划数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际数量",
+            "displayName": "实际数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -714,7 +936,8 @@
               "variableKey": "recoveryType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -774,7 +997,27 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "回收人",
+            "displayName": "回收人",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "计划数量",
+            "displayName": "计划数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "实际数量",
+            "displayName": "实际数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -801,8 +1044,12 @@
               "variableKey": "recoveryType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     }
-  ]
+  ],
+  "backgroundImage": null,
+  "pages": [],
+  "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0"
 }

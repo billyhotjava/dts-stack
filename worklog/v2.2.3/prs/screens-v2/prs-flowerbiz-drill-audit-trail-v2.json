@@ -101,7 +101,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "PRS · Flowerbiz Command Center",
+        "text": "PRS · 花卉租赁业务分析",
         "fontSize": 12,
         "fontWeight": "500",
         "color": "#d9eeff",
@@ -125,7 +125,17 @@
         "fontWeight": "800",
         "color": "#ffffff",
         "textAlign": "center"
-      }
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "返回审批看板",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/22/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{runtime.projectName}}",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "filter-date-range",
@@ -145,7 +155,9 @@
         "labelColor": "#ffffff",
         "inputBackground": "rgba(88, 180, 255, 0.20)",
         "inputBorderColor": "rgba(39, 216, 255, 0.18)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "startVariableKey": "dateFrom",
+        "endVariableKey": "dateTo"
       }
     },
     {
@@ -172,7 +184,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -182,7 +206,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -209,7 +234,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -219,7 +256,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -243,7 +281,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "日志数"
+        "valueField": "日志数",
+        "_sourceColumns": [
+          {
+            "name": "日志数",
+            "displayName": "日志数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "操作人数",
+            "displayName": "操作人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均步骤天数",
+            "displayName": "平均步骤天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -270,7 +330,8 @@
               "variableKey": "operationKind"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -294,7 +355,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "单据数"
+        "valueField": "单据数",
+        "_sourceColumns": [
+          {
+            "name": "日志数",
+            "displayName": "日志数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "操作人数",
+            "displayName": "操作人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均步骤天数",
+            "displayName": "平均步骤天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -321,7 +404,8 @@
               "variableKey": "operationKind"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -345,7 +429,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "操作人数"
+        "valueField": "操作人数",
+        "_sourceColumns": [
+          {
+            "name": "日志数",
+            "displayName": "日志数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "操作人数",
+            "displayName": "操作人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均步骤天数",
+            "displayName": "平均步骤天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -372,7 +478,8 @@
               "variableKey": "operationKind"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -396,7 +503,29 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "平均步骤天数"
+        "valueField": "平均步骤天数",
+        "_sourceColumns": [
+          {
+            "name": "日志数",
+            "displayName": "日志数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "操作人数",
+            "displayName": "操作人数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均步骤天数",
+            "displayName": "平均步骤天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -423,7 +552,8 @@
               "variableKey": "operationKind"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -508,7 +638,52 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "报花单号",
+            "displayName": "报花单号",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "客户",
+            "displayName": "客户",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "操作动作",
+            "displayName": "操作动作",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "操作人",
+            "displayName": "操作人",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "操作时间",
+            "displayName": "操作时间",
+            "baseType": "type/DateTime"
+          },
+          {
+            "name": "距上步天数",
+            "displayName": "距上步天数",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "操作内容",
+            "displayName": "操作内容",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -535,7 +710,8 @@
               "variableKey": "operationKind"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -590,7 +766,22 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "操作动作",
+            "displayName": "操作动作",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "日志数",
+            "displayName": "日志数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -617,7 +808,8 @@
               "variableKey": "operationKind"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -672,7 +864,22 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "操作人",
+            "displayName": "操作人",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "日志数",
+            "displayName": "日志数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -699,7 +906,8 @@
               "variableKey": "operationKind"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -760,12 +968,36 @@
           {
             "name": "日志数",
             "dataKey": "日志数",
-            "color": "#27d8ff"
+            "color": "#27d8ff",
+            "field": "日志数"
           }
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "xAxisField": "月份",
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "_sourceColumns": [
+          {
+            "name": "月份",
+            "displayName": "月份",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "日志数",
+            "displayName": "日志数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -792,8 +1024,12 @@
               "variableKey": "operationKind"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     }
-  ]
+  ],
+  "backgroundImage": null,
+  "pages": [],
+  "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0"
 }

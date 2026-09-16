@@ -1,0 +1,932 @@
+{
+  "capturedFrom": "Chrome publish response",
+  "screens": [
+    {
+      "screenId": 15,
+      "name": "花卉租赁经营总览 V2.2.3",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:09:54.451758867Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "5cc065ae-1eb9-45ca-acbb-9a9301befb49",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:15",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 24,
+      "warmup": {
+        "totalDatabaseSources": 13,
+        "warmed": 2,
+        "skipped": 11,
+        "failed": 0
+      }
+    },
+    {
+      "screenId": 16,
+      "name": "花卉租赁项目客户分析 V2.2.3",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:09:03.423577316Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "d02bec1c-00dd-4b1f-b20d-25a3472fb0ed",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:16",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 22,
+      "warmup": {
+        "totalDatabaseSources": 12,
+        "warmed": 2,
+        "skipped": 10,
+        "failed": 0
+      }
+    },
+    {
+      "screenId": 17,
+      "name": "花卉租赁销售坏账与费用 V2.2.3",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T06:46:12.690140804Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "67ed2618-51f2-4346-b578-697809ca5bb5",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:17",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_extra_cost",
+            "snapshotId": "d1d4eca9-57c6-4a30-9adf-d946072732e9",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 22,
+      "warmup": {
+        "totalDatabaseSources": 12,
+        "warmed": 2,
+        "skipped": 10,
+        "failed": 0,
+        "items": [
+          {
+            "component": "项目",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 269
+          },
+          {
+            "component": "客户",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 143
+          },
+          {
+            "component": "销售金额",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "销售成本",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "赠送成本",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "坏账单成本",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "坏账单租金变动",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "额外费用报价",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "销售赠送月度趋势",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "额外费用成本构成",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "坏账项目 TOP",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "销售坏账费用明细",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          }
+        ]
+      }
+    },
+    {
+      "screenId": 18,
+      "name": "花卉租赁报花执行 V2.2.3",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:08:02.235183908Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "2977fedf-c03d-4eaa-99a6-7b0e7dea2cd4",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:18",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 22,
+      "warmup": {
+        "totalDatabaseSources": 12,
+        "warmed": 2,
+        "skipped": 10,
+        "failed": 0
+      }
+    },
+    {
+      "screenId": 19,
+      "name": "花卉租赁变更与租期调整 V2.2.3",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:07:30.865011113Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "d0c5ad63-6b8a-49ff-99fa-f527e75e6aef",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:19",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_ads_change_detail",
+            "snapshotId": "310bf36a-5f0a-4d88-a17f-3f9de8ae7276",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 22,
+      "warmup": {
+        "totalDatabaseSources": 12,
+        "warmed": 2,
+        "skipped": 10,
+        "failed": 0
+      }
+    },
+    {
+      "screenId": 20,
+      "name": "花卉租赁回收撤摆与去向 V2.2.3",
+      "publishedVersionNo": 3,
+      "publishedAt": "2026-09-14T06:42:54.228865038Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "daad5848-3f27-4fd4-b343-97384d060693",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:20",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_ads_recovery_detail",
+            "snapshotId": "efd667b5-f457-4062-9718-943eb023f9f8",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 22,
+      "warmup": {
+        "totalDatabaseSources": 12,
+        "warmed": 2,
+        "skipped": 10,
+        "failed": 0,
+        "items": [
+          {
+            "component": "项目",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 136
+          },
+          {
+            "component": "回收类型",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 3
+          },
+          {
+            "component": "回收明细数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "实际回收数量",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "计划回收数量",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "报损条数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "回购条数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "留用条数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "回收类型分布",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "回收月度趋势",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "回收人完成量 TOP",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "回收项目明细",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          }
+        ]
+      }
+    },
+    {
+      "screenId": 21,
+      "name": "花卉租赁养护工作量 V2.2.3",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T06:44:18.094375696Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "3b047562-0b00-4081-86c3-155271514f05",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:21",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_curing",
+            "snapshotId": "28ee85f9-f19b-44f2-ad93-cfd82a00a241",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_project",
+            "snapshotId": "da7c02b1-a19d-4602-beb7-d714fc0410f4",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 22,
+      "warmup": {
+        "totalDatabaseSources": 12,
+        "warmed": 2,
+        "skipped": 10,
+        "failed": 0,
+        "items": [
+          {
+            "component": "养护人",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 73
+          },
+          {
+            "component": "项目",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 203
+          },
+          {
+            "component": "养护人数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "养护记录数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "养护项目数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "养护日期数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "摆位巡护次数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "数量缺失记录",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "养护人工作量 TOP",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "养护工作量趋势",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "项目养护记录占比",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "养护人月度明细",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          }
+        ]
+      }
+    },
+    {
+      "screenId": 22,
+      "name": "花卉租赁在途审批与操作监控 V2.2.3",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T06:44:52.630276602Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "d71fc75a-e0da-4fa5-8f40-e6ad830f79d0",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:22",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 22,
+      "warmup": {
+        "totalDatabaseSources": 12,
+        "warmed": 2,
+        "skipped": 10,
+        "failed": 0,
+        "items": [
+          {
+            "component": "项目",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 121
+          },
+          {
+            "component": "状态",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 4
+          },
+          {
+            "component": "在途单数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "挂起超7天",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "待结算",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "审核中",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "平均挂起天数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "在途租金变动额",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "在途状态分布",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "挂起超7天项目 TOP",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "在途业务类型分布",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "待处理清单",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          }
+        ]
+      }
+    },
+    {
+      "screenId": 23,
+      "name": "花卉租赁报花单明细钻取 V2.2.3",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T05:11:15.796303198Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "e4eff936-a5ab-48e6-8961-fd7333c94492",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:23",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_ads_lease_detail",
+            "snapshotId": "8a801e1d-a455-4bc0-96b9-8ddf6ceaa68c",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_position",
+            "snapshotId": "e5ff4e6a-39d3-426d-8d70-98d77aa2418d",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 20,
+      "warmup": {
+        "totalDatabaseSources": 10,
+        "warmed": 2,
+        "skipped": 8,
+        "failed": 0
+      }
+    },
+    {
+      "screenId": 24,
+      "name": "花卉租赁变更明细钻取 V2.2.3",
+      "publishedVersionNo": 2,
+      "publishedAt": "2026-09-14T06:45:09.461478931Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "a4a24b8d-68ff-412f-9020-fbd47e599038",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:24",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:ods_prst_flower_rent_time_log",
+            "snapshotId": "fd78b3a6-59ee-4179-8547-c2f3b5f74ff7",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_ads_change_detail",
+            "snapshotId": "310bf36a-5f0a-4d88-a17f-3f9de8ae7276",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 20,
+      "warmup": {
+        "totalDatabaseSources": 10,
+        "warmed": 2,
+        "skipped": 8,
+        "failed": 0,
+        "items": [
+          {
+            "component": "项目",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 1
+          },
+          {
+            "component": "变更类型",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 3
+          },
+          {
+            "component": "变更数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "已确认金额差额",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "平均确认天数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "起租减租变更数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "变更明细",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "货物更换明细",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "金额影响 TOP",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "租期调整日志（按项目与日期）",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          }
+        ]
+      }
+    },
+    {
+      "screenId": 25,
+      "name": "花卉租赁回收明细钻取 V2.2.3",
+      "publishedVersionNo": 3,
+      "publishedAt": "2026-09-14T06:45:26.869819825Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "26b0be35-04c9-45e2-9f3b-8048ab478328",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:25",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_ads_recovery_detail",
+            "snapshotId": "efd667b5-f457-4062-9718-943eb023f9f8",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 20,
+      "warmup": {
+        "totalDatabaseSources": 10,
+        "warmed": 2,
+        "skipped": 8,
+        "failed": 0,
+        "items": [
+          {
+            "component": "项目",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 136
+          },
+          {
+            "component": "回收类型",
+            "databaseId": 1,
+            "status": "warmed",
+            "rowCount": 3
+          },
+          {
+            "component": "明细数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "计划回收数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "实际回收数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "实际数量缺失数",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "回收明细",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "回收绿植 TOP",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "项目回收完成量 TOP",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          },
+          {
+            "component": "回收人 TOP",
+            "databaseId": 1,
+            "status": "skipped",
+            "reason": "query contains template variables"
+          }
+        ]
+      }
+    },
+    {
+      "screenId": 26,
+      "name": "花卉租赁审批操作链路钻取 V2.2.3",
+      "publishedVersionNo": 1,
+      "publishedAt": "2026-09-14T05:03:36.406038877Z",
+      "classification": "INTERNAL",
+      "classificationSnapshotId": "d49743df-caa9-48e1-b757-f94f165cafe7",
+      "classificationSnapshotVersion": 1,
+      "classificationEvidence": {
+        "manualFloor": "INTERNAL",
+        "effectiveLevel": "INTERNAL",
+        "consumerKey": "screen:26",
+        "upstreams": [
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:ods_prst_flower_biz_log",
+            "snapshotId": "3ea2963b-fe4e-4a16-9397-14613b51f7ec",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_customer",
+            "snapshotId": "16167ab0-b9af-4fdc-89c0-06b2d17c3cc6",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          },
+          {
+            "subjectType": "ASSET",
+            "subjectKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:prs_v2_dwd_flower_order",
+            "snapshotId": "694ed63b-4d3d-4e0b-b4c7-887222a0aa49",
+            "snapshotVersion": 1,
+            "effectiveLevel": "INTERNAL"
+          }
+        ]
+      },
+      "components": 20,
+      "warmup": {
+        "totalDatabaseSources": 10,
+        "warmed": 2,
+        "skipped": 8,
+        "failed": 0
+      }
+    }
+  ]
+}

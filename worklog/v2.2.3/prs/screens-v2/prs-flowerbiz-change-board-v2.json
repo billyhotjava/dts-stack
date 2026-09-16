@@ -101,7 +101,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "PRS · Flowerbiz Command Center",
+        "text": "PRS · 花卉租赁业务分析",
         "fontSize": 12,
         "fontWeight": "500",
         "color": "#d9eeff",
@@ -125,7 +125,17 @@
         "fontWeight": "800",
         "color": "#ffffff",
         "textAlign": "center"
-      }
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "返回经营总览",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/15/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{runtime.projectName}}",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "filter-date-range",
@@ -145,7 +155,9 @@
         "labelColor": "#ffffff",
         "inputBackground": "rgba(88, 180, 255, 0.20)",
         "inputBorderColor": "rgba(39, 216, 255, 0.18)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "startVariableKey": "dateFrom",
+        "endVariableKey": "dateTo"
       }
     },
     {
@@ -172,7 +184,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -182,7 +206,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -209,7 +234,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -219,7 +256,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -243,7 +281,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "变更单数"
+        "valueField": "变更单数",
+        "_sourceColumns": [
+          {
+            "name": "变更单数",
+            "displayName": "变更单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "物品变更",
+            "displayName": "物品变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "金额变更",
+            "displayName": "金额变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "成本变更",
+            "displayName": "成本变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "已确认金额差额",
+            "displayName": "已确认金额差额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "平均确认天数",
+            "displayName": "平均确认天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -270,7 +340,8 @@
               "variableKey": "changeType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -294,7 +365,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "物品变更"
+        "valueField": "物品变更",
+        "_sourceColumns": [
+          {
+            "name": "变更单数",
+            "displayName": "变更单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "物品变更",
+            "displayName": "物品变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "金额变更",
+            "displayName": "金额变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "成本变更",
+            "displayName": "成本变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "已确认金额差额",
+            "displayName": "已确认金额差额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "平均确认天数",
+            "displayName": "平均确认天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -321,7 +424,8 @@
               "variableKey": "changeType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -345,7 +449,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "金额变更"
+        "valueField": "金额变更",
+        "_sourceColumns": [
+          {
+            "name": "变更单数",
+            "displayName": "变更单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "物品变更",
+            "displayName": "物品变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "金额变更",
+            "displayName": "金额变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "成本变更",
+            "displayName": "成本变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "已确认金额差额",
+            "displayName": "已确认金额差额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "平均确认天数",
+            "displayName": "平均确认天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -372,7 +508,8 @@
               "variableKey": "changeType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -396,7 +533,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "成本变更"
+        "valueField": "成本变更",
+        "_sourceColumns": [
+          {
+            "name": "变更单数",
+            "displayName": "变更单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "物品变更",
+            "displayName": "物品变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "金额变更",
+            "displayName": "金额变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "成本变更",
+            "displayName": "成本变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "已确认金额差额",
+            "displayName": "已确认金额差额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "平均确认天数",
+            "displayName": "平均确认天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -423,7 +592,8 @@
               "variableKey": "changeType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -447,7 +617,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "已确认金额差额"
+        "valueField": "已确认金额差额",
+        "_sourceColumns": [
+          {
+            "name": "变更单数",
+            "displayName": "变更单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "物品变更",
+            "displayName": "物品变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "金额变更",
+            "displayName": "金额变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "成本变更",
+            "displayName": "成本变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "已确认金额差额",
+            "displayName": "已确认金额差额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "平均确认天数",
+            "displayName": "平均确认天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -474,7 +676,8 @@
               "variableKey": "changeType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -498,7 +701,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "平均确认天数"
+        "valueField": "平均确认天数",
+        "_sourceColumns": [
+          {
+            "name": "变更单数",
+            "displayName": "变更单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "物品变更",
+            "displayName": "物品变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "金额变更",
+            "displayName": "金额变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "成本变更",
+            "displayName": "成本变更",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "已确认金额差额",
+            "displayName": "已确认金额差额",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "平均确认天数",
+            "displayName": "平均确认天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -525,7 +760,8 @@
               "variableKey": "changeType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -583,7 +819,19 @@
         "categoryKey": "变更类型",
         "valueKey": "变更数",
         "pieInnerRadius": 45,
-        "pieOuterRadius": 78
+        "pieOuterRadius": 78,
+        "_sourceColumns": [
+          {
+            "name": "变更类型",
+            "displayName": "变更类型",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "变更数",
+            "displayName": "变更数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -610,7 +858,8 @@
               "variableKey": "changeType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -671,12 +920,36 @@
           {
             "name": "变更数",
             "dataKey": "变更数",
-            "color": "#27d8ff"
+            "color": "#27d8ff",
+            "field": "变更数"
           }
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "xAxisField": "月份",
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "_sourceColumns": [
+          {
+            "name": "月份",
+            "displayName": "月份",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "变更数",
+            "displayName": "变更数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -703,7 +976,8 @@
               "variableKey": "changeType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -765,12 +1039,37 @@
           {
             "name": "已确认金额差额",
             "dataKey": "已确认金额差额",
-            "color": "#27d8ff"
+            "color": "#27d8ff",
+            "field": "已确认金额差额"
           }
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "xAxisField": "项目",
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "horizontal": true,
+        "_sourceColumns": [
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "已确认金额差额",
+            "displayName": "已确认金额差额",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -797,7 +1096,8 @@
               "variableKey": "changeType"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -877,7 +1177,47 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "变更单号",
+            "displayName": "变更单号",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "报花单号",
+            "displayName": "报花单号",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "变更类型",
+            "displayName": "变更类型",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "申请时间",
+            "displayName": "申请时间",
+            "baseType": "type/DateTime"
+          },
+          {
+            "name": "确认时间",
+            "displayName": "确认时间",
+            "baseType": "type/DateTime"
+          },
+          {
+            "name": "金额差额",
+            "displayName": "金额差额",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -904,8 +1244,22 @@
               "variableKey": "changeType"
             }
           ]
+        },
+        "sourceType": "sql"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "查看项目变更明细",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/24/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{项目}}&var_changeType={{runtime.changeType}}",
+          "jumpOpenMode": "self"
         }
-      }
+      ]
     }
-  ]
+  ],
+  "backgroundImage": null,
+  "pages": [],
+  "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0"
 }

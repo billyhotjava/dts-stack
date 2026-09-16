@@ -101,7 +101,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "PRS · Flowerbiz Command Center",
+        "text": "PRS · 花卉租赁业务分析",
         "fontSize": 12,
         "fontWeight": "500",
         "color": "#d9eeff",
@@ -125,7 +125,17 @@
         "fontWeight": "800",
         "color": "#ffffff",
         "textAlign": "center"
-      }
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "返回经营总览",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/15/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{runtime.projectName}}",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "filter-date-range",
@@ -145,7 +155,9 @@
         "labelColor": "#ffffff",
         "inputBackground": "rgba(88, 180, 255, 0.20)",
         "inputBorderColor": "rgba(39, 216, 255, 0.18)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "startVariableKey": "dateFrom",
+        "endVariableKey": "dateTo"
       }
     },
     {
@@ -172,7 +184,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -182,7 +206,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -209,7 +234,19 @@
         "dataOptionValueField": "value",
         "dataOptionMax": 500,
         "optionBackground": "#0b2652",
-        "optionTextColor": "#ffffff"
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -219,7 +256,8 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 500,
           "parameterBindings": []
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -243,7 +281,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "在途单数"
+        "valueField": "在途单数",
+        "_sourceColumns": [
+          {
+            "name": "在途单数",
+            "displayName": "在途单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "挂起超7天",
+            "displayName": "挂起超7天",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "待结算",
+            "displayName": "待结算",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "审核中",
+            "displayName": "审核中",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均挂起天数",
+            "displayName": "平均挂起天数",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "在途租金变动额",
+            "displayName": "在途租金变动额",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -270,7 +340,8 @@
               "variableKey": "statusName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -294,7 +365,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "挂起超7天"
+        "valueField": "挂起超7天",
+        "_sourceColumns": [
+          {
+            "name": "在途单数",
+            "displayName": "在途单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "挂起超7天",
+            "displayName": "挂起超7天",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "待结算",
+            "displayName": "待结算",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "审核中",
+            "displayName": "审核中",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均挂起天数",
+            "displayName": "平均挂起天数",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "在途租金变动额",
+            "displayName": "在途租金变动额",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -321,7 +424,8 @@
               "variableKey": "statusName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -345,7 +449,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "待结算"
+        "valueField": "待结算",
+        "_sourceColumns": [
+          {
+            "name": "在途单数",
+            "displayName": "在途单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "挂起超7天",
+            "displayName": "挂起超7天",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "待结算",
+            "displayName": "待结算",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "审核中",
+            "displayName": "审核中",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均挂起天数",
+            "displayName": "平均挂起天数",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "在途租金变动额",
+            "displayName": "在途租金变动额",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -372,7 +508,8 @@
               "variableKey": "statusName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -396,7 +533,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "审核中"
+        "valueField": "审核中",
+        "_sourceColumns": [
+          {
+            "name": "在途单数",
+            "displayName": "在途单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "挂起超7天",
+            "displayName": "挂起超7天",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "待结算",
+            "displayName": "待结算",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "审核中",
+            "displayName": "审核中",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均挂起天数",
+            "displayName": "平均挂起天数",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "在途租金变动额",
+            "displayName": "在途租金变动额",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -423,7 +592,8 @@
               "variableKey": "statusName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -447,7 +617,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "平均挂起天数"
+        "valueField": "平均挂起天数",
+        "_sourceColumns": [
+          {
+            "name": "在途单数",
+            "displayName": "在途单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "挂起超7天",
+            "displayName": "挂起超7天",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "待结算",
+            "displayName": "待结算",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "审核中",
+            "displayName": "审核中",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均挂起天数",
+            "displayName": "平均挂起天数",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "在途租金变动额",
+            "displayName": "在途租金变动额",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -474,7 +676,8 @@
               "variableKey": "statusName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -498,7 +701,39 @@
         "titleColor": "#e2ffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
-        "valueField": "在途租金变动额"
+        "valueField": "在途租金变动额",
+        "_sourceColumns": [
+          {
+            "name": "在途单数",
+            "displayName": "在途单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "挂起超7天",
+            "displayName": "挂起超7天",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "待结算",
+            "displayName": "待结算",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "审核中",
+            "displayName": "审核中",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "平均挂起天数",
+            "displayName": "平均挂起天数",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "在途租金变动额",
+            "displayName": "在途租金变动额",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -525,7 +760,8 @@
               "variableKey": "statusName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -583,7 +819,19 @@
         "categoryKey": "状态",
         "valueKey": "在途单数",
         "pieInnerRadius": 45,
-        "pieOuterRadius": 78
+        "pieOuterRadius": 78,
+        "_sourceColumns": [
+          {
+            "name": "状态",
+            "displayName": "状态",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "在途单数",
+            "displayName": "在途单数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -610,7 +858,8 @@
               "variableKey": "statusName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -625,7 +874,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "超期项目 TOP",
+        "text": "挂起超7天项目 TOP",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -672,12 +921,37 @@
           {
             "name": "挂起超7天",
             "dataKey": "挂起超7天",
-            "color": "#27d8ff"
+            "color": "#27d8ff",
+            "field": "挂起超7天"
           }
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "xAxisField": "项目",
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "horizontal": true,
+        "_sourceColumns": [
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "挂起超7天",
+            "displayName": "挂起超7天",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -704,7 +978,8 @@
               "variableKey": "statusName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -719,7 +994,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "操作分类分布",
+        "text": "在途业务类型分布",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -766,12 +1041,37 @@
           {
             "name": "在途单数",
             "dataKey": "在途单数",
-            "color": "#27d8ff"
+            "color": "#27d8ff",
+            "field": "在途单数"
           }
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 36,
-        "axisLabelColor": "#ffffff"
+        "axisLabelColor": "#ffffff",
+        "xAxisField": "业务类型",
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "horizontal": true,
+        "_sourceColumns": [
+          {
+            "name": "业务类型",
+            "displayName": "业务类型",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "在途单数",
+            "displayName": "在途单数",
+            "baseType": "type/BigInteger"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -798,7 +1098,8 @@
               "variableKey": "statusName"
             }
           ]
-        }
+        },
+        "sourceType": "sql"
       }
     },
     {
@@ -878,7 +1179,47 @@
         "titleFontSize": 0,
         "chartPaddingTop": 36,
         "bodyColor": "#ffffff",
-        "freezeHeader": true
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "报花单号",
+            "displayName": "报花单号",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "业务类型",
+            "displayName": "业务类型",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "状态",
+            "displayName": "状态",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "申请人",
+            "displayName": "申请人",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "申请时间",
+            "displayName": "申请时间",
+            "baseType": "type/DateTime"
+          },
+          {
+            "name": "挂起天数",
+            "displayName": "挂起天数",
+            "baseType": "type/Decimal"
+          }
+        ]
       },
       "dataSource": {
         "type": "sql",
@@ -905,8 +1246,22 @@
               "variableKey": "statusName"
             }
           ]
+        },
+        "sourceType": "sql"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "查看项目审批流水",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/26/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{项目}}",
+          "jumpOpenMode": "self"
         }
-      }
+      ]
     }
-  ]
+  ],
+  "backgroundImage": null,
+  "pages": [],
+  "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0"
 }
