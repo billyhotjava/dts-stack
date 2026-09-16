@@ -12,7 +12,7 @@ public final class ModelingSqlReadSetGuard {
         Set<String> allowed = new HashSet<>();
         if (physicalReferences != null) physicalReferences.forEach(ref -> { if (ref != null) allowed.add(normalize(ref)); });
         var matcher = STATIC_REFERENCE.matcher(stripConfig(Objects.toString(sql, "")));
-        StringBuffer resolved = new StringBuffer();
+        StringBuilder resolved = new StringBuilder();
         int ordinal = 0;
         while (matcher.find()) {
             String placeholder = "f9_declared_" + UUID.randomUUID().toString().replace("-", "") + "_" + ordinal++;
@@ -28,7 +28,7 @@ public final class ModelingSqlReadSetGuard {
     }
     private static String stripConfig(String sql) {
         var blocks = Pattern.compile("(?s)\\{\\{\\s*config\\s*\\((.*?)\\)\\s*}}").matcher(sql);
-        StringBuffer result = new StringBuffer();
+        StringBuilder result = new StringBuilder();
         while (blocks.find()) {
             new ConfigLiterals(blocks.group(1)).validate();
             blocks.appendReplacement(result, "");
