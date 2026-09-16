@@ -18,6 +18,17 @@ public interface AdminKeycloakUserRepository extends JpaRepository<AdminKeycloak
 
     Optional<AdminKeycloakUser> findByEmailIgnoreCase(String email);
 
+    /** 该部门下是否还有人员快照；组织删除保护据此判断。 */
+    boolean existsByDeptCodeIgnoreCase(String deptCode);
+
+    /**
+     * 快照里是否已经有任何部门信息。
+     *
+     * <p>dept_code 是 2.2.3 才引入的列，需要一次 MDM 同步或 Keycloak 刷新回填。
+     * 回填之前整列为 NULL，此时「该部门查不到人」并不代表部门为空，不能据此放行删除。
+     */
+    boolean existsByDeptCodeIsNotNull();
+
     Page<AdminKeycloakUser> findByUsernameContainingIgnoreCase(String username, Pageable pageable);
 
     Page<AdminKeycloakUser> findByMdmEnabled(int mdmEnabled, Pageable pageable);

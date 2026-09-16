@@ -1,10 +1,11 @@
 package com.yuzhi.dts.admin.service;
 
 import com.yuzhi.dts.admin.domain.OrganizationNode;
-import com.yuzhi.dts.admin.repository.PersonProfileRepository;
+import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.config.MdmGatewayProperties;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
@@ -34,7 +35,7 @@ public class OrganizationService {
     private static final Duration PROVISIONING_RETRY_BACKOFF = Duration.ofSeconds(30);
 
     private final OrganizationRepository repository;
-    private final PersonProfileRepository personProfileRepository;
+    private final AdminKeycloakUserRepository adminKeycloakUserRepository;
     private final KeycloakAdminClient keycloakAdminClient;
     private final KeycloakAuthService keycloakAuthService;
     private final String managementClientId;
@@ -50,7 +51,7 @@ public class OrganizationService {
 
     public OrganizationService(
         OrganizationRepository repository,
-        PersonProfileRepository personProfileRepository,
+        AdminKeycloakUserRepository adminKeycloakUserRepository,
         KeycloakAdminClient keycloakAdminClient,
         KeycloakAuthService keycloakAuthService,
         @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
@@ -63,7 +64,7 @@ public class OrganizationService {
         MdmGatewayProperties mdmGatewayProperties
     ) {
         this.repository = repository;
-        this.personProfileRepository = personProfileRepository;
+        this.adminKeycloakUserRepository = adminKeycloakUserRepository;
         this.keycloakAdminClient = keycloakAdminClient;
         this.keycloakAuthService = keycloakAuthService;
         this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
@@ -378,23 +379,60 @@ public class OrganizationService {
             if (repository.existsByParent_Id(nodeId)) {
                 throw new IllegalArgumentException("该部门下仍有子部门，无法删除");
             }
-            if (StringUtils.isNotBlank(entity.getDeptCode()) && personProfileRepository.existsByDeptCodeIgnoreCase(entity.getDeptCode())) {
-                throw new IllegalArgumentException("该部门下仍有关联用户（院端同步），请先调整用户所属部门后再删除");
-            }
 
-            String token = null;
+            String token = isKeycloakSyncEnabled() ? resolveManagementToken() : null;
+            assertDepartmentHasNoMembers(entity, token);
+
             if (isKeycloakSyncEnabled()) {
-                token = resolveManagementToken();
-                if (StringUtils.isNotBlank(entity.getKeycloakGroupId())) {
-                    boolean hasMembers = !keycloakAdminClient.listGroupMembers(entity.getKeycloakGroupId(), 0, 1, token).isEmpty();
-                    if (hasMembers) {
-                        throw new IllegalArgumentException("该部门下仍有关联用户，请先调整用户所属部门后再删除");
-                    }
-                }
                 deleteKeycloakGroupRecursive(entity, token);
             }
             repository.delete(entity);
         });
+    }
+
+    /**
+     * 部门下还有人就不允许删除。
+     *
+     * <p>原实现查的是 {@code person_profile}，而该表自 {@code 4d53821ba}「移除 PersonProfile 写入」
+     * 起再无写入方。冻结的数据两头都不对：既会把早已调走的人算在旧部门名下、误拦一个空部门，
+     * 也查不到那之后才调进来的人、漏放一个真有人的部门。
+     *
+     * <p>现按「查不准就不删」处理，依次核对两个仍在维护的来源：
+     * <ol>
+     *   <li>{@code admin_keycloak_user.dept_code}——Keycloak user attribute 的本地镜像；</li>
+     *   <li>Keycloak 组成员——开启组同步且该节点已绑定组时的实时校验。</li>
+     * </ol>
+     * 两个来源都无法给出可信答案时抛错，而不是当作「部门为空」放行。
+     */
+    private void assertDepartmentHasNoMembers(OrganizationNode entity, String token) {
+        String deptCode = StringUtils.trimToNull(entity.getDeptCode());
+        boolean verified = false;
+
+        if (deptCode != null) {
+            if (adminKeycloakUserRepository.existsByDeptCodeIgnoreCase(deptCode)) {
+                throw new IllegalArgumentException("该部门下仍有关联用户，请先调整用户所属部门后再删除");
+            }
+            // 整列还没回填时，「查不到人」不等于「没有人」。
+            verified = adminKeycloakUserRepository.existsByDeptCodeIsNotNull();
+        }
+
+        if (isKeycloakSyncEnabled() && StringUtils.isNotBlank(entity.getKeycloakGroupId())) {
+            List<KeycloakUserDTO> members;
+            try {
+                members = keycloakAdminClient.listGroupMembers(entity.getKeycloakGroupId(), 0, 1, token);
+            } catch (Exception ex) {
+                LOG.warn("check keycloak group members failed for dept {}: {}", deptCode, ex.getMessage());
+                throw new IllegalArgumentException("无法确认该部门下是否仍有用户（Keycloak 查询失败），请稍后重试");
+            }
+            if (members != null && !members.isEmpty()) {
+                throw new IllegalArgumentException("该部门下仍有关联用户，请先调整用户所属部门后再删除");
+            }
+            verified = true;
+        }
+
+        if (!verified) {
+            throw new IllegalArgumentException("无法确认该部门下是否仍有用户：人员快照尚未同步部门信息，请先执行一次人员主数据同步后再删除");
+        }
     }
 
     private boolean isKeycloakSyncEnabled() {
