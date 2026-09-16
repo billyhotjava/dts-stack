@@ -1,6 +1,8 @@
 package com.yuzhi.dts.admin.web.rest.platform;
 
 import com.yuzhi.dts.admin.domain.OrganizationNode;
+import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
+import com.yuzhi.dts.admin.repository.AdminRoleMemberRepository;
 import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.yuzhi.dts.admin.security.AdminInboundServiceAuthenticator;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
@@ -24,6 +26,11 @@ public class ModelingDirectoryResource {
     private final KeycloakAdminClient users;
     private final OrganizationRepository organizations;
     private final com.yuzhi.dts.admin.repository.PersonProfileRepository profiles;
+    private final AdminRoleMemberRepository roleMembers;
+    private final AdminRoleAssignmentRepository roleAssignments;
+
+    private static final List<String> MODELING_ROLES = List.of(AuthoritiesConstants.DEPT_DATA_OWNER, AuthoritiesConstants.DEPT_LEADER,
+        AuthoritiesConstants.INST_DATA_OWNER, AuthoritiesConstants.INST_LEADER);
 
     @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}")
     private String clientId;
@@ -31,12 +38,15 @@ public class ModelingDirectoryResource {
     private String clientSecret;
 
     public ModelingDirectoryResource(AdminInboundServiceAuthenticator authenticator, KeycloakAuthService auth,
-        KeycloakAdminClient users, OrganizationRepository organizations, com.yuzhi.dts.admin.repository.PersonProfileRepository profiles) {
+        KeycloakAdminClient users, OrganizationRepository organizations, com.yuzhi.dts.admin.repository.PersonProfileRepository profiles,
+        AdminRoleMemberRepository roleMembers, AdminRoleAssignmentRepository roleAssignments) {
         this.authenticator = authenticator;
         this.auth = auth;
         this.users = users;
         this.organizations = organizations;
         this.profiles = profiles;
+        this.roleMembers = roleMembers;
+        this.roleAssignments = roleAssignments;
     }
 
     @GetMapping(value = "/users/resolve", params = "purpose=modeling")
@@ -49,9 +59,12 @@ public class ModelingDirectoryResource {
             String token = token();
             var current = users.currentUser(principalKey, token).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
             KeycloakUserDTO user = current.user();
-            List<String> roles = current.roles();
-            if (roles == null || user.getEnabled() == null) throw new IllegalStateException("Incomplete identity");
-            return ApiResponse.ok(identity(user, roles, organizations.findAll(), currentProfiles(List.of(user))));
+            if (current.roles() == null || user.getEnabled() == null || user.getUsername() == null) throw new IllegalStateException("Incomplete identity");
+            // Data roles are granted in DTS, not in Keycloak; merge them the same way login does.
+            Set<String> roles = new LinkedHashSet<>();
+            current.roles().forEach(role -> addRole(roles, role));
+            roles.addAll(localRoles(user.getUsername()));
+            return ApiResponse.ok(identity(user, List.copyOf(roles), organizations.findAll(), currentProfiles(List.of(user))));
         } catch (ResponseStatusException ex) {
             throw ex;
         } catch (RuntimeException ex) {
@@ -77,8 +90,7 @@ public class ModelingDirectoryResource {
             Map<String, KeycloakUserDTO> candidates = new LinkedHashMap<>();
             Map<String, Set<String>> rolesById = new HashMap<>();
             // Bounded by the role set, never a roles lookup for each candidate.
-            for (String role : List.of(AuthoritiesConstants.DEPT_DATA_OWNER, AuthoritiesConstants.DEPT_LEADER,
-                AuthoritiesConstants.INST_DATA_OWNER, AuthoritiesConstants.INST_LEADER)) {
+            for (String role : MODELING_ROLES) {
                 List<KeycloakUserDTO> members = users.currentRoleMembers(role, token);
                 if (members == null) throw new IllegalStateException("Incomplete membership");
                 for (KeycloakUserDTO user : members) {
@@ -86,6 +98,17 @@ public class ModelingDirectoryResource {
                     candidates.put(user.getId(), user);
                     rolesById.computeIfAbsent(user.getId(), ignored -> new HashSet<>()).add(role);
                 }
+            }
+            // DTS-granted data roles: resolve each local member to its Keycloak identity by exact username.
+            Map<String, Set<String>> localRolesByUsername = localRoleMembers();
+            if (localRolesByUsername.size() > 1000) throw new IllegalStateException("Directory selection exceeds bounded capacity");
+            for (var entry : localRolesByUsername.entrySet()) {
+                KeycloakUserDTO user = candidates.values().stream()
+                    .filter(known -> entry.getKey().equalsIgnoreCase(known.getUsername())).findFirst()
+                    .orElseGet(() -> users.findByUsernameStrict(entry.getKey(), token).orElse(null));
+                if (user == null || user.getId() == null || !entry.getKey().equalsIgnoreCase(user.getUsername())) continue;
+                candidates.putIfAbsent(user.getId(), user);
+                rolesById.computeIfAbsent(user.getId(), ignored -> new HashSet<>()).addAll(entry.getValue());
             }
             var currentProfiles = currentProfiles(candidates.values());
             String query = keyword.trim().toLowerCase(Locale.ROOT);
@@ -138,6 +161,36 @@ public class ModelingDirectoryResource {
     private static Set<String> identifiers(KeycloakUserDTO user) {
         return java.util.stream.Stream.of(user.getId(), user.getUsername(), attribute(user,"person_code","personCode"), attribute(user,"external_id","externalId"))
             .filter(Objects::nonNull).map(String::trim).filter(value -> !value.isBlank()).map(value -> value.toLowerCase(Locale.ROOT)).collect(java.util.stream.Collectors.toSet());
+    }
+
+    private Set<String> localRoles(String username) {
+        Set<String> roles = new LinkedHashSet<>();
+        roleMembers.findByUsernameIgnoreCase(username).forEach(member -> addRole(roles, member.getRole()));
+        roleAssignments.findByUsernameIgnoreCase(username).forEach(assignment -> addRole(roles, assignment.getRole()));
+        return roles;
+    }
+
+    private Map<String, Set<String>> localRoleMembers() {
+        Map<String, Set<String>> result = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        for (String role : MODELING_ROLES) {
+            // Grants may be stored with or without the ROLE_ prefix.
+            for (String stored : List.of(role, role.substring("ROLE_".length()))) {
+                roleMembers.findByRoleIgnoreCase(stored).forEach(member -> addMember(result, member.getUsername(), role));
+                roleAssignments.findByRoleIgnoreCase(stored).forEach(assignment -> addMember(result, assignment.getUsername(), role));
+            }
+        }
+        return result;
+    }
+
+    private static void addMember(Map<String, Set<String>> result, String username, String role) {
+        if (username == null || username.isBlank()) return;
+        result.computeIfAbsent(username.trim(), ignored -> new LinkedHashSet<>()).add(role);
+    }
+
+    private static void addRole(Set<String> roles, String role) {
+        if (role == null || role.isBlank()) return;
+        String upper = role.trim().toUpperCase(Locale.ROOT);
+        roles.add(upper.startsWith("ROLE_") ? upper : "ROLE_" + upper);
     }
 
     private static String code(OrganizationNode node) {

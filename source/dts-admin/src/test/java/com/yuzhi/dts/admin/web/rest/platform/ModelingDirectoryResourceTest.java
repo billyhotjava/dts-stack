@@ -22,7 +22,9 @@ class ModelingDirectoryResourceTest {
     private final KeycloakAdminClient users=mock(KeycloakAdminClient.class);
     private final OrganizationRepository organizations=mock(OrganizationRepository.class);
     private final PersonProfileRepository profiles=mock(PersonProfileRepository.class);
-    private final ModelingDirectoryResource resource=new ModelingDirectoryResource(authenticator,auth,users,organizations,profiles);
+    private final AdminRoleMemberRepository roleMembers=mock(AdminRoleMemberRepository.class);
+    private final AdminRoleAssignmentRepository roleAssignments=mock(AdminRoleAssignmentRepository.class);
+    private final ModelingDirectoryResource resource=new ModelingDirectoryResource(authenticator,auth,users,organizations,profiles,roleMembers,roleAssignments);
     private final MockHttpServletRequest request=new MockHttpServletRequest();
     private KeycloakUserDTO user;
     @BeforeEach void prepare(){
@@ -63,6 +65,29 @@ class ModelingDirectoryResourceTest {
         assertThat(resource.candidates("alice","current-dept",request).getData()).extracting(ModelingDirectoryResource.Identity::id).containsExactly("stable-id");
         verify(profiles,times(1)).findByAnyIdentifierLowerIn(anyCollection());verify(users,never()).currentUser(anyString(),anyString());
     }
+    @Test void dtsGrantedDataRoleIsMergedIntoResolvedIdentity(){
+        when(users.currentUser("stable-id","token")).thenReturn(Optional.of(new KeycloakAdminClient.CurrentUser(user,List.of("default-roles-s10","offline_access"))));
+        when(roleMembers.findByUsernameIgnoreCase("alice")).thenReturn(List.of(member("ROLE_INST_DATA_OWNER","alice")));
+        when(roleAssignments.findByUsernameIgnoreCase("alice")).thenReturn(List.of(assignment("dept_leader","alice")));
+        assertThat(resource.resolve("stable-id",request).getData().roles())
+            .contains("ROLE_INST_DATA_OWNER","ROLE_DEPT_LEADER").doesNotHaveDuplicates();
+        verify(users,never()).findByUsername(anyString(),anyString());
+    }
+    @Test void localRoleLookupFailureIsUnavailableInsteadOfDroppingRoles(){
+        when(roleMembers.findByUsernameIgnoreCase("alice")).thenThrow(new IllegalStateException("db down"));
+        assertStatus(503,()->resource.resolve("stable-id",request));
+    }
+    @Test void candidatesIncludeDtsGrantedMembersResolvedByExactUsername(){
+        when(users.currentRoleMembers(anyString(),eq("token"))).thenReturn(List.of());
+        when(roleMembers.findByRoleIgnoreCase("ROLE_DEPT_DATA_OWNER")).thenReturn(List.of(member("ROLE_DEPT_DATA_OWNER","ALICE"),member("ROLE_DEPT_DATA_OWNER","ghost")));
+        when(users.findByUsernameStrict("ALICE","token")).thenReturn(Optional.of(user));
+        when(users.findByUsernameStrict("ghost","token")).thenReturn(Optional.empty());
+        var result=resource.candidates("","old-dept",request).getData();
+        assertThat(result).extracting(ModelingDirectoryResource.Identity::id).containsExactly("stable-id");
+        assertThat(result.getFirst().roles()).containsExactly("ROLE_DEPT_DATA_OWNER");
+    }
+    private AdminRoleMember member(String role,String username){var m=new AdminRoleMember();m.setRole(role);m.setUsername(username);return m;}
+    private AdminRoleAssignment assignment(String role,String username){var a=new AdminRoleAssignment();a.setRole(role);a.setUsername(username);return a;}
     private PersonProfile profile(){var p=new PersonProfile();p.setId(10L);p.setAccount("alice");p.setDeptCode("current-dept");p.setLifecycleStatus(PersonLifecycleStatus.ACTIVE);return p;}
     private OrganizationNode department(Long id,String code){var d=new OrganizationNode();d.setId(id);d.setDeptCode(code);d.setName("部门");return d;}
     private void assertStatus(int status,Runnable action){assertThatThrownBy(action::run).isInstanceOfSatisfying(ResponseStatusException.class,ex->assertThat(ex.getStatusCode().value()).isEqualTo(status));}
