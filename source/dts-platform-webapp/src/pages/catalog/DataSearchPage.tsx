@@ -7,6 +7,7 @@ import { AssetTagFilter } from "@/components/catalog/tags/AssetTagFilter";
 import { readTagIds, writeTagIds } from "@/components/catalog/tags/catalogTagUrlState";
 import { PageHeader } from "@/components/page-header";
 import { type AssetDirectoryRow, AssetLedgerView } from "./assets/AssetLedgerView";
+import { resolveModelDataManagementFocus, resolveModelingReturnTo } from "@/pages/data-modeling/prototype/modelDataManagementLink";
 import { ModelDataOperationsPanel } from "./assets/ModelDataOperationsPanel";
 import { AssetTagsWorkspace } from "./assets/AssetTagsWorkspace";
 import { ASSET_PORTAL_V2_ENABLED, LEDGER_PAGE_SIZE } from "./assets/assetPageShared";
@@ -189,7 +190,8 @@ export default function DataSearchPage() {
 			/>
 			{activeTab === "asset-directory" && searchParams.get("modelSpecId") ? <ModelDataOperationsPanel
 				key={`${searchParams.get("modelSpecId")}:${searchParams.get("environment") || "dev"}`}
-				modelSpecId={searchParams.get("modelSpecId")!} environment={searchParams.get("environment") || "dev"} candidateId={searchParams.get("candidateId") || undefined} /> : null}
+				modelSpecId={searchParams.get("modelSpecId")!} environment={searchParams.get("environment") || "dev"} candidateId={searchParams.get("candidateId") || undefined}
+				focus={resolveModelDataManagementFocus(searchParams.get("focus"))} returnTo={resolveModelingReturnTo(searchParams.get("returnTo"))} /> : null}
 			{activeTab === "catalog-tags" ? <AssetTagsWorkspace /> : <DataAssetDirectoryPage />}
 		</div>
 	);

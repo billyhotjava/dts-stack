@@ -9,6 +9,7 @@ import {
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { UnsavedEditorHandle } from "@/pages/catalog/CatalogDatasetGovernanceSummaryEditor";
 import { ModelPublishDialog } from "./ModelPublishDialog";
+import { buildModelDataManagementUrl, buildModelWorkbenchReturnUrl } from "./modelDataManagementLink";
 import { Button, RequestState, Status } from "./PrototypePrimitives";
 import "./model-wizard.css";
 
@@ -136,7 +137,10 @@ export function ModelWizardFrame({
 							<p>{completed ? `当前版本已构建到 ${delivery?.modelingResult?.targetRelation || "目标表"}。` : "此页保留交付结果回看，资产治理和发布请进入数据管理。"}</p>
 							<div className="dmx-dialog-actions">
 								<Button primary onClick={onBack}>返回模型列表</Button>
-								<Link className="dmx-wizard-completion__link" to={`/catalog/search?view=table&modelSpecId=${encodeURIComponent(model.id)}&environment=${encodeURIComponent(environment)}${delivery?.candidate?.id ? `&candidateId=${encodeURIComponent(delivery.candidate.id)}` : ""}`}>去数据管理</Link>
+								<Link className="dmx-wizard-completion__link" to={buildModelDataManagementUrl({ modelSpecId: model.id, environment, candidateId: delivery?.candidate?.id, returnTo: buildModelWorkbenchReturnUrl(model.id, environment, step) })}>去数据管理</Link>
+								{completed ? (
+									<Link className="dmx-wizard-completion__link" to={buildModelDataManagementUrl({ modelSpecId: model.id, environment, candidateId: delivery?.candidate?.id, focus: "quality", returnTo: buildModelWorkbenchReturnUrl(model.id, environment, step) })}>配置质量规则</Link>
+								) : null}
 							</div>
 						</section>
 					) : loading && !delivery ? (

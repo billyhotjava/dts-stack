@@ -59,3 +59,36 @@ describe("journey stage state with artifact validations", () => {
 		expect(standards?.verification).toBe("unverified");
 	});
 });
+
+describe("journey stage order follows the implementation sequence", () => {
+	it("lists planning and standards before integration", async () => {
+		const { DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS } = await import("./journeyStageState");
+
+		expect(DATA_PRODUCT_JOURNEY_STAGE_DEFINITIONS.map((definition) => definition.stageKey)).toEqual([
+			"planning",
+			"standards",
+			"integration",
+			"modeling",
+			"metrics",
+			"development",
+			"service",
+			"evidence",
+		]);
+	});
+
+	it("lets planning start without a data source and completes it only with a subject domain", () => {
+		const idle = resolveDataProductJourneyStageState("planning", {});
+		const confirmed = resolveDataProductJourneyStageState("planning", { domainId: "d-1" });
+
+		expect(idle.status).toBe("ready");
+		expect(idle.blocker).toBeUndefined();
+		expect(idle.gap).toContain("尚未确认主题域");
+		expect(confirmed.status).toBe("done");
+	});
+
+	it("does not block standards or integration on a missing upstream data source", () => {
+		expect(resolveDataProductJourneyStageState("standards", {}).blocker).toBeUndefined();
+		expect(resolveDataProductJourneyStageState("integration", {}).blocker).toBeUndefined();
+		expect(resolveDataProductJourneyStageState("modeling", {}).blocker?.reason).toContain("缺少");
+	});
+});

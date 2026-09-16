@@ -11,9 +11,12 @@ import { ModelAnalysisPreparationAction } from "@/pages/data-modeling/prototype/
 import { ModelPublishDialog } from "@/pages/data-modeling/prototype/ModelPublishDialog";
 import { ModelWorkbenchNavigationGuard } from "@/pages/data-modeling/prototype/ModelWorkbenchNavigationGuard";
 import { Button } from "@/pages/data-modeling/prototype/PrototypePrimitives";
+import { type ModelDataManagementFocus, resolveModelingReturnTo } from "@/pages/data-modeling/prototype/modelDataManagementLink";
 
 /** Uses existing governance owners with the same model, candidate and asset identities. */
-export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId }: { modelSpecId: string; environment: string; candidateId?: string }) {
+export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId, focus, returnTo }: {
+	modelSpecId: string; environment: string; candidateId?: string; focus?: ModelDataManagementFocus; returnTo?: string;
+}) {
 	const [value, setValue] = useState<{ model: ModelSpecView; delivery: ModelDeliveryStatus } | null>(null);
 	const [failure, setFailure] = useState("");
 	const [busy, setBusy] = useState(false);
@@ -21,6 +24,7 @@ export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId
 	const [qualityGuard, setQualityGuard] = useState<UnsavedEditorHandle | null>(null);
 	const [catalogGuard, setCatalogGuard] = useState<UnsavedEditorHandle | null>(null);
 	const saving = useRef(false);
+	const focusHandled = useRef(false);
 	const sequence = useRef(0);
 	const load = useCallback(async () => {
 		const request = ++sequence.current;
@@ -35,6 +39,14 @@ export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId
 		} finally { if (request === sequence.current) setBusy(false); }
 	}, [modelSpecId, environment, candidateId]);
 	useEffect(() => { void load(); return () => { sequence.current++; }; }, [load]);
+	const awaitingRegistration = value?.delivery.dataPrimaryAction?.code === "REGISTER_DATA_ASSETS";
+	useEffect(() => {
+		// Arriving from a finished model opens the quality section once; later refreshes never reopen it.
+		if (focus !== "quality" || !value || focusHandled.current) return;
+		focusHandled.current = true;
+		if (!awaitingRegistration) setQualityOpen(n => n + 1);
+	}, [focus, value, awaitingRegistration]);
+	const backToModel = resolveModelingReturnTo(returnTo);
 	const guards = [qualityGuard, catalogGuard].filter((guard): guard is UnsavedEditorHandle => Boolean(guard));
 	const dirty = guards.some(guard => guard.dirty);
 	const action = value?.delivery.dataPrimaryAction;
@@ -61,7 +73,9 @@ export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId
 		{busy && !value ? <p>正在读取当前目标和资产状态…</p> : null}
 		{value ? <>
 			<p>{value.delivery.modelingResult?.state === "SUCCEEDED" ? "模型已完成构建" : "当前模型构建记录待确认"} · {value.delivery.modelingResult?.targetRelation || "尚无目标表"}</p>
+			{backToModel ? <Link to={backToModel}>返回模型</Link> : null}
 			<Link to={`/data-modeling/dimensions/workbench?modelSpecId=${encodeURIComponent(modelSpecId)}&step=definition&environment=${encodeURIComponent(environment)}`}>编辑模型</Link>
+			{focus === "quality" && awaitingRegistration ? <output className="dmx-capability-note">资产登记完成后可配置质量规则，请先登记数据资产。</output> : null}
 			{action?.code === "REGISTER_DATA_ASSETS" ? <Button disabled={!canCommand || !action.enabled} onClick={() => void register()}>登记数据资产</Button> : null}
 			{value.model.modelType === "SOURCE" && value.delivery.modelingResult?.state === "SUCCEEDED" ? <p><Link to="/foundation/data-sources/access/new">配置数据接入</Link>：在目标步骤选择此模型表，也可编辑已有接入任务绑定。</p> : null}
 			<ModelTargetQualityPanel delivery={value.delivery} openRequest={qualityOpen} canMaintain={canCommand || Boolean(qualityGuard?.dirty)} onChanged={() => void load()} onNavigationGuardChange={setQualityGuard} />

@@ -47,3 +47,17 @@ it("keeps old delivery links read-only with an explicit data-module destination"
 	expect(container.textContent).not.toContain("构建操作");
 	expect(container.querySelector("a")?.textContent).toBe("去数据管理");
 });
+it("offers one direct jump to the asset quality section with a way back to the model", () => {
+	mount("SUCCEEDED");
+	const quality = Array.from(container.querySelectorAll("a")).find(link => link.textContent === "配置质量规则");
+	expect(quality).toBeDefined();
+	const url = new URL(quality?.getAttribute("href") ?? "", "http://dts.local");
+	expect(url.pathname).toBe("/catalog/search");
+	expect(url.searchParams.get("modelSpecId")).toBe("model-1");
+	expect(url.searchParams.get("focus")).toBe("quality");
+	expect(url.searchParams.get("returnTo")).toBe("/data-modeling/dimensions/workbench?modelSpecId=model-1&step=verification&environment=dev");
+});
+it("does not offer quality configuration before the current version is built", () => {
+	mount("UNKNOWN", "delivery");
+	expect(Array.from(container.querySelectorAll("a")).map(link => link.textContent)).toEqual(["去数据管理"]);
+});

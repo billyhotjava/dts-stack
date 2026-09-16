@@ -1,9 +1,9 @@
 export const E2E_DATA_PRODUCT_JOURNEY = "e2e-data-product";
 
 export type DataProductJourneyStageKey =
-	| "integration"
 	| "planning"
 	| "standards"
+	| "integration"
 	| "modeling"
 	| "metrics"
 	| "development"
@@ -48,13 +48,6 @@ export type DataProductJourneyContext = {
 };
 
 const STAGE_CONFIG: Record<DataProductJourneyStageKey, JourneyStageConfig> = {
-	integration: {
-		label: "数据集成",
-		nextLabel: "继续到数仓规划",
-		currentRoute: "/foundation/data-sources",
-		nextRoute: "/data-architecture?view=business-domains",
-		evidenceRoute: "/ops/instances",
-	},
 	planning: {
 		label: "数仓规划",
 		nextLabel: "继续到数据标准",
@@ -64,10 +57,17 @@ const STAGE_CONFIG: Record<DataProductJourneyStageKey, JourneyStageConfig> = {
 	},
 	standards: {
 		label: "数据标准",
-		nextLabel: "继续到维度建模",
+		nextLabel: "继续到数据集成",
 		currentRoute: "/governance/standards/elements",
-		nextRoute: "/data-modeling/dimensions/workbench",
+		nextRoute: "/foundation/data-sources",
 		evidenceRoute: "/governance/standards/reference",
+	},
+	integration: {
+		label: "数据集成",
+		nextLabel: "继续到维度建模",
+		currentRoute: "/foundation/data-sources",
+		nextRoute: "/data-modeling/dimensions/workbench",
+		evidenceRoute: "/ops/instances",
 	},
 	modeling: {
 		label: "维度建模",

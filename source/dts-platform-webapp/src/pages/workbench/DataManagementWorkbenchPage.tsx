@@ -266,12 +266,12 @@ export default function Page({
 	const sectionTitle = isConsumptionFocus ? "消费发布" : "端到端数据产品";
 	const sectionDescription = isConsumptionFocus
 		? "从数据产品、资产授权、报表/API 发布到客户验收的消费闭环。"
-		: "从集成、数仓规划、标准、建模、指标、开发到服务发布的现场配置闭环。";
+		: "从数仓规划、标准、集成、建模、指标、开发到服务发布的现场配置闭环。";
 	const headerActions = (
 		<Space wrap>
-			<Button onClick={() => router.push(withE2EJourney("/foundation/data-sources"))}>配置数据源</Button>
 			<Button onClick={() => router.push(withE2EJourney("/data-architecture?view=business-domains"))}>数仓规划</Button>
 			<Button onClick={() => router.push(withE2EJourney("/data-modeling/standards/fields"))}>数据标准</Button>
+			<Button onClick={() => router.push(withE2EJourney("/foundation/data-sources"))}>配置数据源</Button>
 			<Button onClick={() => router.push(withE2EJourney("/data-modeling/dimensions/workbench"))}>模型中心</Button>
 			<Button onClick={() => router.push(withE2EJourney("/data-modeling/metrics/atomic"))}>指标设计</Button>
 			<Button onClick={() => router.push(withE2EJourney("/explore/etl/scripts"))}>数据开发</Button>

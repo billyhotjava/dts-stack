@@ -3,6 +3,7 @@ import {
 	buildJourneyParamClearUrl,
 	extractJourneyContextParams,
 	JOURNEY_CONTEXT_PARAM_KEYS,
+	parseDataProductJourneyContext,
 	resolveJourneyBarMode,
 } from "./journeyContext";
 
@@ -62,5 +63,19 @@ describe("journey bar mode", () => {
 	it("renders only for an explicitly active journey context", () => {
 		expect(resolveJourneyBarMode(true)).toBe("journey");
 		expect(resolveJourneyBarMode(false)).toBe("hidden");
+	});
+});
+
+describe("journey next steps follow the implementation sequence", () => {
+	it("moves from planning to standards, integration and modeling", () => {
+		const search = new URLSearchParams("journey=e2e-data-product");
+		const next = (stage: "planning" | "standards" | "integration") =>
+			new URL(parseDataProductJourneyContext(search, stage).nextUrl, "http://dts.local").pathname;
+
+		expect(next("planning")).toBe("/governance/standards/elements");
+		expect(next("standards")).toBe("/foundation/data-sources");
+		expect(next("integration")).toBe("/data-modeling/dimensions/workbench");
+		expect(parseDataProductJourneyContext(search, "standards").nextLabel).toBe("继续到数据集成");
+		expect(parseDataProductJourneyContext(search, "integration").nextLabel).toBe("继续到维度建模");
 	});
 });
