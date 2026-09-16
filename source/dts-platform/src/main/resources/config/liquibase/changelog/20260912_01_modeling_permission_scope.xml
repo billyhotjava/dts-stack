@@ -35,9 +35,8 @@
             <sqlCheck expectedResult="0">SELECT count(*) FROM modeling_warehouse_plan WHERE owner_department_id IS NULL OR btrim(owner_department_id) = '' OR owner_department_id !~ '^[A-Za-z0-9_:-]+$'</sqlCheck>
             <sqlCheck expectedResult="0">SELECT count(*) FROM (SELECT tenant_id,owner_department_id FROM modeling_warehouse_plan GROUP BY tenant_id,owner_department_id HAVING count(*) > 1) conflicts</sqlCheck>
             <sqlCheck expectedResult="0">SELECT count(*) FROM modeling_warehouse_plan WHERE lifecycle_status IN ('PUBLISHED','ARCHIVED')</sqlCheck>
-            <sqlCheck expectedResult="0">SELECT count(*) FROM modeling_model_spec WHERE model_type='APPLICATION' AND (owner_id IS NULL OR btrim(owner_id)='')</sqlCheck>
         </preConditions>
-        <comment>Run F9 directory preflight first. Ambiguous plans and historical ADS owners require an audited stable-ID mapping; no username guessing.</comment>
+        <comment>Run F9 directory preflight first. Ambiguous plans require an audited stable-ID mapping; no username guessing. Historical ADS owners no longer block this DDL: they are reviewed via f9-permission-preflight.py (HISTORICAL_ADS_OWNER_REQUIRES_STABLE_DIRECTORY_ID_REVIEW) and resolved through runtime ownership claim or the audited mapping, see changeset 20260912-03-f9-ads-owner-review.</comment>
         <sql><![CDATA[
             UPDATE modeling_warehouse_plan SET idempotency_key='modeling-context:dept:' || owner_department_id || ':v1';
             CREATE UNIQUE INDEX uk_modeling_department_context ON modeling_warehouse_plan(tenant_id,owner_department_id)
@@ -45,5 +44,13 @@
 
         ]]></sql>
         <rollback><sql>SELECT 1 /* Canonical department identities and ownership are not undone during binary rollback. */</sql></rollback>
+    </changeSet>
+    <changeSet id="20260912-03-f9-ads-owner-review" author="codex">
+        <preConditions onFail="WARN" onError="HALT">
+            <sqlCheck expectedResult="0">SELECT count(*) FROM modeling_model_spec WHERE model_type='APPLICATION' AND (owner_id IS NULL OR btrim(owner_id)='')</sqlCheck>
+        </preConditions>
+        <comment>Review-only check. Historical APPLICATION models created before the owner_id column may stay unresolved at startup: runtime access still falls back to department leader and institute managers, and ownership is claimed on create/reclassify. F9 preflight (f9-permission-preflight.py) keeps reporting HISTORICAL_ADS_OWNER_REQUIRES_STABLE_DIRECTORY_ID_REVIEW until the audited stable-directory-ID mapping is applied. This precondition must not block startup for legacy rows.</comment>
+        <sql>SELECT 1 /* review-only precondition; no schema or data change */</sql>
+        <rollback><sql>SELECT 1 /* review-only precondition; nothing to undo */</sql></rollback>
     </changeSet>
 </databaseChangeLog>
