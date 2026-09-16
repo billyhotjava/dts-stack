@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260916-01-screen-management-root" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <tableExists tableName="system_config"/>
+        </preConditions>
+        <comment>
+            将大屏管理提升为与数据分析与服务平级的一级菜单。原位保留菜单 ID、密级及角色绑定，
+            继续使用 /bi/screens，保存层级和种子哈希快照供回滚使用。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT TEXT := 'screen-management-root-20260916';
+                snapshot_key CONSTANT TEXT := 'portal.menu.screens.root.snapshot.20260916-01';
+                seed_hash CONSTANT TEXT := '4c807a4176742b74f0054314006d3e37512e85ea7c4fc8aabb21e8903172276a';
+                screens_id BIGINT;
+                screens_count INTEGER;
+                consumption_count INTEGER;
+                target_order INTEGER;
+                previous_seed_hash TEXT;
+                menu_snapshot JSONB;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:screens-root:20260916-01', 0));
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = snapshot_key) THEN
+                    RAISE EXCEPTION 'Screen management root snapshot already exists: %', snapshot_key;
+                END IF;
+
+                SELECT COUNT(*), MIN(id) INTO screens_count, screens_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (name = 'sys.nav.portal.biScreens'
+                        OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.biScreens');
+                SELECT COUNT(*), MAX(sort_order) + 1 INTO consumption_count, target_order
+                  FROM portal_menu
+                 WHERE deleted = FALSE AND parent_id IS NULL
+                   AND (name = 'sys.nav.portal.dataConsumption'
+                        OR metadata::jsonb ->> 'key' = 'consumption');
+                IF screens_count <> 1 OR consumption_count <> 1 OR target_order IS NULL THEN
+                    RAISE EXCEPTION 'Screen management root requires one screen and one consumption root; found % / %',
+                        screens_count, consumption_count;
+                END IF;
+                IF EXISTS (SELECT 1 FROM portal_menu WHERE parent_id = screens_id AND deleted = FALSE) THEN
+                    RAISE EXCEPTION 'Screen management has customized children; reconcile before moving it';
+                END IF;
+
+                SELECT jsonb_build_object('id', id, 'parentId', parent_id, 'path', path,
+                           'sortOrder', sort_order, 'metadata', metadata)
+                  INTO menu_snapshot FROM portal_menu WHERE id = screens_id FOR UPDATE;
+                SELECT cfg_value INTO previous_seed_hash FROM system_config WHERE cfg_key = 'portal.menu.seed.hash';
+                INSERT INTO system_config (
+                    cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                    display_name, config_scope, restart_required, owner, created_by, created_date,
+                    last_modified_by, last_modified_date
+                ) VALUES (
+                    snapshot_key, jsonb_build_object('seedHash', previous_seed_hash, 'menu', menu_snapshot)::TEXT,
+                    'Rollback snapshot for screen management root', 'SYSTEM', FALSE, 'JSON', FALSE, 0,
+                    'Screen management root rollback snapshot', 'RUNTIME', FALSE, 'platform', actor, now(), actor, now()
+                );
+
+                UPDATE portal_menu
+                   SET parent_id = NULL, path = 'bi/screens', sort_order = target_order,
+                       metadata = ((COALESCE(metadata::jsonb, '{}'::jsonb) - 'entryKey') ||
+                           jsonb_build_object('key', 'screens', 'sectionKey', 'screens',
+                               'titleKey', 'sys.nav.portal.biScreens', 'title', '大屏管理',
+                               'externalLink', '/bi/screens'))::TEXT,
+                       last_modified_by = actor, last_modified_date = now()
+                 WHERE id = screens_id;
+                INSERT INTO system_config (
+                    cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                    display_name, config_scope, restart_required, owner, created_by, created_date,
+                    last_modified_by, last_modified_date
+                ) VALUES (
+                    'portal.menu.seed.hash', seed_hash, 'Portal menu seed hash', 'SYSTEM', FALSE, 'STRING', FALSE, 0,
+                    'Portal menu seed hash', 'RUNTIME', FALSE, 'platform', actor, now(), actor, now()
+                ) ON CONFLICT (cfg_key) DO UPDATE
+                    SET cfg_value = EXCLUDED.cfg_value, last_modified_by = actor, last_modified_date = now();
+            END $do$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    actor CONSTANT TEXT := 'screen-management-root-20260916';
+                    snapshot_key CONSTANT TEXT := 'portal.menu.screens.root.snapshot.20260916-01';
+                    snapshot JSONB;
+                    saved JSONB;
+                    updated_count INTEGER;
+                BEGIN
+                    PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:screens-root:20260916-01', 0));
+                    SELECT cfg_value::jsonb INTO snapshot FROM system_config WHERE cfg_key = snapshot_key;
+                    IF snapshot IS NULL OR jsonb_typeof(snapshot -> 'menu') <> 'object' THEN
+                        RAISE EXCEPTION 'Screen management root rollback snapshot is missing';
+                    END IF;
+                    saved := snapshot -> 'menu';
+                    UPDATE portal_menu
+                       SET parent_id = (saved ->> 'parentId')::BIGINT, path = saved ->> 'path',
+                           sort_order = (saved ->> 'sortOrder')::INTEGER, metadata = saved ->> 'metadata',
+                           last_modified_by = actor || '-rollback', last_modified_date = now()
+                     WHERE id = (saved ->> 'id')::BIGINT AND last_modified_by = actor;
+                    GET DIAGNOSTICS updated_count = ROW_COUNT;
+                    IF updated_count <> 1 THEN
+                        RAISE EXCEPTION 'Screen management changed after migration; refusing to overwrite it';
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM system_config
+                                    WHERE cfg_key = 'portal.menu.seed.hash' AND last_modified_by = actor) THEN
+                        RAISE EXCEPTION 'Portal seed hash changed after migration; refusing to overwrite it';
+                    END IF;
+                    IF snapshot ->> 'seedHash' IS NULL THEN
+                        DELETE FROM system_config WHERE cfg_key = 'portal.menu.seed.hash';
+                    ELSE
+                        UPDATE system_config SET cfg_value = snapshot ->> 'seedHash',
+                               last_modified_by = actor || '-rollback', last_modified_date = now()
+                         WHERE cfg_key = 'portal.menu.seed.hash';
+                    END IF;
+                    DELETE FROM system_config WHERE cfg_key = snapshot_key;
+                END $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

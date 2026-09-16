@@ -102,17 +102,17 @@ class PortalMenuSeedDefaultsContractTest {
         assertNotNull(consumptionRoot, "数据分析与服务 root menu must exist");
         assertEquals("数据分析与服务", consumptionRoot.get("title"));
 
-        Map<String, Object> screens = listOfMaps(consumptionRoot.get("children"))
+        Map<String, Object> screens = roots
             .stream()
             .filter(node -> "screens".equals(node.get("key")))
             .findFirst()
             .orElse(null);
-        assertNotNull(screens, "大屏管理 must live directly under 数据分析与服务");
-        assertEquals("screens", screens.get("path"));
+        assertNotNull(screens, "大屏管理 must be a root peer of 数据分析与服务");
+        assertEquals("bi/screens", screens.get("path"));
         assertEquals("sys.nav.portal.biScreens", screens.get("titleKey"));
         assertEquals("大屏管理", screens.get("title"));
         assertEquals("/bi/screens", screens.get("externalLink"));
-
+        assertEquals(roots.indexOf(consumptionRoot) + 1, roots.indexOf(screens), "大屏管理 must follow 数据分析与服务");
         Map<String, Object> biAppsRoot = listOfMaps(consumptionRoot.get("children"))
             .stream()
             .filter(node -> "sys.nav.portal.businessIntelligenceApps".equals(node.get("titleKey")))

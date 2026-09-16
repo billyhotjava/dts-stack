@@ -27,6 +27,7 @@ const workbenchComponentPath = GLOBAL_CONFIG.enableSqlIdeV2
 	: "/pages/explore/QueryWorkbenchPage";
 
 const PATH_REDIRECT_OVERRIDES: Record<string, string> = {
+	"/consumption/screens": "/bi/screens",
 	"/workbench/data-management": "/workbench?section=data-management",
 	"/services/consumption": "/workbench?section=consumption",
 };

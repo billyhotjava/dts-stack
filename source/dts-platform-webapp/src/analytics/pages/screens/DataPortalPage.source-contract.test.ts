@@ -84,10 +84,14 @@ test("screen management and data portal keep separate audiences and canonical me
 	const seed = JSON.parse(seedSource) as { portalNavSections: MenuNode[] };
 	const defaults = JSON.parse(defaultsSource) as Array<{ code: string; title: string; route: string }>;
 	const consumption = child(seed.portalNavSections, "consumption");
-	const screens = child(consumption?.children, "screens");
+	const screens = child(seed.portalNavSections, "screens");
 	const biAnalysis = child(child(consumption?.children, "bi-apps")?.children, "bi");
 	const portal = child(biAnalysis?.children, "portal");
 
+	assert.ok(consumption);
+	assert.ok(screens);
+	assert.equal(child(consumption.children, "screens"), undefined);
+	assert.equal(seed.portalNavSections.indexOf(screens), seed.portalNavSections.indexOf(consumption) + 1);
 	assert.deepEqual(
 		{ title: screens?.title, titleKey: screens?.titleKey, route: screens?.externalLink },
 		{ title: "大屏管理", titleKey: "sys.nav.portal.biScreens", route: "/bi/screens" },
@@ -108,4 +112,9 @@ test("screen management and data portal keep separate audiences and canonical me
 	assert.match(zhLocale, /"biPortal":\s*"数据门户"/);
 	assert.match(enLocale, /"biScreens":\s*"Screen management"/);
 	assert.match(enLocale, /"biPortal":\s*"Data portal"/);
+	const dynamicRoutes = await readFile(
+		new URL("../../../routes/sections/dashboard/dynamic-resolver.tsx", import.meta.url),
+		"utf8",
+	);
+	assert.match(dynamicRoutes, /"\/consumption\/screens":\s*"\/bi\/screens"/);
 });

@@ -160,4 +160,5 @@
     <include file="config/liquibase/changelog/20260910_01_indicator_analysis_audit_catalog.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260912_01_modeling_permission_audit.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260914-01_person_import_history_constraints.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260916_01_screen_management_root.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

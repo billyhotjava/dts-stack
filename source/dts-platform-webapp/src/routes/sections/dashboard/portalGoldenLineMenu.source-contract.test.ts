@@ -78,7 +78,7 @@ const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\
 test("primary modules follow the warehouse lifecycle order and modeling stays outside studio", () => {
 	assert.deepEqual(
 		MENU_SEED.portalNavSections.map((item) => item.key),
-		["workbench", "resource", "data-architecture", "modeling", "studio", "governance", "consumption"],
+		["workbench", "resource", "data-architecture", "modeling", "studio", "governance", "consumption", "screens"],
 	);
 	assert.deepEqual(
 		section("studio").children?.map((item) => item.key),

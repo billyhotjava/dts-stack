@@ -619,14 +619,6 @@
           ]
         },
         {
-          "key": "screens",
-          "path": "screens",
-          "icon": "solar:monitor-bold-duotone",
-          "titleKey": "sys.nav.portal.biScreens",
-          "title": "大屏管理",
-          "externalLink": "/bi/screens"
-        },
-        {
           "key": "services",
           "path": "services",
           "icon": "solar:settings-minimalistic-bold-duotone",
@@ -668,6 +660,14 @@
           ]
         }
       ]
+    },
+    {
+      "key": "screens",
+      "path": "bi/screens",
+      "icon": "solar:monitor-bold-duotone",
+      "titleKey": "sys.nav.portal.biScreens",
+      "title": "大屏管理",
+      "externalLink": "/bi/screens"
     }
   ]
 }
