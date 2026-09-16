@@ -38,7 +38,21 @@
 | 阶段 | 状态 |
 |---|---|
 | 开发目录静态检查 | Biome 对比通过（仅保留原有告警） |
-| 构建测试目录专项测试 | 见下方追加记录 |
+| 构建测试目录专项测试 | 通过（`ac3eb0199`，明细见下） |
 | 正式构建与交付包 | 未执行 |
 | 容器部署与迁移 | 未执行 |
 | 真实页面与 Chrome 95 | 未执行 |
+
+## 构建测试目录专项测试记录（2026-09-16）
+
+构建测试目录 `/data/dts-stack` 执行 `git pull --ff-only` 后 HEAD 为 `ac3eb01993e4a07debb6f65d5996981e81100308`。
+
+| 范围 | 结果 |
+|---|---|
+| 前端 vitest：旅程、完成页、质量直达链接、数据运维面板聚焦、领导概览（10 个文件，`10e80ee07`） | 67/67 通过 |
+| 前端 vitest 复跑：旅程、质量直达链接、数据运维面板聚焦（4 个文件，`ac3eb0199`） | 21/21 通过 |
+| 菜单种子源码契约 `portalGoldenLineMenu`、`DataPortalPage`（node --test） | 11/11 通过 |
+| dts-admin Maven（Testcontainers）：本次迁移与种子契约、既有菜单契约、一级菜单排序、大屏分离、规划与旧策略菜单迁移，共 7 个类 | 43/43 通过，BUILD SUCCESS |
+
+- **首轮发现的契约冲突**：`10e80ee07` 首轮跑时，`PortalMenuSeedDefaultsContractTest` 和 `portalGoldenLineMenu` 仍固化 F10 之前的顺序：资产目录在数仓规划之前、建模概览排第一、复合指标排第一。这是本次有意调整的结果，已在 `ac3eb0199` 按新顺序更新断言，复跑通过。
+- **既有失败（与 F10 无关）**：与改动页面相关的 35 个源码契约文件中，另有 11 条失败。在 F10 之前的提交 `10d2af028` 上跑同一批测试，这 11 条的失败项和失败信息完全相同，涉及 JourneyContextBar 旧路由、Sprint45/49/82/93 资产页、ModelQualityEntry、prototypeReplacement、WorkbenchPersonalization、DataAssetPortalMenu。本次不处理。
