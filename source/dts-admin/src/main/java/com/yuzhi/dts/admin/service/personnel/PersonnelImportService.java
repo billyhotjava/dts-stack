@@ -48,7 +48,6 @@ public class PersonnelImportService {
 
     private final PersonImportBatchRepository batchRepository;
     private final PersonImportRecordRepository recordRepository;
-    private final PersonnelProfileService profileService;
     private final PersonnelExcelParser excelParser;
     private final PersonnelApiClient apiClient;
     private final AuditV2Service auditV2Service;
@@ -61,7 +60,6 @@ public class PersonnelImportService {
     public PersonnelImportService(
         PersonImportBatchRepository batchRepository,
         PersonImportRecordRepository recordRepository,
-        PersonnelProfileService profileService,
         PersonnelExcelParser excelParser,
         PersonnelApiClient apiClient,
         AuditV2Service auditV2Service,
@@ -73,7 +71,6 @@ public class PersonnelImportService {
     ) {
         this.batchRepository = batchRepository;
         this.recordRepository = recordRepository;
-        this.profileService = profileService;
         this.excelParser = excelParser;
         this.apiClient = apiClient;
         this.auditV2Service = auditV2Service;
@@ -211,7 +208,8 @@ public class PersonnelImportService {
                 record.setMessage("Dry-run 模式，未写入 Keycloak");
                 return RecordOutcome.oneSkipped();
             }
-            String keycloakUserId = provisioningService.provision(payload);
+            KeycloakUserProvisioningService.ProvisionResult provisioned = provisioningService.provision(payload);
+            String keycloakUserId = provisioned.keycloakUserId();
             record.setKeycloakUserId(keycloakUserId);
             Map<String, Object> attributes = payload.attributes() == null ? Map.of() : payload.attributes();
             upsertSnapshot(
@@ -219,7 +217,9 @@ public class PersonnelImportService {
                 firstNonBlank(payload.account(), payload.personCode()),
                 payload.fullName(),
                 attributes.getOrDefault("securityLevel", attributes.get("person_security_level")),
-                null,
+                payload.deptCode(),
+                payload.deptName(),
+                provisioned.deptGroupPath(),
                 null,
                 resolveMdmEnabled(payload)
             );
@@ -369,12 +369,22 @@ public class PersonnelImportService {
         auditV2Service.record(builder.build());
     }
 
+    /**
+     * 把本次导入的结果回写到 Keycloak 用户快照。
+     *
+     * <p>{@code deptCode}/{@code deptName} 是 Keycloak user attribute 的本地镜像，页面部门显示
+     * 由此而来；{@code deptGroupPath} 是本次实际绑定的部门组路径，按「全量覆盖」写入，
+     * 而不是并入旧值——MDM 推送的是人员当前的完整归属，保留旧部门路径就是把调岗前的
+     * 状态永久留存下来。
+     */
     private void upsertSnapshot(
         String keycloakUserId,
         String username,
         String fullName,
         Object secLevelObj,
-        String groupPath,
+        String deptCode,
+        String deptName,
+        String deptGroupPath,
         Boolean keycloakEnabled,
         Integer mdmEnabled
     ) {
@@ -400,16 +410,16 @@ public class PersonnelImportService {
         if (mdmEnabled != null) {
             snapshot.setMdmEnabled(mdmEnabled);
         }
-        if (StringUtils.isNotBlank(groupPath)) {
-            String normalized = normalizeGroupPath(groupPath);
-            if (StringUtils.isNotBlank(normalized)) {
-                List<String> paths = new java.util.ArrayList<>(snapshot.getGroupPaths() == null ? List.of() : snapshot.getGroupPaths());
-                boolean exists = paths.stream().map(this::normalizeGroupPath).anyMatch(normalized::equalsIgnoreCase);
-                if (!exists) {
-                    paths.add(normalized);
-                    snapshot.setGroupPaths(paths);
-                }
-            }
+        if (StringUtils.isNotBlank(deptCode)) {
+            snapshot.setDeptCode(deptCode.trim());
+        }
+        if (StringUtils.isNotBlank(deptName)) {
+            snapshot.setDeptName(deptName.trim());
+        }
+        String normalizedGroupPath = normalizeGroupPath(deptGroupPath);
+        if (StringUtils.isNotBlank(normalizedGroupPath)) {
+            // 用可变集合，避免 Hibernate 对 jsonb 属性做脏检查时持有不可变 List。
+            snapshot.setGroupPaths(new java.util.ArrayList<>(List.of(normalizedGroupPath)));
         }
         snapshot.setLastSyncAt(Instant.now());
         adminKeycloakUserRepository.save(snapshot);

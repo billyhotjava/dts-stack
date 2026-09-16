@@ -49,6 +49,14 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
     @Column(name = "group_paths", columnDefinition = "jsonb")
     private List<String> groupPaths = new ArrayList<>();
 
+    /** Keycloak user attribute {@code dept_code} 的本地镜像；部门归属的唯一读取来源。 */
+    @Column(name = "dept_code", length = 64)
+    private String deptCode;
+
+    /** Keycloak user attribute {@code dept_name} 的本地镜像。 */
+    @Column(name = "dept_name", length = 128)
+    private String deptName;
+
     @Column(name = "enabled", nullable = false)
     private boolean enabled = true;
 
@@ -129,6 +137,22 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
 
     public void setGroupPaths(List<String> groupPaths) {
         this.groupPaths = groupPaths == null ? new ArrayList<>() : groupPaths;
+    }
+
+    public String getDeptCode() {
+        return deptCode;
+    }
+
+    public void setDeptCode(String deptCode) {
+        this.deptCode = deptCode;
+    }
+
+    public String getDeptName() {
+        return deptName;
+    }
+
+    public void setDeptName(String deptName) {
+        this.deptName = deptName;
     }
 
     public boolean isEnabled() {

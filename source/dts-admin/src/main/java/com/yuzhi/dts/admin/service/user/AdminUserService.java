@@ -274,12 +274,24 @@ public class AdminUserService {
                     if (dto.getRealmRoles() != null) {
                         snapshot.setRealmRoles(dto.getRealmRoles());
                     }
-                    List<String> groupPaths = normalizeGroupPathList(dto.getGroups());
-                    if (groupPaths.isEmpty()) {
-                        groupPaths = resolveGroupPathsFromProfiles(dto.getUsername());
+                    // 部门以 Keycloak attribute 为准；Keycloak 是本系统的唯一事实源。
+                    String deptCode = extractSingle(dto, "dept_code");
+                    if (StringUtils.isNotBlank(deptCode)) {
+                        snapshot.setDeptCode(deptCode.trim());
                     }
-                    if (!groupPaths.isEmpty()) {
-                        snapshot.setGroupPaths(mergeGroupPaths(snapshot.getGroupPaths(), groupPaths));
+                    String deptName = extractSingle(dto, "dept_name");
+                    if (StringUtils.isNotBlank(deptName)) {
+                        snapshot.setDeptName(deptName.trim());
+                    }
+                    List<String> keycloakGroupPaths = normalizeGroupPathList(dto.getGroups());
+                    if (!keycloakGroupPaths.isEmpty()) {
+                        // 覆盖而非并入：这是 Keycloak 给出的该用户当前完整组列表，
+                        // 并入只会让调岗前的旧部门路径永远留存。
+                        snapshot.setGroupPaths(keycloakGroupPaths);
+                    } else if (snapshot.getGroupPaths() == null || snapshot.getGroupPaths().isEmpty()) {
+                        // Keycloak 的 GET /users 不返回组成员关系，只在快照还没有任何组路径时，
+                        // 才用 person_profile 派生值兜底——它是历史遗留数据，不能覆盖已有的正确值。
+                        snapshot.setGroupPaths(resolveGroupPathsFromProfiles(dto.getUsername()));
                     }
                     snapshot.setLastSyncAt(Instant.now());
                     userRepository.save(snapshot);
@@ -380,9 +392,13 @@ public class AdminUserService {
                         )
                     );
                     snapshot.setMdmEnabled(profile.getLifecycleStatus() == PersonLifecycleStatus.INACTIVE ? 0 : 1);
-                    List<String> resolvedPaths = resolveGroupPathsFromProfile(profile);
-                    if (!resolvedPaths.isEmpty()) {
-                        snapshot.setGroupPaths(mergeGroupPaths(snapshot.getGroupPaths(), resolvedPaths));
+                    // person_profile 是历史遗留表（见 4d53821ba），只能给空快照做初始播种，
+                    // 不能并入或覆盖 MDM / Keycloak 已经写好的组路径。
+                    if (snapshot.getGroupPaths() == null || snapshot.getGroupPaths().isEmpty()) {
+                        List<String> resolvedPaths = resolveGroupPathsFromProfile(profile);
+                        if (!resolvedPaths.isEmpty()) {
+                            snapshot.setGroupPaths(resolvedPaths);
+                        }
                     }
                     snapshot.setLastSyncAt(Instant.now());
                     if (StringUtils.isNotBlank(snapshot.getKeycloakId())) {
@@ -616,62 +632,57 @@ public class AdminUserService {
         }
     }
 
+    /**
+     * 解析用户的部门归属。
+     *
+     * <p>数据源是 {@code admin_keycloak_user} 快照的 dept_code/dept_name，即 Keycloak user
+     * attribute 的本地镜像。此前这里读的是 {@code person_profile}，而该表自
+     * {@code 4d53821ba}「processBatch 主流程改为直写 Keycloak，移除 PersonProfile 写入」
+     * 之后就再无写入方，导致 MDM 侧的调岗永远反映不到页面上——部门一直停留在那次重构前的值。
+     *
+     * <p>按「Keycloak 唯一事实源」的定位，这里不再回退到 person_profile：读到空好过读到一个
+     * 已知会过期的值。快照的部门列由 MDM 导入（{@code PersonnelImportService.upsertSnapshot}）
+     * 和 {@code refreshSnapshotsFromKeycloak()} 两条路径填充。
+     */
     @Transactional(readOnly = true)
     public Map<String, DepartmentInfo> resolveDepartments(Collection<String> usernames) {
         LinkedHashMap<String, DepartmentInfo> result = new LinkedHashMap<>();
         if (usernames == null || usernames.isEmpty()) {
             return result;
         }
+        LinkedHashSet<String> orderedInputs = new LinkedHashSet<>();
         LinkedHashSet<String> normalizedInputs = new LinkedHashSet<>();
-        List<String> orderedInputs = new ArrayList<>();
         for (String raw : usernames) {
-            if (StringUtils.isBlank(raw)) {
-                continue;
-            }
-            String trimmed = raw.trim();
-            if (trimmed.isEmpty()) {
+            String trimmed = StringUtils.trimToNull(raw);
+            if (trimmed == null) {
                 continue;
             }
             orderedInputs.add(trimmed);
-            normalizedInputs.add(trimmed.toLowerCase());
+            normalizedInputs.add(trimmed.toLowerCase(Locale.ROOT));
         }
         if (normalizedInputs.isEmpty()) {
             return result;
         }
 
-        Map<String, DepartmentInfo> resolvedById = new HashMap<>();
+        Map<String, DepartmentInfo> resolvedByUsername = new HashMap<>();
         try {
-            List<PersonProfile> profiles = personProfileRepository.findByAnyIdentifierLowerIn(normalizedInputs);
-            for (PersonProfile profile : profiles) {
-                if (profile == null) {
+            for (AdminKeycloakUser snapshot : userRepository.findByUsernameInIgnoreCase(normalizedInputs)) {
+                if (snapshot == null || StringUtils.isBlank(snapshot.getUsername())) {
                     continue;
                 }
-                DepartmentInfo info = new DepartmentInfo(
-                    StringUtils.trimToNull(profile.getDeptCode()),
-                    StringUtils.trimToNull(profile.getDeptName())
-                );
-                if (info.deptCode() == null && info.deptName() == null) {
+                String deptCode = StringUtils.trimToNull(snapshot.getDeptCode());
+                String deptName = StringUtils.trimToNull(snapshot.getDeptName());
+                if (deptCode == null && deptName == null) {
                     continue;
                 }
-                String account = StringUtils.trimToNull(profile.getAccount());
-                if (account != null) {
-                    resolvedById.putIfAbsent(account.toLowerCase(), info);
-                }
-                String personCode = StringUtils.trimToNull(profile.getPersonCode());
-                if (personCode != null) {
-                    resolvedById.putIfAbsent(personCode.toLowerCase(), info);
-                }
-                String externalId = StringUtils.trimToNull(profile.getExternalId());
-                if (externalId != null) {
-                    resolvedById.putIfAbsent(externalId.toLowerCase(), info);
-                }
+                resolvedByUsername.putIfAbsent(snapshot.getUsername().toLowerCase(Locale.ROOT), new DepartmentInfo(deptCode, deptName));
             }
         } catch (Exception ex) {
             LOG.warn("resolve departments failed: {}", ex.getMessage());
         }
 
         for (String input : orderedInputs) {
-            DepartmentInfo info = resolvedById.get(input.toLowerCase());
+            DepartmentInfo info = resolvedByUsername.get(input.toLowerCase(Locale.ROOT));
             if (info != null) {
                 result.put(input, info);
             }
@@ -2301,12 +2312,6 @@ public class AdminUserService {
             }
         }
         return result;
-    }
-
-    private List<String> mergeGroupPaths(Collection<String> existing, Collection<String> additions) {
-        LinkedHashSet<String> merged = new LinkedHashSet<>(normalizeGroupPathList(existing));
-        merged.addAll(normalizeGroupPathList(additions));
-        return new ArrayList<>(merged);
     }
 
     private List<String> normalizeGroupPathListForDiff(Collection<?> source) {

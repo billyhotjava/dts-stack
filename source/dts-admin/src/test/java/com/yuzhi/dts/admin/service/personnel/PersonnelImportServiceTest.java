@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.admin.config.MdmGatewayProperties;
+import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.domain.PersonImportBatch;
 import com.yuzhi.dts.admin.domain.PersonImportRecord;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
@@ -42,7 +43,8 @@ class PersonnelImportServiceTest {
             return batch;
         });
         when(batchRepository.getReferenceById(42L)).thenReturn(savedBatch);
-        when(provisioningService.provision(any(PersonnelPayload.class))).thenReturn("kc-1");
+        when(provisioningService.provision(any(PersonnelPayload.class)))
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null));
         when(adminKeycloakUserRepository.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.empty());
         when(adminKeycloakUserRepository.findByUsernameIgnoreCase("alice")).thenReturn(java.util.Optional.empty());
         when(adminKeycloakUserRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -53,7 +55,6 @@ class PersonnelImportServiceTest {
         PersonnelImportService service = new PersonnelImportService(
             batchRepository,
             recordRepository,
-            mock(PersonnelProfileService.class),
             mock(PersonnelExcelParser.class),
             mock(PersonnelApiClient.class),
             mock(AuditV2Service.class),
@@ -69,6 +70,79 @@ class PersonnelImportServiceTest {
         assertThat(result.status()).isEqualTo("FAILED");
         assertThat(result.successRecords()).isZero();
         assertThat(result.failureRecords()).isEqualTo(1);
+    }
+
+
+    @Test
+    void importFromMdmShouldOverwriteDeptAndGroupPathWhenPersonTransfers() {
+        PersonImportBatchRepository batchRepository = mock(PersonImportBatchRepository.class);
+        PersonImportRecordRepository recordRepository = mock(PersonImportRecordRepository.class);
+        KeycloakUserProvisioningService provisioningService = mock(KeycloakUserProvisioningService.class);
+        AdminKeycloakUserRepository adminKeycloakUserRepository = mock(AdminKeycloakUserRepository.class);
+        PersonImportBatch savedBatch = new PersonImportBatch();
+        savedBatch.setId(7L);
+        when(batchRepository.save(any(PersonImportBatch.class))).thenAnswer((Answer<PersonImportBatch>) invocation -> {
+            PersonImportBatch batch = invocation.getArgument(0);
+            if (batch.getId() == null) {
+                batch.setId(7L);
+            }
+            return batch;
+        });
+        when(batchRepository.getReferenceById(7L)).thenReturn(savedBatch);
+        when(provisioningService.provision(any(PersonnelPayload.class)))
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", "/总部/新部门"));
+
+        // 已存在的快照停留在调岗前的部门
+        AdminKeycloakUser existing = new AdminKeycloakUser();
+        existing.setKeycloakId("kc-1");
+        existing.setUsername("alice");
+        existing.setDeptCode("D001");
+        existing.setDeptName("旧部门");
+        existing.setGroupPaths(new java.util.ArrayList<>(java.util.List.of("/总部/旧部门")));
+        when(adminKeycloakUserRepository.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.of(existing));
+        when(adminKeycloakUserRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(recordRepository.save(any(PersonImportRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PersonnelImportService service = new PersonnelImportService(
+            batchRepository,
+            recordRepository,
+            mock(PersonnelExcelParser.class),
+            mock(PersonnelApiClient.class),
+            mock(AuditV2Service.class),
+            provisioningService,
+            adminKeycloakUserRepository,
+            new ObjectMapper(),
+            new MdmGatewayProperties(),
+            new NoopTransactionManager()
+        );
+
+        PersonnelImportResult result = service.importFromMdm("mdm-ref", java.util.List.of(payloadWithDept("alice", "D002", "新部门")), Map.of());
+
+        assertThat(result.successRecords()).isEqualTo(1);
+        assertThat(existing.getDeptCode()).isEqualTo("D002");
+        assertThat(existing.getDeptName()).isEqualTo("新部门");
+        assertThat(existing.getGroupPaths()).containsExactly("/总部/新部门");
+    }
+
+    private PersonnelPayload payloadWithDept(String account, String deptCode, String deptName) {
+        return new PersonnelPayload(
+            "P001",
+            "EXT001",
+            account,
+            "Alice",
+            null,
+            deptCode,
+            deptName,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "ACTIVE",
+            null,
+            null,
+            Map.of("person_security_level", "3")
+        );
     }
 
     private PersonnelPayload payload(String account) {

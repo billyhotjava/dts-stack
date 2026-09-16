@@ -161,4 +161,5 @@
     <include file="config/liquibase/changelog/20260912_01_modeling_permission_audit.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260914-01_person_import_history_constraints.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260916_01_screen_management_root.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260916_02_admin_keycloak_user_dept.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
