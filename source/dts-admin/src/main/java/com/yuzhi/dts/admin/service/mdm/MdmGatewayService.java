@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -301,27 +302,16 @@ public class MdmGatewayService {
             }
 
             if (!users.isEmpty() || !rejectedUsers.isEmpty()) {
-                var importResult = personnelImportService.importFromMdm(
-                    "mdm-callback-" + result.batchId,
-                    users,
-                    rejectedUsers,
-                    Map.of(
-                        "file",
-                        result.file,
-                        "md5",
-                        md5,
-                        "clientIp",
-                        clientIp,
-                        "dataType",
-                        dataType,
-                        "orgsApplied",
-                        orgsApplied,
-                        "invalidUsers",
-                        result.invalidUsers,
-                        "invalidDepts",
-                        result.invalidDepts
-                    )
-                );
+                // 不能用 Map.of：clientIp 取不到时为 null，会直接 NPE，导致整批人员静默不导入。
+                Map<String, Object> batchMeta = new LinkedHashMap<>();
+                batchMeta.put("file", result.file);
+                batchMeta.put("md5", md5);
+                batchMeta.put("clientIp", clientIp);
+                batchMeta.put("dataType", dataType);
+                batchMeta.put("orgsApplied", orgsApplied);
+                batchMeta.put("invalidUsers", result.invalidUsers);
+                batchMeta.put("invalidDepts", result.invalidDepts);
+                var importResult = personnelImportService.importFromMdm("mdm-callback-" + result.batchId, users, rejectedUsers, batchMeta);
                 result.imported = importResult.successRecords();
                 result.importBatchId = importResult.batchId();
                 result.importFailed = importResult.failureRecords();
