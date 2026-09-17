@@ -3,6 +3,8 @@ package com.yuzhi.dts.admin.service.personnel;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,6 +12,7 @@ import com.yuzhi.dts.admin.config.MdmGatewayProperties;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.domain.PersonImportBatch;
 import com.yuzhi.dts.admin.domain.PersonImportRecord;
+import com.yuzhi.dts.admin.domain.enumeration.PersonRecordStatus;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.yuzhi.dts.admin.repository.PersonImportBatchRepository;
 import com.yuzhi.dts.admin.repository.PersonImportRecordRepository;
@@ -72,6 +75,66 @@ class PersonnelImportServiceTest {
         assertThat(result.failureRecords()).isEqualTo(1);
     }
 
+
+    @Test
+    void importFromMdmShouldRecordRejectedRowsAndStillImportValidOnes() {
+        PersonImportBatchRepository batchRepository = mock(PersonImportBatchRepository.class);
+        PersonImportRecordRepository recordRepository = mock(PersonImportRecordRepository.class);
+        KeycloakUserProvisioningService provisioningService = mock(KeycloakUserProvisioningService.class);
+        AdminKeycloakUserRepository adminKeycloakUserRepository = mock(AdminKeycloakUserRepository.class);
+        PersonImportBatch savedBatch = new PersonImportBatch();
+        savedBatch.setId(9L);
+        when(batchRepository.save(any(PersonImportBatch.class))).thenAnswer((Answer<PersonImportBatch>) invocation -> {
+            PersonImportBatch batch = invocation.getArgument(0);
+            if (batch.getId() == null) {
+                batch.setId(9L);
+            }
+            return batch;
+        });
+        when(batchRepository.getReferenceById(9L)).thenReturn(savedBatch);
+        when(provisioningService.provision(any(PersonnelPayload.class)))
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null));
+        when(adminKeycloakUserRepository.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.empty());
+        when(adminKeycloakUserRepository.findByUsernameIgnoreCase("alice")).thenReturn(java.util.Optional.empty());
+        when(adminKeycloakUserRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        java.util.List<PersonImportRecord> saved = new java.util.ArrayList<>();
+        when(recordRepository.save(any(PersonImportRecord.class))).thenAnswer(invocation -> {
+            saved.add(invocation.getArgument(0));
+            return invocation.getArgument(0);
+        });
+
+        PersonnelImportService service = new PersonnelImportService(
+            batchRepository,
+            recordRepository,
+            mock(PersonnelExcelParser.class),
+            mock(PersonnelApiClient.class),
+            mock(AuditV2Service.class),
+            provisioningService,
+            adminKeycloakUserRepository,
+            new ObjectMapper(),
+            new MdmGatewayProperties(),
+            new NoopTransactionManager()
+        );
+        PersonnelPayload broken = payloadWithDept("bob", null, null);
+
+        PersonnelImportResult result = service.importFromMdm(
+            "mdm-ref",
+            java.util.List.of(payload("alice")),
+            java.util.List.of(new PersonnelImportService.RejectedPayload(broken, "第 2 条人员缺少必填字段: deptCode")),
+            Map.of()
+        );
+
+        assertThat(result.status()).isEqualTo("COMPLETED_WITH_ERRORS");
+        assertThat(result.totalRecords()).isEqualTo(2);
+        assertThat(result.successRecords()).isEqualTo(1);
+        assertThat(result.failureRecords()).isEqualTo(1);
+        assertThat(saved).extracting(PersonImportRecord::getStatus)
+            .containsExactlyInAnyOrder(PersonRecordStatus.SUCCESS, PersonRecordStatus.FAILED);
+        PersonImportRecord rejectedRecord = saved.stream().filter(r -> r.getStatus() == PersonRecordStatus.FAILED).findFirst().orElseThrow();
+        assertThat(rejectedRecord.getAccount()).isEqualTo("bob");
+        assertThat(rejectedRecord.getMessage()).contains("deptCode");
+        verify(provisioningService, never()).provision(broken);
+    }
 
     @Test
     void importFromMdmShouldOverwriteDeptAndGroupPathWhenPersonTransfers() {

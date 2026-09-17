@@ -83,39 +83,59 @@ public class PersonnelImportService {
 
     public PersonnelImportResult importFromApi(String reference, boolean dryRun, String cursor) {
         PersonnelApiClient.ApiFetchResult result = apiClient.fetch(cursor);
-        return processBatch(PersonSourceType.API, reference, dryRun, result.records(), metadataWithCursor(cursor, result.nextCursor()));
+        return processBatch(PersonSourceType.API, reference, dryRun, result.records(), List.of(), metadataWithCursor(cursor, result.nextCursor()));
     }
 
     public PersonnelImportResult importFromExcel(String filename, java.io.InputStream inputStream, boolean dryRun) {
         List<PersonnelPayload> payloads = excelParser.parse(inputStream, filename);
-        return processBatch(PersonSourceType.EXCEL, filename, dryRun, payloads, Map.of("filename", filename));
+        return processBatch(PersonSourceType.EXCEL, filename, dryRun, payloads, List.of(), Map.of("filename", filename));
     }
 
     public PersonnelImportResult importManual(String reference, boolean dryRun, List<PersonnelPayload> payloads) {
-        return processBatch(PersonSourceType.MANUAL, reference, dryRun, payloads, Map.of());
+        return processBatch(PersonSourceType.MANUAL, reference, dryRun, payloads, List.of(), Map.of());
     }
 
     public PersonnelImportResult importFromMdm(String reference, List<PersonnelPayload> payloads, Map<String, Object> metadata) {
-        return processBatch(PersonSourceType.MDM, reference, false, payloads, metadata == null ? Map.of() : metadata);
+        return importFromMdm(reference, payloads, List.of(), metadata);
     }
+
+    /**
+     * MDM 导入：{@code payloads} 正常导入；{@code rejected} 是预校验未通过（如缺必填字段）的记录，
+     * 不写 Keycloak，只作为失败明细记入同一批次，保证单条坏数据不会拦住整个文件。
+     */
+    public PersonnelImportResult importFromMdm(
+        String reference,
+        List<PersonnelPayload> payloads,
+        List<RejectedPayload> rejected,
+        Map<String, Object> metadata
+    ) {
+        return processBatch(PersonSourceType.MDM, reference, false, payloads, rejected, metadata == null ? Map.of() : metadata);
+    }
+
+    /** 预校验未通过的一条记录及原因。 */
+    public record RejectedPayload(PersonnelPayload payload, String reason) {}
 
     private PersonnelImportResult processBatch(
         PersonSourceType sourceType,
         String reference,
         boolean dryRun,
         List<PersonnelPayload> payloads,
+        List<RejectedPayload> rejected,
         Map<String, Object> metadata
     ) {
-        if (payloads == null || payloads.isEmpty()) {
+        List<PersonnelPayload> accepted = payloads == null ? List.of() : payloads;
+        List<RejectedPayload> rejectedRecords = rejected == null ? List.of() : rejected;
+        if (accepted.isEmpty() && rejectedRecords.isEmpty()) {
             throw new PersonnelImportException("导入数据为空");
         }
+        int total = accepted.size() + rejectedRecords.size();
         PersonImportBatch batch = new PersonImportBatch();
         batch.setSourceType(sourceType);
         batch.setStatus(PersonImportStatus.RUNNING);
         batch.setReference(reference);
         batch.setDryRun(dryRun);
         batch.setStartedAt(Instant.now());
-        batch.setTotalRecords(payloads.size());
+        batch.setTotalRecords(total);
         batch.setMetadata(metadata);
         batch = batchRepository.save(batch);
         OPS_LOG.info(
@@ -123,14 +143,18 @@ public class PersonnelImportService {
             batch.getId(),
             sourceType,
             reference,
-            payloads.size(),
+            total,
             dryRun
         );
 
         int success = 0;
         int failed = 0;
         int skipped = 0;
-        for (PersonnelPayload payload : payloads) {
+        for (RejectedPayload rejectedRecord : rejectedRecords) {
+            saveRejectedRecordInNewTransaction(batch.getId(), rejectedRecord);
+            failed++;
+        }
+        for (PersonnelPayload payload : accepted) {
             RecordOutcome outcome;
             try {
                 outcome = processRecordInNewTransaction(batch.getId(), payload, dryRun);
@@ -155,7 +179,7 @@ public class PersonnelImportService {
             "[batch-end] id={} type={} total={} success={} failed={} skipped={} status={} dryRun={}",
             batch.getId(),
             sourceType,
-            payloads.size(),
+            total,
             success,
             failed,
             skipped,
@@ -283,6 +307,37 @@ public class PersonnelImportService {
             ex
         );
         return RecordOutcome.oneFailed();
+    }
+
+    /** 预校验未通过的记录：不调 Keycloak，直接以 FAILED 明细落库，原因写入 message。 */
+    private void saveRejectedRecordInNewTransaction(Long batchId, RejectedPayload rejected) {
+        PersonnelPayload payload = rejected.payload();
+        try {
+            requiresNewTransaction()
+                .executeWithoutResult(status -> {
+                    PersonImportBatch batchRef = batchRepository.getReferenceById(batchId);
+                    PersonImportRecord record = buildRecord(batchRef, payload);
+                    record.setStatus(PersonRecordStatus.FAILED);
+                    record.setMessage(limitMessage(rejected.reason()));
+                    record.setProcessedAt(Instant.now());
+                    recordRepository.save(record);
+                });
+            OPS_LOG.warn(
+                "[record-rejected] batch={} personCode={} reason={}",
+                batchId,
+                payload.personCode(),
+                rejected.reason()
+            );
+        } catch (Exception ex) {
+            OPS_LOG.error(
+                "[record-rejected-persist-fail] batch={} personCode={} reason={} persist={}",
+                batchId,
+                payload.personCode(),
+                rejected.reason(),
+                exceptionMessage(ex),
+                ex
+            );
+        }
     }
 
     private TransactionTemplate requiresNewTransaction() {

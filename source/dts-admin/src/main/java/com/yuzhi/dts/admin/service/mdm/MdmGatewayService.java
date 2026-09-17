@@ -15,8 +15,9 @@ import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,6 +49,7 @@ public class MdmGatewayService {
     private static final Logger LOG = LoggerFactory.getLogger("dts.mdm.gateway");
     private static final DateTimeFormatter TS_DIR = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final DateTimeFormatter TS_FILE = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    private static final int MAX_REJECTED_LOG_LINES = 20;
 
     private final RestTemplate restTemplate;
     private final MdmGatewayProperties properties;
@@ -254,21 +256,26 @@ public class MdmGatewayService {
             result.userRecords = rawUsers.size();
             result.deptRecords = rawDepts.size();
             result.records = result.userRecords + result.deptRecords;
-            result.missingUsers = findMissing(rawUsers, properties.getRequired().getUsers());
-            result.missingDepts = findMissing(rawDepts, properties.getRequired().getDepts());
-            Set<String> union = new HashSet<>();
+            // 必填校验按记录进行：缺字段的记录剔除并记录原因，完整记录照常导入，
+            // 不能因为个别坏数据拦住整个文件。
+            List<Map<String, Object>> validDepts = filterValidDepts(rawDepts, result);
+            List<PersonnelPayload> users = new ArrayList<>();
+            List<PersonnelImportService.RejectedPayload> rejectedUsers = new ArrayList<>();
+            splitUsers(rawUsers, result, users, rejectedUsers);
+            Set<String> union = new LinkedHashSet<>();
             union.addAll(result.missingUsers);
             union.addAll(result.missingDepts);
             result.missingRequired = union;
 
-            if (!result.missingRequired.isEmpty()) {
+            if (result.invalidUsers > 0 || result.invalidDepts > 0) {
                 LOG.warn(
-                    "mdm.callback.validation failed missingRequired={} file={} clientIp={}",
-                    result.missingRequired,
+                    "mdm.callback.validation partial file={} invalidUsers={} invalidDepts={} missingRequired={} clientIp={}",
                     result.file,
+                    result.invalidUsers,
+                    result.invalidDepts,
+                    result.missingRequired,
                     clientIp
                 );
-                return;
             }
             LOG.info(
                 "mdm.callback.parsed file={} clientIp={} users={} depts={} dataType={} md5={}",
@@ -280,7 +287,7 @@ public class MdmGatewayService {
                 md5
             );
 
-            List<OrganizationService.MdmOrgRecord> orgs = rawDepts
+            List<OrganizationService.MdmOrgRecord> orgs = validDepts
                 .stream()
                 .map(this::mapOrgPayload)
                 .filter(Objects::nonNull)
@@ -293,22 +300,38 @@ public class MdmGatewayService {
                 LOG.info("mdm.callback.import.orgs file={} applied={} payloadDepts={}", result.file, orgsApplied, orgs.size());
             }
 
-            List<PersonnelPayload> users = rawUsers.stream().map(this::mapUserPayload).filter(Objects::nonNull).toList();
-            if (!users.isEmpty()) {
+            if (!users.isEmpty() || !rejectedUsers.isEmpty()) {
                 var importResult = personnelImportService.importFromMdm(
                     "mdm-callback-" + result.batchId,
                     users,
-                    Map.of("file", result.file, "md5", md5, "clientIp", clientIp, "dataType", dataType, "orgsApplied", orgsApplied)
+                    rejectedUsers,
+                    Map.of(
+                        "file",
+                        result.file,
+                        "md5",
+                        md5,
+                        "clientIp",
+                        clientIp,
+                        "dataType",
+                        dataType,
+                        "orgsApplied",
+                        orgsApplied,
+                        "invalidUsers",
+                        result.invalidUsers,
+                        "invalidDepts",
+                        result.invalidDepts
+                    )
                 );
                 result.imported = importResult.successRecords();
                 result.importBatchId = importResult.batchId();
                 result.importFailed = importResult.failureRecords();
                 LOG.info(
-                    "mdm.callback.import.users file={} success={} failed={} payloadUsers={}",
+                    "mdm.callback.import.users file={} success={} failed={} payloadUsers={} rejectedUsers={}",
                     result.file,
                     importResult.successRecords(),
                     importResult.failureRecords(),
-                    users.size()
+                    users.size(),
+                    rejectedUsers.size()
                 );
             }
             if (!orgs.isEmpty()) {
@@ -378,20 +401,23 @@ public class MdmGatewayService {
     }
 
     private PersonnelPayload mapUserPayload(Map<String, Object> m) {
+        if (!StringUtils.isNotBlank(string(m.get("userCode"))) && !StringUtils.isNotBlank(string(m.get("userName")))) {
+            return null;
+        }
+        return toUserPayload(m);
+    }
+
+    private PersonnelPayload toUserPayload(Map<String, Object> m) {
         String userCode = string(m.get("userCode"));
         String userName = string(m.get("userName"));
         String deptCode = string(m.get("deptCode"));
         String status = statusToLifecycle(m.get("status"));
-        String securityLevel = string(m.get("securityLevel"));
         Map<String, Object> attrs = new HashMap<>();
         m.forEach((k, v) -> {
             if (v != null) {
                 attrs.put(k, v);
             }
         });
-        if (!StringUtils.isNotBlank(userCode) && !StringUtils.isNotBlank(userName)) {
-            return null;
-        }
         String deptName = StringUtils.defaultIfBlank(string(m.get("deptName")), resolveDeptName(deptCode));
         return new PersonnelPayload(
             userCode, // personCode
@@ -499,26 +525,89 @@ public class MdmGatewayService {
         return out;
     }
 
-    private Set<String> findMissing(List<Map<String, Object>> list, String requiredCsv) {
-        if (!StringUtils.isNotBlank(requiredCsv)) {
-            return Set.of();
+    private List<Map<String, Object>> filterValidDepts(List<Map<String, Object>> rawDepts, CallbackResult result) {
+        Set<String> required = parseRequired(properties.getRequired().getDepts());
+        List<Map<String, Object>> valid = new ArrayList<>();
+        Set<String> missingAll = new LinkedHashSet<>();
+        for (int i = 0; i < rawDepts.size(); i++) {
+            Map<String, Object> row = rawDepts.get(i);
+            List<String> missing = missingFields(row, required);
+            if (missing.isEmpty()) {
+                valid.add(row);
+                continue;
+            }
+            missingAll.addAll(missing);
+            // 组织没有明细表，逐条写日志作为记录。
+            LOG.warn(
+                "mdm.callback.dept.skipped file={} index={} deptCode={} missing={}",
+                result.file,
+                i + 1,
+                string(row.get("deptCode")),
+                missing
+            );
         }
-        Set<String> required = new HashSet<>();
+        result.missingDepts = missingAll;
+        result.invalidDepts = rawDepts.size() - valid.size();
+        return valid;
+    }
+
+    private void splitUsers(
+        List<Map<String, Object>> rawUsers,
+        CallbackResult result,
+        List<PersonnelPayload> accepted,
+        List<PersonnelImportService.RejectedPayload> rejected
+    ) {
+        Set<String> required = parseRequired(properties.getRequired().getUsers());
+        Set<String> missingAll = new LinkedHashSet<>();
+        for (int i = 0; i < rawUsers.size(); i++) {
+            Map<String, Object> row = rawUsers.get(i);
+            List<String> missing = missingFields(row, required);
+            PersonnelPayload payload = missing.isEmpty() ? mapUserPayload(row) : null;
+            if (payload != null) {
+                accepted.add(payload);
+                continue;
+            }
+            String reason = missing.isEmpty()
+                ? "第 " + (i + 1) + " 条人员缺少人员标识(userCode/userName)"
+                : "第 " + (i + 1) + " 条人员缺少必填字段: " + String.join(",", missing);
+            missingAll.addAll(missing.isEmpty() ? List.of("userCode") : missing);
+            rejected.add(new PersonnelImportService.RejectedPayload(toUserPayload(row), reason));
+            // 人员明细会落入导入批次，日志只打前若干条，避免坏文件刷屏。
+            if (rejected.size() <= MAX_REJECTED_LOG_LINES) {
+                LOG.warn(
+                    "mdm.callback.user.skipped file={} index={} userCode={} missing={}",
+                    result.file,
+                    i + 1,
+                    string(row.get("userCode")),
+                    missing
+                );
+            } else if (rejected.size() == MAX_REJECTED_LOG_LINES + 1) {
+                LOG.warn("mdm.callback.user.skipped file={} more rejected users omitted from log; see import batch details", result.file);
+            }
+        }
+        result.missingUsers = missingAll;
+        result.invalidUsers = rejected.size();
+    }
+
+    private Set<String> parseRequired(String requiredCsv) {
+        Set<String> required = new LinkedHashSet<>();
+        if (StringUtils.isBlank(requiredCsv)) {
+            return required;
+        }
         for (String part : StringUtils.split(requiredCsv, ',')) {
             if (StringUtils.isNotBlank(part)) {
                 required.add(part.trim());
             }
         }
-        if (required.isEmpty() || list == null || list.isEmpty()) {
-            return Set.of();
-        }
-        Set<String> missing = new HashSet<>();
-        for (Map<String, Object> m : list) {
-            for (String field : required) {
-                Object val = m.get(field);
-                if (val == null || StringUtils.isBlank(String.valueOf(val))) {
-                    missing.add(field);
-                }
+        return required;
+    }
+
+    private List<String> missingFields(Map<String, Object> row, Set<String> required) {
+        List<String> missing = new ArrayList<>();
+        for (String field : required) {
+            Object val = row == null ? null : row.get(field);
+            if (val == null || StringUtils.isBlank(String.valueOf(val))) {
+                missing.add(field);
             }
         }
         return missing;
@@ -622,6 +711,8 @@ public class MdmGatewayService {
         public Set<String> missingRequired = Set.of();
         public Set<String> missingUsers = Set.of();
         public Set<String> missingDepts = Set.of();
+        public int invalidUsers;
+        public int invalidDepts;
         public Integer imported;
         public Long importBatchId;
         public Integer importFailed;
