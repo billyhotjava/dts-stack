@@ -151,6 +151,36 @@ class MdmGatewayServicePartialValidationTest {
         assertThat(result.missingRequired).isEmpty();
     }
 
+    @Test
+    @DisplayName("本批新建部门的名称在组织同步后补齐，而不是留空")
+    @SuppressWarnings("unchecked")
+    void newDepartmentNameIsResolvedAfterOrgSync() throws Exception {
+        java.util.concurrent.atomic.AtomicBoolean synced = new java.util.concurrent.atomic.AtomicBoolean(false);
+        when(organizationService.syncFromMdm(anyList())).thenAnswer(call -> {
+            synced.set(true);
+            return 1;
+        });
+        com.yuzhi.dts.admin.domain.OrganizationNode node = new com.yuzhi.dts.admin.domain.OrganizationNode();
+        node.setDeptCode("D009");
+        node.setName("本批新建部门");
+        when(organizationService.findByDeptCodeIgnoreCase("D009"))
+            .thenAnswer(call -> synced.get() ? java.util.Optional.of(node) : java.util.Optional.empty());
+        String json = """
+            {
+              "orgIt": [{"deptCode": "D009", "deptName": "本批新建部门", "parentCode": "90"}],
+              "user": [{"userCode": "u-new", "userName": "新部门人员", "deptCode": "D009", "status": "1"}]
+            }
+            """;
+
+        receive(json);
+
+        ArgumentCaptor<List<PersonnelPayload>> accepted = ArgumentCaptor.forClass(List.class);
+        verify(personnelImportService).importFromMdm(anyString(), accepted.capture(), anyList(), anyMap());
+        assertThat(accepted.getValue()).hasSize(1);
+        assertThat(accepted.getValue().get(0).deptCode()).isEqualTo("D009");
+        assertThat(accepted.getValue().get(0).deptName()).isEqualTo("本批新建部门");
+    }
+
     private MdmGatewayService.CallbackResult receive(String json) throws Exception {
         MockMultipartFile file = new MockMultipartFile(
             "file",

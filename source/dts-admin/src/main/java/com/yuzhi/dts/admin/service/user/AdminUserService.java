@@ -677,12 +677,18 @@ public class AdminUserService {
 
         Map<String, DepartmentInfo> resolvedByUsername = new HashMap<>();
         try {
-            for (AdminKeycloakUser snapshot : userRepository.findByUsernameInIgnoreCase(normalizedInputs)) {
+            List<AdminKeycloakUser> snapshots = userRepository.findByUsernameInIgnoreCase(normalizedInputs);
+            Map<String, String> orgNames = resolveOrganizationNames(snapshots);
+            for (AdminKeycloakUser snapshot : snapshots) {
                 if (snapshot == null || StringUtils.isBlank(snapshot.getUsername())) {
                     continue;
                 }
                 String deptCode = StringUtils.trimToNull(snapshot.getDeptCode());
-                String deptName = StringUtils.trimToNull(snapshot.getDeptName());
+                // 名称以组织表当前值为准（部门改名能及时反映）；组织查不到时用快照里存的名称。
+                String deptName = deptCode == null ? null : orgNames.get(deptCode.toLowerCase(Locale.ROOT));
+                if (deptName == null) {
+                    deptName = StringUtils.trimToNull(snapshot.getDeptName());
+                }
                 if (deptCode == null && deptName == null) {
                     continue;
                 }
@@ -699,6 +705,47 @@ public class AdminUserService {
             }
         }
         return result;
+    }
+
+    /**
+     * 按快照中的部门编码批量取组织当前名称，键为小写编码。
+     *
+     * <p>快照部门列存组织编码；组织没有编码（DTS 手工维护）时存的是节点 ID，因此纯数字值也按 ID 查一次，
+     * 编码匹配优先。
+     */
+    private Map<String, String> resolveOrganizationNames(Collection<AdminKeycloakUser> snapshots) {
+        Set<String> codes = new LinkedHashSet<>();
+        Set<Long> ids = new LinkedHashSet<>();
+        for (AdminKeycloakUser snapshot : snapshots) {
+            String code = snapshot == null ? null : StringUtils.trimToNull(snapshot.getDeptCode());
+            if (code == null) {
+                continue;
+            }
+            codes.add(code.toLowerCase(Locale.ROOT));
+            if (code.length() <= 18 && code.chars().allMatch(Character::isDigit)) {
+                ids.add(Long.parseLong(code));
+            }
+        }
+        Map<String, String> names = new HashMap<>();
+        if (codes.isEmpty()) {
+            return names;
+        }
+        for (OrganizationNode node : organizationRepository.findByDeptCodeLowerIn(codes)) {
+            String code = StringUtils.trimToNull(node.getDeptCode());
+            String name = StringUtils.trimToNull(node.getName());
+            if (code != null && name != null) {
+                names.putIfAbsent(code.toLowerCase(Locale.ROOT), name);
+            }
+        }
+        if (!ids.isEmpty()) {
+            for (OrganizationNode node : organizationRepository.findAllById(ids)) {
+                String name = StringUtils.trimToNull(node.getName());
+                if (node.getId() != null && name != null) {
+                    names.putIfAbsent(String.valueOf(node.getId()), name);
+                }
+            }
+        }
+        return names;
     }
 
     @Transactional(readOnly = true)

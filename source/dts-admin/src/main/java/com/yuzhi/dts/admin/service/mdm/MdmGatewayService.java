@@ -260,9 +260,9 @@ public class MdmGatewayService {
             // 必填校验按记录进行：缺字段的记录剔除并记录原因，完整记录照常导入，
             // 不能因为个别坏数据拦住整个文件。
             List<Map<String, Object>> validDepts = filterValidDepts(rawDepts, result);
-            List<PersonnelPayload> users = new ArrayList<>();
+            List<Map<String, Object>> validUserRows = new ArrayList<>();
             List<PersonnelImportService.RejectedPayload> rejectedUsers = new ArrayList<>();
-            splitUsers(rawUsers, result, users, rejectedUsers);
+            splitUsers(rawUsers, result, validUserRows, rejectedUsers);
             Set<String> union = new LinkedHashSet<>();
             union.addAll(result.missingUsers);
             union.addAll(result.missingDepts);
@@ -301,6 +301,9 @@ public class MdmGatewayService {
                 LOG.info("mdm.callback.import.orgs file={} applied={} payloadDepts={}", result.file, orgsApplied, orgs.size());
             }
 
+            // 必须在组织同步之后映射：人员记录通常不带 deptName，要按 deptCode 查组织表补齐，
+            // 本批新建的部门在同步前查不到，会导致这些人员的部门名称为空。
+            List<PersonnelPayload> users = validUserRows.stream().map(this::mapUserPayload).filter(Objects::nonNull).toList();
             if (!users.isEmpty() || !rejectedUsers.isEmpty()) {
                 // 不能用 Map.of：clientIp 取不到时为 null，会直接 NPE，导致整批人员静默不导入。
                 Map<String, Object> batchMeta = new LinkedHashMap<>();
@@ -544,7 +547,7 @@ public class MdmGatewayService {
     private void splitUsers(
         List<Map<String, Object>> rawUsers,
         CallbackResult result,
-        List<PersonnelPayload> accepted,
+        List<Map<String, Object>> accepted,
         List<PersonnelImportService.RejectedPayload> rejected
     ) {
         Set<String> required = parseRequired(properties.getRequired().getUsers());
@@ -552,9 +555,9 @@ public class MdmGatewayService {
         for (int i = 0; i < rawUsers.size(); i++) {
             Map<String, Object> row = rawUsers.get(i);
             List<String> missing = missingFields(row, required);
-            PersonnelPayload payload = missing.isEmpty() ? mapUserPayload(row) : null;
-            if (payload != null) {
-                accepted.add(payload);
+            boolean hasIdentity = StringUtils.isNotBlank(string(row.get("userCode"))) || StringUtils.isNotBlank(string(row.get("userName")));
+            if (missing.isEmpty() && hasIdentity) {
+                accepted.add(row);
                 continue;
             }
             String reason = missing.isEmpty()

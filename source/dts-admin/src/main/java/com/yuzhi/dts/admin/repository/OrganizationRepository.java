@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.repository;
 
 import com.yuzhi.dts.admin.domain.OrganizationNode;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -19,6 +20,10 @@ public interface OrganizationRepository extends JpaRepository<OrganizationNode, 
     Optional<OrganizationNode> findFirstByNameAndParentIsNull(String name);
 
     Optional<OrganizationNode> findFirstByDeptCodeIgnoreCase(String deptCode);
+
+    /** 按组织编码批量查询（入参需为小写）。 */
+    @Query("select o from OrganizationNode o where lower(o.deptCode) in :codes")
+    List<OrganizationNode> findByDeptCodeLowerIn(@Param("codes") Collection<String> codes);
 
     Optional<OrganizationNode> findFirstByOrgCodeIgnoreCase(String orgCode);
 
