@@ -11,7 +11,6 @@ import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -59,7 +58,8 @@ public class KeycloakUserProvisioningService {
 
     /**
      * 创建或更新 Keycloak 用户，并把用户对齐到 payload 指定的部门组；
-     * 返回 keycloakUserId 及本次绑定的部门组路径。
+     * 新建的用户默认禁用，已存在用户的启用状态不做改动。
+     * 返回 keycloakUserId、本次绑定的部门组路径及是否新建。
      * 调用方负责区分成功/失败（异常抛出）。
      *
      * <p>传播模式使用 {@link Propagation#MANDATORY}：本方法会通过 {@code organizationRepository.save(...)}
@@ -79,7 +79,6 @@ public class KeycloakUserProvisioningService {
         if (token == null) {
             throw new PersonnelImportException("Keycloak management token 不可用");
         }
-        int mdmEnabled = resolveMdmEnabled(payload);
         Map<String, List<String>> desiredAttrs = KeycloakUserAttributesMapper.toAttributes(payload);
 
         var existingOpt = keycloakAdminClient.findByUsernameStrict(username, token);
@@ -104,7 +103,9 @@ public class KeycloakUserProvisioningService {
             KeycloakUserDTO dto = new KeycloakUserDTO();
             dto.setUsername(username);
             dto.setFullName(payload.fullName());
-            dto.setEnabled(mdmEnabled != 0);
+            // MDM 新建的账号一律先禁用，由管理员在 DTS 中核对后启用（走现有审批）。
+            // 院级状态（status）只同步到 mdm_enabled 供查看，不决定能否登录。
+            dto.setEnabled(false);
             dto.setEmailVerified(false);
             dto.setAttributes(desiredAttrs);
             KeycloakUserDTO created = keycloakAdminClient.createUser(dto, token);
@@ -123,7 +124,7 @@ public class KeycloakUserProvisioningService {
         }
         assignBaseRoles(keycloakUserId, token);
         String deptGroupPath = syncDeptGroup(keycloakUserId, payload, token, preexisting);
-        return new ProvisionResult(keycloakUserId, deptGroupPath);
+        return new ProvisionResult(keycloakUserId, deptGroupPath, !preexisting);
     }
 
     /**
@@ -131,22 +132,9 @@ public class KeycloakUserProvisioningService {
      *
      * @param keycloakUserId Keycloak 侧的 user id
      * @param deptGroupPath  本次实际绑定的部门组路径；部门无法解析时为 {@code null}
+     * @param created        本次调用新建了 Keycloak 用户（新建用户默认禁用）
      */
-    public record ProvisionResult(String keycloakUserId, String deptGroupPath) {}
-
-    private int resolveMdmEnabled(PersonnelPayload payload) {
-        if (payload == null) {
-            return 1;
-        }
-        Object raw = payload.attributes() == null ? null : payload.attributes().get("status");
-        if (raw != null) {
-            String v = String.valueOf(raw).trim();
-            if ("0".equals(v)) return 0;
-            if ("1".equals(v)) return 1;
-        }
-        String lifecycle = payload.status() == null ? "" : payload.status().trim().toUpperCase(Locale.ROOT);
-        return ("INACTIVE".equals(lifecycle) || "DISABLED".equals(lifecycle)) ? 0 : 1;
-    }
+    public record ProvisionResult(String keycloakUserId, String deptGroupPath, boolean created) {}
 
     private boolean attributesEqual(Map<String, List<String>> left, Map<String, List<String>> right) {
         return normalizeAttributes(left).equals(normalizeAttributes(right));

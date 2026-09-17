@@ -244,7 +244,8 @@ public class PersonnelImportService {
                 payload.deptCode(),
                 payload.deptName(),
                 provisioned.deptGroupPath(),
-                null,
+                // 新建账号在 Keycloak 中是禁用的，快照同步写禁用；已有账号的启用状态不动。
+                provisioned.created() ? Boolean.FALSE : null,
                 resolveMdmEnabled(payload)
             );
             record.setStatus(PersonRecordStatus.SUCCESS);

@@ -89,6 +89,32 @@ class AdminUserServiceListSnapshotsTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void accountStatusFilterUsesSpecificationWithoutRefresh() {
+        AdminUserService serviceWithMgmtToken = buildService("mgmt-client", "mgmt-secret");
+        Page<AdminKeycloakUser> empty = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
+        when(userRepository.findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class))).thenReturn(empty);
+
+        Page<AdminKeycloakUser> result = serviceWithMgmtToken.listSnapshots(0, 20, null, null, Boolean.FALSE);
+
+        assertThat(result.getTotalElements()).isZero();
+        verify(userRepository).findAll(any(org.springframework.data.jpa.domain.Specification.class), any(Pageable.class));
+        verify(userRepository, never()).findAllExcludingUsernames(anyCollection(), any(Pageable.class));
+        verify(keycloakAdminClient, never()).listUsers(anyInt(), anyInt(), anyString());
+        verify(personProfileRepository, never()).findAll(any(Pageable.class));
+    }
+
+    @Test
+    void legacySignatureKeepsFixedQueryPath() {
+        Page<AdminKeycloakUser> empty = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
+        when(userRepository.findByMdmEnabledExcludingUsernames(eq(0), anyCollection(), any(Pageable.class))).thenReturn(empty);
+
+        serviceWithoutMgmtToken.listSnapshots(0, 20, null, 0);
+
+        verify(userRepository).findByMdmEnabledExcludingUsernames(eq(0), anyCollection(), any(Pageable.class));
+    }
+
+    @Test
     void keywordEmptyResultShouldNotTriggerFullRefresh() {
         Page<AdminKeycloakUser> empty = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
         when(userRepository.findByUsernameContainingIgnoreCaseExcludingUsernames(anyString(), anyCollection(), any(org.springframework.data.domain.Pageable.class)))

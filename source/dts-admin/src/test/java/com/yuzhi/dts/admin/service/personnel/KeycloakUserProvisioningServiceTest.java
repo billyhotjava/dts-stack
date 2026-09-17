@@ -131,6 +131,74 @@ class KeycloakUserProvisioningServiceTest {
         verify(keycloakAdminClient).addUserToGroup("kc-1", "grp-new", "token");
     }
 
+    @Test
+    void provisionShouldCreateNewUserDisabledEvenWhenMdmStatusIsActive() {
+        KeycloakAdminClient keycloakAdminClient = org.mockito.Mockito.mock(KeycloakAdminClient.class);
+        KeycloakAuthService keycloakAuthService = org.mockito.Mockito.mock(KeycloakAuthService.class);
+        KeycloakUserProvisioningService service = new KeycloakUserProvisioningService(
+            keycloakAdminClient,
+            keycloakAuthService,
+            org.mockito.Mockito.mock(OrganizationRepository.class),
+            new MdmGatewayProperties(),
+            "admin-cli",
+            "secret"
+        );
+        when(keycloakAuthService.obtainClientCredentialsToken("admin-cli", "secret"))
+            .thenReturn(new TokenResponse("token", null, null, null, null, null, null, null));
+        when(keycloakAdminClient.findByUsernameStrict("newbie", "token")).thenReturn(java.util.Optional.empty());
+        KeycloakUserDTO created = new KeycloakUserDTO();
+        created.setId("kc-new");
+        when(keycloakAdminClient.createUser(any(KeycloakUserDTO.class), eq("token"))).thenReturn(created);
+        // 院级状态为 1（可用），新建账号仍须禁用
+        PersonnelPayload payload = new PersonnelPayload(
+            "newbie", null, "newbie", "新人", null, null, null, null, null, null, null, null, "ACTIVE", null, null,
+            Map.of("status", "1", "person_security_level", "3")
+        );
+
+        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payload);
+
+        org.mockito.ArgumentCaptor<KeycloakUserDTO> sent = org.mockito.ArgumentCaptor.forClass(KeycloakUserDTO.class);
+        verify(keycloakAdminClient).createUser(sent.capture(), eq("token"));
+        assertThat(sent.getValue().getEnabled()).isFalse();
+        assertThat(result.created()).isTrue();
+        assertThat(result.keycloakUserId()).isEqualTo("kc-new");
+    }
+
+    @Test
+    void provisionShouldKeepEnabledStateOfExistingUser() {
+        KeycloakAdminClient keycloakAdminClient = org.mockito.Mockito.mock(KeycloakAdminClient.class);
+        KeycloakAuthService keycloakAuthService = org.mockito.Mockito.mock(KeycloakAuthService.class);
+        KeycloakUserProvisioningService service = new KeycloakUserProvisioningService(
+            keycloakAdminClient,
+            keycloakAuthService,
+            org.mockito.Mockito.mock(OrganizationRepository.class),
+            new MdmGatewayProperties(),
+            "admin-cli",
+            "secret"
+        );
+        when(keycloakAuthService.obtainClientCredentialsToken("admin-cli", "secret"))
+            .thenReturn(new TokenResponse("token", null, null, null, null, null, null, null));
+        KeycloakUserDTO existing = new KeycloakUserDTO();
+        existing.setId("kc-1");
+        existing.setUsername("alice");
+        existing.setFullName("旧名字");
+        existing.setEnabled(true);
+        when(keycloakAdminClient.findByUsernameStrict("alice", "token")).thenReturn(java.util.Optional.of(existing));
+        // 院级状态为 0（禁用），不应改动已有账号的启用状态
+        PersonnelPayload payload = new PersonnelPayload(
+            "alice", null, "alice", "Alice", null, null, null, null, null, null, null, null, "INACTIVE", null, null,
+            Map.of("status", "0", "person_security_level", "3")
+        );
+
+        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payload);
+
+        org.mockito.ArgumentCaptor<KeycloakUserDTO> sent = org.mockito.ArgumentCaptor.forClass(KeycloakUserDTO.class);
+        verify(keycloakAdminClient).updateUser(eq("kc-1"), sent.capture(), eq("token"));
+        assertThat(sent.getValue().getEnabled()).isTrue();
+        assertThat(result.created()).isFalse();
+        verify(keycloakAdminClient, never()).createUser(any(KeycloakUserDTO.class), eq("token"));
+    }
+
     private PersonnelPayload payload(String account) {
         return new PersonnelPayload(
             "P001",

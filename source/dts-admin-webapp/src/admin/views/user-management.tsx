@@ -1,4 +1,4 @@
-import { Button, Table } from "antd";
+import { Button, Select, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -88,11 +88,32 @@ function normalizeUsersPage(page: unknown): { items: UserSnapshotRow[]; total: n
   return { items, total };
 }
 
+type StatusFilter = "all" | "enabled" | "disabled";
+
+const STATUS_FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
+  { value: "all", label: "全部" },
+  { value: "enabled", label: "可用" },
+  { value: "disabled", label: "禁用" },
+];
+
+/** 账号状态：决定能否登录；MDM 新导入的账号默认禁用，需要在此筛出后启用。 */
+function toAccountEnabledParam(filter: StatusFilter): boolean | undefined {
+  return filter === "all" ? undefined : filter === "enabled";
+}
+
+/** 院级状态：MDM 同步的只读状态，后端以 0/1 表示。 */
+function toMdmStatusParam(filter: StatusFilter): 0 | 1 | undefined {
+  if (filter === "all") return undefined;
+  return filter === "enabled" ? 1 : 0;
+}
+
 export default function UserManagementView() {
   const { push } = useRouter();
   const queryClient = useQueryClient();
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
+  const [accountStatus, setAccountStatus] = useState<StatusFilter>("all");
+  const [mdmStatus, setMdmStatus] = useState<StatusFilter>("all");
   const [pagination, setPagination] = useState<{ current: number; pageSize: number }>({
     current: 1,
     pageSize: 20,
@@ -112,13 +133,15 @@ export default function UserManagementView() {
     target?: KeycloakUser;
   }>({ open: false, mode: "create" });
 
-  const usersQueryKey = ["admin", "users", pagination.current, pagination.pageSize, keyword];
+  const usersQueryKey = ["admin", "users", pagination.current, pagination.pageSize, keyword, accountStatus, mdmStatus];
   const { data: usersPage, isLoading: loading } = useQuery({
     queryKey: usersQueryKey,
     queryFn: () => adminApi.getAdminUsers({
       page: Math.max(0, pagination.current - 1),
       size: pagination.pageSize,
       keyword: keyword.trim() ? keyword.trim() : undefined,
+      enabled: toAccountEnabledParam(accountStatus),
+      status: toMdmStatusParam(mdmStatus),
     }),
     refetchInterval: 30_000,
     select: normalizeUsersPage,
@@ -405,7 +428,33 @@ export default function UserManagementView() {
           <Text variant="body1" className="text-lg font-semibold">
             用户管理
           </Text>
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1 text-sm text-muted-foreground">
+              <span className="whitespace-nowrap">账号状态</span>
+              <Select<StatusFilter>
+                aria-label="按账号状态过滤"
+                value={accountStatus}
+                options={STATUS_FILTER_OPTIONS}
+                onChange={(value) => {
+                  setAccountStatus(value);
+                  setPagination((prev) => ({ ...prev, current: 1 }));
+                }}
+                className="w-[96px]"
+              />
+            </label>
+            <label className="flex items-center gap-1 text-sm text-muted-foreground">
+              <span className="whitespace-nowrap">院级状态</span>
+              <Select<StatusFilter>
+                aria-label="按院级状态过滤"
+                value={mdmStatus}
+                options={STATUS_FILTER_OPTIONS}
+                onChange={(value) => {
+                  setMdmStatus(value);
+                  setPagination((prev) => ({ ...prev, current: 1 }));
+                }}
+                className="w-[96px]"
+              />
+            </label>
             <Input
               placeholder="按用户名搜索"
               value={keywordInput}

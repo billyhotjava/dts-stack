@@ -52,7 +52,8 @@ public class AdminUserResource {
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "" + DEFAULT_PAGE_SIZE) int size,
         @RequestParam(required = false) String keyword,
-        @RequestParam(required = false) Integer status
+        @RequestParam(required = false) Integer status,
+        @RequestParam(required = false) Boolean enabled
     ) {
         int pageSize = size <= 0 ? DEFAULT_PAGE_SIZE : Math.min(size, 200);
         Integer mdmStatus = null;
@@ -63,7 +64,7 @@ public class AdminUserResource {
                 return ResponseEntity.badRequest().body(ApiResponse.error("status 仅支持 0（不可用）或 1（可用）"));
             }
         }
-        Page<AdminKeycloakUser> result = adminUserService.listSnapshots(page, pageSize, keyword, mdmStatus);
+        Page<AdminKeycloakUser> result = adminUserService.listSnapshots(page, pageSize, keyword, mdmStatus, enabled);
         List<AdminKeycloakUser> snapshots = result.getContent();
         Map<String, AdminUserService.DepartmentInfo> deptMap = adminUserService.resolveDepartments(
             snapshots.stream().map(AdminKeycloakUser::getUsername).filter(StringUtils::isNotBlank).toList()

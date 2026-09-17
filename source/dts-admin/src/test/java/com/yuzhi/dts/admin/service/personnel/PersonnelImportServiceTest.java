@@ -47,7 +47,7 @@ class PersonnelImportServiceTest {
         });
         when(batchRepository.getReferenceById(42L)).thenReturn(savedBatch);
         when(provisioningService.provision(any(PersonnelPayload.class)))
-            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null));
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null, false));
         when(adminKeycloakUserRepository.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.empty());
         when(adminKeycloakUserRepository.findByUsernameIgnoreCase("alice")).thenReturn(java.util.Optional.empty());
         when(adminKeycloakUserRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -93,7 +93,7 @@ class PersonnelImportServiceTest {
         });
         when(batchRepository.getReferenceById(9L)).thenReturn(savedBatch);
         when(provisioningService.provision(any(PersonnelPayload.class)))
-            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null));
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null, false));
         when(adminKeycloakUserRepository.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.empty());
         when(adminKeycloakUserRepository.findByUsernameIgnoreCase("alice")).thenReturn(java.util.Optional.empty());
         when(adminKeycloakUserRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -153,7 +153,7 @@ class PersonnelImportServiceTest {
         });
         when(batchRepository.getReferenceById(7L)).thenReturn(savedBatch);
         when(provisioningService.provision(any(PersonnelPayload.class)))
-            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", "/总部/新部门"));
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", "/总部/新部门", false));
 
         // 已存在的快照停留在调岗前的部门
         AdminKeycloakUser existing = new AdminKeycloakUser();
@@ -185,6 +185,73 @@ class PersonnelImportServiceTest {
         assertThat(existing.getDeptCode()).isEqualTo("D002");
         assertThat(existing.getDeptName()).isEqualTo("新部门");
         assertThat(existing.getGroupPaths()).containsExactly("/总部/新部门");
+    }
+
+    @Test
+    void importFromMdmShouldSnapshotNewUserAsDisabled() {
+        AdminKeycloakUserRepository snapshots = mock(AdminKeycloakUserRepository.class);
+        KeycloakUserProvisioningService provisioning = mock(KeycloakUserProvisioningService.class);
+        when(provisioning.provision(any(PersonnelPayload.class)))
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-new", null, true));
+        when(snapshots.findByKeycloakId("kc-new")).thenReturn(java.util.Optional.empty());
+        when(snapshots.findByUsernameIgnoreCase("alice")).thenReturn(java.util.Optional.empty());
+        java.util.List<AdminKeycloakUser> saved = new java.util.ArrayList<>();
+        when(snapshots.save(any())).thenAnswer(invocation -> {
+            saved.add(invocation.getArgument(0));
+            return invocation.getArgument(0);
+        });
+
+        PersonnelImportResult result = simpleService(provisioning, snapshots).importFromMdm("mdm-ref", java.util.List.of(payload("alice")), Map.of());
+
+        assertThat(result.successRecords()).isEqualTo(1);
+        assertThat(saved).hasSize(1);
+        assertThat(saved.get(0).isEnabled()).isFalse();
+    }
+
+    @Test
+    void importFromMdmShouldKeepEnabledStateOfExistingSnapshot() {
+        AdminKeycloakUserRepository snapshots = mock(AdminKeycloakUserRepository.class);
+        KeycloakUserProvisioningService provisioning = mock(KeycloakUserProvisioningService.class);
+        when(provisioning.provision(any(PersonnelPayload.class)))
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null, false));
+        AdminKeycloakUser existing = new AdminKeycloakUser();
+        existing.setKeycloakId("kc-1");
+        existing.setUsername("alice");
+        existing.setEnabled(true);
+        when(snapshots.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.of(existing));
+        when(snapshots.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        simpleService(provisioning, snapshots).importFromMdm("mdm-ref", java.util.List.of(payload("alice")), Map.of());
+
+        assertThat(existing.isEnabled()).isTrue();
+    }
+
+    private PersonnelImportService simpleService(KeycloakUserProvisioningService provisioning, AdminKeycloakUserRepository snapshots) {
+        PersonImportBatchRepository batchRepository = mock(PersonImportBatchRepository.class);
+        PersonImportRecordRepository recordRepository = mock(PersonImportRecordRepository.class);
+        PersonImportBatch savedBatch = new PersonImportBatch();
+        savedBatch.setId(11L);
+        when(batchRepository.save(any(PersonImportBatch.class))).thenAnswer((Answer<PersonImportBatch>) invocation -> {
+            PersonImportBatch batch = invocation.getArgument(0);
+            if (batch.getId() == null) {
+                batch.setId(11L);
+            }
+            return batch;
+        });
+        when(batchRepository.getReferenceById(11L)).thenReturn(savedBatch);
+        when(recordRepository.save(any(PersonImportRecord.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        return new PersonnelImportService(
+            batchRepository,
+            recordRepository,
+            mock(PersonnelExcelParser.class),
+            mock(PersonnelApiClient.class),
+            mock(AuditV2Service.class),
+            provisioning,
+            snapshots,
+            new ObjectMapper(),
+            new MdmGatewayProperties(),
+            new NoopTransactionManager()
+        );
     }
 
     private PersonnelPayload payloadWithDept(String account, String deptCode, String deptName) {

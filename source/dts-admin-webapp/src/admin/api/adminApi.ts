@@ -281,7 +281,10 @@ export const adminApi = {
 			url: "/admin/orgs/sync",
 		}),
 
-	getAdminUsers: (options?: { page?: number; size?: number; keyword?: string; status?: 0 | 1 }) =>
+	/**
+	 * status：院级状态（MDM 同步，0 禁用 / 1 可用）；enabled：账号状态（能否登录）。均为空时不过滤。
+	 */
+	getAdminUsers: (options?: { page?: number; size?: number; keyword?: string; status?: 0 | 1; enabled?: boolean }) =>
 		apiClient.get<PagedResult<AdminUser>>({
 			url: "/admin/users",
 			params: {
@@ -289,6 +292,7 @@ export const adminApi = {
 				size: options?.size ?? ADMIN_USER_PAGE_SIZE,
 				keyword: options?.keyword,
 				status: options?.status,
+				enabled: options?.enabled,
 			},
 		}),
 

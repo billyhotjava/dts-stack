@@ -176,7 +176,7 @@ class PersonnelImportHistoryRegressionTest {
         });
         when(provisioning.provision(any()))
             .thenAnswer(call ->
-                new KeycloakUserProvisioningService.ProvisionResult("kc-" + ((PersonnelPayload) call.getArgument(0)).account(), null)
+                new KeycloakUserProvisioningService.ProvisionResult("kc-" + ((PersonnelPayload) call.getArgument(0)).account(), null, false)
             );
         when(snapshots.save(any())).thenAnswer(call -> call.getArgument(0));
         var target = new PersonnelImportService(batches, records, mock(PersonnelExcelParser.class),

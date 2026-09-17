@@ -10,6 +10,7 @@ import com.yuzhi.dts.admin.domain.AdminRoleMember;
 import com.yuzhi.dts.admin.domain.ChangeRequest;
 import com.yuzhi.dts.admin.repository.AdminApprovalRequestRepository;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
+import com.yuzhi.dts.admin.repository.AdminKeycloakUserSpecifications;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleMemberRepository;
 import com.yuzhi.dts.admin.repository.ChangeRequestRepository;
@@ -157,6 +158,15 @@ public class AdminUserService {
 
     @Transactional(propagation = Propagation.REQUIRED)
     public Page<AdminKeycloakUser> listSnapshots(int page, int size, String keyword, Integer mdmStatus) {
+        return listSnapshots(page, size, keyword, mdmStatus, null);
+    }
+
+    /**
+     * @param mdmStatus      院级状态 0/1，{@code null} 不过滤
+     * @param accountEnabled 账号状态（Keycloak enabled），{@code null} 不过滤
+     */
+    @Transactional(propagation = Propagation.REQUIRED)
+    public Page<AdminKeycloakUser> listSnapshots(int page, int size, String keyword, Integer mdmStatus, Boolean accountEnabled) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), 100);
         String normalizedKeyword = StringUtils.trimToEmpty(keyword);
@@ -165,27 +175,29 @@ public class AdminUserService {
         }
         Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "username"));
         LOG.debug(
-            "listSnapshots start page={} size={} keyword='{}' mdmStatus={}",
+            "listSnapshots start page={} size={} keyword='{}' mdmStatus={} accountEnabled={}",
             safePage,
             safeSize,
             normalizedKeyword,
-            mdmStatus
+            mdmStatus,
+            accountEnabled
         );
         boolean hasKeyword = StringUtils.isNotBlank(normalizedKeyword);
-        boolean hasStatus = mdmStatus != null;
+        // 任一状态过滤都视为「带条件查询」，不触发从 Keycloak 补齐快照。
+        boolean hasStatus = mdmStatus != null || accountEnabled != null;
 
-        Page<AdminKeycloakUser> result = querySnapshots(pageable, normalizedKeyword, mdmStatus);
+        Page<AdminKeycloakUser> result = querySnapshots(pageable, normalizedKeyword, mdmStatus, accountEnabled);
         if (result.getTotalElements() == 0) {
             if (hasKeyword && isLikelyUsernameKeyword(normalizedKeyword)) {
                 refreshSnapshotFromKeycloakForUser(normalizedKeyword);
-                result = querySnapshots(pageable, normalizedKeyword, mdmStatus);
+                result = querySnapshots(pageable, normalizedKeyword, mdmStatus, accountEnabled);
             }
 
             if (result.getTotalElements() == 0 && !hasKeyword && !hasStatus && safePage == 0) {
                 LOG.info("user snapshots empty on first page, refreshing from keycloak then profiles");
                 refreshSnapshotsFromKeycloak();
                 refreshSnapshotsFromProfiles();
-                result = querySnapshots(pageable, normalizedKeyword, mdmStatus);
+                result = querySnapshots(pageable, normalizedKeyword, mdmStatus, accountEnabled);
                 LOG.info("user snapshots after full refresh total={}", result.getTotalElements());
             }
         } else if (!hasKeyword && !hasStatus && safePage == 0 && result.getNumberOfElements() < safeSize) {
@@ -193,14 +205,20 @@ public class AdminUserService {
             LOG.info("user snapshots count={} (<pageSize={}), refreshing profiles+keycloak", result.getNumberOfElements(), safeSize);
             refreshSnapshotsFromProfiles();
             refreshSnapshotsFromKeycloak();
-            result = querySnapshots(pageable, normalizedKeyword, mdmStatus);
+            result = querySnapshots(pageable, normalizedKeyword, mdmStatus, accountEnabled);
             LOG.info("user snapshots after top-up total={}", result.getTotalElements());
         }
         LOG.debug("listSnapshots end totalElements={} pageElements={}", result.getTotalElements(), result.getNumberOfElements());
         return result;
     }
 
-    private Page<AdminKeycloakUser> querySnapshots(Pageable pageable, String normalizedKeyword, Integer mdmStatus) {
+    private Page<AdminKeycloakUser> querySnapshots(Pageable pageable, String normalizedKeyword, Integer mdmStatus, Boolean accountEnabled) {
+        if (accountEnabled != null) {
+            return userRepository.findAll(
+                AdminKeycloakUserSpecifications.snapshotFilter(normalizedKeyword, mdmStatus, accountEnabled, HIDDEN_USERNAMES_IN_USERLIST),
+                pageable
+            );
+        }
         boolean hasKeyword = StringUtils.isNotBlank(normalizedKeyword);
         boolean hasStatus = mdmStatus != null;
         if (hasKeyword && hasStatus) {
