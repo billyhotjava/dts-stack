@@ -84,8 +84,10 @@ public class KeycloakUserProvisioningService {
         var existingOpt = keycloakAdminClient.findByUsernameStrict(username, token);
         boolean preexisting = existingOpt.isPresent();
         String keycloakUserId;
+        Boolean keycloakEnabled;
         if (existingOpt.isPresent()) {
             KeycloakUserDTO existing = existingOpt.orElseThrow();
+            keycloakEnabled = existing.getEnabled();
             boolean dirty = false;
             if (!StringUtils.equals(existing.getFullName(), payload.fullName())) {
                 existing.setFullName(payload.fullName());
@@ -106,6 +108,7 @@ public class KeycloakUserProvisioningService {
             // MDM 新建的账号一律先禁用，由管理员在 DTS 中核对后启用（走现有审批）。
             // 院级状态（status）只同步到 mdm_enabled 供查看，不决定能否登录。
             dto.setEnabled(false);
+            keycloakEnabled = Boolean.FALSE;
             dto.setEmailVerified(false);
             dto.setAttributes(desiredAttrs);
             KeycloakUserDTO created = keycloakAdminClient.createUser(dto, token);
@@ -123,18 +126,20 @@ public class KeycloakUserProvisioningService {
             }
         }
         assignBaseRoles(keycloakUserId, token);
-        String deptGroupPath = syncDeptGroup(keycloakUserId, payload, token, preexisting);
-        return new ProvisionResult(keycloakUserId, deptGroupPath, !preexisting);
+        List<String> groupPaths = syncDeptGroup(keycloakUserId, payload, token, preexisting);
+        return new ProvisionResult(keycloakUserId, groupPaths, !preexisting, keycloakEnabled);
     }
 
     /**
      * {@link #provision(PersonnelPayload)} 的返回值。
      *
      * @param keycloakUserId Keycloak 侧的 user id
-     * @param deptGroupPath  本次实际绑定的部门组路径；部门无法解析时为 {@code null}
+     * @param groupPaths     部门组同步后该用户在 Keycloak 中的完整组路径（含非部门组）；
+     *                       未能确定时为 {@code null}，调用方不应改动已有快照
      * @param created        本次调用新建了 Keycloak 用户（新建用户默认禁用）
+     * @param enabled        Keycloak 中该账号当前的启用状态；未知时为 {@code null}
      */
-    public record ProvisionResult(String keycloakUserId, String deptGroupPath, boolean created) {}
+    public record ProvisionResult(String keycloakUserId, List<String> groupPaths, boolean created, Boolean enabled) {}
 
     private boolean attributesEqual(Map<String, List<String>> left, Map<String, List<String>> right) {
         return normalizeAttributes(left).equals(normalizeAttributes(right));
@@ -184,9 +189,9 @@ public class KeycloakUserProvisioningService {
      *
      * @param preexisting 该用户在本次调用前就已存在于 Keycloak；为 {@code false} 时（刚创建）
      *                    不可能挂着旧部门组，跳过清理以省掉一次 listUserGroups 远程调用
-     * @return 实际绑定的部门组路径；未能解析部门或未能绑定时返回 {@code null}
+     * @return 同步后该用户的完整组路径（保留非部门组）；无法确定时返回 {@code null}
      */
-    private String syncDeptGroup(String userId, PersonnelPayload payload, String token, boolean preexisting) {
+    private List<String> syncDeptGroup(String userId, PersonnelPayload payload, String token, boolean preexisting) {
         if (userId == null || token == null) {
             return null;
         }
@@ -224,36 +229,62 @@ public class KeycloakUserProvisioningService {
         if (StringUtils.isBlank(groupPath)) {
             groupPath = buildGroupPathFromRepository(node);
         }
-        if (preexisting) {
-            removeStaleDeptGroups(userId, groupId, token);
-        }
+        List<KeycloakGroupDTO> remaining = preexisting ? removeStaleDeptGroups(userId, groupId, token) : List.of();
         try {
             keycloakAdminClient.addUserToGroup(userId, groupId, token);
         } catch (Exception ex) {
             LOG.warn("bind user {} to dept {} group failed: {}", userId, deptCode, ex.getMessage());
             return null;
         }
-        return groupPath;
+        if (remaining == null) {
+            // 取不到原有组列表时，无法给出完整组路径，调用方保持快照不变。
+            return null;
+        }
+        List<String> paths = new java.util.ArrayList<>();
+        boolean targetListed = false;
+        for (KeycloakGroupDTO group : remaining) {
+            if (StringUtils.equals(group.getId(), groupId)) {
+                targetListed = true;
+            }
+            if (StringUtils.isNotBlank(group.getPath())) {
+                paths.add(group.getPath());
+            }
+        }
+        if (!targetListed) {
+            if (StringUtils.isBlank(groupPath)) {
+                return null;
+            }
+            paths.add(groupPath);
+        }
+        return paths;
     }
 
-    /** 摘除用户当前挂着的、除 {@code keepGroupId} 以外的所有部门组。 */
-    private void removeStaleDeptGroups(String userId, String keepGroupId, String token) {
+    /**
+     * 摘除用户当前挂着的、除 {@code keepGroupId} 以外的所有部门组。
+     *
+     * @return 清理后仍保留的组（含非部门组、摘除失败的部门组及目标组）；取不到组列表时返回 {@code null}
+     */
+    private List<KeycloakGroupDTO> removeStaleDeptGroups(String userId, String keepGroupId, String token) {
         List<KeycloakGroupDTO> current;
         try {
             current = keycloakAdminClient.listUserGroups(userId, token);
         } catch (Exception ex) {
             LOG.warn("list groups for user {} failed, skip stale dept group cleanup: {}", userId, ex.getMessage());
-            return;
+            return null;
         }
-        if (current == null || current.isEmpty()) {
-            return;
+        List<KeycloakGroupDTO> remaining = new java.util.ArrayList<>();
+        if (current == null) {
+            return remaining;
         }
         for (KeycloakGroupDTO group : current) {
-            if (group == null || StringUtils.isBlank(group.getId()) || StringUtils.equals(group.getId(), keepGroupId)) {
+            if (group == null || StringUtils.isBlank(group.getId())) {
                 continue;
             }
             // 只有能反查到组织节点的组才是部门组；其余（专项组、权限组等）不属于 MDM 管辖范围。
-            if (organizationRepository.findByKeycloakGroupId(group.getId()).isEmpty()) {
+            boolean staleDept =
+                !StringUtils.equals(group.getId(), keepGroupId) && organizationRepository.findByKeycloakGroupId(group.getId()).isPresent();
+            if (!staleDept) {
+                remaining.add(group);
                 continue;
             }
             try {
@@ -261,8 +292,10 @@ public class KeycloakUserProvisioningService {
                 LOG.info("removed user {} from stale dept group {} ({})", userId, group.getId(), group.getPath());
             } catch (Exception ex) {
                 LOG.warn("remove user {} from stale dept group {} failed: {}", userId, group.getId(), ex.getMessage());
+                remaining.add(group);
             }
         }
+        return remaining;
     }
 
     private String buildGroupPath(OrganizationNode node) {

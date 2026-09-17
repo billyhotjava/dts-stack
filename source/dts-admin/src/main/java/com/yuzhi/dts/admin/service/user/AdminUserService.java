@@ -293,14 +293,7 @@ public class AdminUserService {
                         snapshot.setRealmRoles(dto.getRealmRoles());
                     }
                     // 部门以 Keycloak attribute 为准；Keycloak 是本系统的唯一事实源。
-                    String deptCode = extractSingle(dto, "dept_code");
-                    if (StringUtils.isNotBlank(deptCode)) {
-                        snapshot.setDeptCode(deptCode.trim());
-                    }
-                    String deptName = extractSingle(dto, "dept_name");
-                    if (StringUtils.isNotBlank(deptName)) {
-                        snapshot.setDeptName(deptName.trim());
-                    }
+                    mirrorDepartment(snapshot, dto);
                     List<String> keycloakGroupPaths = normalizeGroupPathList(dto.getGroups());
                     if (!keycloakGroupPaths.isEmpty()) {
                         // 覆盖而非并入：这是 Keycloak 给出的该用户当前完整组列表，
@@ -659,8 +652,8 @@ public class AdminUserService {
      * 之后就再无写入方，导致 MDM 侧的调岗永远反映不到页面上——部门一直停留在那次重构前的值。
      *
      * <p>按「Keycloak 唯一事实源」的定位，这里不再回退到 person_profile：读到空好过读到一个
-     * 已知会过期的值。快照的部门列由 MDM 导入（{@code PersonnelImportService.upsertSnapshot}）
-     * 和 {@code refreshSnapshotsFromKeycloak()} 两条路径填充。
+     * 已知会过期的值。快照的部门列由 MDM 导入（{@code PersonnelImportService.upsertSnapshot}）、
+     * DTS 内新建/编辑用户后的 {@code syncSnapshot} 以及 {@code refreshSnapshotsFromKeycloak()} 填充。
      */
     @Transactional(readOnly = true)
     public Map<String, DepartmentInfo> resolveDepartments(Collection<String> usernames) {
@@ -2214,11 +2207,44 @@ public class AdminUserService {
         entity.setPersonSecurityLevel(securityLevel);
         entity.setRealmRoles(dto.getRealmRoles());
         entity.setGroupPaths(dto.getGroups());
+        // 在 DTS 中新建/编辑用户（含调整部门）后也要同步部门列，否则列表仍显示旧部门。
+        mirrorDepartment(entity, dto);
         entity.setPhone(extractSingle(dto, "phone"));
         entity.setLastSyncAt(Instant.now());
         if (securityLevel == null || !SUPPORTED_SECURITY_LEVELS.contains(securityLevel)) {
             throw new IllegalStateException("用户密级无效: " + securityLevel);
         }
+    }
+
+    /**
+     * 把 Keycloak user attribute {@code dept_code}/{@code dept_name} 镜像到快照的部门列。
+     *
+     * <p>{@code dept_code} 有两种写法：MDM 同步写组织编码，DTS 手工维护写组织节点 ID。
+     * 这里统一规整为组织编码；组织本身没有编码时保留节点 ID（与组织删除保护的判断口径一致）。
+     * 属性缺失时不改动快照，避免简要表示（无 attributes）把已有部门清空。
+     */
+    private void mirrorDepartment(AdminKeycloakUser entity, KeycloakUserDTO dto) {
+        if (entity == null || dto == null || dto.getAttributes() == null) {
+            return;
+        }
+        String raw = StringUtils.trimToNull(extractSingle(dto, "dept_code"));
+        if (raw == null) {
+            return;
+        }
+        Optional<OrganizationNode> node = organizationRepository.findFirstByDeptCodeIgnoreCase(raw);
+        if (node.isEmpty() && raw.length() <= 18 && raw.chars().allMatch(Character::isDigit)) {
+            node = organizationRepository.findById(Long.parseLong(raw));
+        }
+        String code = node.map(OrganizationNode::getDeptCode).map(StringUtils::trimToNull).orElse(raw);
+        String name = node
+            .map(OrganizationNode::getName)
+            .map(StringUtils::trimToNull)
+            .orElseGet(() -> StringUtils.trimToNull(extractSingle(dto, "dept_name")));
+        if (name == null && StringUtils.equalsIgnoreCase(code, entity.getDeptCode())) {
+            name = entity.getDeptName();
+        }
+        entity.setDeptCode(code);
+        entity.setDeptName(name);
     }
 
     private void refreshSnapshotFromKeycloak(String username) {

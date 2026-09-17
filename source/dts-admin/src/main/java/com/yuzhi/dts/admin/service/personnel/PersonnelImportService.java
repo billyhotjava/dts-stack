@@ -243,9 +243,9 @@ public class PersonnelImportService {
                 attributes.getOrDefault("securityLevel", attributes.get("person_security_level")),
                 payload.deptCode(),
                 payload.deptName(),
-                provisioned.deptGroupPath(),
-                // 新建账号在 Keycloak 中是禁用的，快照同步写禁用；已有账号的启用状态不动。
-                provisioned.created() ? Boolean.FALSE : null,
+                provisioned.groupPaths(),
+                // 以 Keycloak 实际启用状态为准：新建账号为禁用；已有账号不随同步改变，但快照要与之一致。
+                provisioned.enabled(),
                 resolveMdmEnabled(payload)
             );
             record.setStatus(PersonRecordStatus.SUCCESS);
@@ -429,9 +429,8 @@ public class PersonnelImportService {
      * 把本次导入的结果回写到 Keycloak 用户快照。
      *
      * <p>{@code deptCode}/{@code deptName} 是 Keycloak user attribute 的本地镜像，页面部门显示
-     * 由此而来；{@code deptGroupPath} 是本次实际绑定的部门组路径，按「全量覆盖」写入，
-     * 而不是并入旧值——MDM 推送的是人员当前的完整归属，保留旧部门路径就是把调岗前的
-     * 状态永久留存下来。
+     * 由此而来；{@code groupPaths} 是部门组同步后该用户在 Keycloak 中的完整组路径（旧部门组已摘除，
+     * 非部门组保留），按「全量覆盖」写入；为 {@code null} 表示无法确定，保持快照不变。
      */
     private void upsertSnapshot(
         String keycloakUserId,
@@ -440,7 +439,7 @@ public class PersonnelImportService {
         Object secLevelObj,
         String deptCode,
         String deptName,
-        String deptGroupPath,
+        List<String> groupPaths,
         Boolean keycloakEnabled,
         Integer mdmEnabled
     ) {
@@ -472,10 +471,16 @@ public class PersonnelImportService {
         if (StringUtils.isNotBlank(deptName)) {
             snapshot.setDeptName(deptName.trim());
         }
-        String normalizedGroupPath = normalizeGroupPath(deptGroupPath);
-        if (StringUtils.isNotBlank(normalizedGroupPath)) {
+        if (groupPaths != null) {
             // 用可变集合，避免 Hibernate 对 jsonb 属性做脏检查时持有不可变 List。
-            snapshot.setGroupPaths(new java.util.ArrayList<>(List.of(normalizedGroupPath)));
+            List<String> normalized = new java.util.ArrayList<>();
+            for (String path : groupPaths) {
+                String value = normalizeGroupPath(path);
+                if (StringUtils.isNotBlank(value) && normalized.stream().noneMatch(value::equalsIgnoreCase)) {
+                    normalized.add(value);
+                }
+            }
+            snapshot.setGroupPaths(normalized);
         }
         snapshot.setLastSyncAt(Instant.now());
         adminKeycloakUserRepository.save(snapshot);

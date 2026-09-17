@@ -87,6 +87,7 @@ class KeycloakUserProvisioningServiceTest {
         KeycloakUserProvisioningService.ProvisionResult result = service.provision(payloadWithDept("alice", "D002"));
 
         assertThat(result.keycloakUserId()).isEqualTo("kc-1");
+        assertThat(result.groupPaths()).containsExactly("/新部门");
         verify(keycloakAdminClient).removeUserFromGroup("kc-1", "grp-old", "token");
         verify(keycloakAdminClient).addUserToGroup("kc-1", "grp-new", "token");
     }
@@ -125,8 +126,9 @@ class KeycloakUserProvisioningServiceTest {
         when(keycloakAdminClient.listUserGroups("kc-1", "token")).thenReturn(java.util.List.of(adhocGroup));
         when(organizationRepository.findByKeycloakGroupId("grp-adhoc")).thenReturn(java.util.Optional.empty());
 
-        service.provision(payloadWithDept("alice", "D002"));
+        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payloadWithDept("alice", "D002"));
 
+        assertThat(result.groupPaths()).containsExactly("/专项组", "/新部门");
         verify(keycloakAdminClient, never()).removeUserFromGroup(eq("kc-1"), eq("grp-adhoc"), eq("token"));
         verify(keycloakAdminClient).addUserToGroup("kc-1", "grp-new", "token");
     }
@@ -161,6 +163,7 @@ class KeycloakUserProvisioningServiceTest {
         verify(keycloakAdminClient).createUser(sent.capture(), eq("token"));
         assertThat(sent.getValue().getEnabled()).isFalse();
         assertThat(result.created()).isTrue();
+        assertThat(result.enabled()).isFalse();
         assertThat(result.keycloakUserId()).isEqualTo("kc-new");
     }
 
@@ -196,6 +199,7 @@ class KeycloakUserProvisioningServiceTest {
         verify(keycloakAdminClient).updateUser(eq("kc-1"), sent.capture(), eq("token"));
         assertThat(sent.getValue().getEnabled()).isTrue();
         assertThat(result.created()).isFalse();
+        assertThat(result.enabled()).isTrue();
         verify(keycloakAdminClient, never()).createUser(any(KeycloakUserDTO.class), eq("token"));
     }
 

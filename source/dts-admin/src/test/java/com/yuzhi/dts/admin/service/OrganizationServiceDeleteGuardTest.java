@@ -133,6 +133,42 @@ class OrganizationServiceDeleteGuardTest {
     }
 
     @Test
+    @DisplayName("组织没有编码时，按节点 ID 识别快照里的成员")
+    void deleteRejectedWhenSnapshotReferencesNodeId() {
+        OrganizationRepository repository = mock(OrganizationRepository.class);
+        AdminKeycloakUserRepository users = mock(AdminKeycloakUserRepository.class);
+        OrganizationNode node = node();
+        node.setDeptCode(null);
+        when(repository.findById(1L)).thenReturn(Optional.of(node));
+        when(repository.existsByParent_Id(1L)).thenReturn(false);
+        when(users.existsByDeptCodeIgnoreCase("1")).thenReturn(true);
+
+        OrganizationService service = buildService(repository, users, mock(KeycloakAdminClient.class));
+
+        assertThatThrownBy(() -> service.delete(1L))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("仍有关联用户");
+        verify(repository, never()).delete(node);
+    }
+
+    @Test
+    @DisplayName("组织没有编码、快照已同步且无人时允许删除")
+    void deleteAllowedForNodeWithoutDeptCodeWhenEmpty() {
+        OrganizationRepository repository = mock(OrganizationRepository.class);
+        AdminKeycloakUserRepository users = mock(AdminKeycloakUserRepository.class);
+        OrganizationNode node = node();
+        node.setDeptCode(null);
+        when(repository.findById(1L)).thenReturn(Optional.of(node));
+        when(repository.existsByParent_Id(1L)).thenReturn(false);
+        when(users.existsByDeptCodeIsNotNull()).thenReturn(true);
+
+        OrganizationService service = buildService(repository, users, mock(KeycloakAdminClient.class));
+
+        assertThatCode(() -> service.delete(1L)).doesNotThrowAnyException();
+        verify(repository).delete(node);
+    }
+
+    @Test
     @DisplayName("子部门检查仍然先于人员检查")
     void deleteRejectedWhenChildDepartmentExists() {
         OrganizationRepository repository = mock(OrganizationRepository.class);

@@ -12,11 +12,13 @@ import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.lang3.StringUtils;
@@ -406,15 +408,21 @@ public class OrganizationService {
      */
     private void assertDepartmentHasNoMembers(OrganizationNode entity, String token) {
         String deptCode = StringUtils.trimToNull(entity.getDeptCode());
-        boolean verified = false;
-
+        // 快照部门列存组织编码；组织没有编码（DTS 手工维护）时存的是节点 ID，两种都要查。
+        Set<String> memberKeys = new LinkedHashSet<>();
         if (deptCode != null) {
-            if (adminKeycloakUserRepository.existsByDeptCodeIgnoreCase(deptCode)) {
+            memberKeys.add(deptCode);
+        }
+        if (entity.getId() != null) {
+            memberKeys.add(String.valueOf(entity.getId()));
+        }
+        for (String key : memberKeys) {
+            if (adminKeycloakUserRepository.existsByDeptCodeIgnoreCase(key)) {
                 throw new IllegalArgumentException("该部门下仍有关联用户，请先调整用户所属部门后再删除");
             }
-            // 整列还没回填时，「查不到人」不等于「没有人」。
-            verified = adminKeycloakUserRepository.existsByDeptCodeIsNotNull();
         }
+        // 整列还没回填时，「查不到人」不等于「没有人」。
+        boolean verified = !memberKeys.isEmpty() && adminKeycloakUserRepository.existsByDeptCodeIsNotNull();
 
         if (isKeycloakSyncEnabled() && StringUtils.isNotBlank(entity.getKeycloakGroupId())) {
             List<KeycloakUserDTO> members;
