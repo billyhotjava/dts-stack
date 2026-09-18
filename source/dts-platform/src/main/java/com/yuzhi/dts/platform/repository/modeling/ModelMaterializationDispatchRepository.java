@@ -370,7 +370,7 @@ public class ModelMaterializationDispatchRepository {
                      for update
                 )
                 select d.id, d.tenant_id, d.candidate_id,
-                       d.candidate_version, d.attempt,
+                       d.candidate_version, c.plan_id, d.attempt,
                        d.execution_target_key, d.airflow_dag_id,
                        d.airflow_run_id, d.scoped_bundle_checksum,
                        d.runtime_token_digest, d.runtime_token_expires_at,
@@ -393,7 +393,7 @@ public class ModelMaterializationDispatchRepository {
                    and pr.run_purpose = 'RELEASE_BUILD'
                  group by
                        d.id, d.tenant_id, d.candidate_id,
-                       d.candidate_version, d.attempt,
+                       d.candidate_version, c.plan_id, d.attempt,
                        d.execution_target_key, d.airflow_dag_id,
                        d.airflow_run_id, d.scoped_bundle_checksum,
                        d.runtime_token_digest, d.runtime_token_expires_at,
@@ -406,6 +406,7 @@ public class ModelMaterializationDispatchRepository {
                         row.getString("tenant_id"),
                         row.getObject("candidate_id", UUID.class),
                         row.getInt("candidate_version"),
+                        row.getObject("plan_id", UUID.class),
                         row.getInt("attempt"),
                         row.getString("execution_target_key"),
                         row.getString("airflow_dag_id"),
@@ -541,6 +542,7 @@ public class ModelMaterializationDispatchRepository {
         String tenantId,
         UUID candidateId,
         int candidateVersion,
+        UUID planId,
         int attempt,
         String executionTargetKey,
         String airflowDagId,

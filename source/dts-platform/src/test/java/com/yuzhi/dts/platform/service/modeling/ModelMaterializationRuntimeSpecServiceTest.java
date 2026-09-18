@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -26,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +41,8 @@ class ModelMaterializationRuntimeSpecServiceTest {
         UUID.fromString("20000000-0000-0000-0000-000000000002");
     private static final UUID PIPELINE_RUN_ID =
         UUID.fromString("30000000-0000-0000-0000-000000000003");
+    private static final UUID PLAN_ID =
+        UUID.fromString("50000000-0000-0000-0000-000000000005");
 
     @Test
     void issuesOneLeaseAndReturnsNoPathOrCredential() {
@@ -243,6 +247,7 @@ class ModelMaterializationRuntimeSpecServiceTest {
             runtime(token, null).tenantId(),
             runtime(token, null).candidateId(),
             runtime(token, null).candidateVersion(),
+            runtime(token, null).planId(),
             runtime(token, null).attempt(),
             runtime(token, null).executionTargetKey(),
             runtime(token, null).airflowDagId(),
@@ -295,6 +300,51 @@ class ModelMaterializationRuntimeSpecServiceTest {
             org.mockito.ArgumentMatchers.eq(NOW)
         );
         verify(fixture.leases, never()).issue(any());
+    }
+
+    @Test
+    void consumeOpensPlanSystemScopeForAvailabilityChecks() {
+        Fixture fixture = fixture();
+        ModelRuntimeSpecTokenCodec.IssuedToken token =
+            fixture.tokens.issue(DISPATCH_ID, NOW);
+        when(
+            fixture.dispatches.lockRuntimeSpec(token.digest())
+        ).thenReturn(Optional.of(runtime(token, null)));
+        when(fixture.leases.issue(any())).thenReturn(lease());
+        when(
+            fixture.dispatches.attachRuntimeLease(
+                DISPATCH_ID,
+                LEASE_ID,
+                NOW
+            )
+        ).thenReturn(true);
+        AtomicBoolean scopeOpenDuringRequire = new AtomicBoolean();
+        AtomicBoolean scopeOpenDuringPin = new AtomicBoolean();
+        doAnswer(invocation -> {
+            scopeOpenDuringRequire.set(
+                ModelingSystemExecution.permits("tenant-a", PLAN_ID)
+            );
+            return null;
+        })
+            .when(fixture.sourceAvailability)
+            .requireDispatchCurrent(DISPATCH_ID);
+        doAnswer(invocation -> {
+            scopeOpenDuringPin.set(
+                ModelingSystemExecution.permits("tenant-a", PLAN_ID)
+            );
+            return null;
+        })
+            .when(fixture.sourceAvailability)
+            .pinDispatchCurrent(DISPATCH_ID, NOW);
+
+        var view = fixture.service.consume(token.token());
+
+        assertThat(view.pipelineRunGroupId()).isEqualTo(DISPATCH_ID);
+        assertThat(scopeOpenDuringRequire).isTrue();
+        assertThat(scopeOpenDuringPin).isTrue();
+        assertThat(
+            ModelingSystemExecution.permits("tenant-a", PLAN_ID)
+        ).isFalse();
     }
 
     @Test
@@ -396,6 +446,7 @@ class ModelMaterializationRuntimeSpecServiceTest {
                 "40000000-0000-0000-0000-000000000004"
             ),
             3,
+            PLAN_ID,
             1,
             "postgres-primary",
             "dts_release_build_postgres_primary",

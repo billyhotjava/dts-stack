@@ -119,6 +119,24 @@ public class ModelMaterializationRuntimeSpecService {
                 "Runtime spec token has expired"
             );
         }
+        // The Airflow service-token callback carries no user identity, so the source-scope
+        // guard below would fail closed without an explicitly opened system scope. The HMAC
+        // runtime token already authenticated this dispatch, therefore the scope is bound to
+        // the dispatch's own plan only.
+        try (
+            var executionScope = ModelingSystemExecution.open(
+                runtime.tenantId(),
+                runtime.planId()
+            )
+        ) {
+            return consumeWithinSystemScope(runtime, now);
+        }
+    }
+
+    private RuntimeSpecView consumeWithinSystemScope(
+        RuntimeSpecRecord runtime,
+        Instant now
+    ) {
         try {
             sourceAvailability.requireDispatchCurrent(runtime.dispatchId());
         } catch (ModelReleaseCandidateException unavailable) {
