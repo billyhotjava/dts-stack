@@ -119,6 +119,15 @@ public class ModelMaterializationRuntimeSpecService {
                 "Runtime spec token has expired"
             );
         }
+        if (runtime.planId() == null) {
+            // Fail fast before opening a system scope: without the dispatch's own plan
+            // the scope could never satisfy the source guard below and the caller would
+            // otherwise see a misleading fence denial instead of an incomplete spec.
+            throw failure(
+                "MODEL_RUNTIME_SPEC_INCOMPLETE",
+                "Runtime spec is incomplete"
+            );
+        }
         // The Airflow service-token callback carries no user identity, so the source-scope
         // guard below would fail closed without an explicitly opened system scope. The HMAC
         // runtime token already authenticated this dispatch, therefore the scope is bound to
@@ -266,7 +275,6 @@ public class ModelMaterializationRuntimeSpecService {
     private static void requireRuntime(RuntimeSpecRecord runtime) {
         if (
             runtime.pipelineRunId() == null ||
-            runtime.planId() == null ||
             runtime.scopedBundleChecksum() == null ||
             !runtime
                 .scopedBundleChecksum()
