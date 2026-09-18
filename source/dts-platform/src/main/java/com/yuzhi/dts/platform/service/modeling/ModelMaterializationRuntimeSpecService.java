@@ -266,6 +266,7 @@ public class ModelMaterializationRuntimeSpecService {
     private static void requireRuntime(RuntimeSpecRecord runtime) {
         if (
             runtime.pipelineRunId() == null ||
+            runtime.planId() == null ||
             runtime.scopedBundleChecksum() == null ||
             !runtime
                 .scopedBundleChecksum()

@@ -629,13 +629,15 @@ public class ModelMaterializationDispatchService {
         Throwable current = failure;
         while (current != null) {
             String message = current.getMessage();
-            if (
-                message != null &&
-                message.contains(
-                    "already exists with different payload or ownership"
-                )
-            ) {
-                return true;
+            if (message != null) {
+                String normalized =
+                    message.toLowerCase(java.util.Locale.ROOT);
+                if (
+                    normalized.contains("already exists with") &&
+                    normalized.contains("different payload")
+                ) {
+                    return true;
+                }
             }
             current = current.getCause();
         }

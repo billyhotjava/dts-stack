@@ -468,8 +468,7 @@ public class ModelMaterializationRunRepository {
                    last_modified_at = ?
              where id = ?
                and status in (
-                    'CLAIMED', 'SUBMITTED', 'UNKNOWN',
-                    'COMPLETED', 'FAILED'
+                    'CLAIMED', 'SUBMITTED', 'UNKNOWN'
                )
             """,
             status,
@@ -477,11 +476,38 @@ public class ModelMaterializationRunRepository {
             Timestamp.from(now),
             groupId
         );
-        if (updated != 1) {
-            throw new IllegalStateException(
-                "Materialization dispatch cannot be finalized"
-            );
+        if (updated == 1) {
+            return;
         }
+        String current = currentDispatchStatus(groupId);
+        if (status.equals(current)) {
+            // Idempotent replay of the same terminal truth (e.g. a redelivered
+            // Airflow finalize callback). Keep the first write and do not move
+            // last_modified_at again.
+            return;
+        }
+        throw new IllegalStateException(
+            "Materialization dispatch terminal truth cannot move from " +
+            current +
+            " to " +
+            status
+        );
+    }
+
+    private String currentDispatchStatus(UUID groupId) {
+        return jdbcTemplate
+            .query(
+                """
+                select status
+                  from modeling_materialization_dispatch
+                 where id = ?
+                """,
+                (row, rowNumber) -> row.getString("status"),
+                groupId
+            )
+            .stream()
+            .findFirst()
+            .orElse(null);
     }
 
     public record RunGroupRecord(

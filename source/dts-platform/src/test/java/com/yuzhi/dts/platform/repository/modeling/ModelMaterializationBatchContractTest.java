@@ -81,6 +81,12 @@ class ModelMaterializationBatchContractTest {
         assertThat(relationState("FAILED", null, null)).isEqualTo(RelationEvidenceState.FAILED);
     }
 
+    @Test
+    void terminalStaleAndSkippedRunsMapToRelationFailureInsteadOfPending() {
+        assertThat(relationState("FAILED_STALE", null, null)).isEqualTo(RelationEvidenceState.FAILED);
+        assertThat(relationState("SKIPPED_DEPENDENCY_FAILED", null, null)).isEqualTo(RelationEvidenceState.FAILED);
+    }
+
     private static RelationEvidenceState relationState(String runStatus, Boolean verified, Boolean relationExists) {
         return ReflectionTestUtils.invokeMethod(
             ReleaseCandidateWorkbenchEvidenceRepository.class,

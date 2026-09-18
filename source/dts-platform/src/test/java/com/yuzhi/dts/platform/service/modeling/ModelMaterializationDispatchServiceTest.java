@@ -520,6 +520,55 @@ class ModelMaterializationDispatchServiceTest {
     }
 
     @Test
+    void duplicateAuditMatchingIgnoresMessageCasing() {
+        Fixture fixture = fixture();
+        when(
+            fixture.dispatches.claimNext(
+                eq(NOW),
+                eq(Duration.ofMinutes(2))
+            )
+        ).thenReturn(Optional.of(dispatch()));
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope());
+        when(fixture.scoped.prepareCandidate(any())).thenReturn(
+            new DbtScopedProjectService.ScopedCandidateProject(
+                "/must-not-leave-platform",
+                "dim_customer fct_invoice",
+                SCOPED_CHECKSUM,
+                List.of()
+            )
+        );
+        when(fixture.tokens.issue(GROUP_ID, NOW)).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken(
+                "runtime-token",
+                "sha256:" + "c".repeat(64),
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        );
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.retryableUnknown(
+                DAG_RUN_ID,
+                "MODEL_AIRFLOW_TRIGGER_UNKNOWN"
+            )
+        );
+        fixture.audit.failNext(
+            new IllegalStateException(
+                "audit event id ALREADY EXISTS WITH DIFFERENT PAYLOAD or ownership"
+            )
+        );
+
+        var result = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("UNKNOWN");
+        verify(fixture.dispatches).markUnknown(
+            GROUP_ID,
+            "MODEL_AIRFLOW_TRIGGER_UNKNOWN",
+            NOW.plus(Duration.ofSeconds(30)),
+            NOW
+        );
+    }
+
+    @Test
     void acceptedAirflowRunIsNeverDowngradedToBlockedWhenLocalCommitFails() {
         Fixture fixture = fixture();
         when(

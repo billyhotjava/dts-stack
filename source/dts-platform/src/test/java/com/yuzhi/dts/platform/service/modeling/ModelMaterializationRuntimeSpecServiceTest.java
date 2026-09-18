@@ -348,6 +348,45 @@ class ModelMaterializationRuntimeSpecServiceTest {
     }
 
     @Test
+    void consumeRejectsRuntimeSpecWithoutPlanBeforeOpeningSystemScope() {
+        Fixture fixture = fixture();
+        ModelRuntimeSpecTokenCodec.IssuedToken token =
+            fixture.tokens.issue(DISPATCH_ID, NOW);
+        RuntimeSpecRecord withoutPlan = new RuntimeSpecRecord(
+            runtime(token, null).dispatchId(),
+            runtime(token, null).tenantId(),
+            runtime(token, null).candidateId(),
+            runtime(token, null).candidateVersion(),
+            null,
+            runtime(token, null).attempt(),
+            runtime(token, null).executionTargetKey(),
+            runtime(token, null).airflowDagId(),
+            runtime(token, null).airflowRunId(),
+            runtime(token, null).scopedBundleChecksum(),
+            runtime(token, null).runtimeTokenDigest(),
+            runtime(token, null).runtimeTokenExpiresAt(),
+            null,
+            null,
+            runtime(token, null).environment(),
+            runtime(token, null).targetName(),
+            runtime(token, null).selector(),
+            runtime(token, null).pipelineRunId()
+        );
+        when(
+            fixture.dispatches.lockRuntimeSpec(token.digest())
+        ).thenReturn(Optional.of(withoutPlan));
+
+        assertThatThrownBy(() -> fixture.service.consume(token.token()))
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error ->
+                ((ModelMaterializationRuntimeException) error).code()
+            )
+            .isEqualTo("MODEL_RUNTIME_SPEC_INCOMPLETE");
+        verify(fixture.sourceAvailability, never()).requireDispatchCurrent(any());
+        verify(fixture.leases, never()).issue(any());
+    }
+
+    @Test
     void generationPinFailureCompensatesNewLeaseAndPersistsDenialAudit() {
         Fixture fixture = fixture();
         ModelRuntimeSpecTokenCodec.IssuedToken token = fixture.tokens.issue(

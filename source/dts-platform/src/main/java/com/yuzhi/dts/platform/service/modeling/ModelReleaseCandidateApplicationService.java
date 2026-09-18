@@ -1392,6 +1392,8 @@ public class ModelReleaseCandidateApplicationService {
                 .stream()
                 .anyMatch(item ->
                     "FAILED".equals(item.runStatus()) ||
+                    "FAILED_STALE".equals(item.runStatus()) ||
+                    "SKIPPED_DEPENDENCY_FAILED".equals(item.runStatus()) ||
                     "BLOCKED".equals(item.runStatus())
                 )
         ) {
@@ -1426,6 +1428,8 @@ public class ModelReleaseCandidateApplicationService {
                     item.relationState() ==
                         RelationEvidenceState.FAILED ||
                     "FAILED".equals(item.runStatus()) ||
+                    "FAILED_STALE".equals(item.runStatus()) ||
+                    "SKIPPED_DEPENDENCY_FAILED".equals(item.runStatus()) ||
                     "BLOCKED".equals(item.runStatus())
                 )
         ) {

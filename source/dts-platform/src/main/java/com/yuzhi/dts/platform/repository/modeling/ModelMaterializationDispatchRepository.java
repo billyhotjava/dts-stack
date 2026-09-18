@@ -339,13 +339,28 @@ public class ModelMaterializationDispatchRepository {
             jdbcTemplate.update(
                 """
                 update modeling_pipeline_run
-                   set status = 'BLOCKED',
-                       message = ?,
-                       finished_date = ?,
+                   set status = case
+                           when status in ('QUEUED', 'UNKNOWN')
+                               then 'BLOCKED'
+                           else status
+                       end,
+                       message = case
+                           when status in ('QUEUED', 'UNKNOWN')
+                               then ?
+                           else message
+                       end,
+                       finished_date = case
+                           when status in ('QUEUED', 'UNKNOWN')
+                               then coalesce(finished_date, ?)
+                           else finished_date
+                       end,
                        last_modified_date = ?
                  where pipeline_run_group_id = ?
                    and run_purpose = 'RELEASE_BUILD'
-                   and status in ('QUEUED', 'UNKNOWN')
+                   and status in (
+                        'QUEUED', 'UNKNOWN',
+                        'DBT_SUCCEEDED', 'BUILT', 'FAILED'
+                   )
                 """,
                 required(errorCode, "errorCode"),
                 Timestamp.from(now),

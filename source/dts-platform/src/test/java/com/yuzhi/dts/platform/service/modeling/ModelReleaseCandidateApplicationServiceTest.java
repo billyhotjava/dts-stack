@@ -570,6 +570,98 @@ class ModelReleaseCandidateApplicationServiceTest {
     }
 
     @Test
+    void staleTerminalRunReportsBuildFailureInsteadOfRunning() {
+        CandidateView candidate = candidate(
+            DeliveryStatus.BUILD_FAILED,
+            List.of(entry(DeliveryStatus.BUILD_FAILED))
+        );
+        UUID groupId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        List<EntryEvidenceView> evidence = List.of(
+            new EntryEvidenceView(
+                entry(DeliveryStatus.BUILD_FAILED).id(),
+                MODEL_ID,
+                "财务项目模型",
+                2,
+                3,
+                "finance.dwd.finance_project",
+                "FAILED_STALE",
+                RelationEvidenceState.FAILED,
+                groupId,
+                UUID.fromString("60000000-0000-0000-0000-000000000001"),
+                "dts_release_build_postgres_primary",
+                "manual__candidate_1",
+                1,
+                NOW.minusSeconds(30),
+                NOW,
+                NOW.minusSeconds(1),
+                "MODEL_SOURCE_GENERATION_STALE"
+            )
+        );
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(candidate));
+        when(commands.detectDrift(TENANT, candidate)).thenReturn(List.of());
+        when(workbenchEvidence.findCurrent(candidate)).thenReturn(evidence);
+
+        var view = service.workspace(TENANT, ACTOR, PLAN_ID);
+
+        assertThat(view.evidence())
+            .filteredOn(summary ->
+                summary.type() ==
+                com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType.BUILD_RUN
+            )
+            .singleElement()
+            .satisfies(summary -> {
+                assertThat(summary.state()).isEqualTo(EvidenceState.FAILED);
+                assertThat(summary.code()).isEqualTo("MODEL_SOURCE_GENERATION_STALE");
+            });
+    }
+
+    @Test
+    void skippedDependencyRunReportsBuildFailureInsteadOfRunning() {
+        CandidateView candidate = candidate(
+            DeliveryStatus.BUILD_FAILED,
+            List.of(entry(DeliveryStatus.BUILD_FAILED))
+        );
+        UUID groupId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        List<EntryEvidenceView> evidence = List.of(
+            new EntryEvidenceView(
+                entry(DeliveryStatus.BUILD_FAILED).id(),
+                MODEL_ID,
+                "财务项目模型",
+                2,
+                3,
+                "finance.dwd.finance_project",
+                "SKIPPED_DEPENDENCY_FAILED",
+                RelationEvidenceState.FAILED,
+                groupId,
+                UUID.fromString("60000000-0000-0000-0000-000000000001"),
+                "dts_release_build_postgres_primary",
+                "manual__candidate_1",
+                1,
+                NOW.minusSeconds(30),
+                NOW,
+                NOW.minusSeconds(1),
+                null
+            )
+        );
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(candidate));
+        when(commands.detectDrift(TENANT, candidate)).thenReturn(List.of());
+        when(workbenchEvidence.findCurrent(candidate)).thenReturn(evidence);
+
+        var view = service.workspace(TENANT, ACTOR, PLAN_ID);
+
+        assertThat(view.evidence())
+            .filteredOn(summary ->
+                summary.type() ==
+                com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType.BUILD_RUN
+            )
+            .singleElement()
+            .satisfies(summary -> {
+                assertThat(summary.state()).isEqualTo(EvidenceState.FAILED);
+                assertThat(summary.code()).isEqualTo("MODEL_PHYSICAL_RELATION_VERIFICATION_FAILED");
+            });
+    }
+
+    @Test
     void planReadAuthorizationFailsBeforeCandidateStateIsRead() {
         when(planReadAccess.canReadPlan(PLAN_ID)).thenReturn(false);
 

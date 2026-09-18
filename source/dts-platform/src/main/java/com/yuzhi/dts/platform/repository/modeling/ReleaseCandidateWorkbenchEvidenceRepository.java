@@ -413,7 +413,8 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
         }
         return switch (runStatus) {
             case "DBT_SUCCEEDED" -> RelationEvidenceState.PROBING;
-            case "FAILED" -> RelationEvidenceState.FAILED;
+            case "FAILED", "FAILED_STALE", "SKIPPED_DEPENDENCY_FAILED" ->
+                RelationEvidenceState.FAILED;
             case "BLOCKED" -> RelationEvidenceState.UNKNOWN;
             case "UNKNOWN" -> RelationEvidenceState.UNKNOWN;
             default -> RelationEvidenceState.PENDING;
@@ -457,8 +458,11 @@ public class ReleaseCandidateWorkbenchEvidenceRepository
         if (dispatchCode != null && !dispatchCode.isBlank()) {
             return dispatchCode;
         }
-        if ("FAILED".equals(runStatus)) {
+        if ("FAILED".equals(runStatus) || "FAILED_STALE".equals(runStatus)) {
             return "MODEL_MATERIALIZATION_BUILD_FAILED";
+        }
+        if ("SKIPPED_DEPENDENCY_FAILED".equals(runStatus)) {
+            return "MODEL_DBT_SKIPPED_DEPENDENCY_FAILED";
         }
         if ("BLOCKED".equals(runStatus) || "BLOCKED".equals(dispatchStatus)) {
             return "MODEL_MATERIALIZATION_DISPATCH_BLOCKED";
