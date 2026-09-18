@@ -247,6 +247,46 @@ class PersonnelImportServiceTest {
         assertThat(saved.get(0).isEnabled()).isFalse();
     }
 
+    @Test
+    void importFromMdmShouldRejectPersonCodeDifferingOnlyByCaseFromExistingAccount() {
+        AdminKeycloakUserRepository snapshots = mock(AdminKeycloakUserRepository.class);
+        KeycloakUserProvisioningService provisioning = mock(KeycloakUserProvisioningService.class);
+        AdminKeycloakUser existing = new AdminKeycloakUser();
+        existing.setKeycloakId("kc-1");
+        existing.setUsername("li01");
+        existing.setPersonCode("Li01");
+        when(snapshots.findByUsernameIgnoreCase("LI01")).thenReturn(java.util.Optional.of(existing));
+
+        PersonnelImportResult result = simpleService(provisioning, snapshots)
+            .importFromMdm("mdm-ref", java.util.List.of(payloadWithCode("LI01")), Map.of());
+
+        assertThat(result.failureRecords()).isEqualTo(1);
+        assertThat(result.successRecords()).isZero();
+        verify(provisioning, never()).provision(any(PersonnelPayload.class));
+    }
+
+    @Test
+    void importFromMdmShouldAcceptSamePersonCodeCaseAsExistingAccount() {
+        AdminKeycloakUserRepository snapshots = mock(AdminKeycloakUserRepository.class);
+        KeycloakUserProvisioningService provisioning = mock(KeycloakUserProvisioningService.class);
+        AdminKeycloakUser existing = new AdminKeycloakUser();
+        existing.setKeycloakId("kc-1");
+        existing.setUsername("li01");
+        existing.setPersonCode("Li01");
+        when(snapshots.findByUsernameIgnoreCase("Li01")).thenReturn(java.util.Optional.of(existing));
+        when(snapshots.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.of(existing));
+        when(provisioning.provision(any(PersonnelPayload.class)))
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null, false, Boolean.TRUE));
+        when(snapshots.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        PersonnelImportResult result = simpleService(provisioning, snapshots)
+            .importFromMdm("mdm-ref", java.util.List.of(payloadWithCode("Li01")), Map.of());
+
+        assertThat(result.successRecords()).isEqualTo(1);
+        assertThat(existing.getPersonCode()).isEqualTo("Li01");
+        assertThat(existing.getUsername()).isEqualTo("li01");
+    }
+
     private PersonnelImportService simpleService(KeycloakUserProvisioningService provisioning, AdminKeycloakUserRepository snapshots) {
         PersonImportBatchRepository batchRepository = mock(PersonImportBatchRepository.class);
         PersonImportRecordRepository recordRepository = mock(PersonImportRecordRepository.class);
@@ -284,6 +324,28 @@ class PersonnelImportServiceTest {
             null,
             deptCode,
             deptName,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "ACTIVE",
+            null,
+            null,
+            Map.of("person_security_level", "3")
+        );
+    }
+
+    /** 人员编码与账号相同，对应 MDM 的 userCode。 */
+    private PersonnelPayload payloadWithCode(String code) {
+        return new PersonnelPayload(
+            code,
+            null,
+            code,
+            "Alice",
+            null,
+            null,
+            null,
             null,
             null,
             null,

@@ -49,6 +49,15 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
     @Column(name = "group_paths", columnDefinition = "jsonb")
     private List<String> groupPaths = new ArrayList<>();
 
+    /**
+     * MDM 推送的原始人员编码（保留大小写）。
+     *
+     * <p>Keycloak 用户名一律转小写，只差大小写的两个编码在 Keycloak 中无法共存；
+     * 按「不同编码即不同账号」的约定，导入时用这一列识别冲突。
+     */
+    @Column(name = "person_code", length = 64)
+    private String personCode;
+
     /** Keycloak user attribute {@code dept_code} 的本地镜像；部门归属的唯一读取来源。 */
     @Column(name = "dept_code", length = 64)
     private String deptCode;
@@ -137,6 +146,14 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
 
     public void setGroupPaths(List<String> groupPaths) {
         this.groupPaths = groupPaths == null ? new ArrayList<>() : groupPaths;
+    }
+
+    public String getPersonCode() {
+        return personCode;
+    }
+
+    public void setPersonCode(String personCode) {
+        this.personCode = personCode;
     }
 
     public String getDeptCode() {

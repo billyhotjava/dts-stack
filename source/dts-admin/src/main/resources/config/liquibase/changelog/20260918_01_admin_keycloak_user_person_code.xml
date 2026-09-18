@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+      记录 MDM 推送的原始人员编码（保留大小写）。
+      Keycloak 用户名一律小写存储，且默认丢弃未声明的 user attribute（person_code 存不下），
+      因此「不同编码即不同账号」的冲突判断只能依赖本地快照。
+    -->
+    <changeSet id="20260918-01-admin-keycloak-user-person-code" author="dts">
+        <addColumn tableName="admin_keycloak_user">
+            <column name="person_code" type="varchar(64)"/>
+        </addColumn>
+        <sql>CREATE INDEX IF NOT EXISTS idx_admin_kc_user_person_code_lower ON admin_keycloak_user (lower(person_code))</sql>
+    </changeSet>
+
+</databaseChangeLog>

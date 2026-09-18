@@ -232,17 +232,20 @@ public class PersonnelImportService {
                 record.setMessage("Dry-run 模式，未写入 Keycloak");
                 return RecordOutcome.oneSkipped();
             }
+            assertNoPersonCodeConflict(payload);
             KeycloakUserProvisioningService.ProvisionResult provisioned = provisioningService.provision(payload);
             String keycloakUserId = provisioned.keycloakUserId();
             record.setKeycloakUserId(keycloakUserId);
             Map<String, Object> attributes = payload.attributes() == null ? Map.of() : payload.attributes();
             upsertSnapshot(
                 keycloakUserId,
-                firstNonBlank(payload.account(), payload.personCode()),
+                // Keycloak 的用户名一律小写存储，快照与之保持一致，避免同一账号的用户名在两种写法间来回变。
+                normalizeUsername(firstNonBlank(payload.account(), payload.personCode())),
                 payload.fullName(),
                 attributes.getOrDefault("securityLevel", attributes.get("person_security_level")),
                 payload.deptCode(),
                 payload.deptName(),
+                payload.personCode(),
                 provisioned.groupPaths(),
                 // 以 Keycloak 实际启用状态为准：新建账号为禁用；已有账号不随同步改变，但快照要与之一致。
                 provisioned.enabled(),
@@ -274,6 +277,37 @@ public class PersonnelImportService {
                 ex
             );
             return RecordOutcome.oneFailed();
+        }
+    }
+
+    /**
+     * 「不同 userCode 即不同账号」的跨批次校验。
+     *
+     * <p>Keycloak 的用户名一律小写存储，只差大小写的两个编码在 Keycloak 中无法共存：
+     * 按用户名查会命中同一个账号，继续导入就会用后一条记录覆盖前一个人的姓名、部门和归属，
+     * 两人还会共用同一个登录账号。这里在写 Keycloak 之前拦截，记为失败明细，由现场修正源数据。
+     *
+     * <p>快照没有记录过原始编码（早期数据或 DTS 内建账号）时不拦截，本次导入会把编码补上。
+     */
+    private void assertNoPersonCodeConflict(PersonnelPayload payload) {
+        String personCode = StringUtils.trimToNull(payload.personCode());
+        String username = firstNonBlank(payload.account(), payload.personCode());
+        if (personCode == null || username == null) {
+            return;
+        }
+        String existingCode = adminKeycloakUserRepository
+            .findByUsernameIgnoreCase(username)
+            .map(AdminKeycloakUser::getPersonCode)
+            .map(StringUtils::trimToNull)
+            .orElse(null);
+        if (existingCode == null || existingCode.equals(personCode)) {
+            return;
+        }
+        if (existingCode.equalsIgnoreCase(personCode)) {
+            throw new PersonnelImportException(
+                "人员编码 " + personCode + " 与已有账号的编码 " + existingCode + " 仅大小写不同；" +
+                "不同编码视为不同账号，而 Keycloak 无法区分，已拒绝导入，请修正源数据"
+            );
         }
     }
 
@@ -439,6 +473,7 @@ public class PersonnelImportService {
         Object secLevelObj,
         String deptCode,
         String deptName,
+        String personCode,
         List<String> groupPaths,
         Boolean keycloakEnabled,
         Integer mdmEnabled
@@ -464,6 +499,9 @@ public class PersonnelImportService {
         }
         if (mdmEnabled != null) {
             snapshot.setMdmEnabled(mdmEnabled);
+        }
+        if (StringUtils.isNotBlank(personCode)) {
+            snapshot.setPersonCode(personCode.trim());
         }
         if (StringUtils.isNotBlank(deptCode)) {
             snapshot.setDeptCode(deptCode.trim());
@@ -523,6 +561,10 @@ public class PersonnelImportService {
 
     private String normalizeSecurityLevel(String level) {
         return SecurityLevelCatalog.normalizePersonnelCode(level);
+    }
+
+    private String normalizeUsername(String username) {
+        return username == null ? null : username.trim().toLowerCase(Locale.ROOT);
     }
 
     private String firstNonBlank(String... values) {
