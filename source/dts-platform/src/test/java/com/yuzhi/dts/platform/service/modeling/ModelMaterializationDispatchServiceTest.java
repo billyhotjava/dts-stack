@@ -443,6 +443,83 @@ class ModelMaterializationDispatchServiceTest {
     }
 
     @Test
+    void duplicateUnknownAuditOnRetryIsSuppressedInsteadOfPoisoningDispatch() {
+        Fixture fixture = fixture();
+        when(
+            fixture.dispatches.claimNext(
+                eq(NOW),
+                eq(Duration.ofMinutes(2))
+            )
+        ).thenReturn(Optional.of(dispatch()));
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID))
+            .thenReturn(scope());
+        when(fixture.scoped.prepareCandidate(any())).thenReturn(
+            new DbtScopedProjectService.ScopedCandidateProject(
+                "/must-not-leave-platform",
+                "dim_customer fct_invoice",
+                SCOPED_CHECKSUM,
+                List.of()
+            )
+        );
+        when(fixture.tokens.issue(GROUP_ID, NOW)).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken(
+                "runtime-token",
+                "sha256:" + "c".repeat(64),
+                NOW.plus(Duration.ofMinutes(15))
+            )
+        );
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.retryableUnknown(
+                DAG_RUN_ID,
+                "MODEL_AIRFLOW_TRIGGER_UNKNOWN"
+            )
+        );
+        fixture.audit.failNext(
+            new IllegalStateException(
+                "Audit event id already exists with different payload or ownership"
+            )
+        );
+
+        var first = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(first.status()).isEqualTo("UNKNOWN");
+        assertThat(first.errorCode()).isEqualTo(
+            "MODEL_AIRFLOW_TRIGGER_UNKNOWN"
+        );
+        verify(fixture.dispatches).markUnknown(
+            GROUP_ID,
+            "MODEL_AIRFLOW_TRIGGER_UNKNOWN",
+            NOW.plus(Duration.ofSeconds(30)),
+            NOW
+        );
+
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.retryableUnknown(
+                DAG_RUN_ID,
+                "MODEL_AIRFLOW_UNAVAILABLE"
+            )
+        );
+        fixture.audit.failNext(
+            new IllegalStateException(
+                "Audit event id already exists with different payload or ownership"
+            )
+        );
+
+        var second = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(second.status()).isEqualTo("UNKNOWN");
+        assertThat(second.errorCode()).isEqualTo(
+            "MODEL_AIRFLOW_UNAVAILABLE"
+        );
+        verify(fixture.dispatches).markUnknown(
+            GROUP_ID,
+            "MODEL_AIRFLOW_UNAVAILABLE",
+            NOW.plus(Duration.ofSeconds(30)),
+            NOW
+        );
+    }
+
+    @Test
     void acceptedAirflowRunIsNeverDowngradedToBlockedWhenLocalCommitFails() {
         Fixture fixture = fixture();
         when(

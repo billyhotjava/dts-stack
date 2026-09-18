@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class ModelMaterializationDispatchService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(
+        ModelMaterializationDispatchService.class
+    );
     private static final Duration STALE_CLAIM_TTL =
         Duration.ofMinutes(2);
     private static final Duration SUBMITTED_RECONCILE_GRACE =
@@ -587,6 +592,19 @@ public class ModelMaterializationDispatchService {
                 payload
             );
         } catch (RuntimeException failure) {
+            if (isDuplicateDispatchAudit(failure)) {
+                // The outbox keeps first-write-wins per deterministic event identity while a
+                // retry carries a fresh occurredAt/errorCode. The logical event is already
+                // recorded, so treat the retry as a successful no-op instead of poisoning the
+                // dispatch loop with a rollback on every attempt.
+                LOG.info(
+                    "event=model_materialization_dispatch_audit_duplicate_suppressed dispatch={} status={} errorCode={}",
+                    dispatch.id(),
+                    status,
+                    errorCode
+                );
+                return;
+            }
             throw new MachineAuditPersistenceException(failure);
         }
     }
@@ -603,6 +621,25 @@ public class ModelMaterializationDispatchService {
             ":" +
             status.toLowerCase(java.util.Locale.ROOT)
         );
+    }
+
+    private static boolean isDuplicateDispatchAudit(
+        Throwable failure
+    ) {
+        Throwable current = failure;
+        while (current != null) {
+            String message = current.getMessage();
+            if (
+                message != null &&
+                message.contains(
+                    "already exists with different payload or ownership"
+                )
+            ) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 
     private static final class MachineAuditPersistenceException
