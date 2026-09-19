@@ -609,6 +609,26 @@ describe("release and materialization dispatch", () => {
 		expect(button("重试构建")).toBeDefined();
 	});
 
+	it("keeps the abandon exit reachable on the publish tab the dialog switches to after a build starts", async () => {
+		const building = candidate("BATCH_WORKBENCH", "BUILDING");
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["ABANDON_BUILD"], building));
+		apiMocks.abandonBuild.mockResolvedValue({ candidate: candidate("BATCH_WORKBENCH", "BUILD_FAILED") });
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		const publishTab = Array.from(container.querySelectorAll("nav button")).find((item) => item.textContent === "发布模型");
+		await act(async () => (publishTab as HTMLButtonElement | undefined)?.click());
+		await flush();
+
+		expect(container.textContent).toContain("发布模型");
+		await act(async () => button("放弃本次构建")?.click());
+		await act(async () => button("确认放弃本次构建")?.click());
+		await flush();
+		expect(apiMocks.abandonBuild).toHaveBeenCalledTimes(1);
+	});
+
 	it("explains a rejected abandonment in Chinese and keeps the build running", async () => {
 		const building = candidate("BATCH_WORKBENCH", "BUILDING");
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["ABANDON_BUILD"], building));

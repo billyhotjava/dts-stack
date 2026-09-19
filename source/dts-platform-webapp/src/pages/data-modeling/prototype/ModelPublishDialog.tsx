@@ -663,6 +663,16 @@ export function ModelPublishDialog({
 						selectedCount={selection.length} exactScope={candidateScopeMatches}
 						confirmed={confirmedCandidateScope === candidateScopeKey} disabled={Boolean(busy)}
 						onConfirm={(confirmed) => setConfirmedCandidateScope(confirmed ? candidateScopeKey : "")} />
+					{!selectionProblem && scopedCandidate?.status === "BUILDING" ? (
+						<ModelBuildProgressNotice
+							busy={Boolean(busy)}
+							canAbandon={canAbandonBuild}
+							onAbandon={abandonBuild}
+							unconfirmedCode={unconfirmedDispatch
+								? unconfirmedDispatch.repairCode || "MODEL_MATERIALIZATION_DISPATCH_UNKNOWN"
+								: null}
+						/>
+					) : null}
 					{selectionProblem ? (
 						<RequestState description={selectionProblem} kind="empty" title="当前选择不可构建" />
 					) : tab === "materialize" ? (
@@ -768,16 +778,6 @@ export function ModelPublishDialog({
 							) : (
 								<p className="dmx-capability-note">当前发布单尚无逐表执行记录。</p>
 							)}
-							{scopedCandidate?.status === "BUILDING" ? (
-								<ModelBuildProgressNotice
-									busy={Boolean(busy)}
-									canAbandon={canAbandonBuild}
-									onAbandon={abandonBuild}
-									unconfirmedCode={unconfirmedDispatch
-										? unconfirmedDispatch.repairCode || "MODEL_MATERIALIZATION_DISPATCH_UNKNOWN"
-										: null}
-								/>
-							) : null}
 							<ModelMaterializationActions
 								embedded={embedded}
 								pageAction={pageAction && ["RUN_QUALITY", "RERUN_GOVERNANCE_QUALITY"].includes(pageAction.code) && !candidateCommandScopeAllowed
