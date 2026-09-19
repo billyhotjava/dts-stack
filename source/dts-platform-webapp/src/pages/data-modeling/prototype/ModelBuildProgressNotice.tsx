@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReleaseCandidateDeliveryStatus } from "@/api/modelSpecApi";
 import { Button } from "./PrototypePrimitives";
 
@@ -26,6 +26,10 @@ export function ModelBuildProgressNotice({
 	onAbandon: () => Promise<boolean>;
 }) {
 	const [confirming, setConfirming] = useState(false);
+	// The server can withdraw the exit (the build made progress); never keep a stale confirmation.
+	useEffect(() => {
+		if (!canAbandon) setConfirming(false);
+	}, [canAbandon]);
 	return (
 		<section aria-live="polite" className="dmx-request-state">
 			<p>

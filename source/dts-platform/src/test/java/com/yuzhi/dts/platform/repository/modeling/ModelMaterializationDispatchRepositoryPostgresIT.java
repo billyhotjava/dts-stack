@@ -72,6 +72,16 @@ class ModelMaterializationDispatchRepositoryPostgresIT {
             );
             statement.execute(
                 """
+                create table modeling_model_release_candidate (
+                    id uuid primary key,
+                    tenant_id varchar(128) not null,
+                    version int not null,
+                    status varchar(32) not null
+                )
+                """
+            );
+            statement.execute(
+                """
                 create table modeling_pipeline_run (
                     id uuid primary key,
                     pipeline_run_group_id uuid not null,
@@ -112,20 +122,35 @@ class ModelMaterializationDispatchRepositoryPostgresIT {
     }
 
     @Test
-    void latestDispatchIsTheHighestAttemptOfTheCandidateVersion() {
+    void latestDispatchIsTheHighestAttemptOfTheCandidateRegardlessOfVersion() {
         insertDispatch(1, 2, "BLOCKED", 1, null, NOW.minusSeconds(600));
-        UUID latest = insertDispatch(2, 4, "SUBMITTED", 1, null, NOW.minusSeconds(30));
-        insertDispatch(3, 6, "PENDING", 0, null, NOW);
+        insertDispatch(2, 4, "FAILED", 1, null, NOW.minusSeconds(300));
+        UUID latest = insertDispatch(3, 6, "SUBMITTED", 1, null, NOW.minusSeconds(30));
 
-        assertThat(dispatches.findLatestForCandidate("tenant-a", CANDIDATE, 4))
+        assertThat(dispatches.findLatestForCandidate("tenant-a", CANDIDATE))
             .get()
             .satisfies(record -> {
                 assertThat(record.id()).isEqualTo(latest);
+                assertThat(record.attempt()).isEqualTo(3);
                 assertThat(record.lastModifiedAt()).isEqualTo(NOW.minusSeconds(30));
             });
-        assertThat(dispatches.lockLatestForCandidate("tenant-a", CANDIDATE, 4)).get().extracting(r -> r.id()).isEqualTo(latest);
-        assertThat(dispatches.findLatestForCandidate("tenant-a", CANDIDATE, 5)).isEmpty();
-        assertThat(dispatches.findLatestForCandidate("tenant-b", CANDIDATE, 4)).isEmpty();
+        assertThat(dispatches.lockLatestForCandidate("tenant-a", CANDIDATE)).get().extracting(r -> r.id()).isEqualTo(latest);
+        assertThat(dispatches.findLatestForCandidate("tenant-b", CANDIDATE)).isEmpty();
+        assertThat(dispatches.findLatestForCandidate("tenant-a", UUID.randomUUID())).isEmpty();
+    }
+
+    @Test
+    void candidateTransitionGuardMatchesOnlyTheSameBuildingVersion() {
+        jdbc.update(
+            "insert into modeling_model_release_candidate (id, tenant_id, version, status) values (?, 'tenant-a', 4, 'BUILDING')",
+            CANDIDATE
+        );
+
+        assertThat(dispatches.isCandidateBuilding("tenant-a", CANDIDATE, 4)).isTrue();
+        assertThat(dispatches.isCandidateBuilding("tenant-a", CANDIDATE, 3)).isFalse();
+        assertThat(dispatches.isCandidateBuilding("tenant-b", CANDIDATE, 4)).isFalse();
+        jdbc.update("update modeling_model_release_candidate set status = 'STALE' where id = ?", CANDIDATE);
+        assertThat(dispatches.isCandidateBuilding("tenant-a", CANDIDATE, 4)).isFalse();
     }
 
     @Test
@@ -154,6 +179,7 @@ class ModelMaterializationDispatchRepositoryPostgresIT {
         UUID liveClaim = insertDispatch(1, 2, "CLAIMED", 1, NOW.minusSeconds(30), NOW.minusSeconds(30));
         UUID staleClaim = insertDispatch(2, 4, "CLAIMED", 1, NOW.minusSeconds(600), NOW.minusSeconds(600));
         UUID completed = insertDispatch(3, 6, "COMPLETED", 1, null, NOW.minusSeconds(600));
+        UUID claimAtTtl = insertDispatch(5, 10, "CLAIMED", 1, NOW.minus(Duration.ofMinutes(2)), NOW.minus(Duration.ofMinutes(2)));
         UUID unknown = insertDispatch(4, 8, "UNKNOWN", 5, null, NOW);
         Instant claimStaleBefore = NOW.minus(Duration.ofMinutes(2));
 
@@ -163,6 +189,10 @@ class ModelMaterializationDispatchRepositoryPostgresIT {
         assertThat(dispatches.abandonActive(unknown, CODE, NOW, claimStaleBefore)).isTrue();
         assertThat(dispatches.abandonActive(unknown, CODE, NOW, claimStaleBefore))
             .as("a fenced dispatch is terminal")
+            .isFalse();
+
+        assertThat(dispatches.abandonActive(claimAtTtl, CODE, NOW, claimStaleBefore))
+            .as("a claim exactly at the TTL is still owned by its dispatcher")
             .isFalse();
 
         assertThat(dispatchStatus(liveClaim)).isEqualTo("CLAIMED");

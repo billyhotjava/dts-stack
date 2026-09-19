@@ -659,7 +659,7 @@ class ModelReleaseCandidateApplicationServiceTest {
         );
         ModelMaterializationDispatchService dispatcher = mock(ModelMaterializationDispatchService.class);
         service.setBuildDispatches(dispatcher);
-        when(dispatcher.canAbandonBuild(TENANT, CANDIDATE_ID, 4)).thenReturn(true, false);
+        when(dispatcher.canAbandonBuild(TENANT, CANDIDATE_ID)).thenReturn(true, false);
         when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(candidate));
         when(commands.detectDrift(TENANT, candidate)).thenReturn(List.of());
         when(workbenchEvidence.findCurrent(candidate)).thenReturn(evidence);
@@ -682,13 +682,13 @@ class ModelReleaseCandidateApplicationServiceTest {
         ModelMaterializationDispatchService dispatcher = mock(ModelMaterializationDispatchService.class);
         service.setBuildDispatches(dispatcher);
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(candidate));
-        when(dispatcher.abandonBuild(TENANT, ACTOR, CANDIDATE_ID, 4, 4, "abandon-key", "Airflow 故障"))
+        when(dispatcher.abandonBuild(TENANT, ACTOR, CANDIDATE_ID, 4, "abandon-key", "Airflow 故障"))
             .thenReturn(new CommandResult(failed, false, List.of()));
 
         var result = service.abandonBuild(TENANT, ACTOR, PLAN_ID, CANDIDATE_ID, 4, "abandon-key", "Airflow 故障");
 
         assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.BUILD_FAILED);
-        verify(dispatcher).abandonBuild(TENANT, ACTOR, CANDIDATE_ID, 4, 4, "abandon-key", "Airflow 故障");
+        verify(dispatcher).abandonBuild(TENANT, ACTOR, CANDIDATE_ID, 4, "abandon-key", "Airflow 故障");
     }
 
     @Test

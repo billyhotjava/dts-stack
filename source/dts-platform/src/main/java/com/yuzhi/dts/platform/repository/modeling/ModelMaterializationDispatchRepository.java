@@ -377,12 +377,15 @@ public class ModelMaterializationDispatchRepository {
         return true;
     }
 
-    /** Latest build attempt of one candidate version, locked for a state decision. */
+    /**
+     * Latest build attempt of one candidate, locked for a state decision. Like the retry path it
+     * is not filtered by candidate version, so an active attempt can never hide behind a version
+     * mismatch.
+     */
     @Transactional
     public Optional<DispatchRecord> lockLatestForCandidate(
         String tenantId,
-        UUID candidateId,
-        int candidateVersion
+        UUID candidateId
     ) {
         return jdbcTemplate
             .query(
@@ -390,15 +393,13 @@ public class ModelMaterializationDispatchRepository {
                 """
                  where tenant_id = ?
                    and candidate_id = ?
-                   and candidate_version = ?
                  order by attempt desc
                  limit 1
                  for update
                 """,
                 (row, rowNumber) -> map(row),
                 required(tenantId, "tenantId"),
-                candidateId,
-                candidateVersion
+                candidateId
             )
             .stream()
             .findFirst();
@@ -407,8 +408,7 @@ public class ModelMaterializationDispatchRepository {
     @Transactional(readOnly = true)
     public Optional<DispatchRecord> findLatestForCandidate(
         String tenantId,
-        UUID candidateId,
-        int candidateVersion
+        UUID candidateId
     ) {
         return jdbcTemplate
             .query(
@@ -416,17 +416,40 @@ public class ModelMaterializationDispatchRepository {
                 """
                  where tenant_id = ?
                    and candidate_id = ?
-                   and candidate_version = ?
                  order by attempt desc
                  limit 1
                 """,
                 (row, rowNumber) -> map(row),
                 required(tenantId, "tenantId"),
-                candidateId,
-                candidateVersion
+                candidateId
             )
             .stream()
             .findFirst();
+    }
+
+    /**
+     * Whether the candidate still sits in the BUILDING version this dispatch was created for. A
+     * candidate refreshed to STALE meanwhile must not be forced through an invalid transition.
+     */
+    @Transactional(readOnly = true)
+    public boolean isCandidateBuilding(
+        String tenantId,
+        UUID candidateId,
+        int candidateVersion
+    ) {
+        Integer matches = jdbcTemplate.queryForObject(
+            """
+            select count(*)
+              from modeling_model_release_candidate
+             where tenant_id = ? and id = ? and version = ?
+               and status = 'BUILDING'
+            """,
+            Integer.class,
+            required(tenantId, "tenantId"),
+            candidateId,
+            candidateVersion
+        );
+        return matches != null && matches > 0;
     }
 
     private int blockPipelineRows(

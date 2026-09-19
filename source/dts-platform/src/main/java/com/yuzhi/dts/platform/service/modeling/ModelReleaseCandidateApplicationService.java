@@ -502,7 +502,7 @@ public class ModelReleaseCandidateApplicationService {
         String reason
     ) {
         Access access = authorizeMaintainer(tenantId, actorId, planId);
-        CandidateView current = candidateForPlan(access.tenantId(), access.planId(), candidateId);
+        candidateForPlan(access.tenantId(), access.planId(), candidateId);
         if (buildDispatches == null) {
             throw new ModelReleaseCandidateException(
                 "MODEL_MATERIALIZATION_ABANDON_UNAVAILABLE",
@@ -515,7 +515,6 @@ public class ModelReleaseCandidateApplicationService {
                 access.tenantId(),
                 access.actorId(),
                 candidateId,
-                current.version(),
                 expectedVersion,
                 idempotencyKey,
                 reason
@@ -1334,7 +1333,7 @@ public class ModelReleaseCandidateApplicationService {
             candidate.status() == DeliveryStatus.BUILDING &&
             duties.contains(DeliveryActorRole.MODEL_MAINTAINER) &&
             buildDispatches != null &&
-            buildDispatches.canAbandonBuild(candidate.tenantId(), candidate.id(), candidate.version())
+            buildDispatches.canAbandonBuild(candidate.tenantId(), candidate.id())
         ) {
             return java.util.stream.Stream
                 .concat(result.stream(), java.util.stream.Stream.of(WorkspaceAction.ABANDON_BUILD))

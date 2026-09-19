@@ -516,7 +516,14 @@ export function ModelPublishDialog({
 			onChanged?.();
 			return true;
 		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "放弃本次构建未能完成，请刷新后核对状态。").message);
+			const normalized = normalizeModelingRequestFailure(error, "放弃本次构建未能完成，请刷新后核对状态。");
+			setFailure(
+				normalized.code === "MODEL_MATERIALIZATION_BUILD_IN_PROGRESS"
+					? "构建派发正在处理中，暂时不能放弃；请稍后刷新状态再试。（错误码 MODEL_MATERIALIZATION_BUILD_IN_PROGRESS）"
+					: normalized.code === "MODEL_RELEASE_CANDIDATE_VERSION_CONFLICT"
+						? "发布单状态已发生变化，页面已自动刷新，请确认后重试。"
+						: normalized.message,
+			);
 			await load();
 			return false;
 		} finally {

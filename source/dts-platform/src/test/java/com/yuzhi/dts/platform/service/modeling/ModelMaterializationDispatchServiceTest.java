@@ -1018,11 +1018,11 @@ class ModelMaterializationDispatchServiceTest {
     @Test
     void maintainerMayAbandonAnUnconfirmedBuild() {
         Fixture fixture = fixture();
-        when(fixture.dispatches.lockLatestForCandidate("tenant-a", CANDIDATE_ID, 3))
+        when(fixture.dispatches.lockLatestForCandidate("tenant-a", CANDIDATE_ID))
             .thenReturn(Optional.of(recordWith("UNKNOWN", 2, NOW)));
         when(fixture.dispatches.abandonActive(eq(GROUP_ID), any(), eq(NOW), any())).thenReturn(true);
 
-        fixture.service.abandonBuild("tenant-a", "alice", CANDIDATE_ID, 3, 3, "abandon-1", "Airflow 不可用");
+        fixture.service.abandonBuild("tenant-a", "alice", CANDIDATE_ID, 3, "abandon-1", "Airflow 不可用");
 
         verify(fixture.dispatches).abandonActive(GROUP_ID, "MODEL_MATERIALIZATION_BUILD_ABANDONED", NOW, NOW.minus(Duration.ofMinutes(2)));
         verify(fixture.candidates).transition(
@@ -1035,10 +1035,10 @@ class ModelMaterializationDispatchServiceTest {
     @Test
     void progressingBuildCannotBeAbandonedWithinTheGracePeriod() {
         Fixture fixture = fixture();
-        when(fixture.dispatches.lockLatestForCandidate("tenant-a", CANDIDATE_ID, 3))
+        when(fixture.dispatches.lockLatestForCandidate("tenant-a", CANDIDATE_ID))
             .thenReturn(Optional.of(recordWith("SUBMITTED", 1, NOW.minus(Duration.ofMinutes(3)))));
 
-        assertThatThrownBy(() -> fixture.service.abandonBuild("tenant-a", "alice", CANDIDATE_ID, 3, 3, "abandon-1", "等不及"))
+        assertThatThrownBy(() -> fixture.service.abandonBuild("tenant-a", "alice", CANDIDATE_ID, 3, "abandon-1", "等不及"))
             .isInstanceOf(ModelReleaseCandidateException.class)
             .hasMessageContaining("still progressing");
         verify(fixture.dispatches, never()).abandonActive(any(), any(), any(), any());
@@ -1048,7 +1048,7 @@ class ModelMaterializationDispatchServiceTest {
     @Test
     void abandonEligibilityFollowsDispatchProgress() {
         Fixture fixture = fixture();
-        when(fixture.dispatches.findLatestForCandidate("tenant-a", CANDIDATE_ID, 3))
+        when(fixture.dispatches.findLatestForCandidate("tenant-a", CANDIDATE_ID))
             .thenReturn(
                 Optional.of(recordWith("SUBMITTED", 1, NOW.minus(Duration.ofMinutes(3)))),
                 Optional.of(recordWith("SUBMITTED", 1, NOW.minus(Duration.ofMinutes(10)))),
@@ -1057,11 +1057,139 @@ class ModelMaterializationDispatchServiceTest {
                 Optional.empty()
             );
 
-        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isFalse();
-        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isTrue();
-        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isTrue();
-        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isFalse();
-        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isTrue();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID)).isFalse();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID)).isTrue();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID)).isTrue();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID)).isFalse();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID)).isTrue();
+    }
+
+    @Test
+    void lastUnknownAttemptBeforeTheLimitStillRetriesWithTheCappedDelay() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.claimNext(eq(NOW), eq(Duration.ofMinutes(2)))).thenReturn(
+            Optional.of(recordWith("CLAIMED", ModelMaterializationDispatchService.MAX_UNCONFIRMED_DISPATCH_ATTEMPTS - 1, NOW))
+        );
+        stubPreparedSubmission(fixture);
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.retryableUnknown(DAG_RUN_ID, "MODEL_AIRFLOW_TRIGGER_UNKNOWN")
+        );
+
+        var result = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("UNKNOWN");
+        verify(fixture.dispatches).markUnknown(GROUP_ID, "MODEL_AIRFLOW_TRIGGER_UNKNOWN", NOW.plus(Duration.ofMinutes(5)), NOW);
+        verify(fixture.dispatches, never()).markBlocked(any(), any(), any());
+    }
+
+    @Test
+    void exhaustedDispatchIsFencedWithoutForcingACandidateThatAlreadyLeftBuilding() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.claimNext(eq(NOW), eq(Duration.ofMinutes(2)))).thenReturn(
+            Optional.of(recordWith("CLAIMED", ModelMaterializationDispatchService.MAX_UNCONFIRMED_DISPATCH_ATTEMPTS, NOW))
+        );
+        when(fixture.dispatches.isCandidateBuilding("tenant-a", CANDIDATE_ID, 3)).thenReturn(false);
+        stubPreparedSubmission(fixture);
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.retryableUnknown(DAG_RUN_ID, "MODEL_AIRFLOW_TRIGGER_UNKNOWN")
+        );
+
+        var result = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("BLOCKED");
+        verify(fixture.dispatches).markBlocked(GROUP_ID, "MODEL_MATERIALIZATION_DISPATCH_RETRY_EXHAUSTED", NOW);
+        verify(fixture.candidates, never()).transition(any(), any(), any(), any());
+        assertThat(fixture.transactions.commits()).isEqualTo(1);
+    }
+
+    @Test
+    void submittedRunJustInsideTheDeadlineIsLeftRunning() {
+        Fixture fixture = fixture();
+        DispatchRecord young = recordWith("SUBMITTED", 1, NOW.minus(Duration.ofHours(12)).plusSeconds(1));
+        when(fixture.dispatches.findSubmittedBefore(NOW.minus(Duration.ofMinutes(2)), 20)).thenReturn(List.of(young));
+        stubRestoredToken(fixture);
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(
+            Optional.of(DbtExecutionGateway.SubmissionResult.submitted(DAG_RUN_ID, true))
+        );
+
+        fixture.service.reconcileSubmitted();
+
+        verify(fixture.dispatches, never()).abandonActive(any(), any(), any(), any());
+    }
+
+    @Test
+    void unreachableAirflowNeverExpiresASubmittedRunOnItsOwn() {
+        Fixture fixture = fixture();
+        DispatchRecord stale = recordWith("SUBMITTED", 1, NOW.minus(Duration.ofDays(3)));
+        when(fixture.dispatches.findSubmittedBefore(NOW.minus(Duration.ofMinutes(2)), 20)).thenReturn(List.of(stale));
+        stubRestoredToken(fixture);
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(
+            Optional.of(DbtExecutionGateway.SubmissionResult.retryableUnknown(DAG_RUN_ID, "MODEL_AIRFLOW_RECONCILIATION_UNAVAILABLE"))
+        );
+
+        fixture.service.reconcileSubmitted();
+
+        verify(fixture.dispatches, never()).abandonActive(any(), any(), any(), any());
+        verify(fixture.runArtifacts, never()).finalizeRun(any(), any());
+    }
+
+    @Test
+    void expiryThatLosesTheRaceToAnotherTerminalWriterChangesNothingElse() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.findSubmittedBefore(NOW.minus(Duration.ofMinutes(2)), 20)).thenReturn(List.of(submittedDispatch()));
+        stubRestoredToken(fixture);
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(Optional.empty());
+        when(fixture.dispatches.abandonActive(any(), any(), any(), any())).thenReturn(false);
+
+        fixture.service.reconcileSubmitted();
+
+        verify(fixture.candidates, never()).transition(any(), any(), any(), any());
+        assertThat(fixture.audit.calls()).isEmpty();
+    }
+
+    @Test
+    void abandonThatLosesTheRaceToALiveDispatcherIsRejected() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.lockLatestForCandidate("tenant-a", CANDIDATE_ID))
+            .thenReturn(Optional.of(recordWith("UNKNOWN", 2, NOW)));
+        when(fixture.dispatches.abandonActive(any(), any(), any(), any())).thenReturn(false);
+
+        assertThatThrownBy(() -> fixture.service.abandonBuild("tenant-a", "alice", CANDIDATE_ID, 3, "abandon-1", "放弃"))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .satisfies(error -> assertThat(((ModelReleaseCandidateException) error).code())
+                .isEqualTo("MODEL_MATERIALIZATION_BUILD_IN_PROGRESS"));
+        verify(fixture.candidates, never()).transition(any(), any(), any(), any());
+        assertThat(fixture.transactions.rollbacks()).isEqualTo(1);
+    }
+
+    @Test
+    void abandonOfACandidateWithoutActiveDispatchOnlyReleasesTheCandidate() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.lockLatestForCandidate("tenant-a", CANDIDATE_ID))
+            .thenReturn(Optional.of(recordWith("BLOCKED", 2, NOW)));
+
+        fixture.service.abandonBuild("tenant-a", "alice", CANDIDATE_ID, 3, "abandon-1", " ");
+
+        verify(fixture.dispatches, never()).abandonActive(any(), any(), any(), any());
+        verify(fixture.candidates).transition(
+            "tenant-a", "alice", CANDIDATE_ID,
+            new TransitionCommand(3, DeliveryStatus.BUILD_FAILED, "abandon-1", "MODEL_MATERIALIZATION_BUILD_ABANDONED")
+        );
+    }
+
+    @Test
+    void staleClaimOfACrashedDispatcherMayBeAbandoned() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.findLatestForCandidate("tenant-a", CANDIDATE_ID))
+            .thenReturn(
+                Optional.of(recordWith("CLAIMED", 1, NOW.minus(Duration.ofMinutes(2)))),
+                Optional.of(recordWith("PENDING", 0, NOW.minus(Duration.ofMinutes(9)))),
+                Optional.of(recordWith("COMPLETED", 1, NOW))
+            );
+
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID)).isTrue();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID)).isFalse();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID)).isTrue();
     }
 
     private static void stubPreparedSubmission(Fixture fixture) {
@@ -1132,6 +1260,7 @@ class ModelMaterializationDispatchServiceTest {
             new TransactionTemplate(transactions)
         );
         org.springframework.test.util.ReflectionTestUtils.setField(service, "executionAuthorization", mock(ModelingExecutionAuthorization.class));
+        when(dispatches.isCandidateBuilding(anyString(), any(), anyInt())).thenReturn(true);
         return new Fixture(
             service,
             dispatches,

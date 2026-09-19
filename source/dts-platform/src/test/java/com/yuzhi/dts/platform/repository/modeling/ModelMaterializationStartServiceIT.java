@@ -1033,13 +1033,13 @@ class ModelMaterializationStartServiceIT {
             return claimed.id();
         });
 
-        var latest = dispatches.findLatestForCandidate(scope.tenant(), scope.candidateId(), 2).orElseThrow();
+        var latest = dispatches.findLatestForCandidate(scope.tenant(), scope.candidateId()).orElseThrow();
         assertThat(latest.id()).isEqualTo(firstGroupId);
         assertThat(latest.status()).isEqualTo("UNKNOWN");
         assertThat(latest.dispatchAttempts()).isEqualTo(1);
 
         transaction.executeWithoutResult(status -> {
-            assertThat(dispatches.lockLatestForCandidate(scope.tenant(), scope.candidateId(), 2)).isPresent();
+            assertThat(dispatches.lockLatestForCandidate(scope.tenant(), scope.candidateId())).isPresent();
             assertThat(
                 dispatches.abandonActive(
                     firstGroupId,
@@ -1082,7 +1082,7 @@ class ModelMaterializationStartServiceIT {
         assertThat(retrying)
             .extracting(CandidateView::status, CandidateView::version)
             .containsExactly(DeliveryStatus.BUILDING, 4);
-        assertThat(dispatches.findLatestForCandidate(scope.tenant(), scope.candidateId(), 4))
+        assertThat(dispatches.findLatestForCandidate(scope.tenant(), scope.candidateId()))
             .get()
             .extracting(record -> record.attempt(), record -> record.status())
             .containsExactly(2, "PENDING");

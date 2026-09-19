@@ -223,6 +223,70 @@ class AirflowDbtExecutionGatewayTest {
     }
 
     @Test
+    void rejectionIsOnlyTerminalWhenAirflowCanProveTheRunDoesNotExist() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        when(airflow.getDag(DAG_ID)).thenReturn(
+            Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+        );
+        when(airflow.getDagRun(DAG_ID, DAG_RUN_ID))
+            .thenReturn(Optional.empty())
+            .thenThrow(new RuntimeException("Airflow read unavailable"));
+        when(airflow.triggerDag(eq(DAG_ID), any())).thenThrow(
+            new AirflowClient.AirflowApiException("DAG not found", 404, null)
+        );
+
+        DbtExecutionGateway.SubmissionResult result = gateway(airflow)
+            .submitReleaseBuild(request());
+
+        assertThat(result.status()).isEqualTo(DbtExecutionGateway.SubmissionStatus.RETRYABLE_UNKNOWN);
+        assertThat(result.errorCode()).isEqualTo("MODEL_AIRFLOW_RECONCILIATION_UNAVAILABLE");
+    }
+
+    @Test
+    void triggerFailuresWithoutADeterministicClientStatusRemainRetryable() {
+        java.util.List<RuntimeException> failures = java.util.List.of(
+            new AirflowClient.AirflowApiException("connection reset", null),
+            new RuntimeException("plain failure"),
+            new AirflowClient.AirflowApiException("too early", 425, null),
+            new AirflowClient.AirflowApiException("bad gateway", 502, null),
+            new AirflowClient.AirflowApiException("redirect", 399, null)
+        );
+        for (RuntimeException failure : failures) {
+            AirflowClient airflow = mock(AirflowClient.class);
+            when(airflow.getDag(DAG_ID)).thenReturn(
+                Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+            );
+            when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(Optional.empty());
+            when(airflow.triggerDag(eq(DAG_ID), any())).thenThrow(failure);
+
+            DbtExecutionGateway.SubmissionResult result = gateway(airflow)
+                .submitReleaseBuild(request());
+
+            assertThat(result.status())
+                .as(failure.getMessage())
+                .isEqualTo(DbtExecutionGateway.SubmissionStatus.RETRYABLE_UNKNOWN);
+        }
+    }
+
+    @Test
+    void clientStatusRangeBoundsAreRejectedAsDeterministic() {
+        for (int status : new int[] { 400, 499 }) {
+            AirflowClient airflow = mock(AirflowClient.class);
+            when(airflow.getDag(DAG_ID)).thenReturn(
+                Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+            );
+            when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(Optional.empty());
+            when(airflow.triggerDag(eq(DAG_ID), any())).thenThrow(
+                new AirflowClient.AirflowApiException("rejected", status, null)
+            );
+
+            assertThat(gateway(airflow).submitReleaseBuild(request()).errorCode())
+                .as("HTTP %s", status)
+                .isEqualTo("MODEL_AIRFLOW_TRIGGER_REJECTED");
+        }
+    }
+
+    @Test
     void triggerRejectionStillRecoversRunThatAirflowAlreadyAccepted() {
         AirflowClient airflow = mock(AirflowClient.class);
         when(airflow.getDag(DAG_ID)).thenReturn(

@@ -609,6 +609,54 @@ describe("release and materialization dispatch", () => {
 		expect(button("重试构建")).toBeDefined();
 	});
 
+	it("explains a rejected abandonment in Chinese and keeps the build running", async () => {
+		const building = candidate("BATCH_WORKBENCH", "BUILDING");
+		apiMocks.getWorkbench.mockResolvedValue(workspace(["ABANDON_BUILD"], building));
+		apiMocks.abandonBuild.mockRejectedValue({
+			response: { status: 409, data: { code: "MODEL_MATERIALIZATION_BUILD_IN_PROGRESS", message: "The build is still progressing" } },
+		});
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+		await act(async () => button("放弃本次构建")?.click());
+		await act(async () => button("确认放弃本次构建")?.click());
+		await flush();
+
+		expect(container.textContent).toContain("构建派发正在处理中，暂时不能放弃");
+		expect(container.textContent).not.toContain("The build is still progressing");
+		expect(button("重试构建")).toBeUndefined();
+	});
+
+	it("keeps the last known state and keeps polling when a background refresh fails", async () => {
+		vi.useFakeTimers();
+		try {
+			const building = candidate("BATCH_WORKBENCH", "BUILDING");
+			apiMocks.getWorkbench.mockResolvedValue(workspace([], building));
+			await act(async () =>
+				root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			);
+			await flush();
+			apiMocks.getWorkbench.mockRejectedValueOnce(new Error("network down"));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(5000);
+			});
+			await flush();
+
+			expect(container.textContent).toContain("构建进行中");
+			expect(container.textContent).not.toContain("发布单读取失败");
+			const readsAfterFailure = apiMocks.getWorkbench.mock.calls.length;
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(5000);
+			});
+			expect(apiMocks.getWorkbench.mock.calls.length).toBeGreaterThan(readsAfterFailure);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("does not offer abandonment while the server still considers the build progressing", async () => {
 		const building = candidate("BATCH_WORKBENCH", "BUILDING");
 		apiMocks.getWorkbench.mockResolvedValue(workspace([], building));

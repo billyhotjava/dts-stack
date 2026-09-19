@@ -264,16 +264,10 @@ public class ModelMaterializationDispatchService {
             ) {
                 return;
             }
-            candidates.transition(
-                dispatch.tenantId(),
-                "service:dts-platform",
-                dispatch.candidateId(),
-                new TransitionCommand(
-                    dispatch.candidateVersion(),
-                    DeliveryStatus.BUILD_FAILED,
-                    "materialization-dispatch-expired-" + dispatch.id(),
-                    code
-                )
+            failCandidateIfStillBuilding(
+                dispatch,
+                "materialization-dispatch-expired-" + dispatch.id(),
+                code
             );
             auditDispatch(dispatch, "BLOCKED", code, AuditStage.FAIL, now);
         });
@@ -291,11 +285,10 @@ public class ModelMaterializationDispatchService {
      */
     public boolean canAbandonBuild(
         String tenantId,
-        UUID candidateId,
-        int candidateVersion
+        UUID candidateId
     ) {
         return dispatches
-            .findLatestForCandidate(tenantId, candidateId, candidateVersion)
+            .findLatestForCandidate(tenantId, candidateId)
             .map(dispatch -> abandonable(dispatch, clock.instant()))
             .orElse(true);
     }
@@ -308,7 +301,6 @@ public class ModelMaterializationDispatchService {
         String tenantId,
         String actorId,
         UUID candidateId,
-        int candidateVersion,
         int expectedVersion,
         String idempotencyKey,
         String reason
@@ -317,8 +309,7 @@ public class ModelMaterializationDispatchService {
         return transactions.execute(status -> {
             Optional<DispatchRecord> latest = dispatches.lockLatestForCandidate(
                 tenantId,
-                candidateId,
-                candidateVersion
+                candidateId
             );
             if (latest.isPresent() && ACTIVE_STATUSES.contains(latest.orElseThrow().status())) {
                 DispatchRecord dispatch = latest.orElseThrow();
@@ -681,16 +672,10 @@ public class ModelMaterializationDispatchService {
                 : errorCode.trim();
         transactions.executeWithoutResult(status -> {
             dispatches.markBlocked(dispatch.id(), code, now);
-            candidates.transition(
-                dispatch.tenantId(),
-                "service:dts-platform",
-                dispatch.candidateId(),
-                new TransitionCommand(
-                    dispatch.candidateVersion(),
-                    DeliveryStatus.BUILD_FAILED,
-                    "materialization-dispatch-blocked-" + dispatch.id(),
-                    code
-                )
+            failCandidateIfStillBuilding(
+                dispatch,
+                "materialization-dispatch-blocked-" + dispatch.id(),
+                code
             );
             auditDispatch(
                 dispatch,
@@ -750,6 +735,43 @@ public class ModelMaterializationDispatchService {
             dispatch.airflowRunId(),
             false,
             code
+        );
+    }
+
+    /**
+     * A candidate that already left this BUILDING version (for example refreshed to STALE) keeps
+     * its state; the dispatch is still fenced so it cannot loop on an invalid transition.
+     */
+    private void failCandidateIfStillBuilding(
+        DispatchRecord dispatch,
+        String idempotencyKey,
+        String code
+    ) {
+        if (
+            !dispatches.isCandidateBuilding(
+                dispatch.tenantId(),
+                dispatch.candidateId(),
+                dispatch.candidateVersion()
+            )
+        ) {
+            LOG.warn(
+                "event=model_materialization_dispatch_fenced_without_candidate_transition dispatch={} candidate={} errorCode={}",
+                dispatch.id(),
+                dispatch.candidateId(),
+                code
+            );
+            return;
+        }
+        candidates.transition(
+            dispatch.tenantId(),
+            "service:dts-platform",
+            dispatch.candidateId(),
+            new TransitionCommand(
+                dispatch.candidateVersion(),
+                DeliveryStatus.BUILD_FAILED,
+                idempotencyKey,
+                code
+            )
         );
     }
 
