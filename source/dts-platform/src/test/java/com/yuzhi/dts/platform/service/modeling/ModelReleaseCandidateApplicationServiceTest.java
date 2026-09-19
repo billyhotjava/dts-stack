@@ -138,6 +138,7 @@ class ModelReleaseCandidateApplicationServiceTest {
             governanceQuality
         );
         lenient().when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
+        lenient().when(planAccess.canReadPlan(TENANT, PLAN_ID)).thenReturn(true);
         lenient().when(planReadAccess.canReadPlan(PLAN_ID)).thenReturn(true);
         lenient()
             .when(dutyResolver.currentDuties())
