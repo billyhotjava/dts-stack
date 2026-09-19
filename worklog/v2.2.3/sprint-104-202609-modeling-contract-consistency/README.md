@@ -439,3 +439,17 @@ F5 Gate：G0 复用既有基线，运行时仍核对实际环境；G1=PASS，F5-
 **实施进展（2026-09-16）**：用户授权编码后，F10-T01–T03 源码完成，见 [F10 实施记录](assests/F10-implementation-20260916.md)；正式交付、部署与真实验收未执行。
 
 **最新全 Sprint 统计（覆盖上文历史统计）**：10 个 Feature、63 个 Task；按任务文件状态统计 DRAFT=1，READY=0，IN_PROGRESS=59，DONE=3，BLOCKED=0。
+
+## F11 权限模型统一与 RBAC 重构（2026-09-19，梳理阶段）
+
+新增 [F11](features/F11-权限模型统一与RBAC重构/README.md)，6 个 Task（F11-T01–T06）；T01 已 DONE，T02–T06 为 DRAFT，未授权实施。来源为用户要求梳理 dts-admin 与 dts-platform 的三员权限与普通用户权限并提出重构方案，直接起因是 F9 落地后现场出现数据管理员在建模模块全部 403（已由 `9bc3ec27a` 修复该单点）。
+
+**契约/Context Ledger**：[S1–S13 现状、P1–P9 问题、R1–R6 方案、Q16–Q20](assests/F11-permission-model-survey-20260919.md)。关键事实：数据角色只存在 DTS 库、不在 Keycloak，授予入口从不回写（S1）；角色成员按用户名而非 kc_id 关联（S2）；`person_profile` 自 `4d53821ba` 起无写入方但仍被读取（S4）；平台 508 处 `@PreAuthorize` 中五个模块维护者常量全是同一数组的别名（S6）；`ROLE_GOV_ADMIN`、`ROLE_DATA_STEWARD`、`ROLE_INFRA_ADMIN` 无人可被授予却仍在判权条件中（S7）；`/api/menu` 为 permitAll 且角色由调用方传参（S9）；对象级授权有六套并行实现且无统一决策点（S10）。
+
+| Feature | Task 数 | 优先级 | 状态 |
+|---|---|---|---|
+| [F11-权限模型统一与RBAC重构](features/F11-权限模型统一与RBAC重构/README.md) | 6 | P1 | SURVEY |
+
+**排期约束**：Q16（角色事实源方案）与 Q18（本 Sprint 范围）未确认前，T02–T06 不进入实施。T06 的别名下线属于收紧放行面，必须先在现场确认令牌现状。
+
+**最新全 Sprint 统计（覆盖上文历史统计）**：11 个 Feature、69 个 Task；按任务文件状态统计 DRAFT=6，READY=0，IN_PROGRESS=59，DONE=4，BLOCKED=0。
