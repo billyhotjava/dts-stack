@@ -572,6 +572,7 @@
                         <testInclude>**/repository/modeling/ModelImplementationCommandReceiptLiquibaseIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationStartServiceIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationAvailabilityPinPostgresIT.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelMaterializationDispatchRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/repository/modeling/ModelMaterializationBatchContractTest.java</testInclude>
                         <testInclude>**/repository/modeling/RematerializationEvidenceAggregationContractTest.java</testInclude>
                         <testInclude>**/service/modeling/migration/Sprint83G3DatabaseRehearsalPostgresIT.java</testInclude>
