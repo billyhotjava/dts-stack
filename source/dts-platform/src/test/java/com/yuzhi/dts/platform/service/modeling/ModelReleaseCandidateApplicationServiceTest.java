@@ -42,7 +42,6 @@ import com.yuzhi.dts.platform.service.modeling.QualityEvidencePort.QualityEviden
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -120,6 +119,8 @@ class ModelReleaseCandidateApplicationServiceTest {
 
     private ModelReleaseCandidateApplicationService service;
 
+    private ModelSpecAccessService modelAccess;
+
     @BeforeEach
     void setUp() {
         service = new ModelReleaseCandidateApplicationService(
@@ -139,6 +140,16 @@ class ModelReleaseCandidateApplicationServiceTest {
         );
         lenient().when(planAccess.canMaintain(TENANT, PLAN_ID, ACTOR)).thenReturn(true);
         lenient().when(planAccess.canReadPlan(TENANT, PLAN_ID)).thenReturn(true);
+        modelAccess = mock(ModelSpecAccessService.class);
+        lenient()
+            .when(modelAccess.capabilities(eq(TENANT), any()))
+            .thenAnswer(invocation -> {
+                java.util.Collection<UUID> ids = invocation.getArgument(1);
+                java.util.Map<UUID, ModelSpecAccessService.Capabilities> editable = new java.util.LinkedHashMap<>();
+                ids.forEach(id -> editable.put(id, new ModelSpecAccessService.Capabilities(ACTOR, ACTOR, true, true, "D1")));
+                return editable;
+            });
+        ReflectionTestUtils.setField(service, "modelAccess", modelAccess);
         lenient().when(planReadAccess.canReadPlan(PLAN_ID)).thenReturn(true);
         lenient()
             .when(dutyResolver.currentDuties())
@@ -646,11 +657,6 @@ class ModelReleaseCandidateApplicationServiceTest {
                 "MODEL_AIRFLOW_TRIGGER_UNKNOWN"
             )
         );
-        ModelSpecAccessService access = mock(ModelSpecAccessService.class);
-        when(access.capabilities(eq(TENANT), any())).thenReturn(
-            Map.of(MODEL_ID, new ModelSpecAccessService.Capabilities(ACTOR, ACTOR, true, true, "D1"))
-        );
-        ReflectionTestUtils.setField(service, "modelAccess", access);
         ModelMaterializationDispatchService dispatcher = mock(ModelMaterializationDispatchService.class);
         service.setBuildDispatches(dispatcher);
         when(dispatcher.canAbandonBuild(TENANT, CANDIDATE_ID, 4)).thenReturn(true, false);
@@ -673,11 +679,6 @@ class ModelReleaseCandidateApplicationServiceTest {
             DeliveryStatus.BUILD_FAILED,
             List.of(entry(DeliveryStatus.BUILD_FAILED))
         );
-        ModelSpecAccessService access = mock(ModelSpecAccessService.class);
-        lenient().when(access.capabilities(eq(TENANT), any())).thenReturn(
-            Map.of(MODEL_ID, new ModelSpecAccessService.Capabilities(ACTOR, ACTOR, true, true, "D1"))
-        );
-        ReflectionTestUtils.setField(service, "modelAccess", access);
         ModelMaterializationDispatchService dispatcher = mock(ModelMaterializationDispatchService.class);
         service.setBuildDispatches(dispatcher);
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(candidate));
