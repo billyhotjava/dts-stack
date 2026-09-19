@@ -7,11 +7,16 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /** Canonical dbt execution adapter over the repository's single Airflow client. */
 @Component
 public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
+
+    /** Client errors that may succeed when repeated: timeout, conflict, too early, rate limit. */
+    private static final Set<Integer> RETRYABLE_CLIENT_STATUSES = Set.of(408, 409, 425, 429);
 
     private final AirflowClient airflow;
     private final AirflowProperties properties;
@@ -79,7 +84,12 @@ public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
             }
             return SubmissionResult.submitted(actualRunId, false);
         } catch (RuntimeException uncertain) {
-            return reconcileReleaseBuild(request)
+            Optional<SubmissionResult> reconciled = reconcileReleaseBuild(request);
+            if (reconciled.isPresent()) return reconciled.orElseThrow();
+            // Airflow authoritatively has no run for this id. A deterministic rejection will be
+            // answered the same way on every retry, so it must fail the build instead of looping.
+            return deterministicRejectionCode(uncertain)
+                .map(SubmissionResult::blocked)
                 .orElseGet(() ->
                     SubmissionResult.retryableUnknown(
                         request.dagRunId(),
@@ -87,6 +97,23 @@ public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
                     )
                 );
         }
+    }
+
+    private static Optional<String> deterministicRejectionCode(
+        RuntimeException failure
+    ) {
+        if (!(failure instanceof AirflowClient.AirflowApiException api)) {
+            return Optional.empty();
+        }
+        OptionalInt status = api.httpStatus();
+        if (status.isEmpty()) return Optional.empty();
+        int code = status.getAsInt();
+        if (code < 400 || code >= 500 || RETRYABLE_CLIENT_STATUSES.contains(code)) {
+            return Optional.empty();
+        }
+        if (code == 404) return Optional.of("MODEL_AIRFLOW_TRIGGER_DAG_NOT_FOUND");
+        if (code == 401 || code == 403) return Optional.of("MODEL_AIRFLOW_TRIGGER_FORBIDDEN");
+        return Optional.of("MODEL_AIRFLOW_TRIGGER_REJECTED");
     }
 
     /**
@@ -171,6 +198,9 @@ public class AirflowDbtExecutionGateway implements DbtExecutionGateway {
                 actualRunId,
                 "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED"
             );
+        }
+        if ("success".equals(state)) {
+            return SubmissionResult.terminalSucceeded(actualRunId);
         }
         return SubmissionResult.submitted(actualRunId, true);
     }

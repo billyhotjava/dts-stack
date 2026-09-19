@@ -489,6 +489,7 @@ public final class ModelReleaseCandidateContract {
         REMATERIALIZE,
         START_BUILD,
         RETRY_BUILD,
+        ABANDON_BUILD,
         RUN_QUALITY,
         SUBMIT_REVIEW,
         CANCEL_CANDIDATE,

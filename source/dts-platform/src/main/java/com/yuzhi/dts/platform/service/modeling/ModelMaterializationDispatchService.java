@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService.ScopedCandidat
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.PinnedSourceDefinition;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +60,23 @@ public class ModelMaterializationDispatchService {
     private static final int RECONCILE_BATCH_SIZE = 20;
     private static final Duration RETRY_DELAY =
         Duration.ofSeconds(30);
+    private static final Duration MAX_RETRY_DELAY =
+        Duration.ofMinutes(5);
+    /**
+     * Claims (including the first one) after which an outcome that still cannot be confirmed fails
+     * the build. With exponential backoff this is roughly 20 minutes of Airflow uncertainty.
+     */
+    static final int MAX_UNCONFIRMED_DISPATCH_ATTEMPTS = 8;
+    /** A dispatch without progress for this long may be abandoned by a model maintainer. */
+    static final Duration ABANDON_GRACE = Duration.ofMinutes(10);
+    static final String RETRY_EXHAUSTED_CODE =
+        "MODEL_MATERIALIZATION_DISPATCH_RETRY_EXHAUSTED";
+    static final String ABANDONED_CODE =
+        "MODEL_MATERIALIZATION_BUILD_ABANDONED";
+    static final String RUN_TIMEOUT_CODE =
+        "MODEL_MATERIALIZATION_RUN_TIMEOUT";
+    static final String RUN_NOT_FOUND_CODE =
+        "MODEL_AIRFLOW_RUN_NOT_FOUND";
 
     private final ModelMaterializationDispatchRepository dispatches;
     private final ModelMaterializationBuildRepository builds;
@@ -177,24 +196,180 @@ public class ModelMaterializationDispatchService {
             RECONCILE_BATCH_SIZE
         );
         for (DispatchRecord dispatch : submitted) {
-            Optional<ReleaseBuildRequest> request = recoveryRequest(
-                dispatch
-            );
-            if (request.isEmpty()) continue;
-            Optional<SubmissionResult> reconciled =
-                gateway.reconcileReleaseBuild(request.orElseThrow());
-            if (
-                reconciled.isPresent() &&
-                reconciled.orElseThrow().status() ==
-                SubmissionStatus.TERMINAL_FAILED
-            ) {
-                finalizeAirflowFailure(
-                    dispatch,
-                    reconciled.orElseThrow()
+            try {
+                reconcileOne(dispatch, now);
+            } catch (MachineAuditPersistenceException failure) {
+                throw failure;
+            } catch (RuntimeException failure) {
+                // One poisoned dispatch must not starve the rest of the batch on every pass.
+                LOG.warn(
+                    "event=model_materialization_reconcile_failed dispatch={} reason={}",
+                    dispatch.id(),
+                    failure.toString(),
+                    failure
                 );
             }
         }
     }
+
+    private void reconcileOne(DispatchRecord dispatch, Instant now) {
+        Optional<ReleaseBuildRequest> request = recoveryRequest(dispatch);
+        if (request.isEmpty()) return;
+        Optional<SubmissionResult> reconciled =
+            gateway.reconcileReleaseBuild(request.orElseThrow());
+        if (reconciled.isEmpty()) {
+            // Airflow authoritatively has no run for an accepted submission: nothing will ever
+            // finalize it, so fail it instead of showing "building" forever.
+            expire(dispatch, RUN_NOT_FOUND_CODE, now);
+            return;
+        }
+        SubmissionResult result = reconciled.orElseThrow();
+        if (result.status() == SubmissionStatus.TERMINAL_FAILED) {
+            finalizeAirflowFailure(dispatch, result);
+            return;
+        }
+        if (result.status() == SubmissionStatus.TERMINAL_SUCCEEDED) {
+            // The finalize callback was lost. The platform-side success path still requires every
+            // model to carry sync-probe evidence and fails the build closed when it does not.
+            runArtifacts.finalizeRun(
+                dispatch.id(),
+                new ModelMaterializationRunArtifactService.FinalizeCommand(
+                    "SUCCEEDED"
+                )
+            );
+            return;
+        }
+        if (
+            result.status() == SubmissionStatus.SUBMITTED &&
+            submittedTimedOut(dispatch, now)
+        ) {
+            expire(dispatch, RUN_TIMEOUT_CODE, now);
+        }
+    }
+
+    private boolean submittedTimedOut(DispatchRecord dispatch, Instant now) {
+        return dispatch.lastModifiedAt() != null &&
+            !dispatch.lastModifiedAt().plus(submittedTimeout).isAfter(now);
+    }
+
+    private void expire(DispatchRecord dispatch, String code, Instant now) {
+        transactions.executeWithoutResult(status -> {
+            if (
+                !dispatches.abandonActive(
+                    dispatch.id(),
+                    code,
+                    now,
+                    now.minus(STALE_CLAIM_TTL)
+                )
+            ) {
+                return;
+            }
+            candidates.transition(
+                dispatch.tenantId(),
+                "service:dts-platform",
+                dispatch.candidateId(),
+                new TransitionCommand(
+                    dispatch.candidateVersion(),
+                    DeliveryStatus.BUILD_FAILED,
+                    "materialization-dispatch-expired-" + dispatch.id(),
+                    code
+                )
+            );
+            auditDispatch(dispatch, "BLOCKED", code, AuditStage.FAIL, now);
+        });
+        LOG.warn(
+            "event=model_materialization_dispatch_expired dispatch={} errorCode={}",
+            dispatch.id(),
+            code
+        );
+    }
+
+    /**
+     * Whether a model maintainer may abandon the current build of a BUILDING candidate: its
+     * dispatch outcome is unconfirmed, it has made no progress within {@link #ABANDON_GRACE}, or
+     * no live dispatch backs the candidate at all.
+     */
+    public boolean canAbandonBuild(
+        String tenantId,
+        UUID candidateId,
+        int candidateVersion
+    ) {
+        return dispatches
+            .findLatestForCandidate(tenantId, candidateId, candidateVersion)
+            .map(dispatch -> abandonable(dispatch, clock.instant()))
+            .orElse(true);
+    }
+
+    /**
+     * Fences the current build attempt and moves the candidate to BUILD_FAILED so the maintainer
+     * can retry or cancel. Late Airflow callbacks of the fenced attempt are rejected.
+     */
+    public CommandResult abandonBuild(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        int candidateVersion,
+        int expectedVersion,
+        String idempotencyKey,
+        String reason
+    ) {
+        Instant now = clock.instant();
+        return transactions.execute(status -> {
+            Optional<DispatchRecord> latest = dispatches.lockLatestForCandidate(
+                tenantId,
+                candidateId,
+                candidateVersion
+            );
+            if (latest.isPresent() && ACTIVE_STATUSES.contains(latest.orElseThrow().status())) {
+                DispatchRecord dispatch = latest.orElseThrow();
+                if (
+                    !abandonable(dispatch, now) ||
+                    !dispatches.abandonActive(
+                        dispatch.id(),
+                        ABANDONED_CODE,
+                        now,
+                        now.minus(STALE_CLAIM_TTL)
+                    )
+                ) {
+                    throw new ModelReleaseCandidateException(
+                        "MODEL_MATERIALIZATION_BUILD_IN_PROGRESS",
+                        "The build is still progressing and cannot be abandoned yet",
+                        ModelReleaseCandidateException.Kind.CONFLICT
+                    );
+                }
+                auditDispatch(dispatch, "BLOCKED", ABANDONED_CODE, AuditStage.FAIL, now);
+            }
+            return candidates.transition(
+                tenantId,
+                actorId,
+                candidateId,
+                new TransitionCommand(
+                    expectedVersion,
+                    DeliveryStatus.BUILD_FAILED,
+                    idempotencyKey,
+                    reason == null || reason.isBlank() ? ABANDONED_CODE : reason
+                )
+            );
+        });
+    }
+
+    private static final java.util.Set<String> ACTIVE_STATUSES =
+        java.util.Set.of("PENDING", "CLAIMED", "SUBMITTED", "UNKNOWN");
+
+    private static boolean abandonable(DispatchRecord dispatch, Instant now) {
+        if (!ACTIVE_STATUSES.contains(dispatch.status())) return true;
+        if ("UNKNOWN".equals(dispatch.status())) return true;
+        Duration quietFor = "CLAIMED".equals(dispatch.status())
+            ? STALE_CLAIM_TTL
+            : ABANDON_GRACE;
+        return dispatch.lastModifiedAt() == null ||
+            !dispatch.lastModifiedAt().plus(quietFor).isAfter(now);
+    }
+
+    @org.springframework.beans.factory.annotation.Value(
+        "${dts.modeling.materialization.submitted-timeout:PT12H}"
+    )
+    private Duration submittedTimeout = Duration.ofHours(12);
 
     @org.springframework.beans.factory.annotation.Autowired
     private ModelingExecutionAuthorization executionAuthorization;
@@ -309,14 +484,12 @@ public class ModelMaterializationDispatchService {
         } catch (com.yuzhi.dts.platform.security.modeling.ModelingIdentityException failure) {
             // An unavailable directory is retryable. A sealed runtime token may already have crossed the external boundary.
             if (failure.status() == 503 || externalBoundaryCrossed) {
-                markUnknown(dispatch, failure.code(), now);
-                return Optional.of(new DispatchResult(dispatch.id(), "UNKNOWN", dispatch.airflowRunId(), false, failure.code()));
+                return Optional.of(markUnknown(dispatch, failure.code(), now));
             }
             return Optional.of(block(dispatch, failure.code(), now));
         } catch (ModelSpecException failure) {
             if (externalBoundaryCrossed) {
-                markUnknown(dispatch, failure.code(), now);
-                return Optional.of(new DispatchResult(dispatch.id(), "UNKNOWN", dispatch.airflowRunId(), false, failure.code()));
+                return Optional.of(markUnknown(dispatch, failure.code(), now));
             }
             return Optional.of(block(dispatch, failure.code(), now));
         } catch (
@@ -331,7 +504,7 @@ public class ModelMaterializationDispatchService {
             if (externalBoundaryCrossed) {
                 String code = "MODEL_DISPATCH_PERSISTENCE_UNKNOWN";
                 try {
-                    markUnknown(dispatch, code, now);
+                    return Optional.of(markUnknown(dispatch, code, now));
                 } catch (MachineAuditPersistenceException auditFailure) {
                     auditFailure.addSuppressed(failure);
                     throw auditFailure;
@@ -411,7 +584,11 @@ public class ModelMaterializationDispatchService {
         ) {
             return finalizeAirflowFailure(dispatch, submitted);
         }
-        if (submitted.status() == SubmissionStatus.SUBMITTED) {
+        if (
+            submitted.status() == SubmissionStatus.SUBMITTED ||
+            submitted.status() == SubmissionStatus.TERMINAL_SUCCEEDED
+        ) {
+            // A finished successful run is recorded as submitted; reconciliation finalizes it.
             transactions.executeWithoutResult(status -> {
                 dispatches.markSubmitted(
                     dispatch.id(),
@@ -438,14 +615,7 @@ public class ModelMaterializationDispatchService {
             submitted.status() ==
             SubmissionStatus.RETRYABLE_UNKNOWN
         ) {
-            markUnknown(dispatch, submitted.errorCode(), now);
-            return new DispatchResult(
-                dispatch.id(),
-                "UNKNOWN",
-                dispatch.airflowRunId(),
-                false,
-                submitted.errorCode()
-            );
+            return markUnknown(dispatch, submitted.errorCode(), now);
         }
         return block(dispatch, submitted.errorCode(), now);
     }
@@ -539,7 +709,7 @@ public class ModelMaterializationDispatchService {
         );
     }
 
-    private void markUnknown(
+    private DispatchResult markUnknown(
         DispatchRecord dispatch,
         String errorCode,
         Instant now
@@ -548,11 +718,22 @@ public class ModelMaterializationDispatchService {
             errorCode == null || errorCode.isBlank()
                 ? "MODEL_DISPATCH_PERSISTENCE_UNKNOWN"
                 : errorCode.trim();
+        if (dispatch.dispatchAttempts() >= MAX_UNCONFIRMED_DISPATCH_ATTEMPTS) {
+            // The run id is deterministic and the dispatch is fenced by BLOCKED, so a DagRun that
+            // Airflow accepted without telling us can no longer consume the runtime spec.
+            LOG.warn(
+                "event=model_materialization_dispatch_retry_exhausted dispatch={} attempts={} lastErrorCode={}",
+                dispatch.id(),
+                dispatch.dispatchAttempts(),
+                code
+            );
+            return block(dispatch, RETRY_EXHAUSTED_CODE, now);
+        }
         transactions.executeWithoutResult(status -> {
             dispatches.markUnknown(
                 dispatch.id(),
                 code,
-                now.plus(RETRY_DELAY),
+                now.plus(retryDelay(dispatch.dispatchAttempts())),
                 now
             );
             auditDispatch(
@@ -563,6 +744,19 @@ public class ModelMaterializationDispatchService {
                 now
             );
         });
+        return new DispatchResult(
+            dispatch.id(),
+            "UNKNOWN",
+            dispatch.airflowRunId(),
+            false,
+            code
+        );
+    }
+
+    static Duration retryDelay(int dispatchAttempts) {
+        int doublings = Math.max(0, Math.min(dispatchAttempts - 1, 10));
+        Duration delay = RETRY_DELAY.multipliedBy(1L << doublings);
+        return delay.compareTo(MAX_RETRY_DELAY) > 0 ? MAX_RETRY_DELAY : delay;
     }
 
     private void auditDispatch(

@@ -639,7 +639,9 @@ class ModelMaterializationDispatchServiceTest {
             "CLAIMED",
             SCOPED_CHECKSUM,
             "sha256:" + "c".repeat(64),
-            NOW.minusSeconds(1)
+            NOW.minusSeconds(1),
+            1,
+            NOW
         );
         when(
             fixture.dispatches.claimNext(
@@ -794,7 +796,9 @@ class ModelMaterializationDispatchServiceTest {
             "CLAIMED",
             SCOPED_CHECKSUM,
             "sha256:" + "c".repeat(64),
-            NOW.plus(Duration.ofMinutes(15))
+            NOW.plus(Duration.ofMinutes(15)),
+            1,
+            NOW
         );
         when(
             fixture.dispatches.claimNext(
@@ -878,6 +882,217 @@ class ModelMaterializationDispatchServiceTest {
             );
     }
 
+    @Test
+    void unconfirmedRetriesBackOffExponentiallyWithACap() {
+        assertThat(ModelMaterializationDispatchService.retryDelay(1)).isEqualTo(Duration.ofSeconds(30));
+        assertThat(ModelMaterializationDispatchService.retryDelay(2)).isEqualTo(Duration.ofSeconds(60));
+        assertThat(ModelMaterializationDispatchService.retryDelay(4)).isEqualTo(Duration.ofSeconds(240));
+        assertThat(ModelMaterializationDispatchService.retryDelay(5)).isEqualTo(Duration.ofMinutes(5));
+        assertThat(ModelMaterializationDispatchService.retryDelay(40)).isEqualTo(Duration.ofMinutes(5));
+    }
+
+    @Test
+    void repeatedUnknownOutcomeUsesBackoffBeforeTheAttemptLimit() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.claimNext(eq(NOW), eq(Duration.ofMinutes(2))))
+            .thenReturn(Optional.of(recordWith("CLAIMED", 3, NOW)));
+        stubPreparedSubmission(fixture);
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.retryableUnknown(DAG_RUN_ID, "MODEL_AIRFLOW_TRIGGER_UNKNOWN")
+        );
+
+        var result = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("UNKNOWN");
+        verify(fixture.dispatches).markUnknown(
+            GROUP_ID,
+            "MODEL_AIRFLOW_TRIGGER_UNKNOWN",
+            NOW.plus(Duration.ofSeconds(120)),
+            NOW
+        );
+        verify(fixture.candidates, never()).transition(any(), any(), any(), any());
+    }
+
+    @Test
+    void unknownOutcomeAtTheAttemptLimitFailsTheBuildInsteadOfLoopingForever() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.claimNext(eq(NOW), eq(Duration.ofMinutes(2)))).thenReturn(
+            Optional.of(recordWith("CLAIMED", ModelMaterializationDispatchService.MAX_UNCONFIRMED_DISPATCH_ATTEMPTS, NOW))
+        );
+        stubPreparedSubmission(fixture);
+        when(fixture.gateway.submitReleaseBuild(any())).thenReturn(
+            DbtExecutionGateway.SubmissionResult.retryableUnknown(DAG_RUN_ID, "MODEL_AIRFLOW_TRIGGER_UNKNOWN")
+        );
+
+        var result = fixture.service.dispatchNext().orElseThrow();
+
+        assertThat(result.status()).isEqualTo("BLOCKED");
+        assertThat(result.errorCode()).isEqualTo("MODEL_MATERIALIZATION_DISPATCH_RETRY_EXHAUSTED");
+        verify(fixture.dispatches, never()).markUnknown(any(), any(), any(), any());
+        verify(fixture.dispatches).markBlocked(GROUP_ID, "MODEL_MATERIALIZATION_DISPATCH_RETRY_EXHAUSTED", NOW);
+        ArgumentCaptor<TransitionCommand> transition = ArgumentCaptor.forClass(TransitionCommand.class);
+        verify(fixture.candidates).transition(eq("tenant-a"), eq("service:dts-platform"), eq(CANDIDATE_ID), transition.capture());
+        assertThat(transition.getValue().targetStatus()).isEqualTo(DeliveryStatus.BUILD_FAILED);
+    }
+
+    @Test
+    void reconcileFinalizesSucceededRunWhoseCallbackWasLost() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.findSubmittedBefore(NOW.minus(Duration.ofMinutes(2)), 20))
+            .thenReturn(List.of(submittedDispatch()));
+        stubRestoredToken(fixture);
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(
+            Optional.of(DbtExecutionGateway.SubmissionResult.terminalSucceeded(DAG_RUN_ID))
+        );
+
+        fixture.service.reconcileSubmitted();
+
+        verify(fixture.runArtifacts).finalizeRun(
+            GROUP_ID,
+            new ModelMaterializationRunArtifactService.FinalizeCommand("SUCCEEDED")
+        );
+    }
+
+    @Test
+    void reconcileFailsSubmittedRunThatAirflowNoLongerKnows() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.findSubmittedBefore(NOW.minus(Duration.ofMinutes(2)), 20))
+            .thenReturn(List.of(submittedDispatch()));
+        stubRestoredToken(fixture);
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(Optional.empty());
+        when(fixture.dispatches.abandonActive(eq(GROUP_ID), any(), eq(NOW), any())).thenReturn(true);
+
+        fixture.service.reconcileSubmitted();
+
+        verify(fixture.dispatches).abandonActive(GROUP_ID, "MODEL_AIRFLOW_RUN_NOT_FOUND", NOW, NOW.minus(Duration.ofMinutes(2)));
+        ArgumentCaptor<TransitionCommand> transition = ArgumentCaptor.forClass(TransitionCommand.class);
+        verify(fixture.candidates).transition(eq("tenant-a"), eq("service:dts-platform"), eq(CANDIDATE_ID), transition.capture());
+        assertThat(transition.getValue().targetStatus()).isEqualTo(DeliveryStatus.BUILD_FAILED);
+    }
+
+    @Test
+    void reconcileTimesOutRunStillPendingAfterTheDeadline() {
+        Fixture fixture = fixture();
+        DispatchRecord stale = recordWith("SUBMITTED", 1, NOW.minus(Duration.ofHours(12)));
+        when(fixture.dispatches.findSubmittedBefore(NOW.minus(Duration.ofMinutes(2)), 20)).thenReturn(List.of(stale));
+        stubRestoredToken(fixture);
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(
+            Optional.of(DbtExecutionGateway.SubmissionResult.submitted(DAG_RUN_ID, true))
+        );
+        when(fixture.dispatches.abandonActive(eq(GROUP_ID), any(), eq(NOW), any())).thenReturn(true);
+
+        fixture.service.reconcileSubmitted();
+
+        verify(fixture.dispatches).abandonActive(GROUP_ID, "MODEL_MATERIALIZATION_RUN_TIMEOUT", NOW, NOW.minus(Duration.ofMinutes(2)));
+    }
+
+    @Test
+    void oneFailingReconciliationDoesNotStarveTheRestOfTheBatch() {
+        Fixture fixture = fixture();
+        UUID otherId = UUID.fromString("10000000-0000-0000-0000-000000000009");
+        DispatchRecord poisoned = submittedDispatch();
+        DispatchRecord healthy = new DispatchRecord(
+            otherId, "tenant-a", CANDIDATE_ID, 3, 2, "postgres-primary", DAG_ID,
+            "dts_rc_20000000000000000000000000000002_v3_a2", ARTIFACT_CHECKSUM, "SUBMITTED",
+            SCOPED_CHECKSUM, "sha256:" + "c".repeat(64), NOW.plus(Duration.ofMinutes(15)), 1, NOW
+        );
+        when(fixture.dispatches.findSubmittedBefore(NOW.minus(Duration.ofMinutes(2)), 20))
+            .thenReturn(List.of(poisoned, healthy));
+        when(fixture.tokens.restore(GROUP_ID, NOW.plus(Duration.ofMinutes(15))))
+            .thenThrow(new IllegalStateException("Prepared dispatch runtime token has drifted"));
+        when(fixture.tokens.restore(otherId, NOW.plus(Duration.ofMinutes(15)))).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken("runtime-token", "sha256:" + "c".repeat(64), NOW.plus(Duration.ofMinutes(15)))
+        );
+        when(fixture.gateway.reconcileReleaseBuild(any())).thenReturn(
+            Optional.of(DbtExecutionGateway.SubmissionResult.terminalFailed("dts_rc_20000000000000000000000000000002_v3_a2", "MODEL_DBT_AIRFLOW_UPSTREAM_FAILED"))
+        );
+
+        fixture.service.reconcileSubmitted();
+
+        verify(fixture.runArtifacts).finalizeRun(
+            otherId,
+            new ModelMaterializationRunArtifactService.FinalizeCommand("FAILED")
+        );
+    }
+
+    @Test
+    void maintainerMayAbandonAnUnconfirmedBuild() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.lockLatestForCandidate("tenant-a", CANDIDATE_ID, 3))
+            .thenReturn(Optional.of(recordWith("UNKNOWN", 2, NOW)));
+        when(fixture.dispatches.abandonActive(eq(GROUP_ID), any(), eq(NOW), any())).thenReturn(true);
+
+        fixture.service.abandonBuild("tenant-a", "alice", CANDIDATE_ID, 3, 3, "abandon-1", "Airflow 不可用");
+
+        verify(fixture.dispatches).abandonActive(GROUP_ID, "MODEL_MATERIALIZATION_BUILD_ABANDONED", NOW, NOW.minus(Duration.ofMinutes(2)));
+        verify(fixture.candidates).transition(
+            "tenant-a", "alice", CANDIDATE_ID,
+            new TransitionCommand(3, DeliveryStatus.BUILD_FAILED, "abandon-1", "Airflow 不可用")
+        );
+        assertThat(fixture.audit.singleCall().stage()).isEqualTo(AuditStage.FAIL);
+    }
+
+    @Test
+    void progressingBuildCannotBeAbandonedWithinTheGracePeriod() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.lockLatestForCandidate("tenant-a", CANDIDATE_ID, 3))
+            .thenReturn(Optional.of(recordWith("SUBMITTED", 1, NOW.minus(Duration.ofMinutes(3)))));
+
+        assertThatThrownBy(() -> fixture.service.abandonBuild("tenant-a", "alice", CANDIDATE_ID, 3, 3, "abandon-1", "等不及"))
+            .isInstanceOf(ModelReleaseCandidateException.class)
+            .hasMessageContaining("still progressing");
+        verify(fixture.dispatches, never()).abandonActive(any(), any(), any(), any());
+        verify(fixture.candidates, never()).transition(any(), any(), any(), any());
+    }
+
+    @Test
+    void abandonEligibilityFollowsDispatchProgress() {
+        Fixture fixture = fixture();
+        when(fixture.dispatches.findLatestForCandidate("tenant-a", CANDIDATE_ID, 3))
+            .thenReturn(
+                Optional.of(recordWith("SUBMITTED", 1, NOW.minus(Duration.ofMinutes(3)))),
+                Optional.of(recordWith("SUBMITTED", 1, NOW.minus(Duration.ofMinutes(10)))),
+                Optional.of(recordWith("UNKNOWN", 1, NOW)),
+                Optional.of(recordWith("CLAIMED", 1, NOW.minus(Duration.ofMinutes(1)))),
+                Optional.empty()
+            );
+
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isFalse();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isTrue();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isTrue();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isFalse();
+        assertThat(fixture.service.canAbandonBuild("tenant-a", CANDIDATE_ID, 3)).isTrue();
+    }
+
+    private static void stubPreparedSubmission(Fixture fixture) {
+        when(fixture.builds.loadCandidateBuildScope("tenant-a", GROUP_ID)).thenReturn(scope());
+        when(fixture.scoped.prepareCandidate(any())).thenReturn(
+            new DbtScopedProjectService.ScopedCandidateProject(
+                "/must-not-leave-platform", "dim_customer fct_invoice", SCOPED_CHECKSUM, List.of()
+            )
+        );
+        when(fixture.tokens.issue(GROUP_ID, NOW)).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken("runtime-token", "sha256:" + "c".repeat(64), NOW.plus(Duration.ofMinutes(15)))
+        );
+    }
+
+    private static void stubRestoredToken(Fixture fixture) {
+        when(fixture.tokens.restore(GROUP_ID, NOW.plus(Duration.ofMinutes(15)))).thenReturn(
+            new ModelRuntimeSpecTokenCodec.IssuedToken("runtime-token", "sha256:" + "c".repeat(64), NOW.plus(Duration.ofMinutes(15)))
+        );
+    }
+
+    private static DispatchRecord recordWith(String status, int attempts, Instant lastModifiedAt) {
+        return new DispatchRecord(
+            GROUP_ID, "tenant-a", CANDIDATE_ID, 3, 1, "postgres-primary", DAG_ID, DAG_RUN_ID,
+            ARTIFACT_CHECKSUM, status,
+            "SUBMITTED".equals(status) ? SCOPED_CHECKSUM : null,
+            "SUBMITTED".equals(status) ? "sha256:" + "c".repeat(64) : null,
+            "SUBMITTED".equals(status) ? NOW.plus(Duration.ofMinutes(15)) : null,
+            attempts, lastModifiedAt
+        );
+    }
+
     private static Fixture fixture() {
         var dispatches = mock(
             ModelMaterializationDispatchRepository.class
@@ -955,7 +1170,9 @@ class ModelMaterializationDispatchServiceTest {
             "CLAIMED",
             null,
             null,
-            null
+            null,
+            1,
+            NOW
         );
     }
 
@@ -973,7 +1190,9 @@ class ModelMaterializationDispatchServiceTest {
             "SUBMITTED",
             SCOPED_CHECKSUM,
             "sha256:" + "c".repeat(64),
-            NOW.plus(Duration.ofMinutes(15))
+            NOW.plus(Duration.ofMinutes(15)),
+            1,
+            NOW
         );
     }
 

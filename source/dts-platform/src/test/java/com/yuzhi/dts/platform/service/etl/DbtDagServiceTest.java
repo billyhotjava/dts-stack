@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.AirflowProperties;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -35,6 +36,23 @@ class DbtDagServiceTest {
 
         assertThat(Files.readString(tempDir.resolve(releaseId + ".py"))).isEqualTo(releaseSource);
         assertThat(Files.readString(tempDir.resolve(planId + ".py"))).isEqualTo(planSource);
+    }
+
+    @Test
+    void managedDagIsWorldReadableRegardlessOfUmaskEvenWhenUnchanged() throws Exception {
+        AirflowProperties properties = new AirflowProperties();
+        properties.setDagsDir(tempDir.toString());
+        DbtDagService service = new DbtDagService(properties, new ObjectMapper());
+        String releaseId = "dts_release_build_postgres_primary";
+        Path dagFile = tempDir.resolve(releaseId + ".py");
+
+        service.ensureReleaseBuildDag(releaseId);
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(dagFile))).isEqualTo("rw-r--r--");
+
+        Files.setPosixFilePermissions(dagFile, PosixFilePermissions.fromString("rw-------"));
+        service.ensureReleaseBuildDag(releaseId);
+
+        assertThat(PosixFilePermissions.toString(Files.getPosixFilePermissions(dagFile))).isEqualTo("rw-r--r--");
     }
 
     @Test

@@ -295,6 +295,31 @@ public class ModelReleaseCandidateResource {
         );
     }
 
+    @PostMapping("/{candidateId}/abandon-build")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<CommandResult>> abandonBuild(
+        @PathVariable UUID planId,
+        @PathVariable UUID candidateId,
+        @RequestHeader(value = "If-Match", required = false) String ifMatch,
+        @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+        @RequestBody(required = false) ReasonRequest request
+    ) {
+        int expectedVersion = expectedVersion(candidateId, ifMatch);
+        String key = requiredIdempotencyKey(idempotencyKey);
+        ReasonRequest body = requiredRequest(request, "abandon build request");
+        return write(
+            service.abandonBuild(
+                serverTenantId,
+                actorId(),
+                planId,
+                candidateId,
+                expectedVersion,
+                key,
+                body.reason()
+            )
+        );
+    }
+
     @PostMapping("/{candidateId}/cancel")
     @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CommandResult>> cancel(

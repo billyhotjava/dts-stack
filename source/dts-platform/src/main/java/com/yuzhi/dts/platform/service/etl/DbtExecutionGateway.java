@@ -27,6 +27,7 @@ public interface DbtExecutionGateway {
 
     enum SubmissionStatus {
         SUBMITTED,
+        TERMINAL_SUCCEEDED,
         TERMINAL_FAILED,
         BLOCKED,
         RETRYABLE_UNKNOWN,
@@ -104,6 +105,7 @@ public interface DbtExecutionGateway {
             Objects.requireNonNull(status, "status is required");
             if (
                 (status == SubmissionStatus.SUBMITTED ||
+                    status == SubmissionStatus.TERMINAL_SUCCEEDED ||
                     status == SubmissionStatus.TERMINAL_FAILED) &&
                 (dagRunId == null || dagRunId.isBlank())
             ) {
@@ -113,6 +115,7 @@ public interface DbtExecutionGateway {
             }
             if (
                 status != SubmissionStatus.SUBMITTED &&
+                status != SubmissionStatus.TERMINAL_SUCCEEDED &&
                 (errorCode == null || errorCode.isBlank())
             ) {
                 throw new IllegalArgumentException(
@@ -129,6 +132,15 @@ public interface DbtExecutionGateway {
                 SubmissionStatus.SUBMITTED,
                 dagRunId,
                 recovered,
+                null
+            );
+        }
+
+        public static SubmissionResult terminalSucceeded(String dagRunId) {
+            return new SubmissionResult(
+                SubmissionStatus.TERMINAL_SUCCEEDED,
+                dagRunId,
+                true,
                 null
             );
         }

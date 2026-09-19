@@ -159,6 +159,109 @@ class AirflowDbtExecutionGatewayTest {
     }
 
     @Test
+    void deterministicTriggerRejectionWithoutRunIsBlockedInsteadOfRetriedForever() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        when(airflow.getDag(DAG_ID)).thenReturn(
+            Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+        );
+        when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(Optional.empty());
+        when(airflow.triggerDag(eq(DAG_ID), any())).thenThrow(
+            new AirflowClient.AirflowApiException("DAG not found", 404, null)
+        );
+
+        DbtExecutionGateway.SubmissionResult result = gateway(airflow)
+            .submitReleaseBuild(request());
+
+        assertThat(result.status()).isEqualTo(DbtExecutionGateway.SubmissionStatus.BLOCKED);
+        assertThat(result.errorCode()).isEqualTo("MODEL_AIRFLOW_TRIGGER_DAG_NOT_FOUND");
+    }
+
+    @Test
+    void forbiddenAndMalformedTriggerRejectionsAreBlockedWithStableCodes() {
+        for (var expectation : Map.of(
+            403, "MODEL_AIRFLOW_TRIGGER_FORBIDDEN",
+            401, "MODEL_AIRFLOW_TRIGGER_FORBIDDEN",
+            400, "MODEL_AIRFLOW_TRIGGER_REJECTED"
+        ).entrySet()) {
+            AirflowClient airflow = mock(AirflowClient.class);
+            when(airflow.getDag(DAG_ID)).thenReturn(
+                Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+            );
+            when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(Optional.empty());
+            when(airflow.triggerDag(eq(DAG_ID), any())).thenThrow(
+                new AirflowClient.AirflowApiException("rejected", expectation.getKey(), null)
+            );
+
+            DbtExecutionGateway.SubmissionResult result = gateway(airflow)
+                .submitReleaseBuild(request());
+
+            assertThat(result.status()).isEqualTo(DbtExecutionGateway.SubmissionStatus.BLOCKED);
+            assertThat(result.errorCode()).isEqualTo(expectation.getValue());
+        }
+    }
+
+    @Test
+    void transientTriggerStatusesRemainRetryableUnknown() {
+        for (int status : new int[] { 408, 409, 429, 500, 503 }) {
+            AirflowClient airflow = mock(AirflowClient.class);
+            when(airflow.getDag(DAG_ID)).thenReturn(
+                Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+            );
+            when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(Optional.empty());
+            when(airflow.triggerDag(eq(DAG_ID), any())).thenThrow(
+                new AirflowClient.AirflowApiException("transient", status, null)
+            );
+
+            DbtExecutionGateway.SubmissionResult result = gateway(airflow)
+                .submitReleaseBuild(request());
+
+            assertThat(result.status())
+                .as("HTTP %s", status)
+                .isEqualTo(DbtExecutionGateway.SubmissionStatus.RETRYABLE_UNKNOWN);
+            assertThat(result.errorCode()).isEqualTo("MODEL_AIRFLOW_TRIGGER_UNKNOWN");
+        }
+    }
+
+    @Test
+    void triggerRejectionStillRecoversRunThatAirflowAlreadyAccepted() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        when(airflow.getDag(DAG_ID)).thenReturn(
+            Optional.of(Map.of("dag_id", DAG_ID, "is_paused", false))
+        );
+        when(airflow.getDagRun(DAG_ID, DAG_RUN_ID))
+            .thenReturn(Optional.empty())
+            .thenReturn(Optional.of(Map.of(
+                "dag_run_id", DAG_RUN_ID, "state", "queued", "conf", expectedConf()
+            )));
+        when(airflow.triggerDag(eq(DAG_ID), any())).thenThrow(
+            new AirflowClient.AirflowApiException("conflict", 400, null)
+        );
+
+        DbtExecutionGateway.SubmissionResult result = gateway(airflow)
+            .submitReleaseBuild(request());
+
+        assertThat(result.status()).isEqualTo(DbtExecutionGateway.SubmissionStatus.SUBMITTED);
+        assertThat(result.recovered()).isTrue();
+    }
+
+    @Test
+    void reconcileReportsSucceededRunAsTerminalSuccess() {
+        AirflowClient airflow = mock(AirflowClient.class);
+        when(airflow.getDagRun(DAG_ID, DAG_RUN_ID)).thenReturn(
+            Optional.of(Map.of(
+                "dag_run_id", DAG_RUN_ID, "state", "success", "conf", expectedConf()
+            ))
+        );
+
+        DbtExecutionGateway.SubmissionResult result = gateway(airflow)
+            .reconcileReleaseBuild(request())
+            .orElseThrow();
+
+        assertThat(result.status()).isEqualTo(DbtExecutionGateway.SubmissionStatus.TERMINAL_SUCCEEDED);
+        assertThat(result.dagRunId()).isEqualTo(DAG_RUN_ID);
+    }
+
+    @Test
     void unavailableReconciliationNeverBlindTriggers() {
         AirflowClient airflow = mock(AirflowClient.class);
         when(airflow.getDag(DAG_ID)).thenReturn(

@@ -18,7 +18,8 @@ public class ModelMaterializationDispatchRepository {
         select id, tenant_id, candidate_id, candidate_version, attempt,
                execution_target_key, airflow_dag_id, airflow_run_id,
                artifact_bundle_checksum, status, scoped_bundle_checksum,
-               runtime_token_digest, runtime_token_expires_at
+               runtime_token_digest, runtime_token_expires_at,
+               dispatch_attempts, last_modified_at
           from modeling_materialization_dispatch
         """;
 
@@ -80,7 +81,8 @@ public class ModelMaterializationDispatchRepository {
                           d.airflow_run_id, d.artifact_bundle_checksum,
                           d.status, d.scoped_bundle_checksum,
                           d.runtime_token_digest,
-                          d.runtime_token_expires_at
+                          d.runtime_token_expires_at,
+                          d.dispatch_attempts, d.last_modified_at
                 """,
                 (row, rowNumber) -> map(row),
                 Timestamp.from(now),
@@ -335,38 +337,133 @@ public class ModelMaterializationDispatchRepository {
             updated,
             "Blocked dispatch state could not be persisted"
         );
-        requirePipelineRows(
-            jdbcTemplate.update(
+        requirePipelineRows(blockPipelineRows(dispatchId, errorCode, now));
+    }
+
+    /**
+     * Fences a dispatch that can no longer be trusted to finish on its own (user abandonment or a
+     * submitted run that outlived its deadline). BLOCKED is terminal: the runtime spec, sync-probe
+     * and finalize callbacks of a late DagRun are all rejected afterwards.
+     *
+     * @return false when the dispatch already reached a terminal state or is claimed by a live
+     *     dispatcher; the caller must not assume it was fenced
+     */
+    @Transactional
+    public boolean abandonActive(
+        UUID dispatchId,
+        String errorCode,
+        Instant now,
+        Instant claimStaleBefore
+    ) {
+        int updated = jdbcTemplate.update(
+            """
+            update modeling_materialization_dispatch
+               set status = 'BLOCKED', claimed_at = null,
+                   next_attempt_at = null, last_error_code = ?,
+                   last_modified_at = ?
+             where id = ?
+               and (
+                    status in ('PENDING', 'UNKNOWN', 'SUBMITTED')
+                    or (status = 'CLAIMED' and claimed_at < ?)
+               )
+            """,
+            required(errorCode, "errorCode"),
+            Timestamp.from(now),
+            dispatchId,
+            Timestamp.from(claimStaleBefore)
+        );
+        if (updated == 0) return false;
+        blockPipelineRows(dispatchId, errorCode, now);
+        return true;
+    }
+
+    /** Latest build attempt of one candidate version, locked for a state decision. */
+    @Transactional
+    public Optional<DispatchRecord> lockLatestForCandidate(
+        String tenantId,
+        UUID candidateId,
+        int candidateVersion
+    ) {
+        return jdbcTemplate
+            .query(
+                SELECTION +
                 """
-                update modeling_pipeline_run
-                   set status = case
-                           when status in ('QUEUED', 'UNKNOWN')
-                               then 'BLOCKED'
-                           else status
-                       end,
-                       message = case
-                           when status in ('QUEUED', 'UNKNOWN')
-                               then ?
-                           else message
-                       end,
-                       finished_date = case
-                           when status in ('QUEUED', 'UNKNOWN')
-                               then coalesce(finished_date, ?)
-                           else finished_date
-                       end,
-                       last_modified_date = ?
-                 where pipeline_run_group_id = ?
-                   and run_purpose = 'RELEASE_BUILD'
-                   and status in (
-                        'QUEUED', 'UNKNOWN',
-                        'DBT_SUCCEEDED', 'BUILT', 'FAILED'
-                   )
+                 where tenant_id = ?
+                   and candidate_id = ?
+                   and candidate_version = ?
+                 order by attempt desc
+                 limit 1
+                 for update
                 """,
-                required(errorCode, "errorCode"),
-                Timestamp.from(now),
-                Timestamp.from(now),
-                dispatchId
+                (row, rowNumber) -> map(row),
+                required(tenantId, "tenantId"),
+                candidateId,
+                candidateVersion
             )
+            .stream()
+            .findFirst();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<DispatchRecord> findLatestForCandidate(
+        String tenantId,
+        UUID candidateId,
+        int candidateVersion
+    ) {
+        return jdbcTemplate
+            .query(
+                SELECTION +
+                """
+                 where tenant_id = ?
+                   and candidate_id = ?
+                   and candidate_version = ?
+                 order by attempt desc
+                 limit 1
+                """,
+                (row, rowNumber) -> map(row),
+                required(tenantId, "tenantId"),
+                candidateId,
+                candidateVersion
+            )
+            .stream()
+            .findFirst();
+    }
+
+    private int blockPipelineRows(
+        UUID dispatchId,
+        String errorCode,
+        Instant now
+    ) {
+        return jdbcTemplate.update(
+            """
+            update modeling_pipeline_run
+               set status = case
+                       when status in ('QUEUED', 'UNKNOWN')
+                           then 'BLOCKED'
+                       else status
+                   end,
+                   message = case
+                       when status in ('QUEUED', 'UNKNOWN')
+                           then ?
+                       else message
+                   end,
+                   finished_date = case
+                       when status in ('QUEUED', 'UNKNOWN')
+                           then coalesce(finished_date, ?)
+                       else finished_date
+                   end,
+                   last_modified_date = ?
+             where pipeline_run_group_id = ?
+               and run_purpose = 'RELEASE_BUILD'
+               and status in (
+                    'QUEUED', 'UNKNOWN',
+                    'DBT_SUCCEEDED', 'BUILT', 'FAILED'
+               )
+            """,
+            required(errorCode, "errorCode"),
+            Timestamp.from(now),
+            Timestamp.from(now),
+            dispatchId
         );
     }
 
@@ -487,7 +584,9 @@ public class ModelMaterializationDispatchRepository {
             row.getString("status"),
             row.getString("scoped_bundle_checksum"),
             row.getString("runtime_token_digest"),
-            instant(row.getTimestamp("runtime_token_expires_at"))
+            instant(row.getTimestamp("runtime_token_expires_at")),
+            row.getInt("dispatch_attempts"),
+            instant(row.getTimestamp("last_modified_at"))
         );
     }
 
@@ -549,7 +648,9 @@ public class ModelMaterializationDispatchRepository {
         String status,
         String scopedBundleChecksum,
         String runtimeTokenDigest,
-        Instant runtimeTokenExpiresAt
+        Instant runtimeTokenExpiresAt,
+        int dispatchAttempts,
+        Instant lastModifiedAt
     ) {}
 
     public record RuntimeSpecRecord(

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -41,6 +42,7 @@ import com.yuzhi.dts.platform.service.modeling.QualityEvidencePort.QualityEviden
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -51,6 +53,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
@@ -613,6 +616,77 @@ class ModelReleaseCandidateApplicationServiceTest {
                 assertThat(summary.state()).isEqualTo(EvidenceState.FAILED);
                 assertThat(summary.code()).isEqualTo("MODEL_SOURCE_GENERATION_STALE");
             });
+    }
+
+    @Test
+    void stuckBuildOffersAbandonOnlyWhileTheDispatcherAllowsIt() {
+        CandidateView candidate = candidate(
+            DeliveryStatus.BUILDING,
+            List.of(entry(DeliveryStatus.BUILDING))
+        );
+        List<EntryEvidenceView> evidence = List.of(
+            new EntryEvidenceView(
+                entry(DeliveryStatus.BUILDING).id(),
+                MODEL_ID,
+                "财务项目模型",
+                2,
+                3,
+                "finance.dwd.finance_project",
+                "UNKNOWN",
+                RelationEvidenceState.UNKNOWN,
+                UUID.fromString("50000000-0000-0000-0000-000000000001"),
+                null,
+                "dts_release_build_postgres_primary",
+                "manual__candidate_1",
+                1,
+                NOW.minusSeconds(30),
+                null,
+                null,
+                "MODEL_AIRFLOW_TRIGGER_UNKNOWN"
+            )
+        );
+        ModelSpecAccessService access = mock(ModelSpecAccessService.class);
+        when(access.capabilities(eq(TENANT), any())).thenReturn(
+            Map.of(MODEL_ID, new ModelSpecAccessService.Capabilities(ACTOR, ACTOR, true, true, "D1"))
+        );
+        ReflectionTestUtils.setField(service, "modelAccess", access);
+        ModelMaterializationDispatchService dispatcher = mock(ModelMaterializationDispatchService.class);
+        service.setBuildDispatches(dispatcher);
+        when(dispatcher.canAbandonBuild(TENANT, CANDIDATE_ID, 4)).thenReturn(true, false);
+        when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(candidate));
+        when(commands.detectDrift(TENANT, candidate)).thenReturn(List.of());
+        when(workbenchEvidence.findCurrent(candidate)).thenReturn(evidence);
+
+        assertThat(service.workspace(TENANT, ACTOR, PLAN_ID).allowedActions())
+            .containsExactly(WorkspaceAction.ABANDON_BUILD);
+        assertThat(service.workspace(TENANT, ACTOR, PLAN_ID).allowedActions()).isEmpty();
+    }
+
+    @Test
+    void abandonBuildDelegatesWithTheCurrentCandidateVersion() {
+        CandidateView candidate = candidate(
+            DeliveryStatus.BUILDING,
+            List.of(entry(DeliveryStatus.BUILDING))
+        );
+        CandidateView failed = candidate(
+            DeliveryStatus.BUILD_FAILED,
+            List.of(entry(DeliveryStatus.BUILD_FAILED))
+        );
+        ModelSpecAccessService access = mock(ModelSpecAccessService.class);
+        lenient().when(access.capabilities(eq(TENANT), any())).thenReturn(
+            Map.of(MODEL_ID, new ModelSpecAccessService.Capabilities(ACTOR, ACTOR, true, true, "D1"))
+        );
+        ReflectionTestUtils.setField(service, "modelAccess", access);
+        ModelMaterializationDispatchService dispatcher = mock(ModelMaterializationDispatchService.class);
+        service.setBuildDispatches(dispatcher);
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(candidate));
+        when(dispatcher.abandonBuild(TENANT, ACTOR, CANDIDATE_ID, 4, 4, "abandon-key", "Airflow 故障"))
+            .thenReturn(new CommandResult(failed, false, List.of()));
+
+        var result = service.abandonBuild(TENANT, ACTOR, PLAN_ID, CANDIDATE_ID, 4, "abandon-key", "Airflow 故障");
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.BUILD_FAILED);
+        verify(dispatcher).abandonBuild(TENANT, ACTOR, CANDIDATE_ID, 4, 4, "abandon-key", "Airflow 故障");
     }
 
     @Test

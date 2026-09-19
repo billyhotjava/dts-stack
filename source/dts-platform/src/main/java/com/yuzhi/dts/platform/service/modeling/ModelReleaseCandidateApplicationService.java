@@ -480,6 +480,50 @@ public class ModelReleaseCandidateApplicationService {
         );
     }
 
+    /**
+     * Wired optionally so the many narrow unit fixtures of this service need not provide the
+     * dispatcher; without it no build can be abandoned.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setBuildDispatches(ModelMaterializationDispatchService buildDispatches) {
+        this.buildDispatches = buildDispatches;
+    }
+
+    private ModelMaterializationDispatchService buildDispatches;
+
+    /** Gives a maintainer an exit from a build whose dispatch stopped making progress. */
+    public CommandResult abandonBuild(
+        String tenantId,
+        String actorId,
+        UUID planId,
+        UUID candidateId,
+        int expectedVersion,
+        String idempotencyKey,
+        String reason
+    ) {
+        Access access = authorizeMaintainer(tenantId, actorId, planId);
+        CandidateView current = candidateForPlan(access.tenantId(), access.planId(), candidateId);
+        if (buildDispatches == null) {
+            throw new ModelReleaseCandidateException(
+                "MODEL_MATERIALIZATION_ABANDON_UNAVAILABLE",
+                "Build abandonment is not available",
+                Kind.CONFLICT
+            );
+        }
+        return roleAware(
+            buildDispatches.abandonBuild(
+                access.tenantId(),
+                access.actorId(),
+                candidateId,
+                current.version(),
+                expectedVersion,
+                idempotencyKey,
+                reason
+            ),
+            access
+        );
+    }
+
     public CommandResult cancel(
         String tenantId,
         String actorId,
@@ -1284,6 +1328,16 @@ public class ModelReleaseCandidateApplicationService {
                     result.stream()
                 )
                 .distinct()
+                .toList();
+        }
+        if (
+            candidate.status() == DeliveryStatus.BUILDING &&
+            duties.contains(DeliveryActorRole.MODEL_MAINTAINER) &&
+            buildDispatches != null &&
+            buildDispatches.canAbandonBuild(candidate.tenantId(), candidate.id(), candidate.version())
+        ) {
+            return java.util.stream.Stream
+                .concat(result.stream(), java.util.stream.Stream.of(WorkspaceAction.ABANDON_BUILD))
                 .toList();
         }
         if (

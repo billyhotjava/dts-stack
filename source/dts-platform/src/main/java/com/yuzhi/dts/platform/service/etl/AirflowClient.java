@@ -49,7 +49,11 @@ public class AirflowClient {
             return Optional.ofNullable(response.getBody());
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Airflow dag trigger failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
-            throw new RuntimeException("Airflow DAG 触发失败 (" + dagId + "): " + ex.getStatusCode() + " - " + ex.getResponseBodyAsString(), ex);
+            throw new AirflowApiException(
+                "Airflow DAG 触发失败 (" + dagId + "): " + ex.getStatusCode() + " - " + ex.getResponseBodyAsString(),
+                ex.getStatusCode().value(),
+                ex
+            );
         } catch (Exception ex) {
             LOG.warn("Airflow dag trigger error: {}", ex.getMessage());
             throw new RuntimeException("Airflow DAG 触发失败 (" + dagId + "): " + ex.getMessage(), ex);
@@ -196,8 +200,20 @@ public class AirflowClient {
 
     public static class AirflowApiException extends RuntimeException {
 
+        private final Integer httpStatus;
+
         public AirflowApiException(String message, Throwable cause) {
+            this(message, null, cause);
+        }
+
+        public AirflowApiException(String message, Integer httpStatus, Throwable cause) {
             super(message, cause);
+            this.httpStatus = httpStatus;
+        }
+
+        /** The HTTP status Airflow answered with, empty when no response was received. */
+        public java.util.OptionalInt httpStatus() {
+            return httpStatus == null ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(httpStatus);
         }
     }
 

@@ -1021,6 +1021,74 @@ class ModelMaterializationStartServiceIT {
     }
 
     @Test
+    void abandonedUnconfirmedDispatchIsFencedAndCanBeRetried() {
+        Scope scope = scope("abandon-then-retry");
+        TransactionTemplate transaction = new TransactionTemplate(transactionManager);
+        Instant attemptAt = Instant.now().plusSeconds(60);
+        UUID firstGroupId = transaction.execute(status -> {
+            seed(scope, true);
+            starts.start(scope.tenant(), "builder-a", scope.candidateId(), 1, "abandon-start-key", "start first attempt");
+            var claimed = dispatches.claimNext(attemptAt, Duration.ofMinutes(2)).orElseThrow();
+            dispatches.markUnknown(claimed.id(), "MODEL_AIRFLOW_TRIGGER_UNKNOWN", attemptAt.plusSeconds(30), attemptAt);
+            return claimed.id();
+        });
+
+        var latest = dispatches.findLatestForCandidate(scope.tenant(), scope.candidateId(), 2).orElseThrow();
+        assertThat(latest.id()).isEqualTo(firstGroupId);
+        assertThat(latest.status()).isEqualTo("UNKNOWN");
+        assertThat(latest.dispatchAttempts()).isEqualTo(1);
+
+        transaction.executeWithoutResult(status -> {
+            assertThat(dispatches.lockLatestForCandidate(scope.tenant(), scope.candidateId(), 2)).isPresent();
+            assertThat(
+                dispatches.abandonActive(
+                    firstGroupId,
+                    "MODEL_MATERIALIZATION_BUILD_ABANDONED",
+                    attemptAt.plusSeconds(40),
+                    attemptAt.minusSeconds(80)
+                )
+            ).isTrue();
+            candidateCommands.transition(
+                scope.tenant(),
+                "builder-a",
+                scope.candidateId(),
+                new TransitionCommand(2, DeliveryStatus.BUILD_FAILED, "abandon-key", "abandon unconfirmed build")
+            );
+        });
+
+        assertThat(
+            dispatches.abandonActive(firstGroupId, "MODEL_MATERIALIZATION_BUILD_ABANDONED", attemptAt.plusSeconds(50), attemptAt)
+        ).as("a fenced dispatch is terminal").isFalse();
+        assertThat(
+            jdbcTemplate.queryForMap(
+                "select status, last_error_code from modeling_materialization_dispatch where id = ?",
+                firstGroupId
+            )
+        )
+            .containsEntry("status", "BLOCKED")
+            .containsEntry("last_error_code", "MODEL_MATERIALIZATION_BUILD_ABANDONED");
+        assertThat(
+            jdbcTemplate.queryForList(
+                "select distinct status from modeling_pipeline_run where pipeline_run_group_id = ?",
+                String.class,
+                firstGroupId
+            )
+        ).containsExactly("BLOCKED");
+
+        CandidateView retrying = starts
+            .retry(scope.tenant(), "builder-a", scope.candidateId(), 3, "abandon-retry-key", "retry abandoned build")
+            .candidate();
+
+        assertThat(retrying)
+            .extracting(CandidateView::status, CandidateView::version)
+            .containsExactly(DeliveryStatus.BUILDING, 4);
+        assertThat(dispatches.findLatestForCandidate(scope.tenant(), scope.candidateId(), 4))
+            .get()
+            .extracting(record -> record.attempt(), record -> record.status())
+            .containsExactly(2, "PENDING");
+    }
+
+    @Test
     void retrySnapshotDriftTransitionsCandidateStaleWithoutAttemptTwo()
         throws Exception {
         Scope model = scope("retry-model-drift");

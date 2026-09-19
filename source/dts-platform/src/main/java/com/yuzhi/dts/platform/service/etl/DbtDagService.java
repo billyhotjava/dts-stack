@@ -199,6 +199,8 @@ public class DbtDagService {
                 Files.isRegularFile(target) &&
                 Files.readString(target, StandardCharsets.UTF_8).equals(content)
             ) {
+                // An unchanged DAG written under a restrictive umask stays unreadable to Airflow.
+                makeAirflowReadable(target);
                 return;
             }
             temporary = target
@@ -216,6 +218,7 @@ public class DbtDagService {
                 StandardOpenOption.CREATE_NEW,
                 StandardOpenOption.WRITE
             );
+            makeAirflowReadable(temporary);
             try (
                 FileChannel file = FileChannel.open(
                     temporary,
@@ -271,6 +274,21 @@ public class DbtDagService {
             }
         }
     }
+
+    /**
+     * Airflow parses the shared DAG directory under its own uid. The platform may run with a
+     * restrictive umask (for example 077), so the mode is set explicitly instead of inherited.
+     */
+    private static void makeAirflowReadable(Path file) throws IOException {
+        try {
+            Files.setPosixFilePermissions(file, DAG_FILE_PERMISSIONS);
+        } catch (UnsupportedOperationException nonPosix) {
+            // Non-POSIX filesystems have no umask to correct.
+        }
+    }
+
+    private static final java.util.Set<java.nio.file.attribute.PosixFilePermission> DAG_FILE_PERMISSIONS =
+        java.nio.file.attribute.PosixFilePermissions.fromString("rw-r--r--");
 
     private static String requireManagedDagId(String dagId) {
         String id = dagId == null ? "" : dagId.trim();
