@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import {
+	abandonReleaseCandidateBuild,
 	approveReleaseCandidateReview,
 	cancelReleaseCandidate,
 	createReleaseCandidate,
@@ -37,6 +38,7 @@ import {
 import { CompactTable } from "@/components/table";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelAssetDeliveryResult } from "./ModelAssetDeliveryResult";
+import { IN_FLIGHT_REFRESH_MS, isCandidateInFlight, ModelBuildProgressNotice } from "./ModelBuildProgressNotice";
 import { type MaterializationBuildAction, ModelMaterializationActions } from "./ModelMaterializationActions";
 import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 import { ModelReleaseScopeNotice, ModelReleaseScopeSummary } from "./ModelReleaseScopeSummary";
@@ -128,6 +130,7 @@ export function ModelPublishDialog({
 	const [blockingWorkspace, setBlockingWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
 	const [confirmedCandidateScope, setConfirmedCandidateScope] = useState("");
 	const loadSequence = useRef(0);
+	const [pollTick, setPollTick] = useState(0);
 	const selection = useMemo(() => Array.from(new Map(models.map((model) => [model.id, model])).values()), [models]);
 	const selectedIds = useMemo(() => new Set(selection.map((model) => model.id)), [selection]);
 	const primary = selection[0] || null;
@@ -151,16 +154,21 @@ export function ModelPublishDialog({
 	const selectionIsPublished = Boolean(
 		selection.length && selection.every((model) => canonical(model) && model.status === "PUBLISHED"),
 	);
-	const load = useCallback(async () => {
+	// A silent reload keeps the current projection on screen and the buttons enabled; it is the
+	// background refresh while the server advances an in-flight candidate.
+	const load = useCallback(async (options?: { silent?: boolean }) => {
+		const silent = Boolean(options?.silent);
 		const sequence = ++loadSequence.current;
-		setWorkspace(null);
-		setExecutionWorkspace(null);
-		setMaterializations([]);
+		if (!silent) {
+			setWorkspace(null);
+			setExecutionWorkspace(null);
+			setMaterializations([]);
+		}
 		if (!planId) {
 			setBusy("");
 			return;
 		}
-		setBusy("load");
+		if (!silent) setBusy("load");
 		try {
 			const [releaseWorkspace, selectedMaterializations, status] = await Promise.all([
 				step
@@ -207,10 +215,13 @@ export function ModelPublishDialog({
 			setMaterializations(selectedMaterializations);
 			setExecutionWorkspace(nextExecutionWorkspace);
 		} catch (error) {
-			if (sequence !== loadSequence.current) return;
+			if (sequence !== loadSequence.current || silent) return;
 			setFailure(normalizeModelingRequestFailure(error, "发布单读取失败。").message);
 		} finally {
-			if (sequence === loadSequence.current) setBusy("");
+			if (sequence === loadSequence.current) {
+				if (silent) setPollTick((tick) => tick + 1);
+				else setBusy("");
+			}
 		}
 	}, [planId, selectedIds, selectionIsPublished, step, deliveryStatus, batch, primary, environment]);
 	useEffect(() => {
@@ -245,6 +256,19 @@ export function ModelPublishDialog({
 			selection.some((model) => model.id === entry.modelSpecId && model.revision !== entry.modelRevision),
 		);
 	const buildAction = resolveMaterializationBuildAction(workspace, candidateContainsSelection, candidateScopeMatches);
+	const candidateInFlight = isCandidateInFlight(scopedCandidate?.status);
+	const canAbandonBuild = canMaintain && candidateCommandScopeAllowed &&
+		Boolean(workspace?.allowedActions.includes("ABANDON_BUILD"));
+	const unconfirmedDispatch = candidateContainsSelection
+		? selectedEvidence.find((entry) => entry.runStatus === "UNKNOWN" || entry.relationState === "UNKNOWN")
+		: undefined;
+	// The embedded wizard is refreshed by its parent's delivery-status polling.
+	// biome-ignore lint/correctness/useExhaustiveDependencies: pollTick re-arms the timer after every silent reload.
+	useEffect(() => {
+		if (embedded || !candidateInFlight || busy) return;
+		const timer = setTimeout(() => void load({ silent: true }), IN_FLIGHT_REFRESH_MS);
+		return () => clearTimeout(timer);
+	}, [embedded, candidateInFlight, busy, load, pollTick]);
 	const releaseActions = RELEASE_WORKFLOW_ACTIONS.filter(
 		(action) => candidateCommandScopeAllowed && workspace?.allowedActions.includes(action),
 	);
@@ -477,6 +501,23 @@ export function ModelPublishDialog({
 						? "发布单状态已发生变化，页面已自动刷新，请确认后重试。"
 						: normalized.message,
 			);
+			return false;
+		} finally {
+			setBusy("");
+		}
+	};
+	const abandonBuild = async () => {
+		if (busy || !candidate || !canAbandonBuild) return false;
+		setBusy("build");
+		setFailure("");
+		try {
+			await abandonReleaseCandidateBuild(planId, candidate, crypto.randomUUID(), "用户放弃长时间无进展的构建");
+			await Promise.all([load(), refreshMaterializationPlan()]);
+			onChanged?.();
+			return true;
+		} catch (error) {
+			setFailure(normalizeModelingRequestFailure(error, "放弃本次构建未能完成，请刷新后核对状态。").message);
+			await load();
 			return false;
 		} finally {
 			setBusy("");
@@ -720,6 +761,16 @@ export function ModelPublishDialog({
 							) : (
 								<p className="dmx-capability-note">当前发布单尚无逐表执行记录。</p>
 							)}
+							{scopedCandidate?.status === "BUILDING" ? (
+								<ModelBuildProgressNotice
+									busy={Boolean(busy)}
+									canAbandon={canAbandonBuild}
+									onAbandon={abandonBuild}
+									unconfirmedCode={unconfirmedDispatch
+										? unconfirmedDispatch.repairCode || "MODEL_MATERIALIZATION_DISPATCH_UNKNOWN"
+										: null}
+								/>
+							) : null}
 							<ModelMaterializationActions
 								embedded={embedded}
 								pageAction={pageAction && ["RUN_QUALITY", "RERUN_GOVERNANCE_QUALITY"].includes(pageAction.code) && !candidateCommandScopeAllowed

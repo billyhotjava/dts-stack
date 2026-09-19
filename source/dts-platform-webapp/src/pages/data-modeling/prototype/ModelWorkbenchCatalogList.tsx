@@ -30,6 +30,8 @@ const MODEL_TYPE_LABEL: Record<string, string> = {
 };
 
 const PAGE_SIZE = 10;
+/** Rows whose delivery is still running are re-read on this cadence; settled rows are not. */
+const RUNNING_DELIVERY_REFRESH_MS = 10000;
 
 type CatalogRow = {
 	id: string;
@@ -117,6 +119,7 @@ export function ModelWorkbenchCatalogList({
 		failed: Set<string>;
 		pending: Set<string>;
 	}>({ identity: "", data: new Map(), failed: new Set(), pending: new Set() });
+	const [runningRefreshTick, setRunningRefreshTick] = useState(0);
 	const domainById = useMemo(() => new Map(domains.map((domain) => [domain.id, domain.name])), [domains]);
 	const modelById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models]);
 	const dimensionById = useMemo(() => new Map(dimensions.map((dimension) => [dimension.id, dimension])), [dimensions]);
@@ -333,6 +336,39 @@ export function ModelWorkbenchCatalogList({
 			controller.abort();
 		};
 	}, [pageModelIdsKey, models]);
+
+	const runningDeliveryIds = Array.from(deliveryByModel.entries())
+		.filter(([, status]) => status.steps.some((step) => step.state === "RUNNING"))
+		.map(([id]) => id)
+		.sort()
+		.join(",");
+	// biome-ignore lint/correctness/useExhaustiveDependencies: runningRefreshTick re-arms the timer after every pass.
+	useEffect(() => {
+		if (!runningDeliveryIds) return;
+		const controller = new AbortController();
+		let active = true;
+		const timer = setTimeout(async () => {
+			for (const id of runningDeliveryIds.split(",")) {
+				try {
+					const status = await getModelDeliveryStatus(id, undefined, undefined, controller.signal);
+					if (!active) return;
+					setDeliveryResult((previous) =>
+						previous.identity !== pageModelIdsKey
+							? previous
+							: { ...previous, data: new Map(previous.data).set(id, status) },
+					);
+				} catch {
+					// Keep the last known row state; the next pass retries.
+				}
+			}
+			if (active) setRunningRefreshTick((tick) => tick + 1);
+		}, RUNNING_DELIVERY_REFRESH_MS);
+		return () => {
+			active = false;
+			clearTimeout(timer);
+			controller.abort();
+		};
+	}, [runningDeliveryIds, pageModelIdsKey, runningRefreshTick]);
 
 	const totalElements = compatibilityFallback ? filteredLocalRows.length : catalogPage?.totalElements || 0;
 	const pageCount = Math.max(1, compatibilityFallback ? localPageCount : catalogPage?.totalPages || 0);

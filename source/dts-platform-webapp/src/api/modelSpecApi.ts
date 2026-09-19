@@ -673,6 +673,7 @@ export type ReleaseCandidateWorkspaceAction =
 	| "UPDATE_SCOPE"
 	| "REFRESH_CANDIDATE"
 	| "REMATERIALIZE"
+	| "ABANDON_BUILD"
 	| ReleaseCandidateLifecycleAction;
 
 export type ReleaseCandidateEvidenceType =
@@ -1207,6 +1208,20 @@ export const retryReleaseCandidate = (
 ) =>
 	api.post<ReleaseCandidateCommandResult>({
 		url: releaseCandidateItemUrl(planId, expected.id, "/retry"),
+		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
+		data: { reason },
+		_skipErrorToast: true,
+	} as any);
+
+/** Fences a build whose dispatch stopped making progress and moves the candidate to BUILD_FAILED. */
+export const abandonReleaseCandidateBuild = (
+	planId: string,
+	expected: ReleaseCandidateCasToken,
+	idempotencyKey: string,
+	reason: string,
+) =>
+	api.post<ReleaseCandidateCommandResult>({
+		url: releaseCandidateItemUrl(planId, expected.id, "/abandon-build"),
 		headers: releaseCandidateWriteHeaders(idempotencyKey, expected),
 		data: { reason },
 		_skipErrorToast: true,

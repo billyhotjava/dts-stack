@@ -614,3 +614,39 @@ it.each(["denied", "unavailable"] as const)("disables model edits when object au
 	expect(writes.length).toBeGreaterThan(0);
 	expect(writes.every((button) => button.disabled)).toBe(true);
 });
+
+it("re-reads only rows whose delivery is still running until they settle", async () => {
+	vi.useFakeTimers();
+	try {
+		const running = {
+			...(emptyDeliveryStatus as object),
+			steps: [{ key: "materialization", state: "RUNNING", matchesCurrentTarget: true, resourceId: null }],
+		} as never;
+		const failed = {
+			...(emptyDeliveryStatus as object),
+			steps: [{ key: "materialization", state: "FAILED", matchesCurrentTarget: true, resourceId: null }],
+		} as never;
+		let draftReads = 0;
+		apiMocks.getDeliveryStatus.mockImplementation(async (id: string) => {
+			if (id !== draftModel.id) return emptyDeliveryStatus;
+			draftReads += 1;
+			return draftReads === 1 ? running : failed;
+		});
+		await renderPerformanceList([draftModel, publishedModel]);
+		await act(async () => Promise.resolve());
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(2);
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(10000);
+		});
+
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(3);
+		expect(apiMocks.getDeliveryStatus).toHaveBeenLastCalledWith(draftModel.id, undefined, undefined, expect.anything());
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(30000);
+		});
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(3);
+	} finally {
+		vi.useRealTimers();
+	}
+});

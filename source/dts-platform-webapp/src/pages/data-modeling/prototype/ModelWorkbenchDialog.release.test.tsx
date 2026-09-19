@@ -49,6 +49,7 @@ beforeAll(() => {
 });
 
 const apiMocks = vi.hoisted(() => ({
+	abandonBuild: vi.fn(),
 	cancelCandidate: vi.fn(),
 	createCandidate: vi.fn(),
 	createReplacementCandidate: vi.fn(),
@@ -87,6 +88,7 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/api/modelSpecApi")>()),
+	abandonReleaseCandidateBuild: apiMocks.abandonBuild,
 	cancelReleaseCandidate: apiMocks.cancelCandidate,
 	createReleaseCandidate: apiMocks.createCandidate,
 	createReplacementReleaseCandidate: apiMocks.createReplacementCandidate,
@@ -568,6 +570,87 @@ describe("release and materialization dispatch", () => {
 
 		expect(apiMocks.retryCandidate).toHaveBeenCalledWith(model.planId, failed, "idem-1", "从模型工作台重试构建");
 		expect(apiMocks.startBuildIntent).not.toHaveBeenCalled();
+	});
+
+	it("offers an explicit two-step exit from a build whose dispatch outcome stays unconfirmed", async () => {
+		const building = candidate("BATCH_WORKBENCH", "BUILDING");
+		const failed = candidate("BATCH_WORKBENCH", "BUILD_FAILED");
+		apiMocks.getWorkbench.mockResolvedValue({
+			...workspace(["ABANDON_BUILD"], building),
+			entryEvidence: [
+				{
+					candidateEntryId: "entry-1",
+					modelSpecId: model.id,
+					modelName: model.name,
+					modelRevision: model.revision,
+					runStatus: "UNKNOWN",
+					relationState: "UNKNOWN",
+					repairCode: "MODEL_AIRFLOW_TRIGGER_UNKNOWN",
+				},
+			],
+		} as ReleaseCandidateWorkbench);
+		apiMocks.abandonBuild.mockImplementation(async () => {
+			apiMocks.getWorkbench.mockResolvedValue(workspace(["RETRY_BUILD", "CANCEL_CANDIDATE"], failed));
+			return { candidate: failed };
+		});
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+
+		expect(container.textContent).toContain("MODEL_AIRFLOW_TRIGGER_UNKNOWN");
+		await act(async () => button("放弃本次构建")?.click());
+		expect(apiMocks.abandonBuild).not.toHaveBeenCalled();
+		await act(async () => button("确认放弃本次构建")?.click());
+		await flush();
+
+		expect(apiMocks.abandonBuild).toHaveBeenCalledWith(model.planId, building, "idem-1", "用户放弃长时间无进展的构建");
+		expect(button("重试构建")).toBeDefined();
+	});
+
+	it("does not offer abandonment while the server still considers the build progressing", async () => {
+		const building = candidate("BATCH_WORKBENCH", "BUILDING");
+		apiMocks.getWorkbench.mockResolvedValue(workspace([], building));
+
+		await act(async () =>
+			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+		);
+		await flush();
+
+		expect(container.textContent).toContain("构建进行中");
+		expect(button("放弃本次构建")).toBeUndefined();
+	});
+
+	it("keeps refreshing an in-flight build without clearing the dialog until the server settles it", async () => {
+		vi.useFakeTimers();
+		try {
+			const building = candidate("BATCH_WORKBENCH", "BUILDING");
+			const failed = candidate("BATCH_WORKBENCH", "BUILD_FAILED");
+			apiMocks.getWorkbench.mockResolvedValue(workspace([], building));
+
+			await act(async () =>
+				root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			);
+			await flush();
+			const initialReads = apiMocks.getWorkbench.mock.calls.length;
+			apiMocks.getWorkbench.mockResolvedValue(workspace(["RETRY_BUILD"], failed));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(5000);
+			});
+			await flush();
+
+			expect(apiMocks.getWorkbench.mock.calls.length).toBeGreaterThan(initialReads);
+			expect(button("重试构建")).toBeDefined();
+			const settledReads = apiMocks.getWorkbench.mock.calls.length;
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(15000);
+			});
+			expect(apiMocks.getWorkbench.mock.calls.length).toBe(settledReads);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("shows durable physical evidence and atomically rematerializes a successful candidate", async () => {
