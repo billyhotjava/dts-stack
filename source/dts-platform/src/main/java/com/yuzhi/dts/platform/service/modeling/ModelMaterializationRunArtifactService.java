@@ -531,7 +531,13 @@ public class ModelMaterializationRunArtifactService {
             return;
         }
         if (!DeliveryStatus.STALE.name().equals(group.candidateCurrentStatus())) {
-            candidates.transition(
+            // Availability staleness carries its own generation evidence (pinned vs current
+            // source generation recorded by markAvailabilityStale). The canonical transition()
+            // gate only knows model/implementation scope drift and rejects STALE without it
+            // (MODEL_RELEASE_CANDIDATE_DRIFT_REQUIRED), which used to mask the true source
+            // reason as an unactionable BUILD_FAILED. Route through the explicit
+            // rematerialization seam whose STALE transition skips the scope-drift gate.
+            candidates.supersedeForRematerialization(
                 group.tenantId(),
                 "service:dts-airflow",
                 group.candidateId(),

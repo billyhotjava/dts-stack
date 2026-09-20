@@ -512,6 +512,48 @@ class ModelReleaseCandidateServiceTest {
     }
 
     @Test
+    void availabilityStaleReachesStaleWithoutScopeDrift() {
+        EntryView locked = entry(DeliveryStatus.BUILDING, 1, CHECKSUM);
+        CandidateView building = candidate(
+            DeliveryStatus.BUILDING,
+            2,
+            createdAudit(),
+            List.of(locked)
+        );
+        when(repository.findCommandByIdempotencyKey(TENANT, "availability-stale-key")).thenReturn(Optional.empty());
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(building));
+        when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
+
+        var result = service.supersedeForRematerialization(
+            TENANT,
+            ACTOR,
+            CANDIDATE_ID,
+            new TransitionCommand(
+                2,
+                DeliveryStatus.STALE,
+                "availability-stale-key",
+                "MODEL_MATERIALIZATION_SOURCE_GENERATION_STALE"
+            )
+        );
+
+        assertThat(result.candidate().status()).isEqualTo(DeliveryStatus.STALE);
+        assertThat(result.candidate().version()).isEqualTo(3);
+        assertThat(result.driftReasons()).isEmpty();
+        ArgumentCaptor<CommandEventView> event = ArgumentCaptor.forClass(CommandEventView.class);
+        verify(repository).transitionAndAppend(
+            any(),
+            anyInt(),
+            any(),
+            any(),
+            anyString(),
+            any(),
+            event.capture()
+        );
+        assertThat(event.getValue().toStatus()).isEqualTo(DeliveryStatus.STALE);
+        assertThat(event.getValue().reason()).isEqualTo("MODEL_MATERIALIZATION_SOURCE_GENERATION_STALE");
+    }
+
+    @Test
     void explicitRematerializationRestartsTheBuiltCandidateWithoutInventingCanonicalDrift() {
         CandidateView built = candidate(
             DeliveryStatus.BUILT,

@@ -1078,7 +1078,7 @@ class ModelMaterializationRunArtifactServiceTest {
 
         verify(runs, never()).markDbtSucceeded(any(), any(), anyInt(), any());
         verify(runs, never()).markRelationsVerified(any(), anyInt(), any());
-        verify(candidates).transition(
+        verify(candidates).supersedeForRematerialization(
             "tenant-a",
             "service:dts-airflow",
             CANDIDATE_ID,
@@ -1200,7 +1200,7 @@ class ModelMaterializationRunArtifactServiceTest {
             );
 
         verify(runs, never()).finalizeSucceeded(GROUP_ID, NOW);
-        verify(candidates).transition(
+        verify(candidates).supersedeForRematerialization(
             "tenant-a",
             "service:dts-airflow",
             CANDIDATE_ID,
