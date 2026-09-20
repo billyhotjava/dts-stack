@@ -134,6 +134,10 @@ export default function OrgManagementView() {
 					if (key) byUsername.set(key, u);
 				});
 
+				// 员工列表只展示可用账号：MDM 新建的账号默认禁用，需管理员核对后启用，
+				// 在部门预览里混着展示会让人误以为已经生效。
+				const isAccountActive = (u?: KeycloakUser) => u?.enabled !== false;
+
 				let result: Array<{ username: string; fullName?: string }> = [];
 				if (Array.isArray(list) && list.length > 0) {
 					result = list
@@ -144,9 +148,11 @@ export default function OrgManagementView() {
 								fullName: (u?.fullName || u?.firstName || u?.lastName || u?.attributes?.fullName?.[0]) as
 									| string
 									| undefined,
+								active: isAccountActive(u),
 							};
 						})
-						.filter((x) => x.username);
+						.filter((x) => x.username && x.active)
+						.map(({ username, fullName }) => ({ username, fullName }));
 				} else {
 					// Fallback: dev store may return empty; derive by scanning users
 					try {
@@ -155,6 +161,7 @@ export default function OrgManagementView() {
 							: `/${selected.groupPath || ""}`;
 						const orgIdText = String(selected.id);
 						const matched = allUsers.filter((u) => {
+							if (!isAccountActive(u)) return false;
 							const groups = Array.isArray(u.groups)
 								? u.groups.map((p: string) => (p && p.startsWith("/") ? p : `/${p}`))
 								: [];

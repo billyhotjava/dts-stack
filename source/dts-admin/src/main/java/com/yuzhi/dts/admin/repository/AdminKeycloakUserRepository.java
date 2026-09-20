@@ -103,6 +103,15 @@ public interface AdminKeycloakUserRepository
                           and lower(m.role) in (:roleKeys)
                    ) = cast(:inRole as boolean)
                )
+               and (
+                   u.enabled = true
+                   or exists (
+                       select 1
+                         from admin_role_member rm
+                        where lower(rm.username) = lower(u.username)
+                          and lower(rm.role) in (:roleKeys)
+                   )
+               )
              order by lower(u.username)
             """,
         countQuery = """
@@ -129,6 +138,15 @@ public interface AdminKeycloakUserRepository
                         where lower(m.username) = lower(u.username)
                           and lower(m.role) in (:roleKeys)
                    ) = cast(:inRole as boolean)
+               )
+               and (
+                   u.enabled = true
+                   or exists (
+                       select 1
+                         from admin_role_member rm
+                        where lower(rm.username) = lower(u.username)
+                          and lower(rm.role) in (:roleKeys)
+                   )
                )
             """,
         nativeQuery = true

@@ -183,6 +183,8 @@ public class KeycloakApiResource {
                     dto.setUsername(snap.getUsername());
                     dto.setFullName(snap.getFullName());
                     dto.setGroups(snap.getGroupPaths());
+                    // 组织机构页按启用状态过滤成员，快照兜底时也要带上，否则禁用账号会漏过过滤。
+                    dto.setEnabled(snap.isEnabled());
                     fallback.add(dto);
                 }
                 list = filterProtectedUsers(fallback);
