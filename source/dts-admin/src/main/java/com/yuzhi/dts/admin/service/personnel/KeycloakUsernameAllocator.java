@@ -31,7 +31,10 @@ import org.springframework.stereotype.Service;
 public class KeycloakUsernameAllocator {
 
     private static final Logger LOG = LoggerFactory.getLogger(KeycloakUsernameAllocator.class);
-    private static final char SUFFIX_SEPARATOR = '~';
+    /** Keycloak 的用户名校验拒绝 {@code ~} 等字符（实测返回 error-username-invalid-character）；
+     *  {@code .} 在默认校验下可用。 */
+    private static final char SUFFIX_SEPARATOR = '.';
+    private static final int MAX_DISAMBIGUATION_ATTEMPTS = 20;
     /** Keycloak 用户名列长度上限，与 admin_keycloak_user.username 一致。 */
     private static final int MAX_USERNAME_LENGTH = 64;
 
@@ -71,9 +74,28 @@ public class KeycloakUsernameAllocator {
         if (occupantCode == null || occupantCode.equals(code)) {
             return plain;
         }
-        String allocated = withSuffix(plain, code);
+        String allocated = ensureFree(withSuffix(plain, code), code);
         LOG.info("allocate suffixed keycloak username personCode={} username={} occupiedBy={}", code, allocated, occupantCode);
         return allocated;
+    }
+
+    /**
+     * 推导出的名字仍可能被占用（编码本身就含分隔符时），逐次追加标记直到空闲。
+     */
+    private String ensureFree(String candidate, String code) {
+        String name = candidate;
+        for (int attempt = 0; attempt < MAX_DISAMBIGUATION_ATTEMPTS; attempt++) {
+            Optional<AdminKeycloakUser> holder = userRepository.findByUsernameIgnoreCase(name);
+            if (holder.isEmpty()) {
+                return name;
+            }
+            String holderCode = StringUtils.trimToNull(holder.orElseThrow().getPersonCode());
+            if (holderCode == null || holderCode.equals(code)) {
+                return name;
+            }
+            name = withSuffix(candidate, code + attempt);
+        }
+        throw new PersonnelImportException("无法为人员编码 " + code + " 分配可用的 Keycloak 用户名");
     }
 
     private String normalize(String value) {

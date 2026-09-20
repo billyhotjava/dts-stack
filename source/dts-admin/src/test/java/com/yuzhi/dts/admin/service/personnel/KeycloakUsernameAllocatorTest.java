@@ -43,7 +43,9 @@ class KeycloakUsernameAllocatorTest {
 
         String allocated = allocator.allocate("LI01", "LI01");
 
-        assertThat(allocated).startsWith("li01~").isNotEqualTo("li01");
+        assertThat(allocated).startsWith("li01.").isNotEqualTo("li01");
+        // Keycloak 的用户名校验拒绝 ~ 等字符，分隔符必须在允许集合内
+        assertThat(allocated).doesNotContain("~").matches("[a-z0-9._+-]+");
     }
 
     @Test
@@ -68,9 +70,9 @@ class KeycloakUsernameAllocatorTest {
     @Test
     @DisplayName("该编码已有账号时沿用既有用户名")
     void reusesUsernameRecordedForThatCode() {
-        when(repository.findFirstByPersonCode("LI01")).thenReturn(Optional.of(snapshot("li01~3", "LI01")));
+        when(repository.findFirstByPersonCode("LI01")).thenReturn(Optional.of(snapshot("li01.3", "LI01")));
 
-        assertThat(allocator.allocate("LI01", "LI01")).isEqualTo("li01~3");
+        assertThat(allocator.allocate("LI01", "LI01")).isEqualTo("li01.3");
     }
 
     @Test
@@ -89,6 +91,26 @@ class KeycloakUsernameAllocatorTest {
         when(repository.findByUsernameIgnoreCase("li01")).thenReturn(Optional.of(snapshot("li01", "Li01")));
 
         assertThat(allocator.allocate("Li01", "Li01")).isEqualTo("li01");
+    }
+
+    @Test
+    @DisplayName("推导出的名字也被占用时继续消歧")
+    void disambiguatesWhenDerivedNameIsAlsoTaken() {
+        when(repository.findFirstByPersonCode("LI01")).thenReturn(Optional.empty());
+        when(repository.findByUsernameIgnoreCase("li01")).thenReturn(Optional.of(snapshot("li01", "Li01")));
+        // 推导出的名字恰好是另一个真实编码占用的
+        when(repository.findByUsernameIgnoreCase(org.mockito.ArgumentMatchers.argThat(name -> name != null && name.startsWith("li01."))))
+            .thenAnswer(call -> {
+                String name = call.getArgument(0);
+                return name.chars().filter(c -> c == '.').count() == 1
+                    ? Optional.of(snapshot(name, "some-other-code"))
+                    : Optional.empty();
+            });
+
+        String allocated = allocator.allocate("LI01", "LI01");
+
+        assertThat(allocated).startsWith("li01.").isNotEqualTo("li01");
+        assertThat(allocated.chars().filter(c -> c == '.').count()).isGreaterThan(1);
     }
 
     private AdminKeycloakUser snapshot(String username, String personCode) {

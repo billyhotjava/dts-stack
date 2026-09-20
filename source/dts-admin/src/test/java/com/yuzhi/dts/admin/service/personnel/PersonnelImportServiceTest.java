@@ -278,7 +278,7 @@ class PersonnelImportServiceTest {
         verify(provisioning).provision(any(PersonnelPayload.class), username.capture());
         assertThat(result.successRecords()).isEqualTo(1);
         assertThat(result.failureRecords()).isZero();
-        assertThat(username.getValue()).startsWith("li01~").isNotEqualTo("li01");
+        assertThat(username.getValue()).startsWith("li01.").isNotEqualTo("li01");
         assertThat(saved).hasSize(1);
         assertThat(saved.get(0).getPersonCode()).isEqualTo("LI01");
         assertThat(saved.get(0).getUsername()).isEqualTo(username.getValue());

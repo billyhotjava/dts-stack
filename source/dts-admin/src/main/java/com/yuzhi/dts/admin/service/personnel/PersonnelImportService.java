@@ -237,7 +237,22 @@ public class PersonnelImportService {
                 return RecordOutcome.oneSkipped();
             }
             String keycloakUsername = usernameAllocator.allocate(payload.personCode(), payload.account());
-            KeycloakUserProvisioningService.ProvisionResult provisioned = provisioningService.provision(payload, keycloakUsername);
+            KeycloakUserProvisioningService.ProvisionResult provisioned;
+            try {
+                provisioned = provisioningService.provision(payload, keycloakUsername);
+            } catch (RuntimeException ex) {
+                // provision 走 @Transactional(MANDATORY)，异常穿过事务代理时当前事务已被标记 rollback-only。
+                // 在这里吞掉只会让外层提交抛 UnexpectedRollbackException，失败明细变成无信息的「事务异常」。
+                // 原样抛出，由 saveRecordFailureInNewTransaction 在新事务里记录真实原因。
+                OPS_LOG.error(
+                    "[record-provision-failed] batch={} personCode={} username={} reason={}",
+                    batchId,
+                    payload.personCode(),
+                    keycloakUsername,
+                    exceptionMessage(ex)
+                );
+                throw ex;
+            }
             String keycloakUserId = provisioned.keycloakUserId();
             record.setKeycloakUserId(keycloakUserId);
             Map<String, Object> attributes = payload.attributes() == null ? Map.of() : payload.attributes();
@@ -290,7 +305,7 @@ public class PersonnelImportService {
                     PersonImportBatch batchRef = batchRepository.getReferenceById(batchId);
                     PersonImportRecord record = buildRecord(batchRef, payload);
                     record.setStatus(PersonRecordStatus.FAILED);
-                    record.setMessage(limitMessage("事务异常: " + exceptionMessage(ex)));
+                    record.setMessage(limitMessage("导入失败: " + exceptionMessage(ex)));
                     record.setProcessedAt(Instant.now());
                     recordRepository.save(record);
                 });
