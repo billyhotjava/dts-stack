@@ -440,16 +440,24 @@ F5 Gate：G0 复用既有基线，运行时仍核对实际环境；G1=PASS，F5-
 
 **最新全 Sprint 统计（覆盖上文历史统计）**：10 个 Feature、63 个 Task；按任务文件状态统计 DRAFT=1，READY=0，IN_PROGRESS=59，DONE=3，BLOCKED=0。
 
-## F11 权限模型统一与 RBAC 重构（2026-09-19，梳理阶段）
+## F11 权限模型统一与 RBAC 重构（2026-09-19，架构完善）
 
-新增 [F11](features/F11-权限模型统一与RBAC重构/README.md)，6 个 Task（F11-T01–T06）；T01 已 DONE，T02–T06 为 DRAFT，未授权实施。来源为用户要求梳理 dts-admin 与 dts-platform 的三员权限与普通用户权限并提出重构方案，直接起因是 F9 落地后现场出现数据管理员在建模模块全部 403（已由 `9bc3ec27a` 修复该单点）。
+[F11](features/F11-权限模型统一与RBAC重构/README.md) 已按用户要求写入人员/部门/Keycloak 职责划分并完善重构架构，现有 9 个 Task（T01–T09）。当前为 IN_PROGRESS（设计），未授权重构编码、数据库迁移或发布；T01 因原证据错误与现场核验缺口由 DONE 改为 IN_PROGRESS，T02–T09 均 DRAFT。
 
-**契约/Context Ledger**：[S1–S13 现状、P1–P9 问题、R1–R6 方案、Q16–Q20](assests/F11-permission-model-survey-20260919.md)。关键事实：数据角色只存在 DTS 库、不在 Keycloak，授予入口从不回写（S1）；角色成员按用户名而非 kc_id 关联（S2）；`person_profile` 自 `4d53821ba` 起无写入方但仍被读取（S4）；平台 508 处 `@PreAuthorize` 中五个模块维护者常量全是同一数组的别名（S6）；`ROLE_GOV_ADMIN`、`ROLE_DATA_STEWARD`、`ROLE_INFRA_ADMIN` 无人可被授予却仍在判权条件中（S7）；`/api/menu` 为 permitAll 且角色由调用方传参（S9）；对象级授权有六套并行实现且无统一决策点（S10）。
+**设计主文档**：[权限重构架构与实施契约](assests/F11-permission-architecture.md)。**Context Ledger**：[修订现状及 F11-C01–C11](assests/F11-permission-model-survey-20260919.md)。**测试设计**：[IT-68–IT-79](it/F11-身份与权限重构验收.md)，全部 NOT_RUN。
+
+架构工作基线：MDM 管人员/组织字段，DTS 管有效业务目录与授权，Keycloak 管认证账号；每类字段唯一写入来源。保留 organization_node，演进 admin_keycloak_user 支持待开户和字段分源，person_profile 在全部消费者迁移后只读归档。统一当前身份、不跨请求缓存允许；业务动作权限保留授权范围，菜单服务委托和对象/后台决策形成完整链路，继承 F9 的部门精确隔离、编辑与消费/审核分离。
+
+本轮修正了“没有权限码写入方”“六套策略互不调用”“旧人员表只有两个读取点”等错误；组织删除当前已查新快照/Keycloak，MDM 原始 status 不等于已确认离职状态。历史 realm/账号数量和注解计数未重验，不作为当前实施覆盖证明。
 
 | Feature | Task 数 | 优先级 | 状态 |
 |---|---|---|---|
-| [F11-权限模型统一与RBAC重构](features/F11-权限模型统一与RBAC重构/README.md) | 6 | P1 | SURVEY |
+| [F11-权限模型统一与RBAC重构](features/F11-权限模型统一与RBAC重构/README.md) | 9 | P1 | IN_PROGRESS（设计） |
 
-**排期约束**：Q16（角色事实源方案）与 Q18（本 Sprint 范围）未确认前，T02–T06 不进入实施。T06 的别名下线属于收紧放行面，必须先在现场确认令牌现状。
+**任务与切片队列**：T01 + T08/T09 设计 → T07/T02 身份目录切片 → T03/T04/T05 首个权限闭环 → 按资源域扩面 → T06 对应历史清理；T08/T09 随批次迁移/验收。实际 owner、容量、时间盒和实施批次待排，不把整个重构默认承诺在本 Sprint 完成。v2.2.3 当前没有 sprint-queue.md，本节承载 F11 队列，不改 v2.2.2 的历史队列。
 
-**最新全 Sprint 统计（覆盖上文历史统计）**：11 个 Feature、69 个 Task；按任务文件状态统计 DRAFT=6，READY=0，IN_PROGRESS=59，DONE=4，BLOCKED=0。
+**Gate 增量**：G0=GAP（当前环境/数据未核验）；G1=GAP（架构和测试设计已落盘，Q17/Q20–Q24 的矩阵/政策/上游协议与特殊账号等输入待按切片冻结）；G2/G3/G4=PENDING。Q16 采用分域方案 B、Q19 采用扩展→回填→对比→切换→收缩的设计选择，不等于现场迁移已获准或完成。
+
+**最新全 Sprint 统计（覆盖上文历史统计，按实际任务文件）**：11 个 Feature、72 个 Task；DRAFT=9，READY=0，IN_PROGRESS=60，DONE=3，BLOCKED=0。F11 单独为 IN_PROGRESS=1、DRAFT=8；本次未改变其他 Feature/Task 状态。
+
+**证据状态**：仅完成文档、源码复核和文档静态检查；重构源码/测试、正式构建/交付包、部署、真实页面与回退演练均未执行。
