@@ -535,9 +535,9 @@ public class ModelMaterializationRunArtifactService {
             // source generation recorded by markAvailabilityStale). The canonical transition()
             // gate only knows model/implementation scope drift and rejects STALE without it
             // (MODEL_RELEASE_CANDIDATE_DRIFT_REQUIRED), which used to mask the true source
-            // reason as an unactionable BUILD_FAILED. Route through the explicit
-            // rematerialization seam whose STALE transition skips the scope-drift gate.
-            candidates.supersedeForRematerialization(
+            // reason as an unactionable BUILD_FAILED. Route through the dedicated
+            // availability-stale seam whose STALE transition skips the scope-drift gate.
+            candidates.markAvailabilityStale(
                 group.tenantId(),
                 "service:dts-airflow",
                 group.candidateId(),

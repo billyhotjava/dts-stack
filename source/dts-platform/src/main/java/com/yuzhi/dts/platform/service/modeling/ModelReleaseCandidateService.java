@@ -649,7 +649,8 @@ public class ModelReleaseCandidateService {
             CommandEventType.STATUS_CHANGED,
             true,
             false,
-            null
+            null,
+            false
         );
     }
 
@@ -677,7 +678,8 @@ public class ModelReleaseCandidateService {
             CommandEventType.STATUS_CHANGED,
             true,
             false,
-            evidenceSnapshot
+            evidenceSnapshot,
+            false
         );
     }
 
@@ -700,7 +702,37 @@ public class ModelReleaseCandidateService {
             CommandEventType.STATUS_CHANGED,
             true,
             true,
-            null
+            null,
+            false
+        );
+    }
+
+    /**
+     * Records source-generation staleness detected by the materialization runtime.
+     * Unlike a user refresh, the availability guard carries its own generation evidence
+     * (pinned vs current source generation fenced by markAvailabilityStale), so the STALE
+     * transition must not require canonical model/implementation scope drift.
+     */
+    @Transactional
+    public CommandResult markAvailabilityStale(
+        String tenantId,
+        String actorId,
+        UUID candidateId,
+        TransitionCommand command
+    ) {
+        if (command == null || command.targetStatus() != DeliveryStatus.STALE) {
+            throw invalid("availability-stale command must target STALE");
+        }
+        return transition(
+            tenantId,
+            actorId,
+            candidateId,
+            command,
+            CommandEventType.STATUS_CHANGED,
+            true,
+            false,
+            null,
+            true
         );
     }
 
@@ -723,7 +755,8 @@ public class ModelReleaseCandidateService {
             CommandEventType.STATUS_CHANGED,
             false,
             false,
-            null
+            null,
+            false
         );
     }
 
@@ -750,7 +783,8 @@ public class ModelReleaseCandidateService {
             CommandEventType.PUBLICATION_REQUESTED,
             true,
             false,
-            null
+            null,
+            false
         );
     }
 
@@ -762,7 +796,8 @@ public class ModelReleaseCandidateService {
         CommandEventType requestedEventType,
         boolean auditStatusChange,
         boolean explicitRematerialization,
-        CandidateQualityEvidenceSnapshot evidenceSnapshot
+        CandidateQualityEvidenceSnapshot evidenceSnapshot,
+        boolean availabilityStale
     ) {
         String tenant = requiredText(tenantId, "tenantId");
         String actor = requiredText(actorId, "actorId");
@@ -811,10 +846,11 @@ public class ModelReleaseCandidateService {
             );
         }
 
-        List<DriftReasonView> driftReasons = cancellation || explicitRematerialization
+        List<DriftReasonView> driftReasons = cancellation || explicitRematerialization || availabilityStale
             ? List.of()
             : scopeDriftEntries(tenant, current.planId(), current.entries(), true);
         if (
+            !availabilityStale &&
             driftReasons.isEmpty() &&
             requiresMaterializationSnapshotValidation(
                 current,
@@ -826,7 +862,12 @@ public class ModelReleaseCandidateService {
                 ? List.of()
                 : List.copyOf(snapshotDrift);
         }
-        if (command.targetStatus() == DeliveryStatus.STALE && driftReasons.isEmpty() && !explicitRematerialization) {
+        if (
+            command.targetStatus() == DeliveryStatus.STALE &&
+            driftReasons.isEmpty() &&
+            !explicitRematerialization &&
+            !availabilityStale
+        ) {
             throw new ModelReleaseCandidateException(
                 "MODEL_RELEASE_CANDIDATE_DRIFT_REQUIRED",
                 "The candidate can be refreshed only after canonical reference drift is confirmed",

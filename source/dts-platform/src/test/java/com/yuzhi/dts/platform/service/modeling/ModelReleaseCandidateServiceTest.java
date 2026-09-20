@@ -524,7 +524,7 @@ class ModelReleaseCandidateServiceTest {
         when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(building));
         when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
 
-        var result = service.supersedeForRematerialization(
+        var result = service.markAvailabilityStale(
             TENANT,
             ACTOR,
             CANDIDATE_ID,
