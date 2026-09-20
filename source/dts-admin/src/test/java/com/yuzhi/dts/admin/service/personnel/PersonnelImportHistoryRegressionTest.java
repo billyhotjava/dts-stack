@@ -174,13 +174,14 @@ class PersonnelImportHistoryRegressionTest {
             ));
             return r;
         });
-        when(provisioning.provision(any()))
+        when(provisioning.provision(any(), any()))
             .thenAnswer(call ->
                 new KeycloakUserProvisioningService.ProvisionResult("kc-" + ((PersonnelPayload) call.getArgument(0)).account(), null, false, null)
             );
         when(snapshots.save(any())).thenAnswer(call -> call.getArgument(0));
         var target = new PersonnelImportService(batches, records, mock(PersonnelExcelParser.class),
-            mock(PersonnelApiClient.class), mock(AuditV2Service.class), provisioning, snapshots, new ObjectMapper(), new MdmGatewayProperties(), tx);
+            mock(PersonnelApiClient.class), mock(AuditV2Service.class), provisioning, snapshots, new ObjectMapper(), new MdmGatewayProperties(), tx,
+            new KeycloakUsernameAllocator(snapshots));
         var proxy = new ProxyFactory(target);
         proxy.addAdvice(new TransactionInterceptor(tx, new AnnotationTransactionAttributeSource()));
         return (PersonnelImportService) proxy.getProxy();

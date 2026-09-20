@@ -43,7 +43,9 @@ public final class AdminKeycloakUserSpecifications {
             }
             if (StringUtils.isNotBlank(keyword)) {
                 String pattern = "%" + escapeLike(keyword.trim().toLowerCase(Locale.ROOT)) + "%";
-                predicates.add(cb.like(username, pattern, LIKE_ESCAPE));
+                // 页面按原始人员编码展示，检索也要能命中它。
+                Expression<String> personCode = cb.lower(cb.coalesce(root.get("personCode"), ""));
+                predicates.add(cb.or(cb.like(username, pattern, LIKE_ESCAPE), cb.like(personCode, pattern, LIKE_ESCAPE)));
             }
             if (mdmEnabled != null) {
                 predicates.add(cb.equal(root.get("mdmEnabled"), mdmEnabled));

@@ -2,6 +2,7 @@ package com.yuzhi.dts.admin.service.personnel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -46,7 +47,7 @@ class PersonnelImportServiceTest {
             return batch;
         });
         when(batchRepository.getReferenceById(42L)).thenReturn(savedBatch);
-        when(provisioningService.provision(any(PersonnelPayload.class)))
+        when(provisioningService.provision(any(PersonnelPayload.class), any()))
             .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null, false, null));
         when(adminKeycloakUserRepository.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.empty());
         when(adminKeycloakUserRepository.findByUsernameIgnoreCase("alice")).thenReturn(java.util.Optional.empty());
@@ -65,7 +66,8 @@ class PersonnelImportServiceTest {
             adminKeycloakUserRepository,
             new ObjectMapper(),
             new MdmGatewayProperties(),
-            new NoopTransactionManager()
+            new NoopTransactionManager(),
+            new KeycloakUsernameAllocator(adminKeycloakUserRepository)
         );
 
         PersonnelImportResult result = service.importFromMdm("mdm-ref", java.util.List.of(payload("alice")), Map.of());
@@ -92,7 +94,7 @@ class PersonnelImportServiceTest {
             return batch;
         });
         when(batchRepository.getReferenceById(9L)).thenReturn(savedBatch);
-        when(provisioningService.provision(any(PersonnelPayload.class)))
+        when(provisioningService.provision(any(PersonnelPayload.class), any()))
             .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null, false, null));
         when(adminKeycloakUserRepository.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.empty());
         when(adminKeycloakUserRepository.findByUsernameIgnoreCase("alice")).thenReturn(java.util.Optional.empty());
@@ -113,7 +115,8 @@ class PersonnelImportServiceTest {
             adminKeycloakUserRepository,
             new ObjectMapper(),
             new MdmGatewayProperties(),
-            new NoopTransactionManager()
+            new NoopTransactionManager(),
+            new KeycloakUsernameAllocator(adminKeycloakUserRepository)
         );
         PersonnelPayload broken = payloadWithDept("bob", null, null);
 
@@ -133,7 +136,7 @@ class PersonnelImportServiceTest {
         PersonImportRecord rejectedRecord = saved.stream().filter(r -> r.getStatus() == PersonRecordStatus.FAILED).findFirst().orElseThrow();
         assertThat(rejectedRecord.getAccount()).isEqualTo("bob");
         assertThat(rejectedRecord.getMessage()).contains("deptCode");
-        verify(provisioningService, never()).provision(broken);
+        verify(provisioningService, never()).provision(eq(broken), any());
     }
 
     @Test
@@ -152,7 +155,7 @@ class PersonnelImportServiceTest {
             return batch;
         });
         when(batchRepository.getReferenceById(7L)).thenReturn(savedBatch);
-        when(provisioningService.provision(any(PersonnelPayload.class)))
+        when(provisioningService.provision(any(PersonnelPayload.class), any()))
             .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", java.util.List.of("/总部/新部门", "/专项组"), false, null));
 
         // 已存在的快照停留在调岗前的部门
@@ -176,7 +179,8 @@ class PersonnelImportServiceTest {
             adminKeycloakUserRepository,
             new ObjectMapper(),
             new MdmGatewayProperties(),
-            new NoopTransactionManager()
+            new NoopTransactionManager(),
+            new KeycloakUsernameAllocator(adminKeycloakUserRepository)
         );
 
         PersonnelImportResult result = service.importFromMdm("mdm-ref", java.util.List.of(payloadWithDept("alice", "D002", "新部门")), Map.of());
@@ -191,7 +195,7 @@ class PersonnelImportServiceTest {
     void importFromMdmShouldSnapshotNewUserAsDisabled() {
         AdminKeycloakUserRepository snapshots = mock(AdminKeycloakUserRepository.class);
         KeycloakUserProvisioningService provisioning = mock(KeycloakUserProvisioningService.class);
-        when(provisioning.provision(any(PersonnelPayload.class)))
+        when(provisioning.provision(any(PersonnelPayload.class), any()))
             .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-new", null, true, Boolean.FALSE));
         when(snapshots.findByKeycloakId("kc-new")).thenReturn(java.util.Optional.empty());
         when(snapshots.findByUsernameIgnoreCase("alice")).thenReturn(java.util.Optional.empty());
@@ -212,7 +216,7 @@ class PersonnelImportServiceTest {
     void importFromMdmShouldKeepEnabledStateOfExistingSnapshot() {
         AdminKeycloakUserRepository snapshots = mock(AdminKeycloakUserRepository.class);
         KeycloakUserProvisioningService provisioning = mock(KeycloakUserProvisioningService.class);
-        when(provisioning.provision(any(PersonnelPayload.class)))
+        when(provisioning.provision(any(PersonnelPayload.class), any()))
             .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null, false, Boolean.TRUE));
         AdminKeycloakUser existing = new AdminKeycloakUser();
         existing.setKeycloakId("kc-1");
@@ -231,7 +235,7 @@ class PersonnelImportServiceTest {
         AdminKeycloakUserRepository snapshots = mock(AdminKeycloakUserRepository.class);
         KeycloakUserProvisioningService provisioning = mock(KeycloakUserProvisioningService.class);
         // Keycloak 里账号已存在且为禁用（例如上次新建后本地事务回滚），本地没有快照
-        when(provisioning.provision(any(PersonnelPayload.class)))
+        when(provisioning.provision(any(PersonnelPayload.class), any()))
             .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-2", null, false, Boolean.FALSE));
         when(snapshots.findByKeycloakId("kc-2")).thenReturn(java.util.Optional.empty());
         when(snapshots.findByUsernameIgnoreCase("alice")).thenReturn(java.util.Optional.empty());
@@ -248,42 +252,59 @@ class PersonnelImportServiceTest {
     }
 
     @Test
-    void importFromMdmShouldRejectPersonCodeDifferingOnlyByCaseFromExistingAccount() {
+    void importFromMdmShouldCreateSeparateAccountWhenPersonCodeDiffersOnlyByCase() {
         AdminKeycloakUserRepository snapshots = mock(AdminKeycloakUserRepository.class);
         KeycloakUserProvisioningService provisioning = mock(KeycloakUserProvisioningService.class);
         AdminKeycloakUser existing = new AdminKeycloakUser();
         existing.setKeycloakId("kc-1");
         existing.setUsername("li01");
         existing.setPersonCode("Li01");
-        when(snapshots.findByUsernameIgnoreCase("LI01")).thenReturn(java.util.Optional.of(existing));
+        // 已有账号属于另一个编码，本次编码只差大小写 => 应分配带后缀的用户名并新建账号
+        when(snapshots.findFirstByPersonCode("LI01")).thenReturn(java.util.Optional.empty());
+        when(snapshots.findByUsernameIgnoreCase("li01")).thenReturn(java.util.Optional.of(existing));
+        when(provisioning.provision(any(PersonnelPayload.class), any()))
+            .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-2", null, true, Boolean.FALSE));
+        when(snapshots.findByKeycloakId("kc-2")).thenReturn(java.util.Optional.empty());
+        java.util.List<AdminKeycloakUser> saved = new java.util.ArrayList<>();
+        when(snapshots.save(any())).thenAnswer(invocation -> {
+            saved.add(invocation.getArgument(0));
+            return invocation.getArgument(0);
+        });
 
         PersonnelImportResult result = simpleService(provisioning, snapshots)
             .importFromMdm("mdm-ref", java.util.List.of(payloadWithCode("LI01")), Map.of());
 
-        assertThat(result.failureRecords()).isEqualTo(1);
-        assertThat(result.successRecords()).isZero();
-        verify(provisioning, never()).provision(any(PersonnelPayload.class));
+        org.mockito.ArgumentCaptor<String> username = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(provisioning).provision(any(PersonnelPayload.class), username.capture());
+        assertThat(result.successRecords()).isEqualTo(1);
+        assertThat(result.failureRecords()).isZero();
+        assertThat(username.getValue()).startsWith("li01~").isNotEqualTo("li01");
+        assertThat(saved).hasSize(1);
+        assertThat(saved.get(0).getPersonCode()).isEqualTo("LI01");
+        assertThat(saved.get(0).getUsername()).isEqualTo(username.getValue());
     }
 
     @Test
-    void importFromMdmShouldAcceptSamePersonCodeCaseAsExistingAccount() {
+    void importFromMdmShouldReuseAccountForSamePersonCode() {
         AdminKeycloakUserRepository snapshots = mock(AdminKeycloakUserRepository.class);
         KeycloakUserProvisioningService provisioning = mock(KeycloakUserProvisioningService.class);
         AdminKeycloakUser existing = new AdminKeycloakUser();
         existing.setKeycloakId("kc-1");
         existing.setUsername("li01");
         existing.setPersonCode("Li01");
-        when(snapshots.findByUsernameIgnoreCase("Li01")).thenReturn(java.util.Optional.of(existing));
+        when(snapshots.findFirstByPersonCode("Li01")).thenReturn(java.util.Optional.of(existing));
         when(snapshots.findByKeycloakId("kc-1")).thenReturn(java.util.Optional.of(existing));
-        when(provisioning.provision(any(PersonnelPayload.class)))
+        when(provisioning.provision(any(PersonnelPayload.class), any()))
             .thenReturn(new KeycloakUserProvisioningService.ProvisionResult("kc-1", null, false, Boolean.TRUE));
         when(snapshots.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
         PersonnelImportResult result = simpleService(provisioning, snapshots)
             .importFromMdm("mdm-ref", java.util.List.of(payloadWithCode("Li01")), Map.of());
 
+        org.mockito.ArgumentCaptor<String> username = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(provisioning).provision(any(PersonnelPayload.class), username.capture());
         assertThat(result.successRecords()).isEqualTo(1);
-        assertThat(existing.getPersonCode()).isEqualTo("Li01");
+        assertThat(username.getValue()).isEqualTo("li01");
         assertThat(existing.getUsername()).isEqualTo("li01");
     }
 
@@ -311,7 +332,8 @@ class PersonnelImportServiceTest {
             snapshots,
             new ObjectMapper(),
             new MdmGatewayProperties(),
-            new NoopTransactionManager()
+            new NoopTransactionManager(),
+            new KeycloakUsernameAllocator(snapshots)
         );
     }
 

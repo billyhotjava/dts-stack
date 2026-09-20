@@ -57,7 +57,9 @@ public class KeycloakUserProvisioningService {
     }
 
     /**
-     * 创建或更新 Keycloak 用户，并把用户对齐到 payload 指定的部门组；
+     * 创建或更新 Keycloak 用户，并把用户对齐到 payload 指定的部门组。
+     * {@code keycloakUsername} 由 {@link KeycloakUsernameAllocator} 分配：同一编码稳定，
+     * 只差大小写的编码会拿到不同的用户名，从而各自成为独立账号。
      * 新建的用户默认禁用，已存在用户的启用状态不做改动。
      * 返回 keycloakUserId、本次绑定的部门组路径及是否新建。
      * 调用方负责区分成功/失败（异常抛出）。
@@ -70,8 +72,11 @@ public class KeycloakUserProvisioningService {
      * 悄悄产生跨事务写入的一致性漏洞。
      */
     @Transactional(propagation = Propagation.MANDATORY)
-    public ProvisionResult provision(PersonnelPayload payload) {
-        String username = firstNonBlank(payload.account(), payload.personCode());
+    public ProvisionResult provision(PersonnelPayload payload, String keycloakUsername) {
+        String username = StringUtils.trimToNull(keycloakUsername);
+        if (username == null) {
+            username = firstNonBlank(payload.account(), payload.personCode());
+        }
         if (StringUtils.isBlank(username)) {
             throw new PersonnelImportException("无法确定 username：account/personCode 均为空");
         }

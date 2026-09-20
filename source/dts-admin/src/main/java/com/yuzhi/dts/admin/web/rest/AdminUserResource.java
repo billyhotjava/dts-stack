@@ -231,6 +231,7 @@ public class AdminUserResource {
         vm.setId(entity.getId());
         vm.setKeycloakId(entity.getKeycloakId());
         vm.setUsername(entity.getUsername());
+        vm.setPersonCode(entity.getPersonCode());
         vm.setFullName(entity.getFullName());
         vm.setEmail(entity.getEmail());
         vm.setPhone(entity.getPhone());

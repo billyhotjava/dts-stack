@@ -182,14 +182,14 @@ class MdmGatewayServicePartialValidationTest {
     }
 
     @Test
-    @DisplayName("同文件中仅大小写不同的人员编码全部拒绝导入")
+    @DisplayName("同文件中仅大小写不同的人员编码各自导入，不再拦截")
     @SuppressWarnings("unchecked")
-    void userCodesDifferingOnlyByCaseAreRejected() throws Exception {
+    void userCodesDifferingOnlyByCaseAreBothImported() throws Exception {
         String json = """
             {
               "users": [
                 {"userCode": "Li01", "userName": "张三", "deptCode": "D001"},
-                {"userCode": "LI01", "userName": "李四", "deptCode": "D001"},
+                {"userCode": "LI01", "userName": "李四", "deptCode": "D002"},
                 {"userCode": "wang02", "userName": "王五", "deptCode": "D001"}
               ]
             }
@@ -198,12 +198,9 @@ class MdmGatewayServicePartialValidationTest {
         MdmGatewayService.CallbackResult result = receive(json);
 
         ArgumentCaptor<List<PersonnelPayload>> accepted = ArgumentCaptor.forClass(List.class);
-        ArgumentCaptor<List<PersonnelImportService.RejectedPayload>> rejected = ArgumentCaptor.forClass(List.class);
-        verify(personnelImportService).importFromMdm(anyString(), accepted.capture(), rejected.capture(), anyMap());
-        assertThat(accepted.getValue()).extracting(PersonnelPayload::account).containsExactly("wang02");
-        assertThat(rejected.getValue()).hasSize(2);
-        assertThat(rejected.getValue().get(0).reason()).contains("仅大小写不同").contains("Li01").contains("LI01");
-        assertThat(result.invalidUsers).isEqualTo(2);
+        verify(personnelImportService).importFromMdm(anyString(), accepted.capture(), anyList(), anyMap());
+        assertThat(accepted.getValue()).extracting(PersonnelPayload::personCode).containsExactly("Li01", "LI01", "wang02");
+        assertThat(result.invalidUsers).isZero();
     }
 
     @Test

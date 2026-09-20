@@ -20,7 +20,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -553,28 +552,18 @@ public class MdmGatewayService {
     ) {
         Set<String> required = parseRequired(properties.getRequired().getUsers());
         Set<String> missingAll = new LinkedHashSet<>();
-        Map<String, Set<String>> codeVariants = collectUserCodeVariants(rawUsers);
         for (int i = 0; i < rawUsers.size(); i++) {
             Map<String, Object> row = rawUsers.get(i);
             List<String> missing = missingFields(row, required);
-            String userCode = string(row.get("userCode"));
-            boolean hasIdentity = StringUtils.isNotBlank(userCode) || StringUtils.isNotBlank(string(row.get("userName")));
-            Set<String> variants = userCode == null ? Set.of() : codeVariants.getOrDefault(userCode.toLowerCase(Locale.ROOT), Set.of());
-            boolean caseConflict = variants.size() > 1;
-            if (missing.isEmpty() && hasIdentity && !caseConflict) {
+            boolean hasIdentity = StringUtils.isNotBlank(string(row.get("userCode"))) || StringUtils.isNotBlank(string(row.get("userName")));
+            if (missing.isEmpty() && hasIdentity) {
                 accepted.add(row);
                 continue;
             }
-            String reason;
-            if (!missing.isEmpty()) {
-                reason = "第 " + (i + 1) + " 条人员缺少必填字段: " + String.join(",", missing);
-            } else if (caseConflict) {
-                reason =
-                    "第 " + (i + 1) + " 条人员编码 " + userCode + " 与同文件中的 " + String.join("、", variants) +
-                    " 仅大小写不同；不同编码视为不同账号，而 Keycloak 无法区分，已拒绝导入，请修正源数据";
-            } else {
-                reason = "第 " + (i + 1) + " 条人员缺少人员标识(userCode/userName)";
-            }
+            // 仅大小写不同的编码按不同账号导入（Keycloak 用户名由 KeycloakUsernameAllocator 分配），此处不再拦截。
+            String reason = missing.isEmpty()
+                ? "第 " + (i + 1) + " 条人员缺少人员标识(userCode/userName)"
+                : "第 " + (i + 1) + " 条人员缺少必填字段: " + String.join(",", missing);
             missingAll.addAll(missing);
             rejected.add(new PersonnelImportService.RejectedPayload(toUserPayload(row), reason));
             // 人员明细会落入导入批次，日志只打前若干条，避免坏文件刷屏。
@@ -592,24 +581,6 @@ public class MdmGatewayService {
         }
         result.missingUsers = missingAll;
         result.invalidUsers = rejected.size();
-    }
-
-    /**
-     * 按小写编码归集同一文件内出现过的原始 userCode 写法。
-     *
-     * <p>同一编码重复出现（写法完全相同）按同一个人处理，后一条覆盖前一条；只有写法不同、
-     * 仅大小写有差异时才是冲突：Keycloak 用户名一律小写，两条记录会落到同一个账号上。
-     */
-    private Map<String, Set<String>> collectUserCodeVariants(List<Map<String, Object>> rawUsers) {
-        Map<String, Set<String>> variants = new HashMap<>();
-        for (Map<String, Object> row : rawUsers) {
-            String userCode = string(row.get("userCode"));
-            if (userCode == null) {
-                continue;
-            }
-            variants.computeIfAbsent(userCode.toLowerCase(Locale.ROOT), key -> new LinkedHashSet<>()).add(userCode);
-        }
-        return variants;
     }
 
     private Set<String> parseRequired(String requiredCsv) {

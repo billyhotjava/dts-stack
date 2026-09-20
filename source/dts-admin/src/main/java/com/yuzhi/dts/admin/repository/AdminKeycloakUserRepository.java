@@ -20,6 +20,9 @@ public interface AdminKeycloakUserRepository
 
     Optional<AdminKeycloakUser> findByEmailIgnoreCase(String email);
 
+    /** 按原始人员编码精确查找（区分大小写）；编码是人员身份的识别键。 */
+    Optional<AdminKeycloakUser> findFirstByPersonCode(String personCode);
+
     /** 该部门下是否还有人员快照；组织删除保护据此判断。 */
     boolean existsByDeptCodeIgnoreCase(String deptCode);
 
@@ -41,7 +44,9 @@ public interface AdminKeycloakUserRepository
     Page<AdminKeycloakUser> findAllExcludingUsernames(@Param("excluded") Collection<String> excluded, Pageable pageable);
 
     @Query(
-        "select u from AdminKeycloakUser u where u.username is not null and lower(u.username) not in :excluded and lower(u.username) like lower(concat('%', :username, '%'))"
+        "select u from AdminKeycloakUser u where u.username is not null and lower(u.username) not in :excluded" +
+        " and (lower(u.username) like lower(concat('%', :username, '%'))" +
+        " or lower(coalesce(u.personCode, '')) like lower(concat('%', :username, '%')))"
     )
     Page<AdminKeycloakUser> findByUsernameContainingIgnoreCaseExcludingUsernames(
         @Param("username") String username,
@@ -57,7 +62,10 @@ public interface AdminKeycloakUserRepository
     );
 
     @Query(
-        "select u from AdminKeycloakUser u where u.username is not null and lower(u.username) not in :excluded and lower(u.username) like lower(concat('%', :username, '%')) and u.mdmEnabled = :mdmEnabled"
+        "select u from AdminKeycloakUser u where u.username is not null and lower(u.username) not in :excluded" +
+        " and (lower(u.username) like lower(concat('%', :username, '%'))" +
+        " or lower(coalesce(u.personCode, '')) like lower(concat('%', :username, '%')))" +
+        " and u.mdmEnabled = :mdmEnabled"
     )
     Page<AdminKeycloakUser> findByUsernameContainingIgnoreCaseAndMdmEnabledExcludingUsernames(
         @Param("username") String username,

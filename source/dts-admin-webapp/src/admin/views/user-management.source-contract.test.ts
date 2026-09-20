@@ -9,6 +9,12 @@ describe("user management list contract", () => {
 		expect(source).not.toMatch(/title:\s*"邮箱"[\s\S]{0,160}dataIndex:\s*"email"/);
 	});
 
+	it("shows the original person code as the user name and keeps the keycloak login visible", () => {
+		expect(source).toMatch(/const code = record\.personCode\?\.trim\(\)/);
+		expect(source).toContain("Keycloak 账号名：");
+		expect(source).toMatch(/record\.personCode \|\| record\.username/);
+	});
+
 	it("offers account-status and MDM-status filters wired into the list query", () => {
 		expect(source).toContain('aria-label="按账号状态过滤"');
 		expect(source).toContain('aria-label="按院级状态过滤"');

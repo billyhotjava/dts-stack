@@ -164,4 +164,5 @@
     <include file="config/liquibase/changelog/20260916_02_admin_keycloak_user_dept.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260916_03_portal_menu_implementation_order.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260918_01_admin_keycloak_user_person_code.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260920_01_admin_keycloak_user_person_code_unique.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

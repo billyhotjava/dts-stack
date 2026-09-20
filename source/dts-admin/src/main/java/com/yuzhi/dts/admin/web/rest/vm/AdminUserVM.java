@@ -101,6 +101,17 @@ public class AdminUserVM {
         this.realmRoles = realmRoles == null ? new ArrayList<>() : realmRoles;
     }
 
+    /** MDM 推送的原始人员编码（保留大小写），页面以此展示用户名。 */
+    private String personCode;
+
+    public String getPersonCode() {
+        return personCode;
+    }
+
+    public void setPersonCode(String personCode) {
+        this.personCode = personCode;
+    }
+
     public List<String> getGroupPaths() {
         return groupPaths;
     }

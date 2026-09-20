@@ -40,7 +40,7 @@ class KeycloakUserProvisioningServiceTest {
             .thenReturn(new TokenResponse("token", null, null, null, null, null, null, null));
         when(keycloakAdminClient.findByUsernameStrict("alice", "token")).thenThrow(new IllegalStateException("Keycloak 查询失败"));
 
-        assertThatThrownBy(() -> service.provision(payload)).isInstanceOf(IllegalStateException.class).hasMessageContaining("Keycloak 查询失败");
+        assertThatThrownBy(() -> service.provision(payload, "alice")).isInstanceOf(IllegalStateException.class).hasMessageContaining("Keycloak 查询失败");
 
         verify(keycloakAdminClient, never()).createUser(any(KeycloakUserDTO.class), eq("token"));
     }
@@ -84,7 +84,7 @@ class KeycloakUserProvisioningServiceTest {
         oldDept.setKeycloakGroupId("grp-old");
         when(organizationRepository.findByKeycloakGroupId("grp-old")).thenReturn(java.util.Optional.of(oldDept));
 
-        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payloadWithDept("alice", "D002"));
+        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payloadWithDept("alice", "D002"), "alice");
 
         assertThat(result.keycloakUserId()).isEqualTo("kc-1");
         assertThat(result.groupPaths()).containsExactly("/新部门");
@@ -126,7 +126,7 @@ class KeycloakUserProvisioningServiceTest {
         when(keycloakAdminClient.listUserGroups("kc-1", "token")).thenReturn(java.util.List.of(adhocGroup));
         when(organizationRepository.findByKeycloakGroupId("grp-adhoc")).thenReturn(java.util.Optional.empty());
 
-        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payloadWithDept("alice", "D002"));
+        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payloadWithDept("alice", "D002"), "alice");
 
         assertThat(result.groupPaths()).containsExactly("/专项组", "/新部门");
         verify(keycloakAdminClient, never()).removeUserFromGroup(eq("kc-1"), eq("grp-adhoc"), eq("token"));
@@ -157,7 +157,7 @@ class KeycloakUserProvisioningServiceTest {
             Map.of("status", "1", "person_security_level", "3")
         );
 
-        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payload);
+        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payload, "newbie");
 
         org.mockito.ArgumentCaptor<KeycloakUserDTO> sent = org.mockito.ArgumentCaptor.forClass(KeycloakUserDTO.class);
         verify(keycloakAdminClient).createUser(sent.capture(), eq("token"));
@@ -193,7 +193,7 @@ class KeycloakUserProvisioningServiceTest {
             Map.of("status", "0", "person_security_level", "3")
         );
 
-        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payload);
+        KeycloakUserProvisioningService.ProvisionResult result = service.provision(payload, "alice");
 
         org.mockito.ArgumentCaptor<KeycloakUserDTO> sent = org.mockito.ArgumentCaptor.forClass(KeycloakUserDTO.class);
         verify(keycloakAdminClient).updateUser(eq("kc-1"), sent.capture(), eq("token"));

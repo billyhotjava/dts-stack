@@ -18,6 +18,7 @@ type UserSnapshotRow = {
   id?: number;
   keycloakId?: string;
   username?: string;
+  personCode?: string;
   fullName?: string;
   email?: string;
   phone?: string;
@@ -246,7 +247,7 @@ export default function UserManagementView() {
             <div className="space-y-1">
               <div>
                 <span className="text-muted-foreground">用户名：</span>
-                <span>{record.username || "-"}</span>
+                <span>{record.personCode || record.username || "-"}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">姓名：</span>
@@ -274,6 +275,10 @@ export default function UserManagementView() {
               <div>
                 <span className="text-muted-foreground">人员密级：</span>
                 <span>{securityLevel || "-"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Keycloak 账号名：</span>
+                <span>{record.username || "-"}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">账号状态：</span>
@@ -321,6 +326,22 @@ export default function UserManagementView() {
         width: 200,
         ellipsis: true,
         onCell: () => ({ style: { verticalAlign: "middle" } }),
+        // 显示院方原始人员编码（保留大小写）。仅大小写不同的编码是两个账号，
+        // Keycloak 内部用户名会带后缀，这里不展示，避免与院方数据对不上。
+        render: (_, record) => {
+          const code = record.personCode?.trim();
+          const login = record.username?.trim() ?? "";
+          if (!code) return login || <span className="text-muted-foreground">-</span>;
+          if (code.toLowerCase() === login.toLowerCase()) return code;
+          return (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help underline decoration-dotted">{code}</span>
+              </TooltipTrigger>
+              <TooltipContent>Keycloak 账号名：{login}</TooltipContent>
+            </Tooltip>
+          );
+        },
       },
       {
         title: "姓名",
