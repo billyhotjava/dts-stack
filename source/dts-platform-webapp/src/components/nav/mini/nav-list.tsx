@@ -8,7 +8,7 @@ import { NavSubItem } from "./nav-sub-item";
 export function NavList({ data, depth = 0 }: NavListProps) {
 	const hasChild = Boolean(data.children && data.children.length > 0);
 	const location = useLocation();
-	const isActive = isNavItemActive(location.pathname, data.path, hasChild);
+	const isActive = isNavItemActive(location.pathname, data.path, hasChild, location.search);
 
 	if (data.hidden) {
 		return null;

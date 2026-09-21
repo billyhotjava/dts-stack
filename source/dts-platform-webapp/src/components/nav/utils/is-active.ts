@@ -12,9 +12,12 @@ const stripTrailingSlash = (value: string): string =>
  *  - 容器菜单（hasChild）允许前缀匹配，以便父级菜单展开。
  *  - 叶子菜单只允许精确匹配，避免兄弟菜单互相覆盖。
  */
-export function isNavItemActive(pathname: string, menuPath: string, hasChild: boolean): boolean {
+export function isNavItemActive(pathname: string, menuPath: string, hasChild: boolean, search = ""): boolean {
 	if (!menuPath) return false;
 	const current = stripTrailingSlash(pathname || "");
+	if (current === "/data-architecture" && menuPath.startsWith("/data-architecture?")) {
+		return menuPath === dataArchitecturePath(resolveDataArchitectureView(new URLSearchParams(search).get("view")));
+	}
 	const target = stripTrailingSlash(menuPath);
 	if (current === target) return true;
 	if (hasChild) {
@@ -22,3 +25,5 @@ export function isNavItemActive(pathname: string, menuPath: string, hasChild: bo
 	}
 	return false;
 }
+
+import { dataArchitecturePath, resolveDataArchitectureView } from "@/pages/data-architecture/navigation";

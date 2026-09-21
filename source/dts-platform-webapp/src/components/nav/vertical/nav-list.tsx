@@ -8,7 +8,7 @@ import { NavItem } from "./nav-item";
 export function NavList({ data, depth = 1 }: NavListProps) {
 	const location = useLocation();
 	const hasChild = Boolean(data.children && data.children.length > 0);
-	const isActive = isNavItemActive(location.pathname, data.path, hasChild);
+	const isActive = isNavItemActive(location.pathname, data.path, hasChild, location.search);
 	const [open, setOpen] = useState(isActive);
 
 	const handleClick = () => {
