@@ -2073,6 +2073,19 @@
 	padding: 0;
 	vertical-align: middle;
 }
+.dmx-import-semantics .dmx-import-planning-fields,
+.dmx-import-semantics .dmx-import-planning-field {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+	white-space: normal;
+}
+.dmx-import-semantics .dmx-import-planning-field select {
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
+	max-width: 100%;
+}
 .dmx-summary-line {
 	display: flex;
 	flex-wrap: wrap;
