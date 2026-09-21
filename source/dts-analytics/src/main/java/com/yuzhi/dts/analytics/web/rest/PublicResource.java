@@ -157,6 +157,8 @@ public class PublicResource {
 
     @GetMapping(path = "/dashboard/{uuid}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> dashboard(@PathVariable("uuid") String uuid, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> authenticationFailure = MetabaseAuth.requireUser(sessionService, request);
+        if (authenticationFailure.isPresent()) return authenticationFailure.orElseThrow();
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_DASHBOARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();
@@ -309,6 +311,8 @@ public class PublicResource {
             @PathVariable("cardId") long cardId,
             @RequestBody(required = false) JsonNode body,
             HttpServletRequest request) {
+        Optional<ResponseEntity<String>> authenticationFailure = MetabaseAuth.requireUser(sessionService, request);
+        if (authenticationFailure.isPresent()) return authenticationFailure.orElseThrow();
         AnalyticsPublicLink link = publicLinkService.findByPublicUuid(uuid).orElse(null);
         if (link == null || !PublicLinkService.MODEL_DASHBOARD.equals(link.getModel())) {
             return ResponseEntity.notFound().build();

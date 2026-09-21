@@ -1368,9 +1368,9 @@ export class HttpError extends Error {
 
 export class AuthError extends HttpError {}
 
-// Public analytics endpoints (/bi/api/public/*) are accessible without authentication.
-// For these URLs we must NOT redirect to login on 401 — the caller handles the error UI.
+// Dashboard shares require login; other public endpoints retain their own error UI.
 function isPublicAnalyticsUrl(url: string): boolean {
+	if (/\/api\/public\/(?:pivot\/)?dashboard\//.test(url)) return false;
 	return (
 		url.includes("/api/public/") ||
 		url.includes("/bi/api/public/") ||

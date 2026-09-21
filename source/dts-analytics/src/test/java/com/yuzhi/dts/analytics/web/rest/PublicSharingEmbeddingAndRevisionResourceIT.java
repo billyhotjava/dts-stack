@@ -170,13 +170,14 @@ class PublicSharingEmbeddingAndRevisionResourceIT {
         String dashboardUuid =
                 objectMapper.readTree(dashboardPublicLinkResponse.getResponse().getContentAsString()).get("uuid").asText();
 
-        mockMvc.perform(get("/api/public/dashboard/%s".formatted(dashboardUuid)).accept(MediaType.APPLICATION_JSON))
+        mockMvc.perform(get("/api/public/dashboard/%s".formatted(dashboardUuid)).cookie(sessionCookie).accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value((int) dashboardId))
                 .andExpect(jsonPath("$.public_uuid").value(dashboardUuid))
                 .andExpect(jsonPath("$.dashcards[0].id").value((int) dashcardId));
 
         mockMvc.perform(post("/api/public/dashboard/%s/dashcard/%d/card/%d/query".formatted(dashboardUuid, dashcardId, cardId))
+                        .cookie(sessionCookie)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isOk())

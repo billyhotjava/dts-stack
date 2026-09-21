@@ -768,7 +768,7 @@ services:
       - traefik.docker.network=dts-core
       - traefik.http.middlewares.dts-analytics-forwarded.headers.customrequestheaders.X-Forwarded-Proto=https
       - traefik.http.middlewares.dts-analytics-forwarded.headers.customrequestheaders.X-Forwarded-Host=${HOST_PLATFORM_UI}
-      - traefik.http.routers.dts-analytics-public.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/public`)
+      - traefik.http.routers.dts-analytics-public.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/public`) && !PathPrefix(`/analytics/api/public/dashboard/`) && !PathPrefix(`/analytics/api/public/pivot/dashboard/`)
       - traefik.http.routers.dts-analytics-public.entrypoints=websecure
       - traefik.http.routers.dts-analytics-public.tls=true
       - traefik.http.routers.dts-analytics-public.priority=245
