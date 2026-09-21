@@ -20,6 +20,8 @@ import {
 	type DataPortalTreeNode,
 } from "./dataPortalTree";
 
+import { PortalPreviewFrame } from "./PortalPreviewFrame";
+
 const EMPTY_PORTAL: DataPortalSnapshot = { can_write: false, directories: [], items: [] };
 
 function branchKeys(nodes: DataPortalTreeNode[]): string[] {
@@ -250,7 +252,7 @@ export default function DataPortalPage() {
 								)}
 							</aside>
 
-							<section className={`min-h-[520px] min-w-0 flex-1 overflow-auto rounded-xl border border-solid border-border ${selectedScreen ? "bg-[#08121f]" : "bg-bg-container"}`}>
+							<PortalPreviewFrame dark={Boolean(selectedScreen)} available={Boolean(selectedScreen || selectedDashboard)}>
 								{screenRuntimeUrl && selectedScreen ? (
 									<div className="flex h-full min-h-[680px] flex-col">
 										<div className="flex flex-wrap items-center justify-between gap-2 border-0 border-b border-solid border-white/10 bg-[#101c2d] px-4 py-2 text-white">
@@ -284,7 +286,7 @@ export default function DataPortalPage() {
 										<p className="m-0 text-sm text-text-secondary">{selectionRequested ? "内容可能已下线、尚未发布，或当前账号没有访问权限。" : "点击最末级内容菜单后，右侧将直接显示对应内容。"}</p>
 									</div>
 								)}
-							</section>
+							</PortalPreviewFrame>
 						</div>
 					</>
 				)}
