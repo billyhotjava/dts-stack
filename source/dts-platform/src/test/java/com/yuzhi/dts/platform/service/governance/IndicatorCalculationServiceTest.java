@@ -28,7 +28,8 @@ class IndicatorCalculationServiceTest {
     private final IndicatorCalculationService service = spy(new IndicatorCalculationService(definitions,
         mock(GovIndicatorReferenceRepository.class), runs, mock(ModelSpecApplicationService.class), mock(QueryGateway.class),
         new ControlledIndicatorDerivationCompiler(), mapper, indicators, mock(PublishedIndicatorVersionReader.class),
-        mock(AccessChecker.class), mock(ModelSpecReader.class), mock(AssetPermissionService.class), mock(CatalogModelServingProjectionRepository.class), "default"));
+        mock(AccessChecker.class), mock(ModelSpecReader.class), mock(AssetPermissionService.class), mock(CatalogModelServingProjectionRepository.class),
+        mock(com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary.class), "default"));
 
     @Test void persistsResolvedVersionsAndDoesNotCompareDifferentVersions() throws Exception {
         prepare();

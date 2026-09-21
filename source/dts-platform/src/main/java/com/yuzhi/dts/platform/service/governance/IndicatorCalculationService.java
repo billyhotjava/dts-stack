@@ -8,6 +8,8 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorRun;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorReferenceRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorRunRepository;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetKey;
+import com.yuzhi.dts.platform.service.catalog.CatalogClassificationBoundary;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecApplicationService;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
@@ -61,6 +63,7 @@ public class IndicatorCalculationService {
     private final com.yuzhi.dts.platform.service.modeling.ModelSpecReader modelReader;
     private final com.yuzhi.dts.platform.service.permission.AssetPermissionService permissions;
     private final com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository serving;
+    private final CatalogClassificationBoundary classifications;
 
     public IndicatorCalculationService(
         GovIndicatorDefinitionRepository indicators,
@@ -76,6 +79,7 @@ public class IndicatorCalculationService {
         com.yuzhi.dts.platform.service.modeling.ModelSpecReader modelReader,
         com.yuzhi.dts.platform.service.permission.AssetPermissionService permissions,
         com.yuzhi.dts.platform.repository.modeling.CatalogModelServingProjectionRepository serving,
+        CatalogClassificationBoundary classifications,
         @Value("${dts.platform.modeling.default-tenant-id:default}") String serverTenantId
     ) {
         this.indicators = indicators;
@@ -91,6 +95,7 @@ public class IndicatorCalculationService {
         this.accessChecker = accessChecker;
         this.publishedVersions = publishedVersions; this.permissions = permissions;
         this.serving = serving;
+        this.classifications = classifications;
     }
 
     public record ConsumerActor(String username, List<String> roles, String dept, String classification) {}
@@ -113,7 +118,7 @@ public class IndicatorCalculationService {
             if (implementation == null) throw new IndicatorConflictException("缺少固定实现");
             String assetKey = com.yuzhi.dts.platform.service.catalog.CatalogAssetKey.semanticModel(implementation.modelSpecId().toString());
             var decision = permissions.checkAction(new com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionCheckCommand(
-                actor.username(), actor.roles(), actor.dept(), actor.classification(), "SEMANTIC_MODEL", implementation.modelSpecId().toString(), assetKey, "READ", null));
+                actor.username(), actor.roles(), actor.dept(), actor.classification(), "SEMANTIC_MODEL", implementation.modelSpecId().toString(), assetKey, "READ", sourceAssetClassification(implementation.modelSpecId())));
             if (!decision.allowed()) throw new org.springframework.security.access.AccessDeniedException("无权读取指标来源资产");
             return querySource(definition, true);
         }, compiler).build();
@@ -195,7 +200,7 @@ public class IndicatorCalculationService {
             var decision = permissions.checkAction(new com.yuzhi.dts.platform.service.permission.AssetPermissionService.PermissionCheckCommand(
                 login, com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserAuthorities(),
                 com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDept().orElse(null), accessChecker.resolveHighestDataLevel().name(),
-                "SEMANTIC_MODEL", modelId.toString(), com.yuzhi.dts.platform.service.catalog.CatalogAssetKey.semanticModel(modelId.toString()), "READ", null));
+                "SEMANTIC_MODEL", modelId.toString(), CatalogAssetKey.semanticModel(modelId.toString()), "READ", sourceAssetClassification(modelId)));
             if (!decision.allowed()) throw new org.springframework.security.access.AccessDeniedException("无权读取指标来源资产");
         }
         var projection = serving.findProjection(serverTenantId, modelId)
@@ -208,6 +213,14 @@ public class IndicatorCalculationService {
         Set<String> fields = model.fields().stream().filter(java.util.Objects::nonNull).map(ModelField::name).collect(java.util.stream.Collectors.toSet());
         if (!target.group(3).equals(indicator.getMeasureField())) throw new IndicatorConflictException("度量字段与固定实现不一致");
         return new IndicatorQueryPlan.Source(ref.sourceId(), ref.schemaName(), ref.identifier(), fields);
+    }
+
+    private String sourceAssetClassification(UUID modelId) {
+        var fact = classifications.resolve("ASSET", CatalogAssetKey.semanticModel(modelId.toString()))
+            .filter(CatalogClassificationBoundary.ClassificationFact::propagated)
+            .filter(value -> StringUtils.hasText(value.effectiveLevel()))
+            .orElseThrow(() -> new IndicatorConflictException("指标来源资产密级尚未确认或传播完成，请完成资产定级后重试"));
+        return fact.effectiveLevel();
     }
 
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
