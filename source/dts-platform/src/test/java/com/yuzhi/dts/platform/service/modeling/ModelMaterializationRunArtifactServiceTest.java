@@ -447,6 +447,7 @@ class ModelMaterializationRunArtifactServiceTest {
             GROUP_ID,
             INVOCATION_ID,
             Map.of(scope().entries().getFirst().pipelineRunId(), "SKIPPED_DEPENDENCY_FAILED"),
+            Map.of(),
             NOW
         );
     }
@@ -475,6 +476,56 @@ class ModelMaterializationRunArtifactServiceTest {
                 "FAILED",
                 scope.entries().get(1).pipelineRunId(),
                 "SKIPPED_DEPENDENCY_FAILED"
+            ),
+            Map.of(),
+            NOW
+        );
+        verify(runs).markFailed(GROUP_ID, "MODEL_DBT_BUILD_RESULT_FAILED", NOW);
+    }
+
+    @Test
+    void dbtFailureMessageIsPersistedPerCandidateEntry() throws Exception {
+        CandidateBuildScope scope = twoEntryScope();
+        when(builds.loadCandidateBuildScope("tenant-a", GROUP_ID)).thenReturn(scope);
+        writeTwoEntryArtifacts("error", "skipped");
+        ObjectMapper messages = new ObjectMapper();
+        Path resultsPath = project.resolve("target/run_results.json");
+        var runResults = (com.fasterxml.jackson.databind.node.ObjectNode) messages.readTree(
+            resultsPath.toFile()
+        );
+        (
+            (com.fasterxml.jackson.databind.node.ObjectNode) runResults
+                .path("results")
+                .get(0)
+        ).put("message", "column \"task_total\" does not exist");
+        Files.writeString(
+            resultsPath,
+            messages.writeValueAsString(runResults),
+            StandardCharsets.UTF_8
+        );
+
+        assertThatThrownBy(() ->
+            service.syncAndProbe(
+                GROUP_ID,
+                new ModelMaterializationRunArtifactService.SyncProbeCommand("RELEASE_BUILD", BUNDLE)
+            )
+        )
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error -> ((ModelMaterializationRuntimeException) error).code())
+            .isEqualTo("MODEL_DBT_BUILD_RESULT_FAILED");
+
+        verify(runs).recordDbtResults(
+            GROUP_ID,
+            INVOCATION_ID,
+            Map.of(
+                scope.entries().get(0).pipelineRunId(),
+                "FAILED",
+                scope.entries().get(1).pipelineRunId(),
+                "SKIPPED_DEPENDENCY_FAILED"
+            ),
+            Map.of(
+                scope.entries().get(0).pipelineRunId(),
+                "column \"task_total\" does not exist"
             ),
             NOW
         );
