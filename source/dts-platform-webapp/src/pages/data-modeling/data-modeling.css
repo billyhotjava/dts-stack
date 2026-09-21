@@ -1995,7 +1995,7 @@
 	min-width: 0;
 	max-width: 100%;
 }
-.dmx-import-semantics input,
+.dmx-import-semantics input:not([type="checkbox"]),
 .dmx-import-semantics select {
 	min-width: 120px;
 	min-height: 30px;
@@ -2003,6 +2003,15 @@
 	border: 1px solid #ccd4df;
 	border-radius: 3px;
 	font: inherit;
+}
+.dmx-import-semantics input[type="checkbox"] {
+	width: 16px;
+	height: 16px;
+	min-width: 16px;
+	min-height: 16px;
+	margin: 0;
+	padding: 0;
+	vertical-align: middle;
 }
 .dmx-summary-line {
 	display: flex;

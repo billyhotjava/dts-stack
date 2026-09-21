@@ -524,6 +524,7 @@ function ImportSemanticsTable({
 					const checked = selected.includes(model.dbtUniqueId);
 					return (
 						<input
+							aria-label={`选择模型 ${model.dbtUniqueId}`}
 							checked={checked}
 							disabled={eligibility === "BLOCKED"}
 							onChange={(event) =>
