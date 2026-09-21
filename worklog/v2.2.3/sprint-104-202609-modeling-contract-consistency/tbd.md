@@ -2,7 +2,7 @@
 
 > 状态：**草案，暂存**。权限与 Keycloak 重构方案完成后，再合并完善第 5 节（交叉点）和第 7 节（待决问题），然后才能进入 DoR。
 > 日期：2026-09-19　基线提交：`c40a3968d`（v2.2.3）
-> 关联：本目录 `README.md`（F5 状态语义）、`it/20260907-authoring-version-chain-fix.md`（编写态两条版本链）、2026-09-18～19 派发收口提交 `52a74b6b9` `6f6be6a54` `8be931d29` `fa88f11d3` `ce9f13aaf` `451dfd385` `8e98ecdf8` `c40a3968d`
+> 关联：[F11 权限重构架构与实施契约](assests/F11-permission-architecture.md)（§5.2 发起人反查、Q25、Q26 与本文同域，待合并）、本目录 `README.md`（F5 状态语义）、`it/20260907-authoring-version-chain-fix.md`（编写态两条版本链）、2026-09-18～19 派发收口提交 `52a74b6b9` `6f6be6a54` `8be931d29` `fa88f11d3` `ce9f13aaf` `451dfd385` `8e98ecdf8` `c40a3968d`
 
 ## 0. 结论先行
 
@@ -147,7 +147,7 @@
 | 执行身份恢复 | 按 `candidate_version` + BUILDING 命令反查发起人，再用目录服务（dts-admin / Keycloak）打开身份并校验权限（`ModelingExecutionAuthorization:19-28`） | 构建以谁的身份执行：发起人、服务账号，还是"发起人授权 + 服务账号执行"？权限被收回后，正在运行的构建怎么处理？ |
 | 目录服务不可用 | 返回 503 时派发记为 UNKNOWN；09-19 起计入重试上限，**目录服务中断约 20 分钟，构建就会被判失败** | 目录服务中断应当"等待"还是"失败"？是否要单独的上限？ |
 | 系统域 | Airflow 回调不带用户身份，依靠 `ModelingSystemExecution` 按 plan 放开数据源检查（`6f6be6a54`） | 系统身份的授权边界如何纳入新的权限模型 |
-| 手工运行 | 按 `binding_version` + `scope_checksum` 反查发起人 | 和阶段 2 的"按 attempt 记录发起人"统一 |
+| 手工运行 | 已按 tenant + 派发 ID 读取派发表 initiator_id，附加 binding_id/version、scope_checksum、MANUAL 校验 | 复用已封存发起人并统一当前身份解析；保留绑定版本、范围与有效部署守卫，不按候选构建的命令反查问题重做此表 |
 | 审计操作人 | 派发审计固定写 `scheduler`；用户放弃构建时，派发审计中的操作人也是 `scheduler`，真实用户只记在候选单迁移审计中 | 审计操作人的来源和格式跟随新的身份模型 |
 | 测试 | `ModelMaterializationStartServiceIT` 整个类缺少建模身份而无法运行 | 权限重构后提供统一的测试身份夹具，恢复这组集成测试（阶段 1 的回归需要它） |
 

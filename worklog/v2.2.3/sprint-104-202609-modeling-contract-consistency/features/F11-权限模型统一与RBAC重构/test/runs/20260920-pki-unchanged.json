@@ -1,0 +1,198 @@
+{
+  "checked_at": "2026-09-20T23:38:45.661981+08:00",
+  "baseline": "52bc4ce4c4c2fec0e6dac1d938800d390b0e8db1",
+  "head": "272f1894ab22be9eb4746eaf9b5ec7699b5789b3",
+  "scope": "受版本控制的 source 下 PKI/certificate/login-form/KeycloakAuthService 路径；自身改动范围只核对 e104ff9b6 与 871e90de0 两次测试提交，不将他人并行提交归入本轮",
+  "pki_test_scope": "N/A：用户明确本轮不测试 PKI，仅核对未修改",
+  "files": [
+    {
+      "path": "source/dts-admin-webapp/public/vendor/koal/pkiService.js",
+      "baseline_sha256": "7d4ca187cc36d50fd1ee54af0cc269239116b46950bb5f54834ff7990e330855",
+      "workspace_sha256": "7d4ca187cc36d50fd1ee54af0cc269239116b46950bb5f54834ff7990e330855",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin-webapp/public/vendor/koal/pkiService_types.js",
+      "baseline_sha256": "2c228b7a27b8840f10e0cbf30a0bc8116ff3752d864b288cfcff251565ee109f",
+      "workspace_sha256": "2c228b7a27b8840f10e0cbf30a0bc8116ff3752d864b288cfcff251565ee109f",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin-webapp/src/api/services/koalPkiClient.ts",
+      "baseline_sha256": "43e4fbd20fa2e59fbcb2b8c84492171c00876715377e50823fe888ab8f97e16f",
+      "workspace_sha256": "43e4fbd20fa2e59fbcb2b8c84492171c00876715377e50823fe888ab8f97e16f",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin-webapp/src/api/services/pkiService.ts",
+      "baseline_sha256": "aaad46dfdadcde7df5113e14e30c7e4d385c29df413f5102e41f4a81aaf870be",
+      "workspace_sha256": "aaad46dfdadcde7df5113e14e30c7e4d385c29df413f5102e41f4a81aaf870be",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin-webapp/src/pages/sys/login/login-form.tsx",
+      "baseline_sha256": "c277ba89f2c99b23251751e514a0f4249e00e5624c115162c699505cb6e84f9a",
+      "workspace_sha256": "c277ba89f2c99b23251751e514a0f4249e00e5624c115162c699505cb6e84f9a",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin/src/main/docker/zipkin.yml",
+      "baseline_sha256": "4cb9eecf7d2b362cf3c9cbe871fc3166225ba6477184fce9afa3025004a745a4",
+      "workspace_sha256": "4cb9eecf7d2b362cf3c9cbe871fc3166225ba6477184fce9afa3025004a745a4",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/config/PkiAuthProperties.java",
+      "baseline_sha256": "f13e159881e7afa4856326824b301c29cfc94a148a3b5dd5f711871197c63e82",
+      "workspace_sha256": "f13e159881e7afa4856326824b301c29cfc94a148a3b5dd5f711871197c63e82",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/service/keycloak/KeycloakAuthService.java",
+      "baseline_sha256": "543e2de21e51900394000985bb5a6b2b0449043f88f59e0c72fc09d253b3f64d",
+      "workspace_sha256": "543e2de21e51900394000985bb5a6b2b0449043f88f59e0c72fc09d253b3f64d",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/service/pki/PkiChallengeService.java",
+      "baseline_sha256": "f3edd0b8801c00aa43d5c91e741526227f154675c5696a597a4be1c48fe39bed",
+      "workspace_sha256": "f3edd0b8801c00aa43d5c91e741526227f154675c5696a597a4be1c48fe39bed",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/service/pki/PkiVerificationService.java",
+      "baseline_sha256": "aafe9ec53703b149f530d192f8d7514272cb71d7b0f5584ed059ba8143938732",
+      "workspace_sha256": "aafe9ec53703b149f530d192f8d7514272cb71d7b0f5584ed059ba8143938732",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-admin/src/main/java/com/yuzhi/dts/admin/web/rest/dto/PkiChallengeView.java",
+      "baseline_sha256": "8a9cc7179415f189d6a58a048e9e750dadcdbec6a5611d3e4cdcf76f7f95e5fd",
+      "workspace_sha256": "8a9cc7179415f189d6a58a048e9e750dadcdbec6a5611d3e4cdcf76f7f95e5fd",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-common/src/main/docker/zipkin.yml",
+      "baseline_sha256": "92045420e8b5dc095571661fefb6f60f7b05d1c24796db450b2c348222ab5f62",
+      "workspace_sha256": "92045420e8b5dc095571661fefb6f60f7b05d1c24796db450b2c348222ab5f62",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform-webapp/public/vendor/koal/pkiService.js",
+      "baseline_sha256": "7d4ca187cc36d50fd1ee54af0cc269239116b46950bb5f54834ff7990e330855",
+      "workspace_sha256": "7d4ca187cc36d50fd1ee54af0cc269239116b46950bb5f54834ff7990e330855",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform-webapp/public/vendor/koal/pkiService_types.js",
+      "baseline_sha256": "2c228b7a27b8840f10e0cbf30a0bc8116ff3752d864b288cfcff251565ee109f",
+      "workspace_sha256": "2c228b7a27b8840f10e0cbf30a0bc8116ff3752d864b288cfcff251565ee109f",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform-webapp/src/api/services/koalPkiClient.ts",
+      "baseline_sha256": "bbf212c856893b14d0492582ef79024d3401a969e08992769802f96ffe651bb0",
+      "workspace_sha256": "bbf212c856893b14d0492582ef79024d3401a969e08992769802f96ffe651bb0",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform-webapp/src/api/services/pkiService.ts",
+      "baseline_sha256": "73efd67580fa07a790208c1c2edc5d94c0062b3b4dca826c23b7745d93e70e5c",
+      "workspace_sha256": "73efd67580fa07a790208c1c2edc5d94c0062b3b4dca826c23b7745d93e70e5c",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform-webapp/src/pages/sys/login/login-form.source-contract.test.ts",
+      "baseline_sha256": "429517e94751b135189bd78b50900b9d23a2fa89c9f00a9835fa7e2aea9ec467",
+      "workspace_sha256": "429517e94751b135189bd78b50900b9d23a2fa89c9f00a9835fa7e2aea9ec467",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform-webapp/src/pages/sys/login/login-form.tsx",
+      "baseline_sha256": "9825dd7614cff603eb64b17cddd0ee6461e955d6ac9c80b4cbe18ba56d1d8434",
+      "workspace_sha256": "9825dd7614cff603eb64b17cddd0ee6461e955d6ac9c80b4cbe18ba56d1d8434",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/docker/zipkin.yml",
+      "baseline_sha256": "0a4f8527ff0c8d77a16fc7a760fe051cbe57814d6081d7114523a9bbe3cd934f",
+      "workspace_sha256": "0a4f8527ff0c8d77a16fc7a760fe051cbe57814d6081d7114523a9bbe3cd934f",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/domain/security/SecurityPkiBinding.java",
+      "baseline_sha256": "d263fae158f94b76006dd596cf8192d0cbe9f593a34b694a394bb6e56c22ba6f",
+      "workspace_sha256": "d263fae158f94b76006dd596cf8192d0cbe9f593a34b694a394bb6e56c22ba6f",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/repository/security/SecurityPkiBindingRepository.java",
+      "baseline_sha256": "c6159c2bc044ee0b3da527355b3604507dbf129bf2fa3ce2ce9af849d3f9da33",
+      "workspace_sha256": "c6159c2bc044ee0b3da527355b3604507dbf129bf2fa3ce2ce9af849d3f9da33",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/security/session/PkiSessionTicketService.java",
+      "baseline_sha256": "9c1397934b8e94a1ad1552f036241bd4e1e66e94f29974c958bfe8755e137fab",
+      "workspace_sha256": "9c1397934b8e94a1ad1552f036241bd4e1e66e94f29974c958bfe8755e137fab",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/audit/PkiContextEnricher.java",
+      "baseline_sha256": "1c940eaf8bd4aef16a7c21dcfc570d94ed4c66a12c4ea8687141a58e4b955fb2",
+      "workspace_sha256": "1c940eaf8bd4aef16a7c21dcfc570d94ed4c66a12c4ea8687141a58e4b955fb2",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/keycloak/KeycloakAuthService.java",
+      "baseline_sha256": "47d48ed76e8d3181f9beca1da17ce61ee62b3658099eeef17c3c54cc1626338f",
+      "workspace_sha256": "47d48ed76e8d3181f9beca1da17ce61ee62b3658099eeef17c3c54cc1626338f",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/security/pki/PkiClientCert.java",
+      "baseline_sha256": "e98607d50eb3a41c76a6b96ec042da4e7f1a33f08f89301d162e5b58769a3ed6",
+      "workspace_sha256": "e98607d50eb3a41c76a6b96ec042da4e7f1a33f08f89301d162e5b58769a3ed6",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/security/pki/SecurityPkiService.java",
+      "baseline_sha256": "7f3280daa1aabcce80dceb8304ad0ed7068e76c862eed6e50a5d2c063183c7a6",
+      "workspace_sha256": "7f3280daa1aabcce80dceb8304ad0ed7068e76c862eed6e50a5d2c063183c7a6",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/SecurityPkiResource.java",
+      "baseline_sha256": "3757698cc4b89284d8bff99905fdf13ca16b610f792e531c280eaa3efed70a0a",
+      "workspace_sha256": "3757698cc4b89284d8bff99905fdf13ca16b610f792e531c280eaa3efed70a0a",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/main/resources/config/liquibase/changelog/20260103_01_security_pki_binding.xml",
+      "baseline_sha256": "f430bc244b63304ec7af469987b3cd65dcaaccc7119ca7615fe365feed9b94a3",
+      "workspace_sha256": "f430bc244b63304ec7af469987b3cd65dcaaccc7119ca7615fe365feed9b94a3",
+      "unchanged": true
+    },
+    {
+      "path": "source/dts-platform/src/test/java/com/yuzhi/dts/platform/web/rest/PkiLoginAuditEvidenceTest.java",
+      "baseline_sha256": "73f7819428a7532c76d405307ac8acc6e6437daafca0bbe8342303874718cb71",
+      "workspace_sha256": "73f7819428a7532c76d405307ac8acc6e6437daafca0bbe8342303874718cb71",
+      "unchanged": true
+    }
+  ],
+  "committed_changed_files": [
+    "source/dts-admin/src/test/java/com/yuzhi/dts/admin/repository/F11PersonnelIdentityRepositoryIT.java",
+    "source/dts-admin/src/test/java/com/yuzhi/dts/admin/service/personnel/F11PersonnelBindingTest.java",
+    "source/dts-platform/src/test/java/com/yuzhi/dts/platform/security/modeling/ModelingIdentityServiceTest.java",
+    "tests/web-e2e/package.json",
+    "tests/web-e2e/playwright.f11.config.ts",
+    "tests/web-e2e/pnpm-lock.yaml",
+    "tests/web-e2e/specs/f11/permission-browser.f11.ts"
+  ],
+  "all_selected_files_unchanged": true,
+  "own_commits_test_only": true,
+  "test_commits": [
+    "e104ff9b68d99df5e1ad9c3b87273c0c0cf90a20",
+    "871e90de036eb4178ff7f05bd5769be8b0f6fe85"
+  ]
+}

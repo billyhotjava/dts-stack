@@ -440,11 +440,17 @@ F5 Gate：G0 复用既有基线，运行时仍核对实际环境；G1=PASS，F5-
 
 **最新全 Sprint 统计（覆盖上文历史统计）**：10 个 Feature、63 个 Task；按任务文件状态统计 DRAFT=1，READY=0，IN_PROGRESS=59，DONE=3，BLOCKED=0。
 
-## F11 权限模型统一与 RBAC 重构（2026-09-19，架构完善）
+## F11 权限模型统一与 RBAC 重构（2026-09-20 review 复核，架构完善）
 
 [F11](features/F11-权限模型统一与RBAC重构/README.md) 已按用户要求写入人员/部门/Keycloak 职责划分并完善重构架构，现有 9 个 Task（T01–T09）。当前为 IN_PROGRESS（设计），未授权重构编码、数据库迁移或发布；T01 因原证据错误与现场核验缺口由 DONE 改为 IN_PROGRESS，T02–T09 均 DRAFT。
 
 **设计主文档**：[权限重构架构与实施契约](assests/F11-permission-architecture.md)。**Context Ledger**：[修订现状及 F11-C01–C11](assests/F11-permission-model-survey-20260919.md)。**测试设计**：[IT-68–IT-79](it/F11-身份与权限重构验收.md)，全部 NOT_RUN。
+
+**待合并的同域草案**：[建模版本语义梳理与改造方案](tbd.md)（DRAFT）。建模侧的候选单版本承担并发令牌与构建身份双重语义，与 F11 的执行身份、发起人反查同域；F11 合并该身份契约及必要的迁移、回归，草案中其余版本/前端改造继续保留 DRAFT，实施范围另行确定。
+
+**2026-09-20 review 复核结论**：抽查的现状断言（508 处 `@PreAuthorize`、`kc_id` 非空唯一、`admin_role_assignment` 带 scope/dataset/operations、`PolicyService` 的 OBJECT/FIELD/ROW、F9 的 2 秒预算、IT 编号与任务统计）全部属实。本轮增补：设计基线更新到 `db17adfda`；personCode 大小写与用户名分配按 `db17adfda` 记为已定（Q21 部分关闭）；发起人反查纳入 T01/T02；新增 Q25（目录中断与建模重试预算冲突）、Q26（无降级方案的可用性代价）；建模身份测试夹具归 T02 交付、T09 执行。
+
+**后续文档复核（52bc4ce4c）**：用户名首次分配实际受导入顺序影响；手工运行已按派发 ID 读取封存发起人，绑定版本/范围检查须保留。已修正主契约、任务及 IT-70，补齐菜单一次解析的组合协议，区分失败关闭与待验收的可用性。完整设计见 [F11 架构设计总览](features/F11-权限模型统一与RBAC重构/架构设计总览.md)。本次仅源码阅读与文档静态检查，不改变 G0/G1 GAP 和验收 NOT_RUN 状态。
 
 架构工作基线：MDM 管人员/组织字段，DTS 管有效业务目录与授权，Keycloak 管认证账号；每类字段唯一写入来源。保留 organization_node，演进 admin_keycloak_user 支持待开户和字段分源，person_profile 在全部消费者迁移后只读归档。统一当前身份、不跨请求缓存允许；业务动作权限保留授权范围，菜单服务委托和对象/后台决策形成完整链路，继承 F9 的部门精确隔离、编辑与消费/审核分离。
 
