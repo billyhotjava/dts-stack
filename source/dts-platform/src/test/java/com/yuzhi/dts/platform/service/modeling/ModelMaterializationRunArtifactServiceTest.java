@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,8 +19,19 @@ import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepos
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.CandidateBuildScope;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationRunRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationRunRepository.RunGroupRecord;
+import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationAvailabilityPinRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationAvailabilityPinRepository.AvailabilityPin;
+import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationAvailabilityPinRepository.PinnedSnapshot;
+import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationSourceSnapshotRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationSourceSnapshotRepository.InputSnapshot;
+import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelSpecRepository.SourceBindingState;
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository;
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository.ObservationWrite;
+import com.yuzhi.dts.platform.security.modeling.ModelingIdentity;
+import com.yuzhi.dts.platform.service.catalog.CatalogAssetType;
+import com.yuzhi.dts.platform.service.catalog.CatalogMaterializationSourceAvailabilityPort;
+import com.yuzhi.dts.platform.service.catalog.CatalogSourceReferenceReadPort;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailabilityGuard.GenerationCheck;
@@ -27,6 +39,12 @@ import com.yuzhi.dts.platform.service.modeling.ModelMaterializationSourceAvailab
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.ExpectedRelationType;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalColumn;
 import com.yuzhi.dts.platform.service.modeling.PhysicalRelationInspector.PhysicalRelationObservation;
+import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver;
+import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.AccessContext;
+import com.yuzhi.dts.platform.service.modeling.warehouse.SourceReferenceResolver.ResolvedSource;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceLocator;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanContract.SourceType;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,11 +56,17 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionOperations;
 
@@ -52,6 +76,8 @@ class ModelMaterializationRunArtifactServiceTest {
         UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID CANDIDATE_ID =
         UUID.fromString("20000000-0000-0000-0000-000000000002");
+    private static final UUID PLAN_ID =
+        UUID.fromString("60000000-0000-0000-0000-000000000006");
     private static final UUID MODEL_ID =
         UUID.fromString("30000000-0000-0000-0000-000000000003");
     private static final UUID SECOND_MODEL_ID =
@@ -165,6 +191,106 @@ class ModelMaterializationRunArtifactServiceTest {
                 null
             )
         );
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "sync, CURRENT", "finalize, CURRENT",
+        "sync, OTHER_PLAN", "finalize, OTHER_PLAN",
+        "sync, OTHER_TENANT", "finalize, OTHER_TENANT",
+        "sync, VERSION_CHANGED", "finalize, VERSION_CHANGED"
+    })
+    void machineCallbacksValidateRealSourcesWithinThePersistedExecutionScope(String callback, String sourceScenario)
+        throws Exception {
+        writeArtifacts("success", "b".repeat(64));
+        when(runs.finalizeSucceeded(GROUP_ID, NOW)).thenReturn(1);
+        SourceReferenceResolver resolver = installRealSourceGuard(sourceScenario);
+        assertThat(ModelingIdentity.optional()).isEmpty();
+        assertThat(ModelingSystemExecution.permits("tenant-a", PLAN_ID)).isFalse();
+
+        if ("CURRENT".equals(sourceScenario)) {
+            assertThat(invokeMachineCallback(callback).status()).isEqualTo("BUILT");
+            verify(resolver, times("sync".equals(callback) ? 2 : 1)).resolveForExecution(
+                eq(SourceType.CATALOG_TABLE), any(SourceLocator.class), eq(new AccessContext("tenant-a", "SYSTEM", "dept-a"))
+            );
+        } else {
+            assertThatThrownBy(() -> invokeMachineCallback(callback))
+                .isInstanceOf(ModelMaterializationRuntimeException.class)
+                .extracting(error -> ((ModelMaterializationRuntimeException) error).code())
+                .isEqualTo(ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE);
+            verify(runs, never()).markDbtSucceeded(any(), any(), anyInt(), any());
+            verify(runs, never()).finalizeSucceeded(any(), any());
+            verify(observations, never()).appendAll(any());
+        }
+
+        // Both normal completion and a rejected source must clear the callback's ThreadLocal.
+        assertThat(ModelingSystemExecution.permits("tenant-a", PLAN_ID)).isFalse();
+        assertThat(ModelingIdentity.optional()).isEmpty();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "sync", "finalize" })
+    void callbackWithoutPersistedPlanFailsBeforeSourceValidation(String callback) {
+        RunGroupRecord missingPlan = mock(RunGroupRecord.class);
+        when(missingPlan.groupId()).thenReturn(GROUP_ID);
+        when(missingPlan.tenantId()).thenReturn("tenant-a");
+        when(runs.findRunGroup(GROUP_ID)).thenReturn(Optional.of(missingPlan));
+
+        assertThatThrownBy(() -> invokeMachineCallback(callback))
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error -> ((ModelMaterializationRuntimeException) error).code())
+            .isEqualTo("MODEL_DBT_RUN_IDENTITY_MISMATCH");
+        verify(sourceAvailability, never()).checkPinnedCurrentForUpdate(any());
+        verify(runs, never()).finalizeSucceeded(any(), any());
+        assertThat(ModelingSystemExecution.permits("tenant-a", null)).isFalse();
+    }
+
+    private ModelMaterializationRunArtifactService.RunArtifactView invokeMachineCallback(String callback) {
+        return "sync".equals(callback)
+            ? service.syncAndProbe(GROUP_ID, new ModelMaterializationRunArtifactService.SyncProbeCommand("RELEASE_BUILD", BUNDLE))
+            : service.finalizeRun(GROUP_ID, new ModelMaterializationRunArtifactService.FinalizeCommand("SUCCEEDED"));
+    }
+
+    private SourceReferenceResolver installRealSourceGuard(String sourceScenario) {
+        String sourceTenant = "OTHER_TENANT".equals(sourceScenario) ? "tenant-b" : "tenant-a";
+        UUID sourcePlan = "OTHER_PLAN".equals(sourceScenario) ? CANDIDATE_ID : PLAN_ID;
+        UUID bindingId = UUID.fromString("70000000-0000-0000-0000-000000000007");
+        UUID assetId = UUID.fromString("80000000-0000-0000-0000-000000000008");
+        SourceLocator locator = new SourceLocator(assetId, null, null, null, null, null, null);
+        ModelSpecRepository sourceRepository = mock(ModelSpecRepository.class);
+        SourceReferenceResolver resolver = mock(SourceReferenceResolver.class);
+        ModelSpecSourceValidationAdapter validation = new ModelSpecSourceValidationAdapter(
+            sourceRepository, resolver, mock(WarehousePlanActorProvider.class), new ObjectMapper(), mock(ModelSpecPlanWriteAccessPort.class)
+        );
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(any(String.class), eq(UUID.class), eq(sourceTenant), eq(bindingId))).thenReturn(sourcePlan);
+        ReflectionTestUtils.setField(validation, "jdbc", jdbc);
+        CatalogSourceReferenceReadPort catalog = mock(CatalogSourceReferenceReadPort.class);
+        when(catalog.findDatasetAssetKeyByTableId(assetId)).thenReturn(Optional.of("fixture-source"));
+        // An ODS source has no modeling producer; use the real scope guard with an empty producer lookup.
+        ReflectionTestUtils.setField(validation, "sourceScope", new ModelingSourceScopeGuard(jdbc, catalog, mock(ModelSpecAccessService.class)));
+        when(sourceRepository.findSourceBinding(sourceTenant, sourcePlan, bindingId)).thenReturn(Optional.of(new SourceBindingState(
+            bindingId, "CATALOG_TABLE", assetId.toString(), "v1", "CONFIRMED",
+            "{\"assetId\":\"" + assetId + "\"}", "owner", "dept-a"
+        )));
+        when(resolver.resolveForExecution(eq(SourceType.CATALOG_TABLE), eq(locator), any(AccessContext.class)))
+            .thenReturn(ResolvedSource.available("项目任务贴源", "VERSION_CHANGED".equals(sourceScenario) ? "v2" : "v1"));
+
+        ModelMaterializationSourceSnapshotRepository snapshots = mock(ModelMaterializationSourceSnapshotRepository.class);
+        String inputs = "[{\"sourceBindingId\":\"" + bindingId + "\",\"resolvedVersion\":\"v1\"}]";
+        when(snapshots.findDispatchInputs(GROUP_ID)).thenReturn(List.of(new InputSnapshot(
+            sourceTenant, sourcePlan, MODEL_ID, 7, "c".repeat(64), "PHYSICAL_ASSET", inputs, null
+        )));
+        ModelMaterializationAvailabilityPinRepository pins = mock(ModelMaterializationAvailabilityPinRepository.class);
+        when(pins.lockSnapshot(GROUP_ID)).thenReturn(new PinnedSnapshot(GROUP_ID, true, NOW, 1, List.of(
+            new AvailabilityPin(bindingId, CatalogAssetType.DATASET, "fixture-source", "AVAILABLE", 0, 0, "legacy-default", "v1")
+        )));
+        CatalogMaterializationSourceAvailabilityPort availability = mock(CatalogMaterializationSourceAvailabilityPort.class);
+        when(availability.lockAndCompare(any())).thenReturn(List.of());
+        ReflectionTestUtils.setField(service, "sourceAvailability", new ModelMaterializationSourceAvailabilityGuard(
+            snapshots, validation, availability, pins, new ObjectMapper()
+        ));
+        return resolver;
     }
 
     @Test
@@ -1318,6 +1444,7 @@ class ModelMaterializationRunArtifactServiceTest {
         return new RunGroupRecord(
             GROUP_ID,
             "tenant-a",
+            PLAN_ID,
             CANDIDATE_ID,
             3,
             1,

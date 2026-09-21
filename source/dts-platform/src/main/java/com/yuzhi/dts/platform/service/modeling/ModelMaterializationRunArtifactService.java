@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationRunReposit
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationRunRepository.RunGroupRecord;
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository;
 import com.yuzhi.dts.platform.repository.modeling.PhysicalRelationObservationRepository.ObservationWrite;
+import com.yuzhi.dts.platform.security.modeling.ModelingIdentityService.Scope;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
@@ -182,7 +183,7 @@ public class ModelMaterializationRunArtifactService {
         Map<UUID, String> perModelRunResults = Map.of();
         Map<UUID, String> perModelFailureMessages = Map.of();
         UUID runInvocationId = null;
-        try {
+        try (var executionScope = openExecutionScope(group)) {
             requireSyncIdentity(group, command);
             CandidateBuildScope scope =
                 builds.loadCandidateBuildScope(
@@ -375,7 +376,7 @@ public class ModelMaterializationRunArtifactService {
         Instant now = clock.instant();
         int modelCount;
         if ("SUCCEEDED".equals(outcome)) {
-            try {
+            try (var executionScope = openExecutionScope(group)) {
                 SuccessBoundary success = transactions.execute(status -> {
                     GenerationCheck generation = sourceAvailability.checkPinnedCurrentForUpdate(groupId);
                     if (!generation.current()) {
@@ -498,6 +499,18 @@ public class ModelMaterializationRunArtifactService {
             null,
             modelCount
         );
+    }
+
+    private static Scope openExecutionScope(RunGroupRecord group) {
+        if (group.tenantId() == null || group.tenantId().isBlank() || group.planId() == null) {
+            throw failure(
+                "MODEL_DBT_RUN_IDENTITY_MISMATCH",
+                "Materialization run group has no tenant or plan identity"
+            );
+        }
+        // Each Airflow callback is a separate request without a user identity. Use only
+        // the persisted dispatch/candidate identity, never tenant or plan from the caller.
+        return ModelingSystemExecution.open(group.tenantId(), group.planId());
     }
 
     private RunGroupRecord requireGroup(UUID groupId) {

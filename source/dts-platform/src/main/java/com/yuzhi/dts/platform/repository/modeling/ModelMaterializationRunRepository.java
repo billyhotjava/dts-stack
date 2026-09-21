@@ -34,7 +34,7 @@ public class ModelMaterializationRunRepository {
         return jdbcTemplate
             .query(
                 """
-                select d.id, d.tenant_id, d.candidate_id,
+                select d.id, d.tenant_id, c.plan_id, d.candidate_id,
                        d.candidate_version, d.attempt,
                        d.scoped_bundle_checksum, d.status, d.last_error_code,
                        c.version as candidate_current_version,
@@ -53,6 +53,7 @@ public class ModelMaterializationRunRepository {
                     new RunGroupRecord(
                         row.getObject("id", UUID.class),
                         row.getString("tenant_id"),
+                        row.getObject("plan_id", UUID.class),
                         row.getObject("candidate_id", UUID.class),
                         row.getInt("candidate_version"),
                         row.getInt("attempt"),
@@ -513,6 +514,7 @@ public class ModelMaterializationRunRepository {
     public record RunGroupRecord(
         UUID groupId,
         String tenantId,
+        UUID planId,
         UUID candidateId,
         int candidateVersion,
         int attempt,
