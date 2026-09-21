@@ -20,11 +20,9 @@ import type { InfraDataSource } from "@/api/services/dataSourcesService";
 import { listColumns, listTables, type TableInfo } from "@/api/sql-workbench";
 import { Upload as SecureUpload } from "@/components/upload";
 import { CLASSIFICATION_LABELS_ZH, type ClassificationLevel, classificationRank } from "@/utils/classification";
-import { toAdmissionFile, toManagedFile } from "./accessManagedFile";
 import type { AccessPlanFormValues } from "./accessPlan.types";
 import { FileFieldMappingEditor } from "./FileFieldMappingEditor";
-import { FileFieldClassificationSelect } from "./shared/FileClassificationIntake";
-import { applyTargetSchemaTemplate, type TargetSchemaColumn, validateFileTargetColumns } from "./shared/fileTargetSchemaMapping";
+import { applyTargetSchemaTemplate, type TargetSchemaColumn } from "./shared/fileTargetSchemaMapping";
 
 type Props = {
 	form: FormInstance<AccessPlanFormValues>;
@@ -87,7 +85,6 @@ export function FileAccessStep({
 	const [targetColumns, setTargetColumns] = useState<TargetSchemaColumn[]>([]);
 	const [searchingTables, setSearchingTables] = useState(false);
 	const [loadingColumns, setLoadingColumns] = useState(false);
-	const invalidColumnNames = Boolean(fileUploadResult && validateFileTargetColumns(fileUploadResult.columns).length);
 	useEffect(() => {
 		if (modelTarget)
 			_form.setFieldsValue({
@@ -313,7 +310,7 @@ export function FileAccessStep({
 							type="info"
 							showIcon
 							message={`${fileUploadResult.originalName} · ${fileUploadResult.rowCount || 0} 行 · ${fileUploadResult.columns.length} 列`}
-							description="字段结构来自平台加密上传后的解析结果；字段只允许在文件密级基础上升密。"
+							description="字段结构来自平台加密上传后的解析结果；字段密级统一继承文件密级。"
 						/>
 						<FileFieldMappingEditor
 							key={fileUploadResult.fileId}
@@ -321,15 +318,6 @@ export function FileAccessStep({
 							targetColumns={targetColumns}
 							preview={fileUploadResult.preview}
 							onChange={updateFileColumns}
-							renderClassification={(row) => invalidColumnNames ? (
-								<Typography.Text type="secondary">请先修正字段名称，原密级已保留</Typography.Text>
-							) : (
-								<FileFieldClassificationSelect
-									file={toAdmissionFile(fileUploadResult)}
-									fieldName={row.name}
-									onChange={(file) => onFileUploadResultChange(toManagedFile(file))}
-								/>
-							)}
 						/>
 					</>
 				) : null}

@@ -22,3 +22,9 @@ test("preview row selection is presentation-only and bounded to the parsed sampl
 	assert.match(HELPER_SOURCE, /DEFAULT_FILE_PREVIEW_LIMIT = 10/);
 	assert.match(HELPER_SOURCE, /MAX_FILE_PREVIEW_LIMIT = 20/);
 });
+
+test("field mapping preview carries no per-field classification setting (S10DC-100)", () => {
+	assert.doesNotMatch(STEP_SOURCE, /renderClassification/);
+	assert.doesNotMatch(STEP_SOURCE, /FileFieldClassificationSelect/);
+	assert.match(STEP_SOURCE, /字段密级统一继承文件密级/);
+});
