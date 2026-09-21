@@ -1197,15 +1197,9 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1220,21 +1214,6 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 节点类型别名表：'一般'/'一般节点' 等 → canonical code。
-        abbreviation: dim_node_type_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 1
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 2
 - name: dim_risk_level_alias
   description: 风险等级别名表：'高'/'高风险' 等 → canonical code。
   columns:
@@ -1248,15 +1227,9 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1271,21 +1244,6 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 风险等级别名表：'高'/'高风险' 等 → canonical code。
-        abbreviation: dim_risk_level_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 1
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 2
 - name: dim_risk_category_alias
   description: 风险分类别名表：'技术'/'技术风险'/'供应链'/'管理'/'资源' 等 → canonical code（供应链/管理/资源 统一归入进度风险）。
   columns:
@@ -1299,15 +1257,9 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1322,21 +1274,6 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 风险分类别名表：'技术'/'技术风险'/'供应链'/'管理'/'资源' 等 → canonical code（供应链/管理/资源 统一归入进度风险）。
-        abbreviation: dim_risk_category_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 1
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 2
 - name: dim_risk_status_alias
   description: 风险状态别名表（仅收录 '已释放'，未命中由 DWD 层按规则 coalesce 到 '未释放'）。
   columns:
@@ -1350,15 +1287,9 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1373,21 +1304,6 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 风险状态别名表（仅收录 '已释放'，未命中由 DWD 层按规则 coalesce 到 '未释放'）。
-        abbreviation: dim_risk_status_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 1
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 2
 - name: dim_quality_category_alias
   description: 质量问题原因别名表：'外协外购'/'外协' 等 → canonical code。
   columns:
@@ -1401,15 +1317,9 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1424,21 +1334,6 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 质量问题原因别名表：'外协外购'/'外协' 等 → canonical code。
-        abbreviation: dim_quality_category_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 1
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 2
 - name: dim_quality_status_alias
   description: 质量归零状态别名表：'处理中'/'进行中'/'未闭环' 等 → '未完成归零' 等 canonical code。
   columns:
@@ -1452,15 +1347,9 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1475,21 +1364,6 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 质量归零状态别名表：'处理中'/'进行中'/'未闭环' 等 → '未完成归零' 等 canonical code。
-        abbreviation: dim_quality_status_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 1
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 2
 - name: dim_change_category_alias
   description: 更改类别别名表：罗马数字/阿拉伯数字/汉字 等变体 → 'I'/'II'/'III' canonical code。
   columns:
@@ -1503,15 +1377,9 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1526,21 +1394,6 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 更改类别别名表：罗马数字/阿拉伯数字/汉字 等变体 → 'I'/'II'/'III' canonical code。
-        abbreviation: dim_change_category_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 1
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 2
 - name: dim_boolean_alias
   description: 通用布尔别名表：Y/YES/TRUE/是/已提交/已同步/已完成/已签署 → '是'；否定值 → '否'。
   columns:
@@ -1554,15 +1407,9 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1577,21 +1424,6 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 通用布尔别名表：Y/YES/TRUE/是/已提交/已同步/已完成/已签署 → '是'；否定值 → '否'。
-        abbreviation: dim_boolean_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 1
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 2
 - name: dim_reform_status_alias
   description: 整改状态别名表：'已落实整改'/'已完成'/'完成' → '已落实整改'；'不涉及'/'无' → '不涉及'。未命中由 DWD 层 coalesce 到 '整改中'。
   columns:
@@ -1605,15 +1437,9 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1628,21 +1454,6 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 整改状态别名表：'已落实整改'/'已完成'/'完成' → '已落实整改'；'不涉及'/'无' → '不涉及'。未命中由 DWD 层 coalesce 到 '整改中'。
-        abbreviation: dim_reform_status_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 1
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 2
 - name: dim_signature_status_alias
   description: 文件签署状态别名表（上下文相关）：(context, alias_raw) → canonical code。context 取值为 I_II_no_review / I_II_with_review / III。
   columns:
@@ -1658,21 +1469,12 @@ models:
           severity: warn
     description: 上下文
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: context
   - name: alias_raw
     description: 源端原始值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
-    meta:
-      dts:
-        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -1688,26 +1490,6 @@ models:
         - context
         - alias_raw
       fieldRoles: {}
-      dimensionDefinition:
-        name: 文件签署状态别名表（上下文相关）：(context, alias_raw) → canonical code。context 取值为 I_II_no_review / I_II_with_review / III。
-        abbreviation: dim_signature_status_alias
-        definition: 每行代表一个源端取值到标准编码的映射
-        attributes:
-        - code: context
-          name: 上下文
-          definition: 上下文
-          primaryKey: true
-          order: 1
-        - code: alias_raw
-          name: 源端原始值
-          definition: 源端原始值
-          primaryKey: true
-          order: 2
-        - code: canonical_code
-          name: 标准值
-          definition: 标准值
-          primaryKey: false
-          order: 3
 - name: biz_dwd_project_node_v2
   description: 进度节点事实表 — 从 STG 读取，完成情况/节点类型/风险等级标准化并派生日期口径
   columns:
