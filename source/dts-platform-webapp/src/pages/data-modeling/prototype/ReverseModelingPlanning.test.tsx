@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
+import css from "../data-modeling.css?raw";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it } from "vitest";
-import { readFileSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import {
 	ConfirmStep,
 	applyModelSecurityLevel,
@@ -138,10 +139,7 @@ it("retains business process and both application mappings and clears preview bl
 		}
 		expect(host.querySelectorAll(".dmx-import-planning-field")).toHaveLength(3);
 		if (process.env.PLANNING_LAYOUT_EVIDENCE) {
-			const css = readFileSync(
-				new URL("../data-modeling.css", import.meta.url),
-				"utf8",
-			);
+
 			writeFileSync(
 				process.env.PLANNING_LAYOUT_EVIDENCE,
 				`<html><head>${document.head.innerHTML}<style>${css}\nbody{margin:16px}.dts-compact-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px}</style></head><body>${host.innerHTML}</body></html>`,
