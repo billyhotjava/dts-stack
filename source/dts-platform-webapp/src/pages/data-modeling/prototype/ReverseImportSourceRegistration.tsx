@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import type { WarehousePlanSourceBindingView } from "@/api/warehousePlanApi";
-import { ModelSourceInventoryDialog } from "./ModelSourceInventoryDialog";
+const ModelSourceInventoryDialog = lazy(() => import("./ModelSourceInventoryDialog").then(module => ({ default: module.ModelSourceInventoryDialog })));
 import { Button } from "./PrototypePrimitives";
 export function ReverseImportSourceRegistration({
 	planId,
@@ -19,12 +19,12 @@ export function ReverseImportSourceRegistration({
 			</Button>
 			{!planId ? <small>请先选择建模环境。</small> : null}
 			{open ? (
-				<ModelSourceInventoryDialog
+				<Suspense fallback={<p>正在加载来源登记…</p>}><ModelSourceInventoryDialog
 					key={planId}
 					planId={planId}
 					onClose={() => setOpen(false)}
 					onSourcesChanged={onSourcesChanged}
-				/>
+				/></Suspense>
 			) : null}
 		</section>
 	);
