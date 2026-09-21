@@ -22,6 +22,7 @@ import { actionColumn, CompactTable } from "@/components/table";
 import type { ColumnsType } from "antd/es/table";
 import { EmptyState } from "@/components/empty-state";
 import { useCatalogManageAccess } from "@/hooks/useModuleManageAccess";
+import { useRouter } from "@/routes/hooks";
 import {
 	type CatalogSyncConfig,
 	getCatalogSyncConfig,
@@ -195,6 +196,7 @@ const validateCronExpression = (value?: string) => {
 };
 
 export default function MetadataPage() {
+	const router = useRouter();
 	const [form] = Form.useForm();
 	const [pipelines, setPipelines] = useState<SyncPipeline[]>([]);
 	const [selectedPipelineId, setSelectedPipelineId] = useState<string | undefined>();
@@ -687,6 +689,7 @@ export default function MetadataPage() {
 				title="数据源结构采集"
 				extra={
 					<Space>
+						<Button onClick={() => router.push("/catalog/metadata-management")}>返回元数据管理</Button>
 						<Button onClick={() => void loadPipelines()}>刷新任务</Button>
 					</Space>
 				}
