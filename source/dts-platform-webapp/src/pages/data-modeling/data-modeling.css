@@ -1639,6 +1639,66 @@
 }
 .dmx-metric-section input,
 .dmx-metric-section select,
+.dmx-analysis-config {
+	display: grid;
+	gap: 14px;
+	padding: 18px 22px;
+}
+.dmx-analysis-config > h3,
+.dmx-analysis-config > p {
+	margin: 0;
+	padding: 0;
+}
+.dmx-analysis-config > label {
+	display: grid;
+	gap: 6px;
+	font-size: 13px;
+}
+.dmx-analysis-config > div {
+	padding: 0;
+}
+.dmx-analysis-config .dmx-analysis-toggle {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding-top: 0;
+	text-align: left;
+}
+.dmx-analysis-config input[type="checkbox"] {
+	flex: 0 0 16px;
+	width: 16px;
+	height: 16px;
+	min-height: 16px;
+	padding: 0;
+	margin: 0;
+}
+.dmx-analysis-config > .dmx-analysis-dimension {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+	align-items: center;
+}
+.dmx-analysis-config > .dmx-analysis-time {
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.dmx-analysis-config > .dmx-analysis-predicates > .dmx-metric-field {
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1fr) auto;
+	gap: 10px;
+	align-items: center;
+}
+.dmx-analysis-config button {
+	justify-self: start;
+	padding: 6px 12px;
+	border: 1px solid #ccd4df;
+	border-radius: 4px;
+	background: #fff;
+	white-space: nowrap;
+}
+@media (max-width: 900px) {
+	.dmx-analysis-config > .dmx-analysis-dimension,
+	.dmx-analysis-config > .dmx-analysis-time,
+	.dmx-analysis-config > .dmx-analysis-predicates > .dmx-metric-field {
+		grid-template-columns: minmax(0, 1fr);
+	}
+}
 .dmx-metric-section textarea {
 	width: 100%;
 	min-height: 35px;

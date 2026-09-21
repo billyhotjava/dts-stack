@@ -26,7 +26,7 @@ export function PredicateFields({
 	onChange: (value: IndicatorPredicate[]) => void;
 }) {
 	return (
-		<div>
+		<div className="dmx-analysis-predicates">
 			{values.map((rule, index) => (
 				<div key={index} className="dmx-metric-field">
 					<select
@@ -128,11 +128,11 @@ export function IndicatorAnalysisFields({
 		grain: "native",
 	};
 	return (
-		<section className="dmx-metric-section" aria-label="指标分析配置">
+		<section className="dmx-metric-section dmx-analysis-config" aria-label="指标分析配置">
 			<h3>{qualifier ? "限定规则" : "分析维度与结果粒度"}</h3>
 			<p>公共维度编码应在上游指标间保持相同业务含义；模型字段按固定版本配置。</p>
 			{entries.map(([key, field], index) => (
-				<div key={index} className="dmx-metric-field">
+				<div key={index} className="dmx-metric-field dmx-analysis-dimension">
 					<input
 						aria-label="公共维度编码"
 						value={key}
@@ -156,7 +156,7 @@ export function IndicatorAnalysisFields({
 						value={field}
 						onChange={(e) => set({ dimensionBindings: { ...config.dimensionBindings, [key]: e.target.value } })}
 					/>
-					<label>
+					<label className="dmx-analysis-toggle">
 						<input
 							type="checkbox"
 							checked={config.resultGrain.includes(key)}
@@ -205,7 +205,7 @@ export function IndicatorAnalysisFields({
 							))}
 						</select>
 					</label>
-					<label>
+					<label className="dmx-analysis-toggle">
 						<input
 							type="checkbox"
 							checked={Boolean(config.timeBinding)}
@@ -214,7 +214,7 @@ export function IndicatorAnalysisFields({
 						启用时间范围
 					</label>
 					{config.timeBinding && (
-						<div className="dmx-metric-field">
+						<div className="dmx-metric-field dmx-analysis-time">
 							<input
 								aria-label="业务时间编码"
 								value={time.fieldRef}
@@ -232,7 +232,7 @@ export function IndicatorAnalysisFields({
 							/>
 						</div>
 					)}
-					<label>
+					<label className="dmx-analysis-toggle">
 						<input
 							type="checkbox"
 							checked={config.missingGroupsAsZero}
