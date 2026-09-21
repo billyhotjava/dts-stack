@@ -10,7 +10,7 @@ inventory:
   sources: 10
   sourceColumns: 357
   models: 63
-  modelColumns: 1326
+  modelColumns: 1329
   dbtTests: 135
   technicalNodes:
     stg: 10

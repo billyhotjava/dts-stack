@@ -91,59 +91,60 @@ outside_completed AS (
 )
 
 SELECT
-  p.plan_year,
-  p.plan_quarter,
-  p.plan_month,
-  p.project_no,
+  COALESCE(p.plan_year, oc.plan_year) AS plan_year,
+  COALESCE(p.plan_quarter, EXTRACT(QUARTER FROM to_date(oc.plan_month || '-01', 'YYYY-MM-DD'))::int) AS plan_quarter,
+  COALESCE(p.plan_month, oc.plan_month) AS plan_month,
+  COALESCE(p.project_no, oc.project_no) AS project_no,
 
   -- 周期内指标 (#1-7)
-  p.total_cnt,
-  p.pending_normal_cnt,
-  p.due_cnt,
+  COALESCE(p.total_cnt, 0) AS total_cnt,
+  COALESCE(p.pending_normal_cnt, 0) AS pending_normal_cnt,
+  COALESCE(p.due_cnt, 0) AS due_cnt,
   COALESCE(oc.outside_completed_cnt, 0)                                    AS outside_completed_cnt,
-  p.incomplete_cnt,
-  p.on_time_cnt,
-  p.overdue_completed_cnt,
-  p.overdue_completed_unchanged_cnt,
+  COALESCE(p.incomplete_cnt, 0) AS incomplete_cnt,
+  COALESCE(p.on_time_cnt, 0) AS on_time_cnt,
+  COALESCE(p.overdue_completed_cnt, 0) AS overdue_completed_cnt,
+  COALESCE(p.overdue_completed_unchanged_cnt, 0) AS overdue_completed_unchanged_cnt,
 
   -- #8 完成总数（含周期外）
-  (p.on_time_cnt + p.overdue_completed_cnt + COALESCE(oc.outside_completed_cnt, 0)) AS completed_total_cnt,
+  (COALESCE(p.on_time_cnt, 0) + COALESCE(p.overdue_completed_cnt, 0) + COALESCE(oc.outside_completed_cnt, 0)) AS completed_total_cnt,
 
   -- 排除一般节点 (#12-15)
-  p.abnormal_pending_non_general_cnt,
-  p.overdue_incomplete_unchanged_non_general_cnt,
-  p.overdue_incomplete_changed_non_general_cnt,
-  p.overdue_completed_unchanged_non_general_cnt,
+  COALESCE(p.abnormal_pending_non_general_cnt, 0) AS abnormal_pending_non_general_cnt,
+  COALESCE(p.overdue_incomplete_unchanged_non_general_cnt, 0) AS overdue_incomplete_unchanged_non_general_cnt,
+  COALESCE(p.overdue_incomplete_changed_non_general_cnt, 0) AS overdue_incomplete_changed_non_general_cnt,
+  COALESCE(p.overdue_completed_unchanged_non_general_cnt, 0) AS overdue_completed_unchanged_non_general_cnt,
 
   -- 未完成风险/类型分类 (#18-22)
-  p.incomplete_high_risk_cnt,
-  p.incomplete_mid_risk_cnt,
-  p.incomplete_milestone_cnt,
-  p.incomplete_major_cnt,
-  p.incomplete_important_cnt,
+  COALESCE(p.incomplete_high_risk_cnt, 0) AS incomplete_high_risk_cnt,
+  COALESCE(p.incomplete_mid_risk_cnt, 0) AS incomplete_mid_risk_cnt,
+  COALESCE(p.incomplete_milestone_cnt, 0) AS incomplete_milestone_cnt,
+  COALESCE(p.incomplete_major_cnt, 0) AS incomplete_major_cnt,
+  COALESCE(p.incomplete_important_cnt, 0) AS incomplete_important_cnt,
 
   -- 里程碑统计 (#23-25)
-  p.milestone_on_time_cnt,
-  p.milestone_overdue_completed_cnt,
-  p.milestone_pending_cnt,
+  COALESCE(p.milestone_on_time_cnt, 0) AS milestone_on_time_cnt,
+  COALESCE(p.milestone_overdue_completed_cnt, 0) AS milestone_overdue_completed_cnt,
+  COALESCE(p.milestone_pending_cnt, 0) AS milestone_pending_cnt,
 
   -- 风险节点 (#27-28)
-  p.high_risk_cnt,
-  p.mid_risk_cnt,
+  COALESCE(p.high_risk_cnt, 0) AS high_risk_cnt,
+  COALESCE(p.mid_risk_cnt, 0) AS mid_risk_cnt,
 
   -- 节点类型总数 (#29-31)
-  p.milestone_total_cnt,
-  p.major_total_cnt,
-  p.important_total_cnt,
+  COALESCE(p.milestone_total_cnt, 0) AS milestone_total_cnt,
+  COALESCE(p.major_total_cnt, 0) AS major_total_cnt,
+  COALESCE(p.important_total_cnt, 0) AS important_total_cnt,
 
   -- 业务 4 大分类（对齐 gpmc-overview-v4 口径）
-  p.on_time_cnt_v2,
-  p.pending_normal_cnt_v2,
-  p.overdue_completed_effective_cnt,
-  p.overdue_incomplete_effective_cnt
+  COALESCE(p.on_time_cnt_v2, 0) AS on_time_cnt_v2,
+  COALESCE(p.pending_normal_cnt_v2, 0) AS pending_normal_cnt_v2,
+  COALESCE(p.overdue_completed_effective_cnt, 0) AS overdue_completed_effective_cnt,
+  COALESCE(p.overdue_incomplete_effective_cnt, 0) AS overdue_incomplete_effective_cnt
 
+-- 保留仅有周期外完成记录的项目月份；该月份的计划类计数为 0。
 FROM period_stats p
-LEFT JOIN outside_completed oc
+FULL OUTER JOIN outside_completed oc
   ON oc.plan_year = p.plan_year
  AND oc.plan_month = p.plan_month
  AND oc.project_no = p.project_no
