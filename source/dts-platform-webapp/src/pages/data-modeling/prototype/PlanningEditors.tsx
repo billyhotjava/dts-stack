@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { confirmDataMart, createDataMart, listDataMarts, retireDataMart, updateDataMart } from "@/api/dataMartApi";
-import { createBusinessProcessApi } from "@/api/sprint64GovernanceApi";
+import {
+	createBusinessProcessApi,
+	type Sprint64BusinessProcess,
+	updateBusinessProcessApi,
+} from "@/api/sprint64GovernanceApi";
 import {
 	confirmSubjectDomain,
 	createSubjectDomain,
@@ -54,6 +58,7 @@ const asSubjectDomain = (value: unknown): SubjectDomainView | null =>
 	value && typeof value === "object" && "martId" in value ? (value as SubjectDomainView) : null;
 
 export function BusinessProcessForm({
+	initial,
 	canMaintain,
 	onDone,
 }: {
@@ -61,6 +66,12 @@ export function BusinessProcessForm({
 	canMaintain: boolean;
 	onDone: (message: string) => Promise<void>;
 }) {
+	const process = useMemo(
+		() =>
+			initial && typeof initial === "object" && "processId" in initial ? (initial as Sprint64BusinessProcess) : null,
+		[initial],
+	);
+	const editable = canMaintain && process?.lifecycleStatus !== "RETIRED";
 	const [domains, setDomains] = useState<PlanningCatalogDomain[]>([]);
 	const [domainId, setDomainId] = useState("");
 	const [processId, setProcessId] = useState("");
@@ -71,6 +82,11 @@ export function BusinessProcessForm({
 
 	useEffect(() => {
 		let active = true;
+		setDomainId(process?.domainId || "");
+		setProcessId(process?.processId || "");
+		setName(process?.name || "");
+		setDescription(process?.description || "");
+		setError("");
 		void listPlanningCatalogDomains()
 			.then((items) => {
 				if (active) {
@@ -85,21 +101,26 @@ export function BusinessProcessForm({
 		return () => {
 			active = false;
 		};
-	}, []);
+	}, [process]);
 
-	const create = async () => {
+	const save = async () => {
+		if (!editable || busy) return;
 		if (!domainId || !processId.trim() || !name.trim()) return setError("请补齐数据域、英文缩写和中文名称");
 		setBusy(true);
 		setError("");
 		try {
-			await createBusinessProcessApi(domainId, {
-				processId: processId.trim(),
+			const data = {
 				name: name.trim(),
 				description: description.trim() || undefined,
-			});
-			await onDone("业务过程已创建");
+			};
+			if (process) {
+				await updateBusinessProcessApi(process.domainId, process.processId, data);
+			} else {
+				await createBusinessProcessApi(domainId, { processId: processId.trim(), ...data });
+			}
+			await onDone(process ? "业务过程已更新" : "业务过程已创建");
 		} catch (cause) {
-			setError(normalizeModelingRequestFailure(cause, "业务过程创建失败。").message);
+			setError(normalizeModelingRequestFailure(cause, process ? "业务过程更新失败。" : "业务过程创建失败。").message);
 		} finally {
 			setBusy(false);
 		}
@@ -111,19 +132,19 @@ export function BusinessProcessForm({
 				<label>
 					<span className="required">英文缩写</span>
 					<input
-						disabled={!canMaintain || busy}
+						disabled={!editable || busy || Boolean(process)}
 						onChange={(event) => setProcessId(event.target.value)}
 						value={processId}
 					/>
 				</label>
 				<label>
 					<span className="required">中文名称</span>
-					<input disabled={!canMaintain || busy} onChange={(event) => setName(event.target.value)} value={name} />
+					<input disabled={!editable || busy} onChange={(event) => setName(event.target.value)} value={name} />
 				</label>
 				<label>
 					<span className="required">数据域</span>
 					<select
-						disabled={!canMaintain || busy}
+						disabled={!editable || busy || Boolean(process)}
 						onChange={(event) => setDomainId(event.target.value)}
 						value={domainId}
 					>
@@ -138,7 +159,7 @@ export function BusinessProcessForm({
 				<label className="dmx-form-field--wide">
 					<span>业务定义</span>
 					<textarea
-						disabled={!canMaintain || busy}
+						disabled={!editable || busy}
 						onChange={(event) => setDescription(event.target.value)}
 						value={description}
 					/>
@@ -150,8 +171,8 @@ export function BusinessProcessForm({
 				</div>
 			) : null}
 			<div className="dmx-catalog-actions">
-				<Button disabled={!canMaintain || busy} primary onClick={() => void create()}>
-					{busy ? "处理中…" : "新建业务过程"}
+				<Button disabled={!editable || busy} primary onClick={() => void save()}>
+					{busy ? "处理中…" : process ? "保存修改" : "新建业务过程"}
 				</Button>
 			</div>
 		</div>

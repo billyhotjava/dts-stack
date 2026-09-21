@@ -112,6 +112,17 @@ export const deleteBusinessProcessApi = (domainId: string, processId: string) =>
 		`/modeling/business-processes/${encodeURIComponent(processId)}?domainId=${encodeURIComponent(domainId)}`,
 	);
 
+export const updateBusinessProcessApi = (
+	domainId: string,
+	processId: string,
+	data: { name: string; description?: string },
+) =>
+	api.put<Sprint64BusinessProcess>({
+		url: `/modeling/business-processes/${encodeURIComponent(processId)}?domainId=${encodeURIComponent(domainId)}`,
+		data,
+		_skipErrorToast: true,
+	} as any);
+
 export const listWarehouseLayersApi = () => quietGet<Sprint64WarehouseLayer[]>("/governance/sprint64/warehouse-layers");
 
 export const listConformedDimensionsApi = (domainId: string) =>

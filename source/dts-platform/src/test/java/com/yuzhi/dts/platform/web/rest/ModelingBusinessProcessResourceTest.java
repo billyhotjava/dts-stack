@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -60,6 +61,21 @@ class ModelingBusinessProcessResourceTest {
     private com.yuzhi.dts.platform.web.filter.AuditLoggingFilter auditLoggingFilter;
 
     private static final UUID DOMAIN = UUID.fromString("40000000-0000-0000-0000-000000000001");
+
+    @Test
+    void updatesTheExistingProcessThroughPut() throws Exception {
+        when(service.update(eq(DOMAIN), eq("budget"), any())).thenReturn(process("budget"));
+        mockMvc.perform(put("/api/modeling/business-processes/budget")
+                .param("domainId", DOMAIN.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"预算管理修订\",\"description\":\"更新定义\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.processId").value("budget"));
+        org.mockito.Mockito.verify(service).update(
+            DOMAIN, "budget",
+            new com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessUpdateRequest("预算管理修订", "更新定义")
+        );
+    }
 
     @Test
     void listsProcessesForADomain() throws Exception {

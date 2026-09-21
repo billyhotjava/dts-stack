@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +18,7 @@ import com.yuzhi.dts.platform.service.modeling.BusinessProcessApplicationService
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessDto;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessRequest;
+import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessUpdateRequest;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -30,6 +35,31 @@ class BusinessProcessApplicationServiceTest {
         auditService
     );
     private final UUID domainId = UUID.randomUUID();
+
+    @Test
+    void updateChecksPermissionBeforeWritingAndUsesStrictAudit() {
+        BusinessProcessUpdateRequest request = new BusinessProcessUpdateRequest("项目管理", "修改后的定义");
+        BusinessProcessDto expected = process("prj_mgmt");
+        when(ledger.updateProcess(domainId, "prj_mgmt", request)).thenReturn(expected);
+
+        assertThat(service.update(domainId, "prj_mgmt", request)).isEqualTo(expected);
+
+        var order = inOrder(writeGuard, ledger, auditService);
+        order.verify(writeGuard).requireWriteAccess();
+        order.verify(ledger).updateProcess(domainId, "prj_mgmt", request);
+        order.verify(auditService).auditActionStrict(
+            eq("MODELING_BUSINESS_PROCESS_UPDATE"), eq(AuditStage.SUCCESS), eq("prj_mgmt"), any()
+        );
+    }
+
+    @Test
+    void deniedUpdateNeverTouchesTheLedger() {
+        doThrow(new org.springframework.security.access.AccessDeniedException("无权维护"))
+            .when(writeGuard).requireWriteAccess();
+        assertThatThrownBy(() -> service.update(domainId, "prj_mgmt", new BusinessProcessUpdateRequest("项目管理", null)))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verifyNoInteractions(ledger, auditService);
+    }
 
     @Test
     void canonicalCreateUsesSharedLedgerGuardAndStrictAudit() {

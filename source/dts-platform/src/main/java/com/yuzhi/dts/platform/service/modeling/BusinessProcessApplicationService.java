@@ -6,6 +6,7 @@ import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessDto;
 import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessRequest;
+import com.yuzhi.dts.platform.service.sprint64.Sprint64GovernanceService.BusinessProcessUpdateRequest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -58,6 +59,19 @@ public class BusinessProcessApplicationService {
         BusinessProcessDto data = ledger.createProcess(domainId, request);
         auditService.auditActionStrict(
             surface.action("CREATE"),
+            AuditStage.SUCCESS,
+            data.processId(),
+            Map.of("domainId", domainId.toString())
+        );
+        return data;
+    }
+
+    @Transactional
+    public BusinessProcessDto update(UUID domainId, String processId, BusinessProcessUpdateRequest request) {
+        writeGuard.requireWriteAccess();
+        BusinessProcessDto data = ledger.updateProcess(domainId, processId, request);
+        auditService.auditActionStrict(
+            AuditSurface.CANONICAL.action("UPDATE"),
             AuditStage.SUCCESS,
             data.processId(),
             Map.of("domainId", domainId.toString())

@@ -28,7 +28,7 @@ class ArchitectureDictionaryResourceAuthorizationContractTest {
             SubjectDomainResource.class,
             List.of("create", "update", "confirm", "retire"),
             ModelingBusinessProcessResource.class,
-            List.of("create", "delete"),
+            List.of("create", "update", "delete"),
             Sprint64GovernanceResource.class,
             List.of("createProcess", "deleteProcess")
         );

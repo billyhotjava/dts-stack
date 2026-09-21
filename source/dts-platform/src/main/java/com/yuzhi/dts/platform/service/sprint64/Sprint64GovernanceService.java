@@ -100,6 +100,30 @@ public class Sprint64GovernanceService {
         return listProcesses(domainId).stream().filter(item -> item.processId().equals(processId)).findFirst().orElseThrow();
     }
 
+    public BusinessProcessDto updateProcess(UUID domainId, String processId, BusinessProcessUpdateRequest request) {
+        String normalizedProcessId = requiredProcessId(processId);
+        String name = required(request == null ? null : request.name(), "name");
+        int updated = jdbc.update(
+            """
+            update sprint64_business_process
+               set name = :name,
+                   description = :description,
+                   last_modified_date = :now
+             where domain_id = :domainId
+               and process_id = :processId
+               and lifecycle_status = 'ACTIVE'
+            """,
+            params()
+                .addValue("domainId", domainId)
+                .addValue("processId", normalizedProcessId)
+                .addValue("name", name)
+                .addValue("description", trimToNull(request == null ? null : request.description()))
+                .addValue("now", java.sql.Timestamp.from(Instant.now()))
+        );
+        if (updated == 0) throw new IllegalArgumentException("业务过程不存在或已停用: " + normalizedProcessId);
+        return listProcesses(domainId).stream().filter(item -> item.processId().equals(normalizedProcessId)).findFirst().orElseThrow();
+    }
+
     public void deleteProcess(UUID domainId, String processId) {
         String normalizedProcessId = requiredProcessId(processId);
         int updated = jdbc.update(
@@ -431,6 +455,8 @@ public class Sprint64GovernanceService {
     }
 
     public record BusinessProcessRequest(String processId, String name, String description) {}
+
+    public record BusinessProcessUpdateRequest(String name, String description) {}
 
     public record ConformedDimensionRequest(String dimensionId, String name, String sourceModel) {}
 
