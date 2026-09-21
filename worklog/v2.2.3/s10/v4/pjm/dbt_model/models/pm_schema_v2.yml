@@ -13,51 +13,99 @@ models:
           severity: warn
     description: 完成状态标识
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: completion_status_id
   - name: code
     description: 标准编码
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: code
   - name: label
     description: 标准名称
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: label
   - name: is_completed
     description: 是否COMPLETED
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_completed
   - name: is_on_time
     description: 是否ON时间
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_on_time
   - name: is_overdue_completed
     description: 是否超期COMPLETED
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_overdue_completed
   - name: is_incomplete
     description: 是否未完成
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_incomplete
   - name: is_pending_normal
     description: 是否待完成NORMAL
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_pending_normal
   - name: is_abnormal_pending
     description: 是否异常待完成
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_abnormal_pending
   - name: is_overdue_unchanged
     description: 是否超期UNCHANGED
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_overdue_unchanged
   - name: is_overdue_changed
     description: 是否超期CHANGED
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_overdue_changed
   - name: is_overdue_done_unchanged
     description: 是否超期已完成UNCHANGED
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_overdue_done_unchanged
   - name: is_overdue_done_changed
     description: 是否超期已完成CHANGED
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_overdue_done_changed
   - name: is_overdue_completed_effective
     description: 是否超期COMPLETEDEFFECTIVE
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_overdue_completed_effective
   - name: is_overdue_incomplete_effective
     description: 是否超期未完成EFFECTIVE
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_overdue_incomplete_effective
   - name: sort_order
     description: 排序号
     data_type: integer
+    meta:
+      dts:
+        dimensionAttributeCode: sort_order
   config:
     contract:
       enforced: true
@@ -93,6 +141,91 @@ models:
         sort_order: ATTRIBUTE
       dimensionStrategy: STATIC_DBT_SQL_TYPE_1
       dimensionDefinitionCode: dim_ec90d8b6dc4b48248b29f58fda1b5f9a
+      dimensionDefinition:
+        name: 完成情况维度表（稳定 ID + 中文标签）
+        abbreviation: dim_completion_status_v2
+        definition: 每行一个项目节点完成状态
+        attributes:
+        - code: completion_status_id
+          name: 完成状态标识
+          definition: 完成状态标识
+          primaryKey: true
+          order: 1
+        - code: code
+          name: 标准编码
+          definition: 标准编码
+          primaryKey: false
+          order: 2
+        - code: label
+          name: 标准名称
+          definition: 标准名称
+          primaryKey: false
+          order: 3
+        - code: is_completed
+          name: 是否COMPLETED
+          definition: 是否COMPLETED
+          primaryKey: false
+          order: 4
+        - code: is_on_time
+          name: 是否ON时间
+          definition: 是否ON时间
+          primaryKey: false
+          order: 5
+        - code: is_overdue_completed
+          name: 是否超期COMPLETED
+          definition: 是否超期COMPLETED
+          primaryKey: false
+          order: 6
+        - code: is_incomplete
+          name: 是否未完成
+          definition: 是否未完成
+          primaryKey: false
+          order: 7
+        - code: is_pending_normal
+          name: 是否待完成NORMAL
+          definition: 是否待完成NORMAL
+          primaryKey: false
+          order: 8
+        - code: is_abnormal_pending
+          name: 是否异常待完成
+          definition: 是否异常待完成
+          primaryKey: false
+          order: 9
+        - code: is_overdue_unchanged
+          name: 是否超期UNCHANGED
+          definition: 是否超期UNCHANGED
+          primaryKey: false
+          order: 10
+        - code: is_overdue_changed
+          name: 是否超期CHANGED
+          definition: 是否超期CHANGED
+          primaryKey: false
+          order: 11
+        - code: is_overdue_done_unchanged
+          name: 是否超期已完成UNCHANGED
+          definition: 是否超期已完成UNCHANGED
+          primaryKey: false
+          order: 12
+        - code: is_overdue_done_changed
+          name: 是否超期已完成CHANGED
+          definition: 是否超期已完成CHANGED
+          primaryKey: false
+          order: 13
+        - code: is_overdue_completed_effective
+          name: 是否超期COMPLETEDEFFECTIVE
+          definition: 是否超期COMPLETEDEFFECTIVE
+          primaryKey: false
+          order: 14
+        - code: is_overdue_incomplete_effective
+          name: 是否超期未完成EFFECTIVE
+          definition: 是否超期未完成EFFECTIVE
+          primaryKey: false
+          order: 15
+        - code: sort_order
+          name: 排序号
+          definition: 排序号
+          primaryKey: false
+          order: 16
 - name: dim_node_type_v2
   description: 节点类型维度表（稳定 ID + 中文标签）
   columns:
@@ -106,27 +239,51 @@ models:
           severity: warn
     description: 节点类型标识
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: node_type_id
   - name: code
     description: 标准编码
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: code
   - name: label
     description: 标准名称
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: label
   - name: is_general
     description: 是否一般
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_general
   - name: is_important
     description: 是否重要
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_important
   - name: is_major
     description: 是否重大
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_major
   - name: is_milestone
     description: 是否里程碑
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_milestone
   - name: severity_rank
     description: 严重程度序号
     data_type: integer
+    meta:
+      dts:
+        dimensionAttributeCode: severity_rank
   config:
     contract:
       enforced: true
@@ -154,6 +311,51 @@ models:
         severity_rank: ATTRIBUTE
       dimensionStrategy: STATIC_DBT_SQL_TYPE_1
       dimensionDefinitionCode: dim_56f78969cb874428b6beaddedbcbf790
+      dimensionDefinition:
+        name: 节点类型维度表（稳定 ID + 中文标签）
+        abbreviation: dim_node_type_v2
+        definition: 每行一个项目节点类型
+        attributes:
+        - code: node_type_id
+          name: 节点类型标识
+          definition: 节点类型标识
+          primaryKey: true
+          order: 1
+        - code: code
+          name: 标准编码
+          definition: 标准编码
+          primaryKey: false
+          order: 2
+        - code: label
+          name: 标准名称
+          definition: 标准名称
+          primaryKey: false
+          order: 3
+        - code: is_general
+          name: 是否一般
+          definition: 是否一般
+          primaryKey: false
+          order: 4
+        - code: is_important
+          name: 是否重要
+          definition: 是否重要
+          primaryKey: false
+          order: 5
+        - code: is_major
+          name: 是否重大
+          definition: 是否重大
+          primaryKey: false
+          order: 6
+        - code: is_milestone
+          name: 是否里程碑
+          definition: 是否里程碑
+          primaryKey: false
+          order: 7
+        - code: severity_rank
+          name: 严重程度序号
+          definition: 严重程度序号
+          primaryKey: false
+          order: 8
 - name: dim_risk_level_v2
   description: 风险等级维度表（稳定 ID + 中文标签）
   columns:
@@ -167,24 +369,45 @@ models:
           severity: warn
     description: 风险等级标识
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: risk_level_id
   - name: code
     description: 标准编码
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: code
   - name: label
     description: 标准名称
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: label
   - name: is_high
     description: 是否高
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_high
   - name: is_mid
     description: 是否中
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_mid
   - name: is_low
     description: 是否低
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_low
   - name: severity_rank
     description: 严重程度序号
     data_type: integer
+    meta:
+      dts:
+        dimensionAttributeCode: severity_rank
   config:
     contract:
       enforced: true
@@ -211,6 +434,46 @@ models:
         severity_rank: ATTRIBUTE
       dimensionStrategy: STATIC_DBT_SQL_TYPE_1
       dimensionDefinitionCode: dim_a1ba31f74edb488eb0ecb18af3a64e44
+      dimensionDefinition:
+        name: 风险等级维度表（稳定 ID + 中文标签）
+        abbreviation: dim_risk_level_v2
+        definition: 每行一个项目风险等级
+        attributes:
+        - code: risk_level_id
+          name: 风险等级标识
+          definition: 风险等级标识
+          primaryKey: true
+          order: 1
+        - code: code
+          name: 标准编码
+          definition: 标准编码
+          primaryKey: false
+          order: 2
+        - code: label
+          name: 标准名称
+          definition: 标准名称
+          primaryKey: false
+          order: 3
+        - code: is_high
+          name: 是否高
+          definition: 是否高
+          primaryKey: false
+          order: 4
+        - code: is_mid
+          name: 是否中
+          definition: 是否中
+          primaryKey: false
+          order: 5
+        - code: is_low
+          name: 是否低
+          definition: 是否低
+          primaryKey: false
+          order: 6
+        - code: severity_rank
+          name: 严重程度序号
+          definition: 严重程度序号
+          primaryKey: false
+          order: 7
 - name: dim_quality_status_v2
   description: 质量归零状态维度表（稳定 ID + 中文标签）
   columns:
@@ -224,27 +487,51 @@ models:
           severity: warn
     description: 质量状态标识
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: quality_status_id
   - name: code
     description: 标准编码
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: code
   - name: label
     description: 标准名称
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: label
   - name: is_zero_completed
     description: 是否ZEROCOMPLETED
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_zero_completed
   - name: is_tech_zero
     description: 是否技术ZERO
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_tech_zero
   - name: is_mgmt_zero
     description: 是否MGMTZERO
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_mgmt_zero
   - name: is_both_zero
     description: 是否BOTHZERO
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_both_zero
   - name: sort_order
     description: 排序号
     data_type: integer
+    meta:
+      dts:
+        dimensionAttributeCode: sort_order
   config:
     contract:
       enforced: true
@@ -272,6 +559,51 @@ models:
         sort_order: ATTRIBUTE
       dimensionStrategy: STATIC_DBT_SQL_TYPE_1
       dimensionDefinitionCode: dim_f691053e433443f49263f067372c5943
+      dimensionDefinition:
+        name: 质量归零状态维度表（稳定 ID + 中文标签）
+        abbreviation: dim_quality_status_v2
+        definition: 每行一个质量归零状态
+        attributes:
+        - code: quality_status_id
+          name: 质量状态标识
+          definition: 质量状态标识
+          primaryKey: true
+          order: 1
+        - code: code
+          name: 标准编码
+          definition: 标准编码
+          primaryKey: false
+          order: 2
+        - code: label
+          name: 标准名称
+          definition: 标准名称
+          primaryKey: false
+          order: 3
+        - code: is_zero_completed
+          name: 是否ZEROCOMPLETED
+          definition: 是否ZEROCOMPLETED
+          primaryKey: false
+          order: 4
+        - code: is_tech_zero
+          name: 是否技术ZERO
+          definition: 是否技术ZERO
+          primaryKey: false
+          order: 5
+        - code: is_mgmt_zero
+          name: 是否MGMTZERO
+          definition: 是否MGMTZERO
+          primaryKey: false
+          order: 6
+        - code: is_both_zero
+          name: 是否BOTHZERO
+          definition: 是否BOTHZERO
+          primaryKey: false
+          order: 7
+        - code: sort_order
+          name: 排序号
+          definition: 排序号
+          primaryKey: false
+          order: 8
 - name: dim_change_category_v2
   description: 更改类别维度表（稳定 ID + 中文标签）
   columns:
@@ -285,24 +617,45 @@ models:
           severity: warn
     description: 更改分类标识
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: change_category_id
   - name: code
     description: 标准编码
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: code
   - name: label
     description: 标准名称
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: label
   - name: is_cat_i
     description: 是否CATI
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_cat_i
   - name: is_cat_ii
     description: 是否CATII
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_cat_ii
   - name: is_cat_iii
     description: 是否CATIII
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_cat_iii
   - name: severity_rank
     description: 严重程度序号
     data_type: integer
+    meta:
+      dts:
+        dimensionAttributeCode: severity_rank
   config:
     contract:
       enforced: true
@@ -329,6 +682,46 @@ models:
         severity_rank: ATTRIBUTE
       dimensionStrategy: STATIC_DBT_SQL_TYPE_1
       dimensionDefinitionCode: dim_51329b87339f45939d8b1001abf17e20
+      dimensionDefinition:
+        name: 更改类别维度表（稳定 ID + 中文标签）
+        abbreviation: dim_change_category_v2
+        definition: 每行一个技术更改类别
+        attributes:
+        - code: change_category_id
+          name: 更改分类标识
+          definition: 更改分类标识
+          primaryKey: true
+          order: 1
+        - code: code
+          name: 标准编码
+          definition: 标准编码
+          primaryKey: false
+          order: 2
+        - code: label
+          name: 标准名称
+          definition: 标准名称
+          primaryKey: false
+          order: 3
+        - code: is_cat_i
+          name: 是否CATI
+          definition: 是否CATI
+          primaryKey: false
+          order: 4
+        - code: is_cat_ii
+          name: 是否CATII
+          definition: 是否CATII
+          primaryKey: false
+          order: 5
+        - code: is_cat_iii
+          name: 是否CATIII
+          definition: 是否CATIII
+          primaryKey: false
+          order: 6
+        - code: severity_rank
+          name: 严重程度序号
+          definition: 严重程度序号
+          primaryKey: false
+          order: 7
 - name: dim_signature_status_v2
   description: 文件签署状态维度表（稳定 ID + 中文标签）
   columns:
@@ -342,24 +735,45 @@ models:
           severity: warn
     description: 签署状态标识
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: signature_status_id
   - name: code
     description: 标准编码
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: code
   - name: label
     description: 标准名称
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: label
   - name: applies_to_category
     description: APPLIESTO分类
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: applies_to_category
   - name: is_reviewed
     description: 是否REVIEWED
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_reviewed
   - name: is_signed
     description: 是否SIGNED
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: is_signed
   - name: sort_order
     description: 排序号
     data_type: integer
+    meta:
+      dts:
+        dimensionAttributeCode: sort_order
   config:
     contract:
       enforced: true
@@ -386,6 +800,46 @@ models:
         sort_order: ATTRIBUTE
       dimensionStrategy: STATIC_DBT_SQL_TYPE_1
       dimensionDefinitionCode: dim_134a1b22174e4a7dbdc9ecbec3dd51bb
+      dimensionDefinition:
+        name: 文件签署状态维度表（稳定 ID + 中文标签）
+        abbreviation: dim_signature_status_v2
+        definition: 每行一个文件签署状态
+        attributes:
+        - code: signature_status_id
+          name: 签署状态标识
+          definition: 签署状态标识
+          primaryKey: true
+          order: 1
+        - code: code
+          name: 标准编码
+          definition: 标准编码
+          primaryKey: false
+          order: 2
+        - code: label
+          name: 标准名称
+          definition: 标准名称
+          primaryKey: false
+          order: 3
+        - code: applies_to_category
+          name: APPLIESTO分类
+          definition: APPLIESTO分类
+          primaryKey: false
+          order: 4
+        - code: is_reviewed
+          name: 是否REVIEWED
+          definition: 是否REVIEWED
+          primaryKey: false
+          order: 5
+        - code: is_signed
+          name: 是否SIGNED
+          definition: 是否SIGNED
+          primaryKey: false
+          order: 6
+        - code: sort_order
+          name: 排序号
+          definition: 排序号
+          primaryKey: false
+          order: 7
 - name: dim_quality_category_v2
   description: 质量问题原因分类字典（稳定 ID + 中文标签）
   columns:
@@ -399,42 +853,81 @@ models:
           severity: warn
     description: 质量分类标识
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: quality_category_id
   - name: code
     description: 标准编码
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: code
   - name: label
     description: 标准名称
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: label
   - name: cat_design
     description: CATDESIGN
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_design
   - name: cat_process
     description: CATPROCESS
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_process
   - name: cat_management
     description: CATMANAGEMENT
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_management
   - name: cat_component
     description: CATCOMPONENT
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_component
   - name: cat_operation
     description: CATOPERATION
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_operation
   - name: cat_outsource
     description: CATOUTSOURCE
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_outsource
   - name: cat_software
     description: CATSOFTWARE
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_software
   - name: cat_environment
     description: CATENVIRONMENT
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_environment
   - name: cat_other
     description: CATOTHER
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_other
   - name: sort_order
     description: 排序号
     data_type: integer
+    meta:
+      dts:
+        dimensionAttributeCode: sort_order
   config:
     contract:
       enforced: true
@@ -467,6 +960,76 @@ models:
         sort_order: ATTRIBUTE
       dimensionStrategy: STATIC_DBT_SQL_TYPE_1
       dimensionDefinitionCode: dim_94d87d2a1f6e4b5486a679df4bdc68fc
+      dimensionDefinition:
+        name: 质量问题原因分类字典（稳定 ID + 中文标签）
+        abbreviation: dim_quality_category_v2
+        definition: 每行一个质量问题原因分类
+        attributes:
+        - code: quality_category_id
+          name: 质量分类标识
+          definition: 质量分类标识
+          primaryKey: true
+          order: 1
+        - code: code
+          name: 标准编码
+          definition: 标准编码
+          primaryKey: false
+          order: 2
+        - code: label
+          name: 标准名称
+          definition: 标准名称
+          primaryKey: false
+          order: 3
+        - code: cat_design
+          name: CATDESIGN
+          definition: CATDESIGN
+          primaryKey: false
+          order: 4
+        - code: cat_process
+          name: CATPROCESS
+          definition: CATPROCESS
+          primaryKey: false
+          order: 5
+        - code: cat_management
+          name: CATMANAGEMENT
+          definition: CATMANAGEMENT
+          primaryKey: false
+          order: 6
+        - code: cat_component
+          name: CATCOMPONENT
+          definition: CATCOMPONENT
+          primaryKey: false
+          order: 7
+        - code: cat_operation
+          name: CATOPERATION
+          definition: CATOPERATION
+          primaryKey: false
+          order: 8
+        - code: cat_outsource
+          name: CATOUTSOURCE
+          definition: CATOUTSOURCE
+          primaryKey: false
+          order: 9
+        - code: cat_software
+          name: CATSOFTWARE
+          definition: CATSOFTWARE
+          primaryKey: false
+          order: 10
+        - code: cat_environment
+          name: CATENVIRONMENT
+          definition: CATENVIRONMENT
+          primaryKey: false
+          order: 11
+        - code: cat_other
+          name: CATOTHER
+          definition: CATOTHER
+          primaryKey: false
+          order: 12
+        - code: sort_order
+          name: 排序号
+          definition: 排序号
+          primaryKey: false
+          order: 13
 - name: dim_risk_category_v2
   description: 风险类型字典（稳定 ID + 中文标签）
   columns:
@@ -480,33 +1043,63 @@ models:
           severity: warn
     description: 风险分类标识
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: risk_category_id
   - name: code
     description: 标准编码
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: code
   - name: label
     description: 标准名称
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: label
   - name: cat_technical
     description: CATTECHNICAL
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_technical
   - name: cat_schedule
     description: CATSCHEDULE
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_schedule
   - name: cat_cost
     description: CAT成本
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_cost
   - name: cat_design
     description: CATDESIGN
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_design
   - name: cat_quality
     description: CAT质量
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_quality
   - name: cat_other
     description: CATOTHER
     data_type: boolean
+    meta:
+      dts:
+        dimensionAttributeCode: cat_other
   - name: sort_order
     description: 排序号
     data_type: integer
+    meta:
+      dts:
+        dimensionAttributeCode: sort_order
   config:
     contract:
       enforced: true
@@ -536,6 +1129,61 @@ models:
         sort_order: ATTRIBUTE
       dimensionStrategy: STATIC_DBT_SQL_TYPE_1
       dimensionDefinitionCode: dim_31cc1f8208fd41e2abd9dbb1fb002606
+      dimensionDefinition:
+        name: 风险类型字典（稳定 ID + 中文标签）
+        abbreviation: dim_risk_category_v2
+        definition: 每行一个项目风险分类
+        attributes:
+        - code: risk_category_id
+          name: 风险分类标识
+          definition: 风险分类标识
+          primaryKey: true
+          order: 1
+        - code: code
+          name: 标准编码
+          definition: 标准编码
+          primaryKey: false
+          order: 2
+        - code: label
+          name: 标准名称
+          definition: 标准名称
+          primaryKey: false
+          order: 3
+        - code: cat_technical
+          name: CATTECHNICAL
+          definition: CATTECHNICAL
+          primaryKey: false
+          order: 4
+        - code: cat_schedule
+          name: CATSCHEDULE
+          definition: CATSCHEDULE
+          primaryKey: false
+          order: 5
+        - code: cat_cost
+          name: CAT成本
+          definition: CAT成本
+          primaryKey: false
+          order: 6
+        - code: cat_design
+          name: CATDESIGN
+          definition: CATDESIGN
+          primaryKey: false
+          order: 7
+        - code: cat_quality
+          name: CAT质量
+          definition: CAT质量
+          primaryKey: false
+          order: 8
+        - code: cat_other
+          name: CATOTHER
+          definition: CATOTHER
+          primaryKey: false
+          order: 9
+        - code: sort_order
+          name: 排序号
+          definition: 排序号
+          primaryKey: false
+          order: 10
 - name: dim_node_type_alias
   description: 节点类型别名表：'一般'/'一般节点' 等 → canonical code。
   columns:
@@ -549,9 +1197,15 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -566,6 +1220,21 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 节点类型别名表：'一般'/'一般节点' 等 → canonical code。
+        abbreviation: dim_node_type_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 1
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 2
 - name: dim_risk_level_alias
   description: 风险等级别名表：'高'/'高风险' 等 → canonical code。
   columns:
@@ -579,9 +1248,15 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -596,6 +1271,21 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 风险等级别名表：'高'/'高风险' 等 → canonical code。
+        abbreviation: dim_risk_level_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 1
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 2
 - name: dim_risk_category_alias
   description: 风险分类别名表：'技术'/'技术风险'/'供应链'/'管理'/'资源' 等 → canonical code（供应链/管理/资源 统一归入进度风险）。
   columns:
@@ -609,9 +1299,15 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -626,6 +1322,21 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 风险分类别名表：'技术'/'技术风险'/'供应链'/'管理'/'资源' 等 → canonical code（供应链/管理/资源 统一归入进度风险）。
+        abbreviation: dim_risk_category_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 1
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 2
 - name: dim_risk_status_alias
   description: 风险状态别名表（仅收录 '已释放'，未命中由 DWD 层按规则 coalesce 到 '未释放'）。
   columns:
@@ -639,9 +1350,15 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -656,6 +1373,21 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 风险状态别名表（仅收录 '已释放'，未命中由 DWD 层按规则 coalesce 到 '未释放'）。
+        abbreviation: dim_risk_status_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 1
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 2
 - name: dim_quality_category_alias
   description: 质量问题原因别名表：'外协外购'/'外协' 等 → canonical code。
   columns:
@@ -669,9 +1401,15 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -686,6 +1424,21 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 质量问题原因别名表：'外协外购'/'外协' 等 → canonical code。
+        abbreviation: dim_quality_category_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 1
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 2
 - name: dim_quality_status_alias
   description: 质量归零状态别名表：'处理中'/'进行中'/'未闭环' 等 → '未完成归零' 等 canonical code。
   columns:
@@ -699,9 +1452,15 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -716,6 +1475,21 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 质量归零状态别名表：'处理中'/'进行中'/'未闭环' 等 → '未完成归零' 等 canonical code。
+        abbreviation: dim_quality_status_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 1
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 2
 - name: dim_change_category_alias
   description: 更改类别别名表：罗马数字/阿拉伯数字/汉字 等变体 → 'I'/'II'/'III' canonical code。
   columns:
@@ -729,9 +1503,15 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -746,6 +1526,21 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 更改类别别名表：罗马数字/阿拉伯数字/汉字 等变体 → 'I'/'II'/'III' canonical code。
+        abbreviation: dim_change_category_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 1
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 2
 - name: dim_boolean_alias
   description: 通用布尔别名表：Y/YES/TRUE/是/已提交/已同步/已完成/已签署 → '是'；否定值 → '否'。
   columns:
@@ -759,9 +1554,15 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -776,6 +1577,21 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 通用布尔别名表：Y/YES/TRUE/是/已提交/已同步/已完成/已签署 → '是'；否定值 → '否'。
+        abbreviation: dim_boolean_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 1
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 2
 - name: dim_reform_status_alias
   description: 整改状态别名表：'已落实整改'/'已完成'/'完成' → '已落实整改'；'不涉及'/'无' → '不涉及'。未命中由 DWD 层 coalesce 到 '整改中'。
   columns:
@@ -789,9 +1605,15 @@ models:
           severity: warn
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -806,6 +1628,21 @@ models:
         keys:
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 整改状态别名表：'已落实整改'/'已完成'/'完成' → '已落实整改'；'不涉及'/'无' → '不涉及'。未命中由 DWD 层 coalesce 到 '整改中'。
+        abbreviation: dim_reform_status_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 1
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 2
 - name: dim_signature_status_alias
   description: 文件签署状态别名表（上下文相关）：(context, alias_raw) → canonical code。context 取值为 I_II_no_review / I_II_with_review / III。
   columns:
@@ -821,12 +1658,21 @@ models:
           severity: warn
     description: 上下文
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: context
   - name: alias_raw
     description: 源端原始值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: alias_raw
   - name: canonical_code
     description: 标准值
     data_type: text
+    meta:
+      dts:
+        dimensionAttributeCode: canonical_code
   config:
     contract:
       enforced: true
@@ -842,6 +1688,26 @@ models:
         - context
         - alias_raw
       fieldRoles: {}
+      dimensionDefinition:
+        name: 文件签署状态别名表（上下文相关）：(context, alias_raw) → canonical code。context 取值为 I_II_no_review / I_II_with_review / III。
+        abbreviation: dim_signature_status_alias
+        definition: 每行代表一个源端取值到标准编码的映射
+        attributes:
+        - code: context
+          name: 上下文
+          definition: 上下文
+          primaryKey: true
+          order: 1
+        - code: alias_raw
+          name: 源端原始值
+          definition: 源端原始值
+          primaryKey: true
+          order: 2
+        - code: canonical_code
+          name: 标准值
+          definition: 标准值
+          primaryKey: false
+          order: 3
 - name: biz_dwd_project_node_v2
   description: 进度节点事实表 — 从 STG 读取，完成情况/节点类型/风险等级标准化并派生日期口径
   columns:

@@ -448,6 +448,24 @@ def synchronize(path: Path, verified: dict[str, list[tuple[str, str]]]) -> None:
             raise SystemExit(f"{name} has stale schema columns: {sorted(stale)}")
         if not semantics["technicalOnly"]:
             semantics["fieldRoles"] = roles
+        if name in DIMENSIONS:
+            attributes = []
+            for order, column in enumerate(synchronized_columns, 1):
+                meta = column.setdefault("meta", {})
+                meta.setdefault("dts", {})["dimensionAttributeCode"] = column["name"]
+                attributes.append({
+                    "code": column["name"],
+                    "name": column["description"],
+                    "definition": column["description"],
+                    "primaryKey": column["name"] in semantics["grain"]["keys"],
+                    "order": order,
+                })
+            semantics["dimensionDefinition"] = {
+                "name": model.get("description") or name,
+                "abbreviation": name,
+                "definition": semantics["grain"]["statement"],
+                "attributes": attributes,
+            }
         model["config"] = {**(model.get("config") or {}), "contract": {"enforced": True}}
         model["meta"] = {**(model.get("meta") or {}), "dts": semantics}
         if name in MODEL_GRAIN_TESTS:
