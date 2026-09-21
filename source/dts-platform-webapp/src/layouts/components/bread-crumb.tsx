@@ -1,10 +1,11 @@
 import { ChevronDown } from "lucide-react";
 import * as React from "react";
 import { useCallback, useMemo } from "react";
-import { Link, useMatches } from "react-router";
+import { Link, useLocation, useMatches } from "react-router";
 import type { NavItemDataProps } from "@/components/nav";
 import { useFilteredNavData } from "@/layouts/dashboard/nav";
 import useLocale from "@/locales/use-locale";
+import { dataArchitecturePath, resolveDataArchitectureView } from "@/pages/data-architecture/navigation";
 import {
 	Breadcrumb,
 	BreadcrumbEllipsis,
@@ -36,6 +37,7 @@ interface BreadcrumbItemData {
 export default function BreadCrumb({ maxItems = 3 }: BreadCrumbProps) {
 	const { t } = useLocale();
 	const matches = useMatches();
+	const location = useLocation();
 	const navData = useFilteredNavData();
 
 	const findPathInNavData = useCallback((path: string, items: NavItem[]): NavItem[] => {
@@ -57,7 +59,10 @@ export default function BreadCrumb({ maxItems = 3 }: BreadCrumbProps) {
 		const paths = matches.filter((item) => item.pathname !== "/").map((item) => item.pathname);
 
 		// Use the deepest matched path and show its full nav tree path
-		const deepestPath = paths[paths.length - 1];
+		const deepestPath =
+			location.pathname.replace(/\/$/, "") === "/data-architecture"
+				? dataArchitecturePath(resolveDataArchitectureView(new URLSearchParams(location.search).get("view")))
+				: paths[paths.length - 1];
 		if (!deepestPath) return [];
 
 		const navItems = navData.flatMap((section) => section.items);
@@ -78,7 +83,7 @@ export default function BreadCrumb({ maxItems = 3 }: BreadCrumbProps) {
 				items: children,
 			};
 		});
-	}, [matches, t, findPathInNavData, navData]);
+	}, [matches, location.pathname, location.search, t, findPathInNavData, navData]);
 
 	const renderBreadcrumbItem = (item: BreadcrumbItemData, isLast: boolean) => {
 		const hasItems = item.items && item.items.length > 0;
