@@ -15,97 +15,97 @@ models:
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: completion_status_id
+        dimensionAttributeCode: COMPLETION_STATUS_ID
   - name: code
     description: 标准编码
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: code
+        dimensionAttributeCode: CODE
   - name: label
     description: 标准名称
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: label
+        dimensionAttributeCode: LABEL
   - name: is_completed
     description: 是否COMPLETED
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_completed
+        dimensionAttributeCode: IS_COMPLETED
   - name: is_on_time
     description: 是否ON时间
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_on_time
+        dimensionAttributeCode: IS_ON_TIME
   - name: is_overdue_completed
     description: 是否超期COMPLETED
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_overdue_completed
+        dimensionAttributeCode: IS_OVERDUE_COMPLETED
   - name: is_incomplete
     description: 是否未完成
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_incomplete
+        dimensionAttributeCode: IS_INCOMPLETE
   - name: is_pending_normal
     description: 是否待完成NORMAL
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_pending_normal
+        dimensionAttributeCode: IS_PENDING_NORMAL
   - name: is_abnormal_pending
     description: 是否异常待完成
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_abnormal_pending
+        dimensionAttributeCode: IS_ABNORMAL_PENDING
   - name: is_overdue_unchanged
     description: 是否超期UNCHANGED
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_overdue_unchanged
+        dimensionAttributeCode: IS_OVERDUE_UNCHANGED
   - name: is_overdue_changed
     description: 是否超期CHANGED
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_overdue_changed
+        dimensionAttributeCode: IS_OVERDUE_CHANGED
   - name: is_overdue_done_unchanged
     description: 是否超期已完成UNCHANGED
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_overdue_done_unchanged
+        dimensionAttributeCode: IS_OVERDUE_DONE_UNCHANGED
   - name: is_overdue_done_changed
     description: 是否超期已完成CHANGED
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_overdue_done_changed
+        dimensionAttributeCode: IS_OVERDUE_DONE_CHANGED
   - name: is_overdue_completed_effective
     description: 是否超期COMPLETEDEFFECTIVE
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_overdue_completed_effective
+        dimensionAttributeCode: IS_OVERDUE_COMPLETED_EFFECTIVE
   - name: is_overdue_incomplete_effective
     description: 是否超期未完成EFFECTIVE
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_overdue_incomplete_effective
+        dimensionAttributeCode: IS_OVERDUE_INCOMPLETE_EFFECTIVE
   - name: sort_order
     description: 排序号
     data_type: integer
     meta:
       dts:
-        dimensionAttributeCode: sort_order
+        dimensionAttributeCode: SORT_ORDER
   config:
     contract:
       enforced: true
@@ -146,82 +146,82 @@ models:
         abbreviation: dim_completion_status_v2
         definition: 每行一个项目节点完成状态
         attributes:
-        - code: completion_status_id
+        - code: COMPLETION_STATUS_ID
           name: 完成状态标识
           definition: 完成状态标识
           primaryKey: true
           order: 1
-        - code: code
+        - code: CODE
           name: 标准编码
           definition: 标准编码
           primaryKey: false
           order: 2
-        - code: label
+        - code: LABEL
           name: 标准名称
           definition: 标准名称
           primaryKey: false
           order: 3
-        - code: is_completed
+        - code: IS_COMPLETED
           name: 是否COMPLETED
           definition: 是否COMPLETED
           primaryKey: false
           order: 4
-        - code: is_on_time
+        - code: IS_ON_TIME
           name: 是否ON时间
           definition: 是否ON时间
           primaryKey: false
           order: 5
-        - code: is_overdue_completed
+        - code: IS_OVERDUE_COMPLETED
           name: 是否超期COMPLETED
           definition: 是否超期COMPLETED
           primaryKey: false
           order: 6
-        - code: is_incomplete
+        - code: IS_INCOMPLETE
           name: 是否未完成
           definition: 是否未完成
           primaryKey: false
           order: 7
-        - code: is_pending_normal
+        - code: IS_PENDING_NORMAL
           name: 是否待完成NORMAL
           definition: 是否待完成NORMAL
           primaryKey: false
           order: 8
-        - code: is_abnormal_pending
+        - code: IS_ABNORMAL_PENDING
           name: 是否异常待完成
           definition: 是否异常待完成
           primaryKey: false
           order: 9
-        - code: is_overdue_unchanged
+        - code: IS_OVERDUE_UNCHANGED
           name: 是否超期UNCHANGED
           definition: 是否超期UNCHANGED
           primaryKey: false
           order: 10
-        - code: is_overdue_changed
+        - code: IS_OVERDUE_CHANGED
           name: 是否超期CHANGED
           definition: 是否超期CHANGED
           primaryKey: false
           order: 11
-        - code: is_overdue_done_unchanged
+        - code: IS_OVERDUE_DONE_UNCHANGED
           name: 是否超期已完成UNCHANGED
           definition: 是否超期已完成UNCHANGED
           primaryKey: false
           order: 12
-        - code: is_overdue_done_changed
+        - code: IS_OVERDUE_DONE_CHANGED
           name: 是否超期已完成CHANGED
           definition: 是否超期已完成CHANGED
           primaryKey: false
           order: 13
-        - code: is_overdue_completed_effective
+        - code: IS_OVERDUE_COMPLETED_EFFECTIVE
           name: 是否超期COMPLETEDEFFECTIVE
           definition: 是否超期COMPLETEDEFFECTIVE
           primaryKey: false
           order: 14
-        - code: is_overdue_incomplete_effective
+        - code: IS_OVERDUE_INCOMPLETE_EFFECTIVE
           name: 是否超期未完成EFFECTIVE
           definition: 是否超期未完成EFFECTIVE
           primaryKey: false
           order: 15
-        - code: sort_order
+        - code: SORT_ORDER
           name: 排序号
           definition: 排序号
           primaryKey: false
@@ -241,49 +241,49 @@ models:
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: node_type_id
+        dimensionAttributeCode: NODE_TYPE_ID
   - name: code
     description: 标准编码
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: code
+        dimensionAttributeCode: CODE
   - name: label
     description: 标准名称
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: label
+        dimensionAttributeCode: LABEL
   - name: is_general
     description: 是否一般
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_general
+        dimensionAttributeCode: IS_GENERAL
   - name: is_important
     description: 是否重要
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_important
+        dimensionAttributeCode: IS_IMPORTANT
   - name: is_major
     description: 是否重大
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_major
+        dimensionAttributeCode: IS_MAJOR
   - name: is_milestone
     description: 是否里程碑
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_milestone
+        dimensionAttributeCode: IS_MILESTONE
   - name: severity_rank
     description: 严重程度序号
     data_type: integer
     meta:
       dts:
-        dimensionAttributeCode: severity_rank
+        dimensionAttributeCode: SEVERITY_RANK
   config:
     contract:
       enforced: true
@@ -316,42 +316,42 @@ models:
         abbreviation: dim_node_type_v2
         definition: 每行一个项目节点类型
         attributes:
-        - code: node_type_id
+        - code: NODE_TYPE_ID
           name: 节点类型标识
           definition: 节点类型标识
           primaryKey: true
           order: 1
-        - code: code
+        - code: CODE
           name: 标准编码
           definition: 标准编码
           primaryKey: false
           order: 2
-        - code: label
+        - code: LABEL
           name: 标准名称
           definition: 标准名称
           primaryKey: false
           order: 3
-        - code: is_general
+        - code: IS_GENERAL
           name: 是否一般
           definition: 是否一般
           primaryKey: false
           order: 4
-        - code: is_important
+        - code: IS_IMPORTANT
           name: 是否重要
           definition: 是否重要
           primaryKey: false
           order: 5
-        - code: is_major
+        - code: IS_MAJOR
           name: 是否重大
           definition: 是否重大
           primaryKey: false
           order: 6
-        - code: is_milestone
+        - code: IS_MILESTONE
           name: 是否里程碑
           definition: 是否里程碑
           primaryKey: false
           order: 7
-        - code: severity_rank
+        - code: SEVERITY_RANK
           name: 严重程度序号
           definition: 严重程度序号
           primaryKey: false
@@ -371,43 +371,43 @@ models:
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: risk_level_id
+        dimensionAttributeCode: RISK_LEVEL_ID
   - name: code
     description: 标准编码
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: code
+        dimensionAttributeCode: CODE
   - name: label
     description: 标准名称
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: label
+        dimensionAttributeCode: LABEL
   - name: is_high
     description: 是否高
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_high
+        dimensionAttributeCode: IS_HIGH
   - name: is_mid
     description: 是否中
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_mid
+        dimensionAttributeCode: IS_MID
   - name: is_low
     description: 是否低
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_low
+        dimensionAttributeCode: IS_LOW
   - name: severity_rank
     description: 严重程度序号
     data_type: integer
     meta:
       dts:
-        dimensionAttributeCode: severity_rank
+        dimensionAttributeCode: SEVERITY_RANK
   config:
     contract:
       enforced: true
@@ -439,37 +439,37 @@ models:
         abbreviation: dim_risk_level_v2
         definition: 每行一个项目风险等级
         attributes:
-        - code: risk_level_id
+        - code: RISK_LEVEL_ID
           name: 风险等级标识
           definition: 风险等级标识
           primaryKey: true
           order: 1
-        - code: code
+        - code: CODE
           name: 标准编码
           definition: 标准编码
           primaryKey: false
           order: 2
-        - code: label
+        - code: LABEL
           name: 标准名称
           definition: 标准名称
           primaryKey: false
           order: 3
-        - code: is_high
+        - code: IS_HIGH
           name: 是否高
           definition: 是否高
           primaryKey: false
           order: 4
-        - code: is_mid
+        - code: IS_MID
           name: 是否中
           definition: 是否中
           primaryKey: false
           order: 5
-        - code: is_low
+        - code: IS_LOW
           name: 是否低
           definition: 是否低
           primaryKey: false
           order: 6
-        - code: severity_rank
+        - code: SEVERITY_RANK
           name: 严重程度序号
           definition: 严重程度序号
           primaryKey: false
@@ -489,49 +489,49 @@ models:
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: quality_status_id
+        dimensionAttributeCode: QUALITY_STATUS_ID
   - name: code
     description: 标准编码
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: code
+        dimensionAttributeCode: CODE
   - name: label
     description: 标准名称
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: label
+        dimensionAttributeCode: LABEL
   - name: is_zero_completed
     description: 是否ZEROCOMPLETED
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_zero_completed
+        dimensionAttributeCode: IS_ZERO_COMPLETED
   - name: is_tech_zero
     description: 是否技术ZERO
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_tech_zero
+        dimensionAttributeCode: IS_TECH_ZERO
   - name: is_mgmt_zero
     description: 是否MGMTZERO
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_mgmt_zero
+        dimensionAttributeCode: IS_MGMT_ZERO
   - name: is_both_zero
     description: 是否BOTHZERO
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_both_zero
+        dimensionAttributeCode: IS_BOTH_ZERO
   - name: sort_order
     description: 排序号
     data_type: integer
     meta:
       dts:
-        dimensionAttributeCode: sort_order
+        dimensionAttributeCode: SORT_ORDER
   config:
     contract:
       enforced: true
@@ -564,42 +564,42 @@ models:
         abbreviation: dim_quality_status_v2
         definition: 每行一个质量归零状态
         attributes:
-        - code: quality_status_id
+        - code: QUALITY_STATUS_ID
           name: 质量状态标识
           definition: 质量状态标识
           primaryKey: true
           order: 1
-        - code: code
+        - code: CODE
           name: 标准编码
           definition: 标准编码
           primaryKey: false
           order: 2
-        - code: label
+        - code: LABEL
           name: 标准名称
           definition: 标准名称
           primaryKey: false
           order: 3
-        - code: is_zero_completed
+        - code: IS_ZERO_COMPLETED
           name: 是否ZEROCOMPLETED
           definition: 是否ZEROCOMPLETED
           primaryKey: false
           order: 4
-        - code: is_tech_zero
+        - code: IS_TECH_ZERO
           name: 是否技术ZERO
           definition: 是否技术ZERO
           primaryKey: false
           order: 5
-        - code: is_mgmt_zero
+        - code: IS_MGMT_ZERO
           name: 是否MGMTZERO
           definition: 是否MGMTZERO
           primaryKey: false
           order: 6
-        - code: is_both_zero
+        - code: IS_BOTH_ZERO
           name: 是否BOTHZERO
           definition: 是否BOTHZERO
           primaryKey: false
           order: 7
-        - code: sort_order
+        - code: SORT_ORDER
           name: 排序号
           definition: 排序号
           primaryKey: false
@@ -619,43 +619,43 @@ models:
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: change_category_id
+        dimensionAttributeCode: CHANGE_CATEGORY_ID
   - name: code
     description: 标准编码
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: code
+        dimensionAttributeCode: CODE
   - name: label
     description: 标准名称
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: label
+        dimensionAttributeCode: LABEL
   - name: is_cat_i
     description: 是否CATI
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_cat_i
+        dimensionAttributeCode: IS_CAT_I
   - name: is_cat_ii
     description: 是否CATII
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_cat_ii
+        dimensionAttributeCode: IS_CAT_II
   - name: is_cat_iii
     description: 是否CATIII
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_cat_iii
+        dimensionAttributeCode: IS_CAT_III
   - name: severity_rank
     description: 严重程度序号
     data_type: integer
     meta:
       dts:
-        dimensionAttributeCode: severity_rank
+        dimensionAttributeCode: SEVERITY_RANK
   config:
     contract:
       enforced: true
@@ -687,37 +687,37 @@ models:
         abbreviation: dim_change_category_v2
         definition: 每行一个技术更改类别
         attributes:
-        - code: change_category_id
+        - code: CHANGE_CATEGORY_ID
           name: 更改分类标识
           definition: 更改分类标识
           primaryKey: true
           order: 1
-        - code: code
+        - code: CODE
           name: 标准编码
           definition: 标准编码
           primaryKey: false
           order: 2
-        - code: label
+        - code: LABEL
           name: 标准名称
           definition: 标准名称
           primaryKey: false
           order: 3
-        - code: is_cat_i
+        - code: IS_CAT_I
           name: 是否CATI
           definition: 是否CATI
           primaryKey: false
           order: 4
-        - code: is_cat_ii
+        - code: IS_CAT_II
           name: 是否CATII
           definition: 是否CATII
           primaryKey: false
           order: 5
-        - code: is_cat_iii
+        - code: IS_CAT_III
           name: 是否CATIII
           definition: 是否CATIII
           primaryKey: false
           order: 6
-        - code: severity_rank
+        - code: SEVERITY_RANK
           name: 严重程度序号
           definition: 严重程度序号
           primaryKey: false
@@ -737,43 +737,43 @@ models:
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: signature_status_id
+        dimensionAttributeCode: SIGNATURE_STATUS_ID
   - name: code
     description: 标准编码
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: code
+        dimensionAttributeCode: CODE
   - name: label
     description: 标准名称
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: label
+        dimensionAttributeCode: LABEL
   - name: applies_to_category
     description: APPLIESTO分类
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: applies_to_category
+        dimensionAttributeCode: APPLIES_TO_CATEGORY
   - name: is_reviewed
     description: 是否REVIEWED
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_reviewed
+        dimensionAttributeCode: IS_REVIEWED
   - name: is_signed
     description: 是否SIGNED
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: is_signed
+        dimensionAttributeCode: IS_SIGNED
   - name: sort_order
     description: 排序号
     data_type: integer
     meta:
       dts:
-        dimensionAttributeCode: sort_order
+        dimensionAttributeCode: SORT_ORDER
   config:
     contract:
       enforced: true
@@ -805,37 +805,37 @@ models:
         abbreviation: dim_signature_status_v2
         definition: 每行一个文件签署状态
         attributes:
-        - code: signature_status_id
+        - code: SIGNATURE_STATUS_ID
           name: 签署状态标识
           definition: 签署状态标识
           primaryKey: true
           order: 1
-        - code: code
+        - code: CODE
           name: 标准编码
           definition: 标准编码
           primaryKey: false
           order: 2
-        - code: label
+        - code: LABEL
           name: 标准名称
           definition: 标准名称
           primaryKey: false
           order: 3
-        - code: applies_to_category
+        - code: APPLIES_TO_CATEGORY
           name: APPLIESTO分类
           definition: APPLIESTO分类
           primaryKey: false
           order: 4
-        - code: is_reviewed
+        - code: IS_REVIEWED
           name: 是否REVIEWED
           definition: 是否REVIEWED
           primaryKey: false
           order: 5
-        - code: is_signed
+        - code: IS_SIGNED
           name: 是否SIGNED
           definition: 是否SIGNED
           primaryKey: false
           order: 6
-        - code: sort_order
+        - code: SORT_ORDER
           name: 排序号
           definition: 排序号
           primaryKey: false
@@ -855,79 +855,79 @@ models:
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: quality_category_id
+        dimensionAttributeCode: QUALITY_CATEGORY_ID
   - name: code
     description: 标准编码
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: code
+        dimensionAttributeCode: CODE
   - name: label
     description: 标准名称
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: label
+        dimensionAttributeCode: LABEL
   - name: cat_design
     description: CATDESIGN
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_design
+        dimensionAttributeCode: CAT_DESIGN
   - name: cat_process
     description: CATPROCESS
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_process
+        dimensionAttributeCode: CAT_PROCESS
   - name: cat_management
     description: CATMANAGEMENT
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_management
+        dimensionAttributeCode: CAT_MANAGEMENT
   - name: cat_component
     description: CATCOMPONENT
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_component
+        dimensionAttributeCode: CAT_COMPONENT
   - name: cat_operation
     description: CATOPERATION
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_operation
+        dimensionAttributeCode: CAT_OPERATION
   - name: cat_outsource
     description: CATOUTSOURCE
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_outsource
+        dimensionAttributeCode: CAT_OUTSOURCE
   - name: cat_software
     description: CATSOFTWARE
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_software
+        dimensionAttributeCode: CAT_SOFTWARE
   - name: cat_environment
     description: CATENVIRONMENT
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_environment
+        dimensionAttributeCode: CAT_ENVIRONMENT
   - name: cat_other
     description: CATOTHER
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_other
+        dimensionAttributeCode: CAT_OTHER
   - name: sort_order
     description: 排序号
     data_type: integer
     meta:
       dts:
-        dimensionAttributeCode: sort_order
+        dimensionAttributeCode: SORT_ORDER
   config:
     contract:
       enforced: true
@@ -965,67 +965,67 @@ models:
         abbreviation: dim_quality_category_v2
         definition: 每行一个质量问题原因分类
         attributes:
-        - code: quality_category_id
+        - code: QUALITY_CATEGORY_ID
           name: 质量分类标识
           definition: 质量分类标识
           primaryKey: true
           order: 1
-        - code: code
+        - code: CODE
           name: 标准编码
           definition: 标准编码
           primaryKey: false
           order: 2
-        - code: label
+        - code: LABEL
           name: 标准名称
           definition: 标准名称
           primaryKey: false
           order: 3
-        - code: cat_design
+        - code: CAT_DESIGN
           name: CATDESIGN
           definition: CATDESIGN
           primaryKey: false
           order: 4
-        - code: cat_process
+        - code: CAT_PROCESS
           name: CATPROCESS
           definition: CATPROCESS
           primaryKey: false
           order: 5
-        - code: cat_management
+        - code: CAT_MANAGEMENT
           name: CATMANAGEMENT
           definition: CATMANAGEMENT
           primaryKey: false
           order: 6
-        - code: cat_component
+        - code: CAT_COMPONENT
           name: CATCOMPONENT
           definition: CATCOMPONENT
           primaryKey: false
           order: 7
-        - code: cat_operation
+        - code: CAT_OPERATION
           name: CATOPERATION
           definition: CATOPERATION
           primaryKey: false
           order: 8
-        - code: cat_outsource
+        - code: CAT_OUTSOURCE
           name: CATOUTSOURCE
           definition: CATOUTSOURCE
           primaryKey: false
           order: 9
-        - code: cat_software
+        - code: CAT_SOFTWARE
           name: CATSOFTWARE
           definition: CATSOFTWARE
           primaryKey: false
           order: 10
-        - code: cat_environment
+        - code: CAT_ENVIRONMENT
           name: CATENVIRONMENT
           definition: CATENVIRONMENT
           primaryKey: false
           order: 11
-        - code: cat_other
+        - code: CAT_OTHER
           name: CATOTHER
           definition: CATOTHER
           primaryKey: false
           order: 12
-        - code: sort_order
+        - code: SORT_ORDER
           name: 排序号
           definition: 排序号
           primaryKey: false
@@ -1045,61 +1045,61 @@ models:
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: risk_category_id
+        dimensionAttributeCode: RISK_CATEGORY_ID
   - name: code
     description: 标准编码
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: code
+        dimensionAttributeCode: CODE
   - name: label
     description: 标准名称
     data_type: text
     meta:
       dts:
-        dimensionAttributeCode: label
+        dimensionAttributeCode: LABEL
   - name: cat_technical
     description: CATTECHNICAL
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_technical
+        dimensionAttributeCode: CAT_TECHNICAL
   - name: cat_schedule
     description: CATSCHEDULE
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_schedule
+        dimensionAttributeCode: CAT_SCHEDULE
   - name: cat_cost
     description: CAT成本
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_cost
+        dimensionAttributeCode: CAT_COST
   - name: cat_design
     description: CATDESIGN
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_design
+        dimensionAttributeCode: CAT_DESIGN
   - name: cat_quality
     description: CAT质量
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_quality
+        dimensionAttributeCode: CAT_QUALITY
   - name: cat_other
     description: CATOTHER
     data_type: boolean
     meta:
       dts:
-        dimensionAttributeCode: cat_other
+        dimensionAttributeCode: CAT_OTHER
   - name: sort_order
     description: 排序号
     data_type: integer
     meta:
       dts:
-        dimensionAttributeCode: sort_order
+        dimensionAttributeCode: SORT_ORDER
   config:
     contract:
       enforced: true
@@ -1134,52 +1134,52 @@ models:
         abbreviation: dim_risk_category_v2
         definition: 每行一个项目风险分类
         attributes:
-        - code: risk_category_id
+        - code: RISK_CATEGORY_ID
           name: 风险分类标识
           definition: 风险分类标识
           primaryKey: true
           order: 1
-        - code: code
+        - code: CODE
           name: 标准编码
           definition: 标准编码
           primaryKey: false
           order: 2
-        - code: label
+        - code: LABEL
           name: 标准名称
           definition: 标准名称
           primaryKey: false
           order: 3
-        - code: cat_technical
+        - code: CAT_TECHNICAL
           name: CATTECHNICAL
           definition: CATTECHNICAL
           primaryKey: false
           order: 4
-        - code: cat_schedule
+        - code: CAT_SCHEDULE
           name: CATSCHEDULE
           definition: CATSCHEDULE
           primaryKey: false
           order: 5
-        - code: cat_cost
+        - code: CAT_COST
           name: CAT成本
           definition: CAT成本
           primaryKey: false
           order: 6
-        - code: cat_design
+        - code: CAT_DESIGN
           name: CATDESIGN
           definition: CATDESIGN
           primaryKey: false
           order: 7
-        - code: cat_quality
+        - code: CAT_QUALITY
           name: CAT质量
           definition: CAT质量
           primaryKey: false
           order: 8
-        - code: cat_other
+        - code: CAT_OTHER
           name: CATOTHER
           definition: CATOTHER
           primaryKey: false
           order: 9
-        - code: sort_order
+        - code: SORT_ORDER
           name: 排序号
           definition: 排序号
           primaryKey: false

@@ -452,9 +452,9 @@ def synchronize(path: Path, verified: dict[str, list[tuple[str, str]]]) -> None:
             attributes = []
             for order, column in enumerate(synchronized_columns, 1):
                 meta = column.setdefault("meta", {})
-                meta.setdefault("dts", {})["dimensionAttributeCode"] = column["name"]
+                meta.setdefault("dts", {})["dimensionAttributeCode"] = column["name"].upper()
                 attributes.append({
-                    "code": column["name"],
+                    "code": column["name"].upper(),
                     "name": column["description"],
                     "definition": column["description"],
                     "primaryKey": column["name"] in semantics["grain"]["keys"],
