@@ -14,6 +14,10 @@ import { Button, Status } from "./PrototypePrimitives";
 import { createRenameMapping, type RenameMapping } from "./services/modelImportUiState";
 import { candidateEligibility, inspectionSummary, packageProfileLabel } from "./services/reverseModelingInspection";
 
+import { ReverseImportBatchSettings, type ImportBatchControls } from "./ReverseImportBatchSettings";
+import { suggestImportSourceMappings } from "./services/importSourceMapping";
+import { ReverseImportSourceRegistration } from "./ReverseImportSourceRegistration";
+
 const SECURITY_LEVEL_OPTIONS = [
 	{ value: "PUBLIC", label: "公开" },
 	{ value: "INTERNAL", label: "内部" },
@@ -129,6 +133,8 @@ export function StrategyStep({ archive, onArchive }: { archive: File | null; onA
 }
 
 type ConfirmStepProps = {
+	batchControls?: ImportBatchControls;
+	onSourcesChanged?: (sources: ModelingImportSourceBinding[], planId: string) => void;
 	inspection: DbtArchiveInspection;
 	plans: ModelingImportContextHeader[];
 	planId: string;
@@ -154,6 +160,8 @@ type ConfirmStepProps = {
 export function ConfirmStep(props: ConfirmStepProps) {
 	const {
 		inspection,
+		batchControls,
+		onSourcesChanged,
 		plans,
 		planId,
 		plansLoading,
@@ -347,6 +355,7 @@ export function ConfirmStep(props: ConfirmStepProps) {
 					))}
 				</details>
 			) : null}
+			{batchControls ? <ReverseImportBatchSettings controls={batchControls} context={{ domains, businessProcesses, dataMarts, subjectDomains }} /> : null}
 			<div className="dmx-mapping-grid">
 				<label className="dmx-reverse-plan">
 					<span>数仓规划</span>
@@ -360,7 +369,7 @@ export function ConfirmStep(props: ConfirmStepProps) {
 					</select>
 					{!plansLoading && !plans.length ? <small>当前环境尚未初始化模型导入环境。</small> : null}
 				</label>
-				{packageDomains.map((code) => (
+				{!batchControls ? packageDomains.map((code) => (
 					<label key={code}>
 						<span>数据域 {code}</span>
 						<select onChange={(event) => onDomainMapping(code, event.target.value)} value={domainMappings[code] || ""}>
@@ -372,7 +381,14 @@ export function ConfirmStep(props: ConfirmStepProps) {
 							))}
 						</select>
 					</label>
-				))}
+				)) : null}
+			</div>
+			{onSourcesChanged ? <ReverseImportSourceRegistration key={planId} planId={planId} onSourcesChanged={onSourcesChanged} /> : null}
+			{sources.length && packageSources.length ? <Button onClick={() => {
+				Object.entries(suggestImportSourceMappings(packageSources, sources, sourceMappings)).forEach(([id, binding]) => onSourceMapping(id, binding));
+			}}>按同名源表匹配</Button> : null}
+			{!sources.length && packageSources.length ? <p role="alert">当前建模环境没有已确认且结构一致的来源，请先登记并确认来源。</p> : null}
+			<div className="dmx-mapping-grid">
 				{packageSources.map(([sourceId, sourceName]) => (
 					<label key={sourceId}>
 						<span>来源 {sourceName}</span>
@@ -431,43 +447,9 @@ export function ConfirmStep(props: ConfirmStepProps) {
 					</div>
 				))}
 			</section>
-			<label className="dmx-reverse-plan">
-				<span>批量确认发布密级</span>
-				<select
-					aria-label="批量确认导入模型发布密级"
-					onChange={(event) => {
-						const securityLevel = event.target.value;
-						if (!securityLevel) return;
-						inspection.package.models
-							.filter((model) => selected.includes(model.dbtUniqueId))
-							.forEach((model) => {
-								const override = semanticOverrides[model.dbtUniqueId] || { modelUniqueId: model.dbtUniqueId };
-								onSemanticOverride(
-									model.dbtUniqueId,
-									applyModelSecurityLevel(
-										override,
-										(model.columns || []).map((column) => column.name),
-										securityLevel,
-									),
-								);
-							});
-					}}
-					value=""
-				>
-					<option value="">请选择并应用到已选模型</option>
-					{SECURITY_LEVEL_OPTIONS.map((level) => (
-						<option key={level.value} value={level.value}>
-							{level.label}
-						</option>
-					))}
-				</select>
-				<small>
-					{selected.length
-						? "这是当前操作者的显式治理确认，不会写回或篡改原始 dbt SQL；未识别字段的模型不会被应用。"
-						: "请先在下表勾选要导入的模型，再批量确认发布密级。"}
-				</small>
-			</label>
+
 			<ImportSemanticsTable
+				batchControls={batchControls}
 				inspection={inspection}
 				onSelected={onSelected}
 				onSemanticOverride={onSemanticOverride}
@@ -483,6 +465,7 @@ export function ConfirmStep(props: ConfirmStepProps) {
 }
 
 function ImportSemanticsTable({
+	batchControls,
 	inspection,
 	selected,
 	onSelected,
@@ -493,6 +476,7 @@ function ImportSemanticsTable({
 	domainMappings,
 	subjectDomains,
 }: {
+	batchControls?: ImportBatchControls;
 	inspection: DbtArchiveInspection;
 	selected: string[];
 	onSelected: (ids: string[]) => void;
@@ -547,6 +531,9 @@ function ImportSemanticsTable({
 					return (
 						<>
 							{model.dbtUniqueId}
+							{batchControls ? <div>{batchControls.custom.includes(model.dbtUniqueId)
+								? <button type="button" onClick={() => batchControls.onInherit(model.dbtUniqueId)}>单独设置 · 恢复整包设置</button>
+								: <small>继承整包设置</small>}</div> : null}
 							<Status
 								tone={eligibility === "BLOCKED" ? "danger" : eligibility === "REQUIRES_MAPPING" ? "warning" : "success"}
 							>
@@ -771,6 +758,7 @@ function ImportSemanticsTable({
 			},
 		],
 		[
+			batchControls,
 			businessProcesses,
 			dataMarts,
 			domainMappings,
@@ -784,6 +772,10 @@ function ImportSemanticsTable({
 	);
 	return (
 		<section>
+			<div className="dmx-summary-line">
+				<Button onClick={() => onSelected(inspection.package.models.filter(model => candidateEligibility(inspection, model.dbtUniqueId) !== "BLOCKED").map(model => model.dbtUniqueId))}>全选可导入模型</Button>
+				<Button onClick={() => onSelected([])}>取消全选</Button><span>已选择 {selected.length} 个模型</span>
+			</div>
 			<p>发布密级由当前操作者显式确认；选择后应用到该模型全部字段，系统不会从测试数据或包名推断。</p>
 			<CompactTable
 				className="dmx-import-semantics"

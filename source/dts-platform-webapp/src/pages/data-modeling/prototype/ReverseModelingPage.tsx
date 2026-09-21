@@ -36,6 +36,9 @@ import { normalizeModelingRequestFailure } from "./services/planningProjectionSe
 import { isAdvancedDbtImportResult, isInspectionCandidateSelectable } from "./services/reverseModelingInspection";
 import { useDataModelingMenuGrant } from "./useDataModelingMenuGrant";
 
+import { issueText } from "./ReverseModelingIssueText";
+import { initialImportOverrides, useImportBatchSettings } from "./ReverseImportBatchSettings";
+
 const steps = ["逆向策略", "确认模型信息", "生成模型", "完成"];
 
 type Failure = { kind: "permission" | "request"; message: string };
@@ -47,25 +50,6 @@ const EMPTY_PLAN_CONTEXT: PlanContext = {
 	dataMarts: [],
 	subjectDomains: [],
 };
-const issueText = (
-	issues: Array<{
-		code: string;
-		message: string;
-		recoveryAction?: string | null;
-		stage?: string | null;
-		category?: string | null;
-		retryable?: boolean;
-		correlationId?: string | null;
-	}>,
-) =>
-	issues.length
-		? issues
-				.map(
-					(issue) =>
-						`${issue.stage || "UNKNOWN"}/${issue.category || "GENERAL"} · ${issue.code}：${issue.message}${issue.recoveryAction ? `；处理建议：${issue.recoveryAction}` : ""}${issue.retryable == null ? "" : `；可重试：${issue.retryable ? "是" : "否"}`}${issue.correlationId ? `；关联号：${issue.correlationId}` : ""}`,
-				)
-				.join("\n")
-		: "—";
 
 export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 	const canMaintain = useDataModelingMenuGrant();
@@ -90,6 +74,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 	const [sourceMappings, setSourceMappings] = useState<Record<string, string>>({});
 	const [renameMappings, setRenameMappings] = useState<RenameMapping[]>([]);
 	const [semanticOverrides, setSemanticOverrides] = useState<Record<string, ModelSpecImportSemanticOverride>>({});
+	const batch = useImportBatchSettings(inspection, semanticOverrides);
 	const [conflictResolutions, setConflictResolutions] = useState<Record<string, ModelSpecImportConflictResolution>>({});
 	const [loading, setLoading] = useState(true);
 	const [busy, setBusy] = useState<"inspect" | "preview" | "apply" | "refresh" | "retry" | "undo" | "">("");
@@ -189,8 +174,8 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 		[inspection],
 	);
 	const previewIssues = useMemo(
-		() => previewReadinessIssues({ inspection, planId, selected, packageDomains, domainMappings, semanticOverrides }),
-		[inspection, planId, selected, packageDomains, domainMappings, semanticOverrides],
+		() => previewReadinessIssues({ inspection, planId, selected, packageDomains, domainMappings, semanticOverrides: batch.effective }),
+		[inspection, planId, selected, packageDomains, domainMappings, batch.effective],
 	);
 	const hasRetryableResult = Boolean(
 		(result?.overallRun?.items || result?.items || []).some((item) =>
@@ -232,6 +217,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 		setSourceMappings({});
 		setRenameMappings([]);
 		setSemanticOverrides({});
+		batch.reset();
 		setConflictResolutions({});
 		setFailure(null);
 		setBusy("");
@@ -254,32 +240,10 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 					.filter((model) => isInspectionCandidateSelectable(next, model.dbtUniqueId))
 					.map((model) => model.dbtUniqueId),
 			);
-			setSemanticOverrides(
-				Object.fromEntries(
-					next.package.models.map((model) => [
-						model.dbtUniqueId,
-						{
-							modelUniqueId: model.dbtUniqueId,
-							modelType: model.semantics?.modelType || undefined,
-							layer: model.semantics?.layer || undefined,
-							businessName: model.name,
-							businessDefinition: model.description || undefined,
-							grain: model.semantics?.grain?.statement
-								? { statement: model.semantics.grain.statement, keys: model.semantics.grain.keys || [] }
-								: undefined,
-						},
-					]),
-				),
-			);
-			const defaultDomain = planContext.domains[0]?.domainId || "";
-			setDomainMappings(
-				Object.fromEntries(
-					next.package.models
-						.map((model) => model.semantics?.domainCode?.trim())
-						.filter((value): value is string => Boolean(value))
-						.map((code) => [code, defaultDomain]),
-				),
-			);
+			setSemanticOverrides(initialImportOverrides(next));
+			batch.reset();
+			setDomainMappings({});
+			setSourceMappings({});
 			setStep(1);
 		} catch (error) {
 			setFailure(normalizeModelingRequestFailure(error, "dbt ZIP 检查失败。"));
@@ -298,7 +262,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 				inspectionProof: inspection.inspectionProof,
 				context: { planId, domainMappings, sourceMappings },
 				selectedUniqueIds: selected,
-				semanticOverrides: Object.values(semanticOverrides).filter((item) => selected.includes(item.modelUniqueId)),
+				semanticOverrides: Object.values(batch.effective).filter((item) => selected.includes(item.modelUniqueId)),
 				renameMappings: renameMappingRequests(renameMappings),
 			});
 			setRequestedSelection(selected);
@@ -448,18 +412,33 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 								domainMappings={domainMappings}
 								domains={planContext.domains}
 								inspection={inspection}
-								onPlanId={setPlanId}
+								onPlanId={(id) => {
+									setPlanId(id); setSourceMappings({}); setDomainMappings({}); batch.reset();
+									setSemanticOverrides(current => Object.fromEntries(Object.entries(current).map(([key, value]) =>
+										[key, { ...value, businessProcessId: undefined, dataMartId: undefined, subjectDomainId: undefined }])));
+								}}
 								onDomainMapping={(code, value) => setDomainMappings((current) => ({ ...current, [code]: value }))}
 								onRenameMappings={setRenameMappings}
 								onSelected={setSelected}
-								onSemanticOverride={(id, value) => setSemanticOverrides((current) => ({ ...current, [id]: value }))}
+								onSemanticOverride={(id, value) => { batch.customize(id); setSemanticOverrides((current) => ({ ...current, [id]: value })); }}
 								onSourceMapping={(code, value) => setSourceMappings((current) => ({ ...current, [code]: value }))}
 								planId={planId}
 								plans={plans}
 								plansLoading={loading}
 								selected={selected}
 								renameMappings={renameMappings}
-								semanticOverrides={semanticOverrides}
+								semanticOverrides={batch.effective}
+								batchControls={{ defaults: batch.defaults, custom: batch.custom, onInherit: batch.inherit, onChange: next => {
+									if (next.domainId !== batch.defaults.domainId) {
+										setDomainMappings(Object.fromEntries(packageDomains.map(code => [code, next.domainId])));
+										setSemanticOverrides(current => Object.fromEntries(Object.entries(current).map(([id, value]) =>
+											[id, { ...value, businessProcessId: undefined }])));
+									}
+									batch.setDefaults(next);
+								} }}
+								onSourcesChanged={(sources, sourcePlanId) => {
+									if (sourcePlanId === planId) setPlanContext(current => ({ ...current, sources }));
+								}}
 								sourceMappings={sourceMappings}
 								sources={planContext.sources}
 								businessProcesses={planContext.businessProcesses}
@@ -504,7 +483,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 							取消
 						</Button>
 						{step > 0 && step < 3 ? (
-							<Button disabled={Boolean(busy)} onClick={() => setStep((current) => current - 1)}>
+							<Button disabled={Boolean(busy)} onClick={() => { if (step === 2) setSelected(requestedSelection); setStep((current) => current - 1); }}>
 								上一步
 							</Button>
 						) : null}

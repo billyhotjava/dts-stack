@@ -2516,3 +2516,18 @@
 	font-weight: 600;
 	color: #4b5563;
 }
+
+.dmx-import-batch-settings,
+.dmx-import-source-registration {
+	margin-bottom: 16px;
+	padding: 14px;
+	border: 1px solid var(--dmx-border);
+	background: #fbfcfe;
+}
+.dmx-import-batch-settings .dmx-mapping-grid {
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.dmx-import-batch-settings select {
+	width: 100%;
+	min-width: 0;
+}

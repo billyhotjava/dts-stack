@@ -18,6 +18,11 @@ const ruleBody = (selector: string) => {
 };
 
 describe("reverse-modeling responsive layout contract", () => {
+	it("keeps package settings responsive and exposes source registration in the wizard", () => {
+		expect(ruleBody(".dmx-import-batch-settings .dmx-mapping-grid")).toContain("minmax(220px, 1fr)");
+		expect(inspectionSource).toContain("<ReverseImportSourceRegistration");
+		expect(inspectionSource).toContain("全选可导入模型");
+	});
 	it("keeps the wizard and body within their route container", () => {
 		const wizard = ruleBody(".dmx-reverse-wizard");
 		const body = ruleBody(".dmx-wizard-body");
