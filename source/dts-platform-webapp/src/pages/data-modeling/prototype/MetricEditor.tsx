@@ -6,6 +6,7 @@ import type {
 } from "@/features/modeling/indicators/indicatorDefinitionContract";
 import { IndicatorAnalysisFields } from "./IndicatorAnalysisFields";
 import { MetricDefinitionBindingFields } from "./MetricDefinitionBindingFields";
+import { MetricOwnershipSelect } from "./MetricOwnershipSelect";
 import { ModifierDefinitionEditor } from "./ModifierDefinitionEditor";
 import type { PlanningCatalogDomain } from "./services/planningCatalogDomainService";
 import { resolveBusinessProcessBinding } from "./services/planningContextPolicyService";
@@ -148,10 +149,18 @@ export function MetricEditor({
 						/>
 					</MetricField>
 					<MetricField label="负责人">
-						<input onChange={(event) => set("owner", event.target.value)} value={String(values.owner || "")} />
+						<MetricOwnershipSelect
+							kind="user"
+							value={String(values.owner || "")}
+							onChange={(value) => set("owner", value)}
+						/>
 					</MetricField>
 					<MetricField label="责任部门">
-						<input onChange={(event) => set("ownerDept", event.target.value)} value={String(values.ownerDept || "")} />
+						<MetricOwnershipSelect
+							kind="department"
+							value={String(values.ownerDept || "")}
+							onChange={(value) => set("ownerDept", value)}
+						/>
 					</MetricField>
 					<MetricField label="业务口径" required wide>
 						<textarea

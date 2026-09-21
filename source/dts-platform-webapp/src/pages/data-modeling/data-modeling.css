@@ -1637,8 +1637,6 @@
 	display: grid;
 	gap: 5px;
 }
-.dmx-metric-section input,
-.dmx-metric-section select,
 .dmx-analysis-config {
 	display: grid;
 	gap: 14px;
@@ -1699,6 +1697,8 @@
 		grid-template-columns: minmax(0, 1fr);
 	}
 }
+.dmx-metric-section input:not(.ant-select-selection-search-input),
+.dmx-metric-section select,
 .dmx-metric-section textarea {
 	width: 100%;
 	min-height: 35px;
