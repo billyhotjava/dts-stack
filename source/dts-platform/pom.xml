@@ -592,6 +592,7 @@
                         <testInclude>**/service/modeling/DimensionModelApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/DimensionModelCreateRequestDecoderTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelWorkbenchCatalogQueryServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelingAuthorizationServiceTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelWorkbenchCatalogRepositoryPostgresIT.java</testInclude>
                         <testInclude>**/service/modeling/representation/*.java</testInclude>
                         <testInclude>**/service/modeling/authoring/*.java</testInclude>
