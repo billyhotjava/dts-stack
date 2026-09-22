@@ -48,7 +48,7 @@
                 parent_id BIGINT;
                 inserted_count INTEGER := 0;
             BEGIN
-                PERFORM pg_advisory_xact_lock(hashtextended('dts:portal-menu:bootstrap:20260922-01', 0));
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:bootstrap:20260922-01', 0));
                 FOREACH seed SLICE 1 IN ARRAY seeds
                 LOOP
                     -- 已有同 titleKey 的活动行则跳过，绝不覆盖既有排序与归属
