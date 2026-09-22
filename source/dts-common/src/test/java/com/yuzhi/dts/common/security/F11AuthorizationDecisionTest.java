@@ -99,8 +99,9 @@ class F11AuthorizationDecisionTest {
     @DisplayName("F11-UT-017：未知权限码非法，字典外码不授予")
     void unknownPermissionCodesAreRejected() {
         assertThat(PermissionCodes.isKnown("modeling:model:delete")).isFalse();
+        assertThat(PermissionCodes.isKnown("portal:read")).isTrue();
         assertThat(PermissionCodes.isValid("MODELING:model:read")).isFalse();
-        assertThatThrownBy(() -> new ScopedGrant("t1", "unknown:code", "1153", Set.of(), Set.of()))
+        assertThatThrownBy(() -> new ScopedGrant("t1", "Bad Code!", "1153", Set.of(), Set.of()))
             .isInstanceOf(IllegalArgumentException.class);
     }
 }

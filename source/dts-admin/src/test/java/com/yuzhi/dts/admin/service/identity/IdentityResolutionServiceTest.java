@@ -70,15 +70,26 @@ class IdentityResolutionServiceTest {
         stable.setUsername("zhangsan");
         stable.setKeycloakId("kc-1");
         when(roleMembers.findByKeycloakId("kc-1")).thenReturn(List.of(stable));
-        when(roleAssignments.findByKeycloakId("kc-1")).thenReturn(List.of());
+        AdminRoleAssignment stableAssignment = new AdminRoleAssignment();
+        stableAssignment.setRole("DEPT_DATA_OWNER");
+        stableAssignment.setUsername("zhangsan");
+        stableAssignment.setKeycloakId("kc-1");
+        stableAssignment.setDisplayName("测试用户");
+        stableAssignment.setUserSecurityLevel("GENERAL");
+        stableAssignment.setOperationsCsv("read");
+        when(roleAssignments.findByKeycloakId("kc-1")).thenReturn(List.of(stableAssignment));
 
         var resolved = service.resolveByStableId("kc-1");
         assertThat(resolved.roles()).containsExactly("ROLE_DEPT_DATA_OWNER");
         assertThat(resolved.legacyFallback()).isFalse();
         assertThat(resolved.enabled()).isTrue();
+        assertThat(resolved.grants()).hasSize(1);
+        assertThat(resolved.grants().getFirst().source())
+            .isEqualTo(IdentityResolutionService.GrantSource.STABLE);
 
-        // 回填缺失分支
+        // 回填缺失分支：双表均无稳定键时回退 username 并标记
         when(roleMembers.findByKeycloakId("kc-1")).thenReturn(List.of());
+        when(roleAssignments.findByKeycloakId("kc-1")).thenReturn(List.of());
         AdminRoleMember legacy = new AdminRoleMember();
         legacy.setRole("dept_leader");
         legacy.setUsername("ZhangSan");
@@ -94,7 +105,11 @@ class IdentityResolutionServiceTest {
     void assignmentScopeTravelsWithBinding() {
         AdminKeycloakUser user = user("kc-2", "lisi");
         when(users.findByKeycloakId("kc-2")).thenReturn(Optional.of(user));
-        when(roleMembers.findByKeycloakId("kc-2")).thenReturn(List.of());
+        AdminRoleMember stableMember = new AdminRoleMember();
+        stableMember.setRole("DEPT_DATA_OWNER");
+        stableMember.setUsername("lisi");
+        stableMember.setKeycloakId("kc-2");
+        when(roleMembers.findByKeycloakId("kc-2")).thenReturn(List.of(stableMember));
 
         AdminRoleAssignment assignment = new AdminRoleAssignment();
         assignment.setRole("DEPT_DATA_OWNER");
