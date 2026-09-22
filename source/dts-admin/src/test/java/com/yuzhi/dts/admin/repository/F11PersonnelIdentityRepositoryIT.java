@@ -105,6 +105,26 @@ class F11PersonnelIdentityRepositoryIT {
         assertThat(loaded.getMdmEnabled()).isEqualTo(1);
     }
 
+    @Test
+    @DisplayName("F11-T07：业务准入/同步状态与来源版本可独立持久化")
+    void accessAndSyncStatesPersistIndependently() {
+        AdminKeycloakUser user = record("SOURCE-" + UUID.randomUUID(), "lifecycle-" + UUID.randomUUID());
+        user.setAccessState("SUSPENDED");
+        user.setSyncState("RETRYABLE_FAILURE");
+        user.setSyncError("kc-unreachable");
+        user.setSourceSystem("MDM");
+        user.setSourceVersion("v12");
+        repository.saveAndFlush(user);
+        entityManager.clear();
+
+        AdminKeycloakUser loaded = repository.findByKeycloakId(user.getKeycloakId()).orElseThrow();
+        assertThat(loaded.getAccessState()).isEqualTo("SUSPENDED");
+        assertThat(loaded.getSyncState()).isEqualTo("RETRYABLE_FAILURE");
+        assertThat(loaded.getSyncError()).isEqualTo("kc-unreachable");
+        assertThat(loaded.getSourceSystem()).isEqualTo("MDM");
+        assertThat(loaded.getSourceVersion()).isEqualTo("v12");
+    }
+
     private AdminKeycloakUser save(String personCode, String username) {
         return repository.saveAndFlush(record(personCode, username));
     }

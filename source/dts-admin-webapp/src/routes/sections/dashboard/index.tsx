@@ -17,30 +17,8 @@ const getRoutes = (): RouteObject[] => {
 	return getBackendDashboardRoutes();
 };
 
-export const resolveHomePathForRoles = (roles: string[]): string => {
-	const normalized = (roles || []).map((role) =>
-		String(role || "")
-			.trim()
-			.toUpperCase(),
-	);
-	const hasRole = (needle: string) => normalized.includes(needle);
-	if (
-		hasRole("AUDITADMIN") ||
-		hasRole("ROLE_SECURITY_AUDITOR") ||
-		hasRole("SECURITYAUDITOR") ||
-		hasRole("ROLE_AUDITOR_ADMIN") ||
-		hasRole("ROLE_AUDIT_ADMIN")
-	) {
-		return "/admin/audit";
-	}
-	if (hasRole("AUTHADMIN") || hasRole("ROLE_AUTH_ADMIN")) {
-		return "/admin/approval";
-	}
-	if (hasRole("SYSADMIN") || hasRole("ROLE_SYS_ADMIN")) {
-		return "/admin/my-changes";
-	}
-	return GLOBAL_CONFIG.defaultRoute;
-};
+export { resolveHomePathForRoles } from "./home-path";
+import { resolveHomePathForRoles } from "./home-path";
 
 function DashboardIndexRedirect() {
 	const navigate = useNavigate();

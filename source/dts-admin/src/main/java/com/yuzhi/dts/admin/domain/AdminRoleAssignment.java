@@ -18,6 +18,13 @@ public class AdminRoleAssignment extends AbstractAuditingEntity<Long> implements
     @Column(name = "username", nullable = false)
     private String username;
 
+    /**
+     * F11-T02：稳定账号键（Keycloak kc_id）。双写过渡期可空；范围/动作列
+     * （scope_org_id、dataset_ids、operations）保持原语义，随本列整体迁移。
+     */
+    @Column(name = "keycloak_id", length = 64)
+    private String keycloakId;
+
     @Column(name = "display_name", nullable = false)
     private String displayName;
 
@@ -41,6 +48,8 @@ public class AdminRoleAssignment extends AbstractAuditingEntity<Long> implements
     public void setRole(String role) { this.role = role; }
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
+    public String getKeycloakId() { return keycloakId; }
+    public void setKeycloakId(String keycloakId) { this.keycloakId = keycloakId; }
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
     public String getUserSecurityLevel() { return userSecurityLevel; }

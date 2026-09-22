@@ -162,8 +162,11 @@
     <include file="config/liquibase/changelog/20260914-01_person_import_history_constraints.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260916_01_screen_management_root.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260916_02_admin_keycloak_user_dept.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260922_01_portal_menu_implementation_order_bootstrap.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260916_03_portal_menu_implementation_order.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260918_01_admin_keycloak_user_person_code.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260920_01_admin_keycloak_user_person_code_unique.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260921_01_business_process_update_audit.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260922_02_admin_keycloak_user_source_lifecycle.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260922_03_admin_role_stable_key.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

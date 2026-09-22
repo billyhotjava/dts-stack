@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260922-01-portal-menu-implementation-order-bootstrap" author="f11" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="parent_id"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+        </preConditions>
+        <comment>
+            Sprint-104 F11（修复 F11-TEST-001）：20260916_03 排序迁移要求 15 个实施顺序菜单各精确匹配一行，
+            但这些行平时由应用启动时的 PortalMenuService.ensureSeedMenus 落盘，纯 Liquibase 初始化的新库
+            （含 @DataJpaTest 切片）在 20260916_03 执行时一行也没有，导致 HALT。本前置只补缺失行：
+            已存在的 titleKey 绝不覆盖、不改排序；补齐行使用 90001+ 预留 ID，运行时种子重置会按正常流程
+            重建整树。已执行过 20260916_03 的存量库不受影响（本 changeSet 对它们是无操作）。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT TEXT := 'portal-menu-bootstrap-20260922';
+                -- id, title_key, parent_title_key（空为根）, path
+                seeds TEXT[][] := ARRAY[
+                    ['90001','sys.nav.portal.dataArchitecture','','dataArchitecture'],
+                    ['90002','sys.nav.portal.dataIntegration','','dataIntegration'],
+                    ['90003','sys.nav.portal.studioDataModeling','','studioDataModeling'],
+                    ['90004','sys.nav.portal.governanceOperations','','governanceOperations'],
+                    ['90005','sys.nav.portal.dataConsumption','','dataConsumption'],
+                    ['90006','sys.nav.portal.biScreens','','biScreens'],
+                    ['90007','sys.nav.portal.dataStandards','sys.nav.portal.studioDataModeling','standards'],
+                    ['90008','sys.nav.portal.dimensionalModeling','sys.nav.portal.studioDataModeling','dimensional-modeling'],
+                    ['90009','sys.nav.portal.dataMetrics','sys.nav.portal.studioDataModeling','data-metrics'],
+                    ['90010','sys.nav.portal.modelingGraphs','sys.nav.portal.studioDataModeling','modeling-graphs'],
+                    ['90011','sys.nav.portal.modelingHomeWorkspace','sys.nav.portal.studioDataModeling','modeling-home-workspace'],
+                    ['90012','sys.nav.portal.modelingTools','sys.nav.portal.studioDataModeling','modeling-tools'],
+                    ['90013','sys.nav.portal.metricAtomic','sys.nav.portal.dataMetrics','metrics-atomic'],
+                    ['90014','sys.nav.portal.metricComposite','sys.nav.portal.dataMetrics','metrics-composite'],
+                    ['90015','sys.nav.portal.governanceClassification','sys.nav.portal.governanceOperations','classification'],
+                    ['90016','sys.nav.portal.governanceQualityRules','sys.nav.portal.governanceOperations','qualityRules'],
+                    ['90017','sys.nav.portal.governanceQualityReport','sys.nav.portal.governanceOperations','qualityReport'],
+                    ['90018','sys.nav.portal.serviceCenter','sys.nav.portal.dataConsumption','services'],
+                    ['90019','sys.nav.portal.businessIntelligenceApps','sys.nav.portal.dataConsumption','bi-apps']
+                ];
+                seed TEXT[];
+                parent_id BIGINT;
+                inserted_count INTEGER := 0;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextended('dts:portal-menu:bootstrap:20260922-01', 0));
+                FOREACH seed SLICE 1 IN ARRAY seeds
+                LOOP
+                    -- 已有同 titleKey 的活动行则跳过，绝不覆盖既有排序与归属
+                    IF EXISTS (
+                        SELECT 1 FROM portal_menu m
+                         WHERE m.deleted = FALSE
+                           AND (m.name = seed[2] OR m.metadata::jsonb ->> 'titleKey' = seed[2])
+                    ) THEN
+                        CONTINUE;
+                    END IF;
+                    parent_id := NULL;
+                    IF seed[3] <> '' THEN
+                        SELECT m.id INTO parent_id FROM portal_menu m
+                         WHERE m.deleted = FALSE
+                           AND (m.name = seed[3] OR m.metadata::jsonb ->> 'titleKey' = seed[3])
+                         ORDER BY m.id LIMIT 1;
+                    END IF;
+                    INSERT INTO portal_menu (id, name, path, sort_order, metadata, security_level, deleted,
+                        parent_id, created_by, created_date, last_modified_by, last_modified_date)
+                    VALUES (seed[1]::BIGINT, seed[2], seed[4], 999,
+                        jsonb_build_object('titleKey', seed[2]),
+                        'GENERAL', FALSE, parent_id, actor, now(), actor, now())
+                    ON CONFLICT (id) DO NOTHING;
+                    inserted_count := inserted_count + 1;
+                END LOOP;
+                RAISE NOTICE 'Portal menu bootstrap inserted % rows (0 means all present)', inserted_count;
+            END $do$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DELETE FROM portal_menu
+                 WHERE created_by = 'portal-menu-bootstrap-20260922' AND id BETWEEN 90001 AND 90099;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

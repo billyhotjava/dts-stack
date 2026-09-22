@@ -15,6 +15,9 @@ public interface AdminRoleMemberRepository extends JpaRepository<AdminRoleMember
     Optional<AdminRoleMember> findByRoleIgnoreCaseAndUsernameIgnoreCase(String role, String username);
     List<AdminRoleMember> findByUsernameIgnoreCase(String username);
 
+    /** F11-T02：稳定键优先读取；回填完成前可能为空，调用方需保留 username 回退并标记 legacy。 */
+    List<AdminRoleMember> findByKeycloakId(String keycloakId);
+
     @Query("select m from AdminRoleMember m where lower(m.username) in :usernames")
     List<AdminRoleMember> findByUsernameInIgnoreCase(@Param("usernames") Collection<String> usernames);
 

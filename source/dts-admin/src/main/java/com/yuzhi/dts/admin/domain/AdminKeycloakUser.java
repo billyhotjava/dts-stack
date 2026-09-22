@@ -72,6 +72,35 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
     @Column(name = "mdm_enabled", nullable = false)
     private int mdmEnabled = 1;
 
+    /**
+     * F11-T07：人员/组织字段的权威来源（MDM/LOCAL），与 Keycloak 回读的认证字段分离。
+     * 同一记录禁止 MDM 与本地互相覆盖，由 PersonnelSourceFieldGuard 在应用层执行。
+     */
+    @Column(name = "source_system", length = 64)
+    private String sourceSystem;
+
+    /** F11-T07：来源记录版本，用于 CAS 防乱序；无版本时不判先后，只做幂等。 */
+    @Column(name = "source_version", length = 64)
+    private String sourceVersion;
+
+    /**
+     * F11-T07：DTS 业务准入状态（ACTIVE/SUSPENDED/RETIRED），独立于 Keycloak enabled。
+     * 人工停用不被 MDM 活跃值解除；未知来源状态不猜测离职。
+     */
+    @Column(name = "access_state", nullable = false, length = 16)
+    private String accessState = "ACTIVE";
+
+    /**
+     * F11-T07：对外同步结果（PENDING/APPLYING/SYNCED/RETRYABLE_FAILURE/CONFLICT），
+     * 只表示开户/投影进度，不代表有权登录。
+     */
+    @Column(name = "sync_state", nullable = false, length = 32)
+    private String syncState = "SYNCED";
+
+    /** F11-T07：最近一次同步失败原因（脱敏，不存密钥/令牌）。 */
+    @Column(name = "sync_error", columnDefinition = "TEXT")
+    private String syncError;
+
     @Column(name = "last_sync_at")
     private Instant lastSyncAt;
 
@@ -186,6 +215,46 @@ public class AdminKeycloakUser extends AbstractAuditingEntity<Long> implements S
 
     public void setMdmEnabled(int mdmEnabled) {
         this.mdmEnabled = mdmEnabled;
+    }
+
+    public String getSourceSystem() {
+        return sourceSystem;
+    }
+
+    public void setSourceSystem(String sourceSystem) {
+        this.sourceSystem = sourceSystem;
+    }
+
+    public String getSourceVersion() {
+        return sourceVersion;
+    }
+
+    public void setSourceVersion(String sourceVersion) {
+        this.sourceVersion = sourceVersion;
+    }
+
+    public String getAccessState() {
+        return accessState;
+    }
+
+    public void setAccessState(String accessState) {
+        this.accessState = accessState;
+    }
+
+    public String getSyncState() {
+        return syncState;
+    }
+
+    public void setSyncState(String syncState) {
+        this.syncState = syncState;
+    }
+
+    public String getSyncError() {
+        return syncError;
+    }
+
+    public void setSyncError(String syncError) {
+        this.syncError = syncError;
     }
 
     public Instant getLastSyncAt() {

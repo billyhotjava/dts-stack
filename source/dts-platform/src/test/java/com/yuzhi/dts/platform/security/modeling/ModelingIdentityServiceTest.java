@@ -167,11 +167,15 @@ class ModelingIdentityServiceTest {
             return null;
         });
     }
-    @Test void legacySessionMustReloginWithoutUsernameFallback() {
+    @Test
+    @DisplayName("F11-UT-010：旧会话缺稳定ID必须重新登录，不按用户名补齐")
+    void legacySessionMustReloginWithoutUsernameFallback() {
         assertThatThrownBy(() -> identities.resolve(null)).isInstanceOfSatisfying(ModelingIdentityException.class, ex -> assertThat(ex.status()).isEqualTo(401));
         verifyNoInteractions(directory);
     }
-    @Test void usesStableIdOnlyInsideModelingAndRestoresLegacyIdentityEvenOnFailure() {
+    @Test
+    @DisplayName("F11-UT-010：建模内只用稳定ID，失败也恢复原认证上下文")
+    void usesStableIdOnlyInsideModelingAndRestoresLegacyIdentityEvenOnFailure() {
         var previous = new TestingAuthenticationToken("legacy-username", "unused", "ROLE_EMPLOYEE");
         SecurityContextHolder.getContext().setAuthentication(previous);
         when(directory.currentModelingUser("stable-id")).thenReturn(user(AuthoritiesConstants.DEPT_DATA_OWNER,true));
@@ -183,12 +187,16 @@ class ModelingIdentityServiceTest {
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isSameAs(previous);
         assertThat(ModelingIdentity.optional()).isEmpty(); SecurityContextHolder.clearContext();
     }
-    @Test void revokedRoleDisabledUserAndDirectoryFailureNeverReuseAllowedIdentity() {
+    @Test
+    @DisplayName("F11-UT-013/071：撤权/停用/目录故障永不复用历史允许身份")
+    void revokedRoleDisabledUserAndDirectoryFailureNeverReuseAllowedIdentity() {
         when(directory.currentModelingUser("stable-id")).thenReturn(user(AuthoritiesConstants.DEPT_DATA_OWNER,true), user(AuthoritiesConstants.EMPLOYEE,true), user(AuthoritiesConstants.DEPT_DATA_OWNER,false)).thenThrow(new IllegalStateException("directory down"));
         assertThat(identities.asCurrentUser("stable-id", () -> true)).isTrue();
         assertStatus(403); assertStatus(401); assertStatus(503);
     }
-    @Test void exactDepartmentComparisonNeverMatchesSuffixOrParent() {
+    @Test
+    @DisplayName("F11-UT-024：部门精确比较，后缀/父子不匹配")
+    void exactDepartmentComparisonNeverMatchesSuffixOrParent() {
         identities.withIdentity(user(AuthoritiesConstants.DEPT_DATA_OWNER,true), () -> {
             assertThat(ModelingIdentity.department("dept-a")).isTrue();
             assertThat(ModelingIdentity.department("root:dept-a")).isFalse();

@@ -10,4 +10,7 @@ public interface AdminRoleAssignmentRepository extends JpaRepository<AdminRoleAs
     java.util.List<AdminRoleAssignment> findByRoleIgnoreCase(String role);
     java.util.List<AdminRoleAssignment> findByUsernameIgnoreCaseAndRoleIgnoreCase(String username, String role);
     long deleteByUsernameIgnoreCaseAndRoleIgnoreCase(String username, String role);
+
+    /** F11-T02：稳定键优先读取；范围/动作随同一绑定返回，不得展平。 */
+    java.util.List<AdminRoleAssignment> findByKeycloakId(String keycloakId);
 }

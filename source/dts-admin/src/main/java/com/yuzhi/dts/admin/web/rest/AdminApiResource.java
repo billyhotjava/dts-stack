@@ -2413,6 +2413,54 @@ public class AdminApiResource {
                 }
             }
         );
+        // F11-T03：建模/目录/治理动作权限点（格式 模块:资源:动作，见 PermissionCodes）。
+        // 纯自定义角色不得获得 modeling:*（由审批校验执行）；EDITOR 不隐含 read/export（由决策入口执行）。
+        sections.add(
+            new LinkedHashMap<>() {
+                {
+                    put("category", "modeling");
+                    put("description", "数据建模动作");
+                    put(
+                        "permissions",
+                        List.of(
+                            Map.of("code", com.yuzhi.dts.common.security.PermissionCodes.MODELING_MODEL_READ, "name", "模型读取", "description", "查看建模定义与版本"),
+                            Map.of("code", com.yuzhi.dts.common.security.PermissionCodes.MODELING_MODEL_UPDATE, "name", "模型编辑", "description", "编辑建模定义，不含消费/审核/再授权"),
+                            Map.of("code", com.yuzhi.dts.common.security.PermissionCodes.MODELING_MODEL_SHARE, "name", "模型共享", "description", "授予同部门 EDITOR，不含跨部门"),
+                            Map.of("code", com.yuzhi.dts.common.security.PermissionCodes.MODELING_MODEL_PUBLISH, "name", "模型发布", "description", "发布交付，需发布职责")
+                        )
+                    );
+                }
+            }
+        );
+        sections.add(
+            new LinkedHashMap<>() {
+                {
+                    put("category", "catalog");
+                    put("description", "数据消费动作");
+                    put(
+                        "permissions",
+                        List.of(
+                            Map.of("code", com.yuzhi.dts.common.security.PermissionCodes.CATALOG_DATASET_READ, "name", "数据查询", "description", "预览与查询允许行列"),
+                            Map.of("code", com.yuzhi.dts.common.security.PermissionCodes.CATALOG_DATASET_EXPORT, "name", "数据导出", "description", "导出任务与文件下载，需显式授予")
+                        )
+                    );
+                }
+            }
+        );
+        sections.add(
+            new LinkedHashMap<>() {
+                {
+                    put("category", "governance");
+                    put("description", "治理动作");
+                    put(
+                        "permissions",
+                        List.of(
+                            Map.of("code", com.yuzhi.dts.common.security.PermissionCodes.GOVERNANCE_RULE_MANAGE, "name", "规则维护", "description", "配置质量规则与认领工单")
+                        )
+                    );
+                }
+            }
+        );
         sections.add(
             new LinkedHashMap<>() {
                 {

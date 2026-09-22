@@ -79,37 +79,15 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/mdm/**")).permitAll()
                     // Admin service is governance-only: restrict all API endpoints to the triad roles
                     .requestMatchers(mvc.pattern("/api/admin/**"))
-                        .hasAnyAuthority(
-                            AuthoritiesConstants.SYS_ADMIN,
-                            AuthoritiesConstants.AUTH_ADMIN,
-                            AuthoritiesConstants.AUDITOR_ADMIN,
-                            // Backward-compatible aliases observed in legacy realms/tokens
-                            "ROLE_AUDITOR_ADMIN",
-                            "ROLE_AUDIT_ADMIN",
-                            "ROLE_AUDITADMIN"
-                        )
+                        .hasAnyAuthority(triadWithLegacyAliases())
                     .requestMatchers(mvc.pattern("/api/keycloak/approvals/**"))
                         .hasAnyAuthority(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.AUTH_ADMIN)
                     .requestMatchers(mvc.pattern("/api/keycloak/**"))
                         .hasAuthority(AuthoritiesConstants.SYS_ADMIN)
                     .requestMatchers(mvc.pattern("/admin/**"))
-                        .hasAnyAuthority(
-                            AuthoritiesConstants.SYS_ADMIN,
-                            AuthoritiesConstants.AUTH_ADMIN,
-                            AuthoritiesConstants.AUDITOR_ADMIN,
-                            "ROLE_AUDITOR_ADMIN",
-                            "ROLE_AUDIT_ADMIN",
-                            "ROLE_AUDITADMIN"
-                        )
+                        .hasAnyAuthority(triadWithLegacyAliases())
                     .requestMatchers(mvc.pattern("/api/**"))
-                        .hasAnyAuthority(
-                            AuthoritiesConstants.SYS_ADMIN,
-                            AuthoritiesConstants.AUTH_ADMIN,
-                            AuthoritiesConstants.AUDITOR_ADMIN,
-                            "ROLE_AUDITOR_ADMIN",
-                            "ROLE_AUDIT_ADMIN",
-                            "ROLE_AUDITADMIN"
-                        )
+                        .hasAnyAuthority(triadWithLegacyAliases())
                     // Swagger UI + OpenAPI spec: APP_API_DOCS_PUBLIC=true 时匿名可访问（dev/test），
                     // 否则仍受三员角色限制（生产默认）。
                     .requestMatchers(
@@ -130,9 +108,8 @@ public class SecurityConfiguration {
                                 AuthoritiesConstants.SYS_ADMIN.equals(a)
                                 || AuthoritiesConstants.AUTH_ADMIN.equals(a)
                                 || AuthoritiesConstants.AUDITOR_ADMIN.equals(a)
-                                || "ROLE_AUDITOR_ADMIN".equals(a)
-                                || "ROLE_AUDIT_ADMIN".equals(a)
-                                || "ROLE_AUDITADMIN".equals(a));
+                                // F11-T06: 遗留别名集中收口，下线前保持放行
+                                || com.yuzhi.dts.admin.security.LegacyRoleAliases.isLegacyAuditorAlias(a));
                         return new org.springframework.security.authorization.AuthorizationDecision(allowed);
                     })
                     .requestMatchers(mvc.pattern("/management/health")).permitAll()
@@ -140,14 +117,7 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/management/info")).permitAll()
                     .requestMatchers(mvc.pattern("/management/prometheus")).permitAll()
                     .requestMatchers(mvc.pattern("/management/**"))
-                        .hasAnyAuthority(
-                            AuthoritiesConstants.SYS_ADMIN,
-                            AuthoritiesConstants.AUTH_ADMIN,
-                            AuthoritiesConstants.AUDITOR_ADMIN,
-                            "ROLE_AUDITOR_ADMIN",
-                            "ROLE_AUDIT_ADMIN",
-                            "ROLE_AUDITADMIN"
-                        )
+                        .hasAnyAuthority(triadWithLegacyAliases())
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter())))
@@ -186,5 +156,21 @@ public class SecurityConfiguration {
         jwtDecoder.setJwtValidator(withAudience);
 
         return jwtDecoder;
+    }
+
+    /**
+     * F11-T06：三员正名 + 遗留别名（集中收口，下线前保持放行）。
+     * 别名集合见 {@link com.yuzhi.dts.admin.security.LegacyRoleAliases}；T06 完成
+     * realm/令牌/会话/任务核验后改为仅三员，不换成更宽角色兜底。
+     */
+    private static String[] triadWithLegacyAliases() {
+        return java.util.stream.Stream.concat(
+            java.util.stream.Stream.of(
+                AuthoritiesConstants.SYS_ADMIN,
+                AuthoritiesConstants.AUTH_ADMIN,
+                AuthoritiesConstants.AUDITOR_ADMIN
+            ),
+            com.yuzhi.dts.admin.security.LegacyRoleAliases.AUDITOR_ALIASES.stream()
+        ).toArray(String[]::new);
     }
 }

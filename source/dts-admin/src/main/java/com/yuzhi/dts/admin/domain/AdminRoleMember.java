@@ -18,6 +18,13 @@ public class AdminRoleMember extends AbstractAuditingEntity<Long> implements Ser
     @Column(name = "username", nullable = false, length = 255)
     private String username;
 
+    /**
+     * F11-T02：稳定账号键（Keycloak kc_id）。双写过渡期可空；回填与切换由 T08 执行，
+     * 在此之前 username 仍是生效键。本列只增不改历史语义。
+     */
+    @Column(name = "keycloak_id", length = 64)
+    private String keycloakId;
+
     @Column(name = "display_name", length = 255)
     private String displayName;
 
@@ -43,6 +50,14 @@ public class AdminRoleMember extends AbstractAuditingEntity<Long> implements Ser
 
     public void setUsername(String username) {
         this.username = username;
+    }
+
+    public String getKeycloakId() {
+        return keycloakId;
+    }
+
+    public void setKeycloakId(String keycloakId) {
+        this.keycloakId = keycloakId;
     }
 
     public String getDisplayName() {

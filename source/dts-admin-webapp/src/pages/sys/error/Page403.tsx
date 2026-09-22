@@ -1,10 +1,25 @@
+import { useMemo } from "react";
 import Character from "@/assets/images/characters/character_2.png";
 import { themeVars } from "@/theme/theme.css";
 import ErrorLayout from "./components/ErrorLayout";
 import { useTranslation } from "react-i18next";
+import { resolveHomePathForRoles } from "@/routes/sections/dashboard";
+import { useUserRoles } from "@/store/userStore";
 
 export default function Page403() {
 	const { t } = useTranslation();
+	// F11-UI-001：拒绝页的“返回首页”必须按当前三员职责选择落点，不能固定指向
+	// sysadmin 才有权限的 /admin/my-changes，否则 authadmin/auditadmin 点击后仍是 403。
+	const roles = useUserRoles();
+	const homePath = useMemo(() => {
+		try {
+			const resolved = resolveHomePathForRoles(roles);
+			if (resolved && resolved !== "/403") return resolved;
+		} catch {
+			// 角色不可用时回退 ErrorLayout 默认，不在此抛错
+		}
+		return undefined;
+	}, [roles]);
 	const svg = (
 		<svg viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" width={400} height={400} className="w-full">
 			<title>403</title>
@@ -73,6 +88,7 @@ export default function Page403() {
 			helmetTitle={t("sys.errorPage.403.helmetTitle")}
 			desc={t("sys.errorPage.403.description")}
 			svg={svg}
+			homePath={homePath}
 		/>
 	);
 }
