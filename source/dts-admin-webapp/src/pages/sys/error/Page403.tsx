@@ -13,7 +13,8 @@ export default function Page403() {
 	const roles = useUserRoles();
 	const homePath = useMemo(() => {
 		try {
-			const resolved = resolveHomePathForRoles(roles);
+			const normalized = (roles || []).map((role) => String((role as any)?.code ?? role ?? ""));
+			const resolved = resolveHomePathForRoles(normalized);
 			if (resolved && resolved !== "/403") return resolved;
 		} catch {
 			// 角色不可用时回退 ErrorLayout 默认，不在此抛错
