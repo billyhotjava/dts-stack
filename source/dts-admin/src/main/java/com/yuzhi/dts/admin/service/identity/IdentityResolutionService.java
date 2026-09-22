@@ -22,8 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li>人员行按 kc_id 精确查找；username 只做展示，不做身份回退；</li>
- *   <li>角色/授权优先按 keycloak_id 读取；回填完成前缺失时才回退 username，并标记
- *       {@code legacyFallback=true} 供 T08 追踪（不静默当成稳定授权）；</li>
+ *   <li>角色/授权仅按 keycloak_id 读取；未回填记录不按 username 恢复授权，
+ *       由 T08 核验主体映射并回填后才可接入；</li>
  *   <li>assignment 的组织/数据集/操作范围随同一绑定原样返回，不展平；</li>
  *   <li>Keycloak 三员/保留角色仍以 Keycloak 为权威源，本服务只组装 DTS 侧数据/自定义角色，
  *       合并规则（分域、禁止无条件 union 注入保留角色）由调用方按冻结矩阵执行。</li>
@@ -82,39 +82,21 @@ public class IdentityResolutionService {
     }
 
     private ResolvedIdentity assemble(AdminKeycloakUser user) {
-        boolean legacyFallback = false;
         Set<String> roles = new LinkedHashSet<>();
         List<RoleGrant> grants = new ArrayList<>();
-
-        List<AdminRoleMember> stableMembers = roleMembers.findByKeycloakId(user.getKeycloakId());
-        if (stableMembers.isEmpty()) {
-            legacyFallback = true;
-            for (AdminRoleMember member : roleMembers.findByUsernameIgnoreCase(user.getUsername())) {
-                addRole(roles, member.getRole());
-            }
-        } else {
-            for (AdminRoleMember member : stableMembers) {
-                addRole(roles, member.getRole());
-            }
+        // Username is display-only. Even an unbound legacy row needs a verified
+        // migration mapping before it can grant access to this stable subject.
+        for (AdminRoleMember member : roleMembers.findByKeycloakId(user.getKeycloakId())) {
+            addRole(roles, member.getRole());
         }
-
-        List<AdminRoleAssignment> stableAssignments = roleAssignments.findByKeycloakId(user.getKeycloakId());
-        List<AdminRoleAssignment> effectiveAssignments;
-        if (stableAssignments.isEmpty()) {
-            legacyFallback = true;
-            effectiveAssignments = roleAssignments.findByUsernameIgnoreCase(user.getUsername());
-        } else {
-            effectiveAssignments = stableAssignments;
-        }
-        GrantSource source = legacyFallback ? GrantSource.LEGACY_USERNAME_FALLBACK : GrantSource.STABLE;
-        for (AdminRoleAssignment assignment : effectiveAssignments) {
+        for (AdminRoleAssignment assignment : roleAssignments.findByKeycloakId(user.getKeycloakId())) {
             addRole(roles, assignment.getRole());
             grants.add(new RoleGrant(
                 normalizeRole(assignment.getRole()),
                 assignment.getScopeOrgId(),
                 assignment.getDatasetIdsCsv(),
                 assignment.getOperationsCsv(),
-                source
+                GrantSource.STABLE
             ));
         }
 
@@ -128,7 +110,7 @@ public class IdentityResolutionService {
             enabled,
             List.copyOf(roles),
             List.copyOf(grants),
-            legacyFallback
+            false
         );
     }
 

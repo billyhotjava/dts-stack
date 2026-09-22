@@ -23,16 +23,13 @@ Java 集成使用一次性 PostgreSQL 17.4 容器、仓库 Liquibase master 和�
 
 ```bash
 mvn -B -f source/pom.xml -pl dts-admin,dts-platform -am \
-  -Dtest=ModelingIdentityServiceTest,ModelingAuthorizationServiceTest,F11PersonnelBindingTest,PersonnelSourceFieldGuardTest,IdentityResolutionServiceTest,LegacyRoleAliasesTest,AdminApiResourcePermissionCatalogF11Test \
-  -Dtest='com.yuzhi.dts.common.security.F11AuthorizationDecisionTest' \
+  -Dtest=F11AuthorizationDecisionTest,ModelingIdentityServiceTest,ModelingAuthorizationServiceTest,F11PersonnelBindingTest,PersonnelSourceFieldGuardTest,IdentityResolutionServiceTest,LegacyRoleAliasesTest,AdminApiResourcePermissionCatalogF11Test \
   -Dit.test=F11PersonnelIdentityRepositoryIT \
   -Dsurefire.failIfNoSpecifiedTests=false \
   -Dfailsafe.failIfNoSpecifiedTests=false verify
 ```
 
-> 说明：dts-common 的 `F11AuthorizationDecisionTest` 随 `-am` 构建的 common 模块执行；
-> 上式第二行 `-Dtest` 会覆盖第一行——实际执行时分两次跑：一次 `-pl dts-common -Dtest=F11AuthorizationDecisionTest`，
-> 一次上式（去掉第二行）。结果必须另查各指定类的 XML，核对实际执行数和零跳过，不能只看 Maven 退出码。
+> 说明：只传一个 `-Dtest`，包含 common/admin/platform 全部指定类，避免重复参数覆盖。结果另查各指定类 XML 的实际执行数和零跳过，不能只看 Maven 退出码。
 
 两个 `failIfNoSpecifiedTests=false` 仅容许 reactor 中不拥有这些测试的依赖模块；结果必须另查三个指定类的 XML，核对实际执行数和零跳过，不能只看 Maven 退出码。Surefire 报告在对应模块 `target/surefire-reports/`，集成报告在 admin 的 `target/failsafe-reports/`。这是本批定向验证，非整个服务的全量测试或正式交付包验收。
 

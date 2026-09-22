@@ -98,10 +98,12 @@ public final class PersonnelSourceFieldGuard {
 
     /** 双方版本齐全才判新旧；任一缺失 → UNKNOWN（调用方冲突隔离，不按摘要判先后）。 */
     public static VersionRelation compareVersions(String current, String incoming) {
-        if (current == null || incoming == null) {
+        if (current == null || incoming == null || !current.matches("v?[0-9]+") || !incoming.matches("v?[0-9]+")
+            || current.startsWith("v") != incoming.startsWith("v")) {
             return VersionRelation.UNKNOWN;
         }
-        int cmp = incoming.compareTo(current);
+        int offset = current.startsWith("v") ? 1 : 0;
+        int cmp = new java.math.BigInteger(incoming.substring(offset)).compareTo(new java.math.BigInteger(current.substring(offset)));
         if (cmp == 0) {
             return VersionRelation.EQUAL;
         }

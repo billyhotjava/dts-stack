@@ -1,7 +1,6 @@
 package com.yuzhi.dts.common.security;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
  * F11-T05 统一决策组合器（纯函数，无 IO）。
@@ -27,9 +26,14 @@ public final class AuthorizationCombiner {
         if (outcomes == null || outcomes.isEmpty()) {
             return new CombinedDecision(PermissionDecision.DENY, "NO_APPLICABLE_POLICY");
         }
-        String version = policyVersion == null ? "unknown" : policyVersion;
+        if (policyVersion == null || policyVersion.isBlank()) {
+            return new CombinedDecision(PermissionDecision.DENY, "POLICY_VERSION_REQUIRED");
+        }
+        String version = policyVersion;
+        if (outcomes.stream().anyMatch(outcome -> outcome == null || outcome.policyVersion() == null || outcome.policyVersion().isBlank())) {
+            return new CombinedDecision(PermissionDecision.DENY, "POLICY_RESULT_VERSION_REQUIRED");
+        }
         for (PolicyOutcome outcome : outcomes) {
-            Objects.requireNonNull(outcome, "outcome");
             if (outcome.decision() == PermissionDecision.DENY) {
                 return new CombinedDecision(PermissionDecision.DENY, outcome.reasonCode() + "@" + version);
             }

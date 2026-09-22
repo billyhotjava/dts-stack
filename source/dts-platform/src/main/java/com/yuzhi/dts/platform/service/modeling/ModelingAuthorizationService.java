@@ -25,7 +25,7 @@ public class ModelingAuthorizationService {
 
     /** 领域检查 provider：返回适用于本次资源类型+动作的策略结果（只传适用策略）。 */
     public interface BatchAccessCheck {
-        List<PolicyOutcome> check(String tenant, Collection<java.util.UUID> ids, String actor);
+        List<PolicyOutcome> check(String tenant, String permission, Collection<java.util.UUID> ids, String actor);
     }
 
     private final String serverTenant;
@@ -57,6 +57,10 @@ public class ModelingAuthorizationService {
             return new AuthorizationCombiner.CombinedDecision(
                 com.yuzhi.dts.common.security.PermissionDecision.DENY, "UNKNOWN_PERMISSION@f11-t04");
         }
+        if (!PermissionCodes.MODELING_MODEL_READ.equals(permission) && !PermissionCodes.MODELING_MODEL_UPDATE.equals(permission)) {
+            return new AuthorizationCombiner.CombinedDecision(
+                com.yuzhi.dts.common.security.PermissionDecision.DENY, "MODEL_ACTION_NOT_SUPPORTED@f11-t04");
+        }
         if (actor == null || actor.isBlank()) {
             return new AuthorizationCombiner.CombinedDecision(
                 com.yuzhi.dts.common.security.PermissionDecision.DENY, "ACTOR_REQUIRED@f11-t04");
@@ -67,7 +71,7 @@ public class ModelingAuthorizationService {
         }
         List<PolicyOutcome> outcomes;
         try {
-            outcomes = check.check(tenant, ids, actor);
+            outcomes = check.check(tenant, permission, ids, actor);
         } catch (ModelSpecException ex) {
             return new AuthorizationCombiner.CombinedDecision(
                 com.yuzhi.dts.common.security.PermissionDecision.DENY, ex.code() + "@model-spec-access");
@@ -79,8 +83,8 @@ public class ModelingAuthorizationService {
     }
 
     /** 基于既有 ModelSpecAccessService 的 provider：成功→ALLOW，异常由 decideBatch 转 DENY。 */
-    public BatchAccessCheck modelSpecAccessProvider(ModelSpecAccessService access, String permission) {
-        return (tenant, ids, actor) -> {
+    public BatchAccessCheck modelSpecAccessProvider(ModelSpecAccessService access) {
+        return (tenant, permission, ids, actor) -> {
             if (PermissionCodes.MODELING_MODEL_UPDATE.equals(permission)) {
                 access.requireOperation(tenant, ids, actor);
             } else if (PermissionCodes.MODELING_MODEL_READ.equals(permission)) {

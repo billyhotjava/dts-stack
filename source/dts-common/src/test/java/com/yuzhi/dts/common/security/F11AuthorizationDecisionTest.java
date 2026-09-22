@@ -104,4 +104,22 @@ class F11AuthorizationDecisionTest {
         assertThatThrownBy(() -> new ScopedGrant("t1", "Bad Code!", "1153", Set.of(), Set.of()))
             .isInstanceOf(IllegalArgumentException.class);
     }
+
+    @Test
+    void unknownWellFormedGrantCannotBeCreated() {
+        assertThatThrownBy(() -> new ScopedGrant("t1", "modeling:model:delete", "1153", Set.of("a"), Set.of("delete")))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void missingPolicyEvidenceFailsClosed() {
+        for (String missing : new String[] { null, "", " " }) {
+            assertThat(AuthorizationCombiner.combine(List.of(PolicyOutcome.allow("OK", "v1")), missing).decision())
+                .isEqualTo(PermissionDecision.DENY);
+            assertThat(AuthorizationCombiner.combine(List.of(PolicyOutcome.allow("OK", missing)), "v1").decision())
+                .isEqualTo(PermissionDecision.DENY);
+        }
+        assertThat(AuthorizationCombiner.combine(java.util.Arrays.asList(PolicyOutcome.allow("OK", "v1"), null), "v1").decision())
+            .isEqualTo(PermissionDecision.DENY);
+    }
 }

@@ -2,7 +2,7 @@ package com.yuzhi.dts.admin.service.identity;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.domain.AdminRoleAssignment;
@@ -60,7 +60,7 @@ class IdentityResolutionServiceTest {
     }
 
     @Test
-    @DisplayName("F11-UT-011/012：稳定键优先；回填缺失时回退username并标记legacy")
+    @DisplayName("F11-UT-011/012：稳定键授权；回填缺失不按username继承")
     void stableKeyFirstWithMarkedLegacyFallback() {
         AdminKeycloakUser user = user("kc-1", "zhangsan");
         when(users.findByKeycloakId("kc-1")).thenReturn(Optional.of(user));
@@ -87,17 +87,17 @@ class IdentityResolutionServiceTest {
         assertThat(resolved.grants().getFirst().source())
             .isEqualTo(IdentityResolutionService.GrantSource.STABLE);
 
-        // 回填缺失分支：双表均无稳定键时回退 username 并标记
+        // No stable grants: a same-name account (bound or unbound legacy row)
+        // must never be consulted as an authorization fallback.
         when(roleMembers.findByKeycloakId("kc-1")).thenReturn(List.of());
         when(roleAssignments.findByKeycloakId("kc-1")).thenReturn(List.of());
-        AdminRoleMember legacy = new AdminRoleMember();
-        legacy.setRole("dept_leader");
-        legacy.setUsername("ZhangSan");
-        when(roleMembers.findByUsernameIgnoreCase("zhangsan")).thenReturn(List.of(legacy));
-
         var fallback = service.resolveByStableId("kc-1");
-        assertThat(fallback.roles()).containsExactly("ROLE_DEPT_LEADER");
-        assertThat(fallback.legacyFallback()).isTrue();
+        assertThat(fallback.roles()).isEmpty();
+        assertThat(fallback.grants()).isEmpty();
+        assertThat(fallback.legacyFallback()).isFalse();
+        verify(roleMembers, never()).findByUsernameIgnoreCase(anyString());
+        verify(roleAssignments, never()).findByUsernameIgnoreCase(anyString());
+
     }
 
     @Test
@@ -147,5 +147,21 @@ class IdentityResolutionServiceTest {
         when(roleMembers.findByKeycloakId("kc-4")).thenReturn(List.of());
         when(roleAssignments.findByKeycloakId("kc-4")).thenReturn(List.of());
         assertThat(service.resolveByStableId("kc-4").enabled()).isFalse();
+    }
+
+    @Test
+    void renamedSubjectRetainsStableGrantWithoutMemberFallback() {
+        AdminKeycloakUser renamed = user("stable", "new-name");
+        when(users.findByKeycloakId("stable")).thenReturn(Optional.of(renamed));
+        AdminRoleAssignment grant = new AdminRoleAssignment();
+        grant.setKeycloakId("stable");
+        grant.setUsername("old-name");
+        grant.setRole("DEPT_DATA_OWNER");
+        when(roleAssignments.findByKeycloakId("stable")).thenReturn(List.of(grant));
+        var resolved = service.resolveByStableId("stable");
+        assertThat(resolved.grants()).hasSize(1);
+        assertThat(resolved.grants().getFirst().source()).isEqualTo(IdentityResolutionService.GrantSource.STABLE);
+        assertThat(resolved.legacyFallback()).isFalse();
+        verify(roleMembers, never()).findByUsernameIgnoreCase(anyString());
     }
 }

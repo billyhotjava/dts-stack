@@ -30,7 +30,7 @@ public record ScopedGrant(
         if (tenant == null || tenant.isBlank()) {
             throw new IllegalArgumentException("tenant 不能为空");
         }
-        if (!PermissionCodes.isValid(permission)) {
+        if (!PermissionCodes.isKnown(permission)) {
             throw new IllegalArgumentException("permission 非法: " + permission);
         }
         datasetIds = datasetIds == null ? Set.of() : Set.copyOf(datasetIds);
@@ -63,7 +63,7 @@ public record ScopedGrant(
         if (!grant.tenant().equals(request.tenant())) {
             return false;
         }
-        if (!grant.permission().equals(request.permission())) {
+        if (!PermissionCodes.isKnown(request.permission()) || !grant.permission().equals(request.permission())) {
             return false;
         }
         if (grant.orgScope() == null) {

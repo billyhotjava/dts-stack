@@ -56,4 +56,14 @@ class PersonnelSourceFieldGuardTest {
         assertThat(PersonnelSourceFieldGuard.mapLifecycle(null)).isEmpty();
         assertThat(PersonnelSourceFieldGuard.mapLifecycle("  ")).isEmpty();
     }
+
+    @Test
+    void numericVersionsCrossDigitBoundariesWithoutGuessingOpaqueFormats() {
+        assertThat(PersonnelSourceFieldGuard.compareVersions("v9", "v10")).isEqualTo(PersonnelSourceFieldGuard.VersionRelation.NEWER);
+        assertThat(PersonnelSourceFieldGuard.compareVersions("99", "100")).isEqualTo(PersonnelSourceFieldGuard.VersionRelation.NEWER);
+        assertThat(PersonnelSourceFieldGuard.compareVersions("v100", "v99")).isEqualTo(PersonnelSourceFieldGuard.VersionRelation.OLDER);
+        for (String value : new String[] { "", " ", "opaque", "1.2", "10" }) {
+            assertThat(PersonnelSourceFieldGuard.compareVersions("v9", value)).isEqualTo(PersonnelSourceFieldGuard.VersionRelation.UNKNOWN);
+        }
+    }
 }
