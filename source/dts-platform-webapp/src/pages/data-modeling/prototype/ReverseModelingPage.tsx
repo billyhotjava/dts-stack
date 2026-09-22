@@ -282,7 +282,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 	};
 
 	const applyPreview = async () => {
-		if (!preview) return;
+		if (!canMaintain || busy || !selected.length || preview?.status !== "PREVIEWED") return;
 		setBusy("apply");
 		setFailure(null);
 		try {
@@ -405,6 +405,9 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 								title="当前操作未完成"
 							/>
 						) : null}
+						{step === 2 && preview && preview.status !== "PREVIEWED" ? (
+							<p role="alert">当前预览不可执行。请根据下方原因处理冲突或阻断项，返回上一步重新生成预览；预览过期时也需重新生成。</p>
+						) : null}
 						{step === 0 ? (
 							<StrategyStep archive={archive} onArchive={setArchive} />
 						) : step === 1 && inspection ? (
@@ -508,7 +511,7 @@ export function ReverseModelingPage({ route }: { route: DataModelingRoute }) {
 						) : null}
 						{step === 2 ? (
 							<Button
-								disabled={!canMaintain || !preview || !selected.length || preview.status === "EXPIRED" || Boolean(busy)}
+								disabled={!canMaintain || preview?.status !== "PREVIEWED" || !selected.length || Boolean(busy)}
 								primary
 								onClick={() => void applyPreview()}
 							>

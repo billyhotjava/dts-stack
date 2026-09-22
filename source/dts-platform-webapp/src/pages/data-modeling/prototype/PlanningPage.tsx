@@ -1,3 +1,4 @@
+import { Pagination } from "antd";
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { deleteBusinessProcessApi, type Sprint64BusinessProcess } from "@/api/sprint64GovernanceApi";
@@ -305,7 +306,7 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 			const layer = asWarehouseLayer(row.source);
 			const group = layer ? LAYER_GROUP_LABEL[layer.layerGroup] || layer.layerGroup : "";
 			if (group !== lastGroup) {
-				nodes.push({ key: `group-${group}`, id: "", cells: [], group });
+				nodes.push({ key: `group-${group}-${row.id}`, id: "", cells: [], group });
 				lastGroup = group;
 			}
 			nodes.push({ key: row.id, id: row.id, cells: row.cells, source: row.source });
@@ -434,11 +435,15 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 									<CompactTable<ProjectionTableRow>
 										columns={columns}
 										dataSource={projectionTableRows}
-										pagination={{
-											current: currentPage,
-											pageSize,
-											total: sortedRows.length,
-										}}
+										pagination={
+											groupedView
+												? false
+												: {
+														current: currentPage,
+														pageSize,
+														total: sortedRows.length,
+													}
+										}
 										onChange={onTableChange}
 										rowClassName={(record) =>
 											record.group ? "dmx-table-group" : record.id === activeId ? "selected" : ""
@@ -446,6 +451,21 @@ export function PlanningPage({ route, surface = "modeling", activeId = "", onAct
 										rowKey="key"
 									/>
 								</div>
+								{groupedView ? (
+									<Pagination
+										current={currentPage}
+										pageSize={pageSize}
+										total={sortedRows.length}
+										showSizeChanger
+										pageSizeOptions={[10, 20, 50, 100]}
+										showTotal={(total) => `共 ${total} 条`}
+										size="small"
+										onChange={(nextPage, nextSize) => {
+											setPage(nextSize !== pageSize ? 1 : nextPage);
+											setPageSize(nextSize);
+										}}
+									/>
+								) : null}
 								{!visibleRows.length ? (
 									<RequestState description="当前目录暂无记录。" kind="empty" title={`暂无${route.title}`} />
 								) : null}

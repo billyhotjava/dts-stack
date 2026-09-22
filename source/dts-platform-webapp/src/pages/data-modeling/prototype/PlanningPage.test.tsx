@@ -215,6 +215,27 @@ describe("PlanningPage", () => {
 		expect(codeInput).toBeDefined();
 	});
 
+	it("paginates layer records without counting or truncating group headings (S10DC-104)", async () => {
+		mocks.loadPlanningProjection.mockResolvedValue({
+			headers: ["分层编码", "分层名称"],
+			rows: Array.from({ length: 12 }, (_, index) => ({
+				id: `LAYER_${index}`,
+				cells: [`LAYER_${index}`, `分层${index}`],
+				source: { ...builtinDwd, code: `LAYER_${index}`, layerGroup: ["STAGING", "COMMON", "APPLICATION"][index % 3] },
+			})),
+		});
+		await renderPlanning(layerRoute());
+		expect(container.querySelector('[data-row-key="LAYER_9"]')).not.toBeNull();
+		expect(container.querySelector('[data-row-key="LAYER_10"]')).toBeNull();
+		expect(container.textContent).toContain("共 12 条");
+		await act(async () => {
+			(container.querySelector(".ant-pagination-item-2") as HTMLElement).click();
+		});
+		expect(container.querySelector('[data-row-key="LAYER_10"]')).not.toBeNull();
+		expect(container.querySelector('[data-row-key="LAYER_11"]')).not.toBeNull();
+		expect(container.querySelector('[data-row-key="LAYER_0"]')).toBeNull();
+	});
+
 	it("creates a custom layer from the drawer with normalized values and refreshes", async () => {
 		mocks.canMaintain = true;
 		mocks.createWarehouseLayer.mockResolvedValue(customFinDetail);

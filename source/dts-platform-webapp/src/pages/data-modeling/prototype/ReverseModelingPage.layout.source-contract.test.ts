@@ -42,3 +42,15 @@ describe("reverse-modeling responsive layout contract", () => {
 		expect(inspectionSource).toContain("scroll={{ x: 1250 }}");
 	});
 });
+
+// S10DC-106: a conflict-only preview is BLOCKED even when a row remains selected.
+describe("reverse-modeling apply state contract", () => {
+	it("guards both the apply handler and button with the server PREVIEWED state", () => {
+		const page = readFileSync(new URL("./ReverseModelingPage.tsx", import.meta.url), "utf8");
+		expect(page).toContain('if (!canMaintain || busy || !selected.length || preview?.status !== "PREVIEWED") return;');
+		expect(page).toContain(
+			'disabled={!canMaintain || preview?.status !== "PREVIEWED" || !selected.length || Boolean(busy)}',
+		);
+		expect(page).toContain("返回上一步重新生成预览");
+	});
+});
