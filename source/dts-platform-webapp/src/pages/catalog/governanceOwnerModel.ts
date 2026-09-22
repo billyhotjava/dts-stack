@@ -7,8 +7,18 @@ const keepCurrent = (options: SelectOption[], current?: string | null): SelectOp
 	return value && !options.some((option) => option.value === value) ? [{ value, label: value }, ...options] : options;
 };
 
-export function deptSelectOptions(depts: OwnerDirectoryDept[], current?: string | null): SelectOption[] {
-	const options = depts
+export function deptSelectOptions(
+	depts: OwnerDirectoryDept[],
+	current?: string | null,
+	users: OwnerDirectoryUser[] = [],
+): SelectOption[] {
+	const known = new Map(depts.map((dept) => [dept.code, dept]));
+	for (const user of users) {
+		const code = user.deptCode?.trim();
+		const name = user.deptName?.trim();
+		if (code && name && !known.get(code)?.nameZh) known.set(code, { code, nameZh: name });
+	}
+	const options = [...known.values()]
 		.filter((dept) => dept.code?.trim())
 		.map((dept) => ({ value: dept.code, label: dept.nameZh ? `${dept.nameZh}（${dept.code}）` : dept.code }));
 	return keepCurrent(options, current);
@@ -22,7 +32,7 @@ export function ownerSelectOptions(
 ): SelectOption[] {
 	const dept = deptCode?.trim();
 	const options = users
-		.filter((user) => !dept || !user.deptCode || user.deptCode === dept)
+		.filter((user) => !dept || user.deptCode?.trim() === dept)
 		.map((user) => ({
 			value: user.username,
 			label:
@@ -56,5 +66,5 @@ export function ownerLeavesDept(
 	deptCode?: string | null,
 ): boolean {
 	const ownerDept = deptForOwner(users, username);
-	return Boolean(ownerDept && deptCode && ownerDept !== deptCode);
+	return Boolean(username && deptCode && ownerDept !== deptCode.trim());
 }

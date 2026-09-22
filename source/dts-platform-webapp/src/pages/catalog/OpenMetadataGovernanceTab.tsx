@@ -95,7 +95,10 @@ export function OpenMetadataGovernanceTab({
 		};
 	}, []);
 
-	const deptOptions = useMemo(() => deptSelectOptions(departments, selectedDept), [departments, selectedDept]);
+	const deptOptions = useMemo(
+		() => deptSelectOptions(departments, selectedDept, directoryUsers),
+		[departments, selectedDept, directoryUsers],
+	);
 	const ownerOptions = useMemo(
 		() => ownerSelectOptions(directoryUsers, selectedDept, selectedOwner),
 		[directoryUsers, selectedDept, selectedOwner],
