@@ -234,6 +234,9 @@ class F4StrictAuditRollbackPostgresIT {
     private ModelingSourceScopeGuard sourceScope;
 
     @MockBean
+    private CandidateQualityAssetRegistrationService qualityAssets;
+
+    @MockBean
     private PhysicalRelationInspectorRegistry inspectorRegistry;
 
     @MockBean
