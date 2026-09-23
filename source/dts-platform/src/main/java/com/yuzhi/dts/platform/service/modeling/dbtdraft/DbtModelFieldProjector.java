@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.FieldRole;
 import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelField;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ModelType;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -66,6 +67,42 @@ final class DbtModelFieldProjector {
             );
         }
         return List.copyOf(projected);
+    }
+
+    /**
+     * Visual summary aggregates are measures even when the authoring snapshot still carries an older
+     * role. KEY/TIME roles are kept so the grain contract stays consistent.
+     */
+    static List<ModelField> withAggregateMeasures(List<ModelField> fields, ModelType modelType, Map<String, Object> settings) {
+        if (modelType != ModelType.SUMMARY || settings == null || !(settings.get("aggregations") instanceof List<?> aggregations)) {
+            return fields;
+        }
+        Set<String> targets = new LinkedHashSet<>();
+        for (Object aggregation : aggregations) {
+            if (aggregation instanceof Map<?, ?> item && item.get("targetField") instanceof String target && !target.isBlank()) {
+                targets.add(target.trim());
+            }
+        }
+        if (targets.isEmpty()) return fields;
+        return fields
+            .stream()
+            .map(field ->
+                field != null && targets.contains(field.name()) && (field.role() == null || field.role() == FieldRole.ATTRIBUTE)
+                    ? new ModelField(
+                        field.name(),
+                        field.displayName(),
+                        field.dataType(),
+                        field.nullable(),
+                        field.sourceFieldRef(),
+                        FieldRole.MEASURE,
+                        field.securityLevel(),
+                        field.dimensionAttributeCode(),
+                        field.redundant(),
+                        field.redundancySourceRef()
+                    )
+                    : field
+            )
+            .toList();
     }
 
     private static FieldRole role(JsonNode column, ModelField previous) {

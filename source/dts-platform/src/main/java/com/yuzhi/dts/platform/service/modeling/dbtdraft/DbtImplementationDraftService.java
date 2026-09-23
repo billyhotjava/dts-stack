@@ -1791,10 +1791,14 @@ public class DbtImplementationDraftService {
             ? model
             : snapshotCodec.toUpdatedView(model, authoringSnapshot, model.revision(), now);
         requireMaterialization(authoredModel, target, schemaOnly);
-        List<ModelField> projectedFields = DbtModelFieldProjector.project(
-            objectMapper,
-            target.schema(),
-            authoringSnapshot == null ? model.fields() : authoringSnapshot.fields()
+        List<ModelField> projectedFields = DbtModelFieldProjector.withAggregateMeasures(
+            DbtModelFieldProjector.project(
+                objectMapper,
+                target.schema(),
+                authoringSnapshot == null ? model.fields() : authoringSnapshot.fields()
+            ),
+            authoredModel.modelType(),
+            visualCommand == null ? null : visualCommand.settings()
         );
 
         Optional<DraftRow> claim = repository.claimCommit(
