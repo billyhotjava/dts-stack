@@ -63,6 +63,10 @@ public class ModelPublicationQualityReconciler {
             qualityAssets,
             "qualityAssets is required"
         );
+        this.executionAuthorization = Objects.requireNonNull(
+            executionAuthorization,
+            "executionAuthorization is required"
+        );
     }
 
     @Scheduled(
