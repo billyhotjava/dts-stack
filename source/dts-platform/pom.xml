@@ -717,6 +717,8 @@
                         <testInclude>**/service/modeling/PlanExecutionHealthServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/F4StrictAuditRollbackPostgresIT.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationRuntimeSpecServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelMaterializationRuntimeFailureRecorderTest.java</testInclude>
+                        <testInclude>**/service/modeling/PlanOperationalRuntimeSpecServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationSourceAvailabilityGuardTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationAvailabilityPinLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationStartServiceTest.java</testInclude>

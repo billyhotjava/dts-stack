@@ -4,6 +4,7 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationDispatchRepository.RuntimeSpecRecord;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileException;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService.LeaseRequest;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService.LeaseView;
@@ -26,6 +27,7 @@ public class ModelMaterializationRuntimeSpecService {
     private final ModelMaterializationAvailabilityAuditService availabilityAudit;
     private final DbtRuntimeProfileLeaseService leases;
     private final AuditService auditService;
+    private final ModelMaterializationRuntimeFailureRecorder failures;
     private final Clock clock;
 
     @Autowired
@@ -35,7 +37,8 @@ public class ModelMaterializationRuntimeSpecService {
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         ModelMaterializationAvailabilityAuditService availabilityAudit,
         DbtRuntimeProfileLeaseService leases,
-        AuditService auditService
+        AuditService auditService,
+        ModelMaterializationRuntimeFailureRecorder failures
     ) {
         this(
             dispatches,
@@ -44,6 +47,7 @@ public class ModelMaterializationRuntimeSpecService {
             availabilityAudit,
             leases,
             auditService,
+            failures,
             Clock.systemUTC()
         );
     }
@@ -55,6 +59,7 @@ public class ModelMaterializationRuntimeSpecService {
         ModelMaterializationAvailabilityAuditService availabilityAudit,
         DbtRuntimeProfileLeaseService leases,
         AuditService auditService,
+        ModelMaterializationRuntimeFailureRecorder failures,
         Clock clock
     ) {
         this.dispatches = Objects.requireNonNull(
@@ -75,6 +80,7 @@ public class ModelMaterializationRuntimeSpecService {
             auditService,
             "auditService is required"
         );
+        this.failures = Objects.requireNonNull(failures, "failures is required");
         this.clock = Objects.requireNonNull(clock, "clock is required");
     }
 
@@ -114,7 +120,8 @@ public class ModelMaterializationRuntimeSpecService {
             runtime.runtimeTokenExpiresAt() == null ||
             !now.isBefore(runtime.runtimeTokenExpiresAt())
         ) {
-            throw failure(
+            throw recorded(
+                runtime,
                 "MODEL_RUNTIME_SPEC_TOKEN_EXPIRED",
                 "Runtime spec token has expired"
             );
@@ -123,7 +130,8 @@ public class ModelMaterializationRuntimeSpecService {
             // Fail fast before opening a system scope: without the dispatch's own plan
             // the scope could never satisfy the source guard below and the caller would
             // otherwise see a misleading fence denial instead of an incomplete spec.
-            throw failure(
+            throw recorded(
+                runtime,
                 "MODEL_RUNTIME_SPEC_INCOMPLETE",
                 "Runtime spec is incomplete"
             );
@@ -154,20 +162,27 @@ public class ModelMaterializationRuntimeSpecService {
         }
         requireRuntime(runtime);
         LeaseView lease;
-        boolean issuedNow = false;
-        if (runtime.profileLeaseId() != null) {
-            lease = leases.viewActive(runtime.profileLeaseId());
-        } else {
-            lease = leases.issue(
-                new LeaseRequest(
-                    runtime.tenantId(),
-                    runtime.pipelineRunId(),
-                    runtime.airflowRunId(),
-                    runtime.environment(),
-                    runtime.executionTargetKey()
+        boolean issuedNow = runtime.profileLeaseId() == null;
+        try {
+            lease = issuedNow
+                ? leases.issue(
+                    new LeaseRequest(
+                        runtime.tenantId(),
+                        runtime.pipelineRunId(),
+                        runtime.airflowRunId(),
+                        runtime.environment(),
+                        runtime.executionTargetKey()
+                    )
                 )
-            );
-            issuedNow = true;
+                : leases.viewActive(runtime.profileLeaseId());
+        } catch (DbtRuntimeProfileException unavailable) {
+            String code = unavailable.code() == null || unavailable.code().isBlank()
+                ? "DBT_EXECUTION_TARGET_SECRET_UNAVAILABLE"
+                : unavailable.code();
+            availabilityAudit.recordRuntimeDenied(runtime, code, now);
+            throw recorded(runtime, code, unavailable.getMessage());
+        }
+        if (issuedNow) {
             if (
                 !dispatches.attachRuntimeLease(
                     runtime.dispatchId(),
@@ -289,6 +304,16 @@ public class ModelMaterializationRuntimeSpecService {
                 "Runtime spec is incomplete"
             );
         }
+    }
+
+    /** Authenticated refusal of this dispatch: persisted so finalize reports the root cause. */
+    private ModelMaterializationRuntimeException recorded(
+        RuntimeSpecRecord runtime,
+        String code,
+        String message
+    ) {
+        failures.recordAfterRollback(runtime.dispatchId(), code);
+        return failure(code, message);
     }
 
     private static ModelMaterializationRuntimeException failure(

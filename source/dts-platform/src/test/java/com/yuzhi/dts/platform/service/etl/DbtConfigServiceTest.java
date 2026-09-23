@@ -125,4 +125,88 @@ class DbtConfigServiceTest {
         assertThat(Files.exists(profilesDir.resolve("profiles.yml"))).isFalse();
         verifyNoInteractions(secretService);
     }
+
+    @Test
+    void ensureConfigFile_rewritesAMissingTargetWhenExactlyOneWarehouseMatchesTheDatabase() throws Exception {
+        UUID staleTargetId = UUID.randomUUID();
+        Path configPath = writeConfigWithTarget(staleTargetId);
+        InfraDataSource warehouse = warehouse("jdbc:postgresql://dts-pg:5432/biadmin");
+        InfraDataSource other = warehouse("jdbc:postgresql://dts-pg:5432/dts_platform");
+        when(dataSourceRepository.findById(staleTargetId)).thenReturn(Optional.empty());
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(other, warehouse));
+
+        serviceFor(configPath).ensureConfigFile();
+
+        assertThat(Files.readString(configPath)).contains(warehouse.getId().toString()).doesNotContain(staleTargetId.toString());
+    }
+
+    @Test
+    void ensureConfigFile_leavesAMissingTargetUntouchedWhenTheMatchIsAmbiguous() throws Exception {
+        UUID staleTargetId = UUID.randomUUID();
+        Path configPath = writeConfigWithTarget(staleTargetId);
+        when(dataSourceRepository.findById(staleTargetId)).thenReturn(Optional.empty());
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(
+            List.of(warehouse("jdbc:postgresql://pg-a:5432/biadmin"), warehouse("jdbc:postgresql://pg-b:5432/biadmin?ssl=true"))
+        );
+
+        serviceFor(configPath).ensureConfigFile();
+
+        assertThat(Files.readString(configPath)).contains(staleTargetId.toString());
+    }
+
+    @Test
+    void ensureConfigFile_neverRewritesAnExistingTarget() throws Exception {
+        InfraDataSource configured = warehouse("jdbc:postgresql://dts-pg:5432/biadmin");
+        Path configPath = writeConfigWithTarget(configured.getId());
+        when(dataSourceRepository.findById(configured.getId())).thenReturn(Optional.of(configured));
+        String before = Files.readString(configPath);
+
+        serviceFor(configPath).ensureConfigFile();
+
+        assertThat(Files.readString(configPath)).isEqualTo(before);
+    }
+
+    private Path writeConfigWithTarget(UUID targetId) throws Exception {
+        Path projectDir = tempDir.resolve("dbt");
+        Files.createDirectories(projectDir);
+        Path configPath = tempDir.resolve("upload").resolve("dbt-config.json");
+        Files.createDirectories(configPath.getParent());
+        Files.writeString(
+            configPath,
+            """
+            {
+              "enabled": true,
+              "projectDir": "%s",
+              "profilesDir": "%s",
+              "profileName": "dts",
+              "targetName": "dev",
+              "targetDataSourceId": "%s",
+              "database": "biadmin",
+              "schema": "public"
+            }
+            """.formatted(projectDir, tempDir.resolve("profiles"), targetId),
+            StandardCharsets.UTF_8
+        );
+        return configPath;
+    }
+
+    private DbtConfigService serviceFor(Path configPath) {
+        DbtProperties properties = new DbtProperties();
+        properties.setEnabled(true);
+        properties.setConfigPath(configPath.toString());
+        properties.setProjectDir(tempDir.resolve("dbt").toString());
+        properties.setProfilesDir(tempDir.resolve("profiles").toString());
+        return new DbtConfigService(new ObjectMapper(), dataSourceRepository, secretService, properties);
+    }
+
+    private static InfraDataSource warehouse(String jdbcUrl) {
+        InfraDataSource source = new InfraDataSource();
+        source.setId(UUID.randomUUID());
+        source.setName("数仓");
+        source.setType("POSTGRESQL");
+        source.setJdbcUrl(jdbcUrl);
+        source.setUsername("biadmin");
+        source.setStatus("ACTIVE");
+        return source;
+    }
 }

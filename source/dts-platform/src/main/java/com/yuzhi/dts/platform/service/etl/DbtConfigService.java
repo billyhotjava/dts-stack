@@ -73,7 +73,7 @@ public class DbtConfigService {
                 );
                 writeConfig(config);
             } else {
-                config = hydrateResolvedConfig(readConfig());
+                config = hydrateResolvedConfig(reconcileMissingTarget(readConfig()));
             }
             ensureWorkspaceBootstrap(config);
         } catch (IOException ex) {
@@ -103,7 +103,7 @@ public class DbtConfigService {
         }
         DbtWorkspaceConfig config = readConfig();
         if (config == null || config.targetDataSourceId() == null) {
-            throw new IllegalStateException("未配置目标数仓");
+            throw new DbtRuntimeTargetException("DBT_TARGET_NOT_CONFIGURED", "未配置目标数仓");
         }
         return config;
     }
@@ -470,6 +470,73 @@ public class DbtConfigService {
             config.schema(),
             config.vars()
         );
+    }
+
+    /**
+     * The config file outlives database resets and migrations, while the runtime deliberately
+     * never substitutes a target on its own. At startup a missing target is replaced only when
+     * exactly one active PostgreSQL source serves the configured database; otherwise the file is
+     * left as-is and runs fail with DBT_TARGET_DATASOURCE_NOT_FOUND.
+     */
+    private DbtWorkspaceConfig reconcileMissingTarget(DbtWorkspaceConfig config) {
+        if (config == null || config.targetDataSourceId() == null || resolveConfiguredTargetSource(config) != null) {
+            return config;
+        }
+        String database = safeText(config.database(), null);
+        List<InfraDataSource> matches = database == null
+            ? List.of()
+            : dataSourceRepository
+                .findByStatusIgnoreCase("ACTIVE")
+                .stream()
+                .filter(source -> source != null && source.getId() != null)
+                .filter(source -> isPostgres(source.getType()))
+                .filter(source -> database.equalsIgnoreCase(jdbcDatabase(source.getJdbcUrl())))
+                .toList();
+        if (matches.size() != 1) {
+            LOG.error(
+                "event=dbt_config_target_invalid configuredTarget={} database={} candidates={}",
+                config.targetDataSourceId(),
+                database,
+                matches.size()
+            );
+            return config;
+        }
+        UUID replacement = matches.getFirst().getId();
+        DbtWorkspaceConfig reconciled = new DbtWorkspaceConfig(
+            config.enabled(),
+            config.projectDir(),
+            config.profilesDir(),
+            config.profileName(),
+            config.targetName(),
+            replacement,
+            config.database(),
+            config.schema(),
+            config.vars()
+        );
+        writeConfig(reconciled);
+        LOG.warn(
+            "event=dbt_config_target_reconciled previousTarget={} target={} database={}",
+            config.targetDataSourceId(),
+            replacement,
+            database
+        );
+        return reconciled;
+    }
+
+    private static boolean isPostgres(String type) {
+        return type != null && ("postgres".equalsIgnoreCase(type.trim()) || "postgresql".equalsIgnoreCase(type.trim()));
+    }
+
+    private static String jdbcDatabase(String jdbcUrl) {
+        if (jdbcUrl == null) {
+            return null;
+        }
+        String withoutParams = jdbcUrl.split("[?;]", 2)[0];
+        int slash = withoutParams.lastIndexOf('/');
+        if (slash < 0 || slash == withoutParams.length() - 1 || withoutParams.startsWith("//", slash - 1)) {
+            return null;
+        }
+        return withoutParams.substring(slash + 1).trim();
     }
 
     private InfraDataSource resolveTargetSource(DbtWorkspaceConfig config) {

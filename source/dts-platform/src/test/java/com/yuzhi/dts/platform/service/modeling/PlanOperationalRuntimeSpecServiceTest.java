@@ -81,6 +81,29 @@ class PlanOperationalRuntimeSpecServiceTest {
         verify(fixture.leases, never()).issue(any());
     }
 
+    @Test
+    void targetFailureReturnsItsStableCodeInsteadOfAnUnhandledError() {
+        Fixture fixture = fixture();
+        var token = fixture.tokens.issue(GROUP_ID, NOW);
+        when(fixture.runs.lockRuntimeSpec(token.digest()))
+            .thenReturn(Optional.of(runtime(token, null)));
+        when(fixture.leases.issue(any())).thenThrow(
+            new com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileException(
+                "DBT_TARGET_DATASOURCE_NOT_FOUND",
+                "目标数仓数据源不存在",
+                null
+            )
+        );
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> fixture.service.consume(token.token()))
+            .isInstanceOf(PlanExecutionException.class)
+            .satisfies(error -> {
+                assertThat(((PlanExecutionException) error).code()).isEqualTo("DBT_TARGET_DATASOURCE_NOT_FOUND");
+                assertThat(((PlanExecutionException) error).kind()).isEqualTo(PlanExecutionException.Kind.UNAVAILABLE);
+            });
+        verify(fixture.runs, never()).attachRuntimeLease(any(), any(), any());
+    }
+
     private static Fixture fixture() {
         ModelMaterializationProperties properties =
             new ModelMaterializationProperties();

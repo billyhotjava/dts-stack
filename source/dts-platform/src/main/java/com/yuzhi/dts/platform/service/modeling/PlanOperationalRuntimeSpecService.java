@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository;
 import com.yuzhi.dts.platform.repository.modeling.PlanOperationalRunRepository.RuntimeRecord;
+import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileException;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService.LeaseRequest;
 import com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileLeaseService.LeaseView;
@@ -91,18 +92,29 @@ public class PlanOperationalRuntimeSpecService {
         }
         requireRuntime(runtime);
         LeaseView lease;
-        if (runtime.profileLeaseId() != null) {
-            lease = leases.viewActive(runtime.profileLeaseId());
-        } else {
-            lease = leases.issue(
-                new LeaseRequest(
-                    runtime.tenantId(),
-                    runtime.pipelineRunId(),
-                    runtime.airflowRunId(),
-                    runtime.environment(),
-                    runtime.executionTargetKey()
+        boolean issuedNow = runtime.profileLeaseId() == null;
+        try {
+            lease = issuedNow
+                ? leases.issue(
+                    new LeaseRequest(
+                        runtime.tenantId(),
+                        runtime.pipelineRunId(),
+                        runtime.airflowRunId(),
+                        runtime.environment(),
+                        runtime.executionTargetKey()
+                    )
                 )
+                : leases.viewActive(runtime.profileLeaseId());
+        } catch (DbtRuntimeProfileException unavailable) {
+            throw failure(
+                unavailable.code() == null || unavailable.code().isBlank()
+                    ? "DBT_EXECUTION_TARGET_SECRET_UNAVAILABLE"
+                    : unavailable.code(),
+                unavailable.getMessage(),
+                Kind.UNAVAILABLE
             );
+        }
+        if (issuedNow) {
             if (
                 !runs.attachRuntimeLease(
                     runtime.groupId(),

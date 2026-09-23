@@ -378,6 +378,25 @@ public class ModelMaterializationDispatchRepository {
     }
 
     /**
+     * Records why the runtime callback refused an active attempt, without changing its state, so the
+     * later failed finalize reports the root cause instead of a generic upstream failure.
+     */
+    @Transactional
+    public boolean recordRuntimeFailure(UUID dispatchId, String errorCode, Instant now) {
+        return jdbcTemplate.update(
+            """
+            update modeling_materialization_dispatch
+               set last_error_code = ?, last_modified_at = ?
+             where id = ?
+               and status in ('CLAIMED', 'SUBMITTED', 'UNKNOWN')
+            """,
+            required(errorCode, "errorCode"),
+            Timestamp.from(now),
+            dispatchId
+        ) > 0;
+    }
+
+    /**
      * Latest build attempt of one candidate, locked for a state decision. Like the retry path it
      * is not filtered by candidate version, so an active attempt can never hide behind a version
      * mismatch.

@@ -135,6 +135,8 @@ public class DbtRuntimeProfileLeaseService {
         DbtTargetConnectionFactory.RuntimeTarget target;
         try {
             target = targetFactory.resolveRuntimeTarget();
+        } catch (DbtRuntimeTargetException failure) {
+            throw new DbtRuntimeProfileException(failure.code(), failure.getMessage(), failure);
         } catch (RuntimeException failure) {
             throw new DbtRuntimeProfileException(
                 "DBT_EXECUTION_TARGET_SECRET_UNAVAILABLE",

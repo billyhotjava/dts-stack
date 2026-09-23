@@ -70,15 +70,15 @@ public class DbtTargetConnectionFactory {
         UUID targetId = config.targetDataSourceId();
         InfraDataSource source = dataSourceRepository
             .findById(targetId)
-            .orElseThrow(() -> new IllegalStateException("目标数仓数据源不存在"));
+            .orElseThrow(() -> new DbtRuntimeTargetException("DBT_TARGET_DATASOURCE_NOT_FOUND", "目标数仓数据源不存在"));
         if (!StringUtils.hasText(source.getJdbcUrl())) {
-            throw new IllegalStateException("目标数仓 JDBC 地址为空");
+            throw new DbtRuntimeTargetException("DBT_TARGET_JDBC_MISSING", "目标数仓 JDBC 地址为空");
         }
         if (
             !StringUtils.hasText(source.getSecureKeyVersion()) ||
             "PLAINTEXT".equalsIgnoreCase(source.getSecureKeyVersion())
         ) {
-            throw new IllegalStateException("目标数仓凭据不是受保护的加密 secret");
+            throw new DbtRuntimeTargetException("DBT_TARGET_SECRET_UNPROTECTED", "目标数仓凭据不是受保护的加密 secret");
         }
         Map<String, Object> secrets = secretService.readSecrets(source);
         String password = secrets == null
@@ -88,7 +88,7 @@ public class DbtTargetConnectionFactory {
             !StringUtils.hasText(source.getUsername()) ||
             !StringUtils.hasText(password)
         ) {
-            throw new IllegalStateException("目标数仓凭据缺失或无法解密");
+            throw new DbtRuntimeTargetException("DBT_TARGET_SECRET_UNAVAILABLE", "目标数仓凭据缺失或无法解密");
         }
         return new RuntimeTarget(
             targetId,

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import type { MaterializationPlanEntry, ReleaseCandidateEntryEvidence } from "@/api/modelSpecApi";
 import type { CompactColumns } from "@/components/table";
 import { Status } from "./PrototypePrimitives";
+import { materializationFailureReason } from "./services/materializationFailureReason";
 
 const formatTime = (value?: string | null) => {
 	if (!value) return "—";
@@ -58,7 +59,7 @@ export function useModelMaterializationColumns() {
 				dataIndex: "repairCode",
 				render: (value: string | null | undefined, row: ReleaseCandidateEntryEvidence) => (
 					<div style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-						{row.failureMessage || (value === "MODEL_AIRFLOW_DAG_NOT_REGISTERED" ? "执行任务尚未就绪，构建未启动" : value || "—")}
+						{materializationFailureReason(value, row.failureMessage)}
 						{row.failureMessage && value ? <div>错误码：{value}</div> : null}
 					</div>
 				),

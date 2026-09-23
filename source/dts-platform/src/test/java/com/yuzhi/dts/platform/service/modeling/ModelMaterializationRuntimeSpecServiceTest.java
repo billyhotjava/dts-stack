@@ -300,6 +300,42 @@ class ModelMaterializationRuntimeSpecServiceTest {
             org.mockito.ArgumentMatchers.eq(NOW)
         );
         verify(fixture.leases, never()).issue(any());
+        verify(fixture.failures, never()).recordAfterRollback(any(), any());
+    }
+
+    @Test
+    void targetFailureDuringLeaseIssueReturnsItsCodeAndRecordsItOnTheDispatch() {
+        Fixture fixture = fixture();
+        ModelRuntimeSpecTokenCodec.IssuedToken token = fixture.tokens.issue(DISPATCH_ID, NOW);
+        when(fixture.dispatches.lockRuntimeSpec(token.digest())).thenReturn(Optional.of(runtime(token, null)));
+        when(fixture.leases.issue(any())).thenThrow(
+            new com.yuzhi.dts.platform.service.etl.DbtRuntimeProfileException(
+                "DBT_TARGET_DATASOURCE_NOT_FOUND",
+                "目标数仓数据源不存在",
+                null
+            )
+        );
+
+        assertThatThrownBy(() -> fixture.service.consume(token.token()))
+            .isInstanceOf(ModelMaterializationRuntimeException.class)
+            .extracting(error -> ((ModelMaterializationRuntimeException) error).code())
+            .isEqualTo("DBT_TARGET_DATASOURCE_NOT_FOUND");
+        verify(fixture.failures).recordAfterRollback(DISPATCH_ID, "DBT_TARGET_DATASOURCE_NOT_FOUND");
+        verify(fixture.availabilityAudit).recordRuntimeDenied(
+            org.mockito.ArgumentMatchers.any(RuntimeSpecRecord.class),
+            org.mockito.ArgumentMatchers.eq("DBT_TARGET_DATASOURCE_NOT_FOUND"),
+            org.mockito.ArgumentMatchers.eq(NOW)
+        );
+        verify(fixture.dispatches, never()).attachRuntimeLease(any(), any(), any());
+    }
+
+    @Test
+    void invalidTokenIsNeverRecordedOnAnyDispatch() {
+        Fixture fixture = fixture();
+
+        assertThatThrownBy(() -> fixture.service.consume("not-a-token"))
+            .isInstanceOf(ModelMaterializationRuntimeException.class);
+        verify(fixture.failures, never()).recordAfterRollback(any(), any());
     }
 
     @Test
@@ -445,6 +481,7 @@ class ModelMaterializationRuntimeSpecServiceTest {
         var leases = mock(DbtRuntimeProfileLeaseService.class);
         var sourceAvailability = mock(ModelMaterializationSourceAvailabilityGuard.class);
         var availabilityAudit = mock(ModelMaterializationAvailabilityAuditService.class);
+        var failures = mock(ModelMaterializationRuntimeFailureRecorder.class);
         var audit = new RecordingAuditService();
         var service = new ModelMaterializationRuntimeSpecService(
             dispatches,
@@ -453,6 +490,7 @@ class ModelMaterializationRuntimeSpecServiceTest {
             availabilityAudit,
             leases,
             audit,
+            failures,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );
         return new Fixture(
@@ -462,7 +500,8 @@ class ModelMaterializationRuntimeSpecServiceTest {
             sourceAvailability,
             availabilityAudit,
             leases,
-            audit
+            audit,
+            failures
         );
     }
 
@@ -518,7 +557,8 @@ class ModelMaterializationRuntimeSpecServiceTest {
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         ModelMaterializationAvailabilityAuditService availabilityAudit,
         DbtRuntimeProfileLeaseService leases,
-        RecordingAuditService audit
+        RecordingAuditService audit,
+        ModelMaterializationRuntimeFailureRecorder failures
     ) {}
 
     private record AuditCall(

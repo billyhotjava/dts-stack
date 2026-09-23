@@ -175,6 +175,21 @@ class ModelMaterializationDispatchRepositoryPostgresIT {
     }
 
     @Test
+    void runtimeFailureCodeIsRecordedOnlyOnActiveDispatchesWithoutChangingStatus() {
+        UUID submitted = insertDispatch(1, 2, "SUBMITTED", 1, null, NOW.minusSeconds(60));
+        UUID completed = insertDispatch(2, 4, "COMPLETED", 1, null, NOW.minusSeconds(60));
+
+        assertThat(dispatches.recordRuntimeFailure(submitted, "DBT_TARGET_DATASOURCE_NOT_FOUND", NOW)).isTrue();
+        assertThat(dispatches.recordRuntimeFailure(completed, "DBT_TARGET_DATASOURCE_NOT_FOUND", NOW)).isFalse();
+
+        assertThat(jdbc.queryForMap("select status, last_error_code from modeling_materialization_dispatch where id = ?", submitted))
+            .containsEntry("status", "SUBMITTED")
+            .containsEntry("last_error_code", "DBT_TARGET_DATASOURCE_NOT_FOUND");
+        assertThat(jdbc.queryForObject("select last_error_code from modeling_materialization_dispatch where id = ?", String.class, completed))
+            .isNull();
+    }
+
+    @Test
     void abandonLeavesLiveClaimsAndTerminalDispatchesUntouched() {
         UUID liveClaim = insertDispatch(1, 2, "CLAIMED", 1, NOW.minusSeconds(30), NOW.minusSeconds(30));
         UUID staleClaim = insertDispatch(2, 4, "CLAIMED", 1, NOW.minusSeconds(600), NOW.minusSeconds(600));

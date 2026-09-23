@@ -86,6 +86,28 @@ class DbtTargetConnectionFactoryTest {
         verify(configService, never()).loadConfig();
     }
 
+    @Test
+    void reportsMissingConfiguredTargetWithStableCode() {
+        when(repository.findById(TARGET_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(factory::resolveRuntimeTarget)
+            .isInstanceOf(IllegalStateException.class)
+            .isInstanceOf(DbtRuntimeTargetException.class)
+            .extracting(error -> ((DbtRuntimeTargetException) error).code())
+            .isEqualTo("DBT_TARGET_DATASOURCE_NOT_FOUND");
+        verify(configService, never()).loadConfig();
+    }
+
+    @Test
+    void reportsUnprotectedSecretWithStableCode() {
+        InfraDataSource source = source("PLAINTEXT");
+        when(repository.findById(TARGET_ID)).thenReturn(Optional.of(source));
+
+        assertThatThrownBy(factory::resolveRuntimeTarget)
+            .extracting(error -> ((DbtRuntimeTargetException) error).code())
+            .isEqualTo("DBT_TARGET_SECRET_UNPROTECTED");
+    }
+
     private static InfraDataSource source(String keyVersion) {
         InfraDataSource source = new InfraDataSource();
         source.setId(TARGET_ID);

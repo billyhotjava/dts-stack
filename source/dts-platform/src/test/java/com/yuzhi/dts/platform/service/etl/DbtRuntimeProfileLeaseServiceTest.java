@@ -409,6 +409,37 @@ class DbtRuntimeProfileLeaseServiceTest {
     }
 
     @Test
+    void issuePreservesTheSpecificTargetFailureCode() {
+        when(targetFactory.resolveRuntimeTarget()).thenThrow(
+            new DbtRuntimeTargetException("DBT_TARGET_DATASOURCE_NOT_FOUND", "目标数仓数据源不存在")
+        );
+
+        assertThatThrownBy(() -> service.issue(leaseRequest()))
+            .isInstanceOf(DbtRuntimeProfileException.class)
+            .extracting(error -> ((DbtRuntimeProfileException) error).code())
+            .isEqualTo("DBT_TARGET_DATASOURCE_NOT_FOUND");
+    }
+
+    @Test
+    void issueKeepsTheCredentialCodeForUnclassifiedTargetFailures() {
+        when(targetFactory.resolveRuntimeTarget()).thenThrow(new IllegalStateException("boom"));
+
+        assertThatThrownBy(() -> service.issue(leaseRequest()))
+            .extracting(error -> ((DbtRuntimeProfileException) error).code())
+            .isEqualTo("DBT_EXECUTION_TARGET_SECRET_UNAVAILABLE");
+    }
+
+    private static DbtRuntimeProfileLeaseService.LeaseRequest leaseRequest() {
+        return new DbtRuntimeProfileLeaseService.LeaseRequest(
+            "tenant-a",
+            PIPELINE_RUN_ID,
+            DAG_RUN_ID,
+            "DEV",
+            "postgres-primary"
+        );
+    }
+
+    @Test
     void databaseInspectionWinsWhenJvmClockRunsAheadDuringRecovery() {
         var issued = service.issue(
             new DbtRuntimeProfileLeaseService.LeaseRequest(
