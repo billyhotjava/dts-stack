@@ -231,6 +231,9 @@ class F4StrictAuditRollbackPostgresIT {
     private ModelingExecutionAuthorization executionAuthorization;
 
     @MockBean
+    private ModelingSourceScopeGuard sourceScope;
+
+    @MockBean
     private PhysicalRelationInspectorRegistry inspectorRegistry;
 
     @MockBean
