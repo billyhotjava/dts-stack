@@ -56,8 +56,8 @@
 | F10-菜单信息架构按实施主线收敛 | — | — | 见 sprint README §F10 |
 | F11-权限模型统一与RBAC重构 | — | — | 见 sprint README §F11 |
 | **F12-业务应用ZIP全链路导入** | **P1** | **8** | **IN_PROGRESS**（T01 DONE、T02 IN_PROGRESS、T03–T08 DRAFT） |
-| **F13-发布质量处理与失败恢复** | **P1** | **8** | **IN_PROGRESS**（设计；T01 READY、T02–T08 DRAFT） |
-| **F14-模型构建与失败恢复** | **P0** | **8** | **IN_PROGRESS**（设计；T01 READY、T02–T08 DRAFT） |
+| **F13-发布质量处理与失败恢复** | **P1** | **8** | **IN_PROGRESS**（首批后端；F13-T03/F14-T02 已开工） |
+| **F14-模型构建与失败恢复** | **P0** | **8** | **IN_PROGRESS**（首批后端；F13-T03/F14-T02 已开工） |
 
 **F12 统计**：DRAFT=6，IN_PROGRESS=1，DONE=1，BLOCKED=0。估算 31 人日，无人员容量或工期承诺。
 **F12 执行顺序**：T02 主路径 → T08 建模重置/同包重导 → T03 包契约与生产 → T04/T05 领域适配（T06 运行基础先于 T04/T05 真实写入集成）→ T07 分片验收。单代理实施。
@@ -67,11 +67,11 @@
 - 重置能力未实现：43 个 PJM 草稿删除被追加写保护拒绝，用户同规划手工重导需求仍未闭环（T08）。
 - Chrome 95、1366×768/768 窄屏真实浏览器验收未执行。
 
-**F13/F14 联合统计**：共16Task；READY=2、DRAFT=14、IN_PROGRESS=0、DONE=0、BLOCKED=0。每个Feature各8Task，T01 READY，其余DRAFT。F13原11人日估算失效，M0后重估联合开发/测试/交付容量，无工期承诺。
-**联合执行顺序**：F13-T01与F14-T01分别核对后完成M0 → M1构建到质量的最早集成切片 → M2并发与故障恢复 → M3统一界面 → M4同批制品与双环境验收。详见[联合设计](sprint-104-202609-modeling-contract-consistency/assests/F13-F14-联合设计与实施顺序.md)。用户要求后续两个Feature一起编码，本次仅文档。
+**F13/F14 联合统计**：共16Task；READY=2、DRAFT=12、IN_PROGRESS=2、DONE=0、BLOCKED=0。每个Feature各8Task，T01 READY；F13-T03、F14-T02 IN_PROGRESS，其余DRAFT。F13原11人日估算失效，M0后重估联合开发/测试/交付容量，无工期承诺。
+**联合执行顺序**：F13-T01与F14-T01分别核对后完成M0 → M1构建到质量的最早集成切片 → M2并发与故障恢复 → M3统一界面 → M4同批制品与双环境验收。详见[联合设计](sprint-104-202609-modeling-contract-consistency/assests/F13-F14-联合设计与实施顺序.md)。2026-09-24 已按用户确认启动两个Feature首批后端，见[实施记录](sprint-104-202609-modeling-contract-consistency/assests/F13-F14-首批编码与测试记录.md)。
 **职责**：F14负责构建前检查、执行、关系核验与结果回写恢复；F13负责构建后的资产登记与发布质量处理。复用现有派发、身份、台账和页面，不另建调度器。F13自身缺陷仍由F13修复，不转移到F14后计完成。
 **设计入口**：[F13](sprint-104-202609-modeling-contract-consistency/assests/F13-release-quality-reconcile-contract.md)、[F14](sprint-104-202609-modeling-contract-consistency/assests/F14-模型构建与失败恢复设计.md)。保留原refresh使候选失效语义；新增立即检查与构建恢复命令按M0确定。登记根因先真实复现，不预设候选版本变化必然失败。
-**验证**：原F13-IT-01–21、F14-IT-01–20保留；新增F13 16项、F14 17项单元用例及[12项联合系统场景](sprint-104-202609-modeling-contract-consistency/it/F13-F14-系统测试用例.md)，ST细化IT，不重复累计覆盖。全部NOT_RUN；源码/测试、正式包、部署、页面验收未执行。G0/G1=GAP，G2/G3/G4=PENDING。
+**验证**：原F13-IT-01–21、F14-IT-01–20保留；新增F13 16项、F14 17项单元用例及[12项联合系统场景](sprint-104-202609-modeling-contract-consistency/it/F13-F14-系统测试用例.md)，ST细化IT，不重复累计覆盖。首批源码与定向测试证据单独见实施记录，整体IT/ST仍NOT_RUN；正式包、部署、页面验收未执行。G0/G1=GAP，G2/G3/G4=PENDING。
 **2026-09-24架构修订**：统一写入职责和持久交接；恢复operation隔离原失败任务；质量轮次绑定构建/规则/runId；复用平台ADVISORY/BLOCKING，不修改现场配置，保留已通过候选的冻结策略。M2完成T06后端，M3完成其页面联调。
 **主要风险**：终态恢复的合法转换、运行文件保留、唤醒与领取并发、原发起人撤权、Java/Airflow版本兼容和在途操作回退；由两个T01冻结，不凭空放宽。评审流程重构另行登记，不在本次范围。
 
