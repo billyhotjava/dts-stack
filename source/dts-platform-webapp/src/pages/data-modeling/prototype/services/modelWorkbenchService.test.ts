@@ -1455,6 +1455,7 @@ describe("model workbench draft validation", () => {
 		);
 
 		expect(snapshot).not.toHaveProperty("visualImplementation");
+		expect(snapshot).not.toHaveProperty("codeAuthoritative");
 	});
 
 	it("keeps a code-owned visual reference across hydration and repeated saves without making it executable", () => {

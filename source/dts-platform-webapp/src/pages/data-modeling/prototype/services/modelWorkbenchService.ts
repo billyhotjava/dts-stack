@@ -1347,8 +1347,8 @@ export const modelDraftToAuthoringSnapshot = (
 		return { ...snapshot, codeAuthoritative: true, visualReference: normalizedDraft.visualReference || null };
 	}
 	if (!includeStructuredVisual) {
-		// The server retains the last saved visual snapshot; do not rebuild it from edited SQL.
-		return { ...snapshot, codeAuthoritative: true };
+		// The server detects actual file changes and retains the previous visual settings.
+		return snapshot;
 	}
 	if (
 		!includeStructuredVisual ||
