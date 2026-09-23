@@ -56,6 +56,7 @@
 | F10-菜单信息架构按实施主线收敛 | — | — | 见 sprint README §F10 |
 | F11-权限模型统一与RBAC重构 | — | — | 见 sprint README §F11 |
 | **F12-业务应用ZIP全链路导入** | **P1** | **8** | **IN_PROGRESS**（T01 DONE、T02 IN_PROGRESS、T03–T08 DRAFT） |
+| **F13-发布质量对账状态机与阻断可见性** | **P1** | **8** | **IN_PROGRESS**（设计；T01 READY、T02–T08 DRAFT） |
 
 **F12 统计**：DRAFT=6，IN_PROGRESS=1，DONE=1，BLOCKED=0。估算 31 人日，无人员容量或工期承诺。
 **F12 执行顺序**：T02 主路径 → T08 建模重置/同包重导 → T03 包契约与生产 → T04/T05 领域适配（T06 运行基础先于 T04/T05 真实写入集成）→ T07 分片验收。单代理实施。
@@ -64,5 +65,13 @@
 - 下游三类载荷与 dts-analytics 目标契约不同构（SCREEN 需整体重做），G1 契约链为 GAP，T04/T05 在对齐前不得转 READY。
 - 重置能力未实现：43 个 PJM 草稿删除被追加写保护拒绝，用户同规划手工重导需求仍未闭环（T08）。
 - Chrome 95、1366×768/768 窄屏真实浏览器验收未执行。
+
+**F13 统计**：READY=1，DRAFT=7，IN_PROGRESS=0，DONE=0，BLOCKED=0。估算 11 人日，无人员容量或工期承诺。
+**F13 执行顺序**：T01 契约冻结 → T02 登记幂等 ∥ T03 对账状态持久化 → T04 读模型 → T05 面板 ∥ T06 用户闭环 → T07 存量处置与运维 → T08 双环境验收。
+**F13 关键决策**：不拆 `QUALITY_RUNNING`（治理快照冻结与发布门禁依赖现有迁移时机）；新增 `modeling_release_quality_reconcile_state` 持久化对账阶段、阻断类别与退避；阻断码唯一映射责任角色与动作；扩展既有 `WorkbenchView`，不新增路由。见[主契约](sprint-104-202609-modeling-contract-consistency/assests/F13-release-quality-reconcile-contract.md)。
+**F13 已知风险**：
+- 登记幂等改法取决于观测台账拒收规则（Q1），T01 未关闭前 T02 不得开工。
+- openEuler 部署需用户单独确认；两套环境存量卡单原因不同，须分别处置。
+- 评审阶段 reconciler 存在同类问题（`PUBLICATION_REQUEST_EVIDENCE_MISSING`），不在 F13 交付范围，另立后续。
 
 **F4–F11 说明**：sprint README 的「Feature 与执行顺序」表历史上只登记 F1–F3，F4–F11 状态分散在各自章节。本次补建队列时按现状索引，不回溯补全，避免制造未经核对的状态。
