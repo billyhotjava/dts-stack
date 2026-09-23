@@ -1,4 +1,3 @@
-import { summaryMeasureFields } from "./summaryMeasureFields";
 import { listDataMarts } from "@/api/dataMartApi";
 import type { ModelAuthoringSnapshot, ModelAuthoringSnapshotInput } from "@/api/dbtImplementationDraftApi";
 import {
@@ -70,6 +69,7 @@ import type { SubjectDomainView } from "@/features/modeling/contracts/subjectDom
 import { copyDimensionProfile, dimensionProfileForSave, implementationConfiguration } from "./modelDraftConfiguration";
 import { createCommandForDraft } from "./modelDraftCreateCommand";
 import { modelInputIds } from "./modelInputIdentity";
+import { summaryMeasureFields } from "./summaryMeasureFields";
 
 export type ModelCreateKind = "dimension" | "dimension-table" | "source" | "fact" | "summary" | "application";
 export type ModelSpecCreateKind = Exclude<ModelCreateKind, "dimension">;
@@ -437,8 +437,12 @@ const implementationViewFromCommand = (
 const codeReferenceOf = (implementation: ModelImplementationView | null) => {
 	for (const input of implementation?.inputs || []) {
 		if (!("generatorType" in input) || !input.config?.codeAuthoritative) continue;
-		return { codeAuthoritative: true, visualReference: isModelImplementationWriteCommand(input.config.visualReference)
-			? input.config.visualReference : null };
+		return {
+			codeAuthoritative: true,
+			visualReference: isModelImplementationWriteCommand(input.config.visualReference)
+				? input.config.visualReference
+				: null,
+		};
 	}
 	return { codeAuthoritative: false, visualReference: null };
 };
@@ -977,6 +981,9 @@ const filterValueMatchesType = (filter: ModelImplementationFilter): boolean => {
 	});
 };
 
+export const SUMMARY_MEASURE_GUIDANCE =
+	"汇总表需要配置分组和至少一个聚合（如 COUNT、SUM），或在字段管理中把汇总结果字段设为“度量”；不做聚合的去重明细请使用明细表（DWD）建模。";
+
 const validateDesignerTransformations = (draft: ModelSpecDraft): string | null => {
 	const inputCount = draft.sourceRefs.length + draft.dependsOn.length + (draft.dimensionRefs?.length ?? 0);
 	const outputFields = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
@@ -1051,12 +1058,25 @@ const validateDesignerTransformations = (draft: ModelSpecDraft): string | null =
 			return "聚合模型的每个输出字段必须配置为分组字段或聚合结果";
 		}
 	}
+	// The build gate requires a measure or metric ref for DWS summaries; say so while processing is edited.
+	if (
+		draft.createKind === "summary" &&
+		!draft.codeAuthoritative &&
+		fieldMappings.length > 0 &&
+		!aggregations.length &&
+		!draft.fields.some((field) => field.role === "MEASURE") &&
+		!draft.base?.metricRefs?.length
+	) {
+		return SUMMARY_MEASURE_GUIDANCE;
+	}
 	return null;
 };
 
 export const modelDraftToUpdateCommand = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 	const config = MODEL_KIND_CONFIG[draft.createKind];
-	const keyNames = summaryMeasureFields(draft).filter((field) => field.role === "KEY").map((field) => field.name.trim());
+	const keyNames = summaryMeasureFields(draft)
+		.filter((field) => field.role === "KEY")
+		.map((field) => field.name.trim());
 	const updateFieldNames = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
 	const base = draft.base?.compatibilityMode === "CANONICAL" ? draft.base : null;
 	return {

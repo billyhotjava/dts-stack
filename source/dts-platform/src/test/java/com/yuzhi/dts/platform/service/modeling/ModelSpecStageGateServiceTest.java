@@ -666,6 +666,12 @@ class ModelSpecStageGateServiceTest {
         assertThat(ModelSpecStageGateService.evaluate(summary, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(summary)).blockers())
             .extracting(ModelSpecStageGateService.GateBlocker::code)
             .containsExactly("MODEL_SPEC_SUMMARY_MEASURE_REQUIRED");
+        assertThat(ModelSpecStageGateService.evaluate(summary, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(summary)).blockers())
+            .extracting(ModelSpecStageGateService.GateBlocker::message)
+            .singleElement()
+            .asString()
+            .contains("至少一个聚合")
+            .contains("明细表（DWD）");
         assertThat(ModelSpecStageGateService.evaluate(application, Stage.IMPLEMENTATION_READY, GateEvidence.currentFor(application)).status())
             .isEqualTo(GateStatus.READY);
     }

@@ -743,7 +743,7 @@ public class ModelSpecStageGateService {
             case SUMMARY -> {
                 boolean hasMeasure = view.fields().stream().anyMatch(field -> field != null && field.role() == FieldRole.MEASURE);
                 if (!hasMeasure && view.metricRefs().isEmpty()) {
-                    add(blockers, blocker(view, "MODEL_SPEC_SUMMARY_MEASURE_REQUIRED", "fields", "汇总表需声明汇总字段或指标引用", "fields"));
+                    add(blockers, blocker(view, "MODEL_SPEC_SUMMARY_MEASURE_REQUIRED", "fields", "汇总表需声明汇总字段或指标引用：请在加工配置中设置分组和至少一个聚合（如 COUNT、SUM），或在字段管理中把汇总结果字段设为“度量”；不做聚合的去重明细请使用明细表（DWD）建模", "fields"));
                 }
             }
             case APPLICATION -> {
