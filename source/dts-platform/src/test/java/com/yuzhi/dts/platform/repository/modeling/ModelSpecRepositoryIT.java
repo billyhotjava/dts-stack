@@ -16,6 +16,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,8 +44,9 @@ class ModelSpecRepositoryIT {
     @Autowired
     private SchemaDriftDetector schemaDriftDetector;
 
-    @Test
-    void resolvesCatalogTableLocatorThroughParentDataset() {
+    @ParameterizedTest
+    @CsvSource({"ODS,ODS", "DIM,DWD", "dim,DWD", "DWD,DWD", "DWS,DWS", "ADS,ADS", "STG,STG", ",ODS", "UNKNOWN,"})
+    void resolvesCatalogTableLocatorThroughParentDataset(String catalogLayer, Layer expectedLayer) {
         String tenant = "model-spec-catalog-source-it-" + UUID.randomUUID();
         String actor = "owner-1";
         UUID planId = UUID.randomUUID();
@@ -60,11 +63,12 @@ class ModelSpecRepositoryIT {
             insert into catalog_dataset (
                 id, name, type, source_id, hive_database, hive_table, warehouse_layer,
                 enabled, lifecycle_status, harvest_status, created_date, last_modified_date
-            ) values (?, 'orders', 'POSTGRES', ?, 'public', 'orders', 'ODS',
+            ) values (?, 'orders', 'POSTGRES', ?, 'public', 'orders', ?,
                       true, 'DISCOVERED', 'SYNCED', current_timestamp, current_timestamp)
             """,
             datasetId,
-            sourceId
+            sourceId,
+            catalogLayer
         );
         jdbcTemplate.update(
             """
@@ -87,13 +91,20 @@ class ModelSpecRepositoryIT {
             sourceBindingId
         );
 
+        if (expectedLayer == null) {
+            assertThat(repository.findCurrentPhysicalSource(tenant, planId, sourceBindingId, "v1")).isEmpty();
+            return;
+        }
         assertThat(repository.findCurrentPhysicalSource(tenant, planId, sourceBindingId, "v1"))
             .hasValueSatisfying(source -> {
                 assertThat(source.kind()).isEqualTo(SourceKind.TABLE);
                 assertThat(source.ref()).isEqualTo("public.orders");
-                assertThat(source.layer()).isEqualTo(Layer.ODS);
+                assertThat(source.layer()).isEqualTo(expectedLayer);
                 assertThat(source.resolvedVersion()).isEqualTo("v1");
             });
+        assertThat(repository.findCurrentPhysicalSource(tenant, planId, sourceBindingId, "stale-version")).isEmpty();
+        jdbcTemplate.update("update modeling_warehouse_plan_source set confirmation_status = 'PENDING' where id = ?", sourceBindingId);
+        assertThat(repository.findCurrentPhysicalSource(tenant, planId, sourceBindingId, "v1")).isEmpty();
     }
 
     @Test

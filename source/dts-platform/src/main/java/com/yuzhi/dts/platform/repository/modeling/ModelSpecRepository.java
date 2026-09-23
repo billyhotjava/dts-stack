@@ -487,7 +487,9 @@ public class ModelSpecRepository {
                        end as executable_ref,
                        case
                            when s.source_type = 'DBT_NODE' then 'STG'
-                           when s.source_type = 'CATALOG_TABLE' then coalesce(nullif(upper(c.warehouse_layer), ''), 'ODS')
+                           when s.source_type = 'CATALOG_TABLE' then
+                               case when upper(c.warehouse_layer) = 'DIM' then 'DWD'
+                                    else coalesce(nullif(upper(c.warehouse_layer), ''), 'ODS') end
                            else 'ODS'
                        end as source_layer
                   from modeling_warehouse_plan_source s
