@@ -68,6 +68,9 @@ class ModelPublicationQualityReconcilerTest {
     @Mock
     private CandidateQualityAssetRegistrationService qualityAssets;
 
+    @Mock
+    private ModelingExecutionAuthorization executionAuthorization;
+
     private ModelPublicationQualityReconciler reconciler;
 
     @BeforeEach
@@ -77,7 +80,8 @@ class ModelPublicationQualityReconcilerTest {
             candidates,
             commands,
             governanceQuality,
-            qualityAssets
+            qualityAssets,
+            executionAuthorization
         );
     }
 
@@ -219,6 +223,59 @@ class ModelPublicationQualityReconcilerTest {
         assertThat(result.blockerCode()).isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_MISSING");
         verify(commands, never()).transitionWithQualityEvidence(any(), any(), any(), any(), any());
         verify(commands, never()).transition(any(), any(), any(), any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void restoresPublicationInitiatorAndClearsIdentityAfterSuccessOrFailure(boolean registrationFails) {
+        var directory = org.mockito.Mockito.mock(com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.class);
+        var identities = new com.yuzhi.dts.platform.security.modeling.ModelingIdentityService(directory);
+        var user = new com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.ModelingUser(
+            "publisher-id", "publisher", "发布人", "dept-a", "部门甲",
+            List.of(com.yuzhi.dts.platform.security.AuthoritiesConstants.DEPT_DATA_OWNER), true, "GENERAL"
+        );
+        when(directory.currentModelingUser("publisher-id")).thenReturn(user);
+        var previous = org.springframework.security.core.context.SecurityContextHolder.getContext();
+        assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional()).isEmpty();
+        CandidateView running = candidate(DeliveryStatus.QUALITY_RUNNING, 8);
+        when(candidates.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(running));
+        when(executionAuthorization.candidate(TENANT, CANDIDATE_ID, 8, "QUALITY_RUNNING"))
+            .thenAnswer(invocation -> identities.openCurrentUser("publisher-id"));
+        when(qualityAssets.ensureRegistered(running)).thenAnswer(invocation -> {
+            assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id()).isEqualTo("publisher-id");
+            if (registrationFails) {
+                throw new ModelReleaseCandidateException("REGISTRATION_FAILED", "登记失败", ModelReleaseCandidateException.Kind.UNPROCESSABLE);
+            }
+            return List.of();
+        });
+        if (!registrationFails) {
+            when(governanceQuality.evaluateLive(running)).thenAnswer(invocation -> {
+                assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id()).isEqualTo("publisher-id");
+                return passingGovernance();
+            });
+            when(commands.transitionWithQualityEvidence(any(), any(), any(), any(), any()))
+                .thenReturn(new CommandResult(candidate(DeliveryStatus.QUALITY_PASSED, 9), false, List.of(), List.of()));
+        }
+
+        var result = reconciler.reconcile(work("COMPLETED", null, 1, 1, 1));
+
+        assertThat(result.outcome()).isEqualTo(registrationFails ? QualityReconcileOutcome.BLOCKED : QualityReconcileOutcome.PASSED);
+        assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional()).isEmpty();
+        assertThat(org.springframework.security.core.context.SecurityContextHolder.getContext()).isSameAs(previous);
+    }
+
+    @Test
+    void refusesQualityWritesWhenInitiatorAuthorizationWasRevoked() {
+        when(candidates.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(candidate(DeliveryStatus.QUALITY_RUNNING, 8)));
+        when(executionAuthorization.candidate(TENANT, CANDIDATE_ID, 8, "QUALITY_RUNNING"))
+            .thenThrow(new com.yuzhi.dts.platform.security.modeling.ModelingIdentityException(
+                403, "MODEL_EXECUTION_AUTHORIZATION_REVOKED", "发布人的权限已失效"));
+
+        var result = reconciler.reconcile(work("COMPLETED", null, 1, 1, 1));
+
+        assertThat(result.outcome()).isEqualTo(QualityReconcileOutcome.BLOCKED);
+        assertThat(result.blockerCode()).isEqualTo("MODEL_EXECUTION_AUTHORIZATION_REVOKED");
+        org.mockito.Mockito.verifyNoInteractions(qualityAssets, governanceQuality, commands);
     }
 
     private static QualityWorkItem work(

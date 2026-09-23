@@ -33,13 +33,15 @@ public class ModelPublicationQualityReconciler {
     private final ModelReleaseCandidateService commands;
     private final CandidateGovernanceQualityEvidenceService governanceQuality;
     private final CandidateQualityAssetRegistrationService qualityAssets;
+    private final ModelingExecutionAuthorization executionAuthorization;
 
     public ModelPublicationQualityReconciler(
         ModelPublicationQualityEvidenceRepository evidence,
         ModelReleaseCandidateRepository candidates,
         ModelReleaseCandidateService commands,
         CandidateGovernanceQualityEvidenceService governanceQuality,
-        CandidateQualityAssetRegistrationService qualityAssets
+        CandidateQualityAssetRegistrationService qualityAssets,
+        ModelingExecutionAuthorization executionAuthorization
     ) {
         this.evidence = Objects.requireNonNull(
             evidence,
@@ -118,7 +120,9 @@ public class ModelPublicationQualityReconciler {
         String reason = state == EvidenceState.PASSED
             ? "Canonical Airflow dbt build and tests completed with verified relations"
             : failureReason(item);
-        try {
+        try (var identity = executionAuthorization.candidate(
+            candidate.tenantId(), candidate.id(), candidate.version(), DeliveryStatus.QUALITY_RUNNING.name()
+        )) {
             TransitionCommand transition = new TransitionCommand(
                 candidate.version(),
                 target,
@@ -176,6 +180,8 @@ public class ModelPublicationQualityReconciler {
                     : null,
                 command.replayed()
             );
+        } catch (com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            return blocked(candidate.id(), denied.code());
         } catch (ModelReleaseCandidateException conflict) {
             CandidateView current = candidates
                 .find(candidate.tenantId(), candidate.id())
