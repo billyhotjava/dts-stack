@@ -178,6 +178,57 @@ class CandidateGovernanceQualityEvidenceServiceTest {
         verifyNoInteractions(qualityEvidence, governancePolicy);
     }
 
+    @Test
+    void advisoryCannotDowngradeBrokenBuildEvidenceToAWarning() {
+        when(governancePolicy.resolve()).thenReturn(Policy.available(StandardCoverage.NONE, QualityGate.ADVISORY, 300));
+        when(publicationEvidence.requireCurrent(any(), org.mockito.ArgumentMatchers.eq(false)))
+            .thenThrow(new IllegalStateException("sensitive storage detail"));
+
+        var summary = service().evaluateLive(candidate());
+
+        assertThat(summary.required()).isTrue();
+        assertThat(summary.code()).isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_BUILD_EVIDENCE_UNAVAILABLE");
+        assertThat(summary.message()).doesNotContain("sensitive");
+        assertThatThrownBy(() -> service().requirePublishable(candidate()))
+            .isInstanceOf(ModelReleaseCandidateException.class);
+        verifyNoInteractions(qualityEvidence);
+    }
+
+    @Test
+    void advisoryCannotDowngradeUnresolvedAssetIdentityToAWarning() {
+        when(governancePolicy.resolve()).thenReturn(Policy.available(StandardCoverage.NONE, QualityGate.ADVISORY, 300));
+        when(targetResolver.resolve(any())).thenThrow(new IllegalStateException("target missing"));
+
+        assertThat(service().evaluateLive(candidate()).required()).isTrue();
+        verifyNoInteractions(qualityEvidence);
+    }
+
+    @Test
+    void advisoryQualityServiceOutageRemainsAWarningAfterBuildEvidenceIsVerified() {
+        when(governancePolicy.resolve()).thenReturn(Policy.available(StandardCoverage.NONE, QualityGate.ADVISORY, 300));
+        when(qualityEvidence.read(any())).thenThrow(new IllegalStateException("quality service down"));
+
+        var summary = service().requirePublishable(candidate());
+
+        assertThat(summary.required()).isFalse();
+        assertThat(summary.state()).isEqualTo(EvidenceState.UNAVAILABLE);
+        assertThat(summary.passed()).isFalse();
+    }
+
+    @Test
+    void passingEvidenceForAnotherAssetCannotAuthorizePublication() {
+        when(governancePolicy.resolve()).thenReturn(Policy.available(StandardCoverage.NONE, QualityGate.ADVISORY, 300));
+        when(qualityEvidence.read(any())).thenReturn(List.of(new QualityEvidence(
+            "another-asset", RULE_ID, VERSION_ID, BINDING_ID, RUN_ID, "SUCCEEDED", NOW, "a".repeat(64), List.of()
+        )));
+
+        var summary = service().evaluateLive(candidate());
+
+        assertThat(summary.passed()).isFalse();
+        assertThat(summary.required()).isTrue();
+        assertThat(summary.code()).isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_ASSET_MISMATCH");
+    }
+
     private CandidateGovernanceQualityEvidenceService service() {
         return new CandidateGovernanceQualityEvidenceService(
             publicationEvidence,

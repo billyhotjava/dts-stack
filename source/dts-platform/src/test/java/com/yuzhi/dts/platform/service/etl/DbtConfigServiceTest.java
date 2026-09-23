@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.etl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -198,6 +199,67 @@ class DbtConfigServiceTest {
             .value();
 
         assertThat(reconcile).isGreaterThan(sync);
+    }
+
+    @Test
+    void runtimeRejectsMissingTargetWithoutRepairingTheFile() throws Exception {
+        UUID missing = UUID.randomUUID();
+        Path config = writeConfigWithTarget(missing);
+        String before = Files.readString(config);
+
+        assertThatThrownBy(() -> serviceFor(config).loadRuntimeConfig())
+            .isInstanceOf(DbtRuntimeTargetException.class)
+            .extracting(error -> ((DbtRuntimeTargetException) error).code())
+            .isEqualTo("DBT_TARGET_DATASOURCE_NOT_FOUND");
+        assertThat(Files.readString(config)).isEqualTo(before);
+        verifyNoInteractions(secretService);
+    }
+
+    @Test
+    void runtimeRejectsExistingTargetThatDiffersFromTheManagedDefaultLake() throws Exception {
+        InfraDataSource configured = source("jdbc:postgresql://old-pg:5432/biadmin", "{}");
+        InfraDataSource mirror = source("jdbc:postgresql://new-pg:5432/biadmin", MANAGED_MIRROR_PROPS);
+        Path config = writeConfigWithTarget(configured.getId());
+        String before = Files.readString(config);
+        when(dataSourceRepository.findById(configured.getId())).thenReturn(Optional.of(configured));
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(configured, mirror));
+
+        assertThatThrownBy(() -> serviceFor(config).loadRuntimeConfig())
+            .isInstanceOf(DbtRuntimeTargetException.class)
+            .extracting(error -> ((DbtRuntimeTargetException) error).code())
+            .isEqualTo("DBT_TARGET_DEFAULT_LAKE_MISMATCH");
+        assertThat(Files.readString(config)).isEqualTo(before);
+        assertThat(tempDir.resolve("profiles")).doesNotExist();
+        verifyNoInteractions(secretService);
+    }
+
+    @Test
+    void runtimeRejectsAmbiguousManagedDefaultLakeEvenWhenConfiguredTargetIsOneMirror() throws Exception {
+        InfraDataSource mirror = source("jdbc:postgresql://pg-a:5432/biadmin", MANAGED_MIRROR_PROPS);
+        Path config = writeConfigWithTarget(mirror.getId());
+        when(dataSourceRepository.findById(mirror.getId())).thenReturn(Optional.of(mirror));
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(
+            mirror, source("jdbc:postgresql://pg-b:5432/biadmin", MANAGED_MIRROR_PROPS)
+        ));
+
+        assertThatThrownBy(() -> serviceFor(config).loadRuntimeConfig())
+            .isInstanceOf(DbtRuntimeTargetException.class)
+            .extracting(error -> ((DbtRuntimeTargetException) error).code())
+            .isEqualTo("DBT_DEFAULT_LAKE_AMBIGUOUS");
+    }
+
+    @Test
+    void runtimeAcceptsTheUniqueActiveManagedDefaultLakeWithoutWritingResources() throws Exception {
+        InfraDataSource mirror = source("jdbc:postgresql://pg-a:5432/biadmin", MANAGED_MIRROR_PROPS);
+        Path config = writeConfigWithTarget(mirror.getId());
+        String before = Files.readString(config);
+        when(dataSourceRepository.findById(mirror.getId())).thenReturn(Optional.of(mirror));
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(mirror));
+
+        assertThat(serviceFor(config).loadRuntimeConfig().targetDataSourceId()).isEqualTo(mirror.getId());
+        assertThat(Files.readString(config)).isEqualTo(before);
+        assertThat(tempDir.resolve("dbt/dbt_project.yml")).doesNotExist();
+        verifyNoInteractions(secretService);
     }
 
     private Path writeConfigWithTarget(UUID targetId) throws Exception {
