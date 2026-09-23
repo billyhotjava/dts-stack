@@ -24,8 +24,6 @@ public class ModelPublicationQualityReconciler {
     private static final Logger LOG = LoggerFactory.getLogger(
         ModelPublicationQualityReconciler.class
     );
-    private static final String SERVICE_ACTOR =
-        "service:dts-platform-quality";
     private static final int BATCH_SIZE = 20;
 
     private final ModelPublicationQualityEvidenceRepository evidence;
@@ -155,7 +153,7 @@ public class ModelPublicationQualityReconciler {
                 );
                 command = commands.transitionWithQualityEvidence(
                     candidate.tenantId(),
-                    SERVICE_ACTOR,
+                    com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id(),
                     candidate.id(),
                     transition,
                     snapshot
@@ -163,7 +161,7 @@ public class ModelPublicationQualityReconciler {
             } else {
                 command = commands.transition(
                     candidate.tenantId(),
-                    SERVICE_ACTOR,
+                    com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id(),
                     candidate.id(),
                     transition
                 );
@@ -185,6 +183,8 @@ public class ModelPublicationQualityReconciler {
                 command.replayed()
             );
         } catch (com.yuzhi.dts.platform.security.modeling.ModelingIdentityException denied) {
+            return blocked(candidate.id(), denied.code());
+        } catch (ModelSpecException denied) {
             return blocked(candidate.id(), denied.code());
         } catch (ModelReleaseCandidateException conflict) {
             CandidateView current = candidates

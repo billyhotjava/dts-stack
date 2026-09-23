@@ -671,6 +671,62 @@ class ModelReleaseCandidateServiceTest {
         assertThat(replay.candidate()).isEqualTo(first.candidate());
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
+    void backgroundQualityUsesInitiatorThroughRealTransitionService(boolean passed) {
+        var directory = org.mockito.Mockito.mock(com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.class);
+        var identities = new com.yuzhi.dts.platform.security.modeling.ModelingIdentityService(directory);
+        when(directory.currentModelingUser(ACTOR)).thenReturn(
+            new com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.ModelingUser(
+                ACTOR, "publisher", "发布人", "dept-a", "部门甲",
+                List.of(com.yuzhi.dts.platform.security.AuthoritiesConstants.DEPT_DATA_OWNER), true, "GENERAL"));
+        var authorization = org.mockito.Mockito.mock(ModelingExecutionAuthorization.class);
+        when(authorization.candidate(TENANT, CANDIDATE_ID, 8, "QUALITY_RUNNING"))
+            .thenAnswer(invocation -> identities.openCurrentUser(ACTOR));
+        var access = org.mockito.Mockito.mock(ModelSpecPlanWriteAccessPort.class);
+        org.mockito.Mockito.doAnswer(invocation -> {
+            if (!com.yuzhi.dts.platform.security.modeling.ModelingIdentity.matchesActor(invocation.getArgument(2))) {
+                throw new ModelSpecException("MODEL_OPERATION_SCOPE_DENIED", "操作人与当前身份不一致", ModelSpecException.Kind.FORBIDDEN);
+            }
+            return null;
+        }).when(access).requireOperation(eq(TENANT), eq(List.of(MODEL_ID)), anyString());
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "modelAccess", access);
+        CandidateView running = candidate(DeliveryStatus.QUALITY_RUNNING, 8, createdAudit(),
+            List.of(entry(DeliveryStatus.QUALITY_RUNNING, 1, CHECKSUM)));
+        when(repository.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(running));
+        when(repository.findCurrentModelReferences(TENANT, PLAN_ID, List.of(MODEL_ID)))
+            .thenReturn(Map.of(MODEL_ID, currentReference(1, CHECKSUM)));
+        when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
+        var quality = org.mockito.Mockito.mock(CandidateGovernanceQualityEvidenceService.class);
+        var assets = org.mockito.Mockito.mock(CandidateQualityAssetRegistrationService.class);
+        if (passed) {
+            when(quality.evaluateLive(running)).thenReturn(new GovernanceQualitySummaryView(
+                false, EvidenceState.PASSED, null, null, 300, List.of()));
+        }
+        var reconciler = new ModelPublicationQualityReconciler(
+            org.mockito.Mockito.mock(com.yuzhi.dts.platform.repository.modeling.ModelPublicationQualityEvidenceRepository.class),
+            repository, service, quality, assets, authorization);
+        UUID commandId = UUID.randomUUID();
+        var previous = org.springframework.security.core.context.SecurityContextHolder.getContext();
+
+        var result = reconciler.reconcile(new com.yuzhi.dts.platform.repository.modeling.ModelPublicationQualityEvidenceRepository.QualityWorkItem(
+            TENANT, CANDIDATE_ID, PLAN_ID, 8, commandId, UUID.randomUUID(),
+            passed ? "COMPLETED" : "FAILED", passed ? null : "DBT_FAILED", 1, 1, passed ? 1 : 0));
+
+        assertThat(result.outcome()).isEqualTo(passed
+            ? ModelPublicationQualityReconciler.QualityReconcileOutcome.PASSED
+            : ModelPublicationQualityReconciler.QualityReconcileOutcome.FAILED);
+        verify(access).requireOperation(TENANT, List.of(MODEL_ID), ACTOR);
+        ArgumentCaptor<CommandEventView> event = ArgumentCaptor.forClass(CommandEventView.class);
+        verify(repository).transitionAndAppend(eq(running), eq(8),
+            eq(passed ? DeliveryStatus.QUALITY_PASSED : DeliveryStatus.QUALITY_FAILED),
+            any(), eq(ACTOR), eq(NOW), event.capture());
+        assertThat(event.getValue().actorId()).isEqualTo(ACTOR);
+        assertThat(event.getValue().idempotencyKey()).isEqualTo("candidate-quality-result:" + commandId);
+        assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional()).isEmpty();
+        assertThat(org.springframework.security.core.context.SecurityContextHolder.getContext()).isSameAs(previous);
+    }
+
     @Test
     void retrySnapshotDriftUsesTheOriginalCommandReceiptToTransitionStale() {
         EntryView locked = entry(DeliveryStatus.BUILD_FAILED, 1, CHECKSUM);

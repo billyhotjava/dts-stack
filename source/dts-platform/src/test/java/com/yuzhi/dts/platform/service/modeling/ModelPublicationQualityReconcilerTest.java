@@ -75,6 +75,15 @@ class ModelPublicationQualityReconcilerTest {
 
     @BeforeEach
     void setUp() {
+        var directory = org.mockito.Mockito.mock(com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.class);
+        var identities = new com.yuzhi.dts.platform.security.modeling.ModelingIdentityService(directory);
+        var user = new com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.ModelingUser(
+            "publisher-id", "publisher", "发布人", "dept-a", "部门甲",
+            List.of(com.yuzhi.dts.platform.security.AuthoritiesConstants.DEPT_DATA_OWNER), true, "GENERAL"
+        );
+        org.mockito.Mockito.lenient().when(directory.currentModelingUser("publisher-id")).thenReturn(user);
+        org.mockito.Mockito.lenient().when(executionAuthorization.candidate(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any()))
+            .thenAnswer(invocation -> identities.openCurrentUser("publisher-id"));
         reconciler = new ModelPublicationQualityReconciler(
             evidence,
             candidates,
@@ -101,7 +110,7 @@ class ModelPublicationQualityReconcilerTest {
         when(
             commands.transitionWithQualityEvidence(
                 eq(TENANT),
-                eq("service:dts-platform-quality"),
+                eq("publisher-id"),
                 eq(CANDIDATE_ID),
                 any(),
                 any()
@@ -127,7 +136,7 @@ class ModelPublicationQualityReconcilerTest {
             ArgumentCaptor.forClass(TransitionCommand.class);
         verify(commands).transitionWithQualityEvidence(
             eq(TENANT),
-            eq("service:dts-platform-quality"),
+            eq("publisher-id"),
             eq(CANDIDATE_ID),
             command.capture(),
             any()
@@ -173,7 +182,7 @@ class ModelPublicationQualityReconcilerTest {
         when(
             commands.transition(
                 eq(TENANT),
-                eq("service:dts-platform-quality"),
+                eq("publisher-id"),
                 eq(CANDIDATE_ID),
                 any()
             )
@@ -239,8 +248,8 @@ class ModelPublicationQualityReconcilerTest {
         assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional()).isEmpty();
         CandidateView running = candidate(DeliveryStatus.QUALITY_RUNNING, 8);
         when(candidates.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(running));
-        when(executionAuthorization.candidate(TENANT, CANDIDATE_ID, 8, "QUALITY_RUNNING"))
-            .thenAnswer(invocation -> identities.openCurrentUser("publisher-id"));
+        org.mockito.Mockito.doAnswer(invocation -> identities.openCurrentUser("publisher-id"))
+            .when(executionAuthorization).candidate(TENANT, CANDIDATE_ID, 8, "QUALITY_RUNNING");
         when(qualityAssets.ensureRegistered(running)).thenAnswer(invocation -> {
             assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.current().id()).isEqualTo("publisher-id");
             if (registrationFails) {
@@ -267,15 +276,33 @@ class ModelPublicationQualityReconcilerTest {
     @Test
     void refusesQualityWritesWhenInitiatorAuthorizationWasRevoked() {
         when(candidates.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(candidate(DeliveryStatus.QUALITY_RUNNING, 8)));
-        when(executionAuthorization.candidate(TENANT, CANDIDATE_ID, 8, "QUALITY_RUNNING"))
-            .thenThrow(new com.yuzhi.dts.platform.security.modeling.ModelingIdentityException(
-                403, "MODEL_EXECUTION_AUTHORIZATION_REVOKED", "发布人的权限已失效"));
+        org.mockito.Mockito.doThrow(new com.yuzhi.dts.platform.security.modeling.ModelingIdentityException(
+                403, "MODEL_EXECUTION_AUTHORIZATION_REVOKED", "发布人的权限已失效"))
+            .when(executionAuthorization).candidate(TENANT, CANDIDATE_ID, 8, "QUALITY_RUNNING");
 
         var result = reconciler.reconcile(work("COMPLETED", null, 1, 1, 1));
 
         assertThat(result.outcome()).isEqualTo(QualityReconcileOutcome.BLOCKED);
         assertThat(result.blockerCode()).isEqualTo("MODEL_EXECUTION_AUTHORIZATION_REVOKED");
         org.mockito.Mockito.verifyNoInteractions(qualityAssets, governanceQuality, commands);
+    }
+
+    @Test
+    void deniedTransitionDoesNotAbortTheRemainingBatchAndClearsIdentity() {
+        CandidateView running = candidate(DeliveryStatus.QUALITY_RUNNING, 8);
+        var item = work("COMPLETED", null, 1, 1, 1);
+        when(evidence.findQualityRunning(20)).thenReturn(List.of(item, item));
+        when(candidates.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(running));
+        when(governanceQuality.evaluateLive(running)).thenReturn(passingGovernance());
+        when(commands.transitionWithQualityEvidence(eq(TENANT), eq("publisher-id"), eq(CANDIDATE_ID), any(), any()))
+            .thenThrow(new ModelSpecException("MODEL_OPERATION_SCOPE_DENIED", "没有操作权限", ModelSpecException.Kind.FORBIDDEN))
+            .thenReturn(new CommandResult(candidate(DeliveryStatus.QUALITY_PASSED, 9), false, List.of(), List.of()));
+
+        reconciler.reconcilePending();
+
+        verify(commands, org.mockito.Mockito.times(2)).transitionWithQualityEvidence(
+            eq(TENANT), eq("publisher-id"), eq(CANDIDATE_ID), any(), any());
+        assertThat(com.yuzhi.dts.platform.security.modeling.ModelingIdentity.optional()).isEmpty();
     }
 
     private static QualityWorkItem work(
