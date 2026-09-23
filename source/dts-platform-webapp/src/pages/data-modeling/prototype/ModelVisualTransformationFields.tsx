@@ -1,4 +1,4 @@
-import { summaryMeasureFields } from "./services/summaryMeasureFields";
+import { useEffect, useRef } from "react";
 import type {
 	ModelImplementationAggregation,
 	ModelImplementationAggregationFunction,
@@ -8,10 +8,10 @@ import type {
 	ModelImplementationFilterValueType,
 	ModelImplementationJoin,
 } from "@/features/modeling/contracts/modelImplementationContract";
-import { useEffect, useRef } from "react";
 import { Button } from "./PrototypePrimitives";
 import type { ModelSpecDraft, ModelWorkbenchContext } from "./services/modelWorkbenchService";
 import { implementationInputs } from "./services/modelWorkbenchService";
+import { summaryMeasureFields } from "./services/summaryMeasureFields";
 import { defaultNameMappings, uniqueSourceField } from "./services/visualFieldMapping";
 import { ModelSourceFieldInput, useModelSourceFields } from "./useModelSourceFields";
 
@@ -271,6 +271,45 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 					</button>
 				</div>
 			)}
+			{aliases.length > 1 ? (
+				// S10DC-109: joins decide which inputs the field mappings can use, so they come first.
+				<div className="dmx-visual-transform__block">
+					<strong>关联关系</strong>
+					<small>每个附加输入必须连接到一个更早的输入；仅开放 INNER 和 LEFT。</small>
+					{aliases.slice(1).map((input) => {
+						const join = draft.joins.find((item) => item.inputIndex === input.index);
+						return (
+							<div className="dmx-visual-transform__join-row" key={input.index}>
+								<code>src_{input.index}</code>
+								<select
+									aria-label={`关联类型 src_${input.index}`}
+									onChange={(event) => updateJoin(input.index, { type: event.target.value as "INNER" | "LEFT" })}
+									value={join?.type || "LEFT"}
+								>
+									<option value="LEFT">LEFT</option>
+									<option value="INNER">INNER</option>
+								</select>
+								<ModelSourceFieldInput
+									label={`左关联字段 src_${input.index}`}
+									value={join?.leftField || ""}
+									onChange={(value) => updateJoin(input.index, { leftField: value })}
+									sources={directory.sources}
+									labels={sourceLabels}
+								/>
+								<span>=</span>
+								<ModelSourceFieldInput
+									label={`右关联字段 src_${input.index}`}
+									value={join?.rightField || ""}
+									onChange={(value) => updateJoin(input.index, { rightField: value })}
+									sources={directory.sources}
+									labels={sourceLabels}
+								/>
+							</div>
+						);
+					})}
+				</div>
+			) : null}
+
 			<div className="dmx-visual-transform__table-wrap">
 				<table className="dmx-visual-transform__table">
 					<thead>
@@ -393,44 +432,6 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 					</tbody>
 				</table>
 			</div>
-
-			{aliases.length > 1 ? (
-				<div className="dmx-visual-transform__block">
-					<strong>关联关系</strong>
-					<small>每个附加输入必须连接到一个更早的输入；仅开放 INNER 和 LEFT。</small>
-					{aliases.slice(1).map((input) => {
-						const join = draft.joins.find((item) => item.inputIndex === input.index);
-						return (
-							<div className="dmx-visual-transform__join-row" key={input.index}>
-								<code>src_{input.index}</code>
-								<select
-									aria-label={`关联类型 src_${input.index}`}
-									onChange={(event) => updateJoin(input.index, { type: event.target.value as "INNER" | "LEFT" })}
-									value={join?.type || "LEFT"}
-								>
-									<option value="LEFT">LEFT</option>
-									<option value="INNER">INNER</option>
-								</select>
-								<ModelSourceFieldInput
-									label={`左关联字段 src_${input.index}`}
-									value={join?.leftField || ""}
-									onChange={(value) => updateJoin(input.index, { leftField: value })}
-									sources={directory.sources}
-									labels={sourceLabels}
-								/>
-								<span>=</span>
-								<ModelSourceFieldInput
-									label={`右关联字段 src_${input.index}`}
-									value={join?.rightField || ""}
-									onChange={(value) => updateJoin(input.index, { rightField: value })}
-									sources={directory.sources}
-									labels={sourceLabels}
-								/>
-							</div>
-						);
-					})}
-				</div>
-			) : null}
 
 			<div className="dmx-visual-transform__block">
 				<div className="dmx-visual-transform__heading">

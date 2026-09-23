@@ -93,7 +93,9 @@ describe("ModelVisualTransformationFields", () => {
 		current.createKind = "summary";
 		current.fields[1] = { ...current.fields[1], role: "ATTRIBUTE" };
 		const onChange = vi.fn();
-		act(() => root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={onChange} />));
+		act(() =>
+			root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={onChange} />),
+		);
 		const select = container.querySelector('[aria-label="聚合函数 amount"]') as HTMLSelectElement;
 		act(() => {
 			select.value = "SUM";
@@ -143,6 +145,25 @@ describe("ModelVisualTransformationFields", () => {
 		);
 		expect(autoMap?.disabled).toBe(true);
 		expect(container.querySelectorAll('[aria-label^="来源字段 "]')).toHaveLength(0);
+	});
+
+	it("S10DC-109: places the join settings right after the input aliases, before field mappings", () => {
+		container = document.createElement("div");
+		document.body.append(container);
+		root = createRoot(container);
+		const current = draft();
+		current.sourceRefs.push({
+			...current.sourceRefs[0],
+			ref: "预算来源 A",
+			sourceBindingId: "50000000-0000-0000-0000-000000000001",
+		});
+		act(() => root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={vi.fn()} />));
+		const joins = Array.from(container.querySelectorAll("strong")).find((item) => item.textContent === "关联关系");
+		const aliases = container.querySelector(".dmx-visual-transform__aliases");
+		const table = container.querySelector(".dmx-visual-transform__table");
+		if (!joins || !aliases || !table) throw new Error("transformation sections are missing");
+		expect(aliases.compareDocumentPosition(joins) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(joins.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 
 	it("uses the same stable input ordering as the dependency snapshot", () => {
