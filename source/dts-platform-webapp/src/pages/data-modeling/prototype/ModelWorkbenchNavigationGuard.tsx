@@ -5,24 +5,34 @@ import { shouldBlockWorkbenchNavigation } from "./modelingWorkbenchNavigation";
 export function ModelWorkbenchNavigationGuard({
 	dirty,
 	savingRef,
+	discardConfirmedRef,
 	onSave,
 	onDiscard,
 }: {
 	dirty: boolean;
 	savingRef: RefObject<boolean>;
+	/** Set when the editor already asked the user; lets exactly the next navigation through. */
+	discardConfirmedRef?: { current: boolean };
 	onSave: () => Promise<boolean>;
 	onDiscard: () => void;
 }) {
 	const blocker = useBlocker(
 		useCallback<BlockerFunction>(
-			({ currentLocation, nextLocation }) =>
-				!savingRef.current &&
-				shouldBlockWorkbenchNavigation(
-					dirty,
-					currentLocation.pathname + currentLocation.search,
-					nextLocation.pathname + nextLocation.search,
-				),
-			[dirty, savingRef],
+			({ currentLocation, nextLocation }) => {
+				if (discardConfirmedRef?.current) {
+					discardConfirmedRef.current = false;
+					return false;
+				}
+				return (
+					!savingRef.current &&
+					shouldBlockWorkbenchNavigation(
+						dirty,
+						currentLocation.pathname + currentLocation.search,
+						nextLocation.pathname + nextLocation.search,
+					)
+				);
+			},
+			[dirty, savingRef, discardConfirmedRef],
 		),
 	);
 	useEffect(() => {

@@ -330,7 +330,17 @@ function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 	} = authoring;
 	const [assetGuard, setAssetGuard] = useState<UnsavedEditorHandle | null>(null);
 	const unsavedChanges = dirty || authoringCodeDirty || Boolean(assetGuard?.dirty);
-	const confirmDiscard = useCallback(() => !unsavedChanges || window.confirm(DISCARD_PROMPT), [unsavedChanges]);
+	// S10DC-108: once the user confirmed here, the route guard must not ask again for the same navigation.
+	const discardConfirmedRef = useRef(false);
+	const confirmDiscard = useCallback(() => {
+		if (!unsavedChanges) return true;
+		const confirmed = window.confirm(DISCARD_PROMPT);
+		discardConfirmedRef.current = confirmed;
+		return confirmed;
+	}, [unsavedChanges]);
+	useEffect(() => {
+		if (!unsavedChanges) discardConfirmedRef.current = false;
+	}, [unsavedChanges]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: load reads the current route IDs through refs and must rerun on navigation.
 	useEffect(() => {
@@ -554,7 +564,8 @@ function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 		if (view === requestedView || savingRef.current || authoringBusy) return;
 		savingRef.current = true;
 		try {
-			if ((dirty || authoringCodeDirty) && !(await authoring.save(requestedView === "code" ? "CODE" : "VISUAL"))) return;
+			if ((dirty || authoringCodeDirty) && !(await authoring.save(requestedView === "code" ? "CODE" : "VISUAL")))
+				return;
 			syncWorkbenchUrl((params) => {
 				params.set("view", view);
 				params.delete("open");
@@ -832,6 +843,7 @@ function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 			<ModelWorkbenchNavigationGuard
 				dirty={unsavedChanges}
 				savingRef={savingRef}
+				discardConfirmedRef={discardConfirmedRef}
 				onSave={() =>
 					assetGuard?.dirty ? assetGuard.save() : requestedView === "code" ? saveAuthoring("CODE") : save(false)
 				}

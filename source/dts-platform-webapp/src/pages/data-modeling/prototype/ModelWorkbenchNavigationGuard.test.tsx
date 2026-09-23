@@ -17,7 +17,7 @@ afterEach(() => {
 	act(() => root.unmount());
 	container.remove();
 });
-async function setup(save: () => Promise<boolean>, discard = vi.fn()) {
+async function setup(save: () => Promise<boolean>, discard = vi.fn(), discardConfirmedRef = { current: false }) {
 	function Editor() {
 		const navigate = useNavigate();
 		return (
@@ -25,7 +25,16 @@ async function setup(save: () => Promise<boolean>, discard = vi.fn()) {
 				<button type="button" onClick={() => navigate("/model?step=delivery")}>
 					后续步骤
 				</button>
-				<ModelWorkbenchNavigationGuard dirty savingRef={{ current: false }} onSave={save} onDiscard={discard} />
+				<button type="button" onClick={() => navigate("/model?step=review")}>
+					再下一步
+				</button>
+				<ModelWorkbenchNavigationGuard
+					dirty
+					savingRef={{ current: false }}
+					discardConfirmedRef={discardConfirmedRef}
+					onSave={save}
+					onDiscard={discard}
+				/>
 			</>
 		);
 	}
@@ -87,4 +96,18 @@ it("explicit discard resets draft before continuing", async () => {
 	await click("放弃修改并离开");
 	expect(discard).toHaveBeenCalledOnce();
 	expect(router.state.location.search).toBe("?step=delivery");
+});
+it("S10DC-108: a discard already confirmed in the editor does not prompt again, once", async () => {
+	const confirmed = { current: true };
+	const save = vi.fn();
+	const { router, discard } = await setup(save, vi.fn(), confirmed);
+	await click("后续步骤");
+	expect(router.state.location.search).toBe("?step=delivery");
+	expect(document.body.textContent).not.toContain("有未保存的修改");
+	expect(confirmed.current).toBe(false);
+	expect(discard).not.toHaveBeenCalled();
+	await click("再下一步");
+	expect(router.state.location.search).toBe("?step=delivery");
+	expect(document.body.textContent).toContain("有未保存的修改");
+	expect(save).not.toHaveBeenCalled();
 });
