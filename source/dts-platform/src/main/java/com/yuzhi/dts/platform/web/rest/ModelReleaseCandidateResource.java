@@ -45,6 +45,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/modeling/plans/{planId}/release-candidates")
 public class ModelReleaseCandidateResource {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(ModelReleaseCandidateResource.class);
+
     private static final String RELEASE_DUTY_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_RELEASE_DUTIES)";
     private static final Pattern STRONG_ETAG = Pattern.compile(
@@ -466,7 +468,10 @@ public class ModelReleaseCandidateResource {
                 key + ":governance",
                 activeDept
             );
+        } catch (ModelReleaseCandidateException ex) {
+            throw ex;
         } catch (RuntimeException ex) {
+            LOG.error("event=model_governance_quality_start_failed candidateId={}", candidateId, ex);
             throw new ModelReleaseCandidateException(
                 "MODEL_SPEC_GOVERNANCE_QUALITY_START_FAILED",
                 "质量验证工作流启动失败，请修复规则绑定或执行服务后重试",

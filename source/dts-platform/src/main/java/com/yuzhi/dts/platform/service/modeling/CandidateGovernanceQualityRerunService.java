@@ -97,7 +97,7 @@ public class CandidateGovernanceQualityRerunService {
         if (eligible.isEmpty()) {
             throw new ModelReleaseCandidateException(
                 "MODEL_SPEC_GOVERNANCE_QUALITY_BINDING_REQUIRED",
-                "No failed or expired bound quality rule can be rerun; configure a published rule binding first",
+                "当前资产没有可启动的已发布质量规则，请在“配置质量规则”中检查规则发布状态和资产关联后重试",
                 Kind.UNPROCESSABLE,
                 Map.of("candidateId", candidate.id(), "governanceQualityState", current.state())
             );

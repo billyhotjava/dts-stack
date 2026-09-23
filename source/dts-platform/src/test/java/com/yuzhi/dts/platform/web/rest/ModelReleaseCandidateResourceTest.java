@@ -255,6 +255,35 @@ class ModelReleaseCandidateResourceTest {
         );
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "MODEL_SPEC_GOVERNANCE_QUALITY_BINDING_REQUIRED, UNPROCESSABLE, 422",
+        "MODEL_RELEASE_CANDIDATE_PLAN_FORBIDDEN, FORBIDDEN, 403",
+        "MODEL_RELEASE_CANDIDATE_VERSION_CONFLICT, CONFLICT, 409"
+    })
+    void qualityStartPreservesBusinessFailureInsteadOfReportingExecutorFailure(
+        String code, ModelReleaseCandidateException.Kind kind, int httpStatus
+    ) throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(service.runQuality("server-tenant", "xiezm", PLAN_ID, CANDIDATE_ID, 4, "quality-business", "validate"))
+            .thenReturn(new CommandResult(candidateAtVersion(5), false, List.of()));
+        String message = "请在配置质量规则中检查规则发布状态和资产关联";
+        when(governanceQualityReruns.rerun("server-tenant", "xiezm", PLAN_ID, CANDIDATE_ID,
+            5, "quality-business:governance", "INST"))
+            .thenThrow(new ModelReleaseCandidateException(code, message, kind, Map.of("candidateId", CANDIDATE_ID)));
+
+        mockMvc.perform(post("/api/modeling/plans/{planId}/release-candidates/{candidateId}/quality", PLAN_ID, CANDIDATE_ID)
+                .header("If-Match", ETAG)
+                .header("Idempotency-Key", "quality-business")
+                .header("X-Active-Dept", "INST")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"validate\"}"))
+            .andExpect(status().is(httpStatus))
+            .andExpect(jsonPath("$.code").value(code))
+            .andExpect(jsonPath("$.message").value(message))
+            .andExpect(jsonPath("$.data.candidateId").value(CANDIDATE_ID.toString()));
+    }
+
     @Test
     void workspaceUsesServerTenantAndReturnsOneAggregateWithStrongEtag() throws Exception {
         when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
