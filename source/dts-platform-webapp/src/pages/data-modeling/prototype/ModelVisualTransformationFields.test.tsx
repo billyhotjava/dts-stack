@@ -85,6 +85,24 @@ const draft = (): ModelSpecDraft => {
 };
 
 describe("ModelVisualTransformationFields", () => {
+	it("marks a summary aggregate as a measure before saving", () => {
+		container = document.createElement("div");
+		document.body.append(container);
+		root = createRoot(container);
+		const current = draft();
+		current.createKind = "summary";
+		current.fields[1] = { ...current.fields[1], role: "ATTRIBUTE" };
+		const onChange = vi.fn();
+		act(() => root?.render(<ModelVisualTransformationFields context={context()} draft={current} onChange={onChange} />));
+		const select = container.querySelector('[aria-label="聚合函数 amount"]') as HTMLSelectElement;
+		act(() => {
+			select.value = "SUM";
+			select.dispatchEvent(new Event("change", { bubbles: true }));
+		});
+		expect(onChange.mock.lastCall?.[0].fields[1].role).toBe("MEASURE");
+		expect(onChange.mock.lastCall?.[0].aggregations[0].function).toBe("SUM");
+	});
+
 	it("ignores blank editor rows when rendering and repeatedly mapping by name", () => {
 		container = document.createElement("div");
 		document.body.append(container);

@@ -1,3 +1,4 @@
+import { summaryMeasureFields } from "./summaryMeasureFields";
 import { listDataMarts } from "@/api/dataMartApi";
 import type { ModelAuthoringSnapshot, ModelAuthoringSnapshotInput } from "@/api/dbtImplementationDraftApi";
 import {
@@ -1036,7 +1037,7 @@ const validateDesignerTransformations = (draft: ModelSpecDraft): string | null =
 
 export const modelDraftToUpdateCommand = (draft: ModelSpecDraft): UpdateModelSpecCommand => {
 	const config = MODEL_KIND_CONFIG[draft.createKind];
-	const keyNames = draft.fields.filter((field) => field.role === "KEY").map((field) => field.name.trim());
+	const keyNames = summaryMeasureFields(draft).filter((field) => field.role === "KEY").map((field) => field.name.trim());
 	const updateFieldNames = new Set(draft.fields.map((field) => field.name.trim()).filter(Boolean));
 	const base = draft.base?.compatibilityMode === "CANONICAL" ? draft.base : null;
 	return {
@@ -1070,7 +1071,7 @@ export const modelDraftToUpdateCommand = (draft: ModelSpecDraft): UpdateModelSpe
 		dataMartId: config.modelType === "APPLICATION" ? draft.dataMartId?.trim() || null : null,
 		subjectDomainId: config.modelType === "APPLICATION" ? draft.subjectDomainId?.trim() || null : null,
 		variantCode: base?.variantCode || null,
-		fields: draft.fields.map((field) => ({
+		fields: summaryMeasureFields(draft).map((field) => ({
 			...field,
 			name: field.name.trim(),
 			displayName: field.displayName?.trim() || null,

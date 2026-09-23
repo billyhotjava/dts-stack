@@ -1,3 +1,4 @@
+import { summaryMeasureFields } from "./services/summaryMeasureFields";
 import type {
 	ModelImplementationAggregation,
 	ModelImplementationAggregationFunction,
@@ -184,6 +185,7 @@ export function ModelVisualTransformationFields({ draft, context, validationMess
 		}
 		patch({
 			aggregations: next,
+			fields: summaryMeasureFields({ ...draft, aggregations: next }),
 			groupBy: functionName ? draft.groupBy.filter((field) => field !== targetField) : draft.groupBy,
 		});
 	};
