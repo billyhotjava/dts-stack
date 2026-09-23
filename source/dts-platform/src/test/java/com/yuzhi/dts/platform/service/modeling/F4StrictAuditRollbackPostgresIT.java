@@ -1225,12 +1225,12 @@ class F4StrictAuditRollbackPostgresIT {
             jdbc.update(
                 """
                 insert into modeling_model_spec (
-                    id, tenant_id, plan_id, layer, model_type,
+                    id, tenant_id, plan_id, layer, warehouse_layer_code, model_type,
                     implementation_mode, name, status, revision, version,
                     created_date, last_modified_date, contract_version,
                     domain_id, current_checksum, idempotency_key,
                     idempotency_request_hash, idempotency_response_snapshot
-                ) values (?, ?, ?, 'DWD', 'FACT', 'DESIGNER_GENERATED', ?,
+                ) values (?, ?, ?, 'DWD', 'DWD', 'FACT', 'DESIGNER_GENERATED', ?,
                           'DRAFT', 1, 1, current_timestamp, current_timestamp,
                           2, ?, ?, ?, ?, cast(? as jsonb))
                 """,
