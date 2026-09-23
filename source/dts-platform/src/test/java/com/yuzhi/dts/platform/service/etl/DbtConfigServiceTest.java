@@ -127,43 +127,77 @@ class DbtConfigServiceTest {
     }
 
     @Test
-    void ensureConfigFile_rewritesAMissingTargetWhenExactlyOneWarehouseMatchesTheDatabase() throws Exception {
+    void reconcile_pointsAMissingTargetAtTheManagedDefaultLakeMirror() throws Exception {
         UUID staleTargetId = UUID.randomUUID();
         Path configPath = writeConfigWithTarget(staleTargetId);
-        InfraDataSource warehouse = warehouse("jdbc:postgresql://dts-pg:5432/biadmin");
-        InfraDataSource other = warehouse("jdbc:postgresql://dts-pg:5432/dts_platform");
+        InfraDataSource mirror = source("jdbc:postgresql://dts-pg:5432/biadmin", MANAGED_MIRROR_PROPS);
+        InfraDataSource sameDatabaseElsewhere = source("jdbc:postgresql://other-pg:5432/biadmin", "{}");
         when(dataSourceRepository.findById(staleTargetId)).thenReturn(Optional.empty());
-        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(other, warehouse));
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(sameDatabaseElsewhere, mirror));
 
-        serviceFor(configPath).ensureConfigFile();
+        serviceFor(configPath).reconcileTargetWithManagedDefaultLake();
 
-        assertThat(Files.readString(configPath)).contains(warehouse.getId().toString()).doesNotContain(staleTargetId.toString());
+        assertThat(Files.readString(configPath)).contains(mirror.getId().toString()).doesNotContain(staleTargetId.toString());
     }
 
     @Test
-    void ensureConfigFile_leavesAMissingTargetUntouchedWhenTheMatchIsAmbiguous() throws Exception {
+    void reconcile_neverFallsBackToADatabaseNameMatch() throws Exception {
         UUID staleTargetId = UUID.randomUUID();
         Path configPath = writeConfigWithTarget(staleTargetId);
         when(dataSourceRepository.findById(staleTargetId)).thenReturn(Optional.empty());
         when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(
-            List.of(warehouse("jdbc:postgresql://pg-a:5432/biadmin"), warehouse("jdbc:postgresql://pg-b:5432/biadmin?ssl=true"))
+            List.of(
+                source("jdbc:postgresql://dts-pg:5432/biadmin", "{\"source\":\"admin-data-lake\",\"system\":true}"),
+                source("jdbc:postgresql://other-pg:5432/biadmin", "{}")
+            )
         );
 
-        serviceFor(configPath).ensureConfigFile();
+        serviceFor(configPath).reconcileTargetWithManagedDefaultLake();
 
         assertThat(Files.readString(configPath)).contains(staleTargetId.toString());
     }
 
     @Test
-    void ensureConfigFile_neverRewritesAnExistingTarget() throws Exception {
-        InfraDataSource configured = warehouse("jdbc:postgresql://dts-pg:5432/biadmin");
+    void reconcile_leavesTheFileWhenManagedMirrorsAreAmbiguous() throws Exception {
+        UUID staleTargetId = UUID.randomUUID();
+        Path configPath = writeConfigWithTarget(staleTargetId);
+        when(dataSourceRepository.findById(staleTargetId)).thenReturn(Optional.empty());
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(
+            List.of(
+                source("jdbc:postgresql://pg-a:5432/biadmin", MANAGED_MIRROR_PROPS),
+                source("jdbc:postgresql://pg-b:5432/lake", MANAGED_MIRROR_PROPS)
+            )
+        );
+
+        serviceFor(configPath).reconcileTargetWithManagedDefaultLake();
+
+        assertThat(Files.readString(configPath)).contains(staleTargetId.toString());
+    }
+
+    @Test
+    void reconcile_neverSwitchesAValidTargetEvenWhenTheDefaultLakeDiffers() throws Exception {
+        InfraDataSource configured = source("jdbc:postgresql://old-pg:5432/biadmin", "{}");
         Path configPath = writeConfigWithTarget(configured.getId());
         when(dataSourceRepository.findById(configured.getId())).thenReturn(Optional.of(configured));
         String before = Files.readString(configPath);
 
-        serviceFor(configPath).ensureConfigFile();
+        serviceFor(configPath).reconcileTargetWithManagedDefaultLake();
 
         assertThat(Files.readString(configPath)).isEqualTo(before);
+    }
+
+    @Test
+    void reconcile_runsAfterTheManagedDefaultLakeStartupSynchronization() throws Exception {
+        int sync = com.yuzhi.dts.platform.service.infra.DefaultDestinationSyncService.class
+            .getMethod("synchronizeManagedDefaultLakeOnStartup")
+            .getAnnotation(org.springframework.core.annotation.Order.class)
+            .value();
+        int reconcile = DbtConfigService.class
+            .getMethod("reconcileTargetWithManagedDefaultLake")
+            .getAnnotation(org.springframework.core.annotation.Order.class)
+            .value();
+
+        assertThat(reconcile).isGreaterThan(sync);
     }
 
     private Path writeConfigWithTarget(UUID targetId) throws Exception {
@@ -199,7 +233,10 @@ class DbtConfigServiceTest {
         return new DbtConfigService(new ObjectMapper(), dataSourceRepository, secretService, properties);
     }
 
-    private static InfraDataSource warehouse(String jdbcUrl) {
+    private static final String MANAGED_MIRROR_PROPS =
+        "{\"source\":\"admin-default-data-lake\",\"defaultLake\":true,\"adminDataLakeId\":\"b6f121f0-52d2-4315-8002-c8dc0c4e6235\"}";
+
+    private static InfraDataSource source(String jdbcUrl, String props) {
         InfraDataSource source = new InfraDataSource();
         source.setId(UUID.randomUUID());
         source.setName("数仓");
@@ -207,6 +244,7 @@ class DbtConfigServiceTest {
         source.setJdbcUrl(jdbcUrl);
         source.setUsername("biadmin");
         source.setStatus("ACTIVE");
+        source.setProps(props);
         return source;
     }
 }

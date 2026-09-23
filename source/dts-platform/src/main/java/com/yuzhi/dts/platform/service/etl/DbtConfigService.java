@@ -23,11 +23,18 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
 public class DbtConfigService {
+
+    /** Written by DefaultDestinationSyncService for the mirror of the dts-admin default data lake. */
+    private static final String MANAGED_DEFAULT_LAKE_SOURCE = "admin-default-data-lake";
 
     private static final Logger LOG = LoggerFactory.getLogger(DbtConfigService.class);
 
@@ -73,7 +80,7 @@ public class DbtConfigService {
                 );
                 writeConfig(config);
             } else {
-                config = hydrateResolvedConfig(reconcileMissingTarget(readConfig()));
+                config = hydrateResolvedConfig(readConfig());
             }
             ensureWorkspaceBootstrap(config);
         } catch (IOException ex) {
@@ -474,69 +481,80 @@ public class DbtConfigService {
 
     /**
      * The config file outlives database resets and migrations, while the runtime deliberately
-     * never substitutes a target on its own. At startup a missing target is replaced only when
-     * exactly one active PostgreSQL source serves the configured database; otherwise the file is
-     * left as-is and runs fail with DBT_TARGET_DATASOURCE_NOT_FOUND.
+     * never substitutes a target on its own. After the managed default-lake mirror has been
+     * synchronized from dts-admin, a missing or unset target is pointed at that mirror; its
+     * identity comes from the admin default data lake, never from a database-name match. A
+     * target that still exists is never switched, even if the default lake changed.
      */
-    private DbtWorkspaceConfig reconcileMissingTarget(DbtWorkspaceConfig config) {
-        if (config == null || config.targetDataSourceId() == null || resolveConfiguredTargetSource(config) != null) {
-            return config;
+    @EventListener(ApplicationReadyEvent.class)
+    @Order(Ordered.LOWEST_PRECEDENCE)
+    public void reconcileTargetWithManagedDefaultLake() {
+        if (!properties.isEnabled()) {
+            return;
         }
-        String database = safeText(config.database(), null);
-        List<InfraDataSource> matches = database == null
-            ? List.of()
-            : dataSourceRepository
-                .findByStatusIgnoreCase("ACTIVE")
-                .stream()
-                .filter(source -> source != null && source.getId() != null)
-                .filter(source -> isPostgres(source.getType()))
-                .filter(source -> database.equalsIgnoreCase(jdbcDatabase(source.getJdbcUrl())))
-                .toList();
-        if (matches.size() != 1) {
+        try {
+            reconcileMissingTarget(readConfig());
+        } catch (RuntimeException ex) {
+            LOG.warn("event=dbt_config_target_reconcile_failed failureType={}", ex.getClass().getSimpleName());
+        }
+    }
+
+    private void reconcileMissingTarget(DbtWorkspaceConfig config) {
+        if (config == null || (config.targetDataSourceId() != null && resolveConfiguredTargetSource(config) != null)) {
+            return;
+        }
+        List<InfraDataSource> mirrors = dataSourceRepository
+            .findByStatusIgnoreCase("ACTIVE")
+            .stream()
+            .filter(source -> source != null && source.getId() != null && isManagedDefaultLakeMirror(source))
+            .toList();
+        if (mirrors.size() != 1) {
             LOG.error(
-                "event=dbt_config_target_invalid configuredTarget={} database={} candidates={}",
+                "event=dbt_config_target_invalid configuredTarget={} managedDefaultLakeMirrors={}",
                 config.targetDataSourceId(),
-                database,
-                matches.size()
+                mirrors.size()
             );
-            return config;
+            return;
         }
-        UUID replacement = matches.getFirst().getId();
-        DbtWorkspaceConfig reconciled = new DbtWorkspaceConfig(
-            config.enabled(),
-            config.projectDir(),
-            config.profilesDir(),
-            config.profileName(),
-            config.targetName(),
-            replacement,
-            config.database(),
-            config.schema(),
-            config.vars()
+        InfraDataSource mirror = mirrors.getFirst();
+        writeConfig(
+            new DbtWorkspaceConfig(
+                config.enabled(),
+                config.projectDir(),
+                config.profilesDir(),
+                config.profileName(),
+                config.targetName(),
+                mirror.getId(),
+                config.database(),
+                config.schema(),
+                config.vars()
+            )
         );
-        writeConfig(reconciled);
         LOG.warn(
-            "event=dbt_config_target_reconciled previousTarget={} target={} database={}",
+            "event=dbt_config_target_reconciled previousTarget={} target={} adminDataLakeId={}",
             config.targetDataSourceId(),
-            replacement,
-            database
+            mirror.getId(),
+            managedProps(mirror).get("adminDataLakeId")
         );
-        return reconciled;
     }
 
-    private static boolean isPostgres(String type) {
-        return type != null && ("postgres".equalsIgnoreCase(type.trim()) || "postgresql".equalsIgnoreCase(type.trim()));
+    private boolean isManagedDefaultLakeMirror(InfraDataSource source) {
+        Map<String, Object> props = managedProps(source);
+        return MANAGED_DEFAULT_LAKE_SOURCE.equals(props.get("source")) &&
+            Boolean.TRUE.equals(props.get("defaultLake")) &&
+            props.get("adminDataLakeId") instanceof String adminDataLakeId &&
+            !adminDataLakeId.isBlank();
     }
 
-    private static String jdbcDatabase(String jdbcUrl) {
-        if (jdbcUrl == null) {
-            return null;
+    private Map<String, Object> managedProps(InfraDataSource source) {
+        if (source.getProps() == null || source.getProps().isBlank()) {
+            return Map.of();
         }
-        String withoutParams = jdbcUrl.split("[?;]", 2)[0];
-        int slash = withoutParams.lastIndexOf('/');
-        if (slash < 0 || slash == withoutParams.length() - 1 || withoutParams.startsWith("//", slash - 1)) {
-            return null;
+        try {
+            return objectMapper.readValue(source.getProps(), new TypeReference<>() {});
+        } catch (Exception ex) {
+            return Map.of();
         }
-        return withoutParams.substring(slash + 1).trim();
     }
 
     private InfraDataSource resolveTargetSource(DbtWorkspaceConfig config) {
