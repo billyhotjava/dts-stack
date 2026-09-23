@@ -79,6 +79,11 @@ export function placeFieldOnShelf(
 	return { ...selected, visualization: { ...selected.visualization, settings } };
 }
 
+/** S10DC-115: one action for "select all dimensions"; same effect as clicking each one in order. */
+export function placeAllDimensionsOnShelf(spec: AnalysisQuerySpec, dimensionCodes: readonly string[]): AnalysisQuerySpec {
+	return dimensionCodes.reduce((current, code) => placeFieldOnShelf(current, { kind: "dimension", code }, "x"), spec);
+}
+
 export function removeFieldFromAnalysis(spec: AnalysisQuerySpec, code: string): AnalysisQuerySpec {
 	const settings = { ...spec.visualization.settings };
 	for (const key of ["graph.dimensions", "graph.metrics", "dts.tooltip.fields"]) {

@@ -36,6 +36,7 @@ import {
 	type AnalysisShelf,
 	type AnalysisWorkspaceField,
 	CANONICAL_VISUALIZATIONS,
+	placeAllDimensionsOnShelf,
 	placeFieldOnShelf,
 	removeFieldFromAnalysis,
 	setVisualizationSetting,
@@ -239,7 +240,17 @@ export function AnalysisWorkspace({
 						<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无可分析字段" />
 					) : (
 						<Space direction="vertical" size={10} style={{ width: "100%" }}>
-							<Text strong>维度</Text>
+							<Space style={{ width: "100%", justifyContent: "space-between" }}>
+								<Text strong>维度</Text>
+								<Button
+									size="small"
+									type="link"
+									disabled={!canWrite || contract.dimensions.length === 0 || contract.dimensions.every((field) => graphDimensions.includes(field.code))}
+									onClick={() => updateSpec((current) => placeAllDimensionsOnShelf(current, contract.dimensions.map((field) => field.code)))}
+								>
+									全选
+								</Button>
+							</Space>
 							{contract.dimensions.map((field) => (
 								<div data-testid={`analysis-field-dimension-${field.code}`} key={field.code} draggable={canWrite} onDragStart={(event) => fieldDragPayload(event, { kind: "dimension", code: field.code })}>
 									<Button block disabled={!canWrite} onClick={() => place({ kind: "dimension", code: field.code }, "x")}>
