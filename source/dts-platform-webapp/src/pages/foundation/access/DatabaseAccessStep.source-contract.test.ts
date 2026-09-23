@@ -57,3 +57,13 @@ test("access detail shows the saved source-to-target mapping without exposing co
 	assert.match(DETAIL_SOURCE, /dataSource=\{tableMappings\}/);
 	assert.doesNotMatch(DETAIL_SOURCE, /task\.sourceConfig|task\.destinationConfig/);
 });
+
+test("source table comments are display-only and preserve physical selection keys", () => {
+	assert.match(STEP_SOURCE, /title: "表别名（源表注释）"/);
+	assert.match(STEP_SOURCE, /dataIndex: "comment"/);
+	assert.match(STEP_SOURCE, /value\?\.trim\(\) \|\| "—"/);
+	assert.match(STEP_SOURCE, /rowKey=\{tableKey\}/);
+	assert.match(STEP_SOURCE, /const tableKey = .*table\.schema.*table\.name/);
+	assert.doesNotMatch(STEP_SOURCE, /dangerouslySetInnerHTML/);
+	assert.match(STEP_SOURCE, /overflowWrap: "anywhere"/);
+});

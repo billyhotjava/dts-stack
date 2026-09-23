@@ -284,6 +284,7 @@ export interface ColumnInfo {
 }
 
 export interface TableInfo {
+	comment?: string | null;
 	schema?: string;
 	name: string;
 	type?: string;

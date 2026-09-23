@@ -75,7 +75,11 @@ public class JdbcMetadataService {
         }
     }
 
-    public record TableMeta(String schema, String name, String type) {}
+    public record TableMeta(String schema, String name, String type, String comment) {
+        public TableMeta(String schema, String name, String type) {
+            this(schema, name, type, null);
+        }
+    }
 
     public record IndexMeta(String name, boolean unique, List<String> columns) {}
 
@@ -416,7 +420,7 @@ public class JdbcMetadataService {
                     tableSchema = rs.getString("TABLE_CAT");
                 }
                 String type = rs.getString("TABLE_TYPE");
-                tables.add(new TableMeta(tableSchema, tableName, type));
+                tables.add(new TableMeta(tableSchema, tableName, type, normalize(rs.getString("REMARKS"))));
                 if (tables.size() >= limit) {
                     break;
                 }

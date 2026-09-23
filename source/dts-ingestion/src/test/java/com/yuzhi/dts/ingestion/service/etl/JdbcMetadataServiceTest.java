@@ -136,6 +136,33 @@ class JdbcMetadataServiceTest {
         }
     }
 
+    @Test
+    void listTablesReadsSourceCommentsWithoutChangingPhysicalIdentity() throws Exception {
+        DatabaseMetaData metadata = mock(DatabaseMetaData.class);
+        Connection connection = mock(Connection.class);
+        when(connection.getMetaData()).thenReturn(metadata);
+        when(metadata.getDatabaseProductName()).thenReturn("PostgreSQL");
+        ResultSet rows = mock(ResultSet.class);
+        when(rows.next()).thenReturn(true, true, true, false);
+        when(rows.getString("TABLE_SCHEM")).thenReturn("sales", "archive", "public");
+        when(rows.getString("TABLE_NAME")).thenReturn("orders", "orders", "empty_table");
+        when(rows.getString("TABLE_TYPE")).thenReturn("TABLE");
+        when(rows.getString("REMARKS")).thenReturn("  客户订单  ", null, "  ");
+        when(metadata.getTables(nullable(String.class), nullable(String.class), nullable(String.class), any(String[].class)))
+            .thenReturn(rows);
+        Driver driver = new FixedConnectionDriver(connection);
+        DriverManager.registerDriver(driver);
+        try {
+            var info = new JdbcMetadataService.JdbcConnectionInfo("jdbc:dts-mysql-catalog:comments", null, null, null, null, Map.of());
+            assertThat(new JdbcMetadataService().listTables(info, null, null, 0)).containsExactly(
+                new JdbcMetadataService.TableMeta("sales", "orders", "TABLE", "客户订单"),
+                new JdbcMetadataService.TableMeta("archive", "orders", "TABLE", null),
+                new JdbcMetadataService.TableMeta("public", "empty_table", "TABLE", null));
+        } finally {
+            DriverManager.deregisterDriver(driver);
+        }
+    }
+
     private static ResultSet tableRows(TableRow... rows) throws SQLException {
         ResultSet resultSet = mock(ResultSet.class);
         AtomicInteger cursor = new AtomicInteger(-1);

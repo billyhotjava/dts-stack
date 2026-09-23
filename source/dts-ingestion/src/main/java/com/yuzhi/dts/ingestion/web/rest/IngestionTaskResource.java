@@ -243,7 +243,7 @@ public class IngestionTaskResource {
 
     public record TableDiscoveryFilter(String schema, String tablePattern, Integer limit, Boolean includeColumns) {}
 
-    public record TableInfo(String schema, String name, String type, List<ColumnInfo> columns) {}
+    public record TableInfo(String schema, String name, String type, List<ColumnInfo> columns, String comment) {}
 
     public record ColumnInfo(String name, Integer jdbcType, String typeName, Integer columnSize, Integer decimalDigits) {}
 
@@ -808,7 +808,7 @@ public class IngestionTaskResource {
                         .map(col -> new ColumnInfo(col.name(), col.jdbcType(), col.typeName(), col.columnSize(), col.decimalDigits()))
                         .toList();
                 }
-                payload.add(new TableInfo(table.schema(), table.name(), table.type(), columns));
+                payload.add(new TableInfo(table.schema(), table.name(), table.type(), columns, table.comment()));
             }
             return ApiResponses.ok(payload);
         } catch (JdbcMetadataService.MetadataDiscoveryException ex) {

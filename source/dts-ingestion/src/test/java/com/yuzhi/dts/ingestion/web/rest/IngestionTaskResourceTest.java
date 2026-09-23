@@ -922,6 +922,34 @@ class IngestionTaskResourceTest {
     }
 
     @Test
+    void discoverTablesIncludesSourceTableCommentWithoutColumnCollection() throws Exception {
+        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        var connectionInfo = new JdbcMetadataService.JdbcConnectionInfo("jdbc:postgresql://database/app", null, null, null, null, Map.of());
+        when(ingestionSourceResolver.resolve(eq(sourceId), anyList()))
+            .thenReturn(new IngestionSourceResolver.ResolvedSource("postgresqlreader", Map.of(), null));
+        when(ingestionSourceResolver.resolveJdbcInfo(sourceId)).thenReturn(connectionInfo);
+        when(jdbcMetadataService.listTables(eq(connectionInfo), eq(null), eq(null), eq(0)))
+            .thenReturn(List.of(new JdbcMetadataService.TableMeta("public", "orders", "TABLE", "客户订单"),
+                new JdbcMetadataService.TableMeta("archive", "orders", "TABLE")));
+
+        mockMvc.perform(post("/api/ingestion/metadata/tables")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"source":{"dataSourceId":"11111111-2222-3333-4444-555555555555"},
+                     "filter":{"limit":0,"includeColumns":false}}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data[0].comment").value("客户订单"))
+            .andExpect(jsonPath("$.data[0].schema").value("public"))
+            .andExpect(jsonPath("$.data[0].name").value("orders"))
+            .andExpect(jsonPath("$.data[0].columns").isEmpty())
+            .andExpect(jsonPath("$.data[1].schema").value("archive"))
+            .andExpect(jsonPath("$.data[1].name").value("orders"))
+            .andExpect(jsonPath("$.data[1].comment").doesNotExist());
+        verify(jdbcMetadataService, never()).getTableColumns(any(), any());
+    }
+
+    @Test
     void discoverTables_returnsSafeActionableAuthenticationFailure() throws Exception {
         UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
         JdbcMetadataService.JdbcConnectionInfo connectionInfo = new JdbcMetadataService.JdbcConnectionInfo(

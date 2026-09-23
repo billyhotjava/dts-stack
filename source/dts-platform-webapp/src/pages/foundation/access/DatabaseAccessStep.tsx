@@ -118,10 +118,19 @@ export function DatabaseAccessStep({
 							dataIndex: "name",
 							key: "name",
 							render: (_value, row) => (
-								<Space>
-									<span>{tableKey(row)}</span>
+								<Space wrap>
+									<span style={{ overflowWrap: "anywhere" }}>{tableKey(row)}</span>
 									<Tag>{row.type || "TABLE"}</Tag>
 								</Space>
+							),
+						},
+						{
+							title: "表别名（源表注释）",
+							dataIndex: "comment",
+							key: "comment",
+							width: "40%",
+							render: (value: string | null | undefined) => (
+								<span style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{value?.trim() || "—"}</span>
 							),
 						},
 					]}
