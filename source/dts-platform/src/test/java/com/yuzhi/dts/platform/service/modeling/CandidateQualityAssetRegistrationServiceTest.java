@@ -109,20 +109,16 @@ class CandidateQualityAssetRegistrationServiceTest {
         org.mockito.Mockito.lenient().when(model.warehouseLayerCode()).thenReturn(sublayer);
         when(model.layer()).thenReturn(ModelSpecContract.Layer.valueOf(canonicalLayer));
         when(model.modelType()).thenReturn(ModelType.FACT);
-        when(classifications.evaluate(TENANT, MODEL_ID, 3, "a".repeat(64)))
-            .thenReturn(
-                new Decision(
-                    true,
-                    MODEL_ID,
-                    3,
-                    "dbt:model.dts.prjdemo_dwd_project_task_snapshot",
-                    "CONFIDENTIAL",
-                    Map.of("source", "CONFIDENTIAL"),
-                    Map.of(),
-                    List.of(),
-                    null
-                )
-            );
+        Decision classification = new Decision(
+            true, MODEL_ID, 3, "dbt:model.dts.prjdemo_dwd_project_task_snapshot",
+            "CONFIDENTIAL", Map.of("source", "CONFIDENTIAL"), Map.of(), List.of(), null
+        );
+        UUID candidateId = UUID.randomUUID();
+        when(candidate.id()).thenReturn(candidateId);
+        when(classifications.evaluateVerifiedScope(TENANT, List.of(model))).thenReturn(List.of(classification));
+        when(classifications.admitAndSeal(TENANT, MODEL_ID, 3, "a".repeat(64),
+            "candidate-quality:" + candidateId, Map.of(classification.outputSubjectKey(), "CONFIDENTIAL")))
+            .thenReturn(classification);
         when(
             publications.prepareQualityDataset(
                 eq(candidate),
