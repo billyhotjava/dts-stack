@@ -100,6 +100,12 @@ class CandidatePublicationCommitServiceTest {
     @Mock
     private ModelPublicationAssetObservationAdapter assetObservation;
 
+    @Mock
+    private ModelingExecutionAuthorization executionAuthorization;
+
+    @Mock
+    private com.yuzhi.dts.platform.security.modeling.ModelingIdentityService.Scope executionScope;
+
     private CandidatePublicationCommitService service;
 
     @BeforeEach
@@ -119,6 +125,13 @@ class CandidatePublicationCommitServiceTest {
             catalogServing,
             assetObservation
         );
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "executionAuthorization", executionAuthorization);
+        when(executionAuthorization.actor(TENANT, ACTOR, List.of(MODEL_ID))).thenReturn(executionScope);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void closesTheExplicitExecutionScope() {
+        verify(executionScope).close();
     }
 
     @Test

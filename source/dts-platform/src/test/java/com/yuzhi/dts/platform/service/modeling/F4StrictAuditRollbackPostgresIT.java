@@ -37,6 +37,8 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.ArchitectureDictionaryWriteGuard;
 import com.yuzhi.dts.platform.service.catalog.CatalogMaterializationSourceAvailabilityPort;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
+import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.etl.DbtRuntimeTargetException;
 import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
 import com.yuzhi.dts.platform.service.modeling.ModelExecutionTargetCatalogResolver.ResolvedCatalogTarget;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
@@ -221,6 +223,12 @@ class F4StrictAuditRollbackPostgresIT {
 
     @MockBean
     private DbtScopedProjectService scopedProjects;
+
+    @MockBean
+    private DbtConfigService dbtConfig;
+
+    @MockBean
+    private ModelingExecutionAuthorization executionAuthorization;
 
     @MockBean
     private PhysicalRelationInspectorRegistry inspectorRegistry;
@@ -591,14 +599,15 @@ class F4StrictAuditRollbackPostgresIT {
             ModelReleaseCandidateService candidates,
             ModelMaterializationBuildRepository builds,
             ModelMaterializationSourceAvailabilityGuard sourceAvailability,
-            ModelMaterializationAvailabilityAuditService availabilityAudit
+            ModelMaterializationAvailabilityAuditService availabilityAudit,
+            DbtConfigService dbtConfig
         ) {
             return new ModelMaterializationStartService(
                 candidates,
                 builds,
                 sourceAvailability,
                 availabilityAudit,
-                org.mockito.Mockito.mock(com.yuzhi.dts.platform.service.etl.DbtConfigService.class),
+                dbtConfig,
                 TEST_CLOCK
             );
         }
@@ -668,6 +677,7 @@ class F4StrictAuditRollbackPostgresIT {
     void setUp() {
         scope = Scope.create();
         reset(
+            dbtConfig,
             targetResolver,
             scopedProjects,
             inspectorRegistry,
@@ -696,6 +706,31 @@ class F4StrictAuditRollbackPostgresIT {
         ).thenReturn(UUID.randomUUID());
         when(catalogAvailability.lockAndRead(any())).thenReturn(List.of());
         when(catalogAvailability.lockAndCompare(any())).thenReturn(List.of());
+    }
+
+    @Test
+    void targetAdmissionFailureRollsBackCandidateTransitionAndCreatesNoExecution() {
+        seedCanonicalModelAndCandidate(scope, DeliveryStatus.DRAFT, 1, true);
+        when(dbtConfig.loadRuntimeConfig()).thenThrow(new DbtRuntimeTargetException(
+            "DBT_TARGET_DEFAULT_LAKE_MISMATCH", "目标数仓与默认数据湖不一致"
+        ));
+
+        assertThatThrownBy(() -> materializationStart.startWithBuild(
+            TENANT, ACTOR, scope.candidateId(), 1, "target-denied-" + scope.candidateId(), "target admission proof"
+        )).isInstanceOf(ModelReleaseCandidateException.class)
+            .extracting(error -> ((ModelReleaseCandidateException) error).code())
+            .isEqualTo("DBT_TARGET_DEFAULT_LAKE_MISMATCH");
+
+        assertThat(candidateStatus(scope)).isEqualTo("DRAFT");
+        assertThat(candidateVersion(scope)).isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+            "select count(*) from modeling_pipeline_run where tenant_id = ? and release_candidate_id = ?",
+            Integer.class, TENANT, scope.candidateId()
+        )).isZero();
+        assertThat(jdbc.queryForObject(
+            "select count(*) from modeling_model_release_candidate_command where tenant_id = ? and candidate_id = ?",
+            Integer.class, TENANT, scope.candidateId()
+        )).isZero();
     }
 
     @Test
