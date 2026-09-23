@@ -1458,7 +1458,7 @@ describe("model workbench draft validation", () => {
 	});
 
 	it("keeps a code-owned visual reference across hydration and repeated saves without making it executable", () => {
-		const base = canonicalFactView();
+		const base = { ...canonicalFactView(), sourceRefs: [modelSourceRefFromBinding(physicalSource, 0)!] };
 		const implementation = generatedImplementation(base, {
 			inputMode: "PHYSICAL_ASSET",
 			inputs: [{ sourceBindingId: physicalSource.bindingId, resolvedVersion: "source-v1" }],
