@@ -79,7 +79,7 @@ class CandidateQualityReadTransactionTest {
 
         assertThat(summary.required()).isTrue();
         assertThat(summary.passed()).isFalse();
-        assertThat(summary.code()).isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_EVIDENCE_UNAVAILABLE");
+        assertThat(summary.code()).isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_BUILD_EVIDENCE_UNAVAILABLE");
     }
 
     @Test
