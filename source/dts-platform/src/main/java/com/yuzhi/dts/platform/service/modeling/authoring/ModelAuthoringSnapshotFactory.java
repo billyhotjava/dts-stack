@@ -33,6 +33,17 @@ public class ModelAuthoringSnapshotFactory {
         snapshot.set("modelSpec", objectMapper.valueToTree(command));
         JsonNode visualImplementation = visualImplementation(implementation, idempotencyKey);
         if (visualImplementation != null) snapshot.set("visualImplementation", visualImplementation);
+        if (implementation != null && implementation.ownership() == ImplementationMode.DBT_MANAGED && implementation.inputs() != null) {
+            for (JsonNode input : objectMapper.<JsonNode>valueToTree(implementation.inputs())) {
+                JsonNode config = input.path("config");
+                if (config.path("codeAuthoritative").asBoolean(false)) {
+                    snapshot.remove("visualImplementation");
+                    snapshot.put("codeAuthoritative", true);
+                    if (config.path("visualReference").isObject()) snapshot.set("visualReference", config.path("visualReference").deepCopy());
+                    break;
+                }
+            }
+        }
         return snapshot;
     }
 

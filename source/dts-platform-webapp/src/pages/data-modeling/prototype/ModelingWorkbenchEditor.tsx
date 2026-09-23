@@ -14,7 +14,7 @@ import { ModelWizardEditorActions } from "./ModelWizardEditorActions";
 import type { WorkbenchDialog } from "./ModelWorkbenchDialog";
 import { isConceptDimensionDraft } from "./modelWorkbenchPresentation";
 import { Button } from "./PrototypePrimitives";
-import type { ModelDraft, ModelDraftValidationErrors, ModelWorkbenchContext } from "./services/modelWorkbenchService";
+import { isModelSpecDraft, type ModelDraft, type ModelDraftValidationErrors, type ModelWorkbenchContext } from "./services/modelWorkbenchService";
 import "./modeling-workbench.css";
 import { type ModelingWorkbenchView, modelingCapabilityReasonsText } from "./modelingWorkbenchMode";
 
@@ -92,7 +92,8 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 	const published = Boolean(
 		selectedModel && (authoringContext?.publishedForkRequired || selectedModel.status === "PUBLISHED"),
 	);
-	const effectiveReadOnly = readOnly;
+	const codeReferenceOnly = !props.definitionOnly && isModelSpecDraft(draft) && Boolean(draft.codeAuthoritative);
+	const effectiveReadOnly = readOnly || codeReferenceOnly;
 	const busy = saving || Boolean(authoringBusy);
 	const projection = authoringContext?.projection;
 	const importedSql =
@@ -161,6 +162,11 @@ export function ModelingWorkbenchEditor(props: ModelingWorkbenchEditorProps) {
 				</section>
 			) : null}
 
+			{codeReferenceOnly ? (
+				<div className="dmx-capability-note" role="status">
+					代码已修改，以下为上次可视化配置的只读参考，尚未与当前 SQL 同步。实际加工以代码为准，请进入代码模式继续编辑。
+				</div>
+			) : null}
 			<fieldset className="dmx-editor-fieldset dmx-editor-scroll" disabled={effectiveReadOnly || busy}>
 				{conceptDimension ? (
 					<ConceptDimensionForm {...props} draft={draft} />

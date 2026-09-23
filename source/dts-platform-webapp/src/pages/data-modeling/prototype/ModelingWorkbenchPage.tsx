@@ -550,12 +550,18 @@ function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 			params.delete("open");
 		});
 	}, [legacyAdvanced, requestedModelId, selectedModel?.id, syncWorkbenchUrl]);
-	const setWorkbenchView = (view: ModelingWorkbenchView) => {
-		if (view === requestedView || savingRef.current) return;
-		syncWorkbenchUrl((params) => {
-			params.set("view", view);
-			params.delete("open");
-		});
+	const setWorkbenchView = async (view: ModelingWorkbenchView) => {
+		if (view === requestedView || savingRef.current || authoringBusy) return;
+		savingRef.current = true;
+		try {
+			if ((dirty || authoringCodeDirty) && !(await authoring.save(requestedView === "code" ? "CODE" : "VISUAL"))) return;
+			syncWorkbenchUrl((params) => {
+				params.set("view", view);
+				params.delete("open");
+			});
+		} finally {
+			savingRef.current = false;
+		}
 	};
 	const refresh = async () => {
 		if (savingRef.current || !confirmDiscard()) return;

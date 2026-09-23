@@ -228,15 +228,18 @@ public class ModelAuthoringDraftService {
             .findOpenAuthoring(tenantId, actorId, modelSpecId)
             .filter(candidate -> candidate.draftId().equals(draftId))
             .orElseThrow(() -> error("MODEL_AUTHORING_DRAFT_NOT_FOUND", "The authoring draft was not found", ModelAuthoringException.Kind.NOT_FOUND));
+        boolean visualView = request.activeView() == ModelAuthoringContract.ActiveView.VISUAL;
+        JsonNode snapshot = ModelAuthoringSnapshotPolicy.forSave(open.modelSpecSnapshot(), request.modelSpecSnapshot(),
+            visualView, ModelAuthoringSnapshotPolicy.filesChanged(open.sourceBundle(), request.files()));
         SourceBundleView submittedBundle = withFiles(open.sourceBundle(), request.files());
-        AuthoringProjection projection = project(submittedBundle, request.modelSpecSnapshot());
+        AuthoringProjection projection = project(submittedBundle, snapshot);
         var saved = drafts.saveAuthoring(
             tenantId,
             actorId,
             modelSpecId,
             draftId,
             request.expectedEtag(),
-            request.modelSpecSnapshot(),
+            snapshot,
             objectMapper.valueToTree(projection),
             request.files(),
             request.activeView() == ModelAuthoringContract.ActiveView.VISUAL

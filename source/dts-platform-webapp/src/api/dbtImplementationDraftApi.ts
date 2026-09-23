@@ -45,6 +45,8 @@ export type ModelAuthoringSnapshot = {
 	schemaVersion: 1;
 	modelSpec: UpdateModelSpecCommand;
 	visualImplementation?: ModelImplementationWriteCommand | null;
+	visualReference?: ModelImplementationWriteCommand | null;
+	codeAuthoritative?: boolean;
 };
 
 export type ModelAuthoringSnapshotInput = ModelAuthoringSnapshot | UpdateModelSpecCommand;

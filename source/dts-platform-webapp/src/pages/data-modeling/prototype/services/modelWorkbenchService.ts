@@ -133,6 +133,8 @@ export type ModelSpecDraft = {
 	warehouseLayerCode: string;
 	implementationMode: ModelSpecImplementationMode;
 	implementationBase: ModelImplementationView | null;
+	visualReference?: ModelImplementationWriteCommand | null;
+	codeAuthoritative?: boolean;
 	/** Saved authoring pins are independent of the committed implementation used for version checks. */
 	authoringImplementationInputs?: ModelImplementationInput[];
 	implementationInputMode: ModelImplementationInputMode | "";
@@ -432,6 +434,15 @@ const implementationViewFromCommand = (
 	materialization: command.materialization,
 });
 
+const codeReferenceOf = (implementation: ModelImplementationView | null) => {
+	for (const input of implementation?.inputs || []) {
+		if (!("generatorType" in input) || !input.config?.codeAuthoritative) continue;
+		return { codeAuthoritative: true, visualReference: isModelImplementationWriteCommand(input.config.visualReference)
+			? input.config.visualReference : null };
+	}
+	return { codeAuthoritative: false, visualReference: null };
+};
+
 const structuredImplementationView = (
 	model: ModelSpecView,
 	implementation: ModelImplementationView | null,
@@ -446,7 +457,10 @@ export function modelDraftFromView(
 	model: ModelSpecView,
 	implementation: ModelImplementationView | null = null,
 ): ModelSpecDraft {
-	const structuredImplementation = structuredImplementationView(model, implementation);
+	const codeState = codeReferenceOf(implementation);
+	const structuredImplementation = codeState.visualReference
+		? implementationViewFromCommand(model, implementation, codeState.visualReference)
+		: structuredImplementationView(model, implementation);
 	// Restore execution metadata without treating imported SQL as a visual transformation.
 	const executionImplementation = structuredImplementation || implementation;
 	const configuration = implementationConfiguration(executionImplementation, model.implementationPolicy);
@@ -483,6 +497,7 @@ export function modelDraftFromView(
 		warehouseLayerCode: model.warehouseLayerCode || model.layer,
 		implementationMode: model.implementationMode,
 		implementationBase: implementation,
+		...codeState,
 		authoringImplementationInputs: structuredImplementation?.inputs.map((input) => ({ ...input })),
 		implementationInputMode:
 			implementation?.ownership === "DBT_MANAGED" && !structuredImplementation
@@ -531,7 +546,9 @@ export function modelDraftFromAuthoringSnapshot(
 ): ModelSpecDraft {
 	const versioned = isVersionedAuthoringSnapshot(snapshot);
 	const modelSnapshot = versioned ? snapshot.modelSpec : snapshot;
-	const visualSnapshot = versioned ? snapshot.visualImplementation || null : null;
+	const visualReference = versioned ? snapshot.visualReference || null : null;
+	const codeAuthoritative = versioned && Boolean(snapshot.codeAuthoritative || visualReference);
+	const visualSnapshot = visualReference || (versioned ? snapshot.visualImplementation || null : null);
 	const visualView = visualSnapshot
 		? implementationViewFromCommand(model, implementation, visualSnapshot)
 		: versioned
@@ -569,6 +586,8 @@ export function modelDraftFromAuthoringSnapshot(
 		dataMartId: modelSnapshot.dataMartId || "",
 		subjectDomainId: modelSnapshot.subjectDomainId || "",
 		implementationBase: implementation,
+		visualReference,
+		codeAuthoritative,
 		authoringImplementationInputs:
 			visualSnapshot?.inputs.map((input) => ({ ...input })) ?? base.authoringImplementationInputs,
 		implementationIdempotencyKey: crypto.randomUUID(),
@@ -1324,6 +1343,13 @@ export const modelDraftToAuthoringSnapshot = (
 		: draft;
 	const modelSpec = modelDraftToUpdateCommand(normalizedDraft);
 	const snapshot: ModelAuthoringSnapshot = { schemaVersion: 1, modelSpec };
+	if (normalizedDraft.codeAuthoritative) {
+		return { ...snapshot, codeAuthoritative: true, visualReference: normalizedDraft.visualReference || null };
+	}
+	if (!includeStructuredVisual) {
+		// The server retains the last saved visual snapshot; do not rebuild it from edited SQL.
+		return { ...snapshot, codeAuthoritative: true };
+	}
 	if (
 		!includeStructuredVisual ||
 		!supportsStructuredVisualAuthoring(normalizedDraft) ||

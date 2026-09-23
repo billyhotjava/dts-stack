@@ -147,3 +147,12 @@ describe("Sprint-92 unified authoring source contracts", () => {
 		expect(release).not.toContain("item.message || item.code || item.state");
 	});
 });
+
+it("retains code-owned visual reference and saves changes before switching views", () => {
+	const page = source("ModelingWorkbenchPage.tsx");
+	const switching = page.slice(page.indexOf("const setWorkbenchView"), page.indexOf("const refresh"));
+	expect(switching.indexOf("await authoring.save")).toBeLessThan(switching.indexOf("syncWorkbenchUrl"));
+	expect(switching).toContain("dirty || authoringCodeDirty");
+	expect(switching).toContain("authoringBusy");
+	expect(source("ModelingWorkbenchEditor.tsx")).toContain("上次可视化配置的只读参考");
+});

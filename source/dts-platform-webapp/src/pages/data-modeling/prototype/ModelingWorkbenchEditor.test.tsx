@@ -1217,3 +1217,11 @@ describe("initial definition save", () => {
 		expect(button("处理中…").disabled).toBe(true);
 	});
 });
+
+ it("shows code-owned visual settings as read-only without hiding the original target", async () => {
+	await render(makeProps({ draft: makeDraft({ codeAuthoritative: true, physicalName: "dwd_risk" }) }));
+	expect(container.textContent).toContain("上次可视化配置的只读参考");
+	const target = container.querySelector<HTMLInputElement>('input[aria-label="产出表英文名"]');
+	expect(target?.value).toBe("dwd_risk");
+	expect(target?.closest("fieldset")?.disabled).toBe(true);
+ });

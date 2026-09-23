@@ -210,7 +210,7 @@ export function useModelAuthoringSession({
 				session.draft.sourceBundle?.projectKey,
 			),
 			files: nextFiles,
-			activeView: codeDirty ? "CODE" : activeView,
+			activeView: codeDirty || prepared.codeAuthoritative ? "CODE" : activeView,
 		});
 		const nextOpen: DbtImplementationDraft = {
 			...session.draft,

@@ -265,6 +265,50 @@ class ModelAuthoringDraftServiceTest {
     }
 
     @Test
+    void codeSavePersistsTheReferenceAndReturnsTheUnchangedSubmittedSql() throws Exception {
+        var previous = objectMapper.readTree("{\"schemaVersion\":1,\"modelSpec\":{},\"visualImplementation\":{\"settings\":{\"targetPhysicalName\":\"orders\"}}}");
+        var submitted = objectMapper.readTree("{\"schemaVersion\":1,\"modelSpec\":{\"name\":\"新名称\"}}");
+        var stored = new java.util.concurrent.atomic.AtomicReference<com.fasterxml.jackson.databind.JsonNode>(previous);
+        DraftView open = mock(DraftView.class);
+        when(open.draftId()).thenReturn(DRAFT_ID);
+        when(open.modelSpecSnapshot()).thenAnswer(invocation -> stored.get());
+        when(open.sourceBundle()).thenReturn(new SourceBundleView("project", "c".repeat(64), "d".repeat(64),
+            SourceBundleKind.CANONICAL_INITIALIZATION, true, List.of()));
+        when(drafts.findOpenAuthoring(TENANT, ACTOR, MODEL_ID)).thenReturn(Optional.of(open));
+        when(projections.project(any(SourceBundleView.class), org.mockito.ArgumentMatchers.isNull()))
+            .thenReturn(AuthoringProjection.unknown("UNSUPPORTED_SQL"));
+        var files = List.of(new FileInput("models/orders.sql", "select custom_expression() as id"));
+        when(drafts.saveAuthoring(eq(TENANT), eq(ACTOR), eq(MODEL_ID), eq(DRAFT_ID), eq("etag-1"), any(), any(), eq(files), eq(false)))
+            .thenAnswer(invocation -> {
+                stored.set(invocation.getArgument(5));
+                return new SaveFilesView(DRAFT_ID, "etag-2", Instant.parse("2026-08-20T01:00:00Z"), 1, 40);
+            });
+        when(drafts.authoringFiles(TENANT, ACTOR, MODEL_ID, DRAFT_ID)).thenReturn(files);
+
+        var result = service.save(TENANT, ACTOR, MODEL_ID, DRAFT_ID,
+            new SaveAuthoringDraftRequest("etag-1", submitted, files, ActiveView.CODE));
+
+        assertThat(result.files()).isEqualTo(files);
+        assertThat(result.modelSpecSnapshot().path("visualReference")).isEqualTo(previous.path("visualImplementation"));
+        assertThat(result.modelSpecSnapshot().has("visualImplementation")).isFalse();
+        assertThat(result.modelSpecSnapshot().path("codeAuthoritative").asBoolean()).isTrue();
+    }
+
+    @Test
+    void reopeningCommittedCodeRestoresReferenceWithoutEnablingVisualCompilation() {
+        var implementation = mock(com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.ImplementationView.class);
+        when(implementation.ownership()).thenReturn(ImplementationMode.DBT_MANAGED);
+        when(implementation.inputs()).thenReturn(List.of(
+            new com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.GeneratedInput("DBT", Map.of(
+                "codeAuthoritative", true, "visualReference", Map.of("settings", Map.of("targetPhysicalName", "orders"))))));
+        var restored = new ModelAuthoringSnapshotFactory(objectMapper).create(
+            model(ModelStatus.DRAFT, 2, CHECKSUM, ImplementationMode.DBT_MANAGED), implementation, "reopen");
+        assertThat(restored.path("codeAuthoritative").asBoolean()).isTrue();
+        assertThat(restored.path("visualReference").path("settings").path("targetPhysicalName").asText()).isEqualTo("orders");
+        assertThat(restored.has("visualImplementation")).isFalse();
+    }
+
+    @Test
     void validationReportsCanonicalModelAndProjectionIssuesBeforeCommit() {
         UpdateModelSpecCommand command = modelCommand();
         var snapshot = objectMapper.createObjectNode();

@@ -1457,6 +1457,30 @@ describe("model workbench draft validation", () => {
 		expect(snapshot).not.toHaveProperty("visualImplementation");
 	});
 
+	it("keeps a code-owned visual reference across hydration and repeated saves without making it executable", () => {
+		const base = canonicalFactView();
+		const implementation = generatedImplementation(base, {
+			inputMode: "PHYSICAL_ASSET",
+			inputs: [{ sourceBindingId: physicalSource.bindingId, resolvedVersion: "source-v1" }],
+		});
+		const initial = modelDraftFromView(base, implementation);
+		const options = { ownerId: "owner-1", dimensionDefinitions: [], models: [base] };
+		const visual = modelDraftToAuthoringSnapshot(initial, options);
+		const saved = { ...visual, modelSpec: { ...visual.modelSpec, name: "风险明细新名称", description: "保留业务说明" },
+			codeAuthoritative: true, visualReference: visual.visualImplementation, visualImplementation: undefined };
+		const reopened = modelDraftFromAuthoringSnapshot(base, implementation, saved);
+		expect(reopened).toMatchObject({ name: "风险明细新名称", description: "保留业务说明", physicalName: initial.physicalName,
+			codeAuthoritative: true, fieldMappings: initial.fieldMappings });
+		const resaved = modelDraftToAuthoringSnapshot(reopened, options);
+		expect(resaved.visualReference).toEqual(visual.visualImplementation);
+		expect(resaved.visualImplementation).toBeUndefined();
+		expect(resaved.codeAuthoritative).toBe(true);
+		const committed = { ...implementation, ownership: "DBT_MANAGED" as const, inputMode: "GENERATED" as const,
+			inputs: [{ generatorType: "DBT", config: { codeAuthoritative: true, visualReference: visual.visualImplementation } }] };
+		expect(modelDraftFromView(base, committed)).toMatchObject({ codeAuthoritative: true,
+			physicalName: initial.physicalName, fieldMappings: initial.fieldMappings });
+	});
+
 	it("creates a manual model and its first implementation through one atomic operation", async () => {
 		const model = { ...canonicalFactView(), revision: 2, checksum: "d".repeat(64) };
 		const implementation = generatedImplementation(model, {

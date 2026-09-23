@@ -1877,6 +1877,14 @@ public class DbtImplementationDraftService {
             ? visualImplementationConfig(current)
             : null;
         if (visualImplementation != null) generatedConfig.put("visualImplementation", visualImplementation);
+        JsonNode savedAuthoring = unifiedAuthoring ? jsonNode(current.modelSpecSnapshot()) : null;
+        if (savedAuthoring != null && savedAuthoring.path("codeAuthoritative").asBoolean(false)) {
+            generatedConfig.put("codeAuthoritative", true);
+            if (savedAuthoring.path("visualReference").isObject()) {
+                generatedConfig.put("visualReference", objectMapper.convertValue(savedAuthoring.path("visualReference"),
+                    new TypeReference<Map<String, Object>>() {}));
+            }
+        }
         if (committedDependencies != null) {
             generatedConfig.put("dependencyChecksum", committedDependencies.snapshot().dependencyChecksum());
             generatedConfig.put(
