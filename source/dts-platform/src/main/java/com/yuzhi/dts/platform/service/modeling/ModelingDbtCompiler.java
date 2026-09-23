@@ -548,8 +548,18 @@ public final class ModelingDbtCompiler {
 		String expression = mappings.getOrDefault(column, column);
         String type = casts.get(column);
         if (type == null) type = casts.get(expression);
-        if (type != null) expression = "cast(" + expression + " as " + POSTGRES_CAST_TYPES.get(type) + ")";
+        if (type != null) expression = castExpression(expression, type);
 		return expression;
+    }
+
+    /**
+     * Source text columns often carry "" (or spaces) for a missing value, which PostgreSQL rejects when
+     * casting to a date, number or boolean. Those are treated as NULL; text targets keep the value as is.
+     */
+    private static String castExpression(String expression, String type) {
+        String target = POSTGRES_CAST_TYPES.get(type);
+        if ("text".equals(target)) return "cast(" + expression + " as text)";
+        return "cast(nullif(trim(cast(" + expression + " as text)), '') as " + target + ")";
     }
 
 	private static String renderProjectedColumn(

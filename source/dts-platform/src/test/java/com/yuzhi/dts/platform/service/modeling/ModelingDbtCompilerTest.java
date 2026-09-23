@@ -167,6 +167,40 @@ class ModelingDbtCompilerTest {
     }
 
     @Test
+    void castsBlankSourceTextToNullBeforeNonTextTypes() {
+        ModelingCompilerContract.CompilerModel model = PjmModelingFixture.projectNode().compilerModel();
+        for (Map.Entry<String, String> cast : Map.of("date", "date", "decimal", "numeric", "timestamp", "timestamp").entrySet()) {
+            ModelingDbtCompiler.CompiledArtifacts compiled = ModelingDbtCompiler.compile(
+                new ModelSpecCompilerProjection.ImplementationProjection(
+                    model,
+                    "tenant-a",
+                    "a".repeat(64),
+                    3,
+                    "b".repeat(64),
+                    "model.pjm.project_node_detail",
+                    InputMode.PHYSICAL_ASSET,
+                    List.of(),
+                    List.of(new FieldMapping("raw_project_no", "project_no")),
+                    Map.of(
+                        "targetPhysicalName", "project_node_detail",
+                        "loadStrategy", "FULL",
+                        "partitionFields", List.of(),
+                        "casts", Map.of("project_no", cast.getKey())
+                    ),
+                    "table",
+                    model.grain().keys(),
+                    "plan-a",
+                    typedFields(model)
+                )
+            );
+
+            assertThat(compiled.files().get("stg_project_node_detail.sql"))
+                .as("S10DC-117: \"\" in a text source must not fail the %s cast", cast.getKey())
+                .contains("cast(nullif(trim(cast(raw_project_no as text)), '') as " + cast.getValue() + ") as project_no");
+        }
+    }
+
+    @Test
     void compilesOrdinaryImplementationThroughADeterministicEphemeralStg() {
         ModelingCompilerContract.CompilerModel model = PjmModelingFixture.projectNode().compilerModel();
         ModelSpecCompilerProjection.ImplementationProjection implementation = new ModelSpecCompilerProjection.ImplementationProjection(

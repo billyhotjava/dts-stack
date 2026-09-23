@@ -173,7 +173,7 @@ class DbtScopedProjectServiceRealCompileIT {
             assertThat(textValues(manifest.path("parent_map").path(summaryStgUniqueId))).contains(factUniqueId);
             assertThat(manifest.path("nodes").path(factStgUniqueId).path("compiled_code").asText())
                 .contains("cast(project_id as text)")
-                .contains("cast(budget_amount as numeric)");
+                .contains("cast(nullif(trim(cast(budget_amount as text)), '') as numeric)");
         } finally {
             scoped.releaseCandidateProject(project.bundleChecksum());
             deleteRecursively(runtimeDirectory);
