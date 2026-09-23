@@ -71,6 +71,26 @@ F1 字段与错误约束见 [Feature 契约](features/F1-通用建模契约与�
 | C09 | 历史专项回归和构建不能代替当前部署/浏览器/迁移证明 | [基线](it/baseline.md) |
 | C10 | 输入方式按类型固定；执行计划明确不支持 SNAPSHOT，配置历史元数据不等于运行支持 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/ModelImplementationInputPolicy.java:203`；`ModelImplementationExecutionPlanner.java:146` |
 
+### 现状勘察账本 F12 增量（2026-09-22，C126–C136）
+
+下游 F12-T03–T08 复用本表，不重复扫描。路径相对仓库根。
+
+| 编号 | 已确认事实 | 源码证据 |
+|---|---|---|
+| C126 | 模型导入既有路由已具备 inspect/preview/apply/retry/forward-undo/查询，前缀 `/api/modeling/model-spec-imports`；新增编排前缀须与其共存 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/web/rest/ModelSpecImportResource.java:44`、`:137`、`:163`、`:205`、`:211`、`:235`、`:241`、`:263` |
+| C127 | forward-undo 对 CREATE 项直接判 blocked，返回 `CREATED_MODEL_NO_BASE_REVISION`；它不能当重置用 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/imports/reconciliation/ModelSpecImportForwardUndoWorker.java:25`、`:42`、`:112` |
+| C128 | 实现命令回执为追加写，由 Liquibase 保护触发器强制；删除尝试报 `MODEL_IMPLEMENTATION_COMMAND_RECEIPT_APPEND_ONLY` | `source/dts-platform/src/main/resources/config/liquibase/changelog/20260801_06_model_implementation_command_receipt.xml`；`source/dts-platform/src/test/java/com/yuzhi/dts/platform/repository/modeling/ModelImplementationCommandReceiptLiquibaseIT.java` |
+| C129 | 预览服务可复用，不必另造 dbt parser 或模型台账 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/imports/preview/ModelSpecImportPreviewService.java` |
+| C130 | 逆向建模页与来源登记弹窗已存在，来源登记不依赖先建模型 | `source/dts-platform-webapp/src/pages/data-modeling/prototype/ReverseModelingPage.tsx`；`ModelSourceInventoryDialog.tsx`；`ReverseImportSourceRegistration.tsx` |
+| C131 | 语义虚拟数据集写入契约：body `{name,description?,workspace_id?,state:SemanticQueryBody}`；`SemanticQueryBody` 用字符串 id 表达 measures/dimensions，含 `base`/`joins`/`indicatorRefs`/`timeRange`/`derived_metrics`/`order_by`/`filters.value_to` | `source/dts-platform-webapp/src/analytics/api/analyticsApi.ts:2104`、`:181`–`:194` |
+| C132 | 卡片创建强制 `dataset_query.database`（Long，>0），显示字段为 `display`（缺省 `table`）与 `visualization_settings`；卡片绑定数据库 id 而非数据集 id | `source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/web/rest/CardResource.java:59`、`:167`、`:184`–`:186`、`:197`、`:200` |
+| C133 | 大屏 ScreenSpec 为根级扁平 `schemaVersion`/`width`(200–7680)/`height`(120–4320)/`components`/`globalVariables`；组件字段扁平 `id`/`type`/`x`/`y`/`width`/`height`/`dataSource`/`config`/`interaction`/`drillDown`/`actions`，无 `canvas` 与 `frame` 包装 | `source/dts-analytics/src/main/java/com/yuzhi/dts/analytics/service/ScreenSpecValidator.java:97`–`:101`、`:160`–`:182` |
+| C134 | 大屏组件类型白名单 48 项（`line-chart`…`image`/`iframe`/`video`/`table`/`title`/`richtext` 等），不含 `CARD`/`TEXT`；卡片引用走 `dataSource.sourceType ∈ {static,api,card,sql,dataset,metric,database}`；`config` 内 plugin marker 可放行白名单外类型 | 同文件 `:17`–`:70`、`:71`、`:165`、`:170`、`:208` |
+| C135 | dts-platform → dts-analytics 已有带超时的出站通道，F12 须复用而非新建 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/modeling/serving/AnalyticsSemanticPublishClient.java:23`、`:36`–`:37`、`:79`；`source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/integration/ScreenReportLinkSyncService.java:36`、`:45` |
+| C136 | 仓库已有 `CatalogExternalAssetIdentityRegistry`（数据目录外部资产身份），F12 的导入身份注册表须另名 `ImportIdentityRegistry`，不得混用 | `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/catalog/CatalogExternalAssetIdentityRegistry.java` |
+
+开放问题（F12，勘察未决）：QUERY_DATASET 的 `parameters` 在目标语义层的落点；QUERY_DATASET → 底层 `database` 的解析接口不存在；ScreenSpec 是否接受 `theme`/`backgroundResource`。三项未决前 F12-T04/T05 保持 DRAFT。
+
 F2 账本 C11–C18 见 [原交付契约](assests/delivery-workflow-contract.md)；2026-09-07 新增 [C19–C26](assests/F3-modeling-data-boundary.md#5-context-ledger-c19c26)，记录 ODS 禁建、接入建表、真实来源校验、发布耦合和数据目录落点。F3-T01–T06 复用账本，仅对受影响变化补充证据。
 
 ## Gate Registry
@@ -90,6 +110,21 @@ F2 账本 C11–C18 见 [原交付契约](assests/delivery-workflow-contract.md)
 | G2 | F3 实现与聚焦 review | PENDING | F3-T02–T05 已实施，整改源码与178项专项测试通过；真实主线待部署复验 | F3-T02–T05 |
 | G3 | F3 正式交付与安全恢复 | PENDING | 复用 F1-T08、F2-T06 机制，只补本次差异 | F3-T06 |
 | G4 | F3 模块边界与全层真实验收 | PENDING | IT-19/21/23 有分项证据，IT-20/22 完整主线及 IT-24 独立离线待完成 | F3-T06 |
+
+## F12 增量 Gate（2026-09-22）
+
+| Gate | 状态 | 证据与关联 |
+|---|---|---|
+| G0 交付基线 | GAP | 建模切片已在真实环境跑通（[交付记录](features/F12-业务应用ZIP全链路导入/建模切片交付记录-20260921.md)，IT-01 PASS）；分析/大屏侧目标环境未探测。关联 F12-T07 |
+| G0 领域与数据画像 | GAP | PJM 真实画像有（43 业务模型、10 ODS、8 内嵌维度定义）；卡片/大屏侧样本缺。关联 F12-T03 夹具 |
+| G0 领域不变量 | PASS | 复用既有导入向导、来源确认、密级与部门链路；不新增菜单与 owner 模型；密级只升不降 |
+| G1 契约链贯通 | **GAP** | 2026-09-22 发现的载荷差异已回写设计；机器 Schema、真实契约与样本尚未验证，见[实测对照](features/F12-业务应用ZIP全链路导入/领域载荷与接口契约.md)。关联 F12-T03/T04/T05 |
+| G1 UI/UX 规格 | PASS | [F12 README §UI/UX 规格](features/F12-业务应用ZIP全链路导入/README.md)，含线框、四态、happy path 走查（即 IT-01/IT-16 验收脚本） |
+| G1 非功能预算 | GAP | 预算已收口为 [F12-nfr-budget](assests/F12-nfr-budget.md)（延迟/解压/可靠性/保留/告警/日志六类），**尚未实测**；由 F12-IT-14 作门禁。关联 F12-T07 |
+| G2 实现与 review | GAP | 仅 T02 建模切片有源码与镜像证据；T03–T08 未开工。跨服务传输须复用 `AnalyticsSemanticPublishClient`（Q7），review 时核对 |
+| G3 发布安全 | PENDING | 迁移仅扩展、开关默认关闭、回退策略见[运行恢复](features/F12-业务应用ZIP全链路导入/运行恢复与就绪衔接.md)；独立 release-plan 待 T07 产出于 `assests/F12-release-plan.md`，实现前不预置占位文档 |
+| G4 可运维性 | PENDING | 日志字段、告警阈值、排障顺序见[运行恢复](features/F12-业务应用ZIP全链路导入/运行恢复与就绪衔接.md)与 [nfr-budget](assests/F12-nfr-budget.md)；独立 runbook 待 T07 产出于 `assests/F12-runbook.md`，实现前不预置占位文档 |
+| G4 DoD 验收 | PENDING | F12-IT-01 PASS；IT-02–04 部分组件覆盖；IT-05–29 NOT_RUN。见 [it/README](it/README.md) F12 矩阵 |
 
 ## F7 增量 Gate（2026-09-10）
 
@@ -112,6 +147,9 @@ F2 账本 C11–C18 见 [原交付契约](assests/delivery-workflow-contract.md)
 | [F1-通用建模契约与物化一致性](features/F1-通用建模契约与物化一致性/README.md) | 8 | P1（F1-T07 为 P2） | IN_PROGRESS |
 | [F2-模型交付与资产治理贯通](features/F2-模型交付与资产治理贯通/README.md) | 6 | P1 | IN_PROGRESS（F2-T02–T05 源码集成，正式验证待执行） |
 | [F3-全层建模与数据模块边界简化](features/F3-全层建模与数据模块边界简化/README.md) | 6 | P1 | IN_PROGRESS（F3-T01–T06，实施及分项验收） |
+| [F12-业务应用ZIP全链路导入](features/F12-业务应用ZIP全链路导入/README.md) | 8 | P1 | IN_PROGRESS（T01 DONE、T02 IN_PROGRESS、T03–T08 DRAFT） |
+
+说明：本表历史上只登记 F1–F3，F4–F11 的状态分散在下文各自章节；本次只补 F12 行以恢复可见性，不回溯重算 F4–F11，也不重算下文"统计"口径。F12 的 8 个任务不计入下文 `IN_PROGRESS=19, DONE=1` 的历史统计数字；F12 独立统计为 DRAFT=6、IN_PROGRESS=1、DONE=1。
 
 建议顺序：F1-T01 归因 → F1-T07 能力契约冻结 → F1-T02 → F1-T05/F1-T06/F1-T03/F1-T04 → F1-T07 一致性验证 → F1-T08。任务依赖优先于排序；不默认启用多代理。
 统计：DRAFT=0，READY=0，IN_PROGRESS=19，DONE=1，BLOCKED=0。
@@ -144,6 +182,13 @@ F1-T01–T08 均在推进中：源码专项、IT-04真实dbt、历史草稿主�
 | 接入绑定同一 ODS、数据模块形成并维护资产 | F3-T05 | IT-22 |
 | 治理失败独立恢复及旧流程兼容 | F3-T03–T05 | IT-23 |
 | F3 正式包、部署、Chrome95 与离线差异验收 | F3-T06 | IT-24 |
+| 整包配置、来源登记、43 草稿导入（PJM 主路径） | F12-T02 | F12-IT-01–04 |
+| 统一 ZIP 生产、载荷校验与恶意包拒绝 | F12-T03 | F12-IT-05/11/23 |
+| 查询数据集、卡片、大屏引用转换与就绪语义 | F12-T04、F12-T05 | F12-IT-06/07/24/25/26 |
+| 同包重导、升级、改名、并发的身份与幂等 | F12-T06、F12-T08 | F12-IT-08/09/19/20/22 |
+| 清理本次新建对象后同规划手工重导 | F12-T08 | F12-IT-16–18/21 |
+| 上游物化后安全续建与恢复 | F12-T06 | F12-IT-07/26–29 |
+| F12 兼容、安全、性能与在线离线交付一致 | F12-T07 | F12-IT-12–15 |
 
 ## 完成标准与非目标
 
