@@ -56,7 +56,8 @@
 | F10-菜单信息架构按实施主线收敛 | — | — | 见 sprint README §F10 |
 | F11-权限模型统一与RBAC重构 | — | — | 见 sprint README §F11 |
 | **F12-业务应用ZIP全链路导入** | **P1** | **8** | **IN_PROGRESS**（T01 DONE、T02 IN_PROGRESS、T03–T08 DRAFT） |
-| **F13-发布质量对账状态机与阻断可见性** | **P1** | **8** | **IN_PROGRESS**（设计；T01 READY、T02–T08 DRAFT） |
+| **F13-发布质量处理与失败恢复** | **P1** | **8** | **IN_PROGRESS**（设计；T01 READY、T02–T08 DRAFT） |
+| **F14-模型构建与失败恢复** | **P0** | **8** | **IN_PROGRESS**（设计；T01 READY、T02–T08 DRAFT） |
 
 **F12 统计**：DRAFT=6，IN_PROGRESS=1，DONE=1，BLOCKED=0。估算 31 人日，无人员容量或工期承诺。
 **F12 执行顺序**：T02 主路径 → T08 建模重置/同包重导 → T03 包契约与生产 → T04/T05 领域适配（T06 运行基础先于 T04/T05 真实写入集成）→ T07 分片验收。单代理实施。
@@ -66,12 +67,11 @@
 - 重置能力未实现：43 个 PJM 草稿删除被追加写保护拒绝，用户同规划手工重导需求仍未闭环（T08）。
 - Chrome 95、1366×768/768 窄屏真实浏览器验收未执行。
 
-**F13 统计**：READY=1，DRAFT=7，IN_PROGRESS=0，DONE=0，BLOCKED=0。估算 11 人日，无人员容量或工期承诺。
-**F13 执行顺序**：T01 契约冻结 → T02 登记幂等 ∥ T03 对账状态持久化 → T04 读模型 → T05 面板 ∥ T06 用户闭环 → T07 存量处置与运维 → T08 双环境验收。
-**F13 关键决策**：不拆 `QUALITY_RUNNING`（治理快照冻结与发布门禁依赖现有迁移时机）；新增 `modeling_release_quality_reconcile_state` 持久化对账阶段、阻断类别与退避；阻断码唯一映射责任角色与动作；扩展既有 `WorkbenchView`，不新增路由。见[主契约](sprint-104-202609-modeling-contract-consistency/assests/F13-release-quality-reconcile-contract.md)。
-**F13 已知风险**：
-- 登记幂等改法取决于观测台账拒收规则（Q1），T01 未关闭前 T02 不得开工。
-- openEuler 部署需用户单独确认；两套环境存量卡单原因不同，须分别处置。
-- 评审阶段 reconciler 存在同类问题（`PUBLICATION_REQUEST_EVIDENCE_MISSING`），不在 F13 交付范围，另立后续。
+**F13/F14 联合统计**：共16Task；READY=2、DRAFT=14、IN_PROGRESS=0、DONE=0、BLOCKED=0。每个Feature各8Task，T01 READY，其余DRAFT。F13原11人日估算失效，M0后重估联合开发/测试/交付容量，无工期承诺。
+**联合执行顺序**：F13-T01与F14-T01分别核对后完成M0 → M1构建到质量的最早集成切片 → M2并发与故障恢复 → M3统一界面 → M4同批制品与双环境验收。详见[联合设计](sprint-104-202609-modeling-contract-consistency/assests/F13-F14-联合设计与实施顺序.md)。用户要求后续两个Feature一起编码，本次仅文档。
+**职责**：F14负责构建前检查、执行、关系核验与结果回写恢复；F13负责构建后的资产登记与发布质量处理。复用现有派发、身份、台账和页面，不另建调度器。F13自身缺陷仍由F13修复，不转移到F14后计完成。
+**设计入口**：[F13](sprint-104-202609-modeling-contract-consistency/assests/F13-release-quality-reconcile-contract.md)、[F14](sprint-104-202609-modeling-contract-consistency/assests/F14-模型构建与失败恢复设计.md)。保留原refresh使候选失效语义；新增立即检查与构建恢复命令按M0确定。登记根因先真实复现，不预设候选版本变化必然失败。
+**验证**：F13-IT-01–20、F14-IT-01–18全部NOT_RUN；源码/测试、正式包、部署、页面验收未执行。G0/G1=GAP，G2/G3/G4=PENDING。
+**主要风险**：终态恢复的合法转换、运行文件保留、唤醒与领取并发、原发起人撤权、Java/Airflow版本兼容和在途操作回退；由两个T01冻结，不凭空放宽。评审流程重构另行登记，不在本次范围。
 
 **F4–F11 说明**：sprint README 的「Feature 与执行顺序」表历史上只登记 F1–F3，F4–F11 状态分散在各自章节。本次补建队列时按现状索引，不回溯补全，避免制造未经核对的状态。

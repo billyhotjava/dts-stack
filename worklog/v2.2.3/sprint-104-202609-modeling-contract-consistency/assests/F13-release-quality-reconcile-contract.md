@@ -1,135 +1,90 @@
-# F13 发布质量对账契约（草案，待 F13-T01 冻结）
+# F13 发布质量处理与失败恢复设计
 
-**状态**：DRAFT（2026-09-23 登记；T01 完成复现与核对后改为 FROZEN）
-**设计基线**：`v2.2.3@7a2072c61`
-**适用范围**：发布单进入 `QUALITY_RUNNING` 之后、迁到 `QUALITY_PASSED` / `QUALITY_FAILED` 之前的对账过程，以及发布面板对这一段的呈现。
+状态：DRAFT；修订日期：2026-09-23；源码基线：`a7f54ef1e`。与[F13/F14联合设计](F13-F14-联合设计与实施顺序.md)一起阅读。本文替代原草案，尚未编码。
 
-## 1. 问题陈述（证据见 F13 README 账本）
+## 1. 目标、事实与待证问题
 
-`QUALITY_RUNNING` 目前是一个**没有期限、没有归属、用户看不见原因**的等待态：
+仅处理构建结果核验完成后的质量阶段。保留发布状态及通过时冻结质量结论的规则，新增可恢复的检查状态和用户操作；不把治理质量失败写成构建失败。
 
-- reconciler 每 5 秒对所有 `QUALITY_RUNNING` 候选单重新对账，遇到阻断只打一条 WARN 并返回，不写任何状态（`ModelPublicationQualityReconciler.java:69-84`）。
-- 阻断原因混杂了三类：平台自身故障（资产登记失败）、需要用户操作（治理质量缺失/失败/过期、密级未定）、正常等待（治理质量运行中）。三类在代码和界面上没有区分。
-- 前端 `handoffText` 只在 `QUALITY_PASSED` 之后才提示治理问题，`QUALITY_RUNNING` 期间一律显示“服务端正在推进”；步骤条却已把治理质量标红“需处理”（`ModelReleaseWorkflowPanel.tsx:108-129`、`:80-89`）。
-- 资产登记在同一物理产物、候选版本 v3→v4 后必然失败，异常被 `catch (RuntimeException)` 吞成通用码（`CandidateQualityAssetRegistrationService.java:133-147`）。本机一张单 2 天累计 39,811 条告警。
+历史观测表明本机一张单在候选v3→v4后持续登记失败，但尚无真实异常证明版本变化是原因。现有登记唯一键含`evidence_ref`，允许不同证据引用并存。F13-T01必须取得异常链并以真实PostgreSQL复现；不能预先更改台账唯一性或删除历史记录。
 
-## 2. 状态语义（保持枚举与迁移表不变）
+## 2. 检查阶段与完成条件
 
-`DeliveryStatus` 与 `ModelLifecycleContract` 迁移表**不改**。`QUALITY_RUNNING` 的含义冻结为“正在产出工程验证结论与治理质量冻结快照”。在其内部新增一个**对账阶段投影**（持久化，见 §4），只用于调度、告警和呈现，不参与状态迁移判定：
+| phase | 含义 | 推进/恢复条件 |
+|---|---|---|
+| ENGINEERING_PENDING | 构建/工程验证证据暂未齐全 | 从F14当前批次核对；超出等待阈值进入SYSTEM_BLOCKED并保留已确认成功阶段 |
+| GOVERNANCE_WAITING | 工程验证通过，治理质量有真实在途运行 | 按runId查实际状态；超时或运行不存在需明确诊断 |
+| ACTION_REQUIRED | 缺规则、数据不合格、过期、密级或授权待处理 | 对应用户操作完成且当前版本/权限仍有效后重新检查 |
+| SYSTEM_BLOCKED | 登记、服务读取、回写等平台故障 | 故障恢复后重试；不自动绕过任何业务检查 |
+| RESOLVED | 质量轮次结束或当前候选已离开该阶段 | 记录QUALITY_PASSED/QUALITY_FAILED/STALE/BUILDING等实际去向；历史行保留，不参与到期扫描 |
 
-| phase | 含义 | 进入条件 | 离开条件 |
+`QUALITY_PASSED`只能在工程及必要治理检查都通过时提交并冻结快照。工程验证单独显示其真实结论，不能为了页面显示完成提前迁移候选。候选被重建、替代或终止时旧检查行必须停止执行；发现版本不匹配的旧worker不能写入新行。
+
+## 3. 错误分类与动作
+
+`classify(code, context)`返回类别、责任和候选动作；context包含阶段、规则/运行标识、当前版本、异常类型、当前权限。再由既有权限服务过滤`allowedActions`，服务端执行时重新检查。一个码可对应不同合法动作。
+
+| 码/条件 | 类别 | 默认责任 | 动作条件 |
 |---|---|---|---|
-| `ENGINEERING_PENDING` | 工程验证证据尚未落定 | `EvidenceState.PENDING` | 证据 PASSED / FAILED |
-| `GOVERNANCE_WAITING` | 工程验证已通过，治理质量正在运行 | 工程 PASSED 且治理 `RUNNING` | 治理结论变化 |
-| `ACTION_REQUIRED` | 工程验证已通过，需要人处理后才能继续 | 阻断类别 = `USER_ACTION` | 用户处理后下一次对账通过或类别变化 |
-| `SYSTEM_BLOCKED` | 平台故障，用户无法自助处理 | 阻断类别 = `SYSTEM` | 故障消除 |
-| `RESOLVED` | 已迁出 `QUALITY_RUNNING` | 迁到 QUALITY_PASSED / QUALITY_FAILED / STALE | —（行保留作审计） |
+| ASSET_REGISTRATION_FAILED | SYSTEM | 平台运维 | 查看关联ID；须保留脱敏原始异常，不认定一定是幂等问题 |
+| QUALITY_EVIDENCE_UNAVAILABLE / QUALITY_POLICY_UNAVAILABLE | SYSTEM | 平台运维 | 服务恢复后重新检查 |
+| MODEL_RELEASE_QUALITY_EVIDENCE_MISSING | SYSTEM | 平台运维 | 查询F14执行事实，禁止自动重复SQL |
+| GOVERNANCE_QUALITY_MISSING | USER_ACTION | 数据管理员 | 无有效绑定→配置规则；有有效绑定且可执行→运行治理质量 |
+| GOVERNANCE_QUALITY_FAILED / EXPIRED | USER_ACTION | 数据管理员 | 查看运行/重新运行；绑定版本失效时先配置规则 |
+| GOVERNANCE_CLASSIFICATION_REQUIRED | USER_ACTION | 数据管理员 | 按现有资产入口补充密级 |
+| MODELING_EXECUTION_INITIATOR_MISSING / MODEL_EXECUTION_AUTHORIZATION_REVOKED / MODEL_OPERATION_SCOPE_DENIED | 按真实码核对 | 模型维护者/权限管理员 | 发起人停用或撤权不再自动执行；恢复合法授权或通过已有流程新发起，刷新人不能代替原发起人 |
+| GOVERNANCE_QUALITY_RUNNING | WAITING | 无 | 显示真实runId、起始时间；无重跑按钮 |
+| MODEL_RELEASE_CANDIDATE_STALE | USER_ACTION | 模型维护者 | 原检查行RESOLVED，按已有流程创建替代发布单 |
+| 未登记码/读取无法确定 | SYSTEM | 平台运维 | 明示状态尚未确认；登记诊断后再扩充目录 |
 
-**不拆状态的理由**：`QUALITY_PASSED` 及之后的状态读取的是迁移时冻结的治理快照（`CandidateGovernanceQualityEvidenceService.java:134-139`、`:223-247`），发布命令用 `requirePublishableSnapshot` 校验这份快照（`ModelReleaseCandidateApplicationService.java:956`）。若工程验证先行迁到 `QUALITY_PASSED`，冻结的将是失败快照，发布永久被拒。拆状态需要同时重做快照冻结时机、发布门禁、重跑服务与前端步骤条，不在 F13 范围。
+表内省略前缀的码是分组说明，T01须从产生位置登记完整真实码；不得把它们当新增错误码直接实现。公开响应只含可见对象标识与业务提示；`causeMessage`脱敏后截断512字符，仅运维职责可见，不原样输出SQL、凭据或远程响应。
 
-## 3. 阻断目录（blocker catalog）
+## 4. 数据与并发设计（新增表为方案，M0冻结DDL）
 
-每个阻断码必须且只能映射到一个类别、一个责任角色、一个用户动作。未登记的码一律按 `SYSTEM` 处理并在日志中标记 `uncatalogued=true`。
+复用候选和资产表；计划新增`modeling_release_quality_reconcile_state`，不新增业务事实台账。主键`(tenant_id,candidate_id,candidate_version)`，外键引用既有候选，类型与真实表一致。
 
-| 阻断码 | 类别 | 责任角色 | 面板动作 | 备注 |
-|---|---|---|---|---|
-| `MODEL_SPEC_GOVERNANCE_ASSET_REGISTRATION_FAILED` | SYSTEM | PLATFORM_OPERATOR | 显示关联 ID，提示联系平台管理员 | T02 修复主因后应只在真实故障时出现 |
-| `MODEL_SPEC_GOVERNANCE_QUALITY_EVIDENCE_UNAVAILABLE` | SYSTEM | PLATFORM_OPERATOR | 同上 | 质量服务不可读 |
-| `MODEL_SPEC_GOVERNANCE_QUALITY_POLICY_UNAVAILABLE` | SYSTEM | PLATFORM_OPERATOR | 同上 | 策略不可读 |
-| `MODEL_RELEASE_QUALITY_EVIDENCE_MISSING` | SYSTEM | PLATFORM_OPERATOR | 同上 | 构建证据缺失 |
-| `MODEL_SPEC_GOVERNANCE_QUALITY_MISSING` | USER_ACTION | DATA_ADMIN | “配置质量规则”（带资产深链）；已有绑定时“运行治理质量” | |
-| `MODEL_SPEC_GOVERNANCE_QUALITY_FAILED` | USER_ACTION | DATA_ADMIN | “查看质量运行”+“重新运行治理质量” | |
-| `MODEL_SPEC_GOVERNANCE_QUALITY_EXPIRED` | USER_ACTION | DATA_ADMIN | “重新运行治理质量” | openEuler 实测 631 次/小时 |
-| `MODEL_SPEC_GOVERNANCE_CLASSIFICATION_REQUIRED` | USER_ACTION | DATA_ADMIN | “补充密级”（跳资产治理） | |
-| `MODEL_RELEASE_CANDIDATE_STALE` | USER_ACTION | MODEL_MAINTAINER | “创建替代发布单” | `ModelReleaseCandidateContract.java:38` |
-| `MODEL_SPEC_GOVERNANCE_QUALITY_RUNNING` | WAITING | NONE | 无动作，显示“治理质量运行中” | |
-| （工程证据 PENDING） | WAITING | NONE | 无动作 | 不是阻断码，phase=ENGINEERING_PENDING |
+| 字段 | 类型/约束 | 用途 |
+|---|---|---|
+| phase/blocker_code/category/owner_role/detail_json | varchar + jsonb；枚举约束 | 当前检查结果与脱敏诊断 |
+| first_seen_at/last_seen_at/phase_started_at | timestamptz；时间单调 | 当前原因持续时间；阶段超时不能因换码被无限重置 |
+| attempt_count/next_attempt_at | 正整数/timestamptz | 退避与到期查询 |
+| state_revision | bigint单调递增 | 旧结果不能覆盖新结果 |
+| wake_generation/handled_generation | bigint非负，handled≤wake | 事件唤醒不丢失，不能仅覆盖next_attempt_at |
+| claim_token/claim_until | uuid/timestamptz，可空 | 定时与手动请求并发只领取一次；过期可恢复 |
+| last_warn_at/last_summary_at/last_escalated_at | timestamptz可空 | 重启/并发后仍可控制日志频率 |
+| resolved_at/resolution | timestamptz/varchar可空 | 历史去向，不伪造完成 |
 
-T01 须用源码逐一核对上表的码值与产生位置，补齐遗漏码后冻结。
+到期索引覆盖未结束行的next_attempt_at；公平排序含候选ID，不能只取最老20张导致饥饿。读取始终绑定当前候选版本；旧版本行定期按候选实际状态结束，指标不统计历史行。
 
-## 4. 持久化契约（新增表，仅前向 changeSet）
+执行：短事务领取并记录state_revision与wake_generation→事务外访问依赖→短事务重新核对候选版本、claim_token及revision后写结果。领取失效则丢弃旧写入并安排核对，不撤销已合法发生的外部操作。唤醒递增generation；完成时若发现新generation，next_attempt_at不得被退避覆盖。无状态行时wake须幂等创建待检查行。
 
-Liquibase：`dts-platform/src/main/resources/config/liquibase/changelog/20260924_01_release_quality_reconcile_state.xml`
+外部动作自身使用原有业务幂等键；主键upsert不等于副作用幂等。状态写入失败不得把业务迁移判成失败：保留真实迁移结果，日志告警，下一轮从候选事实修复；候选已迁出时也须清理旧行。
 
-```sql
-create table modeling_release_quality_reconcile_state (
-  tenant_id          varchar(128) not null,
-  candidate_id       uuid         not null,
-  candidate_version  integer      not null,
-  phase              varchar(32)  not null,  -- §2 phase
-  blocker_code       varchar(128),
-  blocker_category   varchar(16),            -- SYSTEM | USER_ACTION | WAITING
-  owner_role         varchar(32),            -- PLATFORM_OPERATOR | DATA_ADMIN | MODEL_MAINTAINER | NONE
-  detail_json        jsonb        not null default '{}'::jsonb, -- failureType, causeMessage(截断512), assetKeys[], correlationId
-  first_seen_at      timestamptz  not null,
-  last_seen_at       timestamptz  not null,
-  attempt_count      integer      not null default 1,
-  next_attempt_at    timestamptz  not null,
-  constraint pk_release_quality_reconcile_state primary key (tenant_id, candidate_id, candidate_version),
-  constraint fk_release_quality_reconcile_candidate foreign key (tenant_id, candidate_id)
-    references modeling_model_release_candidate (tenant_id, id) on delete restrict,
-  constraint ck_release_quality_reconcile_phase check (phase in
-    ('ENGINEERING_PENDING','GOVERNANCE_WAITING','ACTION_REQUIRED','SYSTEM_BLOCKED','RESOLVED')),
-  constraint ck_release_quality_reconcile_category check (blocker_category is null or blocker_category in
-    ('SYSTEM','USER_ACTION','WAITING')),
-  constraint ck_release_quality_reconcile_attempts check (attempt_count > 0 and last_seen_at >= first_seen_at)
-);
-create index idx_release_quality_reconcile_due
-  on modeling_release_quality_reconcile_state (next_attempt_at)
-  where phase <> 'RESOLVED';
-```
+## 5. 调度、等待与告警
 
-- 时间列一律 `timestamptz`，写入用 `Instant`，避免 [平台时间戳口径] 问题。
-- `candidate_version` 变化即新行；旧版本行保留，供审计与“卡了多久”统计。
-- `detail_json.causeMessage` 只存异常消息的前 512 字符，不含堆栈、不含 SQL 参数。
+计划预算（M0结合现场运行时长核对，测试可缩短时钟）：WAITING 5秒指数退避至30秒；USER_ACTION/SYSTEM 30秒至5分钟。唤醒优先于退避；单次检查依赖调用必须有上限，领取租期覆盖该上限，超期worker无写回资格。
 
-## 5. 调度与退避
+工程证据在构建已终态后等待超过5分钟、治理运行超过其任务配置超时且无法确认进展时，转为明确的SYSTEM_BLOCKED原因；这只是诊断状态，不直接改写SQL/质量业务结果。无真实运行记录不能一直显示“正在运行”。SYSTEM持续30分钟升级日志；变化WARN一次，同码每小时最多一条摘要，去重跨重启有效。阈值是拟定配置，不是现行SLA。
 
-| 类别 | 首次重试 | 退避 | 上限 | 立即唤醒条件 |
-|---|---|---|---|---|
-| WAITING / ENGINEERING_PENDING | 5 s | ×2 | 30 s | 质量运行完成事件 |
-| USER_ACTION | 30 s | ×2 | 5 min | 治理重跑提交、规则绑定变更、用户点“刷新状态” |
-| SYSTEM | 30 s | ×2 | 5 min | 用户点“刷新状态” |
+质量运行完成事件、规则关联变化、用户立即检查都会wake；每5分钟至少有一次扫描兜底，事件丢失不得永久卡住。用户提交质量重跑成功不等于质量检查通过。
 
-- `findQualityRunning` 改为只取 `next_attempt_at <= now()` 的候选（无状态行的视为到期）。
-- 日志：阻断码**变化时**打一次 WARN；同码持续时每小时最多一次 INFO 摘要；`SYSTEM` 持续超过 30 分钟打 ERROR（`event=model_publication_quality_system_blocked_escalated`）。
-- 指标：`dts_release_quality_blocked{category,code}` 当前数量；`dts_release_quality_blocked_age_seconds` 最大时长。
+## 6. API与页面
 
-## 6. 读接口契约（扩展既有，不新增路由）
+- 扩展既有`WorkbenchView.qualityReconcile`：candidateVersion、phase、blocker、allowedActions、firstSeenAt、lastSeenAt、nextAttemptAt、stateRevision。blocker包含code/category/ownerRole/message/actionHint/assetKeys/correlationId。
+- `GET workspace`/单项GET只读，不登记资产、不执行远程质量检查；读取失败通过显式诊断表示未知，不能返回null让前端误以为正常运行。字段缺失兼容旧后端，但不能默认成通过。
+- 保持`POST /{candidateId}/refresh`原有使旧发布单失效的语义、请求头和CommandResult响应。
+- 计划新增`POST /api/modeling/plans/{planId}/release-candidates/{candidateId}/quality-reconcile`作为立即检查命令：If-Match + Idempotency-Key，body={reason}；检查权限与当前状态后仅持久化wake，返回202及`{candidateId,candidateVersion,requestId,acceptedAt}`，不在HTTP请求中执行长检查。精确DTO与旧ApiResponse封装由T01冻结。
+- 页面“刷新状态”调用现有GET；“重新检查”调用上述命令后轮询GET。失败恢复按钮只使用服务端allowedActions，不凭字符串推测权限。不新增页面或菜单。
+- 无规则/过期等显示处理入口；工程通过独立勾选；系统故障显示“请联系平台管理员”和关联ID。只有真实通知回执存在才显示“已通知管理员”。
 
-`GET /api/modeling/plans/{planId}/release-candidates/workspace`（及 `/{candidateId}`）响应的 `WorkbenchView` 增加可空字段：
+## 7. 登记、身份与F14衔接
 
-```json
-"qualityReconcile": {
-  "phase": "ACTION_REQUIRED",
-  "blocker": {
-    "code": "MODEL_SPEC_GOVERNANCE_QUALITY_EXPIRED",
-    "category": "USER_ACTION",
-    "ownerRole": "DATA_ADMIN",
-    "message": "治理数据质量运行记录已超过有效期",
-    "actionHint": "RERUN_GOVERNANCE_QUALITY",
-    "assetKeys": ["source:.../schema:public/table:dwd_test_0921"],
-    "correlationId": null
-  },
-  "firstSeenAt": "2026-09-21T02:48:51Z",
-  "lastSeenAt": "2026-09-23T10:09:50Z",
-  "attemptCount": 42,
-  "nextAttemptAt": "2026-09-23T10:14:50Z"
-}
-```
+同一构建产物重复登记必须不重复建立资产；不同真实构建的历史证据允许保留，不能要求同一资产同通道永久只有一行。物理证据识别至少包含目标定位、pipelineRunId和metadataChecksum；确定性标识策略在真实复现后冻结，候选版本不作为单独去重依据。
 
-- `actionHint` 枚举：`CONFIGURE_QUALITY_RULES` | `RUN_GOVERNANCE_QUALITY` | `RERUN_GOVERNANCE_QUALITY` | `VIEW_QUALITY_RUN` | `SET_CLASSIFICATION` | `CREATE_REPLACEMENT` | `CONTACT_OPERATOR` | `NONE`。
-- `primaryBlocker` 保持兼容：`QUALITY_RUNNING` 时由 `qualityReconcile.blocker` 填充（替代当前只覆盖登记前置条件的 `previewBlocker`）。
-- 非 `QUALITY_RUNNING` 时 `qualityReconcile` 为 `null`。
-- `POST /{candidateId}/refresh` 语义扩展：`QUALITY_RUNNING` 时把 `next_attempt_at` 置为 now 并同步执行一次对账，返回最新 `WorkbenchView`（T04 先核对该接口现有语义，不破坏已有调用方）。
+登记只在F14物理核验完成后进行；失败只恢复登记/质量检查，不重跑SQL。真实资源ID冲突、定位歧义、来源变化和密级拒绝必须保留。原发起人身份从持久命令读取，每次重试检查当前权限；读取、状态回写和审计一致，正常/异常均关闭身份。不得为消除故障改成管理员或无条件系统身份。
 
-## 7. 资产登记幂等（T02）
+## 8. 待冻结事项与验证
 
-同一物理产物（`pipelineRunId` + `metadataChecksum` 相同）重复登记必须幂等成功，不受候选版本号变化影响。具体改法（调整 `evidenceRef` 构成，或在观测台账中把同通道、同物理证据的版本变化视为同一观测）由 T01 复现拒收规则后在本节冻结。异常必须保留 `failureType` 与截断后的 `causeMessage` 写入 §4 `detail_json` 并打印一次带 `correlationId` 的 ERROR 日志。
+T01：登记真实根因与最小复现、实际错误码清单、身份拒绝处置、立即检查DTO与权限、规则/运行深链、表字段/索引/清理策略、等待预算；与F14-T01共同完成M0。DDL编号暂用`20260924_01_release_quality_reconcile_state.xml`，实施前检查冲突。
 
-## 8. 不在范围
-
-- 不拆分 `QUALITY_RUNNING` / 不改快照冻结时机 / 不改发布门禁。
-- 不新增菜单、不新增路由；质量规则页只增加 `assetKey` 查询参数的预筛选（如该页尚不支持，由 T05 补齐）。
-- 不改变 F3 边界：发布与治理质量仍在数据模块办理，模型页只读展示。
-- 评审阶段的 `ModelPublicationReviewReconciler` 存在同类“阻断只打日志”模式（openEuler 实测 `MODEL_RELEASE_PUBLICATION_REQUEST_EVIDENCE_MISSING`，产生于 `ModelPublicationReviewReconciler.java:114`）。F13 的表结构与目录设计须能直接扩展到该阶段，但本 Feature 只交付质量阶段；评审阶段的接入另立后续 task。
+验证见[F13验收](../it/F13-发布质量对账验收.md)。保留新增表/字段向前兼容；不手工更改存量任务。F13尚未编码，新增API与表均不是当前已提供能力。
