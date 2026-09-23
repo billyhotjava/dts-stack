@@ -2,6 +2,8 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelMaterializationBuildRepository.QueuedBuildGroup;
+import com.yuzhi.dts.platform.service.etl.DbtConfigService;
+import com.yuzhi.dts.platform.service.etl.DbtRuntimeTargetException;
 import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
 import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.TransitionCommand;
@@ -27,6 +29,7 @@ public class ModelMaterializationStartService {
     private final ModelMaterializationBuildRepository builds;
     private final ModelMaterializationSourceAvailabilityGuard sourceAvailability;
     private final ModelMaterializationAvailabilityAuditService availabilityAudit;
+    private final DbtConfigService dbtConfig;
     private final Clock clock;
 
     @Autowired
@@ -34,9 +37,10 @@ public class ModelMaterializationStartService {
         ModelReleaseCandidateService candidateCommands,
         ModelMaterializationBuildRepository builds,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
-        ModelMaterializationAvailabilityAuditService availabilityAudit
+        ModelMaterializationAvailabilityAuditService availabilityAudit,
+        DbtConfigService dbtConfig
     ) {
-        this(candidateCommands, builds, sourceAvailability, availabilityAudit, Clock.systemUTC());
+        this(candidateCommands, builds, sourceAvailability, availabilityAudit, dbtConfig, Clock.systemUTC());
     }
 
     ModelMaterializationStartService(
@@ -44,6 +48,7 @@ public class ModelMaterializationStartService {
         ModelMaterializationBuildRepository builds,
         ModelMaterializationSourceAvailabilityGuard sourceAvailability,
         ModelMaterializationAvailabilityAuditService availabilityAudit,
+        DbtConfigService dbtConfig,
         Clock clock
     ) {
         this.candidateCommands = Objects.requireNonNull(
@@ -53,6 +58,7 @@ public class ModelMaterializationStartService {
         this.builds = Objects.requireNonNull(builds, "builds is required");
         this.sourceAvailability = Objects.requireNonNull(sourceAvailability, "sourceAvailability is required");
         this.availabilityAudit = Objects.requireNonNull(availabilityAudit, "availabilityAudit is required");
+        this.dbtConfig = Objects.requireNonNull(dbtConfig, "dbtConfig is required");
         this.clock = Objects.requireNonNull(clock, "clock is required");
     }
 
@@ -200,6 +206,12 @@ public class ModelMaterializationStartService {
     private void requireAvailable(String tenantId, String actorId, UUID candidateId, int candidateVersion) {
         try {
             sourceAvailability.requireCandidateCurrent(tenantId, candidateId, candidateVersion);
+            dbtConfig.loadRuntimeConfig();
+        } catch (DbtRuntimeTargetException unavailable) {
+            availabilityAudit.recordStartDenied(actorId, candidateId, candidateVersion, unavailable.code());
+            throw new ModelReleaseCandidateException(
+                unavailable.code(), unavailable.getMessage(), ModelReleaseCandidateException.Kind.UNPROCESSABLE
+            );
         } catch (ModelReleaseCandidateException unavailable) {
             availabilityAudit.recordStartDenied(actorId, candidateId, candidateVersion, unavailable.code());
             throw unavailable;

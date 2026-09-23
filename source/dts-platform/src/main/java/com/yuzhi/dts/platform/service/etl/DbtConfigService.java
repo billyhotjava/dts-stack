@@ -105,15 +105,69 @@ public class DbtConfigService {
      * generating a shared profile or silently selecting a replacement data source.
      */
     public DbtWorkspaceConfig loadRuntimeConfig() {
-        if (!properties.isEnabled()) {
-            throw new IllegalStateException("dbt 配置未启用");
-        }
-        DbtWorkspaceConfig config = readConfig();
-        if (config == null || config.targetDataSourceId() == null) {
-            throw new DbtRuntimeTargetException("DBT_TARGET_NOT_CONFIGURED", "未配置目标数仓");
-        }
+        DbtWorkspaceConfig config = properties.isEnabled() ? readConfig() : null;
+        ModelBuildTargetView target = inspectModelBuildTarget(config);
+        if (!target.ready()) throw new DbtRuntimeTargetException(target.code(), target.message());
         return config;
     }
+
+    /** Credential-free, read-only projection; never initializes a workspace or repairs the config. */
+    public ModelBuildTargetView inspectModelBuildTarget() {
+        return inspectModelBuildTarget(properties.isEnabled() ? readConfig() : null);
+    }
+
+    private ModelBuildTargetView inspectModelBuildTarget(DbtWorkspaceConfig config) {
+        if (!properties.isEnabled() || (config != null && !config.enabled())) {
+            return buildTarget(config, null, "DBT_TARGET_DISABLED", "模型构建未启用，请联系系统管理员");
+        }
+        if (config == null || config.targetDataSourceId() == null) {
+            return buildTarget(config, null, "DBT_TARGET_NOT_CONFIGURED", "未配置目标数仓，请联系系统管理员检查默认数据湖配置");
+        }
+        InfraDataSource source = resolveConfiguredTargetSource(config);
+        if (source == null) {
+            return buildTarget(config, null, "DBT_TARGET_DATASOURCE_NOT_FOUND", "目标数仓数据源不存在，请联系系统管理员检查默认数据湖同步结果");
+        }
+        if (!"ACTIVE".equalsIgnoreCase(source.getStatus())) {
+            return buildTarget(config, source, "DBT_TARGET_INACTIVE", "目标数仓已停用，请联系系统管理员检查数据湖配置");
+        }
+        List<InfraDataSource> mirrors = dataSourceRepository.findByStatusIgnoreCase("ACTIVE").stream()
+            .filter(item -> item != null && item.getId() != null && isManagedDefaultLakeMirror(item))
+            .toList();
+        if (mirrors.isEmpty()) {
+            return buildTarget(config, source, "DBT_DEFAULT_LAKE_UNAVAILABLE", "默认数据湖尚未同步到平台，请联系系统管理员");
+        }
+        if (mirrors.size() != 1) {
+            return buildTarget(config, source, "DBT_DEFAULT_LAKE_AMBIGUOUS", "平台存在多个默认数据湖记录，请联系系统管理员核对同步结果");
+        }
+        if (!source.getId().equals(mirrors.getFirst().getId())) {
+            return buildTarget(config, source, "DBT_TARGET_DEFAULT_LAKE_MISMATCH", "目标数仓与默认数据湖不一致，请联系系统管理员核对运行配置");
+        }
+        return buildTarget(config, source, null, "目标数仓配置检查通过");
+    }
+
+    private static ModelBuildTargetView buildTarget(
+        DbtWorkspaceConfig config, InfraDataSource source, String code, String message
+    ) {
+        return new ModelBuildTargetView(
+            code == null,
+            config == null ? null : config.targetDataSourceId(),
+            source == null ? null : source.getName(),
+            config == null ? null : config.database(),
+            config == null ? null : config.schema(),
+            code,
+            message
+        );
+    }
+
+    public record ModelBuildTargetView(
+        boolean ready,
+        UUID dataSourceId,
+        String name,
+        String database,
+        String schema,
+        String code,
+        String message
+    ) {}
 
     /**
      * Lightweight method that only reads the config file to resolve the project directory.
@@ -551,7 +605,8 @@ public class DbtConfigService {
             return Map.of();
         }
         try {
-            return objectMapper.readValue(source.getProps(), new TypeReference<>() {});
+            Map<String, Object> props = objectMapper.readValue(source.getProps(), new TypeReference<>() {});
+            return props == null ? Map.of() : props;
         } catch (Exception ex) {
             return Map.of();
         }

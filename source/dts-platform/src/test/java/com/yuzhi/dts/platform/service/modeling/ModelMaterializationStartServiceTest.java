@@ -54,6 +54,9 @@ class ModelMaterializationStartServiceTest {
     @Mock
     private ModelMaterializationAvailabilityAuditService availabilityAudit;
 
+    @Mock
+    private com.yuzhi.dts.platform.service.etl.DbtConfigService dbtConfig;
+
     private ModelMaterializationStartService service;
 
     @Test
@@ -145,8 +148,33 @@ class ModelMaterializationStartServiceTest {
             builds,
             sourceAvailability,
             availabilityAudit,
+            dbtConfig,
             Clock.fixed(NOW, ZoneOffset.UTC)
         );
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = { "START", "RETRY", "REMATERIALIZE", "SELECTED_REMATERIALIZE" })
+    void targetAdmissionFailureDoesNotCreateAnyBuildGroup(String action) {
+        when(candidateCommands.transition(eq(TENANT), eq(ACTOR), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(candidate(DeliveryStatus.BUILDING), false, List.of()));
+        when(dbtConfig.loadRuntimeConfig()).thenThrow(new com.yuzhi.dts.platform.service.etl.DbtRuntimeTargetException(
+            "DBT_TARGET_DEFAULT_LAKE_MISMATCH", "目标数仓与默认数据湖不一致"
+        ));
+
+        assertThatThrownBy(() -> {
+            switch (action) {
+                case "START" -> service.start(TENANT, ACTOR, CANDIDATE_ID, 4, "key", "reason");
+                case "RETRY" -> service.retry(TENANT, ACTOR, CANDIDATE_ID, 4, "key", "reason");
+                case "REMATERIALIZE" -> service.rematerialize(TENANT, ACTOR, CANDIDATE_ID, 4, "key", "reason");
+                default -> service.rematerialize(TENANT, ACTOR, CANDIDATE_ID, 4, "key", "reason", List.of(UUID.randomUUID()));
+            }
+        }).isInstanceOf(ModelReleaseCandidateException.class)
+            .extracting(error -> ((ModelReleaseCandidateException) error).code())
+            .isEqualTo("DBT_TARGET_DEFAULT_LAKE_MISMATCH");
+
+        org.mockito.Mockito.verifyNoInteractions(builds);
+        verify(availabilityAudit).recordStartDenied(ACTOR, CANDIDATE_ID, 5, "DBT_TARGET_DEFAULT_LAKE_MISMATCH");
     }
 
     @Test

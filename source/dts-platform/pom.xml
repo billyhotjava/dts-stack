@@ -722,6 +722,7 @@
                         <testInclude>**/service/modeling/ModelMaterializationSourceAvailabilityGuardTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationAvailabilityPinLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelMaterializationStartServiceTest.java</testInclude>
+                        <testInclude>**/web/rest/ModelBuildTargetResourceTest.java</testInclude>
                         <testInclude>**/service/modeling/PostgresPhysicalRelationInspectorTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelReleaseCandidateApplicationServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelDeliveryStatusQueryServiceTest.java</testInclude>

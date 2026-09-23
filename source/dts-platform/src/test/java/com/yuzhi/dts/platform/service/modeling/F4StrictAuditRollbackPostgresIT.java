@@ -598,6 +598,7 @@ class F4StrictAuditRollbackPostgresIT {
                 builds,
                 sourceAvailability,
                 availabilityAudit,
+                org.mockito.Mockito.mock(com.yuzhi.dts.platform.service.etl.DbtConfigService.class),
                 TEST_CLOCK
             );
         }

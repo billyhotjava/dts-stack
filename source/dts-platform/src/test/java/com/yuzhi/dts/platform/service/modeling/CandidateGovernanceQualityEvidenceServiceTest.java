@@ -229,6 +229,43 @@ class CandidateGovernanceQualityEvidenceServiceTest {
         assertThat(summary.code()).isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_ASSET_MISMATCH");
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = { "MISSING", "RUNNING", "FAILED", "EXPIRED", "ERROR" })
+    void policyControlsPublicationWithoutTurningQualityWarningsIntoPassed(String violation) {
+        when(qualityEvidence.read(any())).thenReturn(List.of(evidence("FAILED", List.of(violation))));
+        when(governancePolicy.resolve()).thenReturn(Policy.available(StandardCoverage.NONE, QualityGate.ADVISORY, 300));
+
+        var advisory = service().requirePublishable(candidate());
+        assertThat(advisory.required()).isFalse();
+        assertThat(advisory.passed()).isFalse();
+        assertThat(advisory.code()).endsWith(violation);
+
+        when(governancePolicy.resolve()).thenReturn(Policy.available(StandardCoverage.NONE, QualityGate.BLOCKING, 300));
+        assertThatThrownBy(() -> service().requirePublishable(candidate()))
+            .isInstanceOf(ModelReleaseCandidateException.class);
+    }
+
+    @Test
+    void partialSuccessfulResponseCannotPassABatch() {
+        when(governancePolicy.resolve()).thenReturn(Policy.available(StandardCoverage.NONE, QualityGate.BLOCKING, 300));
+        var original = observation();
+        var second = new PublicationEntryEvidence(
+            UUID.randomUUID(), UUID.randomUUID(), 2, "b".repeat(64), 2, "c".repeat(64),
+            "model.pjm.another_detail", "dwd.another_detail", "d".repeat(64), "e".repeat(64),
+            original.pipelineRunGroupId(), UUID.randomUUID(), original.dbtInvocationId(),
+            "postgres", "biadmin", "dwd", "another_detail", ExpectedRelationType.TABLE,
+            "f".repeat(64), NOW.minusSeconds(30)
+        );
+        when(publicationEvidence.requireCurrent(any(), org.mockito.ArgumentMatchers.eq(false)))
+            .thenReturn(List.of(original, second));
+        when(qualityEvidence.read(any())).thenReturn(List.of(evidence("SUCCEEDED", List.of())));
+
+        var summary = service().evaluateLive(candidate());
+
+        assertThat(summary.passed()).isFalse();
+        assertThat(summary.code()).isEqualTo("MODEL_SPEC_GOVERNANCE_QUALITY_MISSING");
+    }
+
     private CandidateGovernanceQualityEvidenceService service() {
         return new CandidateGovernanceQualityEvidenceService(
             publicationEvidence,

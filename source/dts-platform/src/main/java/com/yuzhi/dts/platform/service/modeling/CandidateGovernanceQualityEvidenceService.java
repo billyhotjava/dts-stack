@@ -152,17 +152,21 @@ public class CandidateGovernanceQualityEvidenceService {
         }
         if (candidate == null || !supportsQualityEvidence(candidate.status())) {
             return unavailable(
-                required,
+                true,
                 "MODEL_SPEC_GOVERNANCE_QUALITY_BUILD_REQUIRED",
                 "完成物理构建后才能核验治理数据质量",
                 policy.qualityEvidenceMaxAgeSeconds()
             );
         }
+        List<QualityEvidenceRequest> requests;
         try {
             ResolvedCatalogTarget target = targetResolver.resolve(candidate);
             List<PublicationEntryEvidence> observations = publicationEvidence.requireCurrent(candidate, false);
+            if (observations == null || observations.isEmpty()) {
+                throw new IllegalStateException("Current verified build evidence is required");
+            }
             Instant asOf = clock.instant();
-            List<QualityEvidenceRequest> requests = observations
+            requests = observations
                 .stream()
                 .map(observation ->
                     new QualityEvidenceRequest(
@@ -180,19 +184,42 @@ public class CandidateGovernanceQualityEvidenceService {
                     )
                 )
                 .toList();
+        } catch (RuntimeException unavailable) {
+            // A quality policy cannot waive engineering evidence or physical asset identity.
+            return unavailable(
+                true,
+                "MODEL_SPEC_GOVERNANCE_QUALITY_BUILD_EVIDENCE_UNAVAILABLE",
+                "当前构建结果或物理资产信息无法核验，请先检查构建结果与目标数仓",
+                policy.qualityEvidenceMaxAgeSeconds()
+            );
+        }
+        try {
             List<QualityEvidence> evidence = qualityEvidence.read(requests);
-            if (evidence != null && !evidence.isEmpty() && evidence.stream().allMatch(QualityEvidence::passed)) {
+            List<QualityEvidence> safeEvidence = evidence == null ? List.of() : List.copyOf(evidence);
+            Set<String> expectedAssets = requests.stream()
+                .map(QualityEvidenceRequest::assetKey).collect(java.util.stream.Collectors.toSet());
+            Set<String> actualAssets = safeEvidence.stream()
+                .map(QualityEvidence::assetKey).collect(java.util.stream.Collectors.toSet());
+            if (!expectedAssets.containsAll(actualAssets) || safeEvidence.stream().anyMatch(item -> item.violations().contains("ASSET_MISMATCH"))) {
+                return unavailable(
+                    true,
+                    "MODEL_SPEC_GOVERNANCE_QUALITY_ASSET_MISMATCH",
+                    violationMessage("ASSET_MISMATCH"),
+                    policy.qualityEvidenceMaxAgeSeconds()
+                );
+            }
+            boolean complete = actualAssets.equals(expectedAssets);
+            if (complete && safeEvidence.stream().allMatch(QualityEvidence::passed)) {
                 return new GovernanceQualitySummaryView(
                     required,
                     EvidenceState.PASSED,
                     null,
                     null,
                     policy.qualityEvidenceMaxAgeSeconds(),
-                    evidence
+                    safeEvidence
                 );
             }
-            List<QualityEvidence> safeEvidence = evidence == null ? List.of() : List.copyOf(evidence);
-            String violation = safeEvidence
+            String violation = !complete ? "MISSING" : safeEvidence
                 .stream()
                 .flatMap(item -> item.violations().stream())
                 .findFirst()
@@ -308,7 +335,7 @@ public class CandidateGovernanceQualityEvidenceService {
 
     private static String violationMessage(String violation) {
         return switch (violation) {
-            case "RUNNING" -> "治理数据质量检查仍在运行，完成前不能发布";
+            case "RUNNING" -> "治理数据质量检查仍在运行";
             case "FAILED" -> "治理数据质量检查未通过，请修复数据后重新运行";
             case "ERROR" -> "治理数据质量检查发生错误，请查看运行详情";
             case "EXPIRED" -> "治理数据质量证据已过期，请重新运行";

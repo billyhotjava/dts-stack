@@ -262,6 +262,61 @@ class DbtConfigServiceTest {
         verifyNoInteractions(secretService);
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "INACTIVE, DBT_TARGET_INACTIVE",
+        "MISSING_MIRROR, DBT_DEFAULT_LAKE_UNAVAILABLE",
+        "BAD_MARKER, DBT_DEFAULT_LAKE_UNAVAILABLE",
+        "NULL_MARKER, DBT_DEFAULT_LAKE_UNAVAILABLE"
+    })
+    void readonlyTargetAndRuntimeRejectTheSameConfiguration(String scenario, String code) throws Exception {
+        InfraDataSource target = source("jdbc:postgresql://pg:5432/biadmin", MANAGED_MIRROR_PROPS);
+        if ("INACTIVE".equals(scenario)) target.setStatus("INACTIVE");
+        if ("BAD_MARKER".equals(scenario)) target.setProps("{}");
+        if ("NULL_MARKER".equals(scenario)) target.setProps("null");
+        Path config = writeConfigWithTarget(target.getId());
+        String before = Files.readString(config);
+        when(dataSourceRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        if (!"INACTIVE".equals(scenario)) {
+            when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE"))
+                .thenReturn("MISSING_MIRROR".equals(scenario) ? List.of() : List.of(target));
+        }
+        DbtConfigService service = serviceFor(config);
+
+        var view = service.inspectModelBuildTarget();
+
+        assertThat(view.ready()).isFalse();
+        assertThat(view.code()).isEqualTo(code);
+        assertThatThrownBy(service::loadRuntimeConfig)
+            .isInstanceOf(DbtRuntimeTargetException.class)
+            .extracting(error -> ((DbtRuntimeTargetException) error).code()).isEqualTo(code);
+        assertThat(Files.readString(config)).isEqualTo(before);
+        verifyNoInteractions(secretService);
+    }
+
+    @Test
+    void targetInspectionExposesOnlyCredentialFreeMetadataAndDoesNotInitializeMissingConfig() throws Exception {
+        Path missingConfig = tempDir.resolve("not-created/config.json");
+        var missing = serviceFor(missingConfig).inspectModelBuildTarget();
+        assertThat(missing.code()).isEqualTo("DBT_TARGET_NOT_CONFIGURED");
+        assertThat(missingConfig.getParent()).doesNotExist();
+        verifyNoInteractions(dataSourceRepository, secretService);
+
+        InfraDataSource mirror = source("jdbc:postgresql://private-host:5432/biadmin", MANAGED_MIRROR_PROPS);
+        mirror.setUsername("sensitive-user");
+        Path config = writeConfigWithTarget(mirror.getId());
+        when(dataSourceRepository.findById(mirror.getId())).thenReturn(Optional.of(mirror));
+        when(dataSourceRepository.findByStatusIgnoreCase("ACTIVE")).thenReturn(List.of(mirror));
+
+        var view = serviceFor(config).inspectModelBuildTarget();
+        String json = new ObjectMapper().writeValueAsString(view);
+
+        assertThat(view.ready()).isTrue();
+        assertThat(view.dataSourceId()).isEqualTo(mirror.getId());
+        assertThat(json).doesNotContain("private-host", "sensitive-user", "password", "jdbcUrl", "vars", "projectDir");
+        verifyNoInteractions(secretService);
+    }
+
     private Path writeConfigWithTarget(UUID targetId) throws Exception {
         Path projectDir = tempDir.resolve("dbt");
         Files.createDirectories(projectDir);
