@@ -238,7 +238,8 @@ public class ModelSpecStageGateService {
         if (governancePolicy == null) {
             return ModelGovernancePolicyPort.Policy.available(
                 ModelGovernancePolicyPort.StandardCoverage.ALL_FIELDS,
-                ModelGovernancePolicyPort.QualityGate.BLOCKING
+                // F13-T09: without a configured policy the gate defaults to ADVISORY, never BLOCKING.
+                ModelGovernancePolicyPort.QualityGate.ADVISORY
             );
         }
         try {

@@ -282,4 +282,5 @@
     <include file="config/liquibase/changelog/20260910_01_indicator_implementation_ref.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260910_02_indicator_analysis_expand.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260912_01_modeling_permission_scope.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260924_01_platform_model_governance_policy_advisory_default.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

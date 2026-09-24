@@ -339,6 +339,7 @@ dts:
           dts-airflow:   ${DTS_INBOUND_FROM_AIRFLOW:}
           dts-analytics: ${DTS_INBOUND_FROM_ANALYTICS:}
           dts-metrics:   ${DTS_INBOUND_FROM_METRICS:}
+          dts-admin:     ${DTS_INBOUND_FROM_ADMIN:}
     events:
       kafka:
         enabled: ${DTS_PLATFORM_EVENTS_KAFKA_ENABLED:false}

@@ -93,6 +93,7 @@ class ServiceDependencyAuthenticationFilterTest {
         trusted.put("dts-analytics", "analytics-secret");
         trusted.put("dts-metrics", "metrics-secret");
         trusted.put("dts-airflow", "airflow-secret");
+        trusted.put("dts-admin", "admin-secret");
         props.setTrustedServices(trusted);
         svcTokenAuthService = mock(SvcTokenAuthService.class);
         chain = mock(FilterChain.class);
@@ -601,5 +602,40 @@ class ServiceDependencyAuthenticationFilterTest {
         )
             .isNull();
         verify(localChain).doFilter(any(), any());
+    }
+
+    @Test
+    void adminMatchingToken_canReadAndChangeOnlyTheModelGovernancePolicy() throws Exception {
+        assertAdminAuthenticated("GET", "/api/internal/modeling/governance-policy", "admin-secret", true);
+        assertAdminAuthenticated("GET", "/api/internal/modeling/governance-policy/impact", "admin-secret", true);
+        assertAdminAuthenticated("PUT", "/api/internal/modeling/governance-policy", "admin-secret", true);
+        assertAdminAuthenticated("DELETE", "/api/internal/modeling/governance-policy", "admin-secret", false);
+        assertAdminAuthenticated("GET", "/api/internal/capabilities", "admin-secret", false);
+        assertAdminAuthenticated("POST", "/api/internal/modeling/materialization/runtime-specs/consume", "admin-secret", false);
+    }
+
+    @Test
+    void adminWithoutTheMatchingToken_isNotAuthenticated() throws Exception {
+        assertAdminAuthenticated("PUT", "/api/internal/modeling/governance-policy", "airflow-secret", false);
+    }
+
+    private void assertAdminAuthenticated(String method, String path, String token, boolean expected) throws Exception {
+        SecurityContextHolder.clearContext();
+        ServiceDependencyAuthenticationFilter filter = new ServiceDependencyAuthenticationFilter(props, svcTokenAuthService);
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.addHeader(SERVICE_HEADER, "dts-admin");
+        req.addHeader(TOKEN_HEADER, token);
+        req.setMethod(method);
+        req.setRequestURI(path);
+
+        filter.doFilter(req, new MockHttpServletResponse(), chain);
+
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (expected) {
+            assertThat(auth).isNotNull();
+            assertThat(auth.getPrincipal()).isEqualTo("service:dts-admin");
+        } else {
+            assertThat(auth).isNull();
+        }
     }
 }

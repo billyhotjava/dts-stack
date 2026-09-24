@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260924-01-platform-model-governance-policy-advisory-default" author="xiezm" dbms="postgresql">
+        <comment>
+            F13-T09: the platform default quality gate is ADVISORY. Only the untouched migration seed
+            (revision 1, last modified by system-migration) is moved from BLOCKING to ADVISORY; a value
+            set by a person is kept. The system never switches the gate to BLOCKING by itself.
+        </comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            INSERT INTO modeling_platform_governance_policy (
+                policy_key, standard_coverage, quality_gate, revision,
+                created_by, last_modified_by, created_date, last_modified_date
+            )
+            SELECT 'PLATFORM_DEFAULT', 'KEY_AND_MEASURE', 'ADVISORY', 1,
+                   'system-migration', 'system-migration', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+             WHERE NOT EXISTS (
+                SELECT 1 FROM modeling_platform_governance_policy WHERE policy_key = 'PLATFORM_DEFAULT'
+             );
+            UPDATE modeling_platform_governance_policy
+               SET quality_gate = 'ADVISORY',
+                   last_modified_date = CURRENT_TIMESTAMP
+             WHERE policy_key = 'PLATFORM_DEFAULT'
+               AND quality_gate = 'BLOCKING'
+               AND revision = 1
+               AND last_modified_by = 'system-migration';
+        ]]></sql>
+
+        <rollback>
+            <!-- Intentionally empty: rolling back must never switch the gate to BLOCKING. -->
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

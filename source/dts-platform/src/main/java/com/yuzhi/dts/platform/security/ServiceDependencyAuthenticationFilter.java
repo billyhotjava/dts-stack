@@ -37,6 +37,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
     private static final Logger log = LoggerFactory.getLogger(ServiceDependencyAuthenticationFilter.class);
     private static final String SERVICE_HEADER = "X-DTS-Service";
     private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
+    private static final String GOVERNANCE_POLICY_PATH = "/api/internal/modeling/governance-policy";
 
     private final PlatformInboundServiceAuthProperties authProperties;
     private final SvcTokenAuthService svcTokenAuthService;
@@ -147,6 +148,11 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
                 || isMetricsCatalogRead(method, path)
                 || isMetricsLineageDryRun(method, path)
                 || isMetricsDbtPublishGateway(method, path);
+        }
+        if ("dts-admin".equals(service)) {
+            return isGet(method, path, GOVERNANCE_POLICY_PATH)
+                || isPut(method, path, GOVERNANCE_POLICY_PATH)
+                || isGet(method, path, GOVERNANCE_POLICY_PATH + "/impact");
         }
         if ("dts-airflow".equals(service)) {
             return isAirflowProfileLease(method, path)
