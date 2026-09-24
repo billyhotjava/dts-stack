@@ -67,7 +67,7 @@
 - 重置能力未实现：43 个 PJM 草稿删除被追加写保护拒绝，用户同规划手工重导需求仍未闭环（T08）。
 - Chrome 95、1366×768/768 窄屏真实浏览器验收未执行。
 
-**F13/F14 联合统计**：共16Task；READY=2、DRAFT=12、IN_PROGRESS=2、DONE=0、BLOCKED=0。每个Feature各8Task，T01 READY；F13-T03、F14-T02 IN_PROGRESS，其余DRAFT。F13原11人日估算失效，M0后重估联合开发/测试/交付容量，无工期承诺。
+**F13/F14 联合统计**：共16Task；READY=2、DRAFT=11、IN_PROGRESS=3、DONE=0、BLOCKED=0。每个Feature各8Task，T01 READY；F13-T03、F14-T02/T03 IN_PROGRESS，其余DRAFT。F13原11人日估算失效，M0后重估联合开发/测试/交付容量，无工期承诺。
 **联合执行顺序**：F13-T01与F14-T01分别核对后完成M0 → M1构建到质量的最早集成切片 → M2并发与故障恢复 → M3统一界面 → M4同批制品与双环境验收。详见[联合设计](sprint-104-202609-modeling-contract-consistency/assests/F13-F14-联合设计与实施顺序.md)。2026-09-24 已按用户确认启动两个Feature首批后端，见[实施记录](sprint-104-202609-modeling-contract-consistency/assests/F13-F14-首批编码与测试记录.md)。
 **职责**：F14负责构建前检查、执行、关系核验与结果回写恢复；F13负责构建后的资产登记与发布质量处理。复用现有派发、身份、台账和页面，不另建调度器。F13自身缺陷仍由F13修复，不转移到F14后计完成。
 **设计入口**：[F13](sprint-104-202609-modeling-contract-consistency/assests/F13-release-quality-reconcile-contract.md)、[F14](sprint-104-202609-modeling-contract-consistency/assests/F14-模型构建与失败恢复设计.md)。保留原refresh使候选失效语义；新增立即检查与构建恢复命令按M0确定。登记根因先真实复现，不预设候选版本变化必然失败。

@@ -26,6 +26,16 @@ public class PlatformAuditOutboxRepository {
     // 若 enqueue 参与该事务，PG 会以 "cannot execute INSERT in a read-only transaction" 拒绝并导致端点 500。
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public UUID enqueue(EnqueueCommand command) {
+        return insert(command);
+    }
+
+    /** Strict write commands must commit their state and audit receipt in the same transaction. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public UUID enqueueTransactional(EnqueueCommand command) {
+        return insert(command);
+    }
+
+    private UUID insert(EnqueueCommand command) {
         if (command == null) throw new IllegalArgumentException("command is required");
         UUID id = UUID.randomUUID();
         Instant now = Instant.now();

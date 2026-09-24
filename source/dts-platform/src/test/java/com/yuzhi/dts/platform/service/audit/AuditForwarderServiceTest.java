@@ -41,6 +41,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -104,6 +105,46 @@ class AuditForwarderServiceTest {
             .containsEntry("producer", "dts-platform")
             .containsEntry("action", "MODEL_SPEC_CREATE")
             .containsEntry("resourceId", "spec-1");
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "true,true,true", "true,true,false", "true,false,true", "true,false,false",
+        "false,true,true", "false,true,false", "false,false,true", "false,false,false"
+    })
+    void strictAuditJoinsWritableTransactionsWhileReadAndOrdinaryAuditStayIndependent(
+        boolean strict, boolean readOnly, boolean machine
+    ) {
+        var outbox = mock(PlatformAuditOutboxRepository.class);
+        UUID receipt = UUID.randomUUID();
+        boolean transactional = strict && !readOnly;
+        if (transactional) when(outbox.enqueueTransactional(any())).thenReturn(receipt);
+        else when(outbox.enqueue(any())).thenReturn(receipt);
+        var service = service(outbox, new ObjectMapper());
+        var event = machineEvent(machine ? "airflow" : "alice");
+        boolean wasActive = TransactionSynchronizationManager.isActualTransactionActive();
+        boolean wasReadOnly = TransactionSynchronizationManager.isCurrentTransactionReadOnly();
+        try {
+            TransactionSynchronizationManager.setActualTransactionActive(true);
+            TransactionSynchronizationManager.setCurrentTransactionReadOnly(readOnly);
+            if (machine) {
+                if (strict) assertThat(service.recordTrustedMachineStrict(event, "transaction-test")).isEqualTo(receipt);
+                else service.recordTrustedMachine(event, "transaction-test");
+            } else {
+                if (strict) assertThat(service.recordStrict(event)).isEqualTo(receipt);
+                else service.record(event);
+            }
+        } finally {
+            TransactionSynchronizationManager.setActualTransactionActive(wasActive);
+            TransactionSynchronizationManager.setCurrentTransactionReadOnly(wasReadOnly);
+        }
+        if (transactional) {
+            verify(outbox).enqueueTransactional(any());
+            verify(outbox, never()).enqueue(any());
+        } else {
+            verify(outbox).enqueue(any());
+            verify(outbox, never()).enqueueTransactional(any());
+        }
     }
 
     @Test

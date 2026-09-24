@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -134,7 +135,7 @@ public class AuditForwarderService {
         if (event.auxiliary) {
             throw new IllegalArgumentException("Strict audit events cannot be auxiliary");
         }
-        UUID receiptId = persist(event, false);
+        UUID receiptId = persist(event, false, true);
         if (receiptId == null) {
             throw new IllegalStateException("Strict audit event was not persisted");
         }
@@ -152,7 +153,7 @@ public class AuditForwarderService {
         if (!properties.isEnabled()) {
             throw new IllegalStateException("Audit recording is disabled");
         }
-        UUID receiptId = persist(event, false);
+        UUID receiptId = persist(event, false, true);
         if (receiptId == null) {
             throw new IllegalStateException("Strict machine audit event was not persisted");
         }
@@ -171,6 +172,10 @@ public class AuditForwarderService {
     }
 
     private UUID persist(PendingAuditEvent event, boolean applyReadDedupe) {
+        return persist(event, applyReadDedupe, false);
+    }
+
+    private UUID persist(PendingAuditEvent event, boolean applyReadDedupe, boolean strict) {
         if (event.auxiliary) {
             if (log.isDebugEnabled()) {
                 log.debug(
@@ -200,9 +205,14 @@ public class AuditForwarderService {
         String eventId = StringUtils.hasText(event.eventId) ? event.eventId.trim() : UUID.randomUUID().toString();
         Map<String, Object> body = AuditPayloadSanitizer.sanitize(toRequestBody(event, eventId, occurredAt));
         String bodyJson = serializeCanonical(body);
-        return outbox.enqueue(
-            new EnqueueCommand(tenantResolver.currentTenantId(), eventId, occurredAt, sha256(bodyJson), bodyJson)
+        EnqueueCommand command = new EnqueueCommand(
+            tenantResolver.currentTenantId(), eventId, occurredAt, sha256(bodyJson), bodyJson
         );
+        if (strict && TransactionSynchronizationManager.isActualTransactionActive()
+            && !TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
+            return outbox.enqueueTransactional(command);
+        }
+        return outbox.enqueue(command);
     }
 
     static String normalizeTrustedMachineActor(String actor) {

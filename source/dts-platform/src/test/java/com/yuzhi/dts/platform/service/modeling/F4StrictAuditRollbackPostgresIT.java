@@ -829,6 +829,25 @@ class F4StrictAuditRollbackPostgresIT {
         )).isNull();
     }
 
+    @Test
+    void readOnlyAuditRemainsIndependentOfReaderRollback() {
+        TransactionTemplate reader = new TransactionTemplate(transactionManager);
+        reader.setReadOnly(true);
+        assertThatThrownBy(() -> reader.executeWithoutResult(status -> {
+            auditOutbox.enqueue(new EnqueueCommand(TENANT, scope.auditEventId(), NOW, AUDIT_PAYLOAD_HASH, "{}"));
+            throw new IllegalStateException("reader failed");
+        })).hasMessage("reader failed");
+        assertThat(auditOutboxCount(scope.auditEventId())).isEqualTo(1);
+    }
+
+    @Test
+    void transactionalAuditRequiresAnExistingTransaction() {
+        assertThatThrownBy(() -> auditOutbox.enqueueTransactional(
+            new EnqueueCommand(TENANT, scope.auditEventId(), NOW, AUDIT_PAYLOAD_HASH, "{}")
+        )).isInstanceOf(org.springframework.transaction.IllegalTransactionStateException.class);
+        assertThat(auditOutboxCount(scope.auditEventId())).isZero();
+    }
+
     private ModelMaterializationRuntimeFailureRecorder preparationFailureRecorder() {
         return new ModelMaterializationRuntimeFailureRecorder(
             materializationDispatch, runArtifacts, transactionManager, FocusedConfig.TEST_CLOCK
@@ -1508,6 +1527,7 @@ class F4StrictAuditRollbackPostgresIT {
         );
         if (consumeRuntime) {
             UUID leaseId = UUID.randomUUID();
+            Instant leaseNow = jdbc.queryForObject("select clock_timestamp()", java.sql.Timestamp.class).toInstant();
             runtimeProfileLeases.issue(
                 new LeaseRecord(
                     leaseId,
@@ -1519,8 +1539,8 @@ class F4StrictAuditRollbackPostgresIT {
                     "dev",
                     "sha256:" + sha256("credential:" + claimed.id()),
                     LeaseStatus.ISSUED,
-                    NOW,
-                    NOW.plus(Duration.ofDays(1)),
+                    leaseNow,
+                    leaseNow.plus(Duration.ofDays(1)),
                     null,
                     null
                 )
@@ -1772,7 +1792,7 @@ class F4StrictAuditRollbackPostgresIT {
     }
 
     private void enqueueAuditThenVerifyVisible(String eventId) {
-        auditOutbox.enqueue(
+        auditOutbox.enqueueTransactional(
             new EnqueueCommand(
                 TENANT,
                 eventId,
