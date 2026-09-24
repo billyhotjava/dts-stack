@@ -181,3 +181,25 @@ export interface UpsertInfraDataSourcePayload {
 	secrets?: Record<string, any>;
 	defaulted?: boolean;
 }
+
+export type ModelGovernanceQualityGate = "ADVISORY" | "BLOCKING";
+
+export interface ModelGovernancePolicy {
+	qualityGate: ModelGovernanceQualityGate;
+	standardCoverage: string;
+	revision: number;
+	lastModifiedBy: string;
+	lastModifiedDate: string;
+	systemDefault: boolean;
+}
+
+export interface ModelGovernancePolicyImpact {
+	unfrozenCandidates: number;
+	frozenCandidates: number;
+}
+
+export interface UpdateModelGovernancePolicyPayload {
+	qualityGate: ModelGovernanceQualityGate;
+	expectedRevision: number;
+	reason: string;
+}

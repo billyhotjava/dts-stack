@@ -1,4 +1,4 @@
-import { normalizeAdminRole, type AdminRole } from "@/admin/types";
+import { type AdminRole, normalizeAdminRole } from "@/admin/types";
 
 export interface AdminMenuItem {
 	key: string;
@@ -22,6 +22,12 @@ const sysadminMenus: AdminMenuItem[] = [
 			{ key: "orgs", label: "组织机构管理", path: "/admin/orgs", icon: "local:ic-orgs" },
 			{ key: "data-lake", label: "数据湖配置", path: "/admin/data-lake", icon: "local:ic-management" },
 			{ key: "infra-settings", label: "集成设置", path: "/admin/infra-settings", icon: "solar:settings-bold-duotone" },
+			{
+				key: "model-governance-policy",
+				label: "模型发布治理",
+				path: "/admin/model-governance-policy",
+				icon: "local:ic-setting",
+			},
 			{ key: "ops", label: "运维配置", path: "/admin/ops", icon: "solar:settings-bold-duotone" },
 			{ key: "workflows", label: "工作流配置", path: "/admin/workflows", icon: "solar:shuffle-bold-duotone" },
 		],

@@ -15,6 +15,7 @@ import WorkflowConfigView from "@/admin/views/workflow-config";
 import DataLakeConfigView from "@/admin/views/data-lake-config";
 import DataLakeEditorView from "@/admin/views/data-lake-editor";
 import InfraSettingsView from "@/admin/views/infra-settings";
+import ModelGovernancePolicyView from "@/admin/views/model-governance/model-governance-policy";
 import AdminOtherConfigView from "@/admin/views/system/other-config";
 import { getMenusByRole } from "@/admin/config/menus";
 import { useAdminSession } from "@/admin/lib/session-context";
@@ -52,6 +53,7 @@ export const adminRoutes: RouteObject[] = [
 			{ path: "data-lake/new", element: <DataLakeEditorView /> },
 			{ path: "data-lake/:id", element: <DataLakeEditorView /> },
 			{ path: "infra-settings", element: <InfraSettingsView /> },
+			{ path: "model-governance-policy", element: <ModelGovernancePolicyView /> },
 			{ path: "approval", element: <ApprovalCenterView /> },
 			{ path: "approval/:requestId", element: <ApprovalCenterView /> },
 			{ path: "audit", element: <AuditCenterView /> },

@@ -31,6 +31,9 @@ import type {
 	InfraDataSource,
 	JdbcConnectionTestRequest,
 	JdbcDriverInfo,
+	ModelGovernancePolicy,
+	ModelGovernancePolicyImpact,
+	UpdateModelGovernancePolicyPayload,
 	UpsertInfraDataSourcePayload,
 } from "@/types/infra";
 import apiClient from "@/api/apiClient";
@@ -172,6 +175,22 @@ export const adminApi = {
 	testIntegrationSettings: (service: string, payload: Record<string, any>) =>
 		apiClient.post<InfraServiceTestResult>({
 			url: `/admin/infra/settings/${service}/test`,
+			data: payload,
+		}),
+
+	getModelGovernancePolicy: () =>
+		apiClient.get<ModelGovernancePolicy>({
+			url: "/admin/infra/model-governance-policy",
+		}),
+
+	getModelGovernancePolicyImpact: () =>
+		apiClient.get<ModelGovernancePolicyImpact>({
+			url: "/admin/infra/model-governance-policy/impact",
+		}),
+
+	updateModelGovernancePolicy: (payload: UpdateModelGovernancePolicyPayload) =>
+		apiClient.put<ModelGovernancePolicy>({
+			url: "/admin/infra/model-governance-policy",
 			data: payload,
 		}),
 

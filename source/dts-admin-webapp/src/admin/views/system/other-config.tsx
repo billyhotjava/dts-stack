@@ -214,6 +214,11 @@ export default function AdminOtherConfigView() {
 								badge: "5 条链路",
 							},
 							{
+								title: "模型发布治理",
+								path: "/admin/model-governance-policy",
+								badge: "发布质量策略",
+							},
+							{
 								title: "工作流配置",
 								path: "/admin/workflows",
 								badge: "审批模板",
