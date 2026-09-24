@@ -300,7 +300,7 @@ class ModelMaterializationRuntimeSpecServiceTest {
             org.mockito.ArgumentMatchers.eq(NOW)
         );
         verify(fixture.leases, never()).issue(any());
-        verify(fixture.failures, never()).recordAfterRollback(any(), any());
+        verify(fixture.failures).recordAfterRollback(DISPATCH_ID, ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE);
     }
 
     @Test
@@ -459,6 +459,7 @@ class ModelMaterializationRuntimeSpecServiceTest {
             );
 
         verify(fixture.leases).release(LEASE_ID);
+        verify(fixture.failures).recordAfterRollback(DISPATCH_ID, ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE);
         verify(fixture.availabilityAudit).recordRuntimeDenied(
             any(RuntimeSpecRecord.class),
             eq(
