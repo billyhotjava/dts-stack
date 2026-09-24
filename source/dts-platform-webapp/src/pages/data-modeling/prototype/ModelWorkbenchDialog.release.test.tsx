@@ -609,7 +609,7 @@ describe("release and materialization dispatch", () => {
 		expect(button("重试构建")).toBeDefined();
 	});
 
-	it("keeps the abandon exit reachable on the publish tab the dialog switches to after a build starts", async () => {
+	it("keeps the abandon exit reachable in the single release flow while a build runs", async () => {
 		const building = candidate("BATCH_WORKBENCH", "BUILDING");
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["ABANDON_BUILD"], building));
 		apiMocks.abandonBuild.mockResolvedValue({ candidate: candidate("BATCH_WORKBENCH", "BUILD_FAILED") });
@@ -618,11 +618,10 @@ describe("release and materialization dispatch", () => {
 			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		const publishTab = Array.from(container.querySelectorAll("nav button")).find((item) => item.textContent === "发布模型");
-		await act(async () => (publishTab as HTMLButtonElement | undefined)?.click());
-		await flush();
 
-		expect(container.textContent).toContain("发布模型");
+		// F15-T02: no build/publish tabs to switch; the running build and its exit stay on the one flow.
+		expect(Array.from(container.querySelectorAll("nav button")).some((item) => item.textContent === "发布模型")).toBe(false);
+		expect(container.querySelector('[aria-current="step"]')?.textContent).toContain("构建");
 		await act(async () => button("放弃本次构建")?.click());
 		await act(async () => button("确认放弃本次构建")?.click());
 		await flush();
@@ -894,8 +893,6 @@ describe("release and materialization dispatch", () => {
 				},
 			});
 			await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
-			await flush();
-			await act(async () => button("发布模型").click());
 			await flush();
 			for (const text of [
 				"candidate-specific-asset",
@@ -1268,6 +1265,35 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).not.toContain("发布评审");
 		expect(container.textContent).toContain("提交人：model-owner");
 		expect(button("确认发布")?.disabled).toBe(false);
+	});
+
+	it("leads with one status bar that lets an ADVISORY quality warning continue to publication", async () => {
+		const passed = candidate("BATCH_WORKBENCH", "QUALITY_PASSED");
+		apiMocks.getWorkbench.mockResolvedValue({
+			...workspace(["PUBLISH"], passed),
+			governanceQuality: {
+				required: false,
+				state: "FAILED",
+				code: "MODEL_SPEC_GOVERNANCE_QUALITY_MISSING",
+				message: "缺少质量规则，当前为提示策略",
+				maxAgeSeconds: 86400,
+				evidence: [],
+			},
+		});
+		apiMocks.publishCandidate.mockResolvedValue({ candidate: { ...passed, status: "PUBLISHED" } });
+
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+		await flush();
+
+		const header = container.querySelector('[aria-label="当前发布进度"]');
+		expect(header?.textContent).toContain("治理数据质量：缺少质量规则，当前为提示策略");
+		expect(header?.textContent).toContain("质量策略：提示（不阻断发布）");
+		expect(container.querySelector('[aria-current="step"]')?.className).toContain("dmx-release-step--warning");
+		// The same command is not offered twice.
+		expect(Array.from(container.querySelectorAll("button")).filter((item) => item.textContent === "确认发布")).toHaveLength(0);
+		await act(async () => button("继续发布")?.click());
+		await flush();
+		expect(apiMocks.publishCandidate).toHaveBeenCalledWith(model.planId, passed, "idem-1", "从模型工作台发布");
 	});
 
 	it("does not present a published candidate as online while its plan binding is deploying", async () => {

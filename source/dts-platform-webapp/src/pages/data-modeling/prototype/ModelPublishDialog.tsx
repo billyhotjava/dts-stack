@@ -19,7 +19,6 @@ import {
 	previewMaterializationPlan,
 	publishReleaseCandidate,
 	type ReleaseCandidateEntryEvidence,
-	type ReleaseCandidateLifecycleAction,
 	type ReleaseCandidateWorkbench,
 	refreshReleaseCandidate,
 	rejectReleaseCandidateReview,
@@ -39,21 +38,28 @@ import { CompactTable } from "@/components/table";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { ModelAssetDeliveryResult } from "./ModelAssetDeliveryResult";
 import { IN_FLIGHT_REFRESH_MS, isCandidateInFlight, ModelBuildProgressNotice } from "./ModelBuildProgressNotice";
-import { type MaterializationBuildAction, ModelMaterializationActions } from "./ModelMaterializationActions";
-import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
+import {
+	type MaterializationBuildAction,
+	materializationActionLabel,
+	ModelMaterializationActions,
+} from "./ModelMaterializationActions";
+import { canRerunGovernanceQuality, ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 import { ModelReleaseScopeNotice, ModelReleaseScopeSummary } from "./ModelReleaseScopeSummary";
 import { materializationScopeEntries, resolveMaterializationBuildAction, resolveReleaseCandidateScope } from "./modelReleaseCandidateScope";
 import { Button, Modal, RequestState } from "./PrototypePrimitives";
+import { ReleaseJourneyHeader, ReleaseJourneySteps } from "./ReleaseJourneyView";
+import {
+	deriveReleaseJourney,
+	type JourneyAction,
+	type JourneyActionKey,
+	RELEASE_ACTION_LABELS,
+	type ReleaseWorkflowAction,
+} from "./releaseJourney";
 import { compileSelectedModels } from "./services/compileSelectedModels";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 import { useModelMaterializationColumns } from "./useModelMaterializationColumns";
 
 const MAX_MATERIALIZATION_MODELS = 64;
-
-type ReleaseWorkflowAction = Extract<
-	ReleaseCandidateLifecycleAction,
-	"RUN_QUALITY" | "SUBMIT_REVIEW" | "APPROVE" | "REJECT" | "PUBLISH" | "RETRY_PUBLICATION" | "ROLLBACK"
->;
 
 const RELEASE_WORKFLOW_ACTIONS: ReleaseWorkflowAction[] = [
 	"RUN_QUALITY",
@@ -64,16 +70,6 @@ const RELEASE_WORKFLOW_ACTIONS: ReleaseWorkflowAction[] = [
 	"RETRY_PUBLICATION",
 	"ROLLBACK",
 ];
-
-const RELEASE_ACTION_LABELS: Record<ReleaseWorkflowAction, string> = {
-	RUN_QUALITY: "运行工程验证",
-	SUBMIT_REVIEW: "提交发布评审",
-	APPROVE: "审核通过",
-	REJECT: "驳回",
-	PUBLISH: "确认发布",
-	RETRY_PUBLICATION: "重试发布",
-	ROLLBACK: "回滚发布",
-};
 
 const PLAN_BOUND_BUILD_ACTIONS = new Set<MaterializationBuildAction>([
 	"CREATE_CANDIDATE",
@@ -113,8 +109,8 @@ export function ModelPublishDialog({
 	onChanged?: () => void;
 	onNext?: () => void;
 }) {
-	const [selectedTab, setTab] = useState<"materialize" | "publish">("materialize");
-	const tab = step ? (step === "verification" ? "materialize" : "publish") : selectedTab;
+	// Only the embedded wizard still splits build and release; the standalone dialog shows one flow (F15-T02).
+	const tab = step === "delivery" ? "publish" : "materialize";
 	const [environment, setEnvironment] = useState(initialEnvironment);
 	const [strategy, setStrategy] = useState<MaterializationPlanStrategy>("WITH_MISSING_UPSTREAMS");
 	const [reason, setReason] = useState("从模型工作台发布");
@@ -127,6 +123,8 @@ export function ModelPublishDialog({
 	const [busy, setBusy] = useState<"load" | "build" | "release" | "governance-quality" | "run" | "">("load");
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
 	const [failure, setFailure] = useState<string>("");
+	const [loadFailed, setLoadFailed] = useState(false);
+	const [registrationStatus, setRegistrationStatus] = useState<ModelDeliveryStatus | null>(null);
 	const [blockingWorkspace, setBlockingWorkspace] = useState<ReleaseCandidateWorkbench | null>(null);
 	const [confirmedCandidateScope, setConfirmedCandidateScope] = useState("");
 	const loadSequence = useRef(0);
@@ -163,6 +161,8 @@ export function ModelPublishDialog({
 			setWorkspace(null);
 			setExecutionWorkspace(null);
 			setMaterializations([]);
+			setRegistrationStatus(null);
+			setLoadFailed(false);
 		}
 		if (!planId) {
 			setBusy("");
@@ -214,8 +214,10 @@ export function ModelPublishDialog({
 			setWorkspace(scopedWorkspace);
 			setMaterializations(selectedMaterializations);
 			setExecutionWorkspace(nextExecutionWorkspace);
+			setRegistrationStatus(aggregateMatches ? status : null);
 		} catch (error) {
 			if (sequence !== loadSequence.current || silent) return;
+			setLoadFailed(true);
 			setFailure(normalizeModelingRequestFailure(error, "发布单读取失败。").message);
 		} finally {
 			if (sequence === loadSequence.current) {
@@ -471,7 +473,6 @@ export function ModelPublishDialog({
 				await startModelBuildIntent(primary, crypto.randomUUID(), { planId, environment, buildMode: schemaOnly ? "SCHEMA_ONLY" : "DATA_BUILD" });
 			}
 			await load();
-			if (!batch) setTab("publish");
 			return true;
 		} catch (error) {
 			const normalized = normalizeModelingRequestFailure(error, "数据构建未能启动。");
@@ -617,6 +618,326 @@ export function ModelPublishDialog({
 		}
 	};
 	const { materializationPlanColumns, evidenceColumns } = useModelMaterializationColumns();
+	const scopedGovernanceQuality = candidateContainsSelection ? workspace?.governanceQuality || null : null;
+	const registrationStep = (key: "catalog" | "analysis") =>
+		registrationStatus?.steps.find((item) => item.key === key && item.matchesCurrentTarget)?.state ?? null;
+	const journey = deriveReleaseJourney({
+		loadState: busy === "load" && !workspace ? "loading" : loadFailed ? "error" : "ready",
+		candidate: scopedCandidate,
+		entryEvidence: candidateContainsSelection ? selectedEvidence : [],
+		governanceQuality: scopedGovernanceQuality,
+		primaryBlocker: candidateContainsSelection ? workspace?.primaryBlocker || null : null,
+		releaseActions,
+		plan: {
+			state: planState === "blocked" ? "ready" : planState,
+			blockers: materializationPlan?.blockers.length
+				? materializationPlan.blockers
+				: planState === "blocked"
+					? [{ code: "MODEL_MATERIALIZATION_PLAN_BLOCKED", message: "当前构建计划不允许开始，请核对加工配置后刷新计划" }]
+					: [],
+			failure: planFailure,
+		},
+		precheckBlocker:
+			selectionProblem ||
+			(blockingWorkspace?.candidate
+				? `所选模型范围被发布单 ${blockingWorkspace.candidate.id} 占用，需先关闭该发布单`
+				: !canMaintain
+					? "当前账号不能维护所选数据范围，不能发起构建"
+					: null),
+		canBuild: canMaintain && canBuild && !operationalAction,
+		buildLabel: materializationActionLabel({
+			busy: "",
+			operationalAction: null,
+			buildAction,
+			modelCount: materializationRequestedIds.length,
+		}),
+		registration: registrationStatus
+			? { catalog: registrationStep("catalog"), analysis: registrationStep("analysis") }
+			: null,
+		binding: executionBinding,
+		canRerunGovernanceQuality: Boolean(
+			canMaintain && scopedCandidate && candidateCommandScopeAllowed && canRerunGovernanceQuality(scopedGovernanceQuality),
+		),
+		canConfigureQuality: Boolean(canConfigureQuality && onConfigureQuality),
+		canCancelBlockingCandidate: Boolean(canMaintain && blockingWorkspace?.allowedActions.includes("CANCEL_CANDIDATE")),
+	});
+	// Actions shown in the status bar are not repeated further down the dialog.
+	const headerActions = new Set<JourneyActionKey>(
+		embedded ? [] : [journey.primaryAction?.key, journey.secondaryAction?.key].filter((key): key is JourneyActionKey => Boolean(key)),
+	);
+	const headerHandlesBuild = ["BUILD", "RUN_NOW", "REPAIR_DEPLOYMENT"].some((key) => headerActions.has(key as JourneyActionKey));
+	const runJourneyAction = (action: JourneyAction) => {
+		switch (action.key) {
+			case "BUILD":
+				void build().then((completed) => {
+					if (completed) onChanged?.();
+				});
+				return;
+			case "CANCEL_BLOCKING_CANDIDATE":
+				void closeBlockingCandidate();
+				return;
+			case "RERUN_GOVERNANCE_QUALITY":
+				void rerunGovernanceQuality();
+				return;
+			case "CONFIGURE_QUALITY":
+				onConfigureQuality?.();
+				return;
+			case "RUN_NOW":
+				void runOperationalBinding();
+				return;
+			case "REPAIR_DEPLOYMENT":
+				void repairOperationalBinding();
+				return;
+			case "RELOAD":
+				void load();
+				return;
+			default:
+				void runReleaseAction(action.key).then(onChanged);
+		}
+	};
+	const buildGroupOpen = ["precheck", "build", "registration"].includes(journey.current);
+	const materializeContent = (
+		<>
+			{embedded ? <h3>构建与检查</h3> : null}
+			{candidateContainsSelection && selectedEvidence.filter((entry) => entry.failureMessage).map((entry) => (
+				<div key={entry.candidateEntryId} role="alert" className="dmx-request-state">
+					<strong>{entry.modelName}：构建未完成</strong>
+					<p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{entry.failureMessage}</p>
+					<p>错误码：{entry.repairCode || "未提供"}；执行编号：{entry.pipelineRunGroupId}</p>
+				</div>
+			))}
+			<label>
+				<span>执行环境</span>
+				<select
+					onChange={(event) => {
+						setEnvironment(event.target.value);
+						onEnvironmentChange?.(event.target.value);
+					}}
+					value={environment}
+				>
+					<option value="dev">开发环境</option>
+					<option value="test">测试环境</option>
+					<option value="prod">生产环境</option>
+				</select>
+			</label>
+			<label>
+				<span>依赖策略</span>
+				<select
+					onChange={(event) => setStrategy(event.target.value as MaterializationPlanStrategy)}
+					value={strategy}
+				>
+					<option value="WITH_MISSING_UPSTREAMS">缺失上游一并构建（推荐）</option>
+					<option disabled={!currentOnlyAvailable} value="CURRENT_ONLY">
+						仅使用当前已验证上游
+					</option>
+				</select>
+			</label>
+			<div className="dmx-materialization-plan-toolbar">
+				<strong>依赖构建计划</strong>
+				<Button
+					disabled={planState === "loading" || Boolean(busy)}
+					onClick={() => void refreshMaterializationPlan()}
+				>
+					{planState === "loading" ? "预览中…" : "刷新计划"}
+				</Button>
+			</div>
+			{planState === "error" ? (
+				<div className="dmx-inline-error" role="alert">
+					{planFailure}
+				</div>
+			) : null}
+			{materializationPlan ? (
+				<>
+					<div className="dmx-table-scroll dmx-materialization-plan-table">
+						<CompactTable<MaterializationPlanEntry>
+							columns={materializationPlanColumns}
+							dataSource={materializationPlan.orderedEntries}
+							pagination={false}
+							rowKey="modelSpecId"
+						/>
+					</div>
+					{materializationPlan.blockers.length ? (
+						<ul className="dmx-materialization-plan-blockers">
+							{materializationPlan.blockers.map((blocker) => (
+								<li key={`${blocker.code}:${blocker.modelSpecId || "plan"}`}>
+									<strong>{blocker.code}</strong>：{blocker.message}
+								</li>
+							))}
+						</ul>
+					) : null}
+					<p className="dmx-materialization-plan-checksum">
+						计划校验码：{materializationPlan.planChecksum.slice(0, 12)}…
+					</p>
+				</>
+			) : planState === "loading" ? (
+				<p className="dmx-capability-note">正在计算 BUILD、REUSE 与阻断项…</p>
+			) : null}
+			<dl className="dmx-summary-list">
+				<dt>模型范围</dt>
+				<dd>{selection.map((model) => `${model.name} · r${model.revision}`).join("；")}</dd>
+				<dt>存储方式</dt>
+				<dd>{batch ? "按各模型代码策略" : primary?.materialization || "由加工策略决定"}</dd>
+				<dt>{evidenceIsHistorical ? "历史发布单" : "当前发布单"}</dt>
+				<dd>{selectedCandidateSummary}</dd>
+				<dt>主要阻断</dt>
+				<dd>
+					{materializationBlocker}
+				</dd>
+			</dl>
+			{selectedEvidence.length && evidenceIsHistorical ? (
+				<p className="dmx-capability-note">以下为历史运行结果，不代表当前模型修订的核验结果。</p>
+			) : null}
+			{selectedEvidence.length ? (
+				<div className="dmx-table-scroll dmx-materialization-evidence">
+					<CompactTable<ReleaseCandidateEntryEvidence>
+						columns={evidenceColumns}
+						dataSource={selectedEvidence}
+						pagination={false}
+						rowKey="candidateEntryId"
+					/>
+				</div>
+			) : (
+				<p className="dmx-capability-note">当前发布单尚无逐表执行记录。</p>
+			)}
+			{embedded || !headerHandlesBuild ? (
+				<ModelMaterializationActions
+					embedded={embedded}
+					showBack={embedded}
+					pageAction={pageAction && ["RUN_QUALITY", "RERUN_GOVERNANCE_QUALITY"].includes(pageAction.code) && !candidateCommandScopeAllowed
+						? { ...pageAction, enabled: false } : pageAction}
+					canMaintain={canMaintain}
+					canConfigureQuality={canConfigureQuality}
+					busy={busy}
+					canBuild={canBuild}
+					buildAction={buildAction}
+					operationalAction={operationalAction}
+					modelCount={materializationRequestedIds.length}
+					buildBlocker={
+						materializationBlocker === "无" ? undefined : materializationBlocker
+					}
+					onBack={onClose}
+					onConfigureQuality={onConfigureQuality}
+					onPrimaryAction={() => {
+						if (embedded && pageAction?.code === "RUN_QUALITY")
+							void runReleaseAction("RUN_QUALITY").then(onChanged);
+						else if (embedded && pageAction?.code === "NEXT") onNext?.();
+						else if (embedded && pageAction?.code === "RERUN_GOVERNANCE_QUALITY")
+							void rerunGovernanceQuality().then(onChanged);
+						else void build().then((completed) => { if (completed) onChanged?.(); });
+					}}
+				/>
+			) : null}
+			{!embedded && !selectionProblem ? (
+				<ModelAssetDeliveryResult key={workspace?.candidate?.status || "none"} models={selection} />
+			) : null}
+		</>
+	);
+	const publishContent = (
+		<>
+			{embedded ? <h3>{batch ? "批量发布流程" : "发布模型"}</h3> : null}
+			{!embedded ? (
+				<ModelReleaseWorkflowPanel
+					binding={executionBinding}
+					candidate={scopedCandidate}
+					evidence={candidateContainsSelection ? workspace?.evidence || [] : []}
+					governanceQuality={scopedGovernanceQuality}
+					governanceQualityRerunning={busy === "governance-quality"}
+					onRerunGovernanceQuality={
+						canMaintain && scopedCandidate && candidateCommandScopeAllowed && !headerActions.has("RERUN_GOVERNANCE_QUALITY")
+							? () => void rerunGovernanceQuality()
+							: undefined
+					}
+					releaseActions={releaseActions}
+				/>
+			) : null}
+			{embedded || releaseActions.some((action) => !headerActions.has(action)) ? (
+				<label>
+					<span>操作说明</span>
+					<input onChange={(event) => setReason(event.target.value)} value={reason} />
+				</label>
+			) : null}
+			<ModelReleaseScopeSummary
+				status={busy === "load" ? "正在读取发布单状态…" : failure ? "发布单状态读取失败" :
+					scopedCandidate?.status || (candidate ? "当前发布单不包含所选模型的当前版本" : "当前模型暂无发布单")}
+				actions={releaseActions.map((action) => RELEASE_ACTION_LABELS[action])}
+				blocker={candidateContainsSelection ? workspace?.primaryBlocker?.message || workspace?.governanceQuality?.message : null}
+			/>
+			<div className="dmx-dialog-actions">
+				{embedded ? (
+					<>
+						<Button
+							disabled={Boolean(busy)}
+							onClick={() => {
+								void load();
+								onChanged?.();
+							}}
+						>
+							刷新状态
+						</Button>
+						<Button onClick={onClose}>关闭</Button>
+					</>
+				) : null}
+				{!embedded && executionBinding?.allowedActions.includes("RUN_NOW") && !headerActions.has("RUN_NOW") ? (
+					<Button disabled={Boolean(busy)} onClick={() => void runOperationalBinding()} primary>
+						{busy === "run" ? "运行中…" : "立即运行并核验"}
+					</Button>
+				) : null}
+				{!embedded && executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT") && !headerActions.has("REPAIR_DEPLOYMENT") ? (
+					<Button disabled={Boolean(busy)} onClick={() => void repairOperationalBinding()} primary>
+						{busy === "run" ? "处理中…" : "修复部署"}
+					</Button>
+				) : null}
+				{releaseActions
+					.filter((action) => (embedded ? action === pageAction?.code : !headerActions.has(action)))
+					.map((action, index) => (
+						<Button
+							danger={action === "REJECT" || action === "ROLLBACK"}
+							disabled={Boolean(busy) || (embedded && !pageAction?.enabled)}
+							key={action}
+							onClick={() => void runReleaseAction(action).then(onChanged)}
+							primary={index === 0 && action !== "REJECT" && action !== "ROLLBACK"}
+						>
+							{busy === "release" && activeReleaseAction === action ? "处理中…" : RELEASE_ACTION_LABELS[action]}
+						</Button>
+					))}
+			</div>
+		</>
+	);
+	const occupiedNotice = blockingWorkspace?.candidate ? (
+		<div role="alert" className="dmx-request-state">
+			<p>所选模型范围被发布单 {blockingWorkspace.candidate.id} 占用（{blockingWorkspace.candidate.status}）。涉及模型：{blockingWorkspace.candidate.entries.map((entry) => blockingWorkspace.entryEvidence?.find((evidence) => evidence.modelSpecId === entry.modelSpecId)?.modelName || entry.modelSpecId).join("、")}。</p>
+			<p>关闭会结束该发布单的后续发布流程，保留已有构建结果。确认不再继续该发布单后，再关闭并重新开始构建。</p>
+			{!blockingWorkspace.allowedActions.includes("CANCEL_CANDIDATE") ? (
+				<p>该发布单当前不能关闭，请先在原模型中处理正在进行的构建或发布流程。</p>
+			) : !headerActions.has("CANCEL_BLOCKING_CANDIDATE") ? (
+				<Button disabled={!canMaintain || Boolean(busy)} onClick={() => void closeBlockingCandidate()}>确认关闭占用发布单</Button>
+			) : null}
+		</div>
+	) : null;
+	const sharedNotices = (
+		<>
+			{failure ? (
+				<div className="dmx-inline-error" role="alert">
+					{failure}
+				</div>
+			) : null}
+			{occupiedNotice}
+			<ModelReleaseScopeNotice candidate={scopedCandidate} evidence={workspace?.entryEvidence || []}
+				selectedCount={selection.length} exactScope={candidateScopeMatches}
+				confirmed={confirmedCandidateScope === candidateScopeKey} disabled={Boolean(busy)}
+				onConfirm={(confirmed) => setConfirmedCandidateScope(confirmed ? candidateScopeKey : "")} />
+			{!selectionProblem && scopedCandidate?.status === "BUILDING" ? (
+				<ModelBuildProgressNotice
+					busy={Boolean(busy)}
+					canAbandon={canAbandonBuild}
+					onAbandon={abandonBuild}
+					unconfirmedCode={unconfirmedDispatch
+						? unconfirmedDispatch.repairCode || "MODEL_MATERIALIZATION_DISPATCH_UNKNOWN"
+						: null}
+				/>
+			) : null}
+		</>
+	);
 	return (
 		<DeliveryContainer embedded={embedded} onClose={onClose} title={batch ? "批量构建" : "发布与构建"}>
 			{!canMaintain && !embedded ? (
@@ -626,249 +947,54 @@ export function ModelPublishDialog({
 					title="模型维护受限"
 				/>
 			) : null}
-			<div className={embedded ? "dmx-delivery-step" : "dmx-publish-grid"}>
-				{!embedded ? (
-					<nav>
-						<button
-							className={tab === "materialize" ? "active" : ""}
-							onClick={() => setTab("materialize")}
-							type="button"
+			{embedded ? (
+				<div className="dmx-delivery-step">
+					<section>
+						{sharedNotices}
+						{selectionProblem ? (
+							<RequestState description={selectionProblem} kind="empty" title="当前选择不可构建" />
+						) : tab === "materialize" ? materializeContent : publishContent}
+					</section>
+				</div>
+			) : (
+				<div className="dmx-journey">
+					<ReleaseJourneyHeader
+						busyLabel={busy && busy !== "load" ? "处理中…" : null}
+						journey={journey}
+						onAction={runJourneyAction}
+					/>
+					<ReleaseJourneySteps journey={journey} />
+					<section className="dmx-journey-body">
+						{sharedNotices}
+						{selectionProblem ? (
+							<RequestState description={selectionProblem} kind="empty" title="当前选择不可构建" />
+						) : (
+							<>
+								<details className="dmx-journey-group" key={`build-${buildGroupOpen}`} open={buildGroupOpen}>
+									<summary>构建前检查 · 构建 · 资产登记</summary>
+									<div className="dmx-journey-group__body">{materializeContent}</div>
+								</details>
+								<details className="dmx-journey-group" key={`release-${buildGroupOpen}`} open={!buildGroupOpen}>
+									<summary>{batch ? "批量发布流程" : "工程验证 · 治理数据质量 · 发布 · 上线"}</summary>
+									<div className="dmx-journey-group__body">{publishContent}</div>
+								</details>
+							</>
+						)}
+					</section>
+					<div className="dmx-dialog-actions dmx-journey-footer">
+						<Button
+							disabled={Boolean(busy)}
+							onClick={() => {
+								void load();
+								onChanged?.();
+							}}
 						>
-							{batch ? "批量构建" : "生成构建任务"}
-						</button>
-						<button className={tab === "publish" ? "active" : ""} onClick={() => setTab("publish")} type="button">
-							{batch ? "批量发布流程" : "发布模型"}
-						</button>
-					</nav>
-				) : null}
-				<section>
-					{failure ? (
-						<div className="dmx-inline-error" role="alert">
-							{failure}
-						</div>
-					) : null}
-					{blockingWorkspace?.candidate ? (
-						<div role="alert" className="dmx-request-state">
-							<p>所选模型范围被发布单 {blockingWorkspace.candidate.id} 占用（{blockingWorkspace.candidate.status}）。涉及模型：{blockingWorkspace.candidate.entries.map((entry) => blockingWorkspace.entryEvidence?.find((evidence) => evidence.modelSpecId === entry.modelSpecId)?.modelName || entry.modelSpecId).join("、")}。</p>
-							<p>关闭会结束该发布单的后续发布流程，保留已有构建结果。确认不再继续该发布单后，再关闭并重新开始构建。</p>
-							{blockingWorkspace.allowedActions.includes("CANCEL_CANDIDATE") ? (
-								<Button disabled={!canMaintain || Boolean(busy)} onClick={() => void closeBlockingCandidate()}>确认关闭占用发布单</Button>
-							) : <p>该发布单当前不能关闭，请先在原模型中处理正在进行的构建或发布流程。</p>}
-						</div>
-					) : null}
-					{!embedded && !selectionProblem ? (
-						<ModelAssetDeliveryResult key={workspace?.candidate?.status || "none"} models={selection} />
-					) : null}
-					<ModelReleaseScopeNotice candidate={scopedCandidate} evidence={workspace?.entryEvidence || []}
-						selectedCount={selection.length} exactScope={candidateScopeMatches}
-						confirmed={confirmedCandidateScope === candidateScopeKey} disabled={Boolean(busy)}
-						onConfirm={(confirmed) => setConfirmedCandidateScope(confirmed ? candidateScopeKey : "")} />
-					{!selectionProblem && scopedCandidate?.status === "BUILDING" ? (
-						<ModelBuildProgressNotice
-							busy={Boolean(busy)}
-							canAbandon={canAbandonBuild}
-							onAbandon={abandonBuild}
-							unconfirmedCode={unconfirmedDispatch
-								? unconfirmedDispatch.repairCode || "MODEL_MATERIALIZATION_DISPATCH_UNKNOWN"
-								: null}
-						/>
-					) : null}
-					{selectionProblem ? (
-						<RequestState description={selectionProblem} kind="empty" title="当前选择不可构建" />
-					) : tab === "materialize" ? (
-						<>
-							<h3>构建与检查</h3>
-							{candidateContainsSelection && selectedEvidence.filter((entry) => entry.failureMessage).map((entry) => (
-								<div key={entry.candidateEntryId} role="alert" className="dmx-request-state">
-									<strong>{entry.modelName}：构建未完成</strong>
-									<p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{entry.failureMessage}</p>
-									<p>错误码：{entry.repairCode || "未提供"}；执行编号：{entry.pipelineRunGroupId}</p>
-								</div>
-							))}
-							<label>
-								<span>执行环境</span>
-								<select
-									onChange={(event) => {
-										setEnvironment(event.target.value);
-										onEnvironmentChange?.(event.target.value);
-									}}
-									value={environment}
-								>
-									<option value="dev">开发环境</option>
-									<option value="test">测试环境</option>
-									<option value="prod">生产环境</option>
-								</select>
-							</label>
-							<label>
-								<span>依赖策略</span>
-								<select
-									onChange={(event) => setStrategy(event.target.value as MaterializationPlanStrategy)}
-									value={strategy}
-								>
-									<option value="WITH_MISSING_UPSTREAMS">缺失上游一并构建（推荐）</option>
-									<option disabled={!currentOnlyAvailable} value="CURRENT_ONLY">
-										仅使用当前已验证上游
-									</option>
-								</select>
-							</label>
-							<div className="dmx-materialization-plan-toolbar">
-								<strong>依赖构建计划</strong>
-								<Button
-									disabled={planState === "loading" || Boolean(busy)}
-									onClick={() => void refreshMaterializationPlan()}
-								>
-									{planState === "loading" ? "预览中…" : "刷新计划"}
-								</Button>
-							</div>
-							{planState === "error" ? (
-								<div className="dmx-inline-error" role="alert">
-									{planFailure}
-								</div>
-							) : null}
-							{materializationPlan ? (
-								<>
-									<div className="dmx-table-scroll dmx-materialization-plan-table">
-										<CompactTable<MaterializationPlanEntry>
-											columns={materializationPlanColumns}
-											dataSource={materializationPlan.orderedEntries}
-											pagination={false}
-											rowKey="modelSpecId"
-										/>
-									</div>
-									{materializationPlan.blockers.length ? (
-										<ul className="dmx-materialization-plan-blockers">
-											{materializationPlan.blockers.map((blocker) => (
-												<li key={`${blocker.code}:${blocker.modelSpecId || "plan"}`}>
-													<strong>{blocker.code}</strong>：{blocker.message}
-												</li>
-											))}
-										</ul>
-									) : null}
-									<p className="dmx-materialization-plan-checksum">
-										计划校验码：{materializationPlan.planChecksum.slice(0, 12)}…
-									</p>
-								</>
-							) : planState === "loading" ? (
-								<p className="dmx-capability-note">正在计算 BUILD、REUSE 与阻断项…</p>
-							) : null}
-							<dl className="dmx-summary-list">
-								<dt>模型范围</dt>
-								<dd>{selection.map((model) => `${model.name} · r${model.revision}`).join("；")}</dd>
-								<dt>存储方式</dt>
-								<dd>{batch ? "按各模型代码策略" : primary?.materialization || "由加工策略决定"}</dd>
-								<dt>{evidenceIsHistorical ? "历史发布单" : "当前发布单"}</dt>
-								<dd>{selectedCandidateSummary}</dd>
-								<dt>主要阻断</dt>
-								<dd>
-									{materializationBlocker}
-								</dd>
-							</dl>
-							{selectedEvidence.length && evidenceIsHistorical ? (
-								<p className="dmx-capability-note">以下为历史运行结果，不代表当前模型修订的核验结果。</p>
-							) : null}
-							{selectedEvidence.length ? (
-								<div className="dmx-table-scroll dmx-materialization-evidence">
-									<CompactTable<ReleaseCandidateEntryEvidence>
-										columns={evidenceColumns}
-										dataSource={selectedEvidence}
-										pagination={false}
-										rowKey="candidateEntryId"
-									/>
-								</div>
-							) : (
-								<p className="dmx-capability-note">当前发布单尚无逐表执行记录。</p>
-							)}
-							<ModelMaterializationActions
-								embedded={embedded}
-								pageAction={pageAction && ["RUN_QUALITY", "RERUN_GOVERNANCE_QUALITY"].includes(pageAction.code) && !candidateCommandScopeAllowed
-									? { ...pageAction, enabled: false } : pageAction}
-								canMaintain={canMaintain}
-								canConfigureQuality={canConfigureQuality}
-								busy={busy}
-								canBuild={canBuild}
-								buildAction={buildAction}
-								operationalAction={operationalAction}
-								modelCount={materializationRequestedIds.length}
-								buildBlocker={
-									materializationBlocker === "无" ? undefined : materializationBlocker
-								}
-								onBack={onClose}
-								onConfigureQuality={onConfigureQuality}
-								onPrimaryAction={() => {
-									if (embedded && pageAction?.code === "RUN_QUALITY")
-										void runReleaseAction("RUN_QUALITY").then(onChanged);
-									else if (embedded && pageAction?.code === "NEXT") onNext?.();
-									else if (embedded && pageAction?.code === "RERUN_GOVERNANCE_QUALITY")
-										void rerunGovernanceQuality().then(onChanged);
-									else void build().then((completed) => { if (completed) onChanged?.(); });
-								}}
-							/>
-						</>
-					) : (
-						<>
-							<h3>{batch ? "批量发布流程" : "发布模型"}</h3>
-							{!embedded ? (
-								<ModelReleaseWorkflowPanel
-									binding={executionBinding}
-									candidate={scopedCandidate}
-									evidence={candidateContainsSelection ? workspace?.evidence || [] : []}
-									governanceQuality={candidateContainsSelection ? workspace?.governanceQuality || null : null}
-									governanceQualityRerunning={busy === "governance-quality"}
-									onRerunGovernanceQuality={
-										canMaintain && scopedCandidate && candidateCommandScopeAllowed ? () => void rerunGovernanceQuality() : undefined
-									}
-									releaseActions={releaseActions}
-								/>
-							) : null}
-							<label>
-								<span>操作说明</span>
-								<input onChange={(event) => setReason(event.target.value)} value={reason} />
-							</label>
-							<ModelReleaseScopeSummary
-								status={busy === "load" ? "正在读取发布单状态…" : failure ? "发布单状态读取失败" :
-									scopedCandidate?.status || (candidate ? "当前发布单不包含所选模型的当前版本" : "当前模型暂无发布单")}
-								actions={releaseActions.map((action) => RELEASE_ACTION_LABELS[action])}
-								blocker={candidateContainsSelection ? workspace?.primaryBlocker?.message || workspace?.governanceQuality?.message : null}
-							/>
-							<div className="dmx-dialog-actions">
-								<Button
-									disabled={Boolean(busy)}
-									onClick={() => {
-										void load();
-										onChanged?.();
-									}}
-								>
-									刷新状态
-								</Button>
-								<Button onClick={onClose}>关闭</Button>
-								{!embedded && executionBinding?.allowedActions.includes("RUN_NOW") ? (
-									<Button disabled={Boolean(busy)} onClick={() => void runOperationalBinding()} primary>
-										{busy === "run" ? "运行中…" : "立即运行并核验"}
-									</Button>
-								) : null}
-								{!embedded && executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT") ? (
-									<Button disabled={Boolean(busy)} onClick={() => void repairOperationalBinding()} primary>
-										{busy === "run" ? "处理中…" : "修复部署"}
-									</Button>
-								) : null}
-								{releaseActions
-									.filter((action) => !embedded || action === pageAction?.code)
-									.map((action, index) => (
-										<Button
-											danger={action === "REJECT" || action === "ROLLBACK"}
-											disabled={Boolean(busy) || (embedded && !pageAction?.enabled)}
-											key={action}
-											onClick={() => void runReleaseAction(action).then(onChanged)}
-											primary={index === 0 && action !== "REJECT" && action !== "ROLLBACK"}
-										>
-											{busy === "release" && activeReleaseAction === action ? "处理中…" : RELEASE_ACTION_LABELS[action]}
-										</Button>
-									))}
-							</div>
-						</>
-					)}
-				</section>
-			</div>
+							刷新状态
+						</Button>
+						<Button onClick={onClose}>关闭</Button>
+					</div>
+				</div>
+			)}
 		</DeliveryContainer>
 	);
 }

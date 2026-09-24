@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, Circle, Clock3, RotateCcw, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import type {
 	PlanExecutionBinding,
 	ReleaseCandidate,
@@ -13,8 +13,6 @@ type ReleaseWorkflowAction = Extract<
 	ReleaseCandidateLifecycleAction,
 	"RUN_QUALITY" | "SUBMIT_REVIEW" | "APPROVE" | "REJECT" | "PUBLISH" | "RETRY_PUBLICATION" | "ROLLBACK"
 >;
-
-type WorkflowStepState = "waiting" | "active" | "passed" | "failed" | "rolled-back";
 
 const STATUS_ORDER = [
 	"DRAFT",
@@ -33,77 +31,8 @@ const STATUS_ORDER = [
 	"ROLLED_BACK",
 ] as const;
 
-const statusIndex = (status?: ReleaseCandidate["status"] | null) =>
-	STATUS_ORDER.indexOf(status as (typeof STATUS_ORDER)[number]);
 const reached = (candidate: ReleaseCandidate | null, status: (typeof STATUS_ORDER)[number]) =>
-	statusIndex(candidate?.status) >= STATUS_ORDER.indexOf(status);
-
-const stepState = (
-	candidate: ReleaseCandidate | null,
-	step: "build" | "quality" | "review" | "publication" | "online",
-	binding: PlanExecutionBinding | null,
-): WorkflowStepState => {
-	const status = candidate?.status;
-	if (!status) return "waiting";
-	if (status === "ROLLED_BACK" && step === "publication") return "rolled-back";
-	if (step === "build") {
-		if (status === "BUILD_FAILED") return "failed";
-		if (status === "BUILDING" || status === "DRAFT") return "active";
-		return reached(candidate, "BUILT") ? "passed" : "waiting";
-	}
-	if (step === "quality") {
-		if (status === "QUALITY_FAILED") return "failed";
-		if (status === "QUALITY_RUNNING") return "active";
-		return reached(candidate, "QUALITY_PASSED") ? "passed" : "waiting";
-	}
-	if (step === "review") {
-		if (status === "REJECTED") return "failed";
-		if (status === "REVIEW_PENDING") return "active";
-		return reached(candidate, "APPROVED") ? "passed" : "waiting";
-	}
-	if (step === "publication") {
-		if (status === "PARTIAL") return "failed";
-		if (status === "PUBLISHING") return "active";
-		return status === "PUBLISHED" ? "passed" : "waiting";
-	}
-	if (
-		binding?.state === "ONLINE" &&
-		binding.latestRelation?.verified === true &&
-		binding.latestRelation.exists === true
-	)
-		return "passed";
-	if (status === "PUBLISHED" && binding?.state === "DEGRADED") return "failed";
-	if (status === "PUBLISHED") return "active";
-	return "waiting";
-};
-
-const governanceStepState = (
-	candidate: ReleaseCandidate | null,
-	governanceQuality: ReleaseCandidateGovernanceQuality | null,
-): WorkflowStepState => {
-	if (!candidate || !governanceQuality) return "waiting";
-	if (governanceQuality.state === "PASSED") return "passed";
-	if (governanceQuality.state === "RUNNING") return "active";
-	if (governanceQuality.state === "FAILED" || governanceQuality.state === "STALE") return "failed";
-	if (governanceQuality.required && reached(candidate, "QUALITY_PASSED")) return "failed";
-	return "waiting";
-};
-
-const stepText = (state: WorkflowStepState) => {
-	if (state === "passed") return "已完成";
-	if (state === "active") return "处理中";
-	if (state === "failed") return "需处理";
-	if (state === "rolled-back") return "已回滚";
-	return "等待";
-};
-
-const stepIcon = (state: WorkflowStepState) => {
-	if (state === "passed") return <Check size={16} />;
-	if (state === "failed") return <AlertTriangle size={16} />;
-	if (state === "rolled-back") return <RotateCcw size={16} />;
-	if (state === "active") return <Clock3 size={16} />;
-	return <Circle size={12} />;
-};
+	STATUS_ORDER.indexOf(candidate?.status as (typeof STATUS_ORDER)[number]) >= STATUS_ORDER.indexOf(status);
 
 const handoffText = (
 	candidate: ReleaseCandidate | null,
@@ -169,7 +98,7 @@ const governanceQualityText = (governanceQuality: ReleaseCandidateGovernanceQual
 	return governanceQuality.message || governanceQuality.code || "治理数据质量记录尚未就绪。";
 };
 
-const canRerunGovernanceQuality = (governanceQuality: ReleaseCandidateGovernanceQuality | null) =>
+export const canRerunGovernanceQuality = (governanceQuality: ReleaseCandidateGovernanceQuality | null) =>
 	Boolean(
 		governanceQuality &&
 			(governanceQuality.state === "FAILED" || governanceQuality.state === "STALE") &&
@@ -208,23 +137,6 @@ export function ModelReleaseWorkflowPanel({
 	releaseActions: ReleaseWorkflowAction[];
 	binding: PlanExecutionBinding | null;
 }) {
-	const reviewRequired =
-		Boolean(candidate?.audit?.approvedBy) ||
-		candidate?.status === "APPROVED" ||
-		candidate?.status === "REJECTED" ||
-		(!releaseActions.includes("PUBLISH") &&
-			(candidate?.status === "REVIEW_PENDING" ||
-				releaseActions.some((action) => action === "SUBMIT_REVIEW" || action === "APPROVE" || action === "REJECT")));
-	const steps = [
-		{ key: "build" as const, label: "构建", state: stepState(candidate, "build", binding) },
-		{ key: "quality" as const, label: "工程验证", state: stepState(candidate, "quality", binding) },
-		{ key: "governance-quality" as const, label: "治理数据质量", state: governanceStepState(candidate, governanceQuality) },
-		...(reviewRequired
-			? [{ key: "review" as const, label: "发布评审", state: stepState(candidate, "review", binding) }]
-			: []),
-		{ key: "publication" as const, label: "发布登记", state: stepState(candidate, "publication", binding) },
-		{ key: "online" as const, label: "上线就绪", state: stepState(candidate, "online", binding) },
-	];
 	const online = onlineText(candidate, binding);
 	const governanceRerunnable = Boolean(onRerunGovernanceQuality && canRerunGovernanceQuality(governanceQuality));
 	return (
@@ -240,17 +152,6 @@ export function ModelReleaseWorkflowPanel({
 					{candidate?.status ? statusLabel(candidate.status) : "暂无发布单"}
 				</Status>
 			</div>
-			<ol className="dmx-release-steps">
-				{steps.map((step) => (
-					<li className={`dmx-release-step dmx-release-step--${step.state}`} key={step.key}>
-						<span className="dmx-release-step__icon">{stepIcon(step.state)}</span>
-						<span>
-							<strong>{step.label}</strong>
-							<small>{stepText(step.state)}</small>
-						</span>
-					</li>
-				))}
-			</ol>
 			<div className="dmx-release-handoff">
 				<ShieldCheck size={18} />
 				<div>

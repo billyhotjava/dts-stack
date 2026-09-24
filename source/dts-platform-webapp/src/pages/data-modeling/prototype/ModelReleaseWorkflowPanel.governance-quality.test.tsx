@@ -80,7 +80,8 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 		expect(button).toBeTruthy();
 		await act(async () => button?.click());
 		expect(rerun).toHaveBeenCalledTimes(1);
-		expect(container.textContent).toContain("工程验证");
+		// F15-T02: the step line lives once, in the dialog's release journey, not inside this panel.
+		expect(container.querySelector(".dmx-release-steps")).toBeNull();
 		expect(container.textContent).toContain("治理数据质量记录");
 	});
 

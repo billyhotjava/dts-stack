@@ -328,7 +328,7 @@ function stageActions(stage: JourneyStage, input: ReleaseJourneyInput): [Journey
 	switch (stage.key) {
 		case "precheck":
 			return input.canCancelBlockingCandidate
-				? [{ key: "CANCEL_BLOCKING_CANDIDATE", label: "关闭占用发布单", tone: "primary" }]
+				? [{ key: "CANCEL_BLOCKING_CANDIDATE", label: "确认关闭占用发布单", tone: "primary" }]
 				: [build];
 		case "build":
 			return stage.state === "failed" ? [build] : [];
@@ -339,7 +339,7 @@ function stageActions(stage: JourneyStage, input: ReleaseJourneyInput): [Journey
 			return has("RUN_QUALITY") ? [releaseAction("RUN_QUALITY")] : [];
 		case "governance": {
 			if (input.canRerunGovernanceQuality)
-				return [{ key: "RERUN_GOVERNANCE_QUALITY", label: "重新运行质量检查", tone: "primary" }, configure];
+				return [{ key: "RERUN_GOVERNANCE_QUALITY", label: "重新运行治理质量", tone: "primary" }, configure];
 			if (stage.state === "warning") {
 				const next = has("PUBLISH")
 					? releaseAction("PUBLISH", "继续发布")

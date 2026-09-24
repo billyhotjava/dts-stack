@@ -30,8 +30,29 @@ const BUILD_LABELS: Partial<Record<MaterializationBuildAction, string>> = {
 	START_BUILD: "开始构建",
 };
 
+/** The standalone build button label; shared with the release journey status bar (F15-T02). */
+export function materializationActionLabel({
+	busy,
+	operationalAction,
+	buildAction,
+	modelCount,
+}: {
+	busy: string;
+	operationalAction: string | null;
+	buildAction: MaterializationBuildAction | null;
+	modelCount: number;
+}): string {
+	if (busy === "build" || busy === "run") return "处理中…";
+	if (operationalAction === "REPAIR_DEPLOYMENT") return "修复部署";
+	if (operationalAction === "RUN_NOW") return "再次运行并核验";
+	return (
+		(buildAction && BUILD_LABELS[buildAction]) || (modelCount > 1 ? `创建并运行 ${modelCount} 个模型` : "创建并运行")
+	);
+}
+
 export function ModelMaterializationActions({
 	embedded,
+	showBack = true,
 	pageAction,
 	canMaintain,
 	canConfigureQuality,
@@ -46,6 +67,7 @@ export function ModelMaterializationActions({
 	onConfigureQuality,
 }: {
 	embedded: boolean;
+	showBack?: boolean;
 	pageAction?: DeliveryAction | null;
 	canMaintain: boolean;
 	canConfigureQuality: boolean;
@@ -72,17 +94,10 @@ export function ModelMaterializationActions({
 		? blockedByBusy
 			? "处理中…"
 			: WIZARD_LABELS[pageAction?.code || ""] || "开始构建"
-		: busy === "build" || busy === "run"
-			? "处理中…"
-			: operationalAction === "REPAIR_DEPLOYMENT"
-				? "修复部署"
-				: operationalAction === "RUN_NOW"
-					? "再次运行并核验"
-					: (buildAction && BUILD_LABELS[buildAction]) ||
-						(modelCount > 1 ? `创建并运行 ${modelCount} 个模型` : "创建并运行");
+		: materializationActionLabel({ busy, operationalAction, buildAction, modelCount });
 	return (
 		<div className="dmx-dialog-actions">
-			<Button onClick={onBack}>{embedded ? "上一步" : "取消"}</Button>
+			{showBack ? <Button onClick={onBack}>{embedded ? "上一步" : "取消"}</Button> : null}
 			<Button
 				primary
 				disabled={disabled}
