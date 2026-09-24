@@ -17,6 +17,9 @@ public class PlatformIntegrationProperties {
     /** Logical service name presented to platform when performing calls. */
     private String serviceName = "dts-admin";
 
+    /** Pairwise credential sent as X-DTS-Service-Token on admin-to-platform calls (DTS_ADMIN_TO_PLATFORM). */
+    private String serviceToken;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -47,5 +50,13 @@ public class PlatformIntegrationProperties {
 
     public void setServiceName(String serviceName) {
         this.serviceName = serviceName;
+    }
+
+    public String getServiceToken() {
+        return serviceToken;
+    }
+
+    public void setServiceToken(String serviceToken) {
+        this.serviceToken = serviceToken;
     }
 }

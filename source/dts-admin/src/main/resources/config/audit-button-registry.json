@@ -84,6 +84,15 @@
       "allowEmptyTargets": true
     },
     {
+      "buttonCode": "ADMIN_MODEL_GOVERNANCE_POLICY_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "MODEL_GOVERNANCE_POLICY_UPDATE",
+      "operationName": "修改模型发布治理策略",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
       "buttonCode": "ADMIN_INTEGRATION_SETTINGS_TEST",
       "moduleKey": "system-admin",
       "moduleName": "系统管理",

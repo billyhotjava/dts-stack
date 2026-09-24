@@ -9,6 +9,7 @@ public final class ButtonCodes {
     public static final String INTEGRATION_SETTINGS_VIEW = "ADMIN_INTEGRATION_SETTINGS_VIEW";
     public static final String INTEGRATION_SETTINGS_UPDATE = "ADMIN_INTEGRATION_SETTINGS_UPDATE";
     public static final String INTEGRATION_SETTINGS_TEST = "ADMIN_INTEGRATION_SETTINGS_TEST";
+    public static final String MODEL_GOVERNANCE_POLICY_UPDATE = "ADMIN_MODEL_GOVERNANCE_POLICY_UPDATE";
     public static final String DATA_SOURCE_LIST = "ADMIN_DATA_SOURCE_LIST";
     public static final String DATA_SOURCE_CREATE = "ADMIN_DATA_SOURCE_CREATE";
     public static final String DATA_SOURCE_UPDATE = "ADMIN_DATA_SOURCE_UPDATE";

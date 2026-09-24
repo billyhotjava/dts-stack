@@ -294,6 +294,7 @@ dts:
     base-url: ${DTS_PLATFORM_BASE_URL:http://dts-platform:8081}
     api-path: ${DTS_PLATFORM_API_PATH:/api}
     service-name: ${DTS_PLATFORM_SERVICE_NAME:dts-admin}
+    service-token: ${DTS_ADMIN_TO_PLATFORM:}
   infra:
     heartbeat:
       enabled: ${DTS_INFRA_HEARTBEAT_ENABLED:true}

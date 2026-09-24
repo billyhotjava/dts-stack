@@ -358,6 +358,7 @@ services:
       APP_TEST_API_TOKEN: "${APP_TEST_API_TOKEN:-}"
       # docker-compose 1.x mis-parses nested defaults; init.sh writes explicit pairwise tokens to .env.
       DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-}
+      DTS_ADMIN_TO_PLATFORM: ${DTS_ADMIN_TO_PLATFORM:-}
       DTS_ANALYTICS_TO_ADMIN_TOKEN: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:-}
       DTS_INGESTION_TO_ADMIN_TOKEN: ${DTS_INGESTION_TO_ADMIN_TOKEN:?Set DTS_INGESTION_TO_ADMIN_TOKEN for secret-restore audit}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
@@ -515,6 +516,7 @@ services:
       # Service-to-service auth(platform 入站 + 出站客户端); init.sh writes explicit values for legacy Compose.
       DTS_INBOUND_FROM_ANALYTICS: ${DTS_INBOUND_FROM_ANALYTICS:-}
       DTS_INBOUND_FROM_AIRFLOW: ${DTS_INBOUND_FROM_AIRFLOW:-}
+      DTS_INBOUND_FROM_ADMIN: ${DTS_INBOUND_FROM_ADMIN:-}
       DTS_INBOUND_FROM_INGESTION: ${DTS_INBOUND_FROM_INGESTION:-}
       DTS_INBOUND_FROM_METRICS: ${DTS_INBOUND_FROM_METRICS:-}
       DTS_PLATFORM_TO_ADMIN_TOKEN: ${DTS_PLATFORM_TO_ADMIN_TOKEN:-}
