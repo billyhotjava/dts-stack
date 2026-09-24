@@ -52,7 +52,14 @@ button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visi
 .topbar__brand { font-weight: 700; letter-spacing: 0.02em; }
 .crumbs { color: var(--muted); }
 .crumbs b { color: var(--ink); font-weight: 600; }
-.page { padding: 14px 20px 40px; max-width: 1400px; }
+.shell { display: flex; align-items: flex-start; min-height: calc(100vh - 48px); }
+.sidenav { position: sticky; top: 0; flex: 0 0 208px; min-height: calc(100vh - 48px); padding: 12px 8px; background: #fff; border-right: 1px solid var(--border); }
+.sidenav__group { margin: 10px 10px 4px; color: var(--muted); font-size: 12px; }
+.sidenav a { display: block; padding: 7px 12px; border-radius: var(--radius); color: var(--ink-2); text-decoration: none; }
+.sidenav a:hover { background: var(--canvas); }
+.sidenav a.active { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+.content { flex: 1; min-width: 0; }
+.page { padding: 14px 20px 40px; }
 .page__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .page__head h1 { margin: 0; font-size: 18px; }
 .page__head p { margin: 2px 0 0; color: var(--muted); }
@@ -62,8 +69,7 @@ button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visi
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
 th { color: var(--muted); font-weight: 600; font-size: 12px; background: #f9fafc; white-space: nowrap; }
-th.group { border-left: 1px solid var(--border); }
-td.group { border-left: 1px solid var(--border); }
+.cell-note { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
 .model-name { font-weight: 600; }
 .model-sub { color: var(--muted); font-size: 12px; }
@@ -203,7 +209,7 @@ details.fold .fold__body { padding: 10px 12px; }
 .toast.show { opacity: 1; transform: translateX(-50%); }
 
 /* prototype console — visually distinct from the product */
-.console { margin: 12px 20px 0; max-width: 1360px; background: #fff; border: 1px dashed var(--proto); border-radius: 8px; }
+.console { margin: 12px 20px 0; background: #fff; border: 1px dashed var(--proto); border-radius: 8px; }
 .console__head { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: var(--proto-soft); color: var(--proto); font-weight: 700; border-radius: 8px 8px 0 0; cursor: pointer; }
 .console__body { padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 24px; }
 .console.min .console__body { display: none; }
@@ -213,8 +219,8 @@ details.fold .fold__body { padding: 10px 12px; }
 .console label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
 .console ul { margin: 0; padding-left: 16px; color: var(--ink-2); font-size: 12px; flex: 1 1 320px; }
 
-@media (max-width: 1180px) {
-	.col-optional { display: none; }
+@media (max-width: 960px) {
+	.sidenav { display: none; }
 }
 @media (max-width: 760px) {
 	.page { padding: 12px 12px 40px; }
@@ -231,6 +237,19 @@ details.fold .fold__body { padding: 10px 12px; }
 	<span class="topbar__brand">DTS 数据治理平台</span>
 	<nav class="crumbs" aria-label="面包屑">数据建模 › 维度建模 › <b>模型工作台</b></nav>
 </header>
+<div class="shell">
+<nav class="sidenav" aria-label="门户菜单（示意）">
+	<div class="sidenav__group">数据建模</div>
+	<a href="#">建模规划</a>
+	<a href="#" class="active">模型工作台</a>
+	<a href="#">指标建模</a>
+	<div class="sidenav__group">数据资产</div>
+	<a href="#">资产目录</a>
+	<a href="#">数据质量</a>
+	<div class="sidenav__group">运行</div>
+	<a href="#">运行监控</a>
+</nav>
+<div class="content">
 <section class="console" id="console" aria-label="原型控制台">
 	<div class="console__head" id="consoleHead"><span>原型控制台（仅原型，非产品界面）</span><span id="consoleToggle">收起</span></div>
 	<div class="console__body">
@@ -244,9 +263,9 @@ details.fold .fold__body { padding: 10px 12px; }
 			<span class="seg" id="outcomeSeg"><button type="button" data-v="success" class="on">成功</button><button type="button" data-v="fail">失败</button><button type="button" data-v="verify">待核验</button></span>
 		</label>
 		<ul>
-			<li>每行是一种场景；打开「构建」「发布」体验。</li>
-			<li>点状态标记模拟跳到所属功能（右侧面板）。</li>
-			<li>SQL 执行次数用于检查：恢复登记/质量/运行不重跑构建。</li>
+			<li>每行是一种场景；列表只显示构建、发布两列。</li>
+			<li>登记失败（第 3 行）、缺质量规则（第 4 行）在「发布」的检查清单里出现；运行失败（第 5 行）只在运行监控出现，列表里看不到。</li>
+			<li>发布清单中的处理链接模拟跳到所属功能（右侧面板）；SQL 执行次数用于检查恢复不重跑构建。</li>
 		</ul>
 		<button type="button" class="btn btn--sm" id="reset">重置全部场景</button>
 	</div>
@@ -256,21 +275,18 @@ details.fold .fold__body { padding: 10px 12px; }
 	<div class="page__head">
 		<div>
 			<h1>模型工作台</h1>
-			<p>构建成功即完成建模；发布、登记、质量、运行各自独立，点状态标记到所属功能处理。</p>
+			<p>这里只管构建和发布。构建成功即完成建模；登记、质量只在发布前检查中出现，运行在运行监控中查看。</p>
 		</div>
 	</div>
 	<div class="card">
 		<table aria-label="模型列表">
+			<colgroup><col><col class="col-secondary" style="width:72px"><col style="width:34%"><col style="width:18%"><col style="width:168px"></colgroup>
 			<thead>
 				<tr>
 					<th>模型</th>
 					<th class="col-secondary">版本</th>
 					<th>构建</th>
 					<th>发布</th>
-					<th class="group col-secondary">目录登记</th>
-					<th class="col-optional">分析准备</th>
-					<th class="col-secondary">数据质量</th>
-					<th class="col-optional">运行</th>
 					<th>操作</th>
 				</tr>
 			</thead>
@@ -278,6 +294,8 @@ details.fold .fold__body { padding: 10px 12px; }
 		</table>
 	</div>
 </main>
+</div>
+</div>
 
 <!-- build dialog -->
 <div class="overlay" id="buildOverlay" aria-hidden="true">
@@ -354,18 +372,26 @@ details.fold .fold__body { padding: 10px 12px; }
 	function publishChip(m) {
 		return { none: ["未发布", "none"], review: ["评审中", "run"], approved: ["评审通过", "run"], published: ["已发布", "ok"], rolledback: ["已回滚", "warn"] }[m.publish];
 	}
-	function catalogChip(m) { return { none: ["未登记", "none"], ok: ["已登记", "ok"], failed: ["登记失败", "bad"], running: ["登记中", "run"] }[m.catalog]; }
-	function analysisChip(m) { return { none: ["未准备", "none"], ok: ["已准备", "ok"], failed: ["准备失败", "bad"] }[m.analysis]; }
-	function qualityChip(m) {
-		if (m.quality === "missing") return ["缺少规则", "warn"];
-		return { none: ["未检查", "none"], passed: ["质量合格", "ok"], failed: ["质量不合格", "bad"] }[m.quality];
-	}
-	function runChip(m) { return { none: ["未上线", "none"], ok: ["运行正常", "ok"], failed: ["最近运行失败", "bad"] }[m.run]; }
 	function chip(pair, dim, id) {
-		return '<span class="chip chip--' + pair[1] + '" role="button" tabindex="0" data-dim="' + dim + '" data-id="' + id + '" title="到所属功能查看">' + pair[0] + "</span>";
+		return '<span class="chip chip--' + pair[1] + '" role="button" tabindex="0" data-dim="' + dim + '" data-id="' + id + '" title="打开对应操作">' + pair[0] + "</span>";
 	}
 
 	function canPublish(m) { return m.build === "success"; }
+	function note(text) { return text ? '<span class="cell-note" title="' + esc(text) + '">' + esc(text) + "</span>" : ""; }
+	function buildNote(m) {
+		if (m.build === "success") return note(m.finishedAt + " · " + m.tables + " 张表");
+		if (m.build === "failed") return note(m.failReason);
+		if (m.build === "building") return note("进行中 · " + PHASES[m.progress]);
+		if (m.build === "verify") return note("结果待核验");
+		if (m.build === "occupied") return note("被发布单 " + m.occupiedBy + " 占用");
+		return "";
+	}
+	function publishNote(m) {
+		if (m.publish === "published") return note(m.publishedAt + " 发布");
+		if (m.publish === "review") return note("等待评审人处理");
+		if (m.publish === "approved") return note("可发布");
+		return "";
+	}
 
 	function renderRows() {
 		var html = state.models.map(function (m) {
@@ -374,12 +400,8 @@ details.fold .fold__body { padding: 10px 12px; }
 			return "<tr>" +
 				'<td><div class="model-name"><span class="layer">' + m.layer + "</span>" + esc(m.name) + '</div><div class="model-sub">' + esc(m.cn) + " · SQL 执行 " + m.sql + " 次</div></td>" +
 				'<td class="col-secondary">r' + m.rev + "</td>" +
-				"<td>" + chip(buildChip(m), "build", m.id) + "</td>" +
-				"<td>" + chip(publishChip(m), "publish", m.id) + "</td>" +
-				'<td class="group col-secondary">' + chip(catalogChip(m), "catalog", m.id) + "</td>" +
-				'<td class="col-optional">' + chip(analysisChip(m), "analysis", m.id) + "</td>" +
-				'<td class="col-secondary">' + chip(qualityChip(m), "quality", m.id) + "</td>" +
-				'<td class="col-optional">' + chip(runChip(m), "run", m.id) + "</td>" +
+				"<td>" + chip(buildChip(m), "build", m.id) + buildNote(m) + "</td>" +
+				"<td>" + chip(publishChip(m), "publish", m.id) + publishNote(m) + "</td>" +
 				'<td><div class="row-actions">' +
 				'<button type="button" class="btn btn--sm" data-act="build" data-id="' + m.id + '">构建</button>' +
 				'<button type="button" class="btn btn--sm" data-act="publish" data-id="' + m.id + '"' +
@@ -586,6 +608,8 @@ details.fold .fold__body { padding: 10px 12px; }
 	function closeOverlay(id) { var o = $(id); o.classList.remove("open"); o.setAttribute("aria-hidden", "true"); state.confirm = null; }
 
 	document.addEventListener("click", function (event) {
+		var nav = event.target.closest(".sidenav a");
+		if (nav) { event.preventDefault(); if (!nav.classList.contains("active")) toast("原型只包含模型工作台；「" + nav.textContent + "」为示意入口"); return; }
 		var target = event.target.closest("[data-act],[data-a],[data-dim],[data-go],[data-close]");
 		if (!target) return;
 		var m;
@@ -601,7 +625,11 @@ details.fold .fold__body { padding: 10px 12px; }
 			if (target.getAttribute("aria-disabled") === "true") { toast("「" + m.name + "」尚未构建成功，构建成功后可发布"); return; }
 			state.openPublish = m.id; state.confirm = null; renderPublish(); openOverlay("publishOverlay"); return;
 		}
-		if (target.dataset.dim) { openSide(target.dataset.dim, model(target.dataset.id)); return; }
+		if (target.dataset.dim) {
+			var chipAct = document.querySelector('button[data-act="' + target.dataset.dim + '"][data-id="' + target.dataset.id + '"]');
+			if (chipAct) chipAct.click();
+			return;
+		}
 		if (target.dataset.go) {
 			m = model(state.openPublish);
 			if (target.dataset.go === "build") { closeOverlay("publishOverlay"); state.openPublish = null; state.openBuild = m.id; renderBuild(); openOverlay("buildOverlay"); return; }
