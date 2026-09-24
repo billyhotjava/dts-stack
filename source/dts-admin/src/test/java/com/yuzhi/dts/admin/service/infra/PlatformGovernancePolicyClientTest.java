@@ -13,6 +13,8 @@ import com.yuzhi.dts.admin.config.PlatformIntegrationProperties;
 import com.yuzhi.dts.admin.service.infra.PlatformGovernancePolicyClient.PlatformPolicyException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -88,5 +90,15 @@ class PlatformGovernancePolicyClientTest {
             .isInstanceOfSatisfying(PlatformPolicyException.class, failure ->
                 assertThat(failure.code()).isEqualTo("PLATFORM_SERVICE_TOKEN_MISSING"));
         server.verify();
+    }
+
+    @Test
+    void springUsesTheBuilderConstructorWhenTwoConstructorsExist() throws Exception {
+        // Two constructors without a marker made the admin context fail with "No default constructor found".
+        assertThat(
+            PlatformGovernancePolicyClient.class
+                .getConstructor(RestTemplateBuilder.class, PlatformIntegrationProperties.class)
+                .isAnnotationPresent(Autowired.class)
+        ).isTrue();
     }
 }

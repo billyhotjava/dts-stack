@@ -5,6 +5,7 @@ import java.net.URI;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -32,6 +33,7 @@ public class PlatformGovernancePolicyClient {
     private final RestTemplate restTemplate;
     private final PlatformIntegrationProperties properties;
 
+    @Autowired
     public PlatformGovernancePolicyClient(RestTemplateBuilder builder, PlatformIntegrationProperties properties) {
         this(builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build(), properties);
     }
