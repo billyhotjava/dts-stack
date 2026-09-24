@@ -24,23 +24,27 @@ public class ModelMaterializationRuntimeFailureRecorder {
     private static final Logger LOG = LoggerFactory.getLogger(ModelMaterializationRuntimeFailureRecorder.class);
 
     private final ModelMaterializationDispatchRepository dispatches;
+    private final ModelMaterializationRunArtifactService runArtifacts;
     private final TransactionTemplate transactions;
     private final Clock clock;
 
     @Autowired
     public ModelMaterializationRuntimeFailureRecorder(
         ModelMaterializationDispatchRepository dispatches,
+        ModelMaterializationRunArtifactService runArtifacts,
         PlatformTransactionManager transactionManager
     ) {
-        this(dispatches, transactionManager, Clock.systemUTC());
+        this(dispatches, runArtifacts, transactionManager, Clock.systemUTC());
     }
 
     ModelMaterializationRuntimeFailureRecorder(
         ModelMaterializationDispatchRepository dispatches,
+        ModelMaterializationRunArtifactService runArtifacts,
         PlatformTransactionManager transactionManager,
         Clock clock
     ) {
         this.dispatches = Objects.requireNonNull(dispatches, "dispatches is required");
+        this.runArtifacts = Objects.requireNonNull(runArtifacts, "runArtifacts is required");
         this.transactions = new TransactionTemplate(
             Objects.requireNonNull(transactionManager, "transactionManager is required")
         );
@@ -57,7 +61,7 @@ public class ModelMaterializationRuntimeFailureRecorder {
             new TransactionSynchronization() {
                 @Override
                 public void afterCompletion(int status) {
-                    record(dispatchId, errorCode);
+                    if (status == STATUS_ROLLED_BACK) record(dispatchId, errorCode);
                 }
             }
         );
@@ -65,9 +69,17 @@ public class ModelMaterializationRuntimeFailureRecorder {
 
     private void record(UUID dispatchId, String errorCode) {
         try {
-            transactions.executeWithoutResult(status ->
-                dispatches.recordRuntimeFailure(dispatchId, errorCode, clock.instant())
-            );
+            transactions.executeWithoutResult(status -> {
+                if (
+                    ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE.equals(errorCode) ||
+                    ModelMaterializationSourceAvailabilityGuard.SOURCE_GENERATION_STALE.equals(errorCode) ||
+                    ModelMaterializationSourceAvailabilityGuard.SOURCE_PIN_MISSING.equals(errorCode)
+                ) {
+                    runArtifacts.recordPreparationSourceFailure(dispatchId, errorCode, clock.instant());
+                } else {
+                    dispatches.recordRuntimeFailure(dispatchId, errorCode, clock.instant());
+                }
+            });
         } catch (RuntimeException failure) {
             // Diagnostics only: the caller's original failure must still reach Airflow.
             LOG.warn(

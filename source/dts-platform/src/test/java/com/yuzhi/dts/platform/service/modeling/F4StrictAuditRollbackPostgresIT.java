@@ -714,6 +714,127 @@ class F4StrictAuditRollbackPostgresIT {
         when(catalogAvailability.lockAndCompare(any())).thenReturn(List.of());
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "MODEL_SOURCE_AVAILABILITY_FENCE_ACTIVE",
+        "MODEL_MATERIALIZATION_SOURCE_GENERATION_STALE",
+        "MODEL_MATERIALIZATION_SOURCE_PIN_MISSING"
+    })
+    void preparationSourceFailureCommitsAfterRollbackAndSurvivesLateFinalize(String code) {
+        QueuedBuildGroup build = seedSubmittedMaterialization(scope, false);
+        var recorder = preparationFailureRecorder();
+        AtomicBoolean audited = new AtomicBoolean();
+        doAnswer(invocation -> {
+            assertThat(pipelineStatus(build.pipelineRunGroupId())).isEqualTo("FAILED_STALE");
+            assertThat(candidateStatus(scope)).isEqualTo("STALE");
+            enqueueAuditThenVerifyVisible(scope.auditEventId());
+            audited.set(true);
+            return UUID.randomUUID();
+        }).when(auditService).auditActionAsStrict(
+            eq("airflow"), anyString(), any(Instant.class), eq("MODEL_MATERIALIZATION_RUN_FAILED"),
+            eq(AuditStage.FAIL), eq(build.pipelineRunGroupId().toString()), any()
+        );
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            jdbc.queryForList("select id from modeling_materialization_dispatch where id = ? for update", build.pipelineRunGroupId());
+            recorder.recordAfterRollback(build.pipelineRunGroupId(), code);
+            assertThat(candidateStatus(scope)).isEqualTo("BUILDING");
+            assertThat(audited).isFalse();
+            throw new IllegalStateException("original preparation refusal");
+        })).hasMessage("original preparation refusal");
+
+        assertThat(audited).isTrue();
+        assertThat(auditOutboxCount(scope.auditEventId())).isEqualTo(1);
+        assertThat(candidateStatus(scope)).isEqualTo("STALE");
+        assertThat(candidateVersion(scope)).isEqualTo(3);
+        assertThat(pipelineStatus(build.pipelineRunGroupId())).isEqualTo("FAILED_STALE");
+        assertThat(jdbc.queryForMap(
+            "select status, last_error_code from modeling_materialization_dispatch where id = ?", build.pipelineRunGroupId()
+        )).containsEntry("status", "FAILED").containsEntry("last_error_code", code);
+        recorder.recordAfterRollback(build.pipelineRunGroupId(), "MODEL_SOURCE_AVAILABILITY_FENCE_ACTIVE");
+        for (String outcome : List.of("SUCCEEDED", "FAILED")) {
+            assertThatThrownBy(() -> runArtifacts.finalizeRun(build.pipelineRunGroupId(), new FinalizeCommand(outcome)))
+                .isInstanceOf(ModelMaterializationRuntimeException.class);
+        }
+        assertThat(jdbc.queryForObject(
+            "select last_error_code from modeling_materialization_dispatch where id = ?", String.class, build.pipelineRunGroupId()
+        )).isEqualTo(code);
+        assertThat(candidateVersion(scope)).isEqualTo(3);
+        assertThat(pipelineStatus(build.pipelineRunGroupId())).isEqualTo("FAILED_STALE");
+    }
+
+    @Test
+    void preparationSourceStrictAuditFailureRollsBackEveryStateAndPreservesOriginalError() {
+        QueuedBuildGroup build = seedSubmittedMaterialization(scope, false);
+        AtomicBoolean audited = new AtomicBoolean();
+        doAnswer(invocation -> {
+            assertThat(pipelineStatus(build.pipelineRunGroupId())).isEqualTo("FAILED_STALE");
+            assertThat(candidateStatus(scope)).isEqualTo("STALE");
+            enqueueAuditThenVerifyVisible(scope.auditEventId());
+            audited.set(true);
+            throw new IllegalStateException("strict preparation audit unavailable");
+        }).when(auditService).auditActionAsStrict(
+            eq("airflow"), anyString(), any(Instant.class), eq("MODEL_MATERIALIZATION_RUN_FAILED"),
+            eq(AuditStage.FAIL), eq(build.pipelineRunGroupId().toString()), any()
+        );
+        var recorder = preparationFailureRecorder();
+
+        assertThatThrownBy(() -> new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            recorder.recordAfterRollback(build.pipelineRunGroupId(), "MODEL_SOURCE_AVAILABILITY_FENCE_ACTIVE");
+            throw new IllegalStateException("original preparation refusal");
+        })).hasMessage("original preparation refusal");
+
+        assertThat(audited).isTrue();
+        assertThat(pipelineStatus(build.pipelineRunGroupId())).isEqualTo("SUBMITTED");
+        assertThat(candidateStatus(scope)).isEqualTo("BUILDING");
+        assertThat(candidateVersion(scope)).isEqualTo(2);
+        assertThat(auditOutboxCount(scope.auditEventId())).isZero();
+        assertThat(jdbc.queryForMap(
+            "select status, last_error_code from modeling_materialization_dispatch where id = ?", build.pipelineRunGroupId()
+        )).containsEntry("status", "SUBMITTED").containsEntry("last_error_code", null);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = { "CONSUMED", "SUPERSEDED", "VERSION_CHANGED", "COMPLETED", "NEWER_ATTEMPT" })
+    void preparationSourceFailureIgnoresLateAndSupersededAttempts(String variant) {
+        QueuedBuildGroup build = seedSubmittedMaterialization(scope, "CONSUMED".equals(variant));
+        if ("SUPERSEDED".equals(variant)) {
+            jdbc.update("update modeling_model_release_candidate set status = 'STALE' where id = ?", scope.candidateId());
+        } else if ("VERSION_CHANGED".equals(variant)) {
+            jdbc.update("update modeling_model_release_candidate set version = version + 1 where id = ?", scope.candidateId());
+        } else if ("COMPLETED".equals(variant)) {
+            jdbc.update("update modeling_materialization_dispatch set status = 'COMPLETED' where id = ?", build.pipelineRunGroupId());
+        } else if ("NEWER_ATTEMPT".equals(variant)) {
+            jdbc.update("""
+                insert into modeling_materialization_dispatch (
+                    id, tenant_id, candidate_id, candidate_version, attempt,
+                    execution_target_key, airflow_dag_id, airflow_run_id, artifact_bundle_checksum,
+                    status, created_at, last_modified_at
+                ) select ?, tenant_id, candidate_id, candidate_version, attempt + 1,
+                         execution_target_key, airflow_dag_id, airflow_run_id || '_new', artifact_bundle_checksum,
+                         'FAILED', created_at, last_modified_at
+                    from modeling_materialization_dispatch where id = ?
+                """, UUID.randomUUID(), build.pipelineRunGroupId());
+        }
+        String candidateBefore = candidateStatus(scope);
+        int versionBefore = candidateVersion(scope);
+
+        preparationFailureRecorder().recordAfterRollback(build.pipelineRunGroupId(), "MODEL_SOURCE_AVAILABILITY_FENCE_ACTIVE");
+
+        assertThat(candidateStatus(scope)).isEqualTo(candidateBefore);
+        assertThat(candidateVersion(scope)).isEqualTo(versionBefore);
+        assertThat(pipelineStatus(build.pipelineRunGroupId())).isEqualTo("SUBMITTED");
+        assertThat(jdbc.queryForObject(
+            "select last_error_code from modeling_materialization_dispatch where id = ?", String.class, build.pipelineRunGroupId()
+        )).isNull();
+    }
+
+    private ModelMaterializationRuntimeFailureRecorder preparationFailureRecorder() {
+        return new ModelMaterializationRuntimeFailureRecorder(
+            materializationDispatch, runArtifacts, transactionManager, FocusedConfig.TEST_CLOCK
+        );
+    }
+
     @Test
     void targetAdmissionFailureRollsBackCandidateTransitionAndCreatesNoExecution() {
         seedCanonicalModelAndCandidate(scope, DeliveryStatus.DRAFT, 1, true);
@@ -1353,6 +1474,10 @@ class F4StrictAuditRollbackPostgresIT {
     }
 
     private QueuedBuildGroup seedSubmittedMaterialization(Scope current) {
+        return seedSubmittedMaterialization(current, true);
+    }
+
+    private QueuedBuildGroup seedSubmittedMaterialization(Scope current, boolean consumeRuntime) {
         seedCanonicalModelAndCandidate(
             current,
             DeliveryStatus.DRAFT,
@@ -1381,33 +1506,35 @@ class F4StrictAuditRollbackPostgresIT {
             NOW.plus(Duration.ofMinutes(10)),
             NOW
         );
-        UUID leaseId = UUID.randomUUID();
-        runtimeProfileLeases.issue(
-            new LeaseRecord(
-                leaseId,
-                TENANT,
-                build.runs().getFirst().id(),
-                build.airflowRunId(),
-                "PROD",
-                build.executionTargetKey(),
-                "dev",
-                "sha256:" + sha256("credential:" + claimed.id()),
-                LeaseStatus.ISSUED,
-                NOW,
-                NOW.plus(Duration.ofDays(1)),
-                null,
-                null
-            )
-        );
-        assertThat(runtimeProfileLeases.consume(leaseId)).isTrue();
-        assertThat(
-            materializationDispatch.attachRuntimeLease(
-                claimed.id(),
-                leaseId,
-                NOW.plus(Duration.ofMinutes(1))
-            )
-        ).isTrue();
-        sourceAvailability.pinDispatchCurrent(claimed.id(), NOW);
+        if (consumeRuntime) {
+            UUID leaseId = UUID.randomUUID();
+            runtimeProfileLeases.issue(
+                new LeaseRecord(
+                    leaseId,
+                    TENANT,
+                    build.runs().getFirst().id(),
+                    build.airflowRunId(),
+                    "PROD",
+                    build.executionTargetKey(),
+                    "dev",
+                    "sha256:" + sha256("credential:" + claimed.id()),
+                    LeaseStatus.ISSUED,
+                    NOW,
+                    NOW.plus(Duration.ofDays(1)),
+                    null,
+                    null
+                )
+            );
+            assertThat(runtimeProfileLeases.consume(leaseId)).isTrue();
+            assertThat(
+                materializationDispatch.attachRuntimeLease(
+                    claimed.id(),
+                    leaseId,
+                    NOW.plus(Duration.ofMinutes(1))
+                )
+            ).isTrue();
+            sourceAvailability.pinDispatchCurrent(claimed.id(), NOW);
+        }
         materializationDispatch.markSubmitted(claimed.id(), false, NOW);
         reset(auditService);
         when(

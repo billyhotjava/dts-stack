@@ -1435,6 +1435,63 @@ class ModelMaterializationRunArtifactServiceTest {
         );
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "MODEL_SOURCE_AVAILABILITY_FENCE_ACTIVE",
+        "MODEL_MATERIALIZATION_SOURCE_GENERATION_STALE",
+        "MODEL_MATERIALIZATION_SOURCE_PIN_MISSING"
+    })
+    void preparationSourceFailureUsesTheExistingStaleTransactionAndStageAudit(String code) {
+        when(runs.lockUnconsumedPreparation(GROUP_ID))
+            .thenReturn(Optional.of(runGroup(3, "BUILDING", "SUBMITTED", null)));
+        when(runs.markAvailabilityStale(GROUP_ID, code, NOW)).thenReturn(true);
+
+        service.recordPreparationSourceFailure(GROUP_ID, code, NOW);
+
+        verify(candidates).markAvailabilityStale(
+            "tenant-a", "service:dts-airflow", CANDIDATE_ID,
+            new ModelReleaseCandidateContract.TransitionCommand(
+                3, ModelLifecycleContract.DeliveryStatus.STALE,
+                "materialization-availability-stale-" + GROUP_ID, code
+            )
+        );
+        ArgumentCaptor<Object> payload = ArgumentCaptor.forClass(Object.class);
+        verify(auditService).auditActionAsStrict(
+            eq("airflow"), eq("model-materialization-run:" + GROUP_ID + ":availability-stale"),
+            eq(NOW), eq("MODEL_MATERIALIZATION_RUN_FAILED"), eq(AuditStage.FAIL),
+            eq(GROUP_ID.toString()), payload.capture()
+        );
+        assertThat((Map<String, Object>) payload.getValue())
+            .containsEntry("boundary", "PREPARE_RUNTIME")
+            .containsEntry("reasonCode", code)
+            .containsEntry("generations", List.of());
+        verify(sourceAvailability, never()).checkPinnedCurrentForUpdate(any());
+        verify(runs, never()).finalizeFailed(any(), any(), any());
+        assertThat(ModelingSystemExecution.permits("tenant-a", PLAN_ID)).isFalse();
+    }
+
+    @Test
+    void latePreparationFailureDoesNotChangeAnIneligibleAttempt() {
+        when(runs.lockUnconsumedPreparation(GROUP_ID)).thenReturn(Optional.empty());
+
+        service.recordPreparationSourceFailure(GROUP_ID, ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE, NOW);
+
+        verify(runs, never()).markAvailabilityStale(any(), any(), any());
+        verify(candidates, never()).markAvailabilityStale(any(), any(), any(), any());
+        verify(auditService, never()).auditActionAsStrict(any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void onlySourceRefusalsMayEnterThePreparationStaleBoundary() {
+        assertThatThrownBy(() -> service.recordPreparationSourceFailure(GROUP_ID, "DBT_TARGET_INACTIVE", NOW))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.recordPreparationSourceFailure(null, ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE, NOW))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> service.recordPreparationSourceFailure(GROUP_ID, ModelMaterializationSourceAvailabilityGuard.SOURCE_UNAVAILABLE, null))
+            .isInstanceOf(IllegalArgumentException.class);
+        verify(runs, never()).lockUnconsumedPreparation(any());
+    }
+
     private static RunGroupRecord runGroup(
         int candidateCurrentVersion,
         String candidateCurrentStatus,

@@ -158,7 +158,7 @@ public class ModelMaterializationRuntimeSpecService {
             sourceAvailability.requireDispatchCurrent(runtime.dispatchId());
         } catch (ModelReleaseCandidateException unavailable) {
             availabilityAudit.recordRuntimeDenied(runtime, unavailable.code(), now);
-            throw failure(unavailable.code(), unavailable.getMessage());
+            throw recorded(runtime, unavailable.code(), unavailable.getMessage());
         }
         requireRuntime(runtime);
         LeaseView lease;
@@ -208,7 +208,7 @@ public class ModelMaterializationRuntimeSpecService {
                 }
             }
             availabilityAudit.recordRuntimeDenied(runtime, unavailable.code(), now);
-            throw failure(unavailable.code(), unavailable.getMessage());
+            throw recorded(runtime, unavailable.code(), unavailable.getMessage());
         }
         RuntimeSpecView view = new RuntimeSpecView(
             runtime.dispatchId(),

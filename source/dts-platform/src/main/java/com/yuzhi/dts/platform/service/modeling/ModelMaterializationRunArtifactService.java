@@ -357,6 +357,27 @@ public class ModelMaterializationRunArtifactService {
         }
     }
 
+    /**
+     * Called after an authenticated runtime-spec transaction has rolled back. The source refusal
+     * closes the unconsumed attempt atomically; writing only last_error_code would strand finalize.
+     */
+    public void recordPreparationSourceFailure(UUID groupId, String reasonCode, Instant occurredAt) {
+        if (groupId == null || occurredAt == null || !isAvailabilityStaleReason(reasonCode)) {
+            throw new IllegalArgumentException("groupId, source failure code and occurredAt are required");
+        }
+        transactions.executeWithoutResult(status ->
+            runs.lockUnconsumedPreparation(groupId).ifPresent(group -> {
+                try (var executionScope = openExecutionScope(group)) {
+                    // Preparation never committed its source pin. Keep the observed refusal,
+                    // without inventing pinned/current generation facts.
+                    persistAvailabilityStale(
+                        group, GenerationCheck.stale(reasonCode, List.of()), "PREPARE_RUNTIME", occurredAt
+                    );
+                }
+            })
+        );
+    }
+
     public RunArtifactView finalizeRun(
         UUID groupId,
         FinalizeCommand command

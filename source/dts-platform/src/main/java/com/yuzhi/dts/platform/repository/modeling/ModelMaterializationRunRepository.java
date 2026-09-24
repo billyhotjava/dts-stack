@@ -73,6 +73,46 @@ public class ModelMaterializationRunRepository {
             .findFirst();
     }
 
+    /** Lock in the same candidate-then-dispatch order as build/retry/abandon commands. */
+    @Transactional
+    public Optional<RunGroupRecord> lockUnconsumedPreparation(UUID groupId) {
+        List<UUID> candidates = jdbcTemplate.query(
+            """
+            select c.id
+              from modeling_model_release_candidate c
+              join modeling_materialization_dispatch d
+                on d.tenant_id = c.tenant_id and d.candidate_id = c.id
+             where d.id = ?
+             for update of c
+            """,
+            (row, rowNumber) -> row.getObject("id", UUID.class),
+            groupId
+        );
+        if (candidates.isEmpty()) return Optional.empty();
+        List<UUID> active = jdbcTemplate.query(
+            """
+            select d.id
+              from modeling_materialization_dispatch d
+              join modeling_model_release_candidate c
+                on c.tenant_id = d.tenant_id and c.id = d.candidate_id
+             where d.id = ?
+               and c.status = 'BUILDING' and c.version = d.candidate_version
+               and d.status in ('CLAIMED', 'SUBMITTED', 'UNKNOWN')
+               and d.runtime_consumed_at is null
+               and not exists (
+                   select 1 from modeling_materialization_dispatch newer
+                    where newer.tenant_id = d.tenant_id
+                      and newer.candidate_id = d.candidate_id
+                      and newer.attempt > d.attempt
+               )
+             for update of d
+            """,
+            (row, rowNumber) -> row.getObject("id", UUID.class),
+            groupId
+        );
+        return active.isEmpty() ? Optional.empty() : findRunGroup(groupId);
+    }
+
     @Transactional
     public void markDbtSucceeded(
         UUID groupId,
