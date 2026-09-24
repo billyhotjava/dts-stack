@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>构建与发布原型</title>
+<style>
+:root {
+	--blue: #2468f2;
+	--blue-soft: #eaf1ff;
+	--ink: #172033;
+	--ink-2: #3c4759;
+	--muted: #687386;
+	--border: #dfe5ee;
+	--surface: #ffffff;
+	--canvas: #f4f6f9;
+	--success: #16844a;
+	--success-soft: #e7f7ee;
+	--warning: #c46a08;
+	--warning-soft: #fff3df;
+	--danger: #cf3f3f;
+	--danger-soft: #fdeaea;
+	--neutral-soft: #eef1f5;
+	--proto: #7a4dd8;
+	--proto-soft: #f3eefe;
+	--radius: 4px;
+	--shadow-modal: 0 24px 60px -20px rgba(23, 32, 51, 0.45);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+	background: var(--canvas);
+	color: var(--ink);
+	font: 13px/1.6 "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+button { font: inherit; }
+button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
+	outline: 2px solid var(--blue);
+	outline-offset: 2px;
+}
+
+/* ---------- product chrome ---------- */
+.topbar {
+	display: flex;
+	align-items: center;
+	gap: 18px;
+	height: 48px;
+	padding: 0 20px;
+	background: #fff;
+	border-bottom: 1px solid var(--border);
+}
+.topbar__brand { font-weight: 700; letter-spacing: 0.02em; }
+.crumbs { color: var(--muted); }
+.crumbs b { color: var(--ink); font-weight: 600; }
+.page { padding: 14px 20px 40px; max-width: 1400px; }
+.page__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.page__head h1 { margin: 0; font-size: 18px; }
+.page__head p { margin: 2px 0 0; color: var(--muted); }
+
+/* ---------- table ---------- */
+.card { background: #fff; border: 1px solid var(--border); border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; background: #f9fafc; white-space: nowrap; }
+th.group { border-left: 1px solid var(--border); }
+td.group { border-left: 1px solid var(--border); }
+tr:last-child td { border-bottom: 0; }
+.model-name { font-weight: 600; }
+.model-sub { color: var(--muted); font-size: 12px; }
+.layer { display: inline-block; min-width: 34px; margin-right: 6px; padding: 0 5px; border: 1px solid var(--border); border-radius: 3px; color: var(--ink-2); font-size: 11px; text-align: center; }
+.row-actions { display: flex; gap: 6px; white-space: nowrap; }
+.row-hint { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+
+/* status chip: one fact per chip */
+.chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 1px 8px;
+	border: 1px solid transparent;
+	border-radius: 11px;
+	font-size: 12px;
+	white-space: nowrap;
+	cursor: pointer;
+	background: var(--neutral-soft);
+	color: var(--ink-2);
+}
+.chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.7; }
+.chip:hover { border-color: currentColor; }
+.chip--ok { background: var(--success-soft); color: var(--success); }
+.chip--warn { background: var(--warning-soft); color: var(--warning); }
+.chip--bad { background: var(--danger-soft); color: var(--danger); }
+.chip--run { background: var(--blue-soft); color: var(--blue); }
+.chip--none { color: var(--muted); }
+.chip--static { cursor: default; }
+.chip--static:hover { border-color: transparent; }
+
+/* ---------- buttons ---------- */
+.btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 30px;
+	padding: 0 12px;
+	border: 1px solid #cfd8e6;
+	border-radius: var(--radius);
+	background: #fff;
+	color: var(--ink);
+	cursor: pointer;
+	white-space: nowrap;
+}
+.btn:hover { border-color: var(--blue); color: var(--blue); }
+.btn:active { transform: translateY(1px); }
+.btn--primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+.btn--primary:hover { background: #1b57d6; color: #fff; }
+.btn--danger { border-color: #efb4b7; color: var(--danger); }
+.btn--danger:hover { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+.btn--sm { min-height: 26px; padding: 0 9px; font-size: 12px; }
+.btn[disabled], .btn[aria-disabled="true"] { background: #f4f6f9; border-color: var(--border); color: #a4adbb; cursor: not-allowed; transform: none; }
+.link { color: var(--blue); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- modal ---------- */
+.overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: none; align-items: flex-start; justify-content: center; padding-top: 7vh; background: rgba(23, 32, 51, 0.38); z-index: 20; }
+.overlay.open { display: flex; }
+.modal { width: 640px; max-width: calc(100vw - 24px); max-height: 86vh; display: flex; flex-direction: column; background: #fff; border-radius: 8px; box-shadow: var(--shadow-modal); }
+.modal__head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+.modal__title { font-size: 15px; font-weight: 700; }
+.modal__title small { margin-left: 8px; color: var(--muted); font-weight: 400; font-size: 12px; }
+.modal__close { border: 0; background: none; font-size: 20px; line-height: 1; color: var(--muted); cursor: pointer; }
+.modal__body { padding: 16px 20px; overflow-y: auto; }
+.modal__foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); }
+.modal__foot .spacer { flex: 1; color: var(--muted); font-size: 12px; }
+
+/* state banner in build dialog */
+.state { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 14px; }
+.state__dot { flex: 0 0 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: var(--muted); }
+.state strong { display: block; font-size: 14px; }
+.state p { margin: 2px 0 0; color: var(--ink-2); }
+.state--ok { background: var(--success-soft); border-color: #bfe6cf; }
+.state--ok .state__dot { background: var(--success); }
+.state--bad { background: var(--danger-soft); border-color: #f2c4c6; }
+.state--bad .state__dot { background: var(--danger); }
+.state--run { background: var(--blue-soft); border-color: #c9dafd; }
+.state--run .state__dot { background: var(--blue); animation: pulse 1.2s ease-in-out infinite; }
+.state--hold { background: var(--warning-soft); border-color: #f0d6ac; }
+.state--hold .state__dot { background: var(--warning); }
+@keyframes pulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .state--run .state__dot { animation: none; } .bar__fill { transition: none; } }
+
+.progress { margin-top: 10px; }
+.bar { height: 6px; border-radius: 3px; background: #d8e4fb; overflow: hidden; }
+.bar__fill { height: 100%; background: var(--blue); transition: width 0.4s ease; }
+.phases { display: flex; justify-content: space-between; margin-top: 6px; color: var(--muted); font-size: 12px; }
+.phases .on { color: var(--blue); font-weight: 600; }
+.phases .done { color: var(--success); }
+
+.facts { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 9px 14px; margin: 0 0 12px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.facts select { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; font: inherit; }
+
+details.fold { border: 1px solid var(--border); border-radius: 6px; margin-top: 10px; }
+details.fold > summary { padding: 8px 12px; cursor: pointer; color: var(--ink-2); }
+details.fold[open] > summary { border-bottom: 1px solid var(--border); }
+details.fold .fold__body { padding: 10px 12px; }
+.mini th, .mini td { padding: 6px 8px; font-size: 12px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
+.confirm { margin-top: 12px; padding: 10px 12px; border: 1px dashed #efb4b7; border-radius: 6px; background: #fffafa; }
+.confirm p { margin: 0 0 8px; }
+
+/* publish checklist */
+.checklist { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 6px; }
+.check { display: grid; grid-template-columns: 22px 86px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.check:last-child { border-bottom: 0; }
+.check__icon { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; }
+.check--ok .check__icon { background: var(--success); }
+.check--warn .check__icon { background: var(--warning); }
+.check--bad .check__icon { background: var(--danger); }
+.check--wait .check__icon { background: #a4adbb; }
+.check__name { color: var(--ink-2); font-weight: 600; }
+.check__text { color: var(--ink-2); }
+.check--warn .check__text { color: var(--warning); }
+.check--bad .check__text { color: var(--danger); }
+.policy { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-size: 11px; }
+.field { display: grid; gap: 5px; margin-top: 14px; }
+.field textarea { min-height: 54px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); font: inherit; resize: vertical; }
+.field .req { color: var(--danger); }
+.published { padding: 12px 14px; border: 1px solid #bfe6cf; border-radius: 6px; background: var(--success-soft); margin-bottom: 12px; }
+.note { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+
+/* side panel = another module (示意) */
+.side { position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100vw; background: #fff; border-left: 1px solid var(--border); box-shadow: -12px 0 30px -18px rgba(23,32,51,0.5); transform: translateX(100%); visibility: hidden; transition: transform 0.25s ease, visibility 0s linear 0.25s; z-index: 30; display: flex; flex-direction: column; }
+.side.open { transform: none; visibility: visible; transition: transform 0.25s ease; }
+.side__head { padding: 14px 18px; border-bottom: 1px solid var(--border); }
+.side__head small { display: block; color: var(--muted); }
+.side__body { padding: 16px 18px; overflow-y: auto; flex: 1; }
+.side__foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+.counter { margin-top: 12px; padding: 10px 12px; border-radius: 6px; background: var(--canvas); font-size: 12px; }
+.counter b { font-size: 14px; }
+
+/* toast */
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 9px 16px; border-radius: 6px; background: var(--ink); color: #fff; transition: opacity 0.2s, transform 0.2s; z-index: 40; pointer-events: none; }
+.toast.show { opacity: 1; transform: translateX(-50%); }
+
+/* prototype console — visually distinct from the product */
+.console { margin: 12px 20px 0; max-width: 1360px; background: #fff; border: 1px dashed var(--proto); border-radius: 8px; }
+.console__head { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: var(--proto-soft); color: var(--proto); font-weight: 700; border-radius: 8px 8px 0 0; cursor: pointer; }
+.console__body { padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 24px; }
+.console.min .console__body { display: none; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.seg button { border: 0; padding: 3px 10px; background: #fff; cursor: pointer; }
+.seg button.on { background: var(--proto); color: #fff; }
+.console label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
+.console ul { margin: 0; padding-left: 16px; color: var(--ink-2); font-size: 12px; flex: 1 1 320px; }
+
+@media (max-width: 1180px) {
+	.col-optional { display: none; }
+}
+@media (max-width: 760px) {
+	.page { padding: 12px 12px 40px; }
+	th, td { padding: 8px; }
+	.col-secondary { display: none; }
+	.console { margin: 12px 12px 0; }
+	.check { grid-template-columns: 22px minmax(0, 1fr); }
+	.check__text, .check__act { grid-column: 2; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+	<span class="topbar__brand">DTS 数据治理平台</span>
+	<nav class="crumbs" aria-label="面包屑">数据建模 › 维度建模 › <b>模型工作台</b></nav>
+</header>
+<section class="console" id="console" aria-label="原型控制台">
+	<div class="console__head" id="consoleHead"><span>原型控制台（仅原型，非产品界面）</span><span id="consoleToggle">收起</span></div>
+	<div class="console__body">
+		<label>数据质量策略（系统管理 → 模型发布治理）
+			<span class="seg" id="policySeg"><button type="button" data-v="ADVISORY" class="on">提示</button><button type="button" data-v="BLOCKING">阻断</button></span>
+		</label>
+		<label>当前身份
+			<span class="seg" id="roleSeg"><button type="button" data-v="owner" class="on">数据管理员</button><button type="button" data-v="reviewer">发布评审人</button></span>
+		</label>
+		<label>构建结果模拟
+			<span class="seg" id="outcomeSeg"><button type="button" data-v="success" class="on">成功</button><button type="button" data-v="fail">失败</button><button type="button" data-v="verify">待核验</button></span>
+		</label>
+		<ul>
+			<li>每行是一种场景；打开「构建」「发布」体验。</li>
+			<li>点状态标记模拟跳到所属功能（右侧面板）。</li>
+			<li>SQL 执行次数用于检查：恢复登记/质量/运行不重跑构建。</li>
+		</ul>
+		<button type="button" class="btn btn--sm" id="reset">重置全部场景</button>
+	</div>
+</section>
+
+<main class="page">
+	<div class="page__head">
+		<div>
+			<h1>模型工作台</h1>
+			<p>构建成功即完成建模；发布、登记、质量、运行各自独立，点状态标记到所属功能处理。</p>
+		</div>
+	</div>
+	<div class="card">
+		<table aria-label="模型列表">
+			<thead>
+				<tr>
+					<th>模型</th>
+					<th class="col-secondary">版本</th>
+					<th>构建</th>
+					<th>发布</th>
+					<th class="group col-secondary">目录登记</th>
+					<th class="col-optional">分析准备</th>
+					<th class="col-secondary">数据质量</th>
+					<th class="col-optional">运行</th>
+					<th>操作</th>
+				</tr>
+			</thead>
+			<tbody id="rows"></tbody>
+		</table>
+	</div>
+</main>
+
+<!-- build dialog -->
+<div class="overlay" id="buildOverlay" aria-hidden="true">
+	<section class="modal" role="dialog" aria-modal="true" aria-labelledby="buildTitle">
+		<div class="modal__head">
+			<div class="modal__title" id="buildTitle"></div>
+			<button class="modal__close" type="button" aria-label="关闭" data-close>×</button>
+		</div>
+		<div class="modal__body" id="buildBody"></div>
+		<div class="modal__foot" id="buildFoot"></div>
+	</section>
+</div>
+
+<!-- publish dialog -->
+<div class="overlay" id="publishOverlay" aria-hidden="true">
+	<section class="modal" role="dialog" aria-modal="true" aria-labelledby="publishTitle">
+		<div class="modal__head">
+			<div class="modal__title" id="publishTitle"></div>
+			<button class="modal__close" type="button" aria-label="关闭" data-close>×</button>
+		</div>
+		<div class="modal__body" id="publishBody"></div>
+		<div class="modal__foot" id="publishFoot"></div>
+	</section>
+</div>
+
+<!-- another module, shown as a side panel for the prototype -->
+<aside class="side" id="side" aria-label="其他功能（示意）">
+	<div class="side__head"><strong id="sideTitle"></strong><small id="sideSub"></small></div>
+	<div class="side__body" id="sideBody"></div>
+	<div class="side__foot" id="sideFoot"></div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+
+
+<script>
+(function () {
+	"use strict";
+
+	var BASE = [
+		{ id: "m1", name: "biz_dwd_budget_v2", cn: "预算明细", layer: "DWD", rev: 2,
+			build: "none", catalog: "none", analysis: "none", quality: "none", publish: "none", run: "none", review: false, sql: 0 },
+		{ id: "m2", name: "biz_dws_budget_v2", cn: "预算汇总", layer: "DWS", rev: 4,
+			build: "failed", failReason: "目标数仓不可用：当前 dbt 目标数据源已被删除", failFix: "请系统管理员在「系统管理 → 数据湖配置」确认默认数据湖后重新构建",
+			failCode: "DBT_TARGET_DATASOURCE_NOT_FOUND", runId: "run-7f3a1c", catalog: "none", analysis: "none", quality: "none", publish: "none", run: "none", review: false, sql: 1 },
+		{ id: "m3", name: "biz_ads_budget_derived_v2", cn: "预算执行派生指标", layer: "ADS", rev: 3,
+			build: "success", finishedAt: "09-24 14:02", tables: "3/3", catalog: "failed", analysis: "none", quality: "none", publish: "none", run: "none", review: false, sql: 1 },
+		{ id: "m4", name: "biz_dws_cost_v1", cn: "成本汇总", layer: "DWS", rev: 5,
+			build: "success", finishedAt: "09-24 10:40", tables: "1/1", catalog: "ok", analysis: "ok", quality: "missing", publish: "none", run: "none", review: true, sql: 1 },
+		{ id: "m5", name: "biz_ads_risk_level", cn: "风险等级", layer: "ADS", rev: 7,
+			build: "success", finishedAt: "09-23 18:31", tables: "2/2", catalog: "ok", analysis: "ok", quality: "passed", publish: "published", publishedAt: "09-23 18:40", run: "failed", review: false, sql: 1 },
+		{ id: "m6", name: "biz_dim_org", cn: "组织维度", layer: "DIM", rev: 2,
+			build: "occupied", occupiedBy: "RC-20260921-0137", occupiedStatus: "工程验证中", occupiedModels: "biz_dim_org、biz_dim_dept、biz_dim_post", catalog: "ok", analysis: "ok", quality: "passed", publish: "none", run: "none", review: false, sql: 3 },
+		{ id: "m7", name: "biz_dwd_contract", cn: "合同明细", layer: "DWD", rev: 1,
+			build: "building", progress: 1, slow: true, catalog: "none", analysis: "none", quality: "none", publish: "none", run: "none", review: false, sql: 1 }
+	];
+	var PHASES = ["准备", "加工", "核验", "结果回写"];
+	var state = { models: clone(BASE), policy: "ADVISORY", role: "owner", outcome: "success", openBuild: null, openPublish: null, confirm: null, timers: {} };
+
+	function clone(value) { return JSON.parse(JSON.stringify(value)); }
+	function $(id) { return document.getElementById(id); }
+	function esc(text) { return String(text).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+	function model(id) { for (var i = 0; i < state.models.length; i++) if (state.models[i].id === id) return state.models[i]; return null; }
+	function toast(text) { var t = $("toast"); t.textContent = text; t.classList.add("show"); clearTimeout(toast.timer); toast.timer = setTimeout(function () { t.classList.remove("show"); }, 2600); }
+
+	/* ---------- status vocabulary: one fact per dimension ---------- */
+	function buildChip(m) {
+		return {
+			none: ["未构建", "none"], building: ["构建中", "run"], success: ["已构建", "ok"], failed: ["构建失败", "bad"],
+			verify: ["待核验", "warn"], occupied: ["暂不能构建", "warn"]
+		}[m.build];
+	}
+	function publishChip(m) {
+		return { none: ["未发布", "none"], review: ["评审中", "run"], approved: ["评审通过", "run"], published: ["已发布", "ok"], rolledback: ["已回滚", "warn"] }[m.publish];
+	}
+	function catalogChip(m) { return { none: ["未登记", "none"], ok: ["已登记", "ok"], failed: ["登记失败", "bad"], running: ["登记中", "run"] }[m.catalog]; }
+	function analysisChip(m) { return { none: ["未准备", "none"], ok: ["已准备", "ok"], failed: ["准备失败", "bad"] }[m.analysis]; }
+	function qualityChip(m) {
+		if (m.quality === "missing") return ["缺少规则", "warn"];
+		return { none: ["未检查", "none"], passed: ["质量合格", "ok"], failed: ["质量不合格", "bad"] }[m.quality];
+	}
+	function runChip(m) { return { none: ["未上线", "none"], ok: ["运行正常", "ok"], failed: ["最近运行失败", "bad"] }[m.run]; }
+	function chip(pair, dim, id) {
+		return '<span class="chip chip--' + pair[1] + '" role="button" tabindex="0" data-dim="' + dim + '" data-id="' + id + '" title="到所属功能查看">' + pair[0] + "</span>";
+	}
+
+	function canPublish(m) { return m.build === "success"; }
+
+	function renderRows() {
+		var html = state.models.map(function (m) {
+			var publishDisabled = !canPublish(m) && m.publish === "none";
+			var hint = publishDisabled ? '<span class="row-hint" id="hint-' + m.id + '">构建成功后可发布</span>' : "";
+			return "<tr>" +
+				'<td><div class="model-name"><span class="layer">' + m.layer + "</span>" + esc(m.name) + '</div><div class="model-sub">' + esc(m.cn) + " · SQL 执行 " + m.sql + " 次</div></td>" +
+				'<td class="col-secondary">r' + m.rev + "</td>" +
+				"<td>" + chip(buildChip(m), "build", m.id) + "</td>" +
+				"<td>" + chip(publishChip(m), "publish", m.id) + "</td>" +
+				'<td class="group col-secondary">' + chip(catalogChip(m), "catalog", m.id) + "</td>" +
+				'<td class="col-optional">' + chip(analysisChip(m), "analysis", m.id) + "</td>" +
+				'<td class="col-secondary">' + chip(qualityChip(m), "quality", m.id) + "</td>" +
+				'<td class="col-optional">' + chip(runChip(m), "run", m.id) + "</td>" +
+				'<td><div class="row-actions">' +
+				'<button type="button" class="btn btn--sm" data-act="build" data-id="' + m.id + '">构建</button>' +
+				'<button type="button" class="btn btn--sm" data-act="publish" data-id="' + m.id + '"' +
+				(publishDisabled ? ' aria-disabled="true" aria-describedby="hint-' + m.id + '"' : "") + ">发布</button>" +
+				"</div>" + hint + "</td></tr>";
+		}).join("");
+		$("rows").innerHTML = html;
+	}
+
+	/* ---------- build dialog ---------- */
+	function buildPlanTable(m) {
+		var rows = m.layer === "ADS"
+			? [["1", "biz_dwd_budget_v2", "DWD", "上游依赖", "复用已有结果"], ["2", "biz_dws_budget_v2", "DWS", "上游依赖", "需要构建"], ["3", m.name, m.layer, "本次模型", "需要构建"]]
+			: [["1", m.name, m.layer, "本次模型", "需要构建"]];
+		return '<table class="mini"><thead><tr><th>顺序</th><th>模型</th><th>分层</th><th>依赖角色</th><th>本次动作</th></tr></thead><tbody>' +
+			rows.map(function (r) { return "<tr><td>" + r.join("</td><td>") + "</td></tr>"; }).join("") + "</tbody></table>";
+	}
+	function scopeText(m) { return m.layer === "ADS" ? "本模型 + 2 个上游（1 个需构建，1 个复用）" : "仅本模型"; }
+
+	function renderBuild() {
+		var m = model(state.openBuild);
+		if (!m) return;
+		$("buildTitle").innerHTML = "构建 <small>" + esc(m.name) + " · r" + m.rev + "</small>";
+		var banner, foot = [];
+		var confirming = state.confirm && state.confirm.id === m.id ? state.confirm.kind : null;
+		if (m.build === "none") {
+			banner = stateBox("", "尚未构建", "确认范围和环境后开始构建。构建成功即完成建模，发布是之后单独的动作。");
+			foot.push(btn("开始构建", "startBuild", "primary"));
+		} else if (m.build === "building") {
+			banner = stateBox("run", "构建中 · " + PHASES[m.progress] , "关闭窗口不会取消构建，重新打开会看到同一次运行。" + progressHtml(m));
+			foot.push(btn("放弃本次构建", "askAbandon", "danger"));
+		} else if (m.build === "success") {
+			banner = stateBox("ok", "构建成功，建模已完成", m.finishedAt + " · " + m.tables + " 张表完成 · 工程检查通过");
+			foot.push(btn("重新构建", "startBuild"));
+			foot.push(btn("查看数据资产", "gotoAsset"));
+		} else if (m.build === "failed") {
+			banner = stateBox("bad", "构建失败：" + m.failReason, m.failFix +
+				'<details class="fold"><summary>查看详情</summary><div class="fold__body"><dl class="facts"><dt>错误码</dt><dd class="mono">' + esc(m.failCode) + '</dd><dt>执行编号</dt><dd class="mono">' + esc(m.runId) + "</dd></dl></div></details>");
+			foot.push(btn("重新构建", "startBuild", "primary"));
+		} else if (m.build === "verify") {
+			banner = stateBox("hold", "SQL 已执行，结果待核验", "表已生成，但目标核验或结果回写尚未确认，暂不算构建成功。继续核验不会再次执行 SQL。");
+			foot.push(btn("继续核验", "continueVerify", "primary"));
+		} else if (m.build === "occupied") {
+			banner = stateBox("hold", "暂不能构建：所选模型被另一个发布单占用",
+				"发布单 " + esc(m.occupiedBy) + "（" + esc(m.occupiedStatus) + "）包含：" + esc(m.occupiedModels) + "。这不是一次构建失败。");
+			foot.push(btn("关闭占用发布单", "askCloseOccupied", "danger"));
+		}
+		var body = banner +
+			'<dl class="facts"><dt>构建范围</dt><dd>' + scopeText(m) + '</dd>' +
+			'<dt>执行环境</dt><dd><select aria-label="执行环境"' + (m.build === "building" ? " disabled" : "") + '><option>开发环境</option><option>测试环境</option><option>生产环境</option></select></dd>' +
+			(m.build === "success" ? "<dt>SQL 执行</dt><dd>" + m.sql + " 次（登记、质量、发布、运行的恢复不会增加此次数）</dd>" : "") +
+			"</dl>" +
+			'<details class="fold"><summary>依赖构建计划</summary><div class="fold__body">' + buildPlanTable(m) + "</div></details>" +
+			'<details class="fold"><summary>高级设置</summary><div class="fold__body"><dl class="facts"><dt>依赖策略</dt><dd><select aria-label="依赖策略"><option>缺失上游一并构建（推荐）</option><option>仅使用已验证的上游</option></select></dd></dl></div></details>';
+		if (confirming === "abandon") body += confirmBox("放弃后本次运行标记为已放弃，已写入的数据不回滚。确认放弃？", "doAbandon");
+		if (confirming === "closeOccupied") body += confirmBox("关闭后发布单 " + esc(m.occupiedBy) + " 的后续发布流程结束，已有构建结果保留。该发布单涉及其他模型，确认关闭？", "doCloseOccupied");
+		$("buildBody").innerHTML = body;
+		$("buildFoot").innerHTML = '<span class="spacer">' + (m.build === "success" ? "可以直接返回列表，不需要继续登记、质量或发布。" : "") + "</span>" + btn("关闭", "closeBuild") + foot.reverse().join("");
+	}
+	function stateBox(kind, title, text) {
+		return '<div class="state' + (kind ? " state--" + kind : "") + '" role="status"><span class="state__dot" aria-hidden="true"></span><div><strong>' + title + "</strong><p>" + text + "</p></div></div>";
+	}
+	function progressHtml(m) {
+		var pct = Math.round(((m.progress + 0.5) / PHASES.length) * 100);
+		return '<div class="progress"><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><div class="bar__fill" style="width:' + pct + '%"></div></div><div class="phases">' +
+			PHASES.map(function (p, i) { return '<span class="' + (i < m.progress ? "done" : i === m.progress ? "on" : "") + '">' + p + "</span>"; }).join("") + "</div></div>";
+	}
+	function confirmBox(text, action) {
+		return '<div class="confirm" role="alertdialog"><p>' + text + "</p>" + btn("确认", action, "danger") + " " + btn("取消", "cancelConfirm") + "</div>";
+	}
+	function btn(label, action, tone) { return '<button type="button" class="btn' + (tone ? " btn--" + tone : "") + '" data-a="' + action + '">' + label + "</button>"; }
+
+	function startBuild(m) {
+		m.build = "building"; m.progress = 0; m.sql += 1; m.slow = false;
+		state.confirm = null;
+		tick(m);
+	}
+	function tick(m) {
+		clearTimeout(state.timers[m.id]);
+		state.timers[m.id] = setTimeout(function () {
+			if (m.build !== "building") return;
+			if (m.progress < PHASES.length - 1) { m.progress += 1; refresh(); tick(m); return; }
+			finishBuild(m);
+			refresh();
+		}, m.slow ? 3500 : 1100);
+	}
+	function finishBuild(m) {
+		if (state.outcome === "fail") {
+			m.build = "failed"; m.failReason = "目标数仓连接超时"; m.failFix = "请确认目标数仓可访问后重新构建"; m.failCode = "DBT_TARGET_CONNECTION_TIMEOUT"; m.runId = "run-" + Math.random().toString(16).slice(2, 8);
+		} else if (state.outcome === "verify") {
+			m.build = "verify";
+		} else {
+			markBuilt(m);
+		}
+	}
+	function markBuilt(m) {
+		m.build = "success"; m.finishedAt = "09-24 " + new Date().toTimeString().slice(0, 5); m.tables = m.layer === "ADS" ? "3/3" : "1/1";
+		if (m.catalog === "none") m.catalog = "ok";
+		if (m.analysis === "none") m.analysis = "ok";
+	}
+
+	/* ---------- publish dialog ---------- */
+	function checklist(m) {
+		var blocking = state.policy === "BLOCKING";
+		var rows = [];
+		rows.push(m.build === "success" ? ["ok", "构建结果", "r" + m.rev + " · " + m.finishedAt + " 构建成功", null]
+			: ["bad", "构建结果", "当前版本尚未构建成功", ["去构建", "build"]]);
+		rows.push(m.build === "success" ? ["ok", "工程检查", "通过（随构建执行）", null] : ["wait", "工程检查", "随构建执行", null]);
+		rows.push(m.catalog === "ok" ? ["ok", "资产登记", "已登记", null]
+			: m.catalog === "failed" ? ["bad", "资产登记", "登记失败，发布需要资产身份", ["去资产目录处理", "catalog"]]
+			: ["wait", "资产登记", "构建成功后自动登记", null]);
+		var q;
+		if (m.quality === "passed") q = ["ok", "数据质量", "质量合格", ["查看报告", "quality"]];
+		else if (m.quality === "missing") q = [blocking ? "bad" : "warn", "数据质量", blocking ? "缺少质量规则，阻断策略下不能发布" : "缺少质量规则（提示，不影响发布）", ["去配置规则", "quality"]];
+		else if (m.quality === "failed") q = [blocking ? "bad" : "warn", "数据质量", blocking ? "质量不合格，阻断策略下不能发布" : "质量不合格（提示，不影响发布）", ["查看报告", "quality"]];
+		else q = [blocking ? "bad" : "warn", "数据质量", blocking ? "尚未检查，阻断策略下不能发布" : "尚未检查（提示，不影响发布）", ["去配置规则", "quality"]];
+		q[2] += '<span class="policy">' + (blocking ? "阻断策略" : "提示策略") + "</span>";
+		rows.push(q);
+		if (m.review) {
+			rows.push(m.publish === "approved" || m.publish === "published" ? ["ok", "审批", "评审通过", null]
+				: m.publish === "review" ? ["wait", "审批", "等待发布评审人处理", null]
+				: ["wait", "审批", "需要评审：提交后由独立评审人处理", null]);
+		} else {
+			rows.push(["ok", "审批", "无需评审（数据管理员自助发布）", null]);
+		}
+		rows.push(["ok", "权限与密级", "通过", null]);
+		return rows;
+	}
+	function renderPublish() {
+		var m = model(state.openPublish);
+		if (!m) return;
+		$("publishTitle").innerHTML = "发布 <small>" + esc(m.name) + " · r" + m.rev + "</small>";
+		var body = "", foot = [];
+		var confirming = state.confirm && state.confirm.id === m.id ? state.confirm.kind : null;
+		if (m.publish === "published") {
+			body += '<div class="published"><strong>已发布</strong><div>r' + m.rev + " · " + (m.publishedAt || "刚刚") + " 发布，报表和数据服务按各自授权访问。</div></div>";
+			body += '<p class="note">上线与定时运行在运行监控中查看和处理；运行失败不会改变发布结果，也不会自动回滚。 <button type="button" class="link" data-a="gotoRun">打开运行监控</button></p>';
+			body += '<div class="field"><label for="reason">回滚说明 <span class="req">*</span></label><textarea id="reason" placeholder="回滚必须说明原因"></textarea></div>';
+			if (confirming === "rollback") body += confirmBox("回滚后该版本对下游不可见，构建结果保留。确认回滚？", "doRollback");
+			foot.push(btn("回滚发布", "askRollback", "danger"));
+		} else {
+			var rows = checklist(m);
+			var blockers = rows.filter(function (r) { return r[0] === "bad"; });
+			var awaitingReview = m.review && m.publish === "review";
+			body += '<ul class="checklist" aria-label="发布前检查">' + rows.map(function (r) {
+				var icon = { ok: "✓", warn: "!", bad: "×", wait: "…" }[r[0]];
+				return '<li class="check check--' + r[0] + '"><span class="check__icon" aria-hidden="true">' + icon + '</span><span class="check__name">' + r[1] +
+					'</span><span class="check__text">' + r[2] + '</span><span class="check__act">' + (r[3] ? '<button type="button" class="link" data-go="' + r[3][1] + '">' + r[3][0] + "</button>" : "") + "</span></li>";
+			}).join("") + "</ul>";
+			if (awaitingReview && state.role === "reviewer") {
+				body += '<div class="field"><label for="reason">评审意见（驳回时必填）</label><textarea id="reason"></textarea></div>';
+				foot.push(btn("审核通过", "approve", "primary"));
+				foot.push(btn("驳回", "reject", "danger"));
+			} else if (awaitingReview) {
+				body += '<p class="note">已提交评审，等待独立发布评审人处理；提交人不能评审自己的发布。（在控制台切换为「发布评审人」体验）</p>';
+			} else {
+				body += '<div class="field"><label for="reason">发布说明（选填）</label><textarea id="reason" placeholder="例如：预算口径调整后首发"></textarea></div>';
+				var label = m.review && m.publish !== "approved" ? "提交评审" : "发布";
+				foot.push('<button type="button" class="btn btn--primary" data-a="' + (label === "发布" ? "publish" : "submitReview") + '"' + (blockers.length ? ' disabled aria-describedby="blockSummary"' : "") + ">" + label + "</button>");
+			}
+			var summary = blockers.length ? "有 " + blockers.length + " 项阻止发布：" + blockers.map(function (r) { return r[1]; }).join("、") : "";
+			$("publishFoot").dataset.summary = summary;
+		}
+		$("publishBody").innerHTML = body;
+		var s = $("publishFoot").dataset.summary || "";
+		$("publishFoot").innerHTML = '<span class="spacer" id="blockSummary">' + (m.publish === "published" ? "" : esc(s)) + "</span>" + btn("取消", "closePublish") + foot.reverse().join("");
+		$("publishFoot").dataset.summary = "";
+	}
+
+	/* ---------- other modules (side panel) ---------- */
+	function openSide(dim, m) {
+		var title = { catalog: "资产目录", analysis: "资产目录 · 分析准备", quality: "数据质量", run: "运行监控", build: "构建记录", publish: "发布记录" }[dim];
+		$("sideTitle").textContent = title + "（示意）";
+		$("sideSub").textContent = "从模型工作台跳转 · " + m.name + " r" + m.rev + " · 关闭后返回原列表位置";
+		var body = "", foot = [btn("返回模型工作台", "closeSide")];
+		if (dim === "catalog" && m.catalog === "failed") {
+			body = stateBox("bad", "目录登记失败", "目标表已生成，资产身份登记未完成（元数据服务超时）。重试只重新登记，不会再次执行构建 SQL。") + counterHtml(m);
+			foot.unshift(btn("重试登记", "retryCatalog", "primary"));
+		} else if (dim === "quality" && (m.quality === "missing" || m.quality === "none")) {
+			body = stateBox("hold", "尚未配置质量规则", "为该资产配置规则后运行质量检查。质量结果不改变构建结果；阻断策略下只影响能否发布。") + counterHtml(m);
+			foot.unshift(btn("配置规则并运行（模拟通过）", "fixQuality", "primary"));
+		} else if (dim === "run" && m.run === "failed") {
+			body = stateBox("bad", "最近一次定时计算失败", "09-24 02:00 调度运行失败：上游数据未到达。发布与建模结果不受影响。") + counterHtml(m);
+			foot.unshift(btn("重新运行（模拟成功）", "fixRun", "primary"));
+		} else {
+			body = '<p>' + esc(title) + "中该对象的详情页（原型不展开）。</p>" + counterHtml(m);
+		}
+		$("sideBody").innerHTML = body;
+		$("sideFoot").innerHTML = foot.reverse().join("");
+		$("side").dataset.id = m.id;
+		$("side").classList.add("open");
+	}
+	function counterHtml(m) { return '<div class="counter">构建 SQL 执行次数：<b>' + m.sql + "</b> 次（本功能内的恢复操作不会增加）</div>"; }
+
+	/* ---------- wiring ---------- */
+	function refresh() {
+		renderRows();
+		if (state.openBuild) renderBuild();
+		if (state.openPublish) renderPublish();
+		var sideId = $("side").classList.contains("open") ? $("side").dataset.id : null;
+		if (sideId && $("sideBody").querySelector(".counter")) $("sideBody").querySelector(".counter").innerHTML = counterHtml(model(sideId)).replace(/^<div class="counter">|<\/div>$/g, "");
+	}
+	function openOverlay(id) { var o = $(id); o.classList.add("open"); o.setAttribute("aria-hidden", "false"); setTimeout(function () { var b = o.querySelector(".modal__foot .btn--primary:not([disabled])") || o.querySelector(".modal__close"); if (b) b.focus(); }, 30); }
+	function closeOverlay(id) { var o = $(id); o.classList.remove("open"); o.setAttribute("aria-hidden", "true"); state.confirm = null; }
+
+	document.addEventListener("click", function (event) {
+		var target = event.target.closest("[data-act],[data-a],[data-dim],[data-go],[data-close]");
+		if (!target) return;
+		var m;
+		if (target.hasAttribute("data-close")) {
+			var overlay = target.closest(".overlay");
+			if (overlay.id === "buildOverlay") state.openBuild = null; else state.openPublish = null;
+			closeOverlay(overlay.id);
+			return;
+		}
+		if (target.dataset.act === "build") { state.openBuild = target.dataset.id; state.confirm = null; renderBuild(); openOverlay("buildOverlay"); return; }
+		if (target.dataset.act === "publish") {
+			m = model(target.dataset.id);
+			if (target.getAttribute("aria-disabled") === "true") { toast("「" + m.name + "」尚未构建成功，构建成功后可发布"); return; }
+			state.openPublish = m.id; state.confirm = null; renderPublish(); openOverlay("publishOverlay"); return;
+		}
+		if (target.dataset.dim) { openSide(target.dataset.dim, model(target.dataset.id)); return; }
+		if (target.dataset.go) {
+			m = model(state.openPublish);
+			if (target.dataset.go === "build") { closeOverlay("publishOverlay"); state.openPublish = null; state.openBuild = m.id; renderBuild(); openOverlay("buildOverlay"); return; }
+			openSide(target.dataset.go, m); return;
+		}
+		var a = target.dataset.a;
+		m = model(state.openBuild) || model(state.openPublish) || model($("side").dataset.id);
+		switch (a) {
+			case "startBuild": startBuild(model(state.openBuild)); break;
+			case "askAbandon": state.confirm = { id: state.openBuild, kind: "abandon" }; break;
+			case "doAbandon": m = model(state.openBuild); m.build = "failed"; m.failReason = "本次构建已放弃"; m.failFix = "可以重新构建；已写入的数据未回滚"; m.failCode = "MODEL_BUILD_ABANDONED"; m.runId = "run-abandoned"; state.confirm = null; toast("已放弃本次构建"); break;
+			case "askCloseOccupied": state.confirm = { id: state.openBuild, kind: "closeOccupied" }; break;
+			case "doCloseOccupied": m = model(state.openBuild); m.build = "none"; state.confirm = null; toast("占用发布单已关闭，已有构建结果保留；现在可以开始构建"); break;
+			case "continueVerify": m = model(state.openBuild); markBuilt(m); toast("核验完成，构建成功（SQL 未重新执行）"); break;
+			case "cancelConfirm": state.confirm = null; break;
+			case "gotoAsset": openSide("catalog", model(state.openBuild)); break;
+			case "closeBuild": state.openBuild = null; closeOverlay("buildOverlay"); break;
+			case "closePublish": state.openPublish = null; closeOverlay("publishOverlay"); break;
+			case "submitReview": m = model(state.openPublish); m.publish = "review"; toast("已提交发布评审"); break;
+			case "approve": m = model(state.openPublish); m.publish = "approved"; toast("评审通过；由数据管理员完成发布"); break;
+			case "reject":
+				if (!$("reason").value.trim()) { $("reason").focus(); toast("驳回必须填写评审意见"); return; }
+				m = model(state.openPublish); m.publish = "none"; toast("已驳回，构建结果不受影响"); break;
+			case "publish": m = model(state.openPublish); m.publish = "published"; m.publishedAt = "09-24 " + new Date().toTimeString().slice(0, 5); if (m.run === "none") m.run = "ok"; toast("发布成功。上线与定时运行在运行监控中查看"); break;
+			case "askRollback":
+				if (!$("reason").value.trim()) { $("reason").focus(); toast("回滚必须填写说明"); return; }
+				state.confirm = { id: state.openPublish, kind: "rollback" }; break;
+			case "doRollback": m = model(state.openPublish); m.publish = "rolledback"; state.confirm = null; state.openPublish = null; closeOverlay("publishOverlay"); toast("已回滚发布；构建结果保留"); break;
+			case "gotoRun": openSide("run", model(state.openPublish)); break;
+			case "retryCatalog": m = model($("side").dataset.id); m.catalog = "ok"; m.analysis = "ok"; openSide("catalog", m); toast("登记成功，SQL 执行次数未增加"); break;
+			case "fixQuality": m = model($("side").dataset.id); m.quality = "passed"; openSide("quality", m); toast("质量检查通过，构建结果未变"); break;
+			case "fixRun": m = model($("side").dataset.id); m.run = "ok"; openSide("run", m); toast("运行成功，发布与构建结果未变"); break;
+			case "closeSide": $("side").classList.remove("open"); break;
+		}
+		refresh();
+	});
+	document.addEventListener("keydown", function (event) {
+		if (event.key === "Escape") {
+			if ($("side").classList.contains("open")) { $("side").classList.remove("open"); return; }
+			if (state.openPublish) { state.openPublish = null; closeOverlay("publishOverlay"); return; }
+			if (state.openBuild) { state.openBuild = null; closeOverlay("buildOverlay"); }
+		}
+		if ((event.key === "Enter" || event.key === " ") && event.target.classList && event.target.classList.contains("chip")) { event.preventDefault(); event.target.click(); }
+	});
+	function segment(id, key, after) {
+		$(id).addEventListener("click", function (event) {
+			var b = event.target.closest("button"); if (!b) return;
+			Array.prototype.forEach.call($(id).children, function (c) { c.classList.toggle("on", c === b); });
+			state[key] = b.dataset.v;
+			if (after) after();
+			refresh();
+		});
+	}
+	segment("policySeg", "policy", function () { toast(state.policy === "BLOCKING" ? "已切换为阻断策略（仅影响能否发布）" : "已切换为提示策略"); });
+	segment("roleSeg", "role");
+	segment("outcomeSeg", "outcome");
+	$("consoleHead").addEventListener("click", function () { var c = $("console"); c.classList.toggle("min"); $("consoleToggle").textContent = c.classList.contains("min") ? "展开" : "收起"; });
+	$("reset").addEventListener("click", function () {
+		Object.keys(state.timers).forEach(function (k) { clearTimeout(state.timers[k]); });
+		state.models = clone(BASE); state.openBuild = null; state.openPublish = null; state.confirm = null;
+		closeOverlay("buildOverlay"); closeOverlay("publishOverlay"); $("side").classList.remove("open");
+		refresh(); tick(model("m7"));
+		toast("已重置全部场景");
+	});
+
+	refresh();
+	tick(model("m7"));
+})();
+</script>
+</body>
+</html>
