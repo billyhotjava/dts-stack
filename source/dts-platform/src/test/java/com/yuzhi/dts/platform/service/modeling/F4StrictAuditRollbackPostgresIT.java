@@ -1084,7 +1084,7 @@ class F4StrictAuditRollbackPostgresIT {
                     )
                 ).containsExactly(1, 2);
 
-                auditOutbox.enqueue(
+                auditOutbox.enqueueTransactional(
                     new EnqueueCommand(
                         ATOMIC_TENANT,
                         ATOMIC_AUDIT_EVENT_ID,
