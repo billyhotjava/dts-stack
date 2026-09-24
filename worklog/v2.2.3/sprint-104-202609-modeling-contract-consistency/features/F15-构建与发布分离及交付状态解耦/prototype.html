@@ -27,38 +27,65 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body { background: var(--canvas); color: var(--ink); font: 13px/1.6 "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
-button { font: inherit; }
-button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+button, input, select { font: inherit; }
+button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
+/* ---------- chrome ---------- */
 .topbar { display: flex; align-items: center; gap: 18px; height: 48px; padding: 0 20px; background: #fff; border-bottom: 1px solid var(--border); }
 .topbar__brand { font-weight: 700; letter-spacing: 0.02em; }
 .crumbs { color: var(--muted); }
 .crumbs b { color: var(--ink); font-weight: 600; }
 .shell { display: flex; align-items: flex-start; min-height: calc(100vh - 48px); }
-.sidenav { position: sticky; top: 0; flex: 0 0 208px; min-height: calc(100vh - 48px); padding: 12px 8px; background: #fff; border-right: 1px solid var(--border); }
-.sidenav__group { margin: 10px 10px 4px; color: var(--muted); font-size: 12px; }
-.sidenav button { display: flex; width: 100%; justify-content: space-between; align-items: center; padding: 7px 12px; border: 0; border-radius: var(--radius); background: none; color: var(--ink-2); text-align: left; cursor: pointer; }
+.sidenav { position: sticky; top: 0; flex: 0 0 220px; min-height: calc(100vh - 48px); padding: 10px 8px 24px; background: #fff; border-right: 1px solid var(--border); }
+.sidenav__group { margin: 12px 10px 2px; color: var(--muted); font-size: 12px; }
+.sidenav__sub { margin: 4px 10px 2px 18px; color: #98a2b3; font-size: 11px; }
+.sidenav button { display: flex; width: 100%; justify-content: space-between; align-items: center; padding: 6px 12px 6px 18px; border: 0; border-radius: var(--radius); background: none; color: var(--ink-2); text-align: left; cursor: pointer; }
 .sidenav button:hover { background: var(--canvas); }
 .sidenav button.active { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
-.badge { min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+.badge { min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; line-height: 18px; text-align: center; font-weight: 400; }
 .badge--warn { background: var(--warning); }
 .content { flex: 1; min-width: 0; }
 .page { padding: 14px 20px 40px; }
-.page__head { margin-bottom: 12px; }
-.page__head h1 { margin: 0; font-size: 18px; }
-.page__head p { margin: 2px 0 0; color: var(--muted); }
+.page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.page-header h1 { margin: 0; font-size: 18px; }
+.page-header p { margin: 2px 0 0; color: var(--muted); }
+
+/* context banner: one jump in, one link back (existing returnTo mechanism) */
+.ctx { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; padding: 8px 12px; border: 1px solid #c9dafd; border-radius: 6px; background: var(--blue-soft); color: var(--ink-2); }
+.ctx strong { color: var(--blue); }
+.ctx .spacer { flex: 1; }
 
 .card { background: #fff; border: 1px solid var(--border); border-radius: 6px; }
+.card + .card { margin-top: 12px; }
+.card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+.card__head strong { font-size: 14px; }
+.card__head span { color: var(--muted); font-size: 12px; }
+.card__body { padding: 12px 14px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.tabs button { padding: 8px 14px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--ink-2); cursor: pointer; }
+.tabs button.on { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.filters input, .filters select { min-height: 30px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
+.filters input { min-width: 260px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.stat { padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; text-align: left; }
+.stat.on { border-color: var(--blue); box-shadow: 0 0 0 1px var(--blue) inset; }
+.stat span { display: block; color: var(--muted); font-size: 12px; }
+.stat b { font-size: 20px; }
+.proposal { display: inline-block; margin-left: 6px; padding: 0 5px; border: 1px dashed var(--proto); border-radius: 3px; color: var(--proto); font-size: 11px; font-weight: 400; }
+
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
 th { color: var(--muted); font-weight: 600; font-size: 12px; background: #f9fafc; white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
+tr.focus td { background: #fffbe6; }
 .model-name { font-weight: 600; }
 .sub { display: block; color: var(--muted); font-size: 12px; }
 .layer { display: inline-block; min-width: 34px; margin-right: 6px; padding: 0 5px; border: 1px solid var(--border); border-radius: 3px; color: var(--ink-2); font-size: 11px; text-align: center; }
 .ver { font-weight: 600; }
 .row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .cell-note { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { padding: 28px 0; color: var(--muted); text-align: center; }
 
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 11px; font-size: 12px; white-space: nowrap; background: var(--neutral-soft); color: var(--ink-2); }
 .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.7; }
@@ -67,6 +94,8 @@ tr:last-child td { border-bottom: 0; }
 .chip--bad { background: var(--danger-soft); color: var(--danger); }
 .chip--run { background: var(--blue-soft); color: var(--blue); }
 .chip--none { color: var(--muted); }
+.tag { display: inline-block; padding: 0 6px; border: 1px solid var(--border); border-radius: 3px; font-size: 12px; color: var(--ink-2); background: #fafbfc; }
+.tag--secret { border-color: #f0c2c2; color: #a13030; background: #fff5f5; }
 
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; padding: 0 12px; border: 1px solid #cfd8e6; border-radius: var(--radius); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
 .btn:hover { border-color: var(--blue); color: var(--blue); }
@@ -80,6 +109,20 @@ tr:last-child td { border-bottom: 0; }
 .btn[disabled] { background: #f4f6f9; border-color: var(--border); color: #a4adbb; cursor: not-allowed; transform: none; }
 .link { color: var(--blue); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
+/* quality workspace keeps its own inner navigation, like the real page */
+.dq { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; }
+.dq__head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
+.dq__eyebrow { color: var(--muted); font-size: 12px; }
+.dq__title { display: flex; align-items: center; gap: 8px; }
+.dq__title h1 { margin: 0; font-size: 18px; }
+.dq__where { text-align: right; color: var(--muted); font-size: 12px; }
+.dq__where strong { display: block; color: var(--ink); font-size: 14px; }
+.dq nav { display: flex; flex-direction: column; gap: 2px; padding: 8px; background: #fff; border: 1px solid var(--border); border-radius: 6px; align-self: start; }
+.dq nav button { padding: 6px 10px; border: 0; border-radius: var(--radius); background: none; text-align: left; color: var(--ink-2); cursor: pointer; }
+.dq nav button.on { background: var(--blue); color: #fff; }
+.dq nav .grp { margin: 6px 10px 0; color: #98a2b3; font-size: 11px; }
+
+/* ---------- dialogs ---------- */
 .overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: none; align-items: flex-start; justify-content: center; padding-top: 7vh; background: rgba(23, 32, 51, 0.38); z-index: 20; }
 .overlay.open { display: flex; }
 .modal { width: 640px; max-width: calc(100vw - 24px); max-height: 86vh; display: flex; flex-direction: column; background: #fff; border-radius: 8px; box-shadow: 0 24px 60px -20px rgba(23, 32, 51, 0.45); }
@@ -90,7 +133,6 @@ tr:last-child td { border-bottom: 0; }
 .modal__body { padding: 16px 20px; overflow-y: auto; }
 .modal__foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); }
 .modal__foot .spacer { flex: 1; color: var(--muted); font-size: 12px; }
-
 .state { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 14px; }
 .state__dot { flex: 0 0 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: var(--muted); }
 .state strong { display: block; font-size: 14px; }
@@ -104,18 +146,17 @@ tr:last-child td { border-bottom: 0; }
 .state--hold { background: var(--warning-soft); border-color: #f0d6ac; }
 .state--hold .state__dot { background: var(--warning); }
 @keyframes pulse { 50% { opacity: 0.3; } }
-@media (prefers-reduced-motion: reduce) { .state--run .state__dot { animation: none; } .bar__fill { transition: none; } .side { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .state--run .state__dot { animation: none; } .bar__fill { transition: none; } }
 .progress { margin-top: 10px; }
 .bar { height: 6px; border-radius: 3px; background: #d8e4fb; overflow: hidden; }
 .bar__fill { height: 100%; background: var(--blue); transition: width 0.4s ease; }
 .phases { display: flex; justify-content: space-between; margin-top: 6px; color: var(--muted); font-size: 12px; }
 .phases .on { color: var(--blue); font-weight: 600; }
 .phases .done { color: var(--success); }
-
 .facts { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 9px 14px; margin: 0 0 12px; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; }
-.facts select { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; font: inherit; }
+.facts select { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
 details.fold { border: 1px solid var(--border); border-radius: 6px; margin-top: 10px; }
 details.fold > summary { padding: 8px 12px; cursor: pointer; color: var(--ink-2); }
 details.fold[open] > summary { border-bottom: 1px solid var(--border); }
@@ -124,20 +165,19 @@ details.fold .fold__body { padding: 10px 12px; }
 .mono { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; }
 .confirm { margin-top: 12px; padding: 10px 12px; border: 1px dashed #efb4b7; border-radius: 6px; background: #fffafa; }
 .confirm p { margin: 0 0 8px; }
-
 .summary-ok { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #bfe6cf; border-radius: 6px; background: var(--success-soft); color: var(--success); }
 .checklist { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 6px; }
-.check { display: grid; grid-template-columns: 22px 86px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.check { display: grid; grid-template-columns: 22px 92px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border); }
 .check:last-child { border-bottom: 0; }
 .check__icon { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; }
 .check--ok .check__icon { background: var(--success); }
 .check--warn .check__icon { background: var(--warning); }
 .check--bad .check__icon { background: var(--danger); }
 .check--wait .check__icon { background: #a4adbb; }
-.check--wait .check__text { color: var(--muted); }
 .check__name { color: var(--ink-2); font-weight: 600; }
 .check--warn .check__text { color: var(--warning); }
 .check--bad .check__text { color: var(--danger); }
+.check--wait .check__text { color: var(--muted); }
 .owner { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
 .policy { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-size: 11px; }
 .field { display: grid; gap: 5px; margin-top: 14px; }
@@ -145,16 +185,6 @@ details.fold .fold__body { padding: 10px 12px; }
 .field .req { color: var(--danger); }
 .note { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
 .handoff { margin-top: 12px; padding: 10px 12px; border-radius: 6px; background: var(--canvas); color: var(--ink-2); }
-
-.side { position: fixed; top: 0; right: 0; bottom: 0; width: 560px; max-width: 100vw; background: #fff; border-left: 1px solid var(--border); box-shadow: -12px 0 30px -18px rgba(23,32,51,0.5); transform: translateX(100%); visibility: hidden; transition: transform 0.25s ease, visibility 0s linear 0.25s; z-index: 30; display: flex; flex-direction: column; }
-.side.open { transform: none; visibility: visible; transition: transform 0.25s ease; }
-.side__head { padding: 14px 18px; border-bottom: 1px solid var(--border); }
-.side__head small { display: block; color: var(--muted); }
-.side__body { padding: 14px 18px; overflow-y: auto; flex: 1; }
-.side__foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
-.side table { font-size: 12px; }
-.side th, .side td { padding: 7px 8px; }
-.side .empty { padding: 24px 0; color: var(--muted); text-align: center; }
 
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 9px 16px; border-radius: 6px; background: var(--ink); color: #fff; transition: opacity 0.2s, transform 0.2s; z-index: 40; pointer-events: none; max-width: 90vw; }
 .toast.show { opacity: 1; transform: translateX(-50%); }
@@ -170,12 +200,13 @@ details.fold .fold__body { padding: 10px 12px; }
 .console .pending { color: var(--warning); }
 .console ul { margin: 0; padding-left: 16px; color: var(--ink-2); font-size: 12px; flex: 1 1 360px; }
 
-@media (max-width: 960px) { .sidenav { display: none; } }
+@media (max-width: 960px) { .sidenav { display: none; } .dq { grid-template-columns: minmax(0, 1fr); } .dq nav { flex-direction: row; flex-wrap: wrap; } .dq nav .grp { display: none; } }
 @media (max-width: 760px) {
 	.page { padding: 12px 12px 40px; }
 	.console { margin: 12px 12px 0; }
 	th, td { padding: 8px; }
 	.col-secondary { display: none; }
+	.filters input { min-width: 0; flex: 1 1 100%; }
 	.check { grid-template-columns: 22px minmax(0, 1fr); }
 	.check__text, .check__act { grid-column: 2; }
 }
@@ -184,18 +215,24 @@ details.fold .fold__body { padding: 10px 12px; }
 <body>
 <header class="topbar">
 	<span class="topbar__brand">DTS 数据治理平台</span>
-	<nav class="crumbs" aria-label="面包屑">数据建模 › 维度建模 › <b>模型工作台</b></nav>
+	<nav class="crumbs" aria-label="面包屑" id="crumbs"></nav>
 </header>
 <div class="shell">
-<nav class="sidenav" aria-label="门户菜单（示意）">
+<nav class="sidenav" aria-label="门户菜单（按本机门户菜单裁剪）">
+	<div class="sidenav__group">工作台</div>
+	<button type="button" data-route="todo">待办事项 <span id="badge-todo"></span></button>
 	<div class="sidenav__group">数据建模</div>
-	<button type="button" class="active">模型工作台</button>
-	<div class="sidenav__group">数据资产</div>
-	<button type="button" data-module="catalog">资产目录 <span id="badge-catalog"></span></button>
-	<button type="button" data-module="quality">数据质量 <span id="badge-quality"></span></button>
-	<button type="button" data-module="analysis">分析服务 <span id="badge-analysis"></span></button>
-	<div class="sidenav__group">运行</div>
-	<button type="button" data-module="run">运行管理 <span id="badge-run"></span></button>
+	<div class="sidenav__sub">维度建模</div>
+	<button type="button" data-route="workbench">模型工作台</button>
+	<div class="sidenav__group">数据开发与运维</div>
+	<div class="sidenav__sub">运维中心</div>
+	<button type="button" data-route="ops">任务实例监控 <span id="badge-ops"></span></button>
+	<div class="sidenav__group">数据治理</div>
+	<div class="sidenav__sub">数据地图与资产</div>
+	<button type="button" data-route="catalog">数据资产目录 <span id="badge-catalog"></span></button>
+	<button type="button" data-route="access">权限申请</button>
+	<button type="button" data-route="quality">质量管控 <span id="badge-quality"></span></button>
+	<button type="button" data-route="quality/report">质量报告</button>
 </nav>
 <div class="content">
 <section class="console" id="console" aria-label="原型控制台">
@@ -216,30 +253,18 @@ details.fold .fold__body { padding: 10px 12px; }
 		<label><span>登记范围 <span class="pending">（待决策）</span></span>
 			<span class="seg" data-key="catalogScope"><button type="button" data-v="all" class="on">所有环境</button><button type="button" data-v="prod">仅生产环境</button></span>
 		</label>
-		<label>质量检查（M4）
-			<span class="seg" data-key="qualityOutcome"><button type="button" data-v="pass" class="on">合格</button><button type="button" data-v="fail">不合格</button></span>
+		<label>质量验证（M4）
+			<span class="seg" data-key="qualityOutcome"><button type="button" data-v="pass" class="on">通过</button><button type="button" data-v="fail">未通过</button></span>
 		</label>
 		<ul>
-			<li>工作台只显示设计版本、最近构建、已发布版本；登记/质量/分析/运行的待处理出现在左侧各模块。</li>
-			<li>构建成功只交接登记，不会顺带登记成功、分析就绪或运行上线；每个模块用自己的开关模拟。</li>
-			<li>第 5 行：r8 构建失败，已发布的 r7 仍在运行。模型名下的「构建 SQL 执行次数」用于检查恢复不重跑构建。</li>
+			<li>左侧菜单与页面名称取自本机当前门户菜单；每个模块在自己的页面发现并处理待办。</li>
+			<li>分析准备不是独立页面：它是数据资产目录中的「服务状态」列。运行结果在「任务实例监控」。</li>
+			<li>标有 <span class="proposal">提议</span> 的是现有系统没有、本原型建议新增的内容。</li>
 		</ul>
 		<button type="button" class="btn btn--sm" id="reset">重置全部场景</button>
 	</div>
 </section>
-<main class="page">
-	<div class="page__head">
-		<h1>模型工作台</h1>
-		<p>这里只管模型设计、版本和构建。构建结果确认即完成本次建模；版本发布按需发起；登记、质量、分析、运行在各自功能中处理。</p>
-	</div>
-	<div class="card">
-		<table aria-label="模型列表">
-			<colgroup><col><col class="col-secondary" style="width:150px"><col style="width:32%"><col style="width:15%"><col style="width:290px"></colgroup>
-			<thead><tr><th>模型</th><th class="col-secondary">当前设计版本</th><th>最近构建结果</th><th>已发布版本</th><th>操作</th></tr></thead>
-			<tbody id="rows"></tbody>
-		</table>
-	</div>
-</main>
+<main class="page" id="page"></main>
 </div>
 </div>
 
@@ -257,11 +282,6 @@ details.fold .fold__body { padding: 10px 12px; }
 		<div class="modal__foot" id="publishFoot"></div>
 	</section>
 </div>
-<aside class="side" id="side" aria-label="其他功能（示意）">
-	<div class="side__head"><strong id="sideTitle"></strong><small id="sideSub"></small></div>
-	<div class="side__body" id="sideBody"></div>
-	<div class="side__foot"><button type="button" class="btn" data-a="closeSide">关闭</button></div>
-</aside>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -269,40 +289,50 @@ details.fold .fold__body { padding: 10px 12px; }
 	"use strict";
 	var ENV = { dev: "开发环境", test: "测试环境", prod: "生产环境" };
 	var PHASES = ["准备", "加工", "工程核验", "结果回写"];
-	/* Each module owns its own state; nothing here derives one module's result from another's. */
+	var ROUTES = {
+		workbench: { crumbs: ["数据建模", "维度建模"], title: "模型工作台" },
+		todo: { crumbs: ["工作台"], title: "待办事项" },
+		ops: { crumbs: ["数据开发与运维", "运维中心"], title: "任务实例监控" },
+		catalog: { crumbs: ["数据治理", "数据地图与资产"], title: "数据资产目录" },
+		access: { crumbs: ["数据治理", "数据地图与资产"], title: "权限申请" },
+		quality: { crumbs: ["数据治理"], title: "质量管控" },
+		"quality/report": { crumbs: ["数据治理"], title: "质量报告" }
+	};
+	/* Each module owns its own state; nothing derives one module's result from another's. */
 	var BASE = [
-		{ id: "m1", name: "biz_dwd_budget_v2", cn: "预算明细", layer: "DWD", design: 2, designState: "已保存", sql: 0,
-			build: null, published: null, request: null, review: false,
-			catalog: null, quality: null, analysis: null, run: null },
-		{ id: "m2", name: "biz_dws_budget_v2", cn: "预算汇总", layer: "DWS", design: 4, designState: "已保存", sql: 1,
-			build: { rev: 4, env: "dev", mode: "数据构建", state: "failed", reason: "目标数仓不可用：当前 dbt 目标数据源已被删除", fix: "请系统管理员在「系统管理 → 数据湖配置」确认默认数据湖后重新构建", code: "DBT_TARGET_DATASOURCE_NOT_FOUND", runId: "run-7f3a1c", at: "09-24 13:40" },
-			published: null, request: null, review: false, catalog: null, quality: null, analysis: null, run: null },
-		{ id: "m3", name: "biz_ads_budget_derived_v2", cn: "预算执行派生指标", layer: "ADS", design: 3, designState: "已保存", sql: 1,
-			build: { rev: 3, env: "prod", mode: "数据构建", state: "success", at: "09-24 14:02", tables: "3/3", runId: "run-3c90aa" },
+		{ id: "m1", name: "biz_dwd_budget_v2", cn: "预算明细", layer: "DWD", design: 2, designState: "已保存", sql: 0, owner: "财务部",
+			build: null, published: null, request: null, review: false, catalog: null, quality: null, schedule: null, runs: [] },
+		{ id: "m2", name: "biz_dws_budget_v2", cn: "预算汇总", layer: "DWS", design: 4, designState: "已保存", sql: 1, owner: "财务部",
+			build: { rev: 4, env: "dev", state: "failed", reason: "目标数仓不可用：当前 dbt 目标数据源已被删除", fix: "请系统管理员在「系统管理 → 数据湖配置」确认默认数据湖后重新构建", code: "DBT_TARGET_DATASOURCE_NOT_FOUND", runId: "run-7f3a1c", at: "09-24 13:40", dur: "42s" },
+			published: null, request: null, review: false, catalog: null, quality: null, schedule: null, runs: [] },
+		{ id: "m3", name: "biz_ads_budget_derived_v2", cn: "预算执行派生指标", layer: "ADS", design: 3, designState: "已保存", sql: 1, owner: "财务部",
+			build: { rev: 3, env: "prod", state: "success", at: "09-24 14:02", tables: "3/3", runId: "run-3c90aa", dur: "3m12s" },
 			published: null, request: null, review: false,
-			catalog: { rev: 3, env: "prod", runId: "run-3c90aa", state: "failed", reason: "元数据服务超时", open: false }, quality: null, analysis: null, run: null },
-		{ id: "m4", name: "biz_dws_cost_v1", cn: "成本汇总", layer: "DWS", design: 5, designState: "已保存", sql: 1,
-			build: { rev: 5, env: "prod", mode: "数据构建", state: "success", at: "09-24 10:40", tables: "1/1", runId: "run-51de02" },
+			catalog: { rev: 3, env: "prod", runId: "run-3c90aa", state: "failed", reason: "元数据服务超时", consumable: false, serving: "none", level: "内部" }, quality: null, schedule: null, runs: [] },
+		{ id: "m4", name: "biz_dws_cost_v1", cn: "成本汇总", layer: "DWS", design: 5, designState: "已保存", sql: 1, owner: "成本中心",
+			build: { rev: 5, env: "prod", state: "success", at: "09-24 10:40", tables: "1/1", runId: "run-51de02", dur: "58s" },
 			published: null, request: null, review: true,
-			catalog: { rev: 5, env: "prod", runId: "run-51de02", state: "ok", open: false }, quality: { rev: 5, state: "missing" }, analysis: null, run: null },
-		{ id: "m5", name: "biz_ads_risk_level", cn: "风险等级", layer: "ADS", design: 8, designState: "已保存", sql: 2,
-			build: { rev: 8, env: "prod", mode: "数据构建", state: "failed", reason: "字段 risk_score 类型变更后与上游不兼容", fix: "修正字段映射后重新构建；已发布的 r7 不受影响", code: "MODEL_SPEC_TYPE_INCOMPATIBLE", runId: "run-8a11f0", at: "09-24 16:05" },
+			catalog: { rev: 5, env: "prod", runId: "run-51de02", state: "ok", consumable: false, serving: "none", level: "秘密" }, quality: { rev: 5, state: "missing", rules: 0 }, schedule: null, runs: [] },
+		{ id: "m5", name: "biz_ads_risk_level", cn: "风险等级", layer: "ADS", design: 8, designState: "已保存", sql: 2, owner: "风控部",
+			build: { rev: 8, env: "prod", state: "failed", reason: "字段 risk_score 类型变更后与上游不兼容", fix: "修正字段映射后重新构建；已发布的 r7 不受影响", code: "MODEL_SPEC_TYPE_INCOMPATIBLE", runId: "run-8a11f0", at: "09-24 16:05", dur: "1m03s" },
 			published: { rev: 7, at: "09-23 18:40" }, request: null, review: false,
-			catalog: { rev: 7, env: "prod", runId: "run-77b2c1", state: "ok", open: true }, quality: { rev: 7, state: "passed" }, analysis: { rev: 7, state: "ok" },
-			run: { rev: 7, enabled: true, last: "failed", lastAt: "09-24 02:00", lastReason: "上游数据未到达" } },
-		{ id: "m6", name: "biz_dim_org", cn: "组织维度", layer: "DIM", design: 2, designState: "已保存", sql: 3,
-			build: { rev: 2, env: "prod", mode: "数据构建", state: "blocked", occupiedBy: "RC-20260921-0137", occupiedModels: "biz_dim_org、biz_dim_dept、biz_dim_post" },
+			catalog: { rev: 7, env: "prod", runId: "run-77b2c1", state: "ok", consumable: true, serving: "ok", level: "内部" }, quality: { rev: 7, state: "passed", rules: 4, last: "09-24 03:10" },
+			schedule: { rev: 7, enabled: true, cron: "每日 02:00" },
+			runs: [{ id: "dag-risk-0924", state: "failed", start: "09-24 02:00", end: "09-24 02:07", dur: "7m02s", attempt: 2, note: "上游数据未到达" }, { id: "dag-risk-0923", state: "success", start: "09-23 02:00", end: "09-23 02:11", dur: "11m40s", attempt: 1, note: "" }] },
+		{ id: "m6", name: "biz_dim_org", cn: "组织维度", layer: "DIM", design: 2, designState: "已保存", sql: 3, owner: "人力资源部",
+			build: { rev: 2, env: "prod", state: "blocked", occupiedBy: "RC-20260921-0137", occupiedModels: "biz_dim_org、biz_dim_dept、biz_dim_post" },
 			published: { rev: 1, at: "09-10 09:12" }, request: null, review: false,
-			catalog: { rev: 1, env: "prod", runId: "run-0d11e4", state: "ok", open: true }, quality: { rev: 1, state: "passed" }, analysis: { rev: 1, state: "ok" }, run: { rev: 1, enabled: true, last: "ok", lastAt: "09-24 02:00" } },
-		{ id: "m7", name: "biz_dwd_contract", cn: "合同明细", layer: "DWD", design: 1, designState: "已保存", sql: 1,
-			build: { rev: 1, env: "dev", mode: "数据构建", state: "running", phase: 1, slow: true, runId: "run-c0a1b2" },
-			published: null, request: null, review: false, catalog: null, quality: null, analysis: null, run: null },
-		{ id: "m8", name: "biz_dws_income_v1", cn: "收入汇总", layer: "DWS", design: 2, designState: "已保存", sql: 1,
-			build: { rev: 2, env: "prod", mode: "数据构建", state: "pending", runId: "run-9e4d77", at: "09-24 15:12" },
-			published: null, request: null, review: false, catalog: null, quality: null, analysis: null, run: null }
+			catalog: { rev: 1, env: "prod", runId: "run-0d11e4", state: "ok", consumable: true, serving: "ok", level: "内部" }, quality: { rev: 1, state: "passed", rules: 2, last: "09-24 03:00" },
+			schedule: { rev: 1, enabled: true, cron: "每日 01:00" }, runs: [{ id: "dag-org-0924", state: "success", start: "09-24 01:00", end: "09-24 01:03", dur: "3m10s", attempt: 1, note: "" }] },
+		{ id: "m7", name: "biz_dwd_contract", cn: "合同明细", layer: "DWD", design: 1, designState: "已保存", sql: 1, owner: "法务部",
+			build: { rev: 1, env: "dev", state: "running", phase: 1, slow: true, runId: "run-c0a1b2", at: "09-24 16:30" },
+			published: null, request: null, review: false, catalog: null, quality: null, schedule: null, runs: [] },
+		{ id: "m8", name: "biz_dws_income_v1", cn: "收入汇总", layer: "DWS", design: 2, designState: "已保存", sql: 1, owner: "财务部",
+			build: { rev: 2, env: "prod", state: "pending", runId: "run-9e4d77", at: "09-24 15:12", dur: "2m20s" },
+			published: null, request: null, review: false, catalog: null, quality: null, schedule: null, runs: [] }
 	];
-	var S = { models: clone(BASE), policy: "ADVISORY", role: "owner", buildOutcome: "success", catalogOutcome: "success", catalogScope: "all", qualityOutcome: "pass",
-		openBuild: null, openPublish: null, module: null, focus: null, confirm: null, showChecks: false, timers: {} };
+	var S = { models: clone(BASE), access: [], policy: "ADVISORY", role: "owner", buildOutcome: "success", catalogOutcome: "success", catalogScope: "all", qualityOutcome: "pass",
+		route: "workbench", ctx: null, focus: null, tab: {}, filter: {}, openBuild: null, openPublish: null, confirm: null, showChecks: false, timers: {} };
 
 	function clone(v) { return JSON.parse(JSON.stringify(v)); }
 	function $(id) { return document.getElementById(id); }
@@ -311,11 +341,54 @@ details.fold .fold__body { padding: 10px 12px; }
 	function now() { return "09-24 " + new Date().toTimeString().slice(0, 5); }
 	function toast(t) { var el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(function () { el.classList.remove("show"); }, 2800); }
 	function btn(label, a, tone, extra) { return '<button type="button" class="btn' + (tone ? " btn--" + tone : "") + '" data-a="' + a + '"' + (extra || "") + ">" + label + "</button>"; }
+	function sbtn(label, a, id, tone) { return btn(label, a, "sm" + (tone ? " btn--" + tone : ""), ' data-id="' + id + '"'); }
 	function chip(text, tone) { return '<span class="chip chip--' + tone + '">' + esc(text) + "</span>"; }
 	function note(t) { return t ? '<span class="cell-note" title="' + esc(t) + '">' + esc(t) + "</span>" : ""; }
 	function stateBox(kind, title, text) { return '<div class="state' + (kind ? " state--" + kind : "") + '" role="status"><span class="state__dot" aria-hidden="true"></span><div><strong>' + title + "</strong><p>" + text + "</p></div></div>"; }
+	function rowCls(m) { return S.focus === m.id ? ' class="focus"' : ""; }
+	function badge(id, count, warn) { $(id).innerHTML = count ? '<span class="badge' + (warn ? " badge--warn" : "") + '">' + count + "</span>" : ""; }
 
-	/* ---------------- M1 workbench: design version, latest build, published version ---------------- */
+	/* ================= navigation ================= */
+	function go(route, opts) {
+		opts = opts || {};
+		S.route = route;
+		S.focus = opts.focus || null;
+		S.ctx = opts.ctx || null;
+		if (location.hash !== "#/" + route) { S.silentHash = true; location.hash = "#/" + route; }
+		render();
+		window.scrollTo(0, 0);
+	}
+	window.addEventListener("hashchange", function () {
+		if (S.silentHash) { S.silentHash = false; return; }
+		var r = location.hash.replace(/^#\//, "");
+		if (ROUTES[r]) { S.route = r; S.ctx = null; S.focus = null; render(); }
+	});
+	function ctxBanner() {
+		if (!S.ctx) return "";
+		var m = find(S.ctx.modelId);
+		var from = S.ctx.from === "publish" ? "模型工作台 · 版本发布" : S.ctx.from === "ops" ? "任务实例监控" : "模型工作台";
+		return '<div class="ctx">来自 <strong>' + from + "</strong> · " + esc(m.name) + " r" + m.design + '<span class="spacer"></span>' +
+			(S.ctx.from === "ops" ? "" : btn("返回模型", "backToModel", "sm")) + "</div>";
+	}
+
+	function render() {
+		var r = ROUTES[S.route];
+		$("crumbs").innerHTML = r.crumbs.map(esc).join(" › ") + " › <b>" + r.title + "</b>";
+		Array.prototype.forEach.call(document.querySelectorAll(".sidenav [data-route]"), function (b) { b.classList.toggle("active", b.dataset.route === S.route); });
+		var html = ctxBanner();
+		if (S.route === "workbench") html += pageWorkbench();
+		else if (S.route === "catalog") html += pageCatalog();
+		else if (S.route === "access") html += pageAccess();
+		else if (S.route === "quality" || S.route === "quality/report") html += pageQuality();
+		else if (S.route === "ops") html += pageOps();
+		else if (S.route === "todo") html += pageTodo();
+		$("page").innerHTML = html;
+		renderBadges();
+		if (S.openBuild) renderBuild();
+		if (S.openPublish) renderPublish();
+	}
+
+	/* ================= M1 模型工作台 ================= */
 	function buildCell(m) {
 		var b = m.build;
 		if (!b) return chip("未构建", "none");
@@ -333,24 +406,189 @@ details.fold .fold__body { padding: 10px 12px; }
 		if (m.request && m.request.state === "approved") html += note("r" + m.request.rev + " 评审通过，待发布");
 		return html;
 	}
-	function renderRows() {
-		$("rows").innerHTML = S.models.map(function (m) {
-			return "<tr>" +
-				'<td><div class="model-name"><span class="layer">' + m.layer + "</span>" + esc(m.name) + '</div><span class="sub">' + esc(m.cn) + " · 构建 SQL 执行 " + m.sql + " 次</span></td>" +
-				'<td class="col-secondary"><span class="ver">r' + m.design + '</span><span class="sub">' + m.designState + "</span></td>" +
-				"<td>" + buildCell(m) + "</td>" +
-				"<td>" + publishedCell(m) + "</td>" +
-				'<td><div class="row-actions">' +
-				'<button type="button" class="btn btn--sm" data-act="edit" data-id="' + m.id + '">编辑</button>' +
-				'<button type="button" class="btn btn--sm" data-act="validate" data-id="' + m.id + '">校验</button>' +
-				'<button type="button" class="btn btn--sm" data-act="build" data-id="' + m.id + '">构建</button>' +
-				'<button type="button" class="btn btn--sm btn--ghost" data-act="publish" data-id="' + m.id + '">版本发布</button>' +
-				"</div></td></tr>";
-		}).join("");
-		renderBadges();
+	function pageWorkbench() {
+		return '<div class="page-header"><div><h1>模型工作台</h1><p>这里只管模型设计、版本和构建。构建结果确认即完成本次建模；版本发布按需发起；登记、质量、运行在各自页面处理。</p></div></div>' +
+			'<div class="card"><table aria-label="模型列表"><colgroup><col><col class="col-secondary" style="width:140px"><col style="width:32%"><col style="width:15%"><col style="width:290px"></colgroup>' +
+			'<thead><tr><th>模型</th><th class="col-secondary">当前设计版本</th><th>最近构建结果</th><th>已发布版本</th><th>操作</th></tr></thead><tbody>' +
+			S.models.map(function (m) {
+				return "<tr" + rowCls(m) + ">" +
+					'<td><div class="model-name"><span class="layer">' + m.layer + "</span>" + esc(m.name) + '</div><span class="sub">' + esc(m.cn) + " · 构建 SQL 执行 " + m.sql + " 次</span></td>" +
+					'<td class="col-secondary"><span class="ver">r' + m.design + '</span><span class="sub">' + m.designState + "</span></td>" +
+					"<td>" + buildCell(m) + "</td><td>" + publishedCell(m) + "</td>" +
+					'<td><div class="row-actions">' +
+					'<button type="button" class="btn btn--sm" data-act="edit" data-id="' + m.id + '">编辑</button>' +
+					'<button type="button" class="btn btn--sm" data-act="validate" data-id="' + m.id + '">校验</button>' +
+					'<button type="button" class="btn btn--sm" data-act="build" data-id="' + m.id + '">构建</button>' +
+					'<button type="button" class="btn btn--sm btn--ghost" data-act="publish" data-id="' + m.id + '">版本发布</button>' +
+					"</div></td></tr>";
+			}).join("") + "</tbody></table></div>";
 	}
 
-	/* ---------------- M2 build dialog ---------------- */
+	/* ================= 数据资产目录（含「服务状态」= 分析准备） ================= */
+	function catalogRecords() { return S.models.filter(function (m) { return m.catalog; }); }
+	function registrationTodos() { return catalogRecords().filter(function (m) { return m.catalog.state === "failed" || m.catalog.state === "queued"; }); }
+	function assets() { return catalogRecords().filter(function (m) { return m.catalog.state === "ok"; }); }
+	function pageCatalog() {
+		var tab = S.tab.catalog || "assets";
+		var html = '<div class="page-header"><div><h1>数据资产目录</h1><p>资产登记、服务状态（分析准备）和权限申请在这里处理；质量结论只读展示，规则在质量管控中配置。</p></div></div>' +
+			'<div class="tabs" role="tablist"><button type="button" data-tab="catalog:assets" class="' + (tab === "assets" ? "on" : "") + '">资产目录</button><button type="button" data-tab="catalog:tags" class="' + (tab === "tags" ? "on" : "") + '">数据标签</button></div>';
+		if (tab === "tags") return html + '<div class="card"><p class="empty">数据标签页（原型不展开）</p></div>';
+		var records = catalogRecords().filter(function (m) { return m.catalog.state !== "ok"; });
+		if (records.length) {
+			html += '<div class="card"><div class="card__head"><strong>模型产出登记 <span class="proposal">提议</span></strong><span>构建完成后自动交接登记；失败在这里重试，不会重新执行构建。替代现有「模型产出数据管理」大面板。</span></div>' +
+				'<table><thead><tr><th>模型 / 构建</th><th>登记状态</th><th>说明</th><th>操作</th></tr></thead><tbody>' +
+				records.map(function (m) {
+					var c = m.catalog;
+					var st = { queued: chip("登记排队中", "run"), failed: chip("登记失败", "bad"), skipped: chip("不登记", "none") }[c.state];
+					var why = c.state === "failed" ? esc(c.reason) : c.state === "skipped" ? ENV[c.env] + "构建（登记范围：仅生产环境）" : "等待目录服务处理";
+					return "<tr" + rowCls(m) + "><td>" + esc(m.name) + '<span class="sub">r' + c.rev + " · " + ENV[c.env] + " · " + c.runId + "</span></td><td>" + st + "</td><td>" + why + "</td><td>" +
+						(c.state === "failed" ? sbtn("重试登记", "retryCatalog", m.id, "primary") : "") + "</td></tr>";
+				}).join("") + "</tbody></table></div>";
+		}
+		var q = S.filter.catalog || "";
+		var list = assets().filter(function (m) { return !q || (m.name + m.cn).indexOf(q) >= 0; });
+		html += '<div class="card"><div class="card__head"><strong>数据资产</strong><span>共 ' + list.length + " 项</span></div><div class=\"card__body\">" +
+			'<div class="filters"><input id="catalogSearch" placeholder="搜索资产名称、业务说明或技术标识" value="' + esc(q) + '"><select aria-label="数据分层"><option>数据分层</option><option>DWD</option><option>DWS</option><option>ADS</option><option>DIM</option></select><select aria-label="密级"><option>密级</option><option>公开</option><option>内部</option><option>秘密</option><option>机密</option></select><select aria-label="服务状态"><option>服务状态</option><option>已同步</option><option>同步中</option><option>同步失败</option></select></div>' +
+			'<table><thead><tr><th>资产名称</th><th class="col-secondary">数据分层</th><th>密级</th><th class="col-secondary">责任归属</th><th>消费资格</th><th>服务状态</th><th>质量状态</th><th>操作</th></tr></thead><tbody>' +
+			(list.length ? list.map(function (m) {
+				var c = m.catalog;
+				var serving = { none: chip("未同步", "none"), syncing: chip("同步中", "run"), ok: chip("已同步", "ok"), failed: chip("同步失败", "bad") }[c.serving];
+				var qv = m.quality && m.quality.rev === c.rev ? m.quality.state : "none";
+				var quality = { passed: chip("已通过", "ok"), failed: chip("未通过", "bad"), missing: chip("暂无证据", "none"), none: chip("暂无证据", "none") }[qv];
+				var consumable = c.consumable ? chip("可消费", "ok") : chip("不可消费", "none");
+				var acts = [sbtn("详情", "assetDetail", m.id)];
+				if (c.serving !== "ok" && c.serving !== "syncing") acts.push(sbtn(c.serving === "failed" ? "重新同步" : "同步到分析", "syncServing", m.id));
+				if (!c.consumable) acts.push(sbtn("申请权限", "applyAccess", m.id));
+				return "<tr" + rowCls(m) + "><td><div class=\"model-name\">" + esc(m.cn) + '</div><span class="sub mono">' + esc(m.name) + " · 模型 r" + c.rev + "</span></td>" +
+					'<td class="col-secondary">' + m.layer + '</td><td><span class="tag' + (c.level === "秘密" || c.level === "机密" ? " tag--secret" : "") + '">' + c.level + '</span></td><td class="col-secondary">' + esc(m.owner) + "</td>" +
+					"<td>" + consumable + "</td><td>" + serving + "</td><td>" + quality + "</td><td><div class=\"row-actions\">" + acts.join("") + "</div></td></tr>";
+			}).join("") : '<tr><td colspan="8" class="empty">暂无资产</td></tr>') + "</tbody></table></div></div>";
+		return html;
+	}
+
+	/* ================= 权限申请 ================= */
+	function pageAccess() {
+		return '<div class="page-header"><div><h1>权限申请</h1><p>资产开放使用按既有授权审批；与模型版本发布无关。</p></div></div>' +
+			'<div class="card"><table><thead><tr><th>资产</th><th>申请人</th><th>申请时间</th><th>状态</th><th>操作</th></tr></thead><tbody>' +
+			(S.access.length ? S.access.map(function (a, i) {
+				var m = find(a.modelId);
+				return "<tr><td>" + esc(m.cn) + '<span class="sub mono">' + esc(m.name) + "</span></td><td>" + esc(a.applicant) + "</td><td>" + a.at + "</td><td>" + (a.state === "pending" ? chip("待审批", "run") : chip("已通过", "ok")) + "</td><td>" +
+					(a.state === "pending" ? btn("审批通过（示意）", "approveAccess", "sm", ' data-i="' + i + '"') : "") + "</td></tr>";
+			}).join("") : '<tr><td colspan="5" class="empty">暂无申请。在数据资产目录中对「不可消费」的资产点「申请权限」。</td></tr>') + "</tbody></table></div>";
+	}
+
+	/* ================= 质量管控（保留现有工作区内部导航） ================= */
+	var DQ_NAV = [["质量概览", [["overview", "质量大盘"]]], ["质量资产", [["rules", "规则列表"], ["templates", "规则模板库"]]], ["规则配置", [["tables", "按表配置"], ["by-template", "按模板配置"]]], ["质量运维", [["monitor", "运行策略"], ["runs", "运行记录"]]], ["质量分析", [["report", "质量报告"]]]];
+	function qualityState(m) { return m.quality && m.quality.rev === m.catalog.rev ? m.quality : { state: "none", rules: 0 }; }
+	function qualityTodos() { return assets().filter(function (m) { return qualityState(m).state !== "passed"; }); }
+	function pageQuality() {
+		var sub = S.route === "quality/report" ? "report" : (S.tab.quality || "tables");
+		var label = "";
+		DQ_NAV.forEach(function (g) { g[1].forEach(function (i) { if (i[0] === sub) label = i[1]; }); });
+		var html = '<div class="dq__head"><div><div class="dq__eyebrow">数据质量中心</div><div class="dq__title"><h1>数据质量</h1><span class="chip chip--run">默认数据湖</span></div><p style="margin:2px 0 0;color:var(--muted)">规则、运行策略、验证记录与质量分析；结论不回写模型构建结果。</p></div><div class="dq__where">当前位置<strong>' + label + "</strong></div></div>" +
+			'<div class="dq"><nav aria-label="数据质量工作台导航">' + DQ_NAV.map(function (g) {
+				return '<span class="grp">' + g[0] + "</span>" + g[1].map(function (i) { return '<button type="button" data-dq="' + i[0] + '" class="' + (i[0] === sub ? "on" : "") + '">' + i[1] + "</button>"; }).join("");
+			}).join("") + "</nav><div>";
+		var list = assets();
+		if (sub === "tables") {
+			html += '<div class="card"><div class="card__head"><strong>按表配置</strong><span>只列出已登记的数据资产；未登记的模型产出请先在数据资产目录处理</span></div><table><thead><tr><th>数据资产</th><th>规则数</th><th>最近验证</th><th>结论</th><th>操作</th></tr></thead><tbody>' +
+				(list.length ? list.map(function (m) {
+					var q = qualityState(m);
+					var st = { passed: chip("通过", "ok"), failed: chip("未通过", "bad"), missing: chip("缺少规则", "warn"), none: chip("未配置", "none") }[q.state];
+					return "<tr" + rowCls(m) + "><td>" + esc(m.cn) + '<span class="sub mono">' + esc(m.name) + " · r" + m.catalog.rev + "</span></td><td>" + (q.rules || 0) + "</td><td>" + (q.last || "—") + "</td><td>" + st + "</td><td>" +
+						sbtn(q.rules ? "重新验证" : "配置规则并验证", "runQuality", m.id, q.state === "passed" ? "" : "primary") + "</td></tr>";
+				}).join("") : '<tr><td colspan="5" class="empty">暂无已登记资产</td></tr>') + "</tbody></table></div>";
+		} else if (sub === "runs") {
+			var runs = list.filter(function (m) { return m.quality && m.quality.last; });
+			html += '<div class="card"><div class="card__head"><strong>运行记录</strong><span>执行情况与数据结论分别记录</span></div><table><thead><tr><th>数据资产</th><th>运行时间</th><th>触发方式</th><th>执行</th><th>结论</th></tr></thead><tbody>' +
+				(runs.length ? runs.map(function (m) {
+					return "<tr" + rowCls(m) + "><td>" + esc(m.cn) + "</td><td>" + m.quality.last + "</td><td>手动</td><td>" + chip("执行成功", "ok") + "</td><td>" + (m.quality.state === "passed" ? chip("通过", "ok") : chip("未通过", "bad")) + "</td></tr>";
+				}).join("") : '<tr><td colspan="5" class="empty">暂无运行记录</td></tr>') + "</tbody></table></div>";
+		} else if (sub === "report") {
+			var passed = list.filter(function (m) { return qualityState(m).state === "passed"; }).length;
+			html += '<div class="stats"><div class="stat"><span>已登记资产</span><b>' + list.length + '</b></div><div class="stat"><span>验证通过</span><b>' + passed + '</b></div><div class="stat"><span>未通过或未配置</span><b>' + (list.length - passed) + "</b></div></div>" +
+				'<div class="card"><p class="empty">质量报告明细（原型不展开）</p></div>';
+		} else {
+			html += '<div class="card"><p class="empty">「' + label + "」为现有页面，原型不展开。</p></div>";
+		}
+		return html + "</div></div>";
+	}
+
+	/* ================= 任务实例监控（运维中心） ================= */
+	function instances() {
+		var rows = [];
+		S.models.forEach(function (m) {
+			var b = m.build;
+			if (b && b.state !== "blocked") rows.push({ m: m, id: b.runId, type: "指标/dbt 运行", kind: "build", state: b.state === "running" ? "running" : b.state === "failed" ? "failed" : b.state === "pending" ? "running" : "success", start: b.at || "—", end: b.state === "running" ? "—" : b.at, dur: b.dur || "—", attempt: 1, note: b.state === "failed" ? b.reason : b.state === "pending" ? "结果待核验" : "模型 r" + b.rev + " 构建" });
+			(m.runs || []).forEach(function (r) { rows.push({ m: m, id: r.id, type: "Airflow 调度工作流", kind: "schedule", state: r.state, start: r.start, end: r.end, dur: r.dur, attempt: r.attempt, note: r.note || "发布版本 r" + (m.schedule ? m.schedule.rev : "") + " 定时运行" }); });
+		});
+		return rows;
+	}
+	function pageOps() {
+		var tab = S.tab.ops || "instances";
+		var html = '<div class="page-header"><div><h1>任务实例监控</h1><p>模型构建（指标/dbt 运行）与定时运行（Airflow 调度工作流）的每一次执行都在这里；失败不改变模型的已发布版本。</p></div></div>' +
+			'<div class="tabs"><button type="button" data-tab="ops:instances" class="' + (tab === "instances" ? "on" : "") + '">任务实例</button><button type="button" data-tab="ops:schedule" class="' + (tab === "schedule" ? "on" : "") + '">调度计划 <span class="proposal">待定落点</span></button></div>';
+		if (tab === "schedule") {
+			var pubs = S.models.filter(function (m) { return m.published || m.schedule; });
+			return html + '<div class="card"><div class="card__head"><strong>已发布版本的调度</strong><span>部署和启用只在这里办理；发布不自动上线（F15 M6b）。现有系统的执行关联在发布面板内，独立落点待定。</span></div>' +
+				'<table><thead><tr><th>模型</th><th>正式版本</th><th>调度版本</th><th>调度</th><th>状态</th><th>操作</th></tr></thead><tbody>' +
+				(pubs.length ? pubs.map(function (m) {
+					var s = m.schedule, pub = m.published;
+					var act = pub && (!s || s.rev !== pub.rev) ? sbtn("部署并启用 r" + pub.rev, "deployRun", m.id, "primary") : "";
+					return "<tr" + rowCls(m) + "><td>" + esc(m.name) + "</td><td>" + (pub ? "r" + pub.rev : "无（已回滚）") + "</td><td>" + (s ? "r" + s.rev : "—") + "</td><td>" + (s ? s.cron : "—") + "</td><td>" + (s ? (s.enabled ? chip("已启用", "ok") : chip("已停用", "none")) : chip("未部署", "none")) + "</td><td>" + act + "</td></tr>";
+				}).join("") : '<tr><td colspan="6" class="empty">暂无已发布版本</td></tr>') + "</tbody></table></div>";
+		}
+		var f = S.filter.ops || { state: "ALL", type: "ALL" };
+		var rows = instances().filter(function (r) {
+			return (f.state === "ALL" || r.state === f.state) && (f.type === "ALL" || r.type === f.type);
+		});
+		html += '<div class="card"><div class="card__body"><div class="filters"><input placeholder="搜索任务名称..."><select id="opsState" aria-label="状态">' +
+			[["ALL", "全部状态"], ["running", "运行中"], ["success", "成功"], ["failed", "失败"]].map(function (o) { return '<option value="' + o[0] + '"' + (f.state === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") +
+			'</select><select id="opsType" aria-label="类型">' +
+			[["ALL", "全部类型"], ["入湖任务", "入湖任务"], ["指标/dbt 运行", "指标/dbt 运行"], ["Airflow 调度工作流", "Airflow 调度工作流"]].map(function (o) { return '<option value="' + o[0] + '"' + (f.type === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") +
+			'</select></div><table><thead><tr><th>任务</th><th>类型</th><th>状态</th><th class="col-secondary">开始时间</th><th class="col-secondary">耗时</th><th class="col-secondary">尝试次数</th><th>日志/备注</th><th>操作</th></tr></thead><tbody>' +
+			(rows.length ? rows.map(function (r) {
+				var st = { running: chip("运行中", "run"), success: chip("成功", "ok"), failed: chip("失败", "bad") }[r.state];
+				var acts = [sbtn("查看日志", "viewLog", r.m.id)];
+				if (r.state === "failed" && r.kind === "build") acts.push(sbtn("返回模型修复", "fixModel", r.m.id));
+				if (r.state === "failed" && r.kind === "schedule") acts.push(btn("重试", "rerun", "sm", ' data-id="' + r.m.id + '" data-run="' + r.id + '"'));
+				return "<tr" + rowCls(r.m) + '><td><span class="mono">' + esc(r.id) + '</span><span class="sub">' + esc(r.m.name) + "</span></td><td><span class=\"tag\">" + r.type + "</span></td><td>" + st + '</td><td class="col-secondary">' + r.start + '</td><td class="col-secondary">' + r.dur + '</td><td class="col-secondary">' + r.attempt + "</td><td>" + note(r.note) + '</td><td><div class="row-actions">' + acts.join("") + "</div></td></tr>";
+			}).join("") : '<tr><td colspan="8" class="empty">没有符合条件的任务实例</td></tr>') + "</tbody></table></div></div>";
+		return html;
+	}
+
+	/* ================= 待办事项（现有待办中心 + 提议的「资产登记」类型） ================= */
+	function todos() {
+		var list = [];
+		S.access.forEach(function (a) { if (a.state === "pending") { var m = find(a.modelId); list.push({ type: "ACCESS_APPROVAL", title: m.cn + " 权限申请待审批", m: m, at: a.at, go: "access" }); } });
+		assets().forEach(function (m) { if (qualityState(m).state === "failed") list.push({ type: "QUALITY", title: m.cn + " 质量验证未通过", m: m, at: m.quality.last || "—", go: "quality" }); });
+		registrationTodos().forEach(function (m) { if (m.catalog.state === "failed") list.push({ type: "REGISTRATION", title: m.name + " r" + m.catalog.rev + " 资产登记失败", m: m, at: m.build ? m.build.at : "—", go: "catalog" }); });
+		return list;
+	}
+	function pageTodo() {
+		var all = todos(), f = S.filter.todo || "ALL";
+		var TYPES = [["ALL", "全部待办"], ["ACCESS_APPROVAL", "权限审批"], ["QUALITY", "质量工单"], ["SCHEMA_DRIFT", "结构漂移"], ["REGISTRATION", "资产登记"]];
+		var LABEL = { ACCESS_APPROVAL: "权限审批", QUALITY: "质量工单", SCHEMA_DRIFT: "结构漂移", REGISTRATION: "资产登记" };
+		var list = all.filter(function (t) { return f === "ALL" || t.type === f; });
+		return '<div class="page-header"><div><h1>待办中心</h1><p>各模块产生的待处理事项汇总到这里，点击后到所属页面处理。</p></div></div>' +
+			'<div class="stats">' + TYPES.map(function (t) {
+				var n = t[0] === "ALL" ? all.length : all.filter(function (x) { return x.type === t[0]; }).length;
+				return '<button type="button" class="stat' + (f === t[0] ? " on" : "") + '" data-todo="' + t[0] + '"><span>' + t[1] + (t[0] === "REGISTRATION" ? '<span class="proposal">提议新增</span>' : "") + "</span><b>" + n + "</b></button>";
+			}).join("") + "</div>" +
+			'<div class="card"><div class="card__head"><strong>待办清单</strong></div><table><thead><tr><th>事项</th><th>类型</th><th>状态</th><th>时间</th><th>操作</th></tr></thead><tbody>' +
+			(list.length ? list.map(function (t) {
+				return "<tr><td>" + esc(t.title) + '</td><td><span class="tag">' + LABEL[t.type] + "</span></td><td>" + chip("待处理", "warn") + "</td><td>" + t.at + "</td><td>" + btn(t.type === "QUALITY" ? "查看质量" : t.type === "ACCESS_APPROVAL" ? "前往审批" : "前往处理", "gotoTodo", "sm", ' data-id="' + t.m.id + '" data-go="' + t.go + '"') + "</td></tr>";
+			}).join("") : '<tr><td colspan="5" class="empty">暂无待办</td></tr>') + "</tbody></table></div>";
+	}
+
+	function renderBadges() {
+		badge("badge-todo", todos().length);
+		badge("badge-catalog", registrationTodos().length);
+		badge("badge-quality", qualityTodos().length, true);
+		badge("badge-ops", instances().filter(function (r) { return r.state === "failed"; }).length);
+	}
+
+	/* ================= M2 构建弹窗 ================= */
 	function planTable(m) {
 		var rows = m.layer === "ADS"
 			? [["1", "biz_dwd_budget_v2", "DWD", "上游依赖", "复用已有结果"], ["2", "biz_dws_budget_v2", "DWS", "上游依赖", "需要构建"], ["3", m.name, m.layer, "本次模型", "需要构建"]]
@@ -358,17 +596,23 @@ details.fold .fold__body { padding: 10px 12px; }
 		return '<table class="mini"><thead><tr><th>顺序</th><th>模型</th><th>分层</th><th>依赖角色</th><th>本次动作</th></tr></thead><tbody>' +
 			rows.map(function (r) { return "<tr><td>" + r.join("</td><td>") + "</td></tr>"; }).join("") + "</tbody></table>";
 	}
+	function catalogText(m) {
+		var c = m.catalog;
+		if (!c || !m.build || c.rev !== m.build.rev) return "未交接";
+		return { queued: "登记排队中", ok: "已登记", failed: "登记失败", skipped: "按登记范围不登记" }[c.state];
+	}
+	function confirmBox(text, a) { return '<div class="confirm" role="alertdialog"><p>' + text + "</p>" + btn("确认", a, "danger") + " " + btn("取消", "cancelConfirm") + "</div>"; }
 	function renderBuild() {
 		var m = find(S.openBuild); if (!m) return;
 		var b = m.build, foot = [], banner;
 		$("buildTitle").innerHTML = "构建 <small>" + esc(m.name) + " · 设计 r" + m.design + "</small>";
 		var confirming = S.confirm && S.confirm.id === m.id ? S.confirm.kind : null;
 		if (!b || (b.rev !== m.design && b.state !== "running")) {
-			banner = stateBox("", "r" + m.design + " 尚未构建", "构建只处理当前设计版本的物理落地和必要工程核验；登记、质量、分析、运行由各自功能处理。" + (b ? "上一次构建：r" + b.rev + "。" : ""));
+			banner = stateBox("", "r" + m.design + " 尚未构建", "构建只处理当前设计版本的物理落地和必要工程核验；登记、质量、运行由各自页面处理。" + (b ? "上一次构建：r" + b.rev + "。" : ""));
 			foot.push(btn("开始构建", "startBuild", "primary"));
 		} else if (b.state === "running") {
 			var pct = Math.round(((b.phase + 0.5) / PHASES.length) * 100);
-			banner = stateBox("run", "构建中 · " + PHASES[b.phase], "关闭窗口不会取消构建，重新打开会看到同一次运行（" + b.runId + "）。" +
+			banner = stateBox("run", "构建中 · " + PHASES[b.phase], "关闭窗口不会取消构建，重新打开会看到同一次运行（" + b.runId + "）；执行明细也可在任务实例监控查看。" +
 				'<div class="progress"><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><div class="bar__fill" style="width:' + pct + '%"></div></div><div class="phases">' +
 				PHASES.map(function (p, i) { return '<span class="' + (i < b.phase ? "done" : i === b.phase ? "on" : "") + '">' + p + "</span>"; }).join("") + "</div></div>");
 			foot.push(btn("放弃本次构建", "askAbandon", "danger"));
@@ -394,77 +638,73 @@ details.fold .fold__body { padding: 10px 12px; }
 			'<dt>构建模式</dt><dd><select aria-label="构建模式"' + (running ? " disabled" : "") + "><option>数据构建</option><option>仅结构（不写入数据）</option></select></dd></dl>" +
 			'<details class="fold"><summary>依赖构建计划</summary><div class="fold__body">' + planTable(m) + "</div></details>" +
 			'<details class="fold"><summary>高级设置</summary><div class="fold__body"><dl class="facts"><dt>依赖策略</dt><dd><select aria-label="依赖策略"><option>缺失上游一并构建（推荐）</option><option>仅使用已验证的上游</option></select></dd></dl></div></details>';
-		if (b && b.state === "success" && b.rev === m.design) body += '<div class="handoff">构建结果已交给资产目录独立登记（' + catalogText(m) + "）。登记不影响本次构建结果，失败在资产目录处理。</div>";
+		if (b && b.state === "success" && b.rev === m.design) body += '<div class="handoff">构建结果已交给数据资产目录独立登记（' + catalogText(m) + "）。登记不影响本次构建结果；失败在「数据资产目录 › 模型产出登记」处理。</div>";
 		if (confirming === "abandon") body += confirmBox("放弃后本次运行标记为已放弃，已写入的数据不回滚。确认放弃？", "doAbandon");
 		if (confirming === "closeOccupied") body += confirmBox("关闭后发布单 " + esc(b.occupiedBy) + " 的后续发布流程结束，已有构建结果保留；该发布单涉及其他模型。确认关闭？", "doCloseOccupied");
 		$("buildBody").innerHTML = body;
 		$("buildFoot").innerHTML = '<span class="spacer">' + (b && b.state === "success" ? "可以直接返回列表，不需要继续登记、质量或发布。" : "") + "</span>" + btn("关闭", "closeBuild") + foot.reverse().join("");
 	}
-	function confirmBox(text, a) { return '<div class="confirm" role="alertdialog"><p>' + text + "</p>" + btn("确认", a, "danger") + " " + btn("取消", "cancelConfirm") + "</div>"; }
-	function catalogText(m) {
-		var c = m.catalog;
-		if (!c || c.rev !== m.build.rev) return "未交接";
-		return { queued: "登记排队中", ok: "已登记", failed: "登记失败", skipped: "按登记范围不登记" }[c.state];
-	}
 	function startBuild(m) {
 		var env = $("buildEnv") ? $("buildEnv").value : "dev";
 		m.sql += 1;
-		m.build = { rev: m.design, env: env, mode: "数据构建", state: "running", phase: 0, runId: "run-" + Math.random().toString(16).slice(2, 8) };
+		m.build = { rev: m.design, env: env, state: "running", phase: 0, runId: "run-" + Math.random().toString(16).slice(2, 8), at: now() };
 		S.confirm = null; tick(m);
 	}
 	function tick(m) {
 		clearTimeout(S.timers[m.id]);
 		S.timers[m.id] = setTimeout(function () {
 			var b = m.build; if (!b || b.state !== "running") return;
-			if (b.phase < PHASES.length - 1) { b.phase += 1; refresh(); tick(m); return; }
-			if (S.buildOutcome === "fail") { b.state = "failed"; b.reason = "目标数仓连接超时"; b.fix = "请确认目标数仓可访问后重新构建"; b.code = "DBT_TARGET_CONNECTION_TIMEOUT"; b.at = now(); }
-			else if (S.buildOutcome === "pending") { b.state = "pending"; b.at = now(); }
+			if (b.phase < PHASES.length - 1) { b.phase += 1; render(); tick(m); return; }
+			b.dur = "4s";
+			if (S.buildOutcome === "fail") { b.state = "failed"; b.reason = "目标数仓连接超时"; b.fix = "请确认目标数仓可访问后重新构建"; b.code = "DBT_TARGET_CONNECTION_TIMEOUT"; }
+			else if (S.buildOutcome === "pending") b.state = "pending";
 			else completeBuild(m);
-			refresh();
+			render();
 		}, m.build && m.build.slow ? 3500 : 1100);
 	}
-	/* M2 confirms its own result, then hands off to M3. It never sets catalog/analysis/run results. */
+	/* M2 confirms its own result, then hands off to M3. It never sets catalog/serving/quality/run results. */
 	function completeBuild(m) {
-		var b = m.build; b.state = "success"; b.at = b.at || now(); b.tables = m.layer === "ADS" ? "3/3" : "1/1"; b.slow = false;
+		var b = m.build; b.state = "success"; b.tables = m.layer === "ADS" ? "3/3" : "1/1"; b.slow = false;
 		handOffToCatalog(m);
 	}
 	function handOffToCatalog(m) {
-		var b = m.build;
+		var b = m.build, prev = m.catalog;
 		if (S.catalogScope === "prod" && b.env !== "prod") {
-			m.catalog = { rev: b.rev, env: b.env, runId: b.runId, state: "skipped", open: false };
+			m.catalog = { rev: b.rev, env: b.env, runId: b.runId, state: "skipped", consumable: false, serving: "none", level: prev ? prev.level : "内部" };
 			return;
 		}
-		m.catalog = { rev: b.rev, env: b.env, runId: b.runId, state: "queued", open: m.catalog ? m.catalog.open : false };
-		var delay = S.catalogOutcome === "slow" ? 6000 : 1500;
-		var outcome = S.catalogOutcome;
+		m.catalog = { rev: b.rev, env: b.env, runId: b.runId, state: "queued", consumable: prev ? prev.consumable : false, serving: "none", level: prev ? prev.level : "内部" };
+		settleCatalog(m, b.runId, S.catalogOutcome);
+	}
+	function settleCatalog(m, runId, outcome) {
 		setTimeout(function () {
-			if (!m.catalog || m.catalog.runId !== b.runId || m.catalog.state !== "queued") return;
+			if (!m.catalog || m.catalog.runId !== runId || m.catalog.state !== "queued") return;
 			if (outcome === "fail") { m.catalog.state = "failed"; m.catalog.reason = "元数据服务超时"; }
 			else m.catalog.state = "ok";
-			refresh();
-		}, delay);
+			render();
+		}, outcome === "slow" ? 6000 : 1500);
 	}
 
-	/* ---------------- M6a version publish dialog ---------------- */
+	/* ================= M6a 版本发布弹窗 ================= */
 	function publishTarget(m) { return m.build && m.build.state === "success" && m.build.rev === m.design ? m.build : null; }
 	function checks(m) {
 		var b = publishTarget(m), rows = [], blocking = S.policy === "BLOCKING";
-		rows.push(b ? ["ok", "构建证据", "r" + b.rev + " · " + ENV[b.env] + " · " + b.runId, null, "构建"]
-			: ["bad", "构建证据", "当前设计 r" + m.design + " 尚未构建完成", ["去构建", "build"], "构建"]);
-		rows.push(b ? ["ok", "工程核验", "随构建完成", null, "构建"] : ["wait", "工程核验", "构建完成后检查", null, "构建"]);
+		rows.push(b ? ["ok", "构建证据", "r" + b.rev + " · " + ENV[b.env] + " · " + b.runId, null, "模型工作台"]
+			: ["bad", "构建证据", "当前设计 r" + m.design + " 尚未构建完成", ["去构建", "build"], "模型工作台"]);
+		rows.push(b ? ["ok", "工程核验", "随构建完成", null, "模型工作台"] : ["wait", "工程核验", "构建完成后检查", null, "模型工作台"]);
 		var c = m.catalog && b && m.catalog.rev === b.rev ? m.catalog : null;
-		if (!b) rows.push(["wait", "资产身份", "构建完成后检查", null, "资产目录"]);
-		else if (!c) rows.push(["bad", "资产身份", "尚未交接登记", ["去资产目录", "catalog"], "资产目录"]);
-		else if (c.state === "ok") rows.push(["ok", "资产身份", "已登记", null, "资产目录"]);
-		else if (c.state === "queued") rows.push(["bad", "资产身份", "登记排队中，完成后可发布", ["去资产目录", "catalog"], "资产目录"]);
-		else if (c.state === "skipped") rows.push(["bad", "资产身份", ENV[c.env] + "构建不登记资产；发布需要生产环境构建", ["去构建", "build"], "资产目录"]);
-		else rows.push(["bad", "资产身份", "登记失败：" + esc(c.reason || "未知原因"), ["去资产目录处理", "catalog"], "资产目录"]);
+		if (!b) rows.push(["wait", "资产身份", "构建完成后检查", null, "数据资产目录"]);
+		else if (!c) rows.push(["bad", "资产身份", "尚未交接登记", ["去数据资产目录", "catalog"], "数据资产目录"]);
+		else if (c.state === "ok") rows.push(["ok", "资产身份", "已登记", null, "数据资产目录"]);
+		else if (c.state === "queued") rows.push(["bad", "资产身份", "登记排队中，完成后可发布", ["去数据资产目录", "catalog"], "数据资产目录"]);
+		else if (c.state === "skipped") rows.push(["bad", "资产身份", ENV[c.env] + "构建不登记资产；发布需要生产环境构建", ["去构建", "build"], "数据资产目录"]);
+		else rows.push(["bad", "资产身份", "登记失败：" + esc(c.reason || "未知原因"), ["去数据资产目录处理", "catalog"], "数据资产目录"]);
 		var q = m.quality && b && m.quality.rev === b.rev ? m.quality : null;
 		var qState = q ? q.state : "none";
-		var qText = { passed: "质量合格", failed: "质量不合格", missing: "缺少质量规则", none: "尚未检查" }[qState];
+		var qText = { passed: "验证通过", failed: "验证未通过", missing: "缺少质量规则", none: "尚未验证" }[qState];
 		var pTag = '<span class="policy">' + (blocking ? "阻断策略" : "提示策略") + "</span>";
-		if (qState === "passed") rows.push(["ok", "数据质量", qText + pTag, ["查看报告", "quality"], "数据质量"]);
-		else rows.push([blocking ? "bad" : "warn", "数据质量", qText + (blocking ? "，阻断策略下不能发布" : "（提示，不影响发布；报告如实保留）") + pTag, ["去数据质量", "quality"], "数据质量"]);
+		if (qState === "passed") rows.push(["ok", "数据质量", qText + pTag, ["查看结果", "quality"], "质量管控"]);
+		else rows.push([blocking ? "bad" : "warn", "数据质量", qText + (blocking ? "，阻断策略下不能发布" : "（提示，不影响发布；结论如实保留）") + pTag, ["去质量管控", "quality"], "质量管控"]);
 		if (m.review) {
 			var r = m.request;
 			rows.push(r && r.state === "approved" ? ["ok", "审批", "评审通过", null, "发布"] : r && r.state === "review" ? ["warn", "审批", "等待发布评审人处理", null, "发布"] : ["warn", "审批", "需要评审：提交后由独立评审人处理", null, "发布"]);
@@ -472,20 +712,25 @@ details.fold .fold__body { padding: 10px 12px; }
 		rows.push(["ok", "权限与密级", "通过", null, "权限"]);
 		return rows;
 	}
+	function checklistHtml(rows) {
+		return '<ul class="checklist" aria-label="发布检查">' + rows.map(function (r) {
+			var icon = { ok: "✓", warn: "!", bad: "×", wait: "…" }[r[0]];
+			return '<li class="check check--' + r[0] + '"><span class="check__icon" aria-hidden="true">' + icon + '</span><span class="check__name">' + r[1] + '<span class="owner">' + r[4] + '</span></span><span class="check__text">' + r[2] +
+				'</span><span class="check__act">' + (r[3] ? '<button type="button" class="link" data-go="' + r[3][1] + '">' + r[3][0] + "</button>" : "") + "</span></li>";
+		}).join("") + "</ul>";
+	}
 	function renderPublish() {
 		var m = find(S.openPublish); if (!m) return;
 		var b = publishTarget(m), rows = checks(m), body = "", foot = [];
 		var blockers = rows.filter(function (r) { return r[0] === "bad"; });
-		var warns = rows.filter(function (r) { return r[0] === "warn" || r[0] === "wait"; });
+		var notes = rows.filter(function (r) { return r[0] === "warn" || r[0] === "wait"; });
 		$("publishTitle").innerHTML = "版本发布 <small>" + esc(m.name) + "</small>";
 		body += '<dl class="facts"><dt>发布版本</dt><dd>' + (b ? "r" + b.rev + " · 构建 " + b.runId + "（" + ENV[b.env] + "）" : "当前设计 r" + m.design + "（尚无可发布的构建）") + "</dd>" +
 			"<dt>当前正式版本</dt><dd>" + (m.published ? "r" + m.published.rev + " · " + m.published.at + " 发布" : "无") + "</dd></dl>";
-		if (!blockers.length && !warns.length) {
+		if (!blockers.length && !notes.length) {
 			body += '<div class="summary-ok">✓ 发布检查全部通过（' + rows.length + ' 项） <button type="button" class="link" data-a="toggleChecks">' + (S.showChecks ? "收起明细" : "查看明细") + "</button></div>";
 			if (S.showChecks) body += checklistHtml(rows);
-		} else {
-			body += checklistHtml(rows);
-		}
+		} else body += checklistHtml(rows);
 		var r = m.request, awaiting = m.review && r && r.state === "review" && b && r.rev === b.rev;
 		if (awaiting && S.role === "reviewer") {
 			body += '<div class="field"><label for="reason">评审意见（驳回时必填）</label><textarea id="reason"></textarea></div>';
@@ -496,97 +741,33 @@ details.fold .fold__body { padding: 10px 12px; }
 			var needReview = m.review && !(r && r.state === "approved" && b && r.rev === b.rev);
 			foot.push(btn(needReview ? "提交评审" : "发布 r" + (b ? b.rev : m.design), needReview ? "submitReview" : "publish", "primary", blockers.length ? " disabled" : ""));
 		}
-		body += '<p class="note">发布只登记正式版本，不会开放资产访问、不会准备分析资源、不会部署或启用运行。这些在资产目录、分析服务、运行管理中分别办理。</p>';
+		body += '<p class="note">发布只登记正式版本：不开放资产访问（数据资产目录 › 权限申请）、不同步分析服务（数据资产目录 › 服务状态）、不部署或启用调度（运维中心）。</p>';
 		if (m.published) {
-			body += '<details class="fold"' + (S.confirm && S.confirm.kind === "rollback" ? " open" : "") + '><summary>回滚当前正式版本 r' + m.published.rev + '</summary><div class="fold__body"><div class="field" style="margin-top:0"><label for="rollbackReason">回滚说明 <span class="req">*</span></label><textarea id="rollbackReason"></textarea></div>' +
-				(S.confirm && S.confirm.kind === "rollback" ? confirmBox("回滚后 r" + m.published.rev + " 不再是正式版本；物理表与运行配置不会被删除，运行版本需在运行管理中另行切换。确认回滚？", "doRollback") : '<p style="margin:8px 0 0">' + btn("回滚发布", "askRollback", "danger") + "</p>") +
+			var rb = S.confirm && S.confirm.kind === "rollback";
+			body += '<details class="fold"' + (rb ? " open" : "") + '><summary>回滚当前正式版本 r' + m.published.rev + '</summary><div class="fold__body"><div class="field" style="margin-top:0"><label for="rollbackReason">回滚说明 <span class="req">*</span></label><textarea id="rollbackReason"></textarea></div>' +
+				(rb ? confirmBox("回滚后 r" + m.published.rev + " 不再是正式版本；物理表与调度不会被删除，调度版本需在运维中心另行切换。确认回滚？", "doRollback") : '<p style="margin:8px 0 0">' + btn("回滚发布", "askRollback", "danger") + "</p>") +
 				"</div></details>";
 		}
 		$("publishBody").innerHTML = body;
 		var summary = blockers.length ? "有 " + blockers.length + " 项阻止发布：" + blockers.map(function (x) { return x[1]; }).join("、") : "";
 		$("publishFoot").innerHTML = '<span class="spacer">' + esc(summary) + "</span>" + btn("关闭", "closePublish") + foot.reverse().join("");
 	}
-	function checklistHtml(rows) {
-		return '<ul class="checklist" aria-label="发布检查">' + rows.map(function (r) {
-			var icon = { ok: "✓", warn: "!", bad: "×", wait: "…" }[r[0]];
-			return '<li class="check check--' + r[0] + '"><span class="check__icon" aria-hidden="true">' + icon + '</span><span class="check__name">' + r[1] + '<span class="owner">' + r[4] + '</span></span><span class="check__text">' + r[2] +
-				'</span><span class="check__act">' + (r[3] ? '<button type="button" class="link" data-go="' + r[3][1] + '">' + r[3][0] + "</button>" : "") + "</span></li>";
-		}).join("") + "</ul>";
-	}
 
-	/* ---------------- other modules: each finds its own to-dos ---------------- */
-	function catalogItems() { return S.models.filter(function (m) { return m.catalog; }); }
-	function registered() { return S.models.filter(function (m) { return m.catalog && m.catalog.state === "ok"; }); }
-	function runItems() { return S.models.filter(function (m) { return m.published || m.run; }); }
-	function badge(id, count, warn) { $(id).innerHTML = count ? '<span class="badge' + (warn ? " badge--warn" : "") + '">' + count + "</span>" : ""; }
-	function renderBadges() {
-		badge("badge-catalog", catalogItems().filter(function (m) { return m.catalog.state === "failed" || m.catalog.state === "queued"; }).length);
-		badge("badge-quality", registered().filter(function (m) { return !m.quality || m.quality.rev !== m.catalog.rev || m.quality.state !== "passed"; }).length, true);
-		badge("badge-analysis", registered().filter(function (m) { return !m.analysis || m.analysis.rev !== m.catalog.rev || m.analysis.state !== "ok"; }).length, true);
-		badge("badge-run", runItems().filter(function (m) { return !m.run || m.run.last === "failed" || !m.published || m.run.rev !== m.published.rev; }).length);
-	}
-	function openModule(name, focusId) {
-		S.module = name; S.focus = focusId || null;
-		Array.prototype.forEach.call(document.querySelectorAll(".sidenav [data-module]"), function (b) { b.classList.toggle("active", b.dataset.module === name); });
-		renderModule(); $("side").classList.add("open");
-	}
-	function hl(m) { return S.focus === m.id ? ' style="background:#fffbe6"' : ""; }
-	function renderModule() {
-		var name = S.module, body = "";
-		if (!name) return;
-		var titles = { catalog: ["资产目录", "登记由构建结果自动交接；失败在这里按模型/构建定位重试。资产开放使用在这里单独申请。"],
-			quality: ["数据质量", "对已登记资产配置规则并检查；执行情况与数据结论分别记录，不改变构建结果。"],
-			analysis: ["分析服务", "为已登记资产准备分析资源；登记成功不等于分析就绪。"],
-			run: ["运行管理", "选择已发布版本部署并启用；每次运行单独记录，失败不改变发布与构建结果。"] };
-		$("sideTitle").textContent = titles[name][0] + "（示意）";
-		$("sideSub").textContent = titles[name][1];
-		if (name === "catalog") {
-			var items = catalogItems();
-			body = items.length ? "<table><thead><tr><th>模型 / 构建</th><th>登记</th><th>开放使用</th><th></th></tr></thead><tbody>" + items.map(function (m) {
-				var c = m.catalog;
-				var st = { queued: chip("排队中", "run"), ok: chip("已登记", "ok"), failed: chip("登记失败", "bad"), skipped: chip("不登记", "none") }[c.state];
-				var act = c.state === "failed" ? btn("重试登记", "retryCatalog", "primary", ' data-id="' + m.id + '"') : "";
-				var open = c.state === "ok" ? (c.open ? chip("已开放", "ok") : btn("申请开放", "openAsset", "", ' data-id="' + m.id + '"')) : '<span class="sub">—</span>';
-				var extra = c.state === "failed" ? '<span class="sub">' + esc(c.reason) + "</span>" : c.state === "skipped" ? '<span class="sub">非生产环境构建（登记范围）</span>' : "";
-				return "<tr" + hl(m) + "><td>" + esc(m.name) + '<span class="sub">r' + c.rev + " · " + ENV[c.env] + " · " + c.runId + "</span></td><td>" + st + extra + "</td><td>" + open + "</td><td>" + act + "</td></tr>";
-			}).join("") + "</tbody></table>" : '<p class="empty">暂无登记记录</p>';
-		} else if (name === "quality") {
-			var qi = registered();
-			body = qi.length ? "<table><thead><tr><th>资产</th><th>质量结论</th><th></th></tr></thead><tbody>" + qi.map(function (m) {
-				var q = m.quality && m.quality.rev === m.catalog.rev ? m.quality.state : "none";
-				var st = { passed: chip("合格", "ok"), failed: chip("不合格", "bad"), missing: chip("缺少规则", "warn"), none: chip("未检查", "none") }[q];
-				return "<tr" + hl(m) + "><td>" + esc(m.name) + '<span class="sub">资产 r' + m.catalog.rev + "</span></td><td>" + st + "</td><td>" + btn(q === "passed" ? "重新检查" : "配置规则并检查", "runQuality", q === "passed" ? "" : "primary", ' data-id="' + m.id + '"') + "</td></tr>";
-			}).join("") + "</tbody></table>" : '<p class="empty">暂无已登记资产</p>';
-		} else if (name === "analysis") {
-			var ai = registered();
-			body = ai.length ? "<table><thead><tr><th>资产</th><th>分析资源</th><th></th></tr></thead><tbody>" + ai.map(function (m) {
-				var ok = m.analysis && m.analysis.rev === m.catalog.rev && m.analysis.state === "ok";
-				return "<tr" + hl(m) + "><td>" + esc(m.name) + '<span class="sub">资产 r' + m.catalog.rev + "</span></td><td>" + (ok ? chip("已就绪", "ok") : chip("未准备", "none")) + "</td><td>" + (ok ? "" : btn("准备分析资源", "prepareAnalysis", "primary", ' data-id="' + m.id + '"')) + "</td></tr>";
-			}).join("") + "</tbody></table>" : '<p class="empty">暂无已登记资产</p>';
-		} else if (name === "run") {
-			var ri = runItems();
-			body = ri.length ? "<table><thead><tr><th>模型</th><th>运行版本</th><th>最近运行</th><th></th></tr></thead><tbody>" + ri.map(function (m) {
-				var r = m.run, pub = m.published;
-				var ver = r ? "r" + r.rev + (r.enabled ? " · 已启用" : " · 未启用") : '<span class="sub">未部署</span>';
-				var last = r && r.last ? (r.last === "ok" ? chip("成功", "ok") : chip("失败", "bad")) + '<span class="sub">' + (r.lastAt || "") + (r.lastReason ? " · " + esc(r.lastReason) : "") + "</span>" : '<span class="sub">—</span>';
-				var acts = [];
-				if (pub && (!r || r.rev !== pub.rev)) acts.push(btn("部署并启用 r" + pub.rev, "deployRun", "primary", ' data-id="' + m.id + '"'));
-				if (r && r.last === "failed") acts.push(btn("重新运行", "rerun", "", ' data-id="' + m.id + '"'));
-				return "<tr" + hl(m) + "><td>" + esc(m.name) + '<span class="sub">正式版本 ' + (pub ? "r" + pub.rev : "无（已回滚）") + "</span></td><td>" + ver + "</td><td>" + last + "</td><td>" + acts.join(" ") + "</td></tr>";
-			}).join("") + "</tbody></table>" : '<p class="empty">暂无已发布版本</p>';
-		}
-		$("sideBody").innerHTML = body + '<p class="note">本功能内的处理不会改变模型构建结果，也不会增加构建 SQL 执行次数。</p>';
-	}
-
-	/* ---------------- wiring ---------------- */
-	function refresh() { renderRows(); if (S.openBuild) renderBuild(); if (S.openPublish) renderPublish(); if ($("side").classList.contains("open")) renderModule(); }
+	/* ================= wiring ================= */
 	function openOverlay(id) { var o = $(id); o.classList.add("open"); o.setAttribute("aria-hidden", "false"); setTimeout(function () { var f = o.querySelector(".modal__foot .btn--primary:not([disabled])") || o.querySelector(".modal__close"); if (f) f.focus(); }, 30); }
 	function closeOverlay(which) { var id = which + "Overlay"; $(id).classList.remove("open"); $(id).setAttribute("aria-hidden", "true"); S.confirm = null; if (which === "build") S.openBuild = null; else { S.openPublish = null; S.showChecks = false; } }
-	function closeSide() { $("side").classList.remove("open"); Array.prototype.forEach.call(document.querySelectorAll(".sidenav [data-module]"), function (b) { b.classList.remove("active"); }); S.module = null; S.focus = null; }
+	function openBuild(id) { S.openBuild = id; S.confirm = null; renderBuild(); openOverlay("buildOverlay"); }
+	function openPublish(id) { S.openPublish = id; S.confirm = null; S.showChecks = false; renderPublish(); openOverlay("publishOverlay"); }
 
 	document.addEventListener("click", function (e) {
-		var mod = e.target.closest(".sidenav [data-module]");
-		if (mod) { openModule(mod.dataset.module); return; }
+		var nav = e.target.closest(".sidenav [data-route]");
+		if (nav) { closeOverlay("build"); closeOverlay("publish"); go(nav.dataset.route); return; }
+		var tabBtn = e.target.closest("[data-tab]");
+		if (tabBtn) { var p = tabBtn.dataset.tab.split(":"); S.tab[p[0]] = p[1]; render(); return; }
+		var dq = e.target.closest("[data-dq]");
+		if (dq) { S.tab.quality = dq.dataset.dq; go(dq.dataset.dq === "report" ? "quality/report" : "quality", { focus: S.focus, ctx: S.ctx }); return; }
+		var todoBtn = e.target.closest("[data-todo]");
+		if (todoBtn) { S.filter.todo = todoBtn.dataset.todo; render(); return; }
 		var t = e.target.closest("[data-act],[data-a],[data-go],[data-close]");
 		if (!t) return;
 		if (t.dataset.close) { closeOverlay(t.dataset.close); return; }
@@ -594,20 +775,24 @@ details.fold .fold__body { padding: 10px 12px; }
 		if (t.dataset.act) {
 			m = find(t.dataset.id);
 			if (t.dataset.act === "edit") { toast("打开「" + m.name + "」设计（原型不展开）；保存设计不要求构建、登记或质量"); return; }
-			if (t.dataset.act === "validate") { m.designState = "已校验"; toast("r" + m.design + " 设计校验通过（只检查设计本身）"); refresh(); return; }
-			if (t.dataset.act === "build") { S.openBuild = m.id; S.confirm = null; renderBuild(); openOverlay("buildOverlay"); return; }
-			if (t.dataset.act === "publish") { S.openPublish = m.id; S.confirm = null; S.showChecks = false; renderPublish(); openOverlay("publishOverlay"); return; }
+			if (t.dataset.act === "validate") { m.designState = "已校验"; toast("r" + m.design + " 设计校验通过（只检查设计本身）"); render(); return; }
+			if (t.dataset.act === "build") { openBuild(m.id); return; }
+			if (t.dataset.act === "publish") { openPublish(m.id); return; }
 		}
-		if (t.dataset.go) {
+		if (t.dataset.go && !t.dataset.a) {
 			m = find(S.openPublish);
-			if (t.dataset.go === "build") { closeOverlay("publish"); S.openBuild = m.id; renderBuild(); openOverlay("buildOverlay"); return; }
-			openModule(t.dataset.go, m.id); return;
+			closeOverlay("publish");
+			if (t.dataset.go === "build") { openBuild(m.id); return; }
+			if (t.dataset.go === "quality") S.tab.quality = "tables";
+			go(t.dataset.go, { focus: m.id, ctx: { modelId: m.id, from: "publish" } });
+			return;
 		}
 		var a = t.dataset.a, id = t.dataset.id;
 		switch (a) {
+			case "backToModel": var back = S.ctx; go("workbench", { focus: back.modelId }); if (back.from === "publish") openPublish(back.modelId); return;
 			case "startBuild": startBuild(find(S.openBuild)); break;
 			case "askAbandon": S.confirm = { id: S.openBuild, kind: "abandon" }; break;
-			case "doAbandon": m = find(S.openBuild); m.build.state = "failed"; m.build.reason = "本次构建已放弃"; m.build.fix = "可以重新构建；已写入的数据未回滚"; m.build.code = "MODEL_BUILD_ABANDONED"; m.build.at = now(); S.confirm = null; toast("已放弃本次构建"); break;
+			case "doAbandon": m = find(S.openBuild); m.build.state = "failed"; m.build.reason = "本次构建已放弃"; m.build.fix = "可以重新构建；已写入的数据未回滚"; m.build.code = "MODEL_BUILD_ABANDONED"; S.confirm = null; toast("已放弃本次构建"); break;
 			case "askCloseOccupied": S.confirm = { id: S.openBuild, kind: "closeOccupied" }; break;
 			case "doCloseOccupied": m = find(S.openBuild); m.build = null; S.confirm = null; toast("占用发布单已关闭，已有构建结果保留；现在可以开始构建"); break;
 			case "continueVerify": m = find(S.openBuild); completeBuild(m); toast("核验完成，构建完成（SQL 未重新执行）"); break;
@@ -621,35 +806,33 @@ details.fold .fold__body { padding: 10px 12px; }
 				if (!$("reason").value.trim()) { $("reason").focus(); toast("驳回必须填写评审意见"); return; }
 				m = find(S.openPublish); m.request = null; toast("已驳回；构建结果不受影响"); break;
 			case "publish": m = find(S.openPublish); m.published = { rev: m.build.rev, at: now() }; m.request = null;
-				toast("r" + m.published.rev + " 已发布为正式版本。运行上线请在运行管理中办理"); break;
+				toast("r" + m.published.rev + " 已发布为正式版本。调度在运维中心单独部署并启用"); break;
 			case "askRollback":
 				if (!$("rollbackReason").value.trim()) { $("rollbackReason").focus(); toast("回滚必须填写说明"); return; }
 				S.confirm = { id: S.openPublish, kind: "rollback" }; break;
-			case "doRollback": m = find(S.openPublish); var old = m.published.rev; m.published = null; closeOverlay("publish"); toast("r" + old + " 已撤销正式版本；运行版本未自动更改，请在运行管理确认"); break;
-			case "retryCatalog":
-				m = find(id); m.catalog.state = "queued";
-				(function (target, run, outcome) {
-					setTimeout(function () {
-						if (target.catalog && target.catalog.runId === run && target.catalog.state === "queued") {
-							target.catalog.state = outcome === "fail" ? "failed" : "ok";
-							refresh();
-							toast(outcome === "fail" ? "登记仍失败，保留在资产目录待处理" : "登记成功；构建 SQL 次数未增加，分析资源未自动准备");
-						}
-					}, outcome === "slow" ? 5000 : 1200);
-				})(m, m.catalog.runId, S.catalogOutcome);
-				break;
-			case "openAsset": m = find(id); m.catalog.open = true; toast("已申请开放使用（按既有授权审批）；与模型版本发布无关"); break;
-			case "runQuality": m = find(id); m.quality = { rev: m.catalog.rev, state: S.qualityOutcome === "pass" ? "passed" : "failed" }; toast(S.qualityOutcome === "pass" ? "质量检查合格" : "质量不合格；构建结果不变"); break;
-			case "prepareAnalysis": m = find(id); m.analysis = { rev: m.catalog.rev, state: "ok" }; toast("分析资源已就绪"); break;
-			case "deployRun": m = find(id); m.run = { rev: m.published.rev, enabled: true, last: null }; toast("r" + m.published.rev + " 已部署并启用；每次运行结果单独记录"); break;
-			case "rerun": m = find(id); m.run.last = "ok"; m.run.lastAt = now(); m.run.lastReason = null; toast("运行成功；发布与构建结果未变"); break;
-			case "closeSide": closeSide(); break;
+			case "doRollback": m = find(S.openPublish); var old = m.published.rev; m.published = null; closeOverlay("publish"); toast("r" + old + " 已撤销正式版本；调度版本未自动更改，请在运维中心确认"); break;
+			case "retryCatalog": m = find(id); m.catalog.state = "queued"; settleCatalog(m, m.catalog.runId, S.catalogOutcome); toast("已重新提交登记；不会重新执行构建"); break;
+			case "assetDetail": m = find(id); toast("打开「" + m.cn + "」资产详情（原型不展开）"); return;
+			case "syncServing": m = find(id); m.catalog.serving = "syncing"; (function (x) { setTimeout(function () { if (x.catalog && x.catalog.serving === "syncing") { x.catalog.serving = "ok"; render(); toast("分析服务同步完成；不影响登记与构建"); } }, 1500); })(m); break;
+			case "applyAccess": m = find(id); S.access.push({ modelId: m.id, applicant: "当前用户", at: now(), state: "pending" }); toast("已提交权限申请，审批在「权限申请 / 待办事项」中处理"); break;
+			case "approveAccess": var ap = S.access[Number(t.dataset.i)]; ap.state = "approved"; find(ap.modelId).catalog.consumable = true; toast("审批通过，资产变为可消费"); break;
+			case "runQuality": m = find(id); m.quality = { rev: m.catalog.rev, state: S.qualityOutcome === "pass" ? "passed" : "failed", rules: Math.max(2, (m.quality && m.quality.rules) || 0), last: now() }; toast(S.qualityOutcome === "pass" ? "质量验证通过" : "质量验证未通过；已生成质量工单，构建结果不变"); break;
+			case "viewLog": toast("打开日志（原型不展开）"); return;
+			case "fixModel": m = find(id); go("workbench", { focus: m.id }); openBuild(m.id); return;
+			case "rerun": m = find(id); m.runs.unshift({ id: t.dataset.run + "-r", state: "success", start: now(), end: now(), dur: "9m12s", attempt: 1, note: "" }); m.runs.forEach(function (r) { if (r.id === t.dataset.run) r.note = (r.note ? r.note + "；" : "") + "已重试"; }); toast("重试成功；发布与构建结果未变"); break;
+			case "deployRun": m = find(id); m.schedule = { rev: m.published.rev, enabled: true, cron: "每日 02:00" }; toast("r" + m.published.rev + " 已部署并启用；每次运行在任务实例中单独记录"); break;
+			case "gotoTodo": m = find(id); if (t.dataset.go === "quality") S.tab.quality = "tables"; go(t.dataset.go, { focus: m.id }); return;
 		}
-		refresh();
+		render();
+	});
+	document.addEventListener("input", function (e) {
+		if (e.target.id === "catalogSearch") { S.filter.catalog = e.target.value; var pos = e.target.selectionStart; render(); var el = $("catalogSearch"); el.focus(); el.setSelectionRange(pos, pos); }
+	});
+	document.addEventListener("change", function (e) {
+		if (e.target.id === "opsState" || e.target.id === "opsType") { S.filter.ops = { state: $("opsState").value, type: $("opsType").value }; render(); }
 	});
 	document.addEventListener("keydown", function (e) {
 		if (e.key !== "Escape") return;
-		if ($("side").classList.contains("open")) { closeSide(); return; }
 		if (S.openPublish) { closeOverlay("publish"); return; }
 		if (S.openBuild) closeOverlay("build");
 	});
@@ -658,19 +841,21 @@ details.fold .fold__body { padding: 10px 12px; }
 			var b = e.target.closest("button"); if (!b) return;
 			Array.prototype.forEach.call(seg.children, function (c) { c.classList.toggle("on", c === b); });
 			S[seg.dataset.key] = b.dataset.v;
-			if (seg.dataset.key === "policy") toast(S.policy === "BLOCKING" ? "阻断策略：质量未合格时不能发布（不改变构建和质量报告）" : "提示策略：质量问题只提示");
+			if (seg.dataset.key === "policy") toast(S.policy === "BLOCKING" ? "阻断策略：质量未通过时不能发布（不改变构建和质量结论）" : "提示策略：质量问题只提示");
 			if (seg.dataset.key === "catalogScope") toast(S.catalogScope === "prod" ? "仅生产环境构建登记资产（对之后的构建生效）" : "所有环境构建都登记资产");
-			refresh();
+			render();
 		});
 	});
 	$("consoleHead").addEventListener("click", function () { var c = $("console"); c.classList.toggle("min"); $("consoleToggle").textContent = c.classList.contains("min") ? "展开" : "收起"; });
 	$("reset").addEventListener("click", function () {
 		Object.keys(S.timers).forEach(function (k) { clearTimeout(S.timers[k]); });
-		S.models = clone(BASE); S.confirm = null;
-		closeOverlay("build"); closeOverlay("publish"); closeSide();
-		refresh(); tick(find("m7")); toast("已重置全部场景");
+		S.models = clone(BASE); S.access = []; S.confirm = null; S.tab = {}; S.filter = {};
+		closeOverlay("build"); closeOverlay("publish");
+		go("workbench"); tick(find("m7")); toast("已重置全部场景");
 	});
-	refresh();
+	var initial = location.hash.replace(/^#\//, "");
+	S.route = ROUTES[initial] ? initial : "workbench";
+	render();
 	tick(find("m7"));
 })();
 </script>
