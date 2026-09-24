@@ -58,7 +58,7 @@
 | **F12-业务应用ZIP全链路导入** | **P1** | **8** | **IN_PROGRESS**（T01 DONE、T02 IN_PROGRESS、T03–T08 DRAFT） |
 | **F13-发布质量处理与失败恢复** | **P1** | **9** | **IN_PROGRESS**（后端实施中；F13-T03、F14-T02/T03 已开工） |
 | **F14-模型构建与失败恢复** | **P0** | **8** | **IN_PROGRESS**（后端实施中；F13-T03、F14-T02/T03 已开工） |
-| **[F15-构建与发布分离及交付状态解耦](sprint-104-202609-modeling-contract-consistency/features/F15-构建与发布分离及交付状态解耦/README.md)** | **P0** | **6** | **DRAFT**（T01 设计核对 READY，T02–T06 DRAFT；建模独立完成，登记/质量/治理/发布/上线分别办理和恢复；仅文档重建） |
+| **[F15-建模职责收口与模块解耦](sprint-104-202609-modeling-contract-consistency/features/F15-构建与发布分离及交付状态解耦/README.md)** | **P0** | **6** | **DRAFT**（T01 契约核对 READY，T02–T06 DRAFT；六类职责、查询隔离、可靠交接及发布/运行分离已设计；18 项验收 NOT_RUN，仅文档完善） |
 
 **F12 统计**：DRAFT=6，IN_PROGRESS=1，DONE=1，BLOCKED=0。估算 31 人日，无人员容量或工期承诺。
 **F12 执行顺序**：T02 主路径 → T08 建模重置/同包重导 → T03 包契约与生产 → T04/T05 领域适配（T06 运行基础先于 T04/T05 真实写入集成）→ T07 分片验收。单代理实施。

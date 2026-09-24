@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>构建与发布原型</title>
+<title>建模职责收口原型</title>
 <style>
 :root {
 	--blue: #2468f2;
@@ -12,7 +12,6 @@
 	--ink-2: #3c4759;
 	--muted: #687386;
 	--border: #dfe5ee;
-	--surface: #ffffff;
 	--canvas: #f4f6f9;
 	--success: #16844a;
 	--success-soft: #e7f7ee;
@@ -24,97 +23,52 @@
 	--proto: #7a4dd8;
 	--proto-soft: #f3eefe;
 	--radius: 4px;
-	--shadow-modal: 0 24px 60px -20px rgba(23, 32, 51, 0.45);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-body {
-	background: var(--canvas);
-	color: var(--ink);
-	font: 13px/1.6 "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
-}
+body { background: var(--canvas); color: var(--ink); font: 13px/1.6 "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
 button { font: inherit; }
-button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
-	outline: 2px solid var(--blue);
-	outline-offset: 2px;
-}
+button:focus-visible, a:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-/* ---------- product chrome ---------- */
-.topbar {
-	display: flex;
-	align-items: center;
-	gap: 18px;
-	height: 48px;
-	padding: 0 20px;
-	background: #fff;
-	border-bottom: 1px solid var(--border);
-}
+.topbar { display: flex; align-items: center; gap: 18px; height: 48px; padding: 0 20px; background: #fff; border-bottom: 1px solid var(--border); }
 .topbar__brand { font-weight: 700; letter-spacing: 0.02em; }
 .crumbs { color: var(--muted); }
 .crumbs b { color: var(--ink); font-weight: 600; }
 .shell { display: flex; align-items: flex-start; min-height: calc(100vh - 48px); }
 .sidenav { position: sticky; top: 0; flex: 0 0 208px; min-height: calc(100vh - 48px); padding: 12px 8px; background: #fff; border-right: 1px solid var(--border); }
 .sidenav__group { margin: 10px 10px 4px; color: var(--muted); font-size: 12px; }
-.sidenav a { display: block; padding: 7px 12px; border-radius: var(--radius); color: var(--ink-2); text-decoration: none; }
-.sidenav a:hover { background: var(--canvas); }
-.sidenav a.active { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+.sidenav button { display: flex; width: 100%; justify-content: space-between; align-items: center; padding: 7px 12px; border: 0; border-radius: var(--radius); background: none; color: var(--ink-2); text-align: left; cursor: pointer; }
+.sidenav button:hover { background: var(--canvas); }
+.sidenav button.active { background: var(--blue-soft); color: var(--blue); font-weight: 600; }
+.badge { min-width: 18px; padding: 0 6px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 11px; line-height: 18px; text-align: center; }
+.badge--warn { background: var(--warning); }
 .content { flex: 1; min-width: 0; }
 .page { padding: 14px 20px 40px; }
-.page__head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.page__head { margin-bottom: 12px; }
 .page__head h1 { margin: 0; font-size: 18px; }
 .page__head p { margin: 2px 0 0; color: var(--muted); }
 
-/* ---------- table ---------- */
 .card { background: #fff; border: 1px solid var(--border); border-radius: 6px; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: middle; }
 th { color: var(--muted); font-weight: 600; font-size: 12px; background: #f9fafc; white-space: nowrap; }
-.cell-note { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tr:last-child td { border-bottom: 0; }
 .model-name { font-weight: 600; }
-.model-sub { color: var(--muted); font-size: 12px; }
+.sub { display: block; color: var(--muted); font-size: 12px; }
 .layer { display: inline-block; min-width: 34px; margin-right: 6px; padding: 0 5px; border: 1px solid var(--border); border-radius: 3px; color: var(--ink-2); font-size: 11px; text-align: center; }
-.row-actions { display: flex; gap: 6px; white-space: nowrap; }
-.row-hint { display: block; margin-top: 3px; color: var(--muted); font-size: 11px; }
+.ver { font-weight: 600; }
+.row-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.cell-note { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* status chip: one fact per chip */
-.chip {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	padding: 1px 8px;
-	border: 1px solid transparent;
-	border-radius: 11px;
-	font-size: 12px;
-	white-space: nowrap;
-	cursor: pointer;
-	background: var(--neutral-soft);
-	color: var(--ink-2);
-}
+.chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: 11px; font-size: 12px; white-space: nowrap; background: var(--neutral-soft); color: var(--ink-2); }
 .chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.7; }
-.chip:hover { border-color: currentColor; }
 .chip--ok { background: var(--success-soft); color: var(--success); }
 .chip--warn { background: var(--warning-soft); color: var(--warning); }
 .chip--bad { background: var(--danger-soft); color: var(--danger); }
 .chip--run { background: var(--blue-soft); color: var(--blue); }
 .chip--none { color: var(--muted); }
-.chip--static { cursor: default; }
-.chip--static:hover { border-color: transparent; }
 
-/* ---------- buttons ---------- */
-.btn {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	min-height: 30px;
-	padding: 0 12px;
-	border: 1px solid #cfd8e6;
-	border-radius: var(--radius);
-	background: #fff;
-	color: var(--ink);
-	cursor: pointer;
-	white-space: nowrap;
-}
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 30px; padding: 0 12px; border: 1px solid #cfd8e6; border-radius: var(--radius); background: #fff; color: var(--ink); cursor: pointer; white-space: nowrap; }
 .btn:hover { border-color: var(--blue); color: var(--blue); }
 .btn:active { transform: translateY(1px); }
 .btn--primary { background: var(--blue); border-color: var(--blue); color: #fff; }
@@ -122,13 +76,13 @@ tr:last-child td { border-bottom: 0; }
 .btn--danger { border-color: #efb4b7; color: var(--danger); }
 .btn--danger:hover { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
 .btn--sm { min-height: 26px; padding: 0 9px; font-size: 12px; }
-.btn[disabled], .btn[aria-disabled="true"] { background: #f4f6f9; border-color: var(--border); color: #a4adbb; cursor: not-allowed; transform: none; }
+.btn--ghost { border-color: transparent; color: var(--blue); }
+.btn[disabled] { background: #f4f6f9; border-color: var(--border); color: #a4adbb; cursor: not-allowed; transform: none; }
 .link { color: var(--blue); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
 
-/* ---------- modal ---------- */
 .overlay { position: fixed; top: 0; right: 0; bottom: 0; left: 0; display: none; align-items: flex-start; justify-content: center; padding-top: 7vh; background: rgba(23, 32, 51, 0.38); z-index: 20; }
 .overlay.open { display: flex; }
-.modal { width: 640px; max-width: calc(100vw - 24px); max-height: 86vh; display: flex; flex-direction: column; background: #fff; border-radius: 8px; box-shadow: var(--shadow-modal); }
+.modal { width: 640px; max-width: calc(100vw - 24px); max-height: 86vh; display: flex; flex-direction: column; background: #fff; border-radius: 8px; box-shadow: 0 24px 60px -20px rgba(23, 32, 51, 0.45); }
 .modal__head { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border-bottom: 1px solid var(--border); }
 .modal__title { font-size: 15px; font-weight: 700; }
 .modal__title small { margin-left: 8px; color: var(--muted); font-weight: 400; font-size: 12px; }
@@ -137,7 +91,6 @@ tr:last-child td { border-bottom: 0; }
 .modal__foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--border); }
 .modal__foot .spacer { flex: 1; color: var(--muted); font-size: 12px; }
 
-/* state banner in build dialog */
 .state { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 14px; }
 .state__dot { flex: 0 0 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: var(--muted); }
 .state strong { display: block; font-size: 14px; }
@@ -151,8 +104,7 @@ tr:last-child td { border-bottom: 0; }
 .state--hold { background: var(--warning-soft); border-color: #f0d6ac; }
 .state--hold .state__dot { background: var(--warning); }
 @keyframes pulse { 50% { opacity: 0.3; } }
-@media (prefers-reduced-motion: reduce) { .state--run .state__dot { animation: none; } .bar__fill { transition: none; } }
-
+@media (prefers-reduced-motion: reduce) { .state--run .state__dot { animation: none; } .bar__fill { transition: none; } .side { transition: none; } }
 .progress { margin-top: 10px; }
 .bar { height: 6px; border-radius: 3px; background: #d8e4fb; overflow: hidden; }
 .bar__fill { height: 100%; background: var(--blue); transition: width 0.4s ease; }
@@ -164,7 +116,6 @@ tr:last-child td { border-bottom: 0; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; }
 .facts select { min-height: 28px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; font: inherit; }
-
 details.fold { border: 1px solid var(--border); border-radius: 6px; margin-top: 10px; }
 details.fold > summary { padding: 8px 12px; cursor: pointer; color: var(--ink-2); }
 details.fold[open] > summary { border-bottom: 1px solid var(--border); }
@@ -174,7 +125,7 @@ details.fold .fold__body { padding: 10px 12px; }
 .confirm { margin-top: 12px; padding: 10px 12px; border: 1px dashed #efb4b7; border-radius: 6px; background: #fffafa; }
 .confirm p { margin: 0 0 8px; }
 
-/* publish checklist */
+.summary-ok { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #bfe6cf; border-radius: 6px; background: var(--success-soft); color: var(--success); }
 .checklist { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 6px; }
 .check { display: grid; grid-template-columns: 22px 86px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 12px; border-bottom: 1px solid var(--border); }
 .check:last-child { border-bottom: 0; }
@@ -183,50 +134,48 @@ details.fold .fold__body { padding: 10px 12px; }
 .check--warn .check__icon { background: var(--warning); }
 .check--bad .check__icon { background: var(--danger); }
 .check--wait .check__icon { background: #a4adbb; }
+.check--wait .check__text { color: var(--muted); }
 .check__name { color: var(--ink-2); font-weight: 600; }
-.check__text { color: var(--ink-2); }
 .check--warn .check__text { color: var(--warning); }
 .check--bad .check__text { color: var(--danger); }
+.owner { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
 .policy { display: inline-block; margin-left: 6px; padding: 0 6px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-size: 11px; }
 .field { display: grid; gap: 5px; margin-top: 14px; }
 .field textarea { min-height: 54px; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); font: inherit; resize: vertical; }
 .field .req { color: var(--danger); }
-.published { padding: 12px 14px; border: 1px solid #bfe6cf; border-radius: 6px; background: var(--success-soft); margin-bottom: 12px; }
 .note { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+.handoff { margin-top: 12px; padding: 10px 12px; border-radius: 6px; background: var(--canvas); color: var(--ink-2); }
 
-/* side panel = another module (示意) */
-.side { position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100vw; background: #fff; border-left: 1px solid var(--border); box-shadow: -12px 0 30px -18px rgba(23,32,51,0.5); transform: translateX(100%); visibility: hidden; transition: transform 0.25s ease, visibility 0s linear 0.25s; z-index: 30; display: flex; flex-direction: column; }
+.side { position: fixed; top: 0; right: 0; bottom: 0; width: 560px; max-width: 100vw; background: #fff; border-left: 1px solid var(--border); box-shadow: -12px 0 30px -18px rgba(23,32,51,0.5); transform: translateX(100%); visibility: hidden; transition: transform 0.25s ease, visibility 0s linear 0.25s; z-index: 30; display: flex; flex-direction: column; }
 .side.open { transform: none; visibility: visible; transition: transform 0.25s ease; }
 .side__head { padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .side__head small { display: block; color: var(--muted); }
-.side__body { padding: 16px 18px; overflow-y: auto; flex: 1; }
-.side__foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
-.counter { margin-top: 12px; padding: 10px 12px; border-radius: 6px; background: var(--canvas); font-size: 12px; }
-.counter b { font-size: 14px; }
+.side__body { padding: 14px 18px; overflow-y: auto; flex: 1; }
+.side__foot { padding: 12px 18px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+.side table { font-size: 12px; }
+.side th, .side td { padding: 7px 8px; }
+.side .empty { padding: 24px 0; color: var(--muted); text-align: center; }
 
-/* toast */
-.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 9px 16px; border-radius: 6px; background: var(--ink); color: #fff; transition: opacity 0.2s, transform 0.2s; z-index: 40; pointer-events: none; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px); opacity: 0; padding: 9px 16px; border-radius: 6px; background: var(--ink); color: #fff; transition: opacity 0.2s, transform 0.2s; z-index: 40; pointer-events: none; max-width: 90vw; }
 .toast.show { opacity: 1; transform: translateX(-50%); }
 
-/* prototype console — visually distinct from the product */
 .console { margin: 12px 20px 0; background: #fff; border: 1px dashed var(--proto); border-radius: 8px; }
 .console__head { display: flex; justify-content: space-between; align-items: center; padding: 6px 12px; background: var(--proto-soft); color: var(--proto); font-weight: 700; border-radius: 8px 8px 0 0; cursor: pointer; }
-.console__body { padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 24px; }
+.console__body { padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px 22px; }
 .console.min .console__body { display: none; }
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
 .seg button { border: 0; padding: 3px 10px; background: #fff; cursor: pointer; }
 .seg button.on { background: var(--proto); color: #fff; }
 .console label { display: grid; gap: 4px; color: var(--muted); font-size: 12px; }
-.console ul { margin: 0; padding-left: 16px; color: var(--ink-2); font-size: 12px; flex: 1 1 320px; }
+.console .pending { color: var(--warning); }
+.console ul { margin: 0; padding-left: 16px; color: var(--ink-2); font-size: 12px; flex: 1 1 360px; }
 
-@media (max-width: 960px) {
-	.sidenav { display: none; }
-}
+@media (max-width: 960px) { .sidenav { display: none; } }
 @media (max-width: 760px) {
 	.page { padding: 12px 12px 40px; }
+	.console { margin: 12px 12px 0; }
 	th, td { padding: 8px; }
 	.col-secondary { display: none; }
-	.console { margin: 12px 12px 0; }
 	.check { grid-template-columns: 22px minmax(0, 1fr); }
 	.check__text, .check__act { grid-column: 2; }
 }
@@ -240,56 +189,53 @@ details.fold .fold__body { padding: 10px 12px; }
 <div class="shell">
 <nav class="sidenav" aria-label="门户菜单（示意）">
 	<div class="sidenav__group">数据建模</div>
-	<a href="#">建模规划</a>
-	<a href="#" class="active">模型工作台</a>
-	<a href="#">指标建模</a>
+	<button type="button" class="active">模型工作台</button>
 	<div class="sidenav__group">数据资产</div>
-	<a href="#">资产目录</a>
-	<a href="#">数据质量</a>
+	<button type="button" data-module="catalog">资产目录 <span id="badge-catalog"></span></button>
+	<button type="button" data-module="quality">数据质量 <span id="badge-quality"></span></button>
+	<button type="button" data-module="analysis">分析服务 <span id="badge-analysis"></span></button>
 	<div class="sidenav__group">运行</div>
-	<a href="#">运行监控</a>
+	<button type="button" data-module="run">运行管理 <span id="badge-run"></span></button>
 </nav>
 <div class="content">
 <section class="console" id="console" aria-label="原型控制台">
-	<div class="console__head" id="consoleHead"><span>原型控制台（仅原型，非产品界面）</span><span id="consoleToggle">收起</span></div>
+	<div class="console__head" id="consoleHead"><span>原型控制台（仅原型，非产品界面）· 各模块结果独立模拟</span><span id="consoleToggle">收起</span></div>
 	<div class="console__body">
-		<label>数据质量策略（系统管理 → 模型发布治理）
-			<span class="seg" id="policySeg"><button type="button" data-v="ADVISORY" class="on">提示</button><button type="button" data-v="BLOCKING">阻断</button></span>
+		<label>质量策略（系统管理 → 模型发布治理）
+			<span class="seg" data-key="policy"><button type="button" data-v="ADVISORY" class="on">提示</button><button type="button" data-v="BLOCKING">阻断</button></span>
 		</label>
 		<label>当前身份
-			<span class="seg" id="roleSeg"><button type="button" data-v="owner" class="on">数据管理员</button><button type="button" data-v="reviewer">发布评审人</button></span>
+			<span class="seg" data-key="role"><button type="button" data-v="owner" class="on">数据管理员</button><button type="button" data-v="reviewer">发布评审人</button></span>
 		</label>
-		<label>构建结果模拟
-			<span class="seg" id="outcomeSeg"><button type="button" data-v="success" class="on">成功</button><button type="button" data-v="fail">失败</button><button type="button" data-v="verify">待核验</button></span>
+		<label>构建结果（M2）
+			<span class="seg" data-key="buildOutcome"><button type="button" data-v="success" class="on">成功</button><button type="button" data-v="fail">失败</button><button type="button" data-v="pending">待确认</button></span>
+		</label>
+		<label>登记交接（M3）
+			<span class="seg" data-key="catalogOutcome"><button type="button" data-v="success" class="on">成功</button><button type="button" data-v="fail">失败</button><button type="button" data-v="slow">延迟</button></span>
+		</label>
+		<label><span>登记范围 <span class="pending">（待决策）</span></span>
+			<span class="seg" data-key="catalogScope"><button type="button" data-v="all" class="on">所有环境</button><button type="button" data-v="prod">仅生产环境</button></span>
+		</label>
+		<label>质量检查（M4）
+			<span class="seg" data-key="qualityOutcome"><button type="button" data-v="pass" class="on">合格</button><button type="button" data-v="fail">不合格</button></span>
 		</label>
 		<ul>
-			<li>每行是一种场景；列表只显示构建、发布两列。</li>
-			<li>登记失败（第 3 行）、缺质量规则（第 4 行）在「发布」的检查清单里出现；运行失败（第 5 行）只在运行监控出现，列表里看不到。</li>
-			<li>发布清单中的处理链接模拟跳到所属功能（右侧面板）；SQL 执行次数用于检查恢复不重跑构建。</li>
+			<li>工作台只显示设计版本、最近构建、已发布版本；登记/质量/分析/运行的待处理出现在左侧各模块。</li>
+			<li>构建成功只交接登记，不会顺带登记成功、分析就绪或运行上线；每个模块用自己的开关模拟。</li>
+			<li>第 5 行：r8 构建失败，已发布的 r7 仍在运行。模型名下的「构建 SQL 执行次数」用于检查恢复不重跑构建。</li>
 		</ul>
 		<button type="button" class="btn btn--sm" id="reset">重置全部场景</button>
 	</div>
 </section>
-
 <main class="page">
 	<div class="page__head">
-		<div>
-			<h1>模型工作台</h1>
-			<p>这里只管构建和发布。构建成功即完成建模；登记、质量只在发布前检查中出现，运行在运行监控中查看。</p>
-		</div>
+		<h1>模型工作台</h1>
+		<p>这里只管模型设计、版本和构建。构建结果确认即完成本次建模；版本发布按需发起；登记、质量、分析、运行在各自功能中处理。</p>
 	</div>
 	<div class="card">
 		<table aria-label="模型列表">
-			<colgroup><col><col class="col-secondary" style="width:72px"><col style="width:34%"><col style="width:18%"><col style="width:168px"></colgroup>
-			<thead>
-				<tr>
-					<th>模型</th>
-					<th class="col-secondary">版本</th>
-					<th>构建</th>
-					<th>发布</th>
-					<th>操作</th>
-				</tr>
-			</thead>
+			<colgroup><col><col class="col-secondary" style="width:150px"><col style="width:32%"><col style="width:15%"><col style="width:290px"></colgroup>
+			<thead><tr><th>模型</th><th class="col-secondary">当前设计版本</th><th>最近构建结果</th><th>已发布版本</th><th>操作</th></tr></thead>
 			<tbody id="rows"></tbody>
 		</table>
 	</div>
@@ -297,406 +243,435 @@ details.fold .fold__body { padding: 10px 12px; }
 </div>
 </div>
 
-<!-- build dialog -->
 <div class="overlay" id="buildOverlay" aria-hidden="true">
 	<section class="modal" role="dialog" aria-modal="true" aria-labelledby="buildTitle">
-		<div class="modal__head">
-			<div class="modal__title" id="buildTitle"></div>
-			<button class="modal__close" type="button" aria-label="关闭" data-close>×</button>
-		</div>
+		<div class="modal__head"><div class="modal__title" id="buildTitle"></div><button class="modal__close" type="button" aria-label="关闭" data-close="build">×</button></div>
 		<div class="modal__body" id="buildBody"></div>
 		<div class="modal__foot" id="buildFoot"></div>
 	</section>
 </div>
-
-<!-- publish dialog -->
 <div class="overlay" id="publishOverlay" aria-hidden="true">
 	<section class="modal" role="dialog" aria-modal="true" aria-labelledby="publishTitle">
-		<div class="modal__head">
-			<div class="modal__title" id="publishTitle"></div>
-			<button class="modal__close" type="button" aria-label="关闭" data-close>×</button>
-		</div>
+		<div class="modal__head"><div class="modal__title" id="publishTitle"></div><button class="modal__close" type="button" aria-label="关闭" data-close="publish">×</button></div>
 		<div class="modal__body" id="publishBody"></div>
 		<div class="modal__foot" id="publishFoot"></div>
 	</section>
 </div>
-
-<!-- another module, shown as a side panel for the prototype -->
 <aside class="side" id="side" aria-label="其他功能（示意）">
 	<div class="side__head"><strong id="sideTitle"></strong><small id="sideSub"></small></div>
 	<div class="side__body" id="sideBody"></div>
-	<div class="side__foot" id="sideFoot"></div>
+	<div class="side__foot"><button type="button" class="btn" data-a="closeSide">关闭</button></div>
 </aside>
-
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-
 
 <script>
 (function () {
 	"use strict";
-
+	var ENV = { dev: "开发环境", test: "测试环境", prod: "生产环境" };
+	var PHASES = ["准备", "加工", "工程核验", "结果回写"];
+	/* Each module owns its own state; nothing here derives one module's result from another's. */
 	var BASE = [
-		{ id: "m1", name: "biz_dwd_budget_v2", cn: "预算明细", layer: "DWD", rev: 2,
-			build: "none", catalog: "none", analysis: "none", quality: "none", publish: "none", run: "none", review: false, sql: 0 },
-		{ id: "m2", name: "biz_dws_budget_v2", cn: "预算汇总", layer: "DWS", rev: 4,
-			build: "failed", failReason: "目标数仓不可用：当前 dbt 目标数据源已被删除", failFix: "请系统管理员在「系统管理 → 数据湖配置」确认默认数据湖后重新构建",
-			failCode: "DBT_TARGET_DATASOURCE_NOT_FOUND", runId: "run-7f3a1c", catalog: "none", analysis: "none", quality: "none", publish: "none", run: "none", review: false, sql: 1 },
-		{ id: "m3", name: "biz_ads_budget_derived_v2", cn: "预算执行派生指标", layer: "ADS", rev: 3,
-			build: "success", finishedAt: "09-24 14:02", tables: "3/3", catalog: "failed", analysis: "none", quality: "none", publish: "none", run: "none", review: false, sql: 1 },
-		{ id: "m4", name: "biz_dws_cost_v1", cn: "成本汇总", layer: "DWS", rev: 5,
-			build: "success", finishedAt: "09-24 10:40", tables: "1/1", catalog: "ok", analysis: "ok", quality: "missing", publish: "none", run: "none", review: true, sql: 1 },
-		{ id: "m5", name: "biz_ads_risk_level", cn: "风险等级", layer: "ADS", rev: 7,
-			build: "success", finishedAt: "09-23 18:31", tables: "2/2", catalog: "ok", analysis: "ok", quality: "passed", publish: "published", publishedAt: "09-23 18:40", run: "failed", review: false, sql: 1 },
-		{ id: "m6", name: "biz_dim_org", cn: "组织维度", layer: "DIM", rev: 2,
-			build: "occupied", occupiedBy: "RC-20260921-0137", occupiedStatus: "工程验证中", occupiedModels: "biz_dim_org、biz_dim_dept、biz_dim_post", catalog: "ok", analysis: "ok", quality: "passed", publish: "none", run: "none", review: false, sql: 3 },
-		{ id: "m7", name: "biz_dwd_contract", cn: "合同明细", layer: "DWD", rev: 1,
-			build: "building", progress: 1, slow: true, catalog: "none", analysis: "none", quality: "none", publish: "none", run: "none", review: false, sql: 1 }
+		{ id: "m1", name: "biz_dwd_budget_v2", cn: "预算明细", layer: "DWD", design: 2, designState: "已保存", sql: 0,
+			build: null, published: null, request: null, review: false,
+			catalog: null, quality: null, analysis: null, run: null },
+		{ id: "m2", name: "biz_dws_budget_v2", cn: "预算汇总", layer: "DWS", design: 4, designState: "已保存", sql: 1,
+			build: { rev: 4, env: "dev", mode: "数据构建", state: "failed", reason: "目标数仓不可用：当前 dbt 目标数据源已被删除", fix: "请系统管理员在「系统管理 → 数据湖配置」确认默认数据湖后重新构建", code: "DBT_TARGET_DATASOURCE_NOT_FOUND", runId: "run-7f3a1c", at: "09-24 13:40" },
+			published: null, request: null, review: false, catalog: null, quality: null, analysis: null, run: null },
+		{ id: "m3", name: "biz_ads_budget_derived_v2", cn: "预算执行派生指标", layer: "ADS", design: 3, designState: "已保存", sql: 1,
+			build: { rev: 3, env: "prod", mode: "数据构建", state: "success", at: "09-24 14:02", tables: "3/3", runId: "run-3c90aa" },
+			published: null, request: null, review: false,
+			catalog: { rev: 3, env: "prod", runId: "run-3c90aa", state: "failed", reason: "元数据服务超时", open: false }, quality: null, analysis: null, run: null },
+		{ id: "m4", name: "biz_dws_cost_v1", cn: "成本汇总", layer: "DWS", design: 5, designState: "已保存", sql: 1,
+			build: { rev: 5, env: "prod", mode: "数据构建", state: "success", at: "09-24 10:40", tables: "1/1", runId: "run-51de02" },
+			published: null, request: null, review: true,
+			catalog: { rev: 5, env: "prod", runId: "run-51de02", state: "ok", open: false }, quality: { rev: 5, state: "missing" }, analysis: null, run: null },
+		{ id: "m5", name: "biz_ads_risk_level", cn: "风险等级", layer: "ADS", design: 8, designState: "已保存", sql: 2,
+			build: { rev: 8, env: "prod", mode: "数据构建", state: "failed", reason: "字段 risk_score 类型变更后与上游不兼容", fix: "修正字段映射后重新构建；已发布的 r7 不受影响", code: "MODEL_SPEC_TYPE_INCOMPATIBLE", runId: "run-8a11f0", at: "09-24 16:05" },
+			published: { rev: 7, at: "09-23 18:40" }, request: null, review: false,
+			catalog: { rev: 7, env: "prod", runId: "run-77b2c1", state: "ok", open: true }, quality: { rev: 7, state: "passed" }, analysis: { rev: 7, state: "ok" },
+			run: { rev: 7, enabled: true, last: "failed", lastAt: "09-24 02:00", lastReason: "上游数据未到达" } },
+		{ id: "m6", name: "biz_dim_org", cn: "组织维度", layer: "DIM", design: 2, designState: "已保存", sql: 3,
+			build: { rev: 2, env: "prod", mode: "数据构建", state: "blocked", occupiedBy: "RC-20260921-0137", occupiedModels: "biz_dim_org、biz_dim_dept、biz_dim_post" },
+			published: { rev: 1, at: "09-10 09:12" }, request: null, review: false,
+			catalog: { rev: 1, env: "prod", runId: "run-0d11e4", state: "ok", open: true }, quality: { rev: 1, state: "passed" }, analysis: { rev: 1, state: "ok" }, run: { rev: 1, enabled: true, last: "ok", lastAt: "09-24 02:00" } },
+		{ id: "m7", name: "biz_dwd_contract", cn: "合同明细", layer: "DWD", design: 1, designState: "已保存", sql: 1,
+			build: { rev: 1, env: "dev", mode: "数据构建", state: "running", phase: 1, slow: true, runId: "run-c0a1b2" },
+			published: null, request: null, review: false, catalog: null, quality: null, analysis: null, run: null },
+		{ id: "m8", name: "biz_dws_income_v1", cn: "收入汇总", layer: "DWS", design: 2, designState: "已保存", sql: 1,
+			build: { rev: 2, env: "prod", mode: "数据构建", state: "pending", runId: "run-9e4d77", at: "09-24 15:12" },
+			published: null, request: null, review: false, catalog: null, quality: null, analysis: null, run: null }
 	];
-	var PHASES = ["准备", "加工", "核验", "结果回写"];
-	var state = { models: clone(BASE), policy: "ADVISORY", role: "owner", outcome: "success", openBuild: null, openPublish: null, confirm: null, timers: {} };
+	var S = { models: clone(BASE), policy: "ADVISORY", role: "owner", buildOutcome: "success", catalogOutcome: "success", catalogScope: "all", qualityOutcome: "pass",
+		openBuild: null, openPublish: null, module: null, focus: null, confirm: null, showChecks: false, timers: {} };
 
-	function clone(value) { return JSON.parse(JSON.stringify(value)); }
+	function clone(v) { return JSON.parse(JSON.stringify(v)); }
 	function $(id) { return document.getElementById(id); }
-	function esc(text) { return String(text).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-	function model(id) { for (var i = 0; i < state.models.length; i++) if (state.models[i].id === id) return state.models[i]; return null; }
-	function toast(text) { var t = $("toast"); t.textContent = text; t.classList.add("show"); clearTimeout(toast.timer); toast.timer = setTimeout(function () { t.classList.remove("show"); }, 2600); }
+	function esc(t) { return String(t == null ? "" : t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+	function find(id) { for (var i = 0; i < S.models.length; i++) if (S.models[i].id === id) return S.models[i]; return null; }
+	function now() { return "09-24 " + new Date().toTimeString().slice(0, 5); }
+	function toast(t) { var el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(function () { el.classList.remove("show"); }, 2800); }
+	function btn(label, a, tone, extra) { return '<button type="button" class="btn' + (tone ? " btn--" + tone : "") + '" data-a="' + a + '"' + (extra || "") + ">" + label + "</button>"; }
+	function chip(text, tone) { return '<span class="chip chip--' + tone + '">' + esc(text) + "</span>"; }
+	function note(t) { return t ? '<span class="cell-note" title="' + esc(t) + '">' + esc(t) + "</span>" : ""; }
+	function stateBox(kind, title, text) { return '<div class="state' + (kind ? " state--" + kind : "") + '" role="status"><span class="state__dot" aria-hidden="true"></span><div><strong>' + title + "</strong><p>" + text + "</p></div></div>"; }
 
-	/* ---------- status vocabulary: one fact per dimension ---------- */
-	function buildChip(m) {
-		return {
-			none: ["未构建", "none"], building: ["构建中", "run"], success: ["已构建", "ok"], failed: ["构建失败", "bad"],
-			verify: ["待核验", "warn"], occupied: ["暂不能构建", "warn"]
-		}[m.build];
-	}
-	function publishChip(m) {
-		return { none: ["未发布", "none"], review: ["评审中", "run"], approved: ["评审通过", "run"], published: ["已发布", "ok"], rolledback: ["已回滚", "warn"] }[m.publish];
-	}
-	function chip(pair, dim, id) {
-		return '<span class="chip chip--' + pair[1] + '" role="button" tabindex="0" data-dim="' + dim + '" data-id="' + id + '" title="打开对应操作">' + pair[0] + "</span>";
-	}
-
-	function canPublish(m) { return m.build === "success"; }
-	function note(text) { return text ? '<span class="cell-note" title="' + esc(text) + '">' + esc(text) + "</span>" : ""; }
-	function buildNote(m) {
-		if (m.build === "success") return note(m.finishedAt + " · " + m.tables + " 张表");
-		if (m.build === "failed") return note(m.failReason);
-		if (m.build === "building") return note("进行中 · " + PHASES[m.progress]);
-		if (m.build === "verify") return note("结果待核验");
-		if (m.build === "occupied") return note("被发布单 " + m.occupiedBy + " 占用");
+	/* ---------------- M1 workbench: design version, latest build, published version ---------------- */
+	function buildCell(m) {
+		var b = m.build;
+		if (!b) return chip("未构建", "none");
+		var head = "r" + b.rev + " · " + ENV[b.env] + " · ";
+		if (b.state === "running") return chip("构建中", "run") + note(head + PHASES[b.phase]);
+		if (b.state === "success") return chip("构建完成", "ok") + note(head + b.at + " · " + b.tables + " 张表 · 工程核验通过");
+		if (b.state === "failed") return chip("构建失败", "bad") + note(head + b.reason);
+		if (b.state === "pending") return chip("待确认", "warn") + note(head + "SQL 已执行，结果待核验");
+		if (b.state === "blocked") return chip("暂不能构建", "warn") + note("被发布单 " + b.occupiedBy + " 占用");
 		return "";
 	}
-	function publishNote(m) {
-		if (m.publish === "published") return note(m.publishedAt + " 发布");
-		if (m.publish === "review") return note("等待评审人处理");
-		if (m.publish === "approved") return note("可发布");
-		return "";
+	function publishedCell(m) {
+		var html = m.published ? '<span class="ver">r' + m.published.rev + "</span>" + note(m.published.at + " 发布") : chip("未发布", "none");
+		if (m.request && m.request.state === "review") html += note("r" + m.request.rev + " 评审中");
+		if (m.request && m.request.state === "approved") html += note("r" + m.request.rev + " 评审通过，待发布");
+		return html;
 	}
-
 	function renderRows() {
-		var html = state.models.map(function (m) {
-			var publishDisabled = !canPublish(m) && m.publish === "none";
-			var hint = publishDisabled ? '<span class="row-hint" id="hint-' + m.id + '">构建成功后可发布</span>' : "";
+		$("rows").innerHTML = S.models.map(function (m) {
 			return "<tr>" +
-				'<td><div class="model-name"><span class="layer">' + m.layer + "</span>" + esc(m.name) + '</div><div class="model-sub">' + esc(m.cn) + " · SQL 执行 " + m.sql + " 次</div></td>" +
-				'<td class="col-secondary">r' + m.rev + "</td>" +
-				"<td>" + chip(buildChip(m), "build", m.id) + buildNote(m) + "</td>" +
-				"<td>" + chip(publishChip(m), "publish", m.id) + publishNote(m) + "</td>" +
+				'<td><div class="model-name"><span class="layer">' + m.layer + "</span>" + esc(m.name) + '</div><span class="sub">' + esc(m.cn) + " · 构建 SQL 执行 " + m.sql + " 次</span></td>" +
+				'<td class="col-secondary"><span class="ver">r' + m.design + '</span><span class="sub">' + m.designState + "</span></td>" +
+				"<td>" + buildCell(m) + "</td>" +
+				"<td>" + publishedCell(m) + "</td>" +
 				'<td><div class="row-actions">' +
+				'<button type="button" class="btn btn--sm" data-act="edit" data-id="' + m.id + '">编辑</button>' +
+				'<button type="button" class="btn btn--sm" data-act="validate" data-id="' + m.id + '">校验</button>' +
 				'<button type="button" class="btn btn--sm" data-act="build" data-id="' + m.id + '">构建</button>' +
-				'<button type="button" class="btn btn--sm" data-act="publish" data-id="' + m.id + '"' +
-				(publishDisabled ? ' aria-disabled="true" aria-describedby="hint-' + m.id + '"' : "") + ">发布</button>" +
-				"</div>" + hint + "</td></tr>";
+				'<button type="button" class="btn btn--sm btn--ghost" data-act="publish" data-id="' + m.id + '">版本发布</button>' +
+				"</div></td></tr>";
 		}).join("");
-		$("rows").innerHTML = html;
+		renderBadges();
 	}
 
-	/* ---------- build dialog ---------- */
-	function buildPlanTable(m) {
+	/* ---------------- M2 build dialog ---------------- */
+	function planTable(m) {
 		var rows = m.layer === "ADS"
 			? [["1", "biz_dwd_budget_v2", "DWD", "上游依赖", "复用已有结果"], ["2", "biz_dws_budget_v2", "DWS", "上游依赖", "需要构建"], ["3", m.name, m.layer, "本次模型", "需要构建"]]
 			: [["1", m.name, m.layer, "本次模型", "需要构建"]];
 		return '<table class="mini"><thead><tr><th>顺序</th><th>模型</th><th>分层</th><th>依赖角色</th><th>本次动作</th></tr></thead><tbody>' +
 			rows.map(function (r) { return "<tr><td>" + r.join("</td><td>") + "</td></tr>"; }).join("") + "</tbody></table>";
 	}
-	function scopeText(m) { return m.layer === "ADS" ? "本模型 + 2 个上游（1 个需构建，1 个复用）" : "仅本模型"; }
-
 	function renderBuild() {
-		var m = model(state.openBuild);
-		if (!m) return;
-		$("buildTitle").innerHTML = "构建 <small>" + esc(m.name) + " · r" + m.rev + "</small>";
-		var banner, foot = [];
-		var confirming = state.confirm && state.confirm.id === m.id ? state.confirm.kind : null;
-		if (m.build === "none") {
-			banner = stateBox("", "尚未构建", "确认范围和环境后开始构建。构建成功即完成建模，发布是之后单独的动作。");
+		var m = find(S.openBuild); if (!m) return;
+		var b = m.build, foot = [], banner;
+		$("buildTitle").innerHTML = "构建 <small>" + esc(m.name) + " · 设计 r" + m.design + "</small>";
+		var confirming = S.confirm && S.confirm.id === m.id ? S.confirm.kind : null;
+		if (!b || (b.rev !== m.design && b.state !== "running")) {
+			banner = stateBox("", "r" + m.design + " 尚未构建", "构建只处理当前设计版本的物理落地和必要工程核验；登记、质量、分析、运行由各自功能处理。" + (b ? "上一次构建：r" + b.rev + "。" : ""));
 			foot.push(btn("开始构建", "startBuild", "primary"));
-		} else if (m.build === "building") {
-			banner = stateBox("run", "构建中 · " + PHASES[m.progress] , "关闭窗口不会取消构建，重新打开会看到同一次运行。" + progressHtml(m));
+		} else if (b.state === "running") {
+			var pct = Math.round(((b.phase + 0.5) / PHASES.length) * 100);
+			banner = stateBox("run", "构建中 · " + PHASES[b.phase], "关闭窗口不会取消构建，重新打开会看到同一次运行（" + b.runId + "）。" +
+				'<div class="progress"><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><div class="bar__fill" style="width:' + pct + '%"></div></div><div class="phases">' +
+				PHASES.map(function (p, i) { return '<span class="' + (i < b.phase ? "done" : i === b.phase ? "on" : "") + '">' + p + "</span>"; }).join("") + "</div></div>");
 			foot.push(btn("放弃本次构建", "askAbandon", "danger"));
-		} else if (m.build === "success") {
-			banner = stateBox("ok", "构建成功，建模已完成", m.finishedAt + " · " + m.tables + " 张表完成 · 工程检查通过");
+		} else if (b.state === "success") {
+			banner = stateBox("ok", "构建完成，本次建模已完成", "r" + b.rev + " · " + ENV[b.env] + " · " + b.at + " · " + b.tables + " 张表 · 工程核验通过");
 			foot.push(btn("重新构建", "startBuild"));
-			foot.push(btn("查看数据资产", "gotoAsset"));
-		} else if (m.build === "failed") {
-			banner = stateBox("bad", "构建失败：" + m.failReason, m.failFix +
-				'<details class="fold"><summary>查看详情</summary><div class="fold__body"><dl class="facts"><dt>错误码</dt><dd class="mono">' + esc(m.failCode) + '</dd><dt>执行编号</dt><dd class="mono">' + esc(m.runId) + "</dd></dl></div></details>");
+		} else if (b.state === "failed") {
+			banner = stateBox("bad", "构建失败：" + esc(b.reason), esc(b.fix) +
+				'<details class="fold"><summary>查看详情</summary><div class="fold__body"><dl class="facts"><dt>错误码</dt><dd class="mono">' + esc(b.code) + '</dd><dt>执行编号</dt><dd class="mono">' + esc(b.runId) + "</dd></dl></div></details>");
 			foot.push(btn("重新构建", "startBuild", "primary"));
-		} else if (m.build === "verify") {
-			banner = stateBox("hold", "SQL 已执行，结果待核验", "表已生成，但目标核验或结果回写尚未确认，暂不算构建成功。继续核验不会再次执行 SQL。");
+		} else if (b.state === "pending") {
+			banner = stateBox("hold", "SQL 已执行，结果待确认", "目标核验或结果回写尚未确认，暂不算构建完成。继续核验不会再次执行 SQL。");
 			foot.push(btn("继续核验", "continueVerify", "primary"));
-		} else if (m.build === "occupied") {
-			banner = stateBox("hold", "暂不能构建：所选模型被另一个发布单占用",
-				"发布单 " + esc(m.occupiedBy) + "（" + esc(m.occupiedStatus) + "）包含：" + esc(m.occupiedModels) + "。这不是一次构建失败。");
+		} else if (b.state === "blocked") {
+			banner = stateBox("hold", "暂不能构建：所选模型被另一个发布单占用", "发布单 " + esc(b.occupiedBy) + " 包含：" + esc(b.occupiedModels) + "。这不是一次构建失败。");
 			foot.push(btn("关闭占用发布单", "askCloseOccupied", "danger"));
 		}
+		var running = b && b.state === "running";
 		var body = banner +
-			'<dl class="facts"><dt>构建范围</dt><dd>' + scopeText(m) + '</dd>' +
-			'<dt>执行环境</dt><dd><select aria-label="执行环境"' + (m.build === "building" ? " disabled" : "") + '><option>开发环境</option><option>测试环境</option><option>生产环境</option></select></dd>' +
-			(m.build === "success" ? "<dt>SQL 执行</dt><dd>" + m.sql + " 次（登记、质量、发布、运行的恢复不会增加此次数）</dd>" : "") +
-			"</dl>" +
-			'<details class="fold"><summary>依赖构建计划</summary><div class="fold__body">' + buildPlanTable(m) + "</div></details>" +
+			'<dl class="facts"><dt>构建范围</dt><dd>' + (m.layer === "ADS" ? "本模型 + 2 个上游（1 个需构建，1 个复用）" : "仅本模型") + "</dd>" +
+			'<dt>执行环境</dt><dd><select id="buildEnv" aria-label="执行环境"' + (running ? " disabled" : "") + ">" +
+			["dev", "test", "prod"].map(function (e) { return '<option value="' + e + '"' + ((b ? b.env : "dev") === e ? " selected" : "") + ">" + ENV[e] + "</option>"; }).join("") + "</select></dd>" +
+			'<dt>构建模式</dt><dd><select aria-label="构建模式"' + (running ? " disabled" : "") + "><option>数据构建</option><option>仅结构（不写入数据）</option></select></dd></dl>" +
+			'<details class="fold"><summary>依赖构建计划</summary><div class="fold__body">' + planTable(m) + "</div></details>" +
 			'<details class="fold"><summary>高级设置</summary><div class="fold__body"><dl class="facts"><dt>依赖策略</dt><dd><select aria-label="依赖策略"><option>缺失上游一并构建（推荐）</option><option>仅使用已验证的上游</option></select></dd></dl></div></details>';
+		if (b && b.state === "success" && b.rev === m.design) body += '<div class="handoff">构建结果已交给资产目录独立登记（' + catalogText(m) + "）。登记不影响本次构建结果，失败在资产目录处理。</div>";
 		if (confirming === "abandon") body += confirmBox("放弃后本次运行标记为已放弃，已写入的数据不回滚。确认放弃？", "doAbandon");
-		if (confirming === "closeOccupied") body += confirmBox("关闭后发布单 " + esc(m.occupiedBy) + " 的后续发布流程结束，已有构建结果保留。该发布单涉及其他模型，确认关闭？", "doCloseOccupied");
+		if (confirming === "closeOccupied") body += confirmBox("关闭后发布单 " + esc(b.occupiedBy) + " 的后续发布流程结束，已有构建结果保留；该发布单涉及其他模型。确认关闭？", "doCloseOccupied");
 		$("buildBody").innerHTML = body;
-		$("buildFoot").innerHTML = '<span class="spacer">' + (m.build === "success" ? "可以直接返回列表，不需要继续登记、质量或发布。" : "") + "</span>" + btn("关闭", "closeBuild") + foot.reverse().join("");
+		$("buildFoot").innerHTML = '<span class="spacer">' + (b && b.state === "success" ? "可以直接返回列表，不需要继续登记、质量或发布。" : "") + "</span>" + btn("关闭", "closeBuild") + foot.reverse().join("");
 	}
-	function stateBox(kind, title, text) {
-		return '<div class="state' + (kind ? " state--" + kind : "") + '" role="status"><span class="state__dot" aria-hidden="true"></span><div><strong>' + title + "</strong><p>" + text + "</p></div></div>";
+	function confirmBox(text, a) { return '<div class="confirm" role="alertdialog"><p>' + text + "</p>" + btn("确认", a, "danger") + " " + btn("取消", "cancelConfirm") + "</div>"; }
+	function catalogText(m) {
+		var c = m.catalog;
+		if (!c || c.rev !== m.build.rev) return "未交接";
+		return { queued: "登记排队中", ok: "已登记", failed: "登记失败", skipped: "按登记范围不登记" }[c.state];
 	}
-	function progressHtml(m) {
-		var pct = Math.round(((m.progress + 0.5) / PHASES.length) * 100);
-		return '<div class="progress"><div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + pct + '"><div class="bar__fill" style="width:' + pct + '%"></div></div><div class="phases">' +
-			PHASES.map(function (p, i) { return '<span class="' + (i < m.progress ? "done" : i === m.progress ? "on" : "") + '">' + p + "</span>"; }).join("") + "</div></div>";
-	}
-	function confirmBox(text, action) {
-		return '<div class="confirm" role="alertdialog"><p>' + text + "</p>" + btn("确认", action, "danger") + " " + btn("取消", "cancelConfirm") + "</div>";
-	}
-	function btn(label, action, tone) { return '<button type="button" class="btn' + (tone ? " btn--" + tone : "") + '" data-a="' + action + '">' + label + "</button>"; }
-
 	function startBuild(m) {
-		m.build = "building"; m.progress = 0; m.sql += 1; m.slow = false;
-		state.confirm = null;
-		tick(m);
+		var env = $("buildEnv") ? $("buildEnv").value : "dev";
+		m.sql += 1;
+		m.build = { rev: m.design, env: env, mode: "数据构建", state: "running", phase: 0, runId: "run-" + Math.random().toString(16).slice(2, 8) };
+		S.confirm = null; tick(m);
 	}
 	function tick(m) {
-		clearTimeout(state.timers[m.id]);
-		state.timers[m.id] = setTimeout(function () {
-			if (m.build !== "building") return;
-			if (m.progress < PHASES.length - 1) { m.progress += 1; refresh(); tick(m); return; }
-			finishBuild(m);
+		clearTimeout(S.timers[m.id]);
+		S.timers[m.id] = setTimeout(function () {
+			var b = m.build; if (!b || b.state !== "running") return;
+			if (b.phase < PHASES.length - 1) { b.phase += 1; refresh(); tick(m); return; }
+			if (S.buildOutcome === "fail") { b.state = "failed"; b.reason = "目标数仓连接超时"; b.fix = "请确认目标数仓可访问后重新构建"; b.code = "DBT_TARGET_CONNECTION_TIMEOUT"; b.at = now(); }
+			else if (S.buildOutcome === "pending") { b.state = "pending"; b.at = now(); }
+			else completeBuild(m);
 			refresh();
-		}, m.slow ? 3500 : 1100);
+		}, m.build && m.build.slow ? 3500 : 1100);
 	}
-	function finishBuild(m) {
-		if (state.outcome === "fail") {
-			m.build = "failed"; m.failReason = "目标数仓连接超时"; m.failFix = "请确认目标数仓可访问后重新构建"; m.failCode = "DBT_TARGET_CONNECTION_TIMEOUT"; m.runId = "run-" + Math.random().toString(16).slice(2, 8);
-		} else if (state.outcome === "verify") {
-			m.build = "verify";
-		} else {
-			markBuilt(m);
+	/* M2 confirms its own result, then hands off to M3. It never sets catalog/analysis/run results. */
+	function completeBuild(m) {
+		var b = m.build; b.state = "success"; b.at = b.at || now(); b.tables = m.layer === "ADS" ? "3/3" : "1/1"; b.slow = false;
+		handOffToCatalog(m);
+	}
+	function handOffToCatalog(m) {
+		var b = m.build;
+		if (S.catalogScope === "prod" && b.env !== "prod") {
+			m.catalog = { rev: b.rev, env: b.env, runId: b.runId, state: "skipped", open: false };
+			return;
 		}
-	}
-	function markBuilt(m) {
-		m.build = "success"; m.finishedAt = "09-24 " + new Date().toTimeString().slice(0, 5); m.tables = m.layer === "ADS" ? "3/3" : "1/1";
-		if (m.catalog === "none") m.catalog = "ok";
-		if (m.analysis === "none") m.analysis = "ok";
+		m.catalog = { rev: b.rev, env: b.env, runId: b.runId, state: "queued", open: m.catalog ? m.catalog.open : false };
+		var delay = S.catalogOutcome === "slow" ? 6000 : 1500;
+		var outcome = S.catalogOutcome;
+		setTimeout(function () {
+			if (!m.catalog || m.catalog.runId !== b.runId || m.catalog.state !== "queued") return;
+			if (outcome === "fail") { m.catalog.state = "failed"; m.catalog.reason = "元数据服务超时"; }
+			else m.catalog.state = "ok";
+			refresh();
+		}, delay);
 	}
 
-	/* ---------- publish dialog ---------- */
-	function checklist(m) {
-		var blocking = state.policy === "BLOCKING";
-		var rows = [];
-		rows.push(m.build === "success" ? ["ok", "构建结果", "r" + m.rev + " · " + m.finishedAt + " 构建成功", null]
-			: ["bad", "构建结果", "当前版本尚未构建成功", ["去构建", "build"]]);
-		rows.push(m.build === "success" ? ["ok", "工程检查", "通过（随构建执行）", null] : ["wait", "工程检查", "随构建执行", null]);
-		rows.push(m.catalog === "ok" ? ["ok", "资产登记", "已登记", null]
-			: m.catalog === "failed" ? ["bad", "资产登记", "登记失败，发布需要资产身份", ["去资产目录处理", "catalog"]]
-			: ["wait", "资产登记", "构建成功后自动登记", null]);
-		var q;
-		if (m.quality === "passed") q = ["ok", "数据质量", "质量合格", ["查看报告", "quality"]];
-		else if (m.quality === "missing") q = [blocking ? "bad" : "warn", "数据质量", blocking ? "缺少质量规则，阻断策略下不能发布" : "缺少质量规则（提示，不影响发布）", ["去配置规则", "quality"]];
-		else if (m.quality === "failed") q = [blocking ? "bad" : "warn", "数据质量", blocking ? "质量不合格，阻断策略下不能发布" : "质量不合格（提示，不影响发布）", ["查看报告", "quality"]];
-		else q = [blocking ? "bad" : "warn", "数据质量", blocking ? "尚未检查，阻断策略下不能发布" : "尚未检查（提示，不影响发布）", ["去配置规则", "quality"]];
-		q[2] += '<span class="policy">' + (blocking ? "阻断策略" : "提示策略") + "</span>";
-		rows.push(q);
+	/* ---------------- M6a version publish dialog ---------------- */
+	function publishTarget(m) { return m.build && m.build.state === "success" && m.build.rev === m.design ? m.build : null; }
+	function checks(m) {
+		var b = publishTarget(m), rows = [], blocking = S.policy === "BLOCKING";
+		rows.push(b ? ["ok", "构建证据", "r" + b.rev + " · " + ENV[b.env] + " · " + b.runId, null, "构建"]
+			: ["bad", "构建证据", "当前设计 r" + m.design + " 尚未构建完成", ["去构建", "build"], "构建"]);
+		rows.push(b ? ["ok", "工程核验", "随构建完成", null, "构建"] : ["wait", "工程核验", "构建完成后检查", null, "构建"]);
+		var c = m.catalog && b && m.catalog.rev === b.rev ? m.catalog : null;
+		if (!b) rows.push(["wait", "资产身份", "构建完成后检查", null, "资产目录"]);
+		else if (!c) rows.push(["bad", "资产身份", "尚未交接登记", ["去资产目录", "catalog"], "资产目录"]);
+		else if (c.state === "ok") rows.push(["ok", "资产身份", "已登记", null, "资产目录"]);
+		else if (c.state === "queued") rows.push(["bad", "资产身份", "登记排队中，完成后可发布", ["去资产目录", "catalog"], "资产目录"]);
+		else if (c.state === "skipped") rows.push(["bad", "资产身份", ENV[c.env] + "构建不登记资产；发布需要生产环境构建", ["去构建", "build"], "资产目录"]);
+		else rows.push(["bad", "资产身份", "登记失败：" + esc(c.reason || "未知原因"), ["去资产目录处理", "catalog"], "资产目录"]);
+		var q = m.quality && b && m.quality.rev === b.rev ? m.quality : null;
+		var qState = q ? q.state : "none";
+		var qText = { passed: "质量合格", failed: "质量不合格", missing: "缺少质量规则", none: "尚未检查" }[qState];
+		var pTag = '<span class="policy">' + (blocking ? "阻断策略" : "提示策略") + "</span>";
+		if (qState === "passed") rows.push(["ok", "数据质量", qText + pTag, ["查看报告", "quality"], "数据质量"]);
+		else rows.push([blocking ? "bad" : "warn", "数据质量", qText + (blocking ? "，阻断策略下不能发布" : "（提示，不影响发布；报告如实保留）") + pTag, ["去数据质量", "quality"], "数据质量"]);
 		if (m.review) {
-			rows.push(m.publish === "approved" || m.publish === "published" ? ["ok", "审批", "评审通过", null]
-				: m.publish === "review" ? ["wait", "审批", "等待发布评审人处理", null]
-				: ["wait", "审批", "需要评审：提交后由独立评审人处理", null]);
-		} else {
-			rows.push(["ok", "审批", "无需评审（数据管理员自助发布）", null]);
-		}
-		rows.push(["ok", "权限与密级", "通过", null]);
+			var r = m.request;
+			rows.push(r && r.state === "approved" ? ["ok", "审批", "评审通过", null, "发布"] : r && r.state === "review" ? ["warn", "审批", "等待发布评审人处理", null, "发布"] : ["warn", "审批", "需要评审：提交后由独立评审人处理", null, "发布"]);
+		} else rows.push(["ok", "审批", "无需评审（数据管理员自助发布）", null, "发布"]);
+		rows.push(["ok", "权限与密级", "通过", null, "权限"]);
 		return rows;
 	}
 	function renderPublish() {
-		var m = model(state.openPublish);
-		if (!m) return;
-		$("publishTitle").innerHTML = "发布 <small>" + esc(m.name) + " · r" + m.rev + "</small>";
-		var body = "", foot = [];
-		var confirming = state.confirm && state.confirm.id === m.id ? state.confirm.kind : null;
-		if (m.publish === "published") {
-			body += '<div class="published"><strong>已发布</strong><div>r' + m.rev + " · " + (m.publishedAt || "刚刚") + " 发布，报表和数据服务按各自授权访问。</div></div>";
-			body += '<p class="note">上线与定时运行在运行监控中查看和处理；运行失败不会改变发布结果，也不会自动回滚。 <button type="button" class="link" data-a="gotoRun">打开运行监控</button></p>';
-			body += '<div class="field"><label for="reason">回滚说明 <span class="req">*</span></label><textarea id="reason" placeholder="回滚必须说明原因"></textarea></div>';
-			if (confirming === "rollback") body += confirmBox("回滚后该版本对下游不可见，构建结果保留。确认回滚？", "doRollback");
-			foot.push(btn("回滚发布", "askRollback", "danger"));
+		var m = find(S.openPublish); if (!m) return;
+		var b = publishTarget(m), rows = checks(m), body = "", foot = [];
+		var blockers = rows.filter(function (r) { return r[0] === "bad"; });
+		var warns = rows.filter(function (r) { return r[0] === "warn" || r[0] === "wait"; });
+		$("publishTitle").innerHTML = "版本发布 <small>" + esc(m.name) + "</small>";
+		body += '<dl class="facts"><dt>发布版本</dt><dd>' + (b ? "r" + b.rev + " · 构建 " + b.runId + "（" + ENV[b.env] + "）" : "当前设计 r" + m.design + "（尚无可发布的构建）") + "</dd>" +
+			"<dt>当前正式版本</dt><dd>" + (m.published ? "r" + m.published.rev + " · " + m.published.at + " 发布" : "无") + "</dd></dl>";
+		if (!blockers.length && !warns.length) {
+			body += '<div class="summary-ok">✓ 发布检查全部通过（' + rows.length + ' 项） <button type="button" class="link" data-a="toggleChecks">' + (S.showChecks ? "收起明细" : "查看明细") + "</button></div>";
+			if (S.showChecks) body += checklistHtml(rows);
 		} else {
-			var rows = checklist(m);
-			var blockers = rows.filter(function (r) { return r[0] === "bad"; });
-			var awaitingReview = m.review && m.publish === "review";
-			body += '<ul class="checklist" aria-label="发布前检查">' + rows.map(function (r) {
-				var icon = { ok: "✓", warn: "!", bad: "×", wait: "…" }[r[0]];
-				return '<li class="check check--' + r[0] + '"><span class="check__icon" aria-hidden="true">' + icon + '</span><span class="check__name">' + r[1] +
-					'</span><span class="check__text">' + r[2] + '</span><span class="check__act">' + (r[3] ? '<button type="button" class="link" data-go="' + r[3][1] + '">' + r[3][0] + "</button>" : "") + "</span></li>";
-			}).join("") + "</ul>";
-			if (awaitingReview && state.role === "reviewer") {
-				body += '<div class="field"><label for="reason">评审意见（驳回时必填）</label><textarea id="reason"></textarea></div>';
-				foot.push(btn("审核通过", "approve", "primary"));
-				foot.push(btn("驳回", "reject", "danger"));
-			} else if (awaitingReview) {
-				body += '<p class="note">已提交评审，等待独立发布评审人处理；提交人不能评审自己的发布。（在控制台切换为「发布评审人」体验）</p>';
-			} else {
-				body += '<div class="field"><label for="reason">发布说明（选填）</label><textarea id="reason" placeholder="例如：预算口径调整后首发"></textarea></div>';
-				var label = m.review && m.publish !== "approved" ? "提交评审" : "发布";
-				foot.push('<button type="button" class="btn btn--primary" data-a="' + (label === "发布" ? "publish" : "submitReview") + '"' + (blockers.length ? ' disabled aria-describedby="blockSummary"' : "") + ">" + label + "</button>");
-			}
-			var summary = blockers.length ? "有 " + blockers.length + " 项阻止发布：" + blockers.map(function (r) { return r[1]; }).join("、") : "";
-			$("publishFoot").dataset.summary = summary;
+			body += checklistHtml(rows);
+		}
+		var r = m.request, awaiting = m.review && r && r.state === "review" && b && r.rev === b.rev;
+		if (awaiting && S.role === "reviewer") {
+			body += '<div class="field"><label for="reason">评审意见（驳回时必填）</label><textarea id="reason"></textarea></div>';
+			foot.push(btn("审核通过", "approve", "primary")); foot.push(btn("驳回", "reject", "danger"));
+		} else if (awaiting) {
+			body += '<p class="note">已提交评审，等待独立发布评审人处理；提交人不能评审自己的发布。（在控制台切换为「发布评审人」体验）</p>';
+		} else {
+			var needReview = m.review && !(r && r.state === "approved" && b && r.rev === b.rev);
+			foot.push(btn(needReview ? "提交评审" : "发布 r" + (b ? b.rev : m.design), needReview ? "submitReview" : "publish", "primary", blockers.length ? " disabled" : ""));
+		}
+		body += '<p class="note">发布只登记正式版本，不会开放资产访问、不会准备分析资源、不会部署或启用运行。这些在资产目录、分析服务、运行管理中分别办理。</p>';
+		if (m.published) {
+			body += '<details class="fold"' + (S.confirm && S.confirm.kind === "rollback" ? " open" : "") + '><summary>回滚当前正式版本 r' + m.published.rev + '</summary><div class="fold__body"><div class="field" style="margin-top:0"><label for="rollbackReason">回滚说明 <span class="req">*</span></label><textarea id="rollbackReason"></textarea></div>' +
+				(S.confirm && S.confirm.kind === "rollback" ? confirmBox("回滚后 r" + m.published.rev + " 不再是正式版本；物理表与运行配置不会被删除，运行版本需在运行管理中另行切换。确认回滚？", "doRollback") : '<p style="margin:8px 0 0">' + btn("回滚发布", "askRollback", "danger") + "</p>") +
+				"</div></details>";
 		}
 		$("publishBody").innerHTML = body;
-		var s = $("publishFoot").dataset.summary || "";
-		$("publishFoot").innerHTML = '<span class="spacer" id="blockSummary">' + (m.publish === "published" ? "" : esc(s)) + "</span>" + btn("取消", "closePublish") + foot.reverse().join("");
-		$("publishFoot").dataset.summary = "";
+		var summary = blockers.length ? "有 " + blockers.length + " 项阻止发布：" + blockers.map(function (x) { return x[1]; }).join("、") : "";
+		$("publishFoot").innerHTML = '<span class="spacer">' + esc(summary) + "</span>" + btn("关闭", "closePublish") + foot.reverse().join("");
+	}
+	function checklistHtml(rows) {
+		return '<ul class="checklist" aria-label="发布检查">' + rows.map(function (r) {
+			var icon = { ok: "✓", warn: "!", bad: "×", wait: "…" }[r[0]];
+			return '<li class="check check--' + r[0] + '"><span class="check__icon" aria-hidden="true">' + icon + '</span><span class="check__name">' + r[1] + '<span class="owner">' + r[4] + '</span></span><span class="check__text">' + r[2] +
+				'</span><span class="check__act">' + (r[3] ? '<button type="button" class="link" data-go="' + r[3][1] + '">' + r[3][0] + "</button>" : "") + "</span></li>";
+		}).join("") + "</ul>";
 	}
 
-	/* ---------- other modules (side panel) ---------- */
-	function openSide(dim, m) {
-		var title = { catalog: "资产目录", analysis: "资产目录 · 分析准备", quality: "数据质量", run: "运行监控", build: "构建记录", publish: "发布记录" }[dim];
-		$("sideTitle").textContent = title + "（示意）";
-		$("sideSub").textContent = "从模型工作台跳转 · " + m.name + " r" + m.rev + " · 关闭后返回原列表位置";
-		var body = "", foot = [btn("返回模型工作台", "closeSide")];
-		if (dim === "catalog" && m.catalog === "failed") {
-			body = stateBox("bad", "目录登记失败", "目标表已生成，资产身份登记未完成（元数据服务超时）。重试只重新登记，不会再次执行构建 SQL。") + counterHtml(m);
-			foot.unshift(btn("重试登记", "retryCatalog", "primary"));
-		} else if (dim === "quality" && (m.quality === "missing" || m.quality === "none")) {
-			body = stateBox("hold", "尚未配置质量规则", "为该资产配置规则后运行质量检查。质量结果不改变构建结果；阻断策略下只影响能否发布。") + counterHtml(m);
-			foot.unshift(btn("配置规则并运行（模拟通过）", "fixQuality", "primary"));
-		} else if (dim === "run" && m.run === "failed") {
-			body = stateBox("bad", "最近一次定时计算失败", "09-24 02:00 调度运行失败：上游数据未到达。发布与建模结果不受影响。") + counterHtml(m);
-			foot.unshift(btn("重新运行（模拟成功）", "fixRun", "primary"));
-		} else {
-			body = '<p>' + esc(title) + "中该对象的详情页（原型不展开）。</p>" + counterHtml(m);
+	/* ---------------- other modules: each finds its own to-dos ---------------- */
+	function catalogItems() { return S.models.filter(function (m) { return m.catalog; }); }
+	function registered() { return S.models.filter(function (m) { return m.catalog && m.catalog.state === "ok"; }); }
+	function runItems() { return S.models.filter(function (m) { return m.published || m.run; }); }
+	function badge(id, count, warn) { $(id).innerHTML = count ? '<span class="badge' + (warn ? " badge--warn" : "") + '">' + count + "</span>" : ""; }
+	function renderBadges() {
+		badge("badge-catalog", catalogItems().filter(function (m) { return m.catalog.state === "failed" || m.catalog.state === "queued"; }).length);
+		badge("badge-quality", registered().filter(function (m) { return !m.quality || m.quality.rev !== m.catalog.rev || m.quality.state !== "passed"; }).length, true);
+		badge("badge-analysis", registered().filter(function (m) { return !m.analysis || m.analysis.rev !== m.catalog.rev || m.analysis.state !== "ok"; }).length, true);
+		badge("badge-run", runItems().filter(function (m) { return !m.run || m.run.last === "failed" || !m.published || m.run.rev !== m.published.rev; }).length);
+	}
+	function openModule(name, focusId) {
+		S.module = name; S.focus = focusId || null;
+		Array.prototype.forEach.call(document.querySelectorAll(".sidenav [data-module]"), function (b) { b.classList.toggle("active", b.dataset.module === name); });
+		renderModule(); $("side").classList.add("open");
+	}
+	function hl(m) { return S.focus === m.id ? ' style="background:#fffbe6"' : ""; }
+	function renderModule() {
+		var name = S.module, body = "";
+		if (!name) return;
+		var titles = { catalog: ["资产目录", "登记由构建结果自动交接；失败在这里按模型/构建定位重试。资产开放使用在这里单独申请。"],
+			quality: ["数据质量", "对已登记资产配置规则并检查；执行情况与数据结论分别记录，不改变构建结果。"],
+			analysis: ["分析服务", "为已登记资产准备分析资源；登记成功不等于分析就绪。"],
+			run: ["运行管理", "选择已发布版本部署并启用；每次运行单独记录，失败不改变发布与构建结果。"] };
+		$("sideTitle").textContent = titles[name][0] + "（示意）";
+		$("sideSub").textContent = titles[name][1];
+		if (name === "catalog") {
+			var items = catalogItems();
+			body = items.length ? "<table><thead><tr><th>模型 / 构建</th><th>登记</th><th>开放使用</th><th></th></tr></thead><tbody>" + items.map(function (m) {
+				var c = m.catalog;
+				var st = { queued: chip("排队中", "run"), ok: chip("已登记", "ok"), failed: chip("登记失败", "bad"), skipped: chip("不登记", "none") }[c.state];
+				var act = c.state === "failed" ? btn("重试登记", "retryCatalog", "primary", ' data-id="' + m.id + '"') : "";
+				var open = c.state === "ok" ? (c.open ? chip("已开放", "ok") : btn("申请开放", "openAsset", "", ' data-id="' + m.id + '"')) : '<span class="sub">—</span>';
+				var extra = c.state === "failed" ? '<span class="sub">' + esc(c.reason) + "</span>" : c.state === "skipped" ? '<span class="sub">非生产环境构建（登记范围）</span>' : "";
+				return "<tr" + hl(m) + "><td>" + esc(m.name) + '<span class="sub">r' + c.rev + " · " + ENV[c.env] + " · " + c.runId + "</span></td><td>" + st + extra + "</td><td>" + open + "</td><td>" + act + "</td></tr>";
+			}).join("") + "</tbody></table>" : '<p class="empty">暂无登记记录</p>';
+		} else if (name === "quality") {
+			var qi = registered();
+			body = qi.length ? "<table><thead><tr><th>资产</th><th>质量结论</th><th></th></tr></thead><tbody>" + qi.map(function (m) {
+				var q = m.quality && m.quality.rev === m.catalog.rev ? m.quality.state : "none";
+				var st = { passed: chip("合格", "ok"), failed: chip("不合格", "bad"), missing: chip("缺少规则", "warn"), none: chip("未检查", "none") }[q];
+				return "<tr" + hl(m) + "><td>" + esc(m.name) + '<span class="sub">资产 r' + m.catalog.rev + "</span></td><td>" + st + "</td><td>" + btn(q === "passed" ? "重新检查" : "配置规则并检查", "runQuality", q === "passed" ? "" : "primary", ' data-id="' + m.id + '"') + "</td></tr>";
+			}).join("") + "</tbody></table>" : '<p class="empty">暂无已登记资产</p>';
+		} else if (name === "analysis") {
+			var ai = registered();
+			body = ai.length ? "<table><thead><tr><th>资产</th><th>分析资源</th><th></th></tr></thead><tbody>" + ai.map(function (m) {
+				var ok = m.analysis && m.analysis.rev === m.catalog.rev && m.analysis.state === "ok";
+				return "<tr" + hl(m) + "><td>" + esc(m.name) + '<span class="sub">资产 r' + m.catalog.rev + "</span></td><td>" + (ok ? chip("已就绪", "ok") : chip("未准备", "none")) + "</td><td>" + (ok ? "" : btn("准备分析资源", "prepareAnalysis", "primary", ' data-id="' + m.id + '"')) + "</td></tr>";
+			}).join("") + "</tbody></table>" : '<p class="empty">暂无已登记资产</p>';
+		} else if (name === "run") {
+			var ri = runItems();
+			body = ri.length ? "<table><thead><tr><th>模型</th><th>运行版本</th><th>最近运行</th><th></th></tr></thead><tbody>" + ri.map(function (m) {
+				var r = m.run, pub = m.published;
+				var ver = r ? "r" + r.rev + (r.enabled ? " · 已启用" : " · 未启用") : '<span class="sub">未部署</span>';
+				var last = r && r.last ? (r.last === "ok" ? chip("成功", "ok") : chip("失败", "bad")) + '<span class="sub">' + (r.lastAt || "") + (r.lastReason ? " · " + esc(r.lastReason) : "") + "</span>" : '<span class="sub">—</span>';
+				var acts = [];
+				if (pub && (!r || r.rev !== pub.rev)) acts.push(btn("部署并启用 r" + pub.rev, "deployRun", "primary", ' data-id="' + m.id + '"'));
+				if (r && r.last === "failed") acts.push(btn("重新运行", "rerun", "", ' data-id="' + m.id + '"'));
+				return "<tr" + hl(m) + "><td>" + esc(m.name) + '<span class="sub">正式版本 ' + (pub ? "r" + pub.rev : "无（已回滚）") + "</span></td><td>" + ver + "</td><td>" + last + "</td><td>" + acts.join(" ") + "</td></tr>";
+			}).join("") + "</tbody></table>" : '<p class="empty">暂无已发布版本</p>';
 		}
-		$("sideBody").innerHTML = body;
-		$("sideFoot").innerHTML = foot.reverse().join("");
-		$("side").dataset.id = m.id;
-		$("side").classList.add("open");
+		$("sideBody").innerHTML = body + '<p class="note">本功能内的处理不会改变模型构建结果，也不会增加构建 SQL 执行次数。</p>';
 	}
-	function counterHtml(m) { return '<div class="counter">构建 SQL 执行次数：<b>' + m.sql + "</b> 次（本功能内的恢复操作不会增加）</div>"; }
 
-	/* ---------- wiring ---------- */
-	function refresh() {
-		renderRows();
-		if (state.openBuild) renderBuild();
-		if (state.openPublish) renderPublish();
-		var sideId = $("side").classList.contains("open") ? $("side").dataset.id : null;
-		if (sideId && $("sideBody").querySelector(".counter")) $("sideBody").querySelector(".counter").innerHTML = counterHtml(model(sideId)).replace(/^<div class="counter">|<\/div>$/g, "");
-	}
-	function openOverlay(id) { var o = $(id); o.classList.add("open"); o.setAttribute("aria-hidden", "false"); setTimeout(function () { var b = o.querySelector(".modal__foot .btn--primary:not([disabled])") || o.querySelector(".modal__close"); if (b) b.focus(); }, 30); }
-	function closeOverlay(id) { var o = $(id); o.classList.remove("open"); o.setAttribute("aria-hidden", "true"); state.confirm = null; }
+	/* ---------------- wiring ---------------- */
+	function refresh() { renderRows(); if (S.openBuild) renderBuild(); if (S.openPublish) renderPublish(); if ($("side").classList.contains("open")) renderModule(); }
+	function openOverlay(id) { var o = $(id); o.classList.add("open"); o.setAttribute("aria-hidden", "false"); setTimeout(function () { var f = o.querySelector(".modal__foot .btn--primary:not([disabled])") || o.querySelector(".modal__close"); if (f) f.focus(); }, 30); }
+	function closeOverlay(which) { var id = which + "Overlay"; $(id).classList.remove("open"); $(id).setAttribute("aria-hidden", "true"); S.confirm = null; if (which === "build") S.openBuild = null; else { S.openPublish = null; S.showChecks = false; } }
+	function closeSide() { $("side").classList.remove("open"); Array.prototype.forEach.call(document.querySelectorAll(".sidenav [data-module]"), function (b) { b.classList.remove("active"); }); S.module = null; S.focus = null; }
 
-	document.addEventListener("click", function (event) {
-		var nav = event.target.closest(".sidenav a");
-		if (nav) { event.preventDefault(); if (!nav.classList.contains("active")) toast("原型只包含模型工作台；「" + nav.textContent + "」为示意入口"); return; }
-		var target = event.target.closest("[data-act],[data-a],[data-dim],[data-go],[data-close]");
-		if (!target) return;
+	document.addEventListener("click", function (e) {
+		var mod = e.target.closest(".sidenav [data-module]");
+		if (mod) { openModule(mod.dataset.module); return; }
+		var t = e.target.closest("[data-act],[data-a],[data-go],[data-close]");
+		if (!t) return;
+		if (t.dataset.close) { closeOverlay(t.dataset.close); return; }
 		var m;
-		if (target.hasAttribute("data-close")) {
-			var overlay = target.closest(".overlay");
-			if (overlay.id === "buildOverlay") state.openBuild = null; else state.openPublish = null;
-			closeOverlay(overlay.id);
-			return;
+		if (t.dataset.act) {
+			m = find(t.dataset.id);
+			if (t.dataset.act === "edit") { toast("打开「" + m.name + "」设计（原型不展开）；保存设计不要求构建、登记或质量"); return; }
+			if (t.dataset.act === "validate") { m.designState = "已校验"; toast("r" + m.design + " 设计校验通过（只检查设计本身）"); refresh(); return; }
+			if (t.dataset.act === "build") { S.openBuild = m.id; S.confirm = null; renderBuild(); openOverlay("buildOverlay"); return; }
+			if (t.dataset.act === "publish") { S.openPublish = m.id; S.confirm = null; S.showChecks = false; renderPublish(); openOverlay("publishOverlay"); return; }
 		}
-		if (target.dataset.act === "build") { state.openBuild = target.dataset.id; state.confirm = null; renderBuild(); openOverlay("buildOverlay"); return; }
-		if (target.dataset.act === "publish") {
-			m = model(target.dataset.id);
-			if (target.getAttribute("aria-disabled") === "true") { toast("「" + m.name + "」尚未构建成功，构建成功后可发布"); return; }
-			state.openPublish = m.id; state.confirm = null; renderPublish(); openOverlay("publishOverlay"); return;
+		if (t.dataset.go) {
+			m = find(S.openPublish);
+			if (t.dataset.go === "build") { closeOverlay("publish"); S.openBuild = m.id; renderBuild(); openOverlay("buildOverlay"); return; }
+			openModule(t.dataset.go, m.id); return;
 		}
-		if (target.dataset.dim) {
-			var chipAct = document.querySelector('button[data-act="' + target.dataset.dim + '"][data-id="' + target.dataset.id + '"]');
-			if (chipAct) chipAct.click();
-			return;
-		}
-		if (target.dataset.go) {
-			m = model(state.openPublish);
-			if (target.dataset.go === "build") { closeOverlay("publishOverlay"); state.openPublish = null; state.openBuild = m.id; renderBuild(); openOverlay("buildOverlay"); return; }
-			openSide(target.dataset.go, m); return;
-		}
-		var a = target.dataset.a;
-		m = model(state.openBuild) || model(state.openPublish) || model($("side").dataset.id);
+		var a = t.dataset.a, id = t.dataset.id;
 		switch (a) {
-			case "startBuild": startBuild(model(state.openBuild)); break;
-			case "askAbandon": state.confirm = { id: state.openBuild, kind: "abandon" }; break;
-			case "doAbandon": m = model(state.openBuild); m.build = "failed"; m.failReason = "本次构建已放弃"; m.failFix = "可以重新构建；已写入的数据未回滚"; m.failCode = "MODEL_BUILD_ABANDONED"; m.runId = "run-abandoned"; state.confirm = null; toast("已放弃本次构建"); break;
-			case "askCloseOccupied": state.confirm = { id: state.openBuild, kind: "closeOccupied" }; break;
-			case "doCloseOccupied": m = model(state.openBuild); m.build = "none"; state.confirm = null; toast("占用发布单已关闭，已有构建结果保留；现在可以开始构建"); break;
-			case "continueVerify": m = model(state.openBuild); markBuilt(m); toast("核验完成，构建成功（SQL 未重新执行）"); break;
-			case "cancelConfirm": state.confirm = null; break;
-			case "gotoAsset": openSide("catalog", model(state.openBuild)); break;
-			case "closeBuild": state.openBuild = null; closeOverlay("buildOverlay"); break;
-			case "closePublish": state.openPublish = null; closeOverlay("publishOverlay"); break;
-			case "submitReview": m = model(state.openPublish); m.publish = "review"; toast("已提交发布评审"); break;
-			case "approve": m = model(state.openPublish); m.publish = "approved"; toast("评审通过；由数据管理员完成发布"); break;
+			case "startBuild": startBuild(find(S.openBuild)); break;
+			case "askAbandon": S.confirm = { id: S.openBuild, kind: "abandon" }; break;
+			case "doAbandon": m = find(S.openBuild); m.build.state = "failed"; m.build.reason = "本次构建已放弃"; m.build.fix = "可以重新构建；已写入的数据未回滚"; m.build.code = "MODEL_BUILD_ABANDONED"; m.build.at = now(); S.confirm = null; toast("已放弃本次构建"); break;
+			case "askCloseOccupied": S.confirm = { id: S.openBuild, kind: "closeOccupied" }; break;
+			case "doCloseOccupied": m = find(S.openBuild); m.build = null; S.confirm = null; toast("占用发布单已关闭，已有构建结果保留；现在可以开始构建"); break;
+			case "continueVerify": m = find(S.openBuild); completeBuild(m); toast("核验完成，构建完成（SQL 未重新执行）"); break;
+			case "cancelConfirm": S.confirm = null; break;
+			case "closeBuild": closeOverlay("build"); break;
+			case "closePublish": closeOverlay("publish"); break;
+			case "toggleChecks": S.showChecks = !S.showChecks; break;
+			case "submitReview": m = find(S.openPublish); m.request = { state: "review", rev: m.build.rev }; toast("已提交发布评审"); break;
+			case "approve": m = find(S.openPublish); m.request.state = "approved"; toast("评审通过；由数据管理员完成发布"); break;
 			case "reject":
 				if (!$("reason").value.trim()) { $("reason").focus(); toast("驳回必须填写评审意见"); return; }
-				m = model(state.openPublish); m.publish = "none"; toast("已驳回，构建结果不受影响"); break;
-			case "publish": m = model(state.openPublish); m.publish = "published"; m.publishedAt = "09-24 " + new Date().toTimeString().slice(0, 5); if (m.run === "none") m.run = "ok"; toast("发布成功。上线与定时运行在运行监控中查看"); break;
+				m = find(S.openPublish); m.request = null; toast("已驳回；构建结果不受影响"); break;
+			case "publish": m = find(S.openPublish); m.published = { rev: m.build.rev, at: now() }; m.request = null;
+				toast("r" + m.published.rev + " 已发布为正式版本。运行上线请在运行管理中办理"); break;
 			case "askRollback":
-				if (!$("reason").value.trim()) { $("reason").focus(); toast("回滚必须填写说明"); return; }
-				state.confirm = { id: state.openPublish, kind: "rollback" }; break;
-			case "doRollback": m = model(state.openPublish); m.publish = "rolledback"; state.confirm = null; state.openPublish = null; closeOverlay("publishOverlay"); toast("已回滚发布；构建结果保留"); break;
-			case "gotoRun": openSide("run", model(state.openPublish)); break;
-			case "retryCatalog": m = model($("side").dataset.id); m.catalog = "ok"; m.analysis = "ok"; openSide("catalog", m); toast("登记成功，SQL 执行次数未增加"); break;
-			case "fixQuality": m = model($("side").dataset.id); m.quality = "passed"; openSide("quality", m); toast("质量检查通过，构建结果未变"); break;
-			case "fixRun": m = model($("side").dataset.id); m.run = "ok"; openSide("run", m); toast("运行成功，发布与构建结果未变"); break;
-			case "closeSide": $("side").classList.remove("open"); break;
+				if (!$("rollbackReason").value.trim()) { $("rollbackReason").focus(); toast("回滚必须填写说明"); return; }
+				S.confirm = { id: S.openPublish, kind: "rollback" }; break;
+			case "doRollback": m = find(S.openPublish); var old = m.published.rev; m.published = null; closeOverlay("publish"); toast("r" + old + " 已撤销正式版本；运行版本未自动更改，请在运行管理确认"); break;
+			case "retryCatalog":
+				m = find(id); m.catalog.state = "queued";
+				(function (target, run, outcome) {
+					setTimeout(function () {
+						if (target.catalog && target.catalog.runId === run && target.catalog.state === "queued") {
+							target.catalog.state = outcome === "fail" ? "failed" : "ok";
+							refresh();
+							toast(outcome === "fail" ? "登记仍失败，保留在资产目录待处理" : "登记成功；构建 SQL 次数未增加，分析资源未自动准备");
+						}
+					}, outcome === "slow" ? 5000 : 1200);
+				})(m, m.catalog.runId, S.catalogOutcome);
+				break;
+			case "openAsset": m = find(id); m.catalog.open = true; toast("已申请开放使用（按既有授权审批）；与模型版本发布无关"); break;
+			case "runQuality": m = find(id); m.quality = { rev: m.catalog.rev, state: S.qualityOutcome === "pass" ? "passed" : "failed" }; toast(S.qualityOutcome === "pass" ? "质量检查合格" : "质量不合格；构建结果不变"); break;
+			case "prepareAnalysis": m = find(id); m.analysis = { rev: m.catalog.rev, state: "ok" }; toast("分析资源已就绪"); break;
+			case "deployRun": m = find(id); m.run = { rev: m.published.rev, enabled: true, last: null }; toast("r" + m.published.rev + " 已部署并启用；每次运行结果单独记录"); break;
+			case "rerun": m = find(id); m.run.last = "ok"; m.run.lastAt = now(); m.run.lastReason = null; toast("运行成功；发布与构建结果未变"); break;
+			case "closeSide": closeSide(); break;
 		}
 		refresh();
 	});
-	document.addEventListener("keydown", function (event) {
-		if (event.key === "Escape") {
-			if ($("side").classList.contains("open")) { $("side").classList.remove("open"); return; }
-			if (state.openPublish) { state.openPublish = null; closeOverlay("publishOverlay"); return; }
-			if (state.openBuild) { state.openBuild = null; closeOverlay("buildOverlay"); }
-		}
-		if ((event.key === "Enter" || event.key === " ") && event.target.classList && event.target.classList.contains("chip")) { event.preventDefault(); event.target.click(); }
+	document.addEventListener("keydown", function (e) {
+		if (e.key !== "Escape") return;
+		if ($("side").classList.contains("open")) { closeSide(); return; }
+		if (S.openPublish) { closeOverlay("publish"); return; }
+		if (S.openBuild) closeOverlay("build");
 	});
-	function segment(id, key, after) {
-		$(id).addEventListener("click", function (event) {
-			var b = event.target.closest("button"); if (!b) return;
-			Array.prototype.forEach.call($(id).children, function (c) { c.classList.toggle("on", c === b); });
-			state[key] = b.dataset.v;
-			if (after) after();
+	Array.prototype.forEach.call(document.querySelectorAll(".seg"), function (seg) {
+		seg.addEventListener("click", function (e) {
+			var b = e.target.closest("button"); if (!b) return;
+			Array.prototype.forEach.call(seg.children, function (c) { c.classList.toggle("on", c === b); });
+			S[seg.dataset.key] = b.dataset.v;
+			if (seg.dataset.key === "policy") toast(S.policy === "BLOCKING" ? "阻断策略：质量未合格时不能发布（不改变构建和质量报告）" : "提示策略：质量问题只提示");
+			if (seg.dataset.key === "catalogScope") toast(S.catalogScope === "prod" ? "仅生产环境构建登记资产（对之后的构建生效）" : "所有环境构建都登记资产");
 			refresh();
 		});
-	}
-	segment("policySeg", "policy", function () { toast(state.policy === "BLOCKING" ? "已切换为阻断策略（仅影响能否发布）" : "已切换为提示策略"); });
-	segment("roleSeg", "role");
-	segment("outcomeSeg", "outcome");
+	});
 	$("consoleHead").addEventListener("click", function () { var c = $("console"); c.classList.toggle("min"); $("consoleToggle").textContent = c.classList.contains("min") ? "展开" : "收起"; });
 	$("reset").addEventListener("click", function () {
-		Object.keys(state.timers).forEach(function (k) { clearTimeout(state.timers[k]); });
-		state.models = clone(BASE); state.openBuild = null; state.openPublish = null; state.confirm = null;
-		closeOverlay("buildOverlay"); closeOverlay("publishOverlay"); $("side").classList.remove("open");
-		refresh(); tick(model("m7"));
-		toast("已重置全部场景");
+		Object.keys(S.timers).forEach(function (k) { clearTimeout(S.timers[k]); });
+		S.models = clone(BASE); S.confirm = null;
+		closeOverlay("build"); closeOverlay("publish"); closeSide();
+		refresh(); tick(find("m7")); toast("已重置全部场景");
 	});
-
 	refresh();
-	tick(model("m7"));
+	tick(find("m7"));
 })();
 </script>
 </body>
