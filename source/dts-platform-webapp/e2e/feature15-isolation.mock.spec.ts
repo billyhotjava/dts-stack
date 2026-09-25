@@ -42,7 +42,7 @@ test("operations discovers a late plan, confirms deployment and separately enabl
         }
         return respond([]);
     });
-    await page.goto("/ops/instances?tab=schedule&planId=plan-60");
+    await page.goto("/#/ops/instances?tab=schedule&planId=plan-60");
     await page.getByRole("combobox", { name: "选择部署版本" }).click();
     await page.getByText("财务建模规划60 · 生产环境", { exact: true }).click();
     await page.getByRole("button", { name: "部署版本", exact: true }).click();
