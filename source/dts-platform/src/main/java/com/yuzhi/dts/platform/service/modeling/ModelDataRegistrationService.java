@@ -32,7 +32,20 @@ public class ModelDataRegistrationService {
             candidate.entries().stream().noneMatch(entry -> entry.modelSpecId().equals(modelId) && entry.revision() == model.revision() && entry.checksum().equals(model.checksum())))
             throw failure("MODEL_DATA_REGISTRATION_STALE", Kind.CONFLICT);
         access.requireOperation(tenant, candidate.entries().stream().map(entry -> entry.modelSpecId()).toList(), actor);
-        return registration.ensureRegistered(candidate);
+        List<UUID> registered = registration.ensureRegistered(candidate);
+        // F15 K3: a manual retry from the data asset catalog completes the queued registration task as well.
+        registration.recordRegistered(candidate);
+        return registered;
+    }
+    /** F15 K3 read: the registration task of a model's build, so the catalog can show failures without a publication. */
+    @Transactional(readOnly = true)
+    public CandidateQualityAssetRegistrationService.RegistrationStatus status(String tenant, UUID modelId, UUID candidateId) {
+        var model = models.get(tenant, modelId);
+        if (candidateId == null) throw failure("MODEL_DATA_REGISTRATION_NOT_FOUND", Kind.NOT_FOUND);
+        var candidate = candidates.find(tenant, candidateId).orElseThrow(() -> failure("MODEL_DATA_REGISTRATION_NOT_FOUND", Kind.NOT_FOUND));
+        if (!candidate.planId().equals(model.planId()) || candidate.entries().stream().noneMatch(entry -> entry.modelSpecId().equals(modelId)))
+            throw failure("MODEL_DATA_REGISTRATION_NOT_FOUND", Kind.NOT_FOUND);
+        return registration.registrationStatus(candidate);
     }
     private static ModelReleaseCandidateException failure(String code, Kind kind) {
         return new ModelReleaseCandidateException(code, "数据登记条件或版本已变化，请刷新当前模型产出后重试", kind);

@@ -133,7 +133,25 @@ public class ModelPublicationQualityReconciler {
             );
             CommandResult command;
             if (state == EvidenceState.PASSED) {
-                qualityAssets.ensureRegistered(candidate);
+                // F15 K3: registration runs on its own task after the build; publication checks only read it.
+                CandidateQualityAssetRegistrationService.RegistrationStatus registration = qualityAssets.registrationStatus(candidate);
+                switch (registration.state()) {
+                    case UNTRACKED -> qualityAssets.ensureRegistered(candidate);
+                    case SUCCEEDED -> { }
+                    case MISSING -> {
+                        qualityAssets.requestRegistration(candidate);
+                        return new QualityReconcileResult(candidate.id(), QualityReconcileOutcome.WAITING, null, false);
+                    }
+                    case PENDING -> {
+                        return new QualityReconcileResult(candidate.id(), QualityReconcileOutcome.WAITING, null, false);
+                    }
+                    case FAILED -> {
+                        return blocked(
+                            candidate.id(),
+                            registration.errorCode() == null ? "MODEL_ASSET_REGISTRATION_FAILED" : registration.errorCode()
+                        );
+                    }
+                }
                 GovernanceQualitySummaryView governance = governanceQuality.evaluateLive(candidate);
                 if (governance.required() && !governance.passed()) {
                     return blocked(

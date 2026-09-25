@@ -21,6 +21,11 @@ public class ModelDataRegistrationResource {
         var actor=actors.currentActor();
         return ApiResponses.ok(service.register(tenant, actor == null ? null : actor.ownerId(), id, command));
     }
+    @GetMapping("/{id}/data-registration")
+    public ApiResponse<com.yuzhi.dts.platform.service.modeling.CandidateQualityAssetRegistrationService.RegistrationStatus> status(
+        @PathVariable UUID id, @RequestParam UUID candidateId) {
+        return ApiResponses.ok(service.status(tenant, id, candidateId));
+    }
     @ExceptionHandler(ModelReleaseCandidateException.class)
     public ResponseEntity<ApiResponse<Object>> error(ModelReleaseCandidateException ex) {
         HttpStatus status = switch(ex.kind()) { case FORBIDDEN -> HttpStatus.FORBIDDEN; case NOT_FOUND -> HttpStatus.NOT_FOUND;

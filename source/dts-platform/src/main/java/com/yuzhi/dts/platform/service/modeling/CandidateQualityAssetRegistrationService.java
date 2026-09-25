@@ -32,6 +32,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import com.yuzhi.dts.platform.repository.modeling.ModelAssetRegistrationTaskRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelAssetRegistrationTaskRepository.TaskView;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,8 +52,21 @@ public class CandidateQualityAssetRegistrationService {
     private final CatalogDatasetRepository datasets;
     private final CatalogPhysicalDatasetObservationAdapter observations;
     private final Clock clock;
+    private final ModelAssetRegistrationTaskRepository tasks;
 
-    @Autowired
+    /** Registration status of a built candidate as seen by the publication checks (F15 K3). */
+    public enum RegistrationState {
+        /** No task store is wired (legacy wiring); callers register inline as before. */
+        UNTRACKED,
+        /** A task store exists but this candidate has no task yet (built before the handoff existed). */
+        MISSING,
+        PENDING,
+        SUCCEEDED,
+        FAILED,
+    }
+
+    public record RegistrationStatus(RegistrationState state, String errorCode, String errorMessage, int attempts) {}
+
     public CandidateQualityAssetRegistrationService(
         CandidatePublicationEvidenceRepository evidence,
         ModelExecutionTargetCatalogResolver targets,
@@ -61,16 +76,21 @@ public class CandidateQualityAssetRegistrationService {
         CatalogDatasetRepository datasets,
         CatalogPhysicalDatasetObservationAdapter observations
     ) {
-        this(
-            evidence,
-            targets,
-            models,
-            classifications,
-            publications,
-            datasets,
-            observations,
-            Clock.systemUTC()
-        );
+        this(evidence, targets, models, classifications, publications, datasets, observations, Clock.systemUTC(), null);
+    }
+
+    @Autowired
+    public CandidateQualityAssetRegistrationService(
+        CandidatePublicationEvidenceRepository evidence,
+        ModelExecutionTargetCatalogResolver targets,
+        ModelSpecReader models,
+        ModelClassificationPublishGate classifications,
+        CandidatePublicationRepository publications,
+        CatalogDatasetRepository datasets,
+        CatalogPhysicalDatasetObservationAdapter observations,
+        ModelAssetRegistrationTaskRepository tasks
+    ) {
+        this(evidence, targets, models, classifications, publications, datasets, observations, Clock.systemUTC(), tasks);
     }
 
     CandidateQualityAssetRegistrationService(
@@ -83,6 +103,20 @@ public class CandidateQualityAssetRegistrationService {
         CatalogPhysicalDatasetObservationAdapter observations,
         Clock clock
     ) {
+        this(evidence, targets, models, classifications, publications, datasets, observations, clock, null);
+    }
+
+    CandidateQualityAssetRegistrationService(
+        CandidatePublicationEvidenceRepository evidence,
+        ModelExecutionTargetCatalogResolver targets,
+        ModelSpecReader models,
+        ModelClassificationPublishGate classifications,
+        CandidatePublicationRepository publications,
+        CatalogDatasetRepository datasets,
+        CatalogPhysicalDatasetObservationAdapter observations,
+        Clock clock,
+        ModelAssetRegistrationTaskRepository tasks
+    ) {
         this.evidence = Objects.requireNonNull(evidence, "evidence is required");
         this.targets = Objects.requireNonNull(targets, "targets are required");
         this.models = Objects.requireNonNull(models, "models are required");
@@ -91,6 +125,35 @@ public class CandidateQualityAssetRegistrationService {
         this.datasets = Objects.requireNonNull(datasets, "datasets are required");
         this.observations = Objects.requireNonNull(observations, "observations are required");
         this.clock = Objects.requireNonNull(clock, "clock is required");
+        this.tasks = tasks;
+    }
+
+    /**
+     * F15 K3: hands a candidate that has just become BUILT to asset registration. Called inside the transaction
+     * that commits BUILT so the handoff cannot be lost; the registration itself runs later in
+     * {@link ModelAssetRegistrationWorker} and can never roll back the confirmed build.
+     */
+    public void requestRegistration(CandidateView built) {
+        if (tasks == null || built == null) return;
+        tasks.enqueue(built.tenantId(), built.id(), built.version(), built.planId(), built.environment(), clock.instant());
+    }
+
+    public RegistrationStatus registrationStatus(CandidateView candidate) {
+        if (tasks == null) return new RegistrationStatus(RegistrationState.UNTRACKED, null, null, 0);
+        TaskView task = tasks.findByCandidate(candidate.tenantId(), candidate.id()).orElse(null);
+        if (task == null) return new RegistrationStatus(RegistrationState.MISSING, null, null, 0);
+        RegistrationState state = switch (task.state()) {
+            case PENDING -> RegistrationState.PENDING;
+            case SUCCEEDED -> RegistrationState.SUCCEEDED;
+            case FAILED -> RegistrationState.FAILED;
+        };
+        return new RegistrationStatus(state, task.lastErrorCode(), task.lastErrorMessage(), task.attempts());
+    }
+
+    /** A registration performed directly (manual retry in the catalog) completes the pending task too. */
+    public void recordRegistered(CandidateView candidate) {
+        if (tasks == null || candidate == null) return;
+        tasks.markSucceeded(candidate.tenantId(), candidate.id(), clock.instant());
     }
 
     @Transactional

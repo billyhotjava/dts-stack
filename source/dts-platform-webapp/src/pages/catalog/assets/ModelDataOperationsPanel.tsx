@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
-import { registerModelData } from "@/api/modelIngestionTargetApi";
+import { getModelDataRegistrationStatus, type ModelDataRegistrationStatus, registerModelData } from "@/api/modelIngestionTargetApi";
 import { getModelSpec } from "@/api/modelSpecApi";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { UnsavedEditorHandle } from "../CatalogDatasetGovernanceSummaryEditor";
@@ -20,7 +20,7 @@ import { type ModelDataManagementFocus, resolveModelingReturnTo } from "@/pages/
 export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId, focus, returnTo }: {
 	modelSpecId: string; environment: string; candidateId?: string; focus?: ModelDataManagementFocus; returnTo?: string;
 }) {
-	const [value, setValue] = useState<{ model: ModelSpecView; delivery: ModelDeliveryStatus } | null>(null);
+	const [value, setValue] = useState<{ model: ModelSpecView; delivery: ModelDeliveryStatus; registration: ModelDataRegistrationStatus | null } | null>(null);
 	const [failure, setFailure] = useState("");
 	const [busy, setBusy] = useState(false);
 	const [catalogGuard, setCatalogGuard] = useState<UnsavedEditorHandle | null>(null);
@@ -33,7 +33,12 @@ export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId
 			const [model, delivery] = await Promise.all([getModelSpec(modelSpecId), getModelDeliveryStatus(modelSpecId, environment, candidateId)]);
 			if (request !== sequence.current) return;
 			if (model.id !== modelSpecId || delivery.modelSpecId !== model.id || delivery.modelRevision !== model.revision || delivery.modelChecksum !== model.checksum) throw new Error("模型版本已变化，请刷新后重试");
-			setValue({ model, delivery });
+			// The registration task is read on its own; its failure must not hide the model output.
+			const registration = delivery.candidate
+				? await getModelDataRegistrationStatus(modelSpecId, delivery.candidate.id).catch(() => null)
+				: null;
+			if (request !== sequence.current) return;
+			setValue({ model, delivery, registration });
 		} catch (error) {
 			if (request === sequence.current) setFailure(error instanceof Error ? error.message : "模型产出读取失败");
 		} finally { if (request === sequence.current) setBusy(false); }
@@ -42,11 +47,13 @@ export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId
 	const backToModel = resolveModelingReturnTo(returnTo);
 	const dirty = Boolean(catalogGuard?.dirty);
 	const action = value?.delivery.dataPrimaryAction;
-	const awaitingRegistration = action?.code === "REGISTER_DATA_ASSETS";
+	const registrationTask = value?.registration;
+	const registrationFailed = registrationTask?.state === "FAILED";
+	const awaitingRegistration = action?.code === "REGISTER_DATA_ASSETS" || registrationFailed;
 	const registeredDatasetId = value ? currentCatalogOutputs(value.delivery).find((output) => output.resourceId)?.resourceId : undefined;
 	const register = async () => {
 		const candidate = value?.delivery.candidate;
-		if (!value || !candidate || busy || dirty || !awaitingRegistration || !action?.enabled) return;
+		if (!value || !candidate || busy || dirty || !awaitingRegistration || (!registrationFailed && !action?.enabled)) return;
 		setBusy(true);
 		try { await registerModelData(modelSpecId, { candidateId: candidate.id, candidateVersion: candidate.version, modelRevision: value.model.revision, modelChecksum: value.model.checksum }); await load(); }
 		catch (error) { setFailure(error instanceof Error ? error.message : "资产登记失败"); }
@@ -61,9 +68,14 @@ export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId
 			<p>{value.delivery.modelingResult?.state === "SUCCEEDED" ? "模型已完成构建" : "当前模型构建记录待确认"} · {value.delivery.modelingResult?.targetRelation || "尚无目标表"}</p>
 			{backToModel ? <Link to={backToModel}>返回模型</Link> : null}
 			<Link to={`/data-modeling/dimensions/workbench?modelSpecId=${encodeURIComponent(modelSpecId)}&step=definition&environment=${encodeURIComponent(environment)}`}>编辑模型</Link>
+			{registrationTask?.state === "PENDING" ? <p className="dmx-capability-note">构建已完成，资产登记排队中（自动执行）。</p> : null}
+			{registrationFailed ? <div role="alert" className="dmx-request-state">
+				<strong>资产登记失败</strong>
+				<p>{registrationTask?.errorMessage || "登记未完成"}（{registrationTask?.errorCode || "未提供错误码"}），已尝试 {registrationTask?.attempts ?? 0} 次。构建结果不受影响。</p>
+			</div> : null}
 			{awaitingRegistration ? <>
-				<p className="dmx-capability-note">资产尚未登记。登记只处理资产身份，不会重新执行构建。</p>
-				<Button disabled={!canCommand || !action?.enabled} onClick={() => void register()}>登记数据资产</Button>
+				<p className="dmx-capability-note">登记只处理资产身份，不会重新执行构建。</p>
+				<Button disabled={!canCommand || (!registrationFailed && !action?.enabled)} onClick={() => void register()}>{registrationFailed ? "重试登记" : "登记数据资产"}</Button>
 			</> : null}
 			{registeredDatasetId ? (
 				<p>

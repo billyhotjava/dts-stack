@@ -424,6 +424,8 @@ public class ModelMaterializationRunArtifactService {
                         );
                     }
                     // Catalog registration is an independent data-module command; it must not roll back a verified model build.
+                    // F15 K3: only the handoff is written here, in the same transaction as BUILT, so it cannot be lost.
+                    qualityAssets.requestRegistration(built.candidate());
                     auditRun(
                         group,
                         "finalized:succeeded",
