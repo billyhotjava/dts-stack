@@ -261,6 +261,11 @@ export function ModelPublishDialog({
 	);
 	const executionBinding = executionWorkspace?.bindings.find((binding) => binding.environment === environment) || null;
 	// F15 (option 2): running a published version is handled in 运维中心 › 调度计划, not in these dialogs.
+	// An unchanged published version with a runnable binding is run from 调度计划; this dialog never rebuilds it instead.
+	const runsFromSchedule = Boolean(
+		selectionIsPublished &&
+			executionBinding?.allowedActions.some((action) => action === "RUN_NOW" || action === "REPAIR_DEPLOYMENT"),
+	);
 	const schedulePath = planId ? `/ops/instances?tab=schedule&planId=${encodeURIComponent(planId)}` : "/ops/instances?tab=schedule";
 	const materializationRequestEntries = useMemo(
 		() => materializationScopeEntries(candidate, selection, buildAction), [candidate, selection, buildAction],
@@ -314,7 +319,7 @@ export function ModelPublishDialog({
 			materializationPlan.orderedEntries.every((entry) => entry.dependencyRole === "ROOT" || entry.action === "REUSE"),
 	);
 	const canBuild = Boolean(
-		!selectionProblem && !blockingWorkspace?.candidate &&
+		!selectionProblem && !blockingWorkspace?.candidate && !runsFromSchedule &&
 			(buildAction !== "REMATERIALIZE" || candidateCommandScopeAllowed) &&
 			buildAction && (!requiresPlan || (planState === "ready" && materializationPlan?.canStart)),
 	);
@@ -692,7 +697,7 @@ export function ModelPublishDialog({
 					}}
 				/>
 			)}
-			{!embedded && selectionIsPublished && !buildAction ? (
+			{!embedded && runsFromSchedule ? (
 				<p className="dmx-capability-note">
 					当前版本已发布且没有改动，无需重新构建。运行已发布版本请到 <Link to={schedulePath}>运维中心 › 调度计划</Link>。
 				</p>

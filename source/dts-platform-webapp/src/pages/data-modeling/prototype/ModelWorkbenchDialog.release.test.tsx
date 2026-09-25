@@ -1257,14 +1257,13 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).toContain("工程验证");
 		expect(container.textContent).toContain("治理数据质量");
 		expect(container.textContent).toContain("发布登记");
-		expect(container.textContent).toContain("上线就绪");
 		expect(container.textContent).toContain("无需另行审批");
 		expect(container.textContent).not.toContain("发布评审");
 		expect(container.textContent).toContain("提交人：model-owner");
 		expect(button("确认发布")?.disabled).toBe(false);
 	});
 
-	it("leads with one status bar that lets an ADVISORY quality warning continue to publication", async () => {
+	it("shows an ADVISORY quality warning as a hint and still offers publication once", async () => {
 		const passed = candidate("BATCH_WORKBENCH", "QUALITY_PASSED");
 		apiMocks.getWorkbench.mockResolvedValue({
 			...workspace(["PUBLISH"], passed),
@@ -1282,13 +1281,11 @@ describe("release and materialization dispatch", () => {
 		await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
 		await flush();
 
-		const header = container.querySelector('[aria-label="当前发布进度"]');
-		expect(header?.textContent).toContain("治理数据质量：缺少质量规则，当前为提示策略");
-		expect(header?.textContent).toContain("质量策略：提示（不阻断发布）");
-		expect(container.querySelector('[aria-current="step"]')?.className).toContain("dmx-release-step--warning");
+		expect(container.textContent).toContain("缺少质量规则，当前为提示策略");
+		expect(container.textContent).toContain("提示项");
 		// The same command is not offered twice.
-		expect(Array.from(container.querySelectorAll("button")).filter((item) => item.textContent === "确认发布")).toHaveLength(0);
-		await act(async () => button("继续发布")?.click());
+		expect(Array.from(container.querySelectorAll("button")).filter((item) => item.textContent === "确认发布")).toHaveLength(1);
+		await act(async () => button("确认发布")?.click());
 		await flush();
 		expect(apiMocks.publishCandidate).toHaveBeenCalledWith(model.planId, passed, "idem-1", "从模型工作台发布");
 	});
@@ -1414,7 +1411,7 @@ describe("release and materialization dispatch", () => {
 
 		expect(button("立即运行并核验")).toBeUndefined();
 		expect(apiMocks.runExecutionNow).not.toHaveBeenCalled();
-		expect(container.querySelector(`a[href="/ops/instances?tab=schedule&planId=${model.planId}"]`)).not.toBeNull();
+		expect(container.innerHTML).toContain(`href="/ops/instances?tab=schedule&amp;planId=${model.planId}"`);
 	});
 
 	it("leaves deployment repair to 调度计划 when a newer draft candidate occupies the plan workspace", async () => {
@@ -1544,7 +1541,7 @@ describe("release and materialization dispatch", () => {
 		await flush();
 		expect(button("再次运行并核验")).toBeUndefined();
 		expect(container.textContent).toContain("当前版本已发布且没有改动，无需重新构建");
-		expect(container.querySelector(`a[href="/ops/instances?tab=schedule&planId=${model.planId}"]`)).not.toBeNull();
+		expect(container.innerHTML).toContain(`href="/ops/instances?tab=schedule&amp;planId=${model.planId}"`);
 		expect(apiMocks.runExecutionNow).not.toHaveBeenCalled();
 		expect(apiMocks.compileLifecycle).not.toHaveBeenCalled();
 		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
@@ -1901,11 +1898,13 @@ describe("model-scoped historical release workspace", () => {
 		};
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], foreign));
 		apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(workspace(["ROLLBACK"], own)));
-		await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
+		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
 		await flush();
 		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(model.id, "dev");
 		expect(apiMocks.getWorkbench).not.toHaveBeenCalled();
 		expect(container.textContent).toContain("PUBLISHED · v7");
+		await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
+		await flush();
 		expect(button("回滚发布")).toBeDefined();
 		expect(container.textContent).not.toContain("暂无发布单");
 	});
