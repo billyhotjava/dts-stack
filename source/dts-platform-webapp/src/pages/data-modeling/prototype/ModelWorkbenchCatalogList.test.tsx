@@ -632,7 +632,10 @@ it("re-reads summaries while a build is running and stops once it settles", asyn
 		expect(container.textContent).toContain("构建中");
 
 		await act(async () => {
-			await vi.advanceTimersByTimeAsync(20000);
+			await vi.advanceTimersByTimeAsync(10000);
+		});
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(0);
 		});
 		expect(apiMocks.getSummaries).toHaveBeenCalledTimes(2);
 		expect(container.textContent).toContain("构建失败");

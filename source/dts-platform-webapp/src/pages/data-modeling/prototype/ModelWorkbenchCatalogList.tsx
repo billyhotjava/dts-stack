@@ -336,7 +336,8 @@ export function ModelWorkbenchCatalogList({
 					return { identity: pageModelIdsKey, data, loading: false };
 				});
 			},
-			polling ? RUNNING_BUILD_REFRESH_MS : 0,
+			// The running-build tick already waited RUNNING_BUILD_REFRESH_MS; read right away.
+			0,
 		);
 		return () => {
 			active = false;
