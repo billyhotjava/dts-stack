@@ -3,6 +3,8 @@ import { test, expect } from "@playwright/test";
 test("operations discovers a late plan, confirms deployment and separately enables it", async ({ page }, testInfo) => {
     const errors: string[] = [], writes: Array<{ path: string; data: unknown }> = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+    page.on("response", (response) => { if (response.status() >= 400) errors.push(`HTTP ${response.status()} ${new URL(response.url()).pathname}`); });
     await page.addInitScript(() => {
         localStorage.setItem("dts.platform.userStore", JSON.stringify({ state: {
             userInfo: { username: "feature15-reviewer", fullName: "运行维护验收", roles: ["ROLE_OP_ADMIN"], permissions: ["modeling.manage"], enabled: true },
