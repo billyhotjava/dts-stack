@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.config;
 
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.ModelGovernanceUserSessionVerifier;
 import com.yuzhi.dts.platform.security.oauth2.AudienceValidator;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import java.util.Collection;
@@ -41,7 +42,8 @@ public class ModelGovernanceSecurityConfiguration {
     SecurityFilterChain modelGovernanceFilterChain(
         HttpSecurity http,
         @Qualifier("modelGovernanceJwtDecoder") JwtDecoder decoder,
-        AuditLoggingFilter auditLoggingFilter
+        AuditLoggingFilter auditLoggingFilter,
+        ModelGovernanceUserSessionVerifier sessions
     ) throws Exception {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
         converter.setPrincipalClaimName("preferred_username");
@@ -49,9 +51,11 @@ public class ModelGovernanceSecurityConfiguration {
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
             Object realm = jwt.getClaims().get("realm_access");
             Object roles = realm instanceof Map<?, ?> values ? values.get("roles") : null;
-            return roles instanceof Collection<?> values && values.contains(AuthoritiesConstants.SYS_ADMIN)
-                ? List.of(new SimpleGrantedAuthority(AuthoritiesConstants.SYS_ADMIN))
-                : List.of();
+            if (roles instanceof Collection<?> values && values.contains(AuthoritiesConstants.SYS_ADMIN)) {
+                sessions.requireActive(jwt);
+                return List.of(new SimpleGrantedAuthority(AuthoritiesConstants.SYS_ADMIN));
+            }
+            return List.of();
         });
         return http
             .securityMatcher(POLICY_PATH, POLICY_PATH + "/**")

@@ -50,6 +50,12 @@ public class AdminModelGovernancePolicyResource {
 
     public record UpdateRequest(String qualityGate, Integer expectedRevision, String reason) {}
 
+    /** Confirms the caller passed both JWT authorization and the existing admin session filter. */
+    @GetMapping("/identity")
+    public ResponseEntity<ApiResponse<Map<String, String>>> identity() {
+        return ResponseEntity.ok(ApiResponse.ok(Map.of("actor", SecurityUtils.getCurrentAuditableLogin())));
+    }
+
     @GetMapping
     public ResponseEntity<ApiResponse<PolicyView>> current() {
         return ResponseEntity.ok(ApiResponse.ok(platform.current()));

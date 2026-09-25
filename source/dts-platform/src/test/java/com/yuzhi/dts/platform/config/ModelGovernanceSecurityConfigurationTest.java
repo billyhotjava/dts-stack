@@ -18,6 +18,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 import com.yuzhi.dts.platform.security.session.PortalSessionBearerTokenResolver;
 import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
+import com.yuzhi.dts.platform.security.ModelGovernanceUserSessionVerifier;
 import com.yuzhi.dts.platform.service.audit.AuditFlowManager;
 import com.yuzhi.dts.platform.service.audit.AuditForwarderService;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
@@ -72,11 +73,12 @@ class ModelGovernanceSecurityConfigurationTest {
     @Autowired WebApplicationContext context;
     @Autowired ModelGovernancePolicyAdministrationService policies;
     @Autowired AuditForwarderService audit;
+    @Autowired ModelGovernanceUserSessionVerifier sessions;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        reset(policies, audit);
+        reset(policies, audit, sessions);
         when(policies.current()).thenReturn(view(QualityGate.ADVISORY, "system-migration"));
         when(policies.impact()).thenReturn(new ModelGovernancePolicyAdministrationService.ImpactView(3, 2));
         when(policies.update(eq(QualityGate.BLOCKING), anyInt(), anyString())).thenAnswer(call -> view(QualityGate.BLOCKING, call.getArgument(2)));
@@ -115,6 +117,15 @@ class ModelGovernanceSecurityConfigurationTest {
     @ValueSource(strings = { "expired", "wrong-issuer", "wrong-audience", "wrong-signature", "missing-expiration", "missing-user" })
     void rejectsInvalidSignedTokens(String defect) throws Exception {
         mvc.perform(get(PATH).header("Authorization", "Bearer " + token("ROLE_SYS_ADMIN", defect)))
+            .andExpect(status().isUnauthorized());
+        verifyNoInteractions(policies);
+    }
+
+    @Test
+    void aLoggedOutOrTimedOutAdministratorCannotUseAnOtherwiseValidJwt() throws Exception {
+        doThrow(new org.springframework.security.oauth2.core.OAuth2AuthenticationException("invalid_token"))
+            .when(sessions).requireActive(any());
+        mvc.perform(get(PATH).header("Authorization", "Bearer " + token("ROLE_SYS_ADMIN", "valid")))
             .andExpect(status().isUnauthorized());
         verifyNoInteractions(policies);
     }
@@ -183,14 +194,15 @@ class ModelGovernanceSecurityConfigurationTest {
         }
         @Bean ProbeResource probe() { return new ProbeResource(); }
         @Bean AuditForwarderService audit() { return mock(AuditForwarderService.class); }
+        @Bean ModelGovernanceUserSessionVerifier sessions() { return mock(ModelGovernanceUserSessionVerifier.class); }
 
         @Bean @Order(2)
-        SecurityFilterChain governance(HttpSecurity http, AuditForwarderService audit) throws Exception {
+        SecurityFilterChain governance(HttpSecurity http, AuditForwarderService audit, ModelGovernanceUserSessionVerifier sessions) throws Exception {
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(SIGNING_KEY.toRSAPublicKey()).build();
             decoder.setJwtValidator(ModelGovernanceSecurityConfiguration.tokenValidator(ISSUER, List.of("account")));
             var provider = new StaticListableBeanFactory(Map.of("audit", audit)).getBeanProvider(AuditForwarderService.class);
             var filter = new AuditLoggingFilter(provider, mock(AuditFlowManager.class), false);
-            return new ModelGovernanceSecurityConfiguration().modelGovernanceFilterChain(http, decoder, filter);
+            return new ModelGovernanceSecurityConfiguration().modelGovernanceFilterChain(http, decoder, filter, sessions);
         }
 
         @Bean @Order(3)

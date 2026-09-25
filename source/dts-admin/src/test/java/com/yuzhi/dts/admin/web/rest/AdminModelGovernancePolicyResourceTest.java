@@ -51,6 +51,12 @@ class AdminModelGovernancePolicyResourceTest {
     }
 
     @Test
+    void identityCheckUsesTheLoginWithoutRecursingIntoPlatform() {
+        assertThat(resource.identity().getBody().getData()).containsEntry("actor", "sysadmin");
+        org.mockito.Mockito.verifyNoInteractions(platform);
+    }
+
+    @Test
     void onlySystemAdministratorsReachThePolicy() {
         PreAuthorize guard = AdminModelGovernancePolicyResource.class.getAnnotation(PreAuthorize.class);
         assertThat(guard.value()).isEqualTo("hasAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')");

@@ -790,6 +790,7 @@
                         <testInclude>**/service/modeling/CandidateQualityAssetRegistrationTaskStateTest.java</testInclude>
                         <testInclude>**/web/rest/internal/ModelGovernancePolicyInternalResourceTest.java</testInclude>
                         <testInclude>**/config/ModelGovernanceSecurityConfigurationTest.java</testInclude>
+                        <testInclude>**/security/ModelGovernanceUserSessionVerifierTest.java</testInclude>
                         <testInclude>**/service/modeling/Sprint74ModelingLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtArtifactImportServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/StandardPackageApplyServiceTest.java</testInclude>
