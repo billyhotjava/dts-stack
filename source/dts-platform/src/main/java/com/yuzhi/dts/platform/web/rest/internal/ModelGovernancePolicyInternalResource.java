@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -20,14 +22,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Governance policy administration for dts-admin; the admin service authorizes and audits the person. */
+/** Governance policy administration under the verified system administrator's identity. */
 @RestController
 @RequestMapping("/api/internal/modeling/governance-policy")
-@PreAuthorize(
-    "hasAuthority('" +
-    AuthoritiesConstants.SERVICE_INTERNAL +
-    "') and authentication.name == 'service:dts-admin'"
-)
+@PreAuthorize("hasAuthority('" + AuthoritiesConstants.SYS_ADMIN + "')")
 public class ModelGovernancePolicyInternalResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(ModelGovernancePolicyInternalResource.class);
@@ -38,7 +36,7 @@ public class ModelGovernancePolicyInternalResource {
         this.policies = policies;
     }
 
-    public record UpdateRequest(QualityGate qualityGate, Integer expectedRevision, String actor, String reason) {}
+    public record UpdateRequest(QualityGate qualityGate, Integer expectedRevision, String reason) {}
 
     @GetMapping
     public PolicyView current() {
@@ -51,12 +49,15 @@ public class ModelGovernancePolicyInternalResource {
     }
 
     @PutMapping
-    public PolicyView update(@RequestBody UpdateRequest request) {
-        if (request == null || request.qualityGate() == null || request.expectedRevision() == null) {
+    public PolicyView update(@RequestBody UpdateRequest request, Authentication authentication) {
+        if (request == null || request.qualityGate() == null || request.expectedRevision() == null || request.expectedRevision() < 1) {
             throw new IllegalArgumentException("qualityGate and expectedRevision are required");
         }
+        if (!StringUtils.hasText(request.reason()) || request.reason().trim().length() > 200) {
+            throw new IllegalArgumentException("修改原因须为 1 至 200 个字");
+        }
         PolicyView before = policies.current();
-        PolicyView after = policies.update(request.qualityGate(), request.expectedRevision(), request.actor());
+        PolicyView after = policies.update(request.qualityGate(), request.expectedRevision(), authentication.getName());
         LOG.info(
             "event=model_governance_policy_changed from={} to={} revision={} actor={}",
             before.qualityGate(),

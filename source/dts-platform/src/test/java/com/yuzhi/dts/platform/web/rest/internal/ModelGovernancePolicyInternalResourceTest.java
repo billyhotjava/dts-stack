@@ -24,6 +24,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.authorization.method.PreAuthorizeAuthorizationManager;
 import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.Authentication;
 
 class ModelGovernancePolicyInternalResourceTest {
 
@@ -37,15 +38,18 @@ class ModelGovernancePolicyInternalResourceTest {
     @CsvSource({
         "service:dts-admin, EMPLOYEE, false",
         "service:dts-airflow, SERVICE, false",
-        "service:dts-admin, SERVICE, true",
+        "service:dts-admin, SERVICE, false",
+        "sysadmin, SYS_ADMIN, true",
+        "operator, OP_ADMIN, false",
+        "authadmin, AUTH_ADMIN, false",
     })
-    void onlyTheAdminServiceMayChangeThePolicy(String principal, String authorityKind, boolean granted) throws Exception {
-        String authority = "SERVICE".equals(authorityKind) ? AuthoritiesConstants.SERVICE_INTERNAL : AuthoritiesConstants.EMPLOYEE;
-        Method method = ModelGovernancePolicyInternalResource.class.getMethod("update", UpdateRequest.class);
+    void onlyTheSystemAdministratorMayChangeThePolicy(String principal, String authorityKind, boolean granted) throws Exception {
+        String authority = "SERVICE".equals(authorityKind) ? AuthoritiesConstants.SERVICE_INTERNAL : "ROLE_" + authorityKind;
+        Method method = ModelGovernancePolicyInternalResource.class.getMethod("update", UpdateRequest.class, Authentication.class);
         MethodInvocation invocation = mock(MethodInvocation.class);
         when(invocation.getMethod()).thenReturn(method);
         when(invocation.getThis()).thenReturn(resource);
-        when(invocation.getArguments()).thenReturn(new Object[] { null });
+        when(invocation.getArguments()).thenReturn(new Object[] { null, null });
 
         var result = new PreAuthorizeAuthorizationManager().authorize(
             () -> new UsernamePasswordAuthenticationToken(principal, "n/a", AuthorityUtils.createAuthorityList(authority)),
@@ -58,7 +62,7 @@ class ModelGovernancePolicyInternalResourceTest {
 
     @Test
     void switchesOnlyWithAnExpectedRevision() {
-        assertThatThrownBy(() -> resource.update(new UpdateRequest(QualityGate.BLOCKING, null, "sysadmin", "上线前收紧")))
+        assertThatThrownBy(() -> resource.update(new UpdateRequest(QualityGate.BLOCKING, null, "上线前收紧"), admin()))
             .isInstanceOf(IllegalArgumentException.class);
         verify(policies, never()).update(QualityGate.BLOCKING, 1, "sysadmin");
     }
@@ -68,7 +72,7 @@ class ModelGovernancePolicyInternalResourceTest {
         when(policies.current()).thenReturn(ADVISORY);
         when(policies.update(QualityGate.BLOCKING, 1, "sysadmin")).thenReturn(BLOCKING);
 
-        PolicyView after = resource.update(new UpdateRequest(QualityGate.BLOCKING, 1, "sysadmin", "上线前收紧"));
+        PolicyView after = resource.update(new UpdateRequest(QualityGate.BLOCKING, 1, "上线前收紧"), admin());
 
         assertThat(after).isEqualTo(BLOCKING);
     }
@@ -79,6 +83,10 @@ class ModelGovernancePolicyInternalResourceTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(response.getBody()).containsEntry("code", "GOVERNANCE_POLICY_REVISION_CONFLICT");
+    }
+
+    private static Authentication admin() {
+        return new UsernamePasswordAuthenticationToken("sysadmin", "n/a", AuthorityUtils.createAuthorityList(AuthoritiesConstants.SYS_ADMIN));
     }
 
     private static PolicyView view(QualityGate gate, int revision, String actor, boolean systemDefault) {

@@ -605,10 +605,10 @@ class ServiceDependencyAuthenticationFilterTest {
     }
 
     @Test
-    void adminMatchingToken_canReadAndChangeOnlyTheModelGovernancePolicy() throws Exception {
-        assertAdminAuthenticated("GET", "/api/internal/modeling/governance-policy", "admin-secret", true);
-        assertAdminAuthenticated("GET", "/api/internal/modeling/governance-policy/impact", "admin-secret", true);
-        assertAdminAuthenticated("PUT", "/api/internal/modeling/governance-policy", "admin-secret", true);
+    void adminServiceTokenCannotReplaceTheLoggedInAdministrator() throws Exception {
+        assertAdminAuthenticated("GET", "/api/internal/modeling/governance-policy", "admin-secret", false);
+        assertAdminAuthenticated("GET", "/api/internal/modeling/governance-policy/impact", "admin-secret", false);
+        assertAdminAuthenticated("PUT", "/api/internal/modeling/governance-policy", "admin-secret", false);
         assertAdminAuthenticated("DELETE", "/api/internal/modeling/governance-policy", "admin-secret", false);
         assertAdminAuthenticated("GET", "/api/internal/capabilities", "admin-secret", false);
         assertAdminAuthenticated("POST", "/api/internal/modeling/materialization/runtime-specs/consume", "admin-secret", false);

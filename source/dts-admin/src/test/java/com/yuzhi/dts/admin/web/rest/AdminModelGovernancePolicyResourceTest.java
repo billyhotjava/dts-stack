@@ -66,13 +66,13 @@ class AdminModelGovernancePolicyResourceTest {
         var response = resource.update(new UpdateRequest("BLOCKING", 1, ""), new MockHttpServletRequest());
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        verify(platform, never()).update(anyString(), anyInt(), anyString(), anyString());
+        verify(platform, never()).update(anyString(), anyInt(), anyString());
     }
 
     @Test
     void switchesWithTheLoggedInActorAndAuditsBeforeAndAfter() {
         when(platform.current()).thenReturn(ADVISORY);
-        when(platform.update("BLOCKING", 1, "sysadmin", "上线前收紧质量要求")).thenReturn(BLOCKING);
+        when(platform.update("BLOCKING", 1, "上线前收紧质量要求")).thenReturn(BLOCKING);
 
         var response = resource.update(new UpdateRequest("BLOCKING", 1, " 上线前收紧质量要求 "), new MockHttpServletRequest());
 
@@ -87,7 +87,7 @@ class AdminModelGovernancePolicyResourceTest {
     @Test
     void platformFailureIsAuditedAndSurfacedUnchanged() {
         when(platform.current()).thenReturn(ADVISORY);
-        when(platform.update(anyString(), anyInt(), anyString(), anyString()))
+        when(platform.update(anyString(), anyInt(), anyString()))
             .thenThrow(new PlatformPolicyException(HttpStatus.CONFLICT, "GOVERNANCE_POLICY_REVISION_CONFLICT", "策略已被他人修改，请刷新后重试"));
 
         assertThatThrownBy(() -> resource.update(new UpdateRequest("BLOCKING", 1, "收紧"), new MockHttpServletRequest()))

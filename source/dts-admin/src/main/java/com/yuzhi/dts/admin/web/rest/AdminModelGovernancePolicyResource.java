@@ -71,7 +71,7 @@ public class AdminModelGovernancePolicyResource {
         String before = null;
         try {
             before = platform.current().qualityGate();
-            PolicyView after = platform.update(request.qualityGate(), request.expectedRevision(), actor, reason);
+            PolicyView after = platform.update(request.qualityGate(), request.expectedRevision(), reason);
             audit(actor, before, after.qualityGate(), reason, AuditResultStatus.SUCCESS, null, httpRequest);
             return ResponseEntity.ok(ApiResponse.ok(after));
         } catch (PlatformPolicyException failure) {

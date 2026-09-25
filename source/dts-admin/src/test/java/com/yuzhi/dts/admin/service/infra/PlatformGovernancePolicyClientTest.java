@@ -3,6 +3,7 @@ package com.yuzhi.dts.admin.service.infra;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.headerDoesNotExist;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -12,12 +13,17 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.yuzhi.dts.admin.config.PlatformIntegrationProperties;
 import com.yuzhi.dts.admin.service.infra.PlatformGovernancePolicyClient.PlatformPolicyException;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
@@ -36,24 +42,38 @@ class PlatformGovernancePolicyClientTest {
     @BeforeEach
     void setUp() {
         properties = new PlatformIntegrationProperties();
-        properties.setServiceToken("admin-to-platform-secret");
+        // Existing deployments do not need an admin-to-platform service credential.
+        properties.setServiceToken(null);
         RestTemplate restTemplate = new RestTemplate();
         server = MockRestServiceServer.bindTo(restTemplate).build();
         client = new PlatformGovernancePolicyClient(restTemplate, properties);
+        login("first-user-token");
+    }
+
+    @AfterEach
+    void clearAuthentication() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void login(String token) {
+        Jwt jwt = Jwt.withTokenValue(token).header("alg", "RS256").subject("sysadmin").build();
+        SecurityContextHolder.getContext().setAuthentication(
+            new JwtAuthenticationToken(jwt, AuthorityUtils.createAuthorityList("ROLE_SYS_ADMIN"), "sysadmin"));
     }
 
     @Test
-    void sendsTheAdminServiceIdentityAndExpectedRevision() {
+    void forwardsTheAuthenticatedUserAndExpectedRevisionWithoutServiceCredentials() {
         server.expect(requestTo(POLICY_URL))
             .andExpect(method(HttpMethod.PUT))
-            .andExpect(header("X-DTS-Service", "dts-admin"))
-            .andExpect(header("X-DTS-Service-Token", "admin-to-platform-secret"))
+            .andExpect(header("Authorization", "Bearer first-user-token"))
+            .andExpect(headerDoesNotExist("X-DTS-Service"))
+            .andExpect(headerDoesNotExist("X-DTS-Service-Token"))
             .andExpect(jsonPath("$.qualityGate").value("BLOCKING"))
             .andExpect(jsonPath("$.expectedRevision").value(1))
-            .andExpect(jsonPath("$.actor").value("sysadmin"))
+            .andExpect(jsonPath("$.actor").doesNotExist())
             .andRespond(withSuccess(POLICY_JSON, MediaType.APPLICATION_JSON));
 
-        var view = client.update("BLOCKING", 1, "sysadmin", "收紧");
+        var view = client.update("BLOCKING", 1, "收紧");
 
         assertThat(view.qualityGate()).isEqualTo("BLOCKING");
         assertThat(view.revision()).isEqualTo(2);
@@ -64,7 +84,7 @@ class PlatformGovernancePolicyClientTest {
     void revisionConflictIsReportedAsConflict() {
         server.expect(requestTo(POLICY_URL)).andRespond(withStatus(HttpStatus.CONFLICT));
 
-        assertThatThrownBy(() -> client.update("ADVISORY", 1, "sysadmin", "放宽"))
+        assertThatThrownBy(() -> client.update("ADVISORY", 1, "放宽"))
             .isInstanceOfSatisfying(PlatformPolicyException.class, failure -> {
                 assertThat(failure.status()).isEqualTo(HttpStatus.CONFLICT);
                 assertThat(failure.code()).isEqualTo("GOVERNANCE_POLICY_REVISION_CONFLICT");
@@ -72,24 +92,46 @@ class PlatformGovernancePolicyClientTest {
     }
 
     @Test
-    void rejectedServiceCredentialNamesTheMisconfiguration() {
+    void rejectedUserTokenRequestsLoginAgain() {
         server.expect(requestTo(POLICY_URL)).andRespond(withStatus(HttpStatus.UNAUTHORIZED));
 
         assertThatThrownBy(() -> client.current())
             .isInstanceOfSatisfying(PlatformPolicyException.class, failure -> {
-                assertThat(failure.status()).isEqualTo(HttpStatus.BAD_GATEWAY);
-                assertThat(failure.code()).isEqualTo("PLATFORM_SERVICE_AUTH_REJECTED");
+                assertThat(failure.status()).isEqualTo(HttpStatus.UNAUTHORIZED);
+                assertThat(failure.code()).isEqualTo("GOVERNANCE_POLICY_LOGIN_REQUIRED");
             });
     }
 
     @Test
-    void missingServiceTokenFailsWithoutCallingThePlatform() {
-        properties.setServiceToken(" ");
+    void missingUserIdentityFailsEvenIfALegacyServiceTokenExists() {
+        properties.setServiceToken("legacy-service-token");
+        SecurityContextHolder.clearContext();
 
-        assertThatThrownBy(() -> client.update("BLOCKING", 1, "sysadmin", "收紧"))
+        assertThatThrownBy(() -> client.update("BLOCKING", 1, "收紧"))
             .isInstanceOfSatisfying(PlatformPolicyException.class, failure ->
-                assertThat(failure.code()).isEqualTo("PLATFORM_SERVICE_TOKEN_MISSING"));
+                assertThat(failure.code()).isEqualTo("GOVERNANCE_POLICY_LOGIN_REQUIRED"));
         server.verify();
+    }
+
+    @Test
+    void readsUseEachRequestsIdentityRatherThanACachedToken() {
+        server.expect(requestTo(POLICY_URL)).andExpect(header("Authorization", "Bearer first-user-token"))
+            .andRespond(withSuccess(POLICY_JSON, MediaType.APPLICATION_JSON));
+        server.expect(requestTo(POLICY_URL + "/impact")).andExpect(header("Authorization", "Bearer second-user-token"))
+            .andRespond(withSuccess("{\"unfrozenCandidates\":3,\"frozenCandidates\":2}", MediaType.APPLICATION_JSON));
+        client.current();
+        login("second-user-token");
+        assertThat(client.impact().unfrozenCandidates()).isEqualTo(3);
+        server.verify();
+    }
+
+    @Test
+    void authorizationFailureIsNotReportedAsAConfigurationFailure() {
+        server.expect(requestTo(POLICY_URL)).andRespond(withStatus(HttpStatus.FORBIDDEN));
+        assertThatThrownBy(() -> client.current()).isInstanceOfSatisfying(PlatformPolicyException.class, failure -> {
+            assertThat(failure.status()).isEqualTo(HttpStatus.FORBIDDEN);
+            assertThat(failure.code()).isEqualTo("GOVERNANCE_POLICY_ACCESS_DENIED");
+        });
     }
 
     @Test

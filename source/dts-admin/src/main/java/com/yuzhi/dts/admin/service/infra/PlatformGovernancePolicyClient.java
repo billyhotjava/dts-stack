@@ -12,6 +12,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -26,8 +28,6 @@ import org.springframework.web.client.RestTemplate;
 @Component
 public class PlatformGovernancePolicyClient {
 
-    static final String SERVICE_HEADER = "X-DTS-Service";
-    static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String POLICY_PATH = "/internal/modeling/governance-policy";
 
     private final RestTemplate restTemplate;
@@ -83,11 +83,11 @@ public class PlatformGovernancePolicyClient {
         return exchange(HttpMethod.GET, POLICY_PATH + "/impact", null, ImpactView.class);
     }
 
-    public PolicyView update(String qualityGate, int expectedRevision, String actor, String reason) {
+    public PolicyView update(String qualityGate, int expectedRevision, String reason) {
         return exchange(
             HttpMethod.PUT,
             POLICY_PATH,
-            Map.of("qualityGate", qualityGate, "expectedRevision", expectedRevision, "actor", actor, "reason", reason),
+            Map.of("qualityGate", qualityGate, "expectedRevision", expectedRevision, "reason", reason),
             PolicyView.class
         );
     }
@@ -95,12 +95,6 @@ public class PlatformGovernancePolicyClient {
     private <T> T exchange(HttpMethod method, String suffix, Object body, Class<T> type) {
         if (!properties.isEnabled()) {
             throw unavailable("PLATFORM_INTEGRATION_DISABLED", "平台联动未启用，无法读取或修改模型发布治理策略");
-        }
-        if (!StringUtils.hasText(properties.getServiceToken())) {
-            throw unavailable(
-                "PLATFORM_SERVICE_TOKEN_MISSING",
-                "未配置 dts-admin 调用平台的服务凭据（DTS_ADMIN_TO_PLATFORM），策略未修改"
-            );
         }
         try {
             T response = restTemplate.exchange(buildUri(suffix), method, new HttpEntity<>(body, headers()), type).getBody();
@@ -119,10 +113,14 @@ public class PlatformGovernancePolicyClient {
             if (rejected.getStatusCode().value() == HttpStatus.BAD_REQUEST.value()) {
                 throw new PlatformPolicyException(HttpStatus.BAD_REQUEST, "GOVERNANCE_POLICY_REQUEST_INVALID", "策略取值无效");
             }
-            if (rejected.getStatusCode().value() == HttpStatus.UNAUTHORIZED.value() || rejected.getStatusCode().value() == HttpStatus.FORBIDDEN.value()) {
-                throw unavailable(
-                    "PLATFORM_SERVICE_AUTH_REJECTED",
-                    "平台拒绝了 dts-admin 的服务凭据，请核对 DTS_ADMIN_TO_PLATFORM 与 DTS_INBOUND_FROM_ADMIN，策略未修改"
+            if (rejected.getStatusCode().value() == HttpStatus.UNAUTHORIZED.value()) {
+                throw new PlatformPolicyException(
+                    HttpStatus.UNAUTHORIZED, "GOVERNANCE_POLICY_LOGIN_REQUIRED", "登录身份已失效，请重新登录后重试"
+                );
+            }
+            if (rejected.getStatusCode().value() == HttpStatus.FORBIDDEN.value()) {
+                throw new PlatformPolicyException(
+                    HttpStatus.FORBIDDEN, "GOVERNANCE_POLICY_ACCESS_DENIED", "当前账号无权管理模型发布治理策略"
                 );
             }
             throw unavailable("PLATFORM_POLICY_REQUEST_FAILED", "平台服务处理失败，策略未修改");
@@ -136,10 +134,16 @@ public class PlatformGovernancePolicyClient {
     }
 
     private HttpHeaders headers() {
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (!(authentication instanceof JwtAuthenticationToken jwt) || !jwt.isAuthenticated()) {
+            throw new PlatformPolicyException(
+                HttpStatus.UNAUTHORIZED, "GOVERNANCE_POLICY_LOGIN_REQUIRED", "请重新登录后管理模型发布治理策略"
+            );
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(SERVICE_HEADER, StringUtils.hasText(properties.getServiceName()) ? properties.getServiceName() : "dts-admin");
-        headers.set(SERVICE_TOKEN_HEADER, properties.getServiceToken().trim());
+        // Forward the authenticated person's access token, never an unverified incoming header.
+        headers.setBearerAuth(jwt.getToken().getTokenValue());
         return headers;
     }
 
