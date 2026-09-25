@@ -361,6 +361,59 @@ class ModelDeliveryStatusQueryServiceTest {
         assertThat(analysis.reasonCode()).isEqualTo("MODEL_DELIVERY_PUBLICATION_REQUIRED");
     }
 
+    @Test
+    void workbenchSummaryHidesTheReleaseHistoryOfModelsTheActorCannotRead() {
+        Fixture fixture = new Fixture();
+        var releases = mock(com.yuzhi.dts.platform.repository.modeling.ModelPublishedReleaseReadRepository.class);
+        var service = new ModelDeliveryStatusQueryService(fixture.models, fixture.candidates, fixture.authoring, fixture.serving, fixture.qualityContexts, releases);
+        UUID hidden = UUID.randomUUID();
+        Instant publishedAt = Instant.parse("2026-09-20T02:00:00Z");
+        when(releases.latestPublished("tenant", java.util.List.of(fixture.modelId, hidden))).thenReturn(java.util.Map.of(
+            fixture.modelId, new com.yuzhi.dts.platform.repository.modeling.ModelPublishedReleaseReadRepository.PublishedRelease(UUID.randomUUID(), fixture.modelId, 3, "prod", publishedAt),
+            hidden, new com.yuzhi.dts.platform.repository.modeling.ModelPublishedReleaseReadRepository.PublishedRelease(UUID.randomUUID(), hidden, 9, "prod", publishedAt)
+        ));
+        when(fixture.models.get("tenant", hidden)).thenThrow(new ModelSpecException("MODEL_SPEC_NOT_FOUND", "not found", ModelSpecException.Kind.NOT_FOUND));
+        fixture.selectDefault(null, fixture.workspace(null, java.util.List.of()));
+
+        var rows = service.workbenchSummaries("tenant", "actor", java.util.List.of(fixture.modelId, hidden, fixture.modelId), null);
+
+        assertThat(rows).hasSize(2);
+        assertThat(rows.get(0).readState()).isEqualTo("OK");
+        assertThat(rows.get(0).modelRevision()).isEqualTo(fixture.modelRevision);
+        assertThat(rows.get(0).published().modelRevision()).isEqualTo(3);
+        assertThat(rows.get(0).published().publishedAt()).isEqualTo(publishedAt);
+        assertThat(rows.get(1).readState()).isEqualTo("FAILED");
+        assertThat(rows.get(1).reasonCode()).isEqualTo("MODEL_SPEC_NOT_FOUND");
+        assertThat(rows.get(1).published()).isNull();
+        // K1: the modeling list never waits on quality or analysis-service reads.
+        org.mockito.Mockito.verifyNoInteractions(fixture.serving, fixture.qualityContexts);
+    }
+
+    @Test
+    void workbenchSummaryKeepsBuildResultsWhenTheReleaseLedgerIsUnavailable() {
+        Fixture fixture = new Fixture();
+        var releases = mock(com.yuzhi.dts.platform.repository.modeling.ModelPublishedReleaseReadRepository.class);
+        var service = new ModelDeliveryStatusQueryService(fixture.models, fixture.candidates, fixture.authoring, fixture.serving, fixture.qualityContexts, releases);
+        when(releases.latestPublished(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenThrow(new IllegalStateException("db"));
+        fixture.selectDefault(null, fixture.workspace(null, java.util.List.of()));
+
+        var rows = service.workbenchSummaries("tenant", "actor", java.util.List.of(fixture.modelId), null);
+
+        assertThat(rows.get(0).readState()).isEqualTo("OK");
+        assertThat(rows.get(0).publishedReadState()).isEqualTo("FAILED");
+        assertThat(rows.get(0).published()).isNull();
+    }
+
+    @Test
+    void workbenchSummaryRejectsMoreThanOnePage() {
+        Fixture fixture = new Fixture();
+        var ids = java.util.stream.Stream.generate(UUID::randomUUID).limit(51).toList();
+
+        assertThatThrownBy(() -> fixture.service.workbenchSummaries("tenant", "actor", ids, null))
+            .isInstanceOf(ModelSpecException.class)
+            .hasMessageContaining("50");
+    }
+
     private static final class Fixture {
         final ModelSpecApplicationService models = mock(ModelSpecApplicationService.class);
         final ModelReleaseCandidateApplicationService candidates = mock(ModelReleaseCandidateApplicationService.class);

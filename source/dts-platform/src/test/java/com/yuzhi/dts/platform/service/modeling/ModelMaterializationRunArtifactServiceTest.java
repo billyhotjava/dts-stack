@@ -1174,6 +1174,8 @@ class ModelMaterializationRunArtifactServiceTest {
                 "dbt build and physical relation evidence verified"
             )
         );
+        // F15 K3: the confirmed build only hands off registration; it never registers inline.
+        order.verify(qualityAssets).requestRegistration(any());
         verify(qualityAssets, never()).ensureRegistered(any());
         verify(auditService).auditActionAsStrict(
             eq("airflow"),

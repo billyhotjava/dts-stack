@@ -99,10 +99,11 @@ public class ModelDeliveryStatusQueryService {
                     publishedReadState, releaseView));
             } catch (ModelSpecException | ModelReleaseCandidateException failure) {
                 String code = failure instanceof ModelSpecException spec ? spec.code() : ((ModelReleaseCandidateException) failure).code();
-                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", code, null, publishedReadState, releaseView));
+                // A model the actor cannot read must not reveal its release history either.
+                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", code, null, publishedReadState, null));
             } catch (RuntimeException failure) {
                 LOG.warn("event=model_workbench_summary_read_failed modelSpecId={} failureType={}", id, failure.getClass().getSimpleName());
-                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", "MODEL_WORKBENCH_SUMMARY_UNAVAILABLE", null, publishedReadState, releaseView));
+                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", "MODEL_WORKBENCH_SUMMARY_UNAVAILABLE", null, publishedReadState, null));
             }
         }
         return List.copyOf(rows);
