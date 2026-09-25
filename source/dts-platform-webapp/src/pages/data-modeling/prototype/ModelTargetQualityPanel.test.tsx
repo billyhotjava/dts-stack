@@ -78,7 +78,6 @@ function Harness({
 				busy={busy}
 				canBuild={false}
 				buildAction={null}
-				operationalAction={null}
 				modelCount={1}
 				onBack={apiMocks.command}
 				onPrimaryAction={apiMocks.command}

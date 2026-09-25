@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
 import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import {
 	abandonReleaseCandidateBuild,
@@ -23,12 +24,10 @@ import {
 	refreshReleaseCandidate,
 	rejectReleaseCandidateReview,
 	rematerializeReleaseCandidate,
-	repairPlanExecutionBinding,
 	rerunReleaseCandidateGovernanceQuality,
 	retryReleaseCandidate,
 	retryReleaseCandidateRegistration,
 	rollbackReleaseCandidate,
-	runPlanExecutionNow,
 	runReleaseCandidateQuality,
 	startModelBuildIntent,
 	startModelPublicationIntent,
@@ -261,14 +260,8 @@ export function ModelPublishDialog({
 		(action) => candidateCommandScopeAllowed && workspace?.allowedActions.includes(action),
 	);
 	const executionBinding = executionWorkspace?.bindings.find((binding) => binding.environment === environment) || null;
-	const publishedSelection = Boolean(selectionIsPublished && executionBinding);
-	const operationalAction = publishedSelection
-		? executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT")
-			? "REPAIR_DEPLOYMENT"
-			: executionBinding?.allowedActions.includes("RUN_NOW")
-				? "RUN_NOW"
-				: null
-		: null;
+	// F15 (option 2): running a published version is handled in 运维中心 › 调度计划, not in these dialogs.
+	const schedulePath = planId ? `/ops/instances?tab=schedule&planId=${encodeURIComponent(planId)}` : "/ops/instances?tab=schedule";
 	const materializationRequestEntries = useMemo(
 		() => materializationScopeEntries(candidate, selection, buildAction), [candidate, selection, buildAction],
 	);
@@ -323,19 +316,10 @@ export function ModelPublishDialog({
 	const canBuild = Boolean(
 		!selectionProblem && !blockingWorkspace?.candidate &&
 			(buildAction !== "REMATERIALIZE" || candidateCommandScopeAllowed) &&
-			(operationalAction ||
-				(buildAction && (!requiresPlan || (planState === "ready" && materializationPlan?.canStart)))),
+			buildAction && (!requiresPlan || (planState === "ready" && materializationPlan?.canStart)),
 	);
 	const build = async () => {
 		if (!canMaintain || !canBuild || !planId || !primary || !selection.every(canonical)) return;
-		if (operationalAction === "REPAIR_DEPLOYMENT") {
-			await repairOperationalBinding();
-			return true;
-		}
-		if (operationalAction === "RUN_NOW") {
-			await runOperationalBinding();
-			return true;
-		}
 		setBusy("build");
 		setFailure("");
 		try {
@@ -577,32 +561,6 @@ export function ModelPublishDialog({
 			setBusy("");
 		}
 	};
-	const runOperationalBinding = async () => {
-		if (!planId || !executionBinding?.allowedActions.includes("RUN_NOW")) return;
-		setBusy("run");
-		setFailure("");
-		try {
-			await runPlanExecutionNow(planId, executionBinding.id, crypto.randomUUID());
-			await load();
-		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "运行计划未能启动。").message);
-		} finally {
-			setBusy("");
-		}
-	};
-	const repairOperationalBinding = async () => {
-		if (!planId || !executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT")) return;
-		setBusy("run");
-		setFailure("");
-		try {
-			await repairPlanExecutionBinding(planId, executionBinding.id, executionBinding.version);
-			await load();
-		} catch (error) {
-			setFailure(normalizeModelingRequestFailure(error, "运行计划部署修复未能启动。").message);
-		} finally {
-			setBusy("");
-		}
-	};
 	const { materializationPlanColumns, evidenceColumns } = useModelMaterializationColumns();
 	const scopedGovernanceQuality = candidateContainsSelection ? workspace?.governanceQuality || null : null;
 	const materializeContent = (
@@ -718,7 +676,6 @@ export function ModelPublishDialog({
 					busy={busy}
 					canBuild={canBuild}
 					buildAction={buildAction}
-					operationalAction={operationalAction}
 					modelCount={materializationRequestedIds.length}
 					buildBlocker={
 						materializationBlocker === "无" ? undefined : materializationBlocker
@@ -735,6 +692,11 @@ export function ModelPublishDialog({
 					}}
 				/>
 			)}
+			{!embedded && selectionIsPublished && !buildAction ? (
+				<p className="dmx-capability-note">
+					当前版本已发布且没有改动，无需重新构建。运行已发布版本请到 <Link to={schedulePath}>运维中心 › 调度计划</Link>。
+				</p>
+			) : null}
 			{!embedded && !selectionProblem ? (
 				<ModelAssetDeliveryResult key={workspace?.candidate?.status || "none"} models={selection} />
 			) : null}
@@ -764,6 +726,11 @@ export function ModelPublishDialog({
 					<input onChange={(event) => setReason(event.target.value)} value={reason} />
 				</label>
 			) : null}
+			{!embedded && executionBinding ? (
+				<p className="dmx-capability-note">
+					发布只登记正式版本。已发布版本的运行、部署修复在 <Link to={schedulePath}>运维中心 › 调度计划</Link> 办理，运行失败不会改变发布结果。
+				</p>
+			) : null}
 			<ModelReleaseScopeSummary
 				status={busy === "load" ? "正在读取发布单状态…" : failure ? "发布单状态读取失败" :
 					scopedCandidate?.status || (candidate ? "当前发布单不包含所选模型的当前版本" : "当前模型暂无发布单")}
@@ -781,16 +748,6 @@ export function ModelPublishDialog({
 					刷新状态
 				</Button>
 				<Button onClick={onClose}>关闭</Button>
-				{!embedded && executionBinding?.allowedActions.includes("RUN_NOW") ? (
-					<Button disabled={Boolean(busy)} onClick={() => void runOperationalBinding()} primary>
-						{busy === "run" ? "运行中…" : "立即运行并核验"}
-					</Button>
-				) : null}
-				{!embedded && executionBinding?.allowedActions.includes("REPAIR_DEPLOYMENT") ? (
-					<Button disabled={Boolean(busy)} onClick={() => void repairOperationalBinding()} primary>
-						{busy === "run" ? "处理中…" : "修复部署"}
-					</Button>
-				) : null}
 				{releaseActions
 					.filter((action) => !embedded || action === pageAction?.code)
 					.map((action, index) => (

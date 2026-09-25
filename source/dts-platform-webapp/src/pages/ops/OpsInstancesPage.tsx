@@ -1,4 +1,4 @@
-import { Button, Card, Input, Select, Space, Tag, Typography } from "antd";
+import { Button, Card, Input, Select, Space, Tabs, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -9,6 +9,7 @@ import { buildJourneyUrl, JourneyContextBar, JourneyGateEvidenceSummary } from "
 import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
 import { PageHeader } from "@/components/page-header";
 import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
+import { PlanExecutionSchedulePanel } from "./PlanExecutionSchedulePanel";
 
 const { Text } = Typography;
 
@@ -48,7 +49,8 @@ const resolveSourceTaskPath = (record: OpsInstance) => {
 export default function OpsInstancesPage() {
 	const [records, setRecords] = useState<OpsInstance[]>([]);
 	const [loading, setLoading] = useState(false);
-	const [searchParams] = useSearchParams();
+	const [searchParams, setSearchParams] = useSearchParams();
+	const activeTab = searchParams.get("tab") === "schedule" ? "schedule" : "instances";
 	const urlKeyword = searchParams.get("keyword") ?? "";
 	const urlEntryKey = searchParams.get("entryKey") || "ALL";
 	const modelSpecId = searchParams.get("modelSpecId") || searchParams.get("modelId") || "";
@@ -248,6 +250,24 @@ export default function OpsInstancesPage() {
 			<PageHeader title="任务实例监控" />
 			<JourneyContextBar stage="evidence" />
 			<JourneyGateEvidenceSummary stage="evidence" />
+			<Tabs
+				activeKey={activeTab}
+				onChange={(key) =>
+					setSearchParams((current) => {
+						const next = new URLSearchParams(current);
+						if (key === "schedule") next.set("tab", "schedule");
+						else next.delete("tab");
+						return next;
+					})
+				}
+				items={[
+					{ key: "instances", label: "任务实例" },
+					{ key: "schedule", label: "调度计划" },
+				]}
+			/>
+			{activeTab === "schedule" ? (
+				<PlanExecutionSchedulePanel focusPlanId={planId || undefined} />
+			) : (
 			<Card
 				extra={
 					<Space>
@@ -348,6 +368,7 @@ export default function OpsInstancesPage() {
 					}}
 				/>
 			</Card>
+			)}
 			<RecordDetailDrawer<OpsInstance>
 				open={detailRow !== null}
 				onClose={() => setDetailRow(null)}
