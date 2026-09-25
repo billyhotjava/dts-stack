@@ -98,7 +98,7 @@ const governanceQualityText = (governanceQuality: ReleaseCandidateGovernanceQual
 	return governanceQuality.message || governanceQuality.code || "治理数据质量记录尚未就绪。";
 };
 
-export const canRerunGovernanceQuality = (governanceQuality: ReleaseCandidateGovernanceQuality | null) =>
+const canRerunGovernanceQuality = (governanceQuality: ReleaseCandidateGovernanceQuality | null) =>
 	Boolean(
 		governanceQuality &&
 			(governanceQuality.state === "FAILED" || governanceQuality.state === "STALE") &&

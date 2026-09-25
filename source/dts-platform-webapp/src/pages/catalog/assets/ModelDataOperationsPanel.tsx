@@ -2,29 +2,29 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import { registerModelData } from "@/api/modelIngestionTargetApi";
-import { getModelSpec, rerunReleaseCandidateGovernanceQuality } from "@/api/modelSpecApi";
+import { getModelSpec } from "@/api/modelSpecApi";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import type { UnsavedEditorHandle } from "../CatalogDatasetGovernanceSummaryEditor";
-import { ModelTargetQualityPanel } from "@/pages/data-modeling/prototype/ModelTargetQualityPanel";
-import { ModelCatalogDeliveryPanel } from "@/pages/data-modeling/prototype/ModelCatalogDeliveryPanel";
+import { currentCatalogOutputs, ModelCatalogDeliveryPanel } from "@/pages/data-modeling/prototype/ModelCatalogDeliveryPanel";
 import { ModelAnalysisPreparationAction } from "@/pages/data-modeling/prototype/ModelAnalysisPreparationAction";
-import { ModelPublishDialog } from "@/pages/data-modeling/prototype/ModelPublishDialog";
 import { ModelWorkbenchNavigationGuard } from "@/pages/data-modeling/prototype/ModelWorkbenchNavigationGuard";
 import { Button } from "@/pages/data-modeling/prototype/PrototypePrimitives";
 import { type ModelDataManagementFocus, resolveModelingReturnTo } from "@/pages/data-modeling/prototype/modelDataManagementLink";
 
-/** Uses existing governance owners with the same model, candidate and asset identities. */
+/**
+ * F15: "模型产出登记" in the data asset catalog. It handles only what the catalog owns for a model's output —
+ * asset registration, catalog governance details and analysis-service sync (the catalog's service status).
+ * Quality rules live in 质量管控 and version publication stays in the modeling workbench; this panel links to
+ * them instead of embedding their forms.
+ */
 export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId, focus, returnTo }: {
 	modelSpecId: string; environment: string; candidateId?: string; focus?: ModelDataManagementFocus; returnTo?: string;
 }) {
 	const [value, setValue] = useState<{ model: ModelSpecView; delivery: ModelDeliveryStatus } | null>(null);
 	const [failure, setFailure] = useState("");
 	const [busy, setBusy] = useState(false);
-	const [qualityOpen, setQualityOpen] = useState(0);
-	const [qualityGuard, setQualityGuard] = useState<UnsavedEditorHandle | null>(null);
 	const [catalogGuard, setCatalogGuard] = useState<UnsavedEditorHandle | null>(null);
 	const saving = useRef(false);
-	const focusHandled = useRef(false);
 	const sequence = useRef(0);
 	const load = useCallback(async () => {
 		const request = ++sequence.current;
@@ -39,58 +39,46 @@ export function ModelDataOperationsPanel({ modelSpecId, environment, candidateId
 		} finally { if (request === sequence.current) setBusy(false); }
 	}, [modelSpecId, environment, candidateId]);
 	useEffect(() => { void load(); return () => { sequence.current++; }; }, [load]);
-	const awaitingRegistration = value?.delivery.dataPrimaryAction?.code === "REGISTER_DATA_ASSETS";
-	useEffect(() => {
-		// Arriving from a finished model opens the quality section once; later refreshes never reopen it.
-		if (focus !== "quality" || !value || focusHandled.current) return;
-		focusHandled.current = true;
-		if (!awaitingRegistration) setQualityOpen(n => n + 1);
-	}, [focus, value, awaitingRegistration]);
 	const backToModel = resolveModelingReturnTo(returnTo);
-	const guards = [qualityGuard, catalogGuard].filter((guard): guard is UnsavedEditorHandle => Boolean(guard));
-	const dirty = guards.some(guard => guard.dirty);
+	const dirty = Boolean(catalogGuard?.dirty);
 	const action = value?.delivery.dataPrimaryAction;
-	const rerunQuality = async () => {
-		const candidate = value?.delivery.workspace?.candidate;
-		if (!value || !candidate || busy || dirty || action?.code !== "RERUN_GOVERNANCE_QUALITY" || !action.enabled) return;
-		setBusy(true);
-		try { await rerunReleaseCandidateGovernanceQuality(value.delivery.planId, candidate, crypto.randomUUID()); await load(); }
-		catch (error) { setFailure(error instanceof Error ? error.message : "质量检查未能启动"); }
-		finally { setBusy(false); }
-	};
+	const awaitingRegistration = action?.code === "REGISTER_DATA_ASSETS";
+	const registeredDatasetId = value ? currentCatalogOutputs(value.delivery).find((output) => output.resourceId)?.resourceId : undefined;
 	const register = async () => {
 		const candidate = value?.delivery.candidate;
-		if (!value || !candidate || busy || dirty || action?.code !== "REGISTER_DATA_ASSETS" || !action.enabled) return;
+		if (!value || !candidate || busy || dirty || !awaitingRegistration || !action?.enabled) return;
 		setBusy(true);
 		try { await registerModelData(modelSpecId, { candidateId: candidate.id, candidateVersion: candidate.version, modelRevision: value.model.revision, modelChecksum: value.model.checksum }); await load(); }
 		catch (error) { setFailure(error instanceof Error ? error.message : "资产登记失败"); }
 		finally { setBusy(false); }
 	};
 	const canCommand = !busy && !failure && !dirty;
-	return <section className="dmx-editor-panel" aria-label="模型产出数据管理">
-		<h3>{value?.model.name || "模型产出"}</h3>
+	return <section className="dmx-editor-panel" aria-label="模型产出登记">
+		<h3>模型产出登记{value ? ` · ${value.model.name}` : ""}</h3>
 		{failure ? <div role="alert">{failure}<Button disabled={busy || dirty} onClick={() => void load()}>重试</Button></div> : null}
 		{busy && !value ? <p>正在读取当前目标和资产状态…</p> : null}
 		{value ? <>
 			<p>{value.delivery.modelingResult?.state === "SUCCEEDED" ? "模型已完成构建" : "当前模型构建记录待确认"} · {value.delivery.modelingResult?.targetRelation || "尚无目标表"}</p>
 			{backToModel ? <Link to={backToModel}>返回模型</Link> : null}
 			<Link to={`/data-modeling/dimensions/workbench?modelSpecId=${encodeURIComponent(modelSpecId)}&step=definition&environment=${encodeURIComponent(environment)}`}>编辑模型</Link>
-			{focus === "quality" && awaitingRegistration ? <output className="dmx-capability-note">资产登记完成后可配置质量规则，请先登记数据资产。</output> : null}
-			{action?.code === "REGISTER_DATA_ASSETS" ? <Button disabled={!canCommand || !action.enabled} onClick={() => void register()}>登记数据资产</Button> : null}
+			{awaitingRegistration ? <>
+				<p className="dmx-capability-note">资产尚未登记。登记只处理资产身份，不会重新执行构建。</p>
+				<Button disabled={!canCommand || !action?.enabled} onClick={() => void register()}>登记数据资产</Button>
+			</> : null}
+			{registeredDatasetId ? (
+				<p>
+					质量规则在质量管控中配置和验证：
+					<Link to={`/governance/rules/config/tables/${encodeURIComponent(registeredDatasetId)}`}>按表配置质量规则</Link>
+				</p>
+			) : focus === "quality" ? <p className="dmx-capability-note">资产登记完成后，才能在质量管控中为它配置规则。</p> : null}
 			{value.model.modelType === "SOURCE" && value.delivery.modelingResult?.state === "SUCCEEDED" ? <p><Link to="/foundation/data-sources/access/new">配置数据接入</Link>：在目标步骤选择此模型表，也可编辑已有接入任务绑定。</p> : null}
-			<ModelTargetQualityPanel delivery={value.delivery} openRequest={qualityOpen} canMaintain={canCommand || Boolean(qualityGuard?.dirty)} onChanged={() => void load()} onNavigationGuardChange={setQualityGuard} />
-			{action?.code === "CONFIGURE_QUALITY_RULES" ? <Button disabled={!canCommand || !action.enabled} onClick={() => setQualityOpen(n => n + 1)}>配置质量规则</Button> : null}
-			{action?.code === "RERUN_GOVERNANCE_QUALITY" ? <Button disabled={!canCommand || !action.enabled} onClick={() => void rerunQuality()}>执行质量检查</Button> : null}
-			<ModelPublishDialog models={[value.model]} step="delivery" initialEnvironment={environment}
-				deliveryStatus={{ ...value.delivery, wizard: value.delivery.wizard.map(page => page.key === "delivery" ? { ...page, canEdit: Boolean(action?.enabled), primaryAction: action || null } : page) }}
-				canMaintain={canCommand} onChanged={() => void load()} onClose={() => void load()} />
 			<ModelAnalysisPreparationAction delivery={value.delivery} canMaintain={canCommand} onChanged={() => void load()} />
 			<ModelCatalogDeliveryPanel delivery={value.delivery} modelName={value.model.name} canMaintain={!busy && !failure} onSaved={() => void load()} onNavigationGuardChange={setCatalogGuard} />
 		</> : null}
 		<ModelWorkbenchNavigationGuard dirty={dirty} savingRef={saving} onSave={async () => {
 			saving.current = true;
-			try { for (const guard of guards) if (guard.dirty && !await guard.save()) return false; return true; }
+			try { return !catalogGuard?.dirty || await catalogGuard.save(); }
 			finally { saving.current = false; }
-		}} onDiscard={() => guards.forEach(guard => guard.discard())} />
+		}} onDiscard={() => catalogGuard?.discard()} />
 	</section>;
 }

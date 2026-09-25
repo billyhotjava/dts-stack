@@ -90,6 +90,32 @@ export const getModelDeliveryStatus = (id: string, environment?: string, candida
 		_skipErrorToast: true,
 	} as any);
 
+/** F15 K1: per-row build and publication facts for the modeling workbench; never quality or serving state. */
+export type ModelPublishedRelease = {
+	releaseId: string;
+	modelRevision: number;
+	environment: string | null;
+	publishedAt: string;
+};
+export type ModelWorkbenchSummary = {
+	modelSpecId: string;
+	modelRevision: number;
+	modelChecksum: string | null;
+	readState: "OK" | "FAILED";
+	reasonCode: string | null;
+	build: ModelingResult | null;
+	publishedReadState: "OK" | "FAILED";
+	published: ModelPublishedRelease | null;
+};
+export const MODEL_WORKBENCH_SUMMARY_LIMIT = 50;
+export const getModelWorkbenchSummaries = (modelSpecIds: string[], environment?: string, signal?: AbortSignal) =>
+	api.post<ModelWorkbenchSummary[]>({
+		url: "/modeling/model-specs/workbench-summaries",
+		data: { modelSpecIds, environment: environment || undefined },
+		signal,
+		_skipErrorToast: true,
+	} as any);
+
 export function normalizeModelWizardStep(value: string | null): ModelWizardStep | null {
 	return value === "delivery" || MODEL_WIZARD_STEPS.some(step => step === value) ? (value as ModelWizardStep) : null;
 }

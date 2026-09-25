@@ -27,7 +27,7 @@ const ACTION_LABELS: Record<ModelWorkflowAction, string> = {
 	save: "保存草稿",
 	validate: "校验",
 	commit: "提交加工配置",
-	deliver: "构建与交付",
+	deliver: "构建",
 	fork: "创建新草稿版本",
 };
 const BUSY_LABELS: Record<string, string> = {
@@ -73,13 +73,19 @@ export function ModelWorkflowToolbar(props: ModelWorkflowToolbarProps) {
 		validation: authoringValidation,
 	};
 	const [, refreshAction] = useReducer((value: number) => value + 1, 0);
+	const deliverable = Boolean(
+		persisted &&
+			!dirty &&
+			authoringContext?.implementation &&
+			!(authoringContext.openDraft && authoringContext.openDraft.state !== "COMMITTED"),
+	);
 	const next = resolveModelWorkflowAction(input);
 	const actions: Record<ModelWorkflowAction, () => void> = {
 		save: onSave,
 		validate: onValidate,
 		commit: onCommit,
 		fork: onForkPublished,
-		deliver: () => onDialog("publish"),
+		deliver: () => onDialog("build"),
 	};
 	const execute = () => {
 		const current = resolveModelWorkflowAction(input);
@@ -110,19 +116,13 @@ export function ModelWorkflowToolbar(props: ModelWorkflowToolbarProps) {
 						</Button>
 					))}
 					{next.action !== "deliver" ? (
-						<Button
-							disabled={
-								busy ||
-								!persisted ||
-								dirty ||
-								!authoringContext?.implementation ||
-								Boolean(authoringContext.openDraft && authoringContext.openDraft.state !== "COMMITTED")
-							}
-							onClick={() => onDialog("publish")}
-						>
-							构建与交付
+						<Button disabled={busy || !deliverable} onClick={() => onDialog("build")}>
+							构建
 						</Button>
 					) : null}
+					<Button disabled={busy || !deliverable} onClick={() => onDialog("release")}>
+						版本发布
+					</Button>
 					<Button disabled={busy} onClick={onRefresh}>
 						刷新状态
 					</Button>

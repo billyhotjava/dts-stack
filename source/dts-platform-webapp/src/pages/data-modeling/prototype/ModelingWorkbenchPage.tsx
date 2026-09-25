@@ -168,6 +168,7 @@ function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 	const [selectedDimensionId, setSelectedDimensionId] = useState("");
 	const [dialog, setDialog] = useState<WorkbenchDialog>(null);
 	const [batchMaterializationModels, setBatchMaterializationModels] = useState<ModelSpecView[]>([]);
+	const [listDialogMode, setListDialogMode] = useState<"build" | "release">("build");
 	const [materializationRefreshKey, setMaterializationRefreshKey] = useState(0);
 	const [loading, setLoading] = useState(true);
 	const [contextReady, setContextReady] = useState(false);
@@ -670,7 +671,14 @@ function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 					onGoToGraphDimension={goToDimensionGraph}
 					onGoToGraphModel={goToGraph}
 					onImport={navigateToReverseModeling}
-					onMaterialize={setBatchMaterializationModels}
+					onMaterialize={(items) => {
+						setListDialogMode("build");
+						setBatchMaterializationModels(items);
+					}}
+					onPublishVersion={(items) => {
+						setListDialogMode("release");
+						setBatchMaterializationModels(items);
+					}}
 					onRefresh={refresh}
 					onRemoveDimension={(item) => void removeDimension(item)}
 					onRemoveModel={(item) => void removeModel(item)}
@@ -859,13 +867,14 @@ function ModelingWorkbenchBody({ route }: { route: DataModelingRoute }) {
 				dialog={dialog}
 				model={selectedModel}
 				onClose={() => {
-					if (dialog === "publish") setMaterializationRefreshKey((current) => current + 1);
+					if (dialog === "build" || dialog === "release") setMaterializationRefreshKey((current) => current + 1);
 					setDialog(null);
 				}}
 			/>
 			{batchMaterializationModels.length ? (
 				<ModelPublishDialog
 					canMaintain={canMaintain}
+					mode={listDialogMode}
 					models={batchMaterializationModels}
 					onClose={() => {
 						setBatchMaterializationModels([]);

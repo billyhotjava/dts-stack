@@ -17,15 +17,10 @@ const STEP_LABELS: Record<ModelWizardStep, string> = {
 	definition: "模型设计",
 	implementation: "加工配置",
 	verification: "构建",
-	delivery: "发布与交付",
+	delivery: "完成",
 };
-const RESULT_LABELS = {
-	materialization: "构建",
-	quality: "质量检查",
-	publication: "发布",
-	catalog: "资产登记",
-	analysis: "分析准备",
-};
+// F15: the wizard reports only the build; registration, quality, publication and runs are handled in their own pages.
+const RESULT_LABELS: Record<string, string> = { materialization: "构建" };
 const STATE_LABELS = {
 	NOT_STARTED: "未开始",
 	WAITING_INPUT: "待完善",
@@ -118,8 +113,8 @@ export function ModelWizardFrame({
 				children
 			) : !model ? null : (
 				<>
-					<section className="dmx-wizard-results" aria-label="当前版本交付状态">
-						{delivery?.steps.filter(item => step === "delivery" || item.key === "materialization").map((item) => (
+					<section className="dmx-wizard-results" aria-label="当前版本构建结果">
+						{delivery?.steps.filter(item => item.key === "materialization").map((item) => (
 							<div key={item.key}>
 								<strong>{RESULT_LABELS[item.key]}</strong>
 								<Status tone={item.state === "SUCCEEDED" ? "success" : item.state === "FAILED" ? "danger" : "neutral"}>
@@ -134,12 +129,11 @@ export function ModelWizardFrame({
 					{step === "delivery" || completed ? (
 						<section className="dmx-wizard-completion" aria-label={completed ? "建模完成" : "历史交付结果"}>
 							<h3>{completed ? "建模已完成" : "历史交付结果"}</h3>
-							<p>{completed ? `当前版本已构建到 ${delivery?.modelingResult?.targetRelation || "目标表"}。` : "此页保留交付结果回看，资产治理和发布请进入数据管理。"}</p>
+							<p>{completed ? `当前版本已构建到 ${delivery?.modelingResult?.targetRelation || "目标表"}。资产登记、质量与版本发布按需在各自功能中办理。` : "当前版本尚未完成构建。"}</p>
 							<div className="dmx-dialog-actions">
 								<Button primary onClick={onBack}>返回模型列表</Button>
-								<Link className="dmx-wizard-completion__link" to={buildModelDataManagementUrl({ modelSpecId: model.id, environment, candidateId: delivery?.candidate?.id, returnTo: buildModelWorkbenchReturnUrl(model.id, environment, step) })}>去数据管理</Link>
 								{completed ? (
-									<Link className="dmx-wizard-completion__link" to={buildModelDataManagementUrl({ modelSpecId: model.id, environment, candidateId: delivery?.candidate?.id, focus: "quality", returnTo: buildModelWorkbenchReturnUrl(model.id, environment, step) })}>配置质量规则</Link>
+									<Link className="dmx-wizard-completion__link" to={buildModelDataManagementUrl({ modelSpecId: model.id, environment, candidateId: delivery?.candidate?.id, returnTo: buildModelWorkbenchReturnUrl(model.id, environment, step) })}>查看数据资产</Link>
 								) : null}
 							</div>
 						</section>

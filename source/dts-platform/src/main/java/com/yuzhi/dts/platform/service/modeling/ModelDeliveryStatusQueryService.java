@@ -12,9 +12,16 @@ import com.yuzhi.dts.platform.service.modeling.authoring.ModelAuthoringContract.
 import com.yuzhi.dts.platform.service.modeling.authoring.ModelAuthoringDraftService;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticSyncCommandService;
 import com.yuzhi.dts.platform.service.modeling.serving.CatalogModelSemanticSyncCommandService.ServingSyncView;
+import com.yuzhi.dts.platform.repository.modeling.ModelPublishedReleaseReadRepository;
+import com.yuzhi.dts.platform.repository.modeling.ModelPublishedReleaseReadRepository.PublishedRelease;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.annotation.Propagation;
@@ -27,6 +34,8 @@ public class ModelDeliveryStatusQueryService {
     private final ModelAuthoringDraftService authoring;
     private final CatalogModelSemanticSyncCommandService serving;
     private final CandidateQualityRuleContextService qualityContexts;
+    private final ModelPublishedReleaseReadRepository publishedReleases;
+    private static final Logger LOG = LoggerFactory.getLogger(ModelDeliveryStatusQueryService.class);
 
     public ModelDeliveryStatusQueryService(
         ModelSpecApplicationService models,
@@ -35,17 +44,74 @@ public class ModelDeliveryStatusQueryService {
         CatalogModelSemanticSyncCommandService serving,
         CandidateQualityRuleContextService qualityContexts
     ) {
+        this(models, candidates, authoring, serving, qualityContexts, null);
+    }
+
+    @Autowired
+    public ModelDeliveryStatusQueryService(
+        ModelSpecApplicationService models,
+        ModelReleaseCandidateApplicationService candidates,
+        ModelAuthoringDraftService authoring,
+        CatalogModelSemanticSyncCommandService serving,
+        CandidateQualityRuleContextService qualityContexts,
+        ModelPublishedReleaseReadRepository publishedReleases
+    ) {
         this.models = models;
         this.candidates = candidates;
         this.authoring = authoring;
         this.serving = serving;
         this.qualityContexts = qualityContexts;
+        this.publishedReleases = publishedReleases;
     }
 
-    // Readers own their short transactions. Holding one here while quality/default-lake
-    // reads suspend it and acquire another connection can exhaust the pool per page.
+    /**
+     * F15 K1: build and publication summaries for one workbench page. Reads only the model, its implementation
+     * and release-candidate ledgers plus the local release history; never quality contexts or serving sync, so a
+     * quality or analysis outage cannot break the modeling list. A row that cannot be read fails alone.
+     */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public DeliveryStatusView get(String tenantId, String actorId, UUID modelSpecId, String environment, UUID candidateId) {
+    public List<WorkbenchSummaryView> workbenchSummaries(String tenantId, String actorId, List<UUID> modelSpecIds, String environment) {
+        if (modelSpecIds == null || modelSpecIds.isEmpty()) return List.of();
+        List<UUID> ids = modelSpecIds.stream().distinct().toList();
+        if (ids.size() > ModelPublishedReleaseReadRepository.MAX_MODELS) {
+            throw new ModelSpecException("MODEL_WORKBENCH_SUMMARY_TOO_MANY", "At most " + ModelPublishedReleaseReadRepository.MAX_MODELS + " models per request", ModelSpecException.Kind.BAD_REQUEST);
+        }
+        Map<UUID, PublishedRelease> published = Map.of();
+        String publishedReadState = "OK";
+        if (publishedReleases != null) {
+            try {
+                published = publishedReleases.latestPublished(tenantId, ids);
+            } catch (RuntimeException unavailable) {
+                publishedReadState = "FAILED";
+                LOG.warn("event=model_workbench_published_read_failed count={} failureType={}", ids.size(), unavailable.getClass().getSimpleName());
+            }
+        }
+        List<WorkbenchSummaryView> rows = new ArrayList<>(ids.size());
+        for (UUID id : ids) {
+            PublishedRelease release = published.get(id);
+            PublishedReleaseView releaseView = release == null ? null
+                : new PublishedReleaseView(release.releaseId(), release.modelRevision(), release.environment(), release.publishedAt());
+            try {
+                Selection selection = select(tenantId, actorId, id, environment, null);
+                ModelSpecView model = selection.model();
+                rows.add(new WorkbenchSummaryView(model.id(), model.revision(), model.checksum(), "OK", null,
+                    modelingResult(model, selection.authoringContext(), selection.candidate(), selection.workspace(), selection.entry(), selection.current(), environment),
+                    publishedReadState, releaseView));
+            } catch (ModelSpecException | ModelReleaseCandidateException failure) {
+                String code = failure instanceof ModelSpecException spec ? spec.code() : ((ModelReleaseCandidateException) failure).code();
+                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", code, null, publishedReadState, releaseView));
+            } catch (RuntimeException failure) {
+                LOG.warn("event=model_workbench_summary_read_failed modelSpecId={} failureType={}", id, failure.getClass().getSimpleName());
+                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", "MODEL_WORKBENCH_SUMMARY_UNAVAILABLE", null, publishedReadState, releaseView));
+            }
+        }
+        return List.copyOf(rows);
+    }
+
+    private record Selection(ModelSpecView model, AuthoringContextView authoringContext, WorkbenchView workspace,
+        CandidateView candidate, EntryView entry, boolean current) {}
+
+    private Selection select(String tenantId, String actorId, UUID modelSpecId, String environment, UUID candidateId) {
         ModelSpecView model = models.get(tenantId, modelSpecId);
         AuthoringContextView authoringContext = authoring.context(tenantId, actorId, modelSpecId, null, null, true);
         WorkbenchView workspace = candidateId == null ? candidates.workspaceForCurrentModel(
@@ -63,9 +129,22 @@ public class ModelDeliveryStatusQueryService {
             throw new ModelReleaseCandidateException("MODEL_DELIVERY_STATUS_CANDIDATE_SCOPE_NOT_FOUND", "Release candidate does not belong to this model", ModelReleaseCandidateException.Kind.NOT_FOUND);
         }
         if (candidateId == null && entry == null && candidate != null) { candidate = null; workspace = null; }
-        CandidateView selectedCandidate = candidate;
         boolean modelCurrent = entry != null && entry.revision() == model.revision() && entry.checksum().equals(model.checksum()) && entry.planId().equals(model.planId());
         boolean current = modelCurrent && implementationMatches(entry, workspace, authoringContext);
+        return new Selection(model, authoringContext, workspace, candidate, entry, current);
+    }
+
+    // Readers own their short transactions. Holding one here while quality/default-lake
+    // reads suspend it and acquire another connection can exhaust the pool per page.
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public DeliveryStatusView get(String tenantId, String actorId, UUID modelSpecId, String environment, UUID candidateId) {
+        Selection selection = select(tenantId, actorId, modelSpecId, environment, candidateId);
+        ModelSpecView model = selection.model();
+        AuthoringContextView authoringContext = selection.authoringContext();
+        WorkbenchView workspace = selection.workspace();
+        EntryView entry = selection.entry();
+        CandidateView selectedCandidate = selection.candidate();
+        boolean current = selection.current();
         List<DeliveryAction> allowed = selectedCandidate == null ? List.of() : nullSafe(candidates.allowedActionsForRead(tenantId, actorId, model.planId(), selectedCandidate.id()));
         List<ActionView> deliveryActions = allowed.stream().map(action -> candidateAction(action, selectedCandidate)).toList();
         List<ActionView> workspaceActions = nullSafe(workspace == null ? null : workspace.allowedActions()).stream()
@@ -321,6 +400,9 @@ public class ModelDeliveryStatusQueryService {
             candidate == null ? null : candidate.id(), evidence == null ? null : evidence.pipelineRunGroupId(),
             evidence == null ? null : evidence.targetRelation(), matches, evidence == null ? null : evidence.observedAt());
     }
+    public record PublishedReleaseView(UUID releaseId, int modelRevision, String environment, Instant publishedAt) {}
+    public record WorkbenchSummaryView(UUID modelSpecId, int modelRevision, String modelChecksum, String readState, String reasonCode,
+        ModelingResultView build, String publishedReadState, PublishedReleaseView published) {}
     public record ModelingResultView(String state, String reasonCode, UUID modelSpecId, int modelRevision, String modelChecksum,
         Integer implementationRevision, String implementationChecksum, String buildMode, String environment, UUID candidateId,
         UUID runGroupId, String targetRelation, boolean matchesCurrentTarget, Instant observedAt) {}

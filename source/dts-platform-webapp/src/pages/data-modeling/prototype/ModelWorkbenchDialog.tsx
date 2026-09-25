@@ -31,7 +31,8 @@ import { normalizeModelingRequestFailure } from "./services/planningProjectionSe
 
 export type WorkbenchDialog =
 	| "association"
-	| "publish"
+	| "build"
+	| "release"
 	| "versions"
 	| "releases"
 	| "logs"
@@ -63,7 +64,7 @@ export function ModelWorkbenchDialog({
 	const [failure, setFailure] = useState<{ kind: "permission" | "request"; message: string } | null>(null);
 
 	const load = useCallback(async () => {
-		if (!dialog || !model || dialog === "publish" || dialog === "preview" || dialog === "advanced") return;
+		if (!dialog || !model || dialog === "build" || dialog === "release" || dialog === "preview" || dialog === "advanced") return;
 		setLoading(true);
 		setFailure(null);
 		try {
@@ -87,7 +88,8 @@ export function ModelWorkbenchDialog({
 	}, [load]);
 
 	if (!dialog || !model) return null;
-	if (dialog === "publish") return <ModelPublishDialog canMaintain={canMaintain} models={[model]} onClose={onClose} />;
+	if (dialog === "build" || dialog === "release")
+		return <ModelPublishDialog canMaintain={canMaintain} mode={dialog} models={[model]} onClose={onClose} />;
 	if (dialog === "preview") return <PhysicalPreviewDialog canMaintain={canMaintain} model={model} onClose={onClose} />;
 	if (dialog === "advanced") return null;
 
@@ -131,7 +133,7 @@ function DialogContent({
 	model,
 	payload,
 }: {
-	dialog: Exclude<WorkbenchDialog, "publish" | "preview" | null>;
+	dialog: Exclude<WorkbenchDialog, "build" | "release" | "preview" | null>;
 	model: ModelSpecView;
 	payload: DialogPayload | null;
 }) {

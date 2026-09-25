@@ -1,7 +1,6 @@
-import { Space } from "antd";
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
+import { getModelWorkbenchSummaries, type ModelWorkbenchSummary } from "@/api/modelDeliveryStatusApi";
 import {
 	listModelWorkbenchCatalogPage,
 	type ModelWorkbenchCatalogEntry,
@@ -11,10 +10,9 @@ import type { CatalogDomain } from "@/api/services/catalogDomainService";
 import { actionColumn, type CompactColumns, CompactTable } from "@/components/table";
 import type { DimensionDefinitionView } from "@/features/modeling/contracts/dimensionDefinitionContract";
 import type { ModelSpecLayer, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
-import { useRouter } from "@/routes/hooks";
 import { statusLabel } from "@/utils/customerDisplayLabels";
-import { ModelDeliveryStatusCell, resolveModelDeliveryCell } from "./ModelDeliveryStatusCell";
 import { ModelWorkbenchCreateMenu } from "./ModelWorkbenchCreateMenu";
+import { ModelBuildSummaryCell, ModelPublishedSummaryCell } from "./ModelWorkbenchSummaryCells";
 import { Button, RequestState, Status } from "./PrototypePrimitives";
 import type { ModelCreateKind } from "./services/modelWorkbenchService";
 import { useModelAccess } from "./useModelingAccess";
@@ -31,7 +29,7 @@ const MODEL_TYPE_LABEL: Record<string, string> = {
 
 const PAGE_SIZE = 10;
 /** Rows whose delivery is still running are re-read on this cadence; settled rows are not. */
-const RUNNING_DELIVERY_REFRESH_MS = 10000;
+const RUNNING_BUILD_REFRESH_MS = 10000;
 
 type CatalogRow = {
 	id: string;
@@ -68,6 +66,8 @@ export type ModelWorkbenchCatalogListProps = {
 	onGoToGraphModel: (model: ModelSpecView) => void;
 	onImport: () => void;
 	onMaterialize: (models: ModelSpecView[]) => void;
+	/** F15: version publication is its own dialog, separate from building. */
+	onPublishVersion: (models: ModelSpecView[]) => void;
 	onRefresh: () => void;
 	onRemoveDimension: (dimension: DimensionDefinitionView) => void;
 	onRemoveModel: (model: ModelSpecView) => void;
@@ -91,6 +91,7 @@ export function ModelWorkbenchCatalogList({
 	onGoToGraphModel,
 	onImport,
 	onMaterialize,
+	onPublishVersion,
 	onRefresh,
 	onRemoveDimension,
 	onRemoveModel,
@@ -100,7 +101,6 @@ export function ModelWorkbenchCatalogList({
 		() => (permissions.isError ? {} : permissions.data || {}),
 		[permissions.data, permissions.isError],
 	);
-	const router = useRouter();
 	const [createOpen, setCreateOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [planFilter, setPlanFilter] = useState("");
@@ -113,12 +113,11 @@ export function ModelWorkbenchCatalogList({
 	const [catalogLoading, setCatalogLoading] = useState(true);
 	const [compatibilityFallback, setCompatibilityFallback] = useState(false);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
-	const [deliveryResult, setDeliveryResult] = useState<{
+	const [summaryResult, setSummaryResult] = useState<{
 		identity: string;
-		data: Map<string, ModelDeliveryStatus>;
-		failed: Set<string>;
-		pending: Set<string>;
-	}>({ identity: "", data: new Map(), failed: new Set(), pending: new Set() });
+		data: Map<string, ModelWorkbenchSummary>;
+		loading: boolean;
+	}>({ identity: "", data: new Map(), loading: false });
 	const [runningRefreshTick, setRunningRefreshTick] = useState(0);
 	const domainById = useMemo(() => new Map(domains.map((domain) => [domain.id, domain.name])), [domains]);
 	const modelById = useMemo(() => new Map(models.map((model) => [model.id, model])), [models]);
@@ -284,91 +283,72 @@ export function ModelWorkbenchCatalogList({
 		.map((row) => (row.model ? `${row.model.id}:${row.model.revision}:${row.model.checksum}` : ""))
 		.filter(Boolean)
 		.join(",");
-	const deliveryByModel =
-		deliveryResult.identity === pageModelIdsKey ? deliveryResult.data : new Map<string, ModelDeliveryStatus>();
-	const deliveryFailure = deliveryResult.identity === pageModelIdsKey ? deliveryResult.failed : new Set<string>();
-	const deliveryLoading =
-		deliveryResult.identity === pageModelIdsKey
-			? deliveryResult.pending
-			: new Set(pageRows.flatMap((row) => (row.model ? [row.model.id] : [])));
-	// biome-ignore lint/correctness/useExhaustiveDependencies: refresh delivery facts when model revisions change, even when page IDs stay the same.
+	// F15 K1: one bounded summary call per page; never the per-row delivery aggregation that also reads
+	// quality and serving, so their outages cannot slow down or break the modeling list.
+	const summaryByModel =
+		summaryResult.identity === pageModelIdsKey ? summaryResult.data : new Map<string, ModelWorkbenchSummary>();
+	const summaryLoading = summaryResult.identity !== pageModelIdsKey || summaryResult.loading;
+	const runningBuildIds = Array.from(summaryByModel.values())
+		.filter((summary) => summary.build?.state === "RUNNING")
+		.map((summary) => summary.modelSpecId)
+		.sort()
+		.join(",");
+	// biome-ignore lint/correctness/useExhaustiveDependencies: refresh summaries when revisions change, and re-arm while a build runs.
 	useEffect(() => {
 		const modelSpecIds = pageModelIdsKey
 			.split(",")
 			.map((item) => item.split(":")[0])
 			.filter(Boolean);
+		if (!modelSpecIds.length) {
+			setSummaryResult({ identity: pageModelIdsKey, data: new Map(), loading: false });
+			return;
+		}
 		const controller = new AbortController();
 		let active = true;
-		let next = 0;
-		setDeliveryResult({
-			identity: pageModelIdsKey,
-			data: new Map(),
-			failed: new Set(),
-			pending: new Set(modelSpecIds),
-		});
-		const worker = async () => {
-			while (active && next < modelSpecIds.length) {
-				const id = modelSpecIds[next++];
-				let status: ModelDeliveryStatus | undefined;
+		const polling = runningRefreshTick > 0;
+		if (!polling) setSummaryResult({ identity: pageModelIdsKey, data: new Map(), loading: true });
+		const timer = setTimeout(
+			async () => {
+				let rows: ModelWorkbenchSummary[] | null = null;
 				try {
-					status = await getModelDeliveryStatus(id, undefined, undefined, controller.signal);
+					rows = await getModelWorkbenchSummaries(modelSpecIds, undefined, controller.signal);
 				} catch {
-					// Failure belongs to this row only; successful rows remain usable.
+					// Keep the last known rows; each cell shows its own read state.
 				}
 				if (!active) return;
-				const resolved = status;
-				setDeliveryResult((previous) => {
-					if (previous.identity !== pageModelIdsKey) return previous;
-					const data = new Map(previous.data);
-					const failed = new Set(previous.failed);
-					const pending = new Set(previous.pending);
-					pending.delete(id);
-					if (resolved) data.set(id, resolved);
-					else failed.add(id);
-					return { identity: pageModelIdsKey, data, failed, pending };
+				setSummaryResult((previous) => {
+					const data =
+						previous.identity === pageModelIdsKey ? new Map(previous.data) : new Map<string, ModelWorkbenchSummary>();
+					for (const row of rows || []) data.set(row.modelSpecId, row);
+					if (!rows)
+						for (const id of modelSpecIds)
+							if (!data.has(id))
+								data.set(id, {
+									modelSpecId: id,
+									modelRevision: 0,
+									modelChecksum: null,
+									readState: "FAILED",
+									reasonCode: "MODEL_WORKBENCH_SUMMARY_UNAVAILABLE",
+									build: null,
+									publishedReadState: "FAILED",
+									published: null,
+								});
+					return { identity: pageModelIdsKey, data, loading: false };
 				});
-			}
-		};
-		void worker();
-		void worker();
-		return () => {
-			active = false;
-			controller.abort();
-		};
-	}, [pageModelIdsKey, models]);
-
-	const runningDeliveryIds = Array.from(deliveryByModel.entries())
-		.filter(([, status]) => status.steps.some((step) => step.state === "RUNNING"))
-		.map(([id]) => id)
-		.sort()
-		.join(",");
-	// biome-ignore lint/correctness/useExhaustiveDependencies: runningRefreshTick re-arms the timer after every pass.
-	useEffect(() => {
-		if (!runningDeliveryIds) return;
-		const controller = new AbortController();
-		let active = true;
-		const timer = setTimeout(async () => {
-			for (const id of runningDeliveryIds.split(",")) {
-				try {
-					const status = await getModelDeliveryStatus(id, undefined, undefined, controller.signal);
-					if (!active) return;
-					setDeliveryResult((previous) =>
-						previous.identity !== pageModelIdsKey
-							? previous
-							: { ...previous, data: new Map(previous.data).set(id, status) },
-					);
-				} catch {
-					// Keep the last known row state; the next pass retries.
-				}
-			}
-			if (active) setRunningRefreshTick((tick) => tick + 1);
-		}, RUNNING_DELIVERY_REFRESH_MS);
+			},
+			polling ? RUNNING_BUILD_REFRESH_MS : 0,
+		);
 		return () => {
 			active = false;
 			clearTimeout(timer);
 			controller.abort();
 		};
-	}, [runningDeliveryIds, pageModelIdsKey, runningRefreshTick]);
+	}, [pageModelIdsKey, models, runningRefreshTick]);
+	useEffect(() => {
+		if (!runningBuildIds || summaryResult.loading) return;
+		const timer = setTimeout(() => setRunningRefreshTick((tick) => tick + 1), RUNNING_BUILD_REFRESH_MS);
+		return () => clearTimeout(timer);
+	}, [runningBuildIds, summaryResult]);
 
 	const totalElements = compatibilityFallback ? filteredLocalRows.length : catalogPage?.totalElements || 0;
 	const pageCount = Math.max(1, compatibilityFallback ? localPageCount : catalogPage?.totalPages || 0);
@@ -454,68 +434,31 @@ export function ModelWorkbenchCatalogList({
 				render: (value: string) => domainById.get(value) || "未归属",
 			},
 			{
-				title: "状态",
-				dataIndex: "status",
-				render: (value: string) => <Status tone={value === "DRAFT" ? "warning" : "info"}>{statusLabel(value)}</Status>,
+				title: "当前设计版本",
+				key: "design-revision",
+				render: (_, row) => (
+					<>
+						<strong>r{row.revision}</strong>{" "}
+						<Status tone={row.status === "DRAFT" ? "warning" : "info"}>{statusLabel(row.status)}</Status>
+					</>
+				),
 			},
 			{
-				title: "版本",
-				dataIndex: "revision",
-				render: (value: number) => `r${value}`,
-			},
-			{
-				title: "构建状态",
-				key: "materialization",
+				title: "最近构建结果",
+				key: "latest-build",
 				render: (_, row) =>
 					row.model ? (
-						<ModelDeliveryStatusCell
-							model={row.model}
-							status={deliveryByModel.get(row.model.id)}
-							kind="materialization"
-							loading={deliveryLoading.has(row.model.id)}
-							failed={deliveryFailure.has(row.model.id)}
-						/>
+						<ModelBuildSummaryCell loading={summaryLoading} summary={summaryByModel.get(row.model.id)} />
 					) : (
 						"不适用"
 					),
 			},
 			{
-				title: "目录登记",
-				key: "catalog-registration",
-				render: (_, row) => {
-					if (!row.model) return "不适用";
-					const delivery = deliveryByModel.get(row.model.id);
-					const assetId = resolveModelDeliveryCell(row.model, delivery, "catalog").assetId;
-					return (
-						<Space size={4}>
-							<ModelDeliveryStatusCell
-								model={row.model}
-								status={delivery}
-								kind="catalog"
-								loading={deliveryLoading.has(row.model.id)}
-								failed={deliveryFailure.has(row.model.id)}
-							/>
-							{assetId ? (
-								<Button onClick={() => router.push(`/catalog/datasets/${encodeURIComponent(assetId)}`)} type="text">
-									查看资产
-								</Button>
-							) : null}
-						</Space>
-					);
-				},
-			},
-			{
-				title: "分析准备",
-				key: "analysis-preparation",
+				title: "已发布版本",
+				key: "published-version",
 				render: (_, row) =>
 					row.model ? (
-						<ModelDeliveryStatusCell
-							model={row.model}
-							status={deliveryByModel.get(row.model.id)}
-							kind="analysis"
-							loading={deliveryLoading.has(row.model.id)}
-							failed={deliveryFailure.has(row.model.id)}
-						/>
+						<ModelPublishedSummaryCell loading={summaryLoading} summary={summaryByModel.get(row.model.id)} />
 					) : (
 						"不适用"
 					),
@@ -537,7 +480,7 @@ export function ModelWorkbenchCatalogList({
 					},
 					{
 						key: "materialize",
-						label: row.model && deliveryByModel.has(row.model.id) ? "构建历史 / 再次构建" : "构建详情",
+						label: "构建",
 						hidden: !row.model,
 						disabled:
 							busy ||
@@ -546,6 +489,13 @@ export function ModelWorkbenchCatalogList({
 							!objectAccess[row.id]?.canEdit ||
 							row.model?.status === "ARCHIVED",
 						onClick: () => onMaterialize([row.model as ModelSpecView]),
+					},
+					{
+						key: "publish-version",
+						label: "版本发布",
+						hidden: !row.model,
+						disabled: busy || !detailsReady || row.model?.status === "ARCHIVED",
+						onClick: () => onPublishVersion([row.model as ModelSpecView]),
 					},
 					{
 						key: "model-remove",
@@ -602,17 +552,16 @@ export function ModelWorkbenchCatalogList({
 			detailsReady,
 			canMaintain,
 			domainById,
-			deliveryByModel,
-			deliveryFailure,
-			deliveryLoading,
+			summaryByModel,
+			summaryLoading,
 			onCloneDimension,
 			onGoToGraphDimension,
 			onGoToGraphModel,
 			onMaterialize,
+			onPublishVersion,
 			onArchiveModel,
 			onRemoveDimension,
 			onRemoveModel,
-			router,
 			selectedIds,
 			selectedPlanId,
 			toggleModel,
