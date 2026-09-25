@@ -1251,7 +1251,7 @@ describe("release and materialization dispatch", () => {
 		expect(container.textContent).toContain("发布流程");
 		expect(container.textContent).toContain("工程验证");
 		expect(container.textContent).toContain("治理数据质量");
-		expect(container.textContent).toContain("发布登记");
+		expect(container.textContent).toContain("确认发布");
 		expect(container.textContent).toContain("无需另行审批");
 		expect(container.textContent).not.toContain("发布评审");
 		expect(container.textContent).toContain("提交人：model-owner");
@@ -1897,7 +1897,7 @@ describe("model-scoped historical release workspace", () => {
 		await flush();
 		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(model.id, "dev");
 		expect(apiMocks.getWorkbench).not.toHaveBeenCalled();
-		expect(container.textContent).toContain("PUBLISHED · v7");
+		expect(button("回滚发布")).toBeDefined();
 		await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
 		await flush();
 		expect(button("回滚发布")).toBeDefined();
@@ -1929,13 +1929,16 @@ describe("model-scoped historical release workspace", () => {
 		});
 		await flush();
 		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(model.id, "prod");
-		expect(container.textContent).toContain("PUBLISHED · v9");
+		expect(button("回滚发布")).toBeDefined();
 		await act(async () =>
 			resolveDev(deliveryStatusFor(workspace(["PUBLISH"], candidate("BATCH_WORKBENCH", "APPROVED")))),
 		);
 		await flush();
-		expect(container.textContent).toContain("PUBLISHED · v9");
-		expect(container.textContent).not.toContain("APPROVED · v4");
+		expect(button("回滚发布")).toBeDefined();
+		expect(button("确认发布")).toBeUndefined();
+        await act(async () => button("回滚发布")?.click());
+        expect(apiMocks.rollbackCandidate).toHaveBeenCalledWith(model.planId, current, "idem-1", expect.any(String));
+        expect(apiMocks.previewMaterializationPlan).not.toHaveBeenCalled();
 	});
 
 	it.each(["revision", "checksum", "environment"])(

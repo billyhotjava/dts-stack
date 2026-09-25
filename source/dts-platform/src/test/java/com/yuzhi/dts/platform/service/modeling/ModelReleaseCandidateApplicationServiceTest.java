@@ -177,17 +177,14 @@ class ModelReleaseCandidateApplicationServiceTest {
     }
 
     @Test
-    void emptyDraftExposesScopeEditingButNeverStartBuild() {
+    void emptyDraftCannotOfferCommandsWithoutAnAuthorizedModelScope() {
         CandidateView candidate = candidate(DeliveryStatus.DRAFT, List.of());
         when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(candidate));
 
         var view = service.workspace(TENANT, ACTOR, PLAN_ID);
 
         assertThat(view.state()).isEqualTo(WorkbenchState.EMPTY);
-        assertThat(view.allowedActions()).containsExactly(
-            WorkspaceAction.UPDATE_SCOPE,
-            WorkspaceAction.CANCEL_CANDIDATE
-        );
+        assertThat(view.allowedActions()).isEmpty();
         assertThat(view.primaryBlocker().code()).isEqualTo(ModelReleaseCandidateContract.SCOPE_EMPTY_ERROR_CODE);
         assertThat(view.etag()).isEqualTo("\"release-candidate:" + CANDIDATE_ID + ":4\"");
     }
@@ -1141,7 +1138,7 @@ class ModelReleaseCandidateApplicationServiceTest {
     }
 
     @Test
-    void cancelledEmptyCandidateOffersReplacementWithoutReopeningIt() {
+    void cancelledEmptyCandidateRemainsReadOnlyWithoutAnAuthorizedModelScope() {
         CandidateView cancelled = candidate(DeliveryStatus.CANCELLED, List.of());
         when(repository.listForWorkbench(TENANT, PLAN_ID)).thenReturn(List.of(cancelled));
 
@@ -1149,7 +1146,7 @@ class ModelReleaseCandidateApplicationServiceTest {
 
         assertThat(view.state()).isEqualTo(WorkbenchState.BLOCKED);
         assertThat(view.primaryBlocker().code()).isEqualTo("MODEL_RELEASE_CANDIDATE_REPLACEMENT_REQUIRED");
-        assertThat(view.allowedActions()).containsExactly(WorkspaceAction.CREATE_REPLACEMENT_CANDIDATE);
+        assertThat(view.allowedActions()).isEmpty();
     }
 
     @Test
