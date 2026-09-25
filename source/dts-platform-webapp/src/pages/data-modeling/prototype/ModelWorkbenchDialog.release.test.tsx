@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
@@ -136,6 +136,7 @@ vi.mock("@/api/dbtImplementationDraftApi", () => ({
 vi.mock("react-router", async (importOriginal) => ({
 	...(await importOriginal<typeof import("react-router")>()),
 	useNavigate: () => vi.fn(),
+	Link: ({ to, children }: { to: string; children: ReactNode }) => <a href={to}>{children}</a>,
 }));
 
 const routerPush = vi.hoisted(() => vi.fn());
@@ -400,7 +401,7 @@ describe("release and materialization dispatch", () => {
 			implementation: { ...implementation, ownership: "DBT_MANAGED", inputMode: "GENERATED", inputs: [input] },
 			artifacts: [], events: [],
 		});
-		await act(async () => root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />));
+		await act(async () => root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />));
 		await flush();
 		await act(async () => button("创建并运行")?.click());
 		expect(apiMocks.startBuildIntent).toHaveBeenCalledWith(model, "idem-1", {
@@ -417,7 +418,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.lockCandidate.mockResolvedValue({ candidate: created });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("创建并运行")?.click());
@@ -448,7 +449,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.compileLifecycle.mockRejectedValue(new Error("当前模型代码编译失败"));
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("创建并运行")?.click());
@@ -476,7 +477,7 @@ describe("release and materialization dispatch", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 
@@ -505,7 +506,7 @@ describe("release and materialization dispatch", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("创建并运行")?.click());
@@ -547,7 +548,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.getLifecycle.mockResolvedValue({ implementation: null, artifacts: [], events: [] });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("创建并运行")?.click());
@@ -563,7 +564,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.retryCandidate.mockResolvedValue({ candidate: failed });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("重试构建")?.click());
@@ -595,7 +596,7 @@ describe("release and materialization dispatch", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 
@@ -615,7 +616,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.abandonBuild.mockResolvedValue({ candidate: candidate("BATCH_WORKBENCH", "BUILD_FAILED") });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 
@@ -636,7 +637,7 @@ describe("release and materialization dispatch", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("放弃本次构建")?.click());
@@ -654,7 +655,7 @@ describe("release and materialization dispatch", () => {
 			const building = candidate("BATCH_WORKBENCH", "BUILDING");
 			apiMocks.getWorkbench.mockResolvedValue(workspace([], building));
 			await act(async () =>
-				root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+				root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 			);
 			await flush();
 			apiMocks.getWorkbench.mockRejectedValueOnce(new Error("network down"));
@@ -681,7 +682,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.getWorkbench.mockResolvedValue(workspace([], building));
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 
@@ -697,7 +698,7 @@ describe("release and materialization dispatch", () => {
 			apiMocks.getWorkbench.mockResolvedValue(workspace([], building));
 
 			await act(async () =>
-				root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+				root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 			);
 			await flush();
 			const initialReads = apiMocks.getWorkbench.mock.calls.length;
@@ -743,7 +744,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.rematerializeCandidate.mockResolvedValue({ candidate: built });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 
@@ -784,7 +785,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.rematerializeCandidate.mockResolvedValue({ candidate: built });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("重新构建")?.click());
@@ -847,7 +848,7 @@ describe("release and materialization dispatch", () => {
 		]);
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 
@@ -892,7 +893,7 @@ describe("release and materialization dispatch", () => {
 					],
 				},
 			});
-			await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+			await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
 			await flush();
 			for (const text of [
 				"candidate-specific-asset",
@@ -918,7 +919,7 @@ describe("release and materialization dispatch", () => {
 				expect(container.querySelector('a[href*="candidate-quality-run"]')).toBeNull();
 			}
 			if (matching) {
-				await act(async () => root.render(<ModelPublishDialog canMaintain models={[secondModel]} onClose={vi.fn()} />));
+				await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[secondModel]} onClose={vi.fn()} />));
 				await flush();
 				expect(container.textContent).not.toContain("candidate-quality-run");
 				expect(container.textContent).not.toContain("1/1 项记录已通过");
@@ -1111,7 +1112,7 @@ describe("release and materialization dispatch", () => {
 		);
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("按新修订重新构建")?.click());
@@ -1159,7 +1160,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.createReplacementCandidate.mockRejectedValue(new Error("替代发布单创建失败"));
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("按新修订重新构建")?.click());
@@ -1178,10 +1179,9 @@ describe("release and materialization dispatch", () => {
 		apiMocks.publishCandidate.mockResolvedValue({ candidate: approved });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("发布模型")?.click());
 		await act(async () => button("确认发布")?.click());
 
 		expect(apiMocks.publishCandidate).toHaveBeenCalledWith(model.planId, approved, "idem-1", "从模型工作台发布");
@@ -1207,10 +1207,9 @@ describe("release and materialization dispatch", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("发布模型")?.click());
 
 		expect(container.textContent).toContain("资产登记结果");
 		expect(container.textContent).toContain("资产已登记");
@@ -1224,10 +1223,9 @@ describe("release and materialization dispatch", () => {
 		apiMocks.startPublicationIntent.mockResolvedValue({ candidateId: built.id });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("发布模型")?.click());
 		await act(async () => button("运行工程验证")?.click());
 
 		expect(apiMocks.startPublicationIntent).toHaveBeenCalledWith(model.id, built, "idem-1", "从模型工作台发布");
@@ -1251,10 +1249,9 @@ describe("release and materialization dispatch", () => {
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["PUBLISH"], reviewPending));
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("发布模型")?.click());
 
 		expect(container.textContent).toContain("发布流程");
 		expect(container.textContent).toContain("工程验证");
@@ -1282,7 +1279,7 @@ describe("release and materialization dispatch", () => {
 		});
 		apiMocks.publishCandidate.mockResolvedValue({ candidate: { ...passed, status: "PUBLISHED" } });
 
-		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+		await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
 		await flush();
 
 		const header = container.querySelector('[aria-label="当前发布进度"]');
@@ -1325,10 +1322,9 @@ describe("release and materialization dispatch", () => {
 		} as PlanExecutionWorkspace);
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("发布模型")?.click());
 
 		expect(apiMocks.getExecutionWorkspace).toHaveBeenCalledWith(model.planId);
 		expect(container.textContent).toContain("发布登记已完成");
@@ -1365,16 +1361,15 @@ describe("release and materialization dispatch", () => {
 		} as PlanExecutionWorkspace);
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("发布模型")?.click());
 
 		expect(container.textContent).toContain("上线完成");
 		expect(container.textContent).toContain("关系健康");
 	});
 
-	it("lets the data owner run an online manual binding to produce operational relation evidence", async () => {
+	it("sends the data owner to 调度计划 to run an online binding instead of running from the release dialog", async () => {
 		const published = {
 			...candidate("BATCH_WORKBENCH", "PUBLISHED"),
 			environment: "dev",
@@ -1413,16 +1408,16 @@ describe("release and materialization dispatch", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("发布模型")?.click());
-		await act(async () => button("立即运行并核验")?.click());
 
-		expect(apiMocks.runExecutionNow).toHaveBeenCalledWith(model.planId, "binding-1", "idem-1");
+		expect(button("立即运行并核验")).toBeUndefined();
+		expect(apiMocks.runExecutionNow).not.toHaveBeenCalled();
+		expect(container.querySelector(`a[href="/ops/instances?tab=schedule&planId=${model.planId}"]`)).not.toBeNull();
 	});
 
-	it("keeps the published execution binding operable when a newer draft candidate occupies the plan workspace", async () => {
+	it("leaves deployment repair to 调度计划 when a newer draft candidate occupies the plan workspace", async () => {
 		const draft = {
 			...candidate("BATCH_WORKBENCH", "DRAFT"),
 			environment: "dev",
@@ -1477,20 +1472,18 @@ describe("release and materialization dispatch", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={publishedModel} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={publishedModel} onClose={vi.fn()} />),
 		);
 		await flush();
 
 		expect(apiMocks.getExecutionWorkspace).toHaveBeenCalledWith(model.planId);
-		expect(button("修复部署")?.disabled).toBe(false);
-		await act(async () => button("修复部署")?.click());
-
-		expect(apiMocks.repairExecutionBinding).toHaveBeenCalledWith(model.planId, "binding-1", 10);
+		expect(button("修复部署")).toBeUndefined();
+		expect(apiMocks.repairExecutionBinding).not.toHaveBeenCalled();
 		expect(apiMocks.compileLifecycle).not.toHaveBeenCalled();
 		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
 	});
 
-	it("runs an unchanged published model from its existing binding instead of creating another candidate", async () => {
+	it("does not rebuild or run an unchanged published model and points to 调度计划", async () => {
 		const publishedModel = { ...model, status: "PUBLISHED" } as ModelSpecView;
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
 		apiMocks.getMaterializationStatuses.mockResolvedValue([
@@ -1546,12 +1539,13 @@ describe("release and materialization dispatch", () => {
 		});
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={publishedModel} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={publishedModel} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("再次运行并核验")?.click());
-
-		expect(apiMocks.runExecutionNow).toHaveBeenCalledWith(model.planId, "binding-1", "idem-1");
+		expect(button("再次运行并核验")).toBeUndefined();
+		expect(container.textContent).toContain("当前版本已发布且没有改动，无需重新构建");
+		expect(container.querySelector(`a[href="/ops/instances?tab=schedule&planId=${model.planId}"]`)).not.toBeNull();
+		expect(apiMocks.runExecutionNow).not.toHaveBeenCalled();
 		expect(apiMocks.compileLifecycle).not.toHaveBeenCalled();
 		expect(apiMocks.createCandidate).not.toHaveBeenCalled();
 	});
@@ -1562,10 +1556,9 @@ describe("release and materialization dispatch", () => {
 		apiMocks.approveCandidate.mockResolvedValue({ candidate: reviewPending });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain={false} dialog="publish" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain={false} dialog="release" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
-		await act(async () => button("发布模型")?.click());
 		expect(button("审核通过")?.disabled).toBe(false);
 		await act(async () => button("审核通过")?.click());
 
@@ -1587,10 +1580,9 @@ describe("release and materialization dispatch", () => {
 			apiMocks[mockName].mockResolvedValue({ candidate: current });
 
 			await act(async () =>
-				root.render(<ModelWorkbenchDialog canMaintain dialog="publish" model={model} onClose={vi.fn()} />),
+				root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
 			);
 			await flush();
-			await act(async () => button("发布模型")?.click());
 			await act(async () => button(label)?.click());
 
 			expect(apiMocks[mockName]).toHaveBeenCalledWith(model.planId, current, "idem-1", "从模型工作台发布");
@@ -1909,12 +1901,11 @@ describe("model-scoped historical release workspace", () => {
 		};
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], foreign));
 		apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(workspace(["ROLLBACK"], own)));
-		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+		await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
 		await flush();
 		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(model.id, "dev");
 		expect(apiMocks.getWorkbench).not.toHaveBeenCalled();
 		expect(container.textContent).toContain("PUBLISHED · v7");
-		await act(async () => button("发布模型")?.click());
 		expect(button("回滚发布")).toBeDefined();
 		expect(container.textContent).not.toContain("暂无发布单");
 	});
@@ -1961,9 +1952,8 @@ describe("model-scoped historical release workspace", () => {
 			if (field === "checksum") own.entries[0] = { ...own.entries[0], checksum: "older-checksum" };
 			if (field === "environment") own.environment = "test";
 			apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(workspace(["PUBLISH"], own)));
-			await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+			await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
 			await flush();
-			await act(async () => button("发布模型")?.click());
 			expect(button("确认发布")).toBeUndefined();
 			expect(apiMocks.publishCandidate).not.toHaveBeenCalled();
 		},
@@ -2003,7 +1993,6 @@ describe("model-scoped historical release workspace", () => {
 			),
 		);
 		await flush();
-		await act(async () => button("发布模型")?.click());
 		expect(button("立即运行并核验")).toBeUndefined();
 		expect(apiMocks.runExecutionNow).not.toHaveBeenCalled();
 	});
@@ -2021,12 +2010,11 @@ describe("model-scoped historical release workspace", () => {
 			deliveryStatusFor(workspace(["ROLLBACK"], candidate("BATCH_WORKBENCH", "PUBLISHED"))),
 		);
 		await act(async () =>
-			root.render(<ModelPublishDialog canMaintain models={[model, secondModel]} onClose={vi.fn()} />),
+			root.render(<ModelPublishDialog canMaintain mode="release" models={[model, secondModel]} onClose={vi.fn()} />),
 		);
 		await flush();
 		expect(apiMocks.getWorkbench).toHaveBeenCalledWith(model.planId, { environment: "dev", modelSpecIds: [model.id, secondModel.id] });
 		expect(apiMocks.getDeliveryStatus.mock.calls.every((args) => args.length === 1)).toBe(true);
-		await act(async () => button("批量发布流程")?.click());
 		expect(button("确认发布")).toBeDefined();
 		expect(button("回滚发布")).toBeUndefined();
 	});
