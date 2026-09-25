@@ -784,6 +784,7 @@
                         <testInclude>**/service/modeling/ModelAssetRegistrationInboxServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PlanExecutionDeploymentServiceTest.java</testInclude>
                         <testInclude>**/service/modeling/PlanDagDeploymentServiceTest.java</testInclude>
+                        <testInclude>**/repository/modeling/PlanExecutionIsolationPostgresTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelAssetRegistrationTaskRepositoryPostgresTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelPublishedReleaseReadRepositoryPostgresTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateQualityAssetRegistrationTaskStateTest.java</testInclude>
