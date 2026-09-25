@@ -68,6 +68,7 @@ class ModelGovernanceSecurityConfigurationTest {
 
     private static final String PATH = ModelGovernanceSecurityConfiguration.POLICY_PATH;
     private static final String ISSUER = "https://issuer.example/realms/S10";
+    private static final String CLIENT_ID = "configured-admin-console";
     private static final RSAKey SIGNING_KEY = key();
 
     @Autowired WebApplicationContext context;
@@ -93,6 +94,34 @@ class ModelGovernanceSecurityConfigurationTest {
     }
 
     @Test
+    void deployedAdminTokenWithTopLevelRolesAndAuthorizedPartyCanReadPolicyAndImpact() throws Exception {
+        String bearer = "Bearer " + token("ROLE_SYS_ADMIN", "deployed-claims");
+        mvc.perform(get(PATH).header("Authorization", bearer)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.qualityGate").value("ADVISORY"));
+        mvc.perform(get(PATH + "/impact").header("Authorization", bearer)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.unfrozenCandidates").value(3));
+        verify(sessions, times(2)).requireActive(argThat(jwt -> !jwt.hasClaim("aud")
+            && !jwt.hasClaim("realm_access") && CLIENT_ID.equals(jwt.getClaimAsString("azp"))));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = { "ROLE_EMPLOYEE", "ROLE_AUTH_ADMIN", "ROLE_SYSTEM_READER", "SYS_ADMIN" })
+    void topLevelRolesStillRequireTheExactAdministratorRole(String role) throws Exception {
+        mvc.perform(get(PATH).header("Authorization", "Bearer " + token(role, "deployed-claims")))
+            .andExpect(status().isForbidden());
+        verifyNoInteractions(policies, sessions);
+    }
+
+    @Test
+    void deployedClaimsStillRequireAnActiveAdministratorSession() throws Exception {
+        doThrow(new org.springframework.security.oauth2.core.OAuth2AuthenticationException("invalid_token"))
+            .when(sessions).requireActive(any());
+        mvc.perform(get(PATH).header("Authorization", "Bearer " + token("ROLE_SYS_ADMIN", "deployed-claims")))
+            .andExpect(status().isUnauthorized());
+        verifyNoInteractions(policies);
+    }
+
+    @Test
     void updateUsesTheSignedIdentityAndIgnoresAnActorSuppliedInTheBody() throws Exception {
         mvc.perform(put(PATH).header("Authorization", "Bearer " + token("ROLE_SYS_ADMIN", "valid"))
             .contentType(MediaType.APPLICATION_JSON)
@@ -114,11 +143,11 @@ class ModelGovernanceSecurityConfigurationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = { "expired", "wrong-issuer", "wrong-audience", "wrong-signature", "missing-expiration", "missing-user" })
+    @ValueSource(strings = { "expired", "wrong-issuer", "wrong-audience", "wrong-authorized-party", "wrong-signature", "missing-expiration", "missing-user" })
     void rejectsInvalidSignedTokens(String defect) throws Exception {
         mvc.perform(get(PATH).header("Authorization", "Bearer " + token("ROLE_SYS_ADMIN", defect)))
             .andExpect(status().isUnauthorized());
-        verifyNoInteractions(policies);
+        verifyNoInteractions(policies, sessions);
     }
 
     @Test
@@ -171,9 +200,14 @@ class ModelGovernanceSecurityConfigurationTest {
         Instant now = Instant.now();
         var claims = new JWTClaimsSet.Builder()
             .issuer("wrong-issuer".equals(defect) ? "https://untrusted.example" : ISSUER)
-            .audience("wrong-audience".equals(defect) ? "other-app" : "account")
-            .subject("user-id").issueTime(Date.from(now.minusSeconds(600)))
-            .claim("realm_access", Map.of("roles", List.of(role)));
+            .subject("user-id").issueTime(Date.from(now.minusSeconds(600)));
+        if ("deployed-claims".equals(defect) || "wrong-authorized-party".equals(defect)) {
+            claims.claim("roles", List.of(role))
+                .claim("azp", "wrong-authorized-party".equals(defect) ? "untrusted-app" : CLIENT_ID);
+        } else {
+            claims.audience("wrong-audience".equals(defect) ? "other-app" : "account")
+                .claim("realm_access", Map.of("roles", List.of(role)));
+        }
         if (!"missing-expiration".equals(defect)) {
             claims.expirationTime(Date.from("expired".equals(defect) ? now.minusSeconds(300) : now.plusSeconds(300)));
         }
@@ -195,23 +229,27 @@ class ModelGovernanceSecurityConfigurationTest {
         @Bean ProbeResource probe() { return new ProbeResource(); }
         @Bean AuditForwarderService audit() { return mock(AuditForwarderService.class); }
         @Bean ModelGovernanceUserSessionVerifier sessions() { return mock(ModelGovernanceUserSessionVerifier.class); }
+        // Match production: the portal resolver is a global bean, not just an inline DSL setting.
+        @Bean PortalSessionBearerTokenResolver portalSessionBearerTokenResolver() {
+            var cookies = new PortalSessionCookieService("browser_id", "portal_session", "/", false, "Lax", "test-signing-secret");
+            return new PortalSessionBearerTokenResolver(cookies);
+        }
 
         @Bean @Order(2)
         SecurityFilterChain governance(HttpSecurity http, AuditForwarderService audit, ModelGovernanceUserSessionVerifier sessions) throws Exception {
             NimbusJwtDecoder decoder = NimbusJwtDecoder.withPublicKey(SIGNING_KEY.toRSAPublicKey()).build();
-            decoder.setJwtValidator(ModelGovernanceSecurityConfiguration.tokenValidator(ISSUER, List.of("account")));
+            decoder.setJwtValidator(ModelGovernanceSecurityConfiguration.tokenValidator(ISSUER, List.of("account"), CLIENT_ID));
             var provider = new StaticListableBeanFactory(Map.of("audit", audit)).getBeanProvider(AuditForwarderService.class);
             var filter = new AuditLoggingFilter(provider, mock(AuditFlowManager.class), false);
             return new ModelGovernanceSecurityConfiguration().modelGovernanceFilterChain(http, decoder, filter, sessions);
         }
 
         @Bean @Order(3)
-        SecurityFilterChain portal(HttpSecurity http) throws Exception {
-            var cookies = new PortalSessionCookieService("browser_id", "portal_session", "/", false, "Lax", "test-signing-secret");
+        SecurityFilterChain portal(HttpSecurity http, PortalSessionBearerTokenResolver cookies) throws Exception {
             return http.csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth.anyRequest().authenticated())
-                .oauth2ResourceServer(oauth -> oauth.bearerTokenResolver(new PortalSessionBearerTokenResolver(cookies))
+                .oauth2ResourceServer(oauth -> oauth.bearerTokenResolver(cookies)
                     .opaqueToken(opaque -> opaque.introspector(token -> new DefaultOAuth2AuthenticatedPrincipal(
                         "employee", Map.of("sub", "employee"), AuthorityUtils.createAuthorityList("ROLE_EMPLOYEE")))))
                 .build();
