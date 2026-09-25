@@ -1,4 +1,18 @@
+import { readFileSync } from "node:fs";
 import { test, expect } from "@playwright/test";
+
+type MenuSeed = { key: string; path: string; titleKey: string; title: string; icon?: string; externalLink?: string; children?: MenuSeed[] };
+function menuTree() {
+    const seed = JSON.parse(readFileSync(new URL("../../dts-admin/src/main/resources/config/data/portal-menu-seed.json", import.meta.url), "utf8"));
+    let id = 0;
+    const map = (node: MenuSeed, sectionKey: string, parent = ""): Record<string, unknown> => {
+        const path = node.externalLink || `${parent}/${node.path}`.replace(/\/{2,}/g, "/");
+        return { id: ++id, name: node.titleKey, displayName: node.title, path, icon: node.icon, deleted: false,
+            metadata: JSON.stringify({ key: node.key, sectionKey, entryKey: node.key, titleKey: node.titleKey, title: node.title, icon: node.icon }),
+            children: (node.children || []).map((child) => map(child, sectionKey, path)) };
+    };
+    return seed.portalNavSections.map((node: MenuSeed) => map(node, node.key));
+}
 
 test("operations discovers a late plan, confirms deployment and separately enables it", async ({ page }, testInfo) => {
     const errors: string[] = [], writes: Array<{ path: string; data: unknown }> = [];
@@ -17,7 +31,7 @@ test("operations discovers a late plan, confirms deployment and separately enabl
         const path = new URL(route.request().url()).pathname.replace(/^\/api/, "");
         const respond = (data: unknown) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: 200, data, message: "OK" }) });
         if (path === "/session/status") return respond({ authenticated: true, remainingSeconds: 3600 });
-        if (path === "/menu/tree") return respond([]);
+        if (path === "/menu/tree") return respond(menuTree());
         if (path === "/modeling/warehouse-plans") return respond(Array.from({ length: 61 }, (_, i) => ({ id: `plan-${i}`, name: `财务建模规划${i}`, code: `P${i}`, tenantId: "t", ownerId: "a" })));
         if (path.endsWith("/execution-bindings/publications")) return respond(path.includes("plan-60/") ? [{ candidateId: "candidate", candidateVersion: 9, environment: "prod", models: ["预算明细 · r3", "预算汇总 · r2"], releaseIds: ["release-a", "release-b"], bindingVersion: deployed ? 1 : 0, canDeploy: true }] : []);
         if (path.endsWith("/execution-bindings/workspace")) return respond({ planId: "plan-60", state: deployed ? "READY" : "NOT_DEPLOYED", bindings: deployed && path.includes("plan-60/") ? [{ id: "binding", version: enabled ? 2 : 1, environment: "prod", state: enabled ? "ONLINE" : "DISABLED", scheduleMode: "MANUAL_ONLY", deploymentStatus: "ACTIVE", airflowDagId: "dts_plan_budget", latestOperationalRun: {}, latestRelation: {}, allowedActions: enabled ? ["RUN_NOW"] : ["ENABLE"] }] : [] });
