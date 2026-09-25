@@ -258,6 +258,7 @@ export function PlanExecutionSchedulePanel({ focusPlanId }: { focusPlanId?: stri
             <Pagination current={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} showSizeChanger={false} showTotal={(count) => `共 ${count} 个规划`} />
 			<CompactTable<ScheduleRow>
 				pagination={false}
+                scroll={{ x: 900 }}
 				columns={columns}
 				dataSource={rows}
 				loading={loading}

@@ -63,7 +63,6 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 		await act(async () => {
 			root.render(
 				<ModelReleaseWorkflowPanel
-					binding={null}
 					candidate={candidate}
 					evidence={[]}
 					governanceQuality={failedQuality}
@@ -89,7 +88,6 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 		await act(async () => {
 			root.render(
 				<ModelReleaseWorkflowPanel
-					binding={null}
 					candidate={candidate}
 					evidence={[]}
 					governanceQuality={{
@@ -116,7 +114,6 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 		await act(async () => {
 			root.render(
 				<ModelReleaseWorkflowPanel
-					binding={null}
 					candidate={candidate}
 					evidence={[]}
 					governanceQuality={{
@@ -152,7 +149,6 @@ describe("ModelReleaseWorkflowPanel governance quality rerun", () => {
 		await act(async () => {
 			root.render(
 				<ModelReleaseWorkflowPanel
-					binding={null}
 					candidate={{ ...candidate, status: "BUILD_FAILED" }}
 					evidence={evidence}
 					governanceQuality={null}

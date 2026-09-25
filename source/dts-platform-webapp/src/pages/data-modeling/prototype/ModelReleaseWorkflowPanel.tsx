@@ -1,6 +1,5 @@
 import { ShieldCheck } from "lucide-react";
 import type {
-	PlanExecutionBinding,
 	ReleaseCandidate,
 	ReleaseCandidateEvidenceSummary,
 	ReleaseCandidateGovernanceQuality,
@@ -53,20 +52,9 @@ const handoffText = (
 		return "评审已通过，等待独立发布操作员登记上线。";
 	if (actions.includes("PUBLISH")) return "评审已通过，当前由发布操作员完成发布登记。";
 	if (actions.includes("RETRY_PUBLICATION")) return "发布未完整提交，请重试发布或回滚。";
-	if (candidate.status === "PUBLISHED") return "发布登记已完成；上线状态继续以执行关联和物理关系为准。";
+	if (candidate.status === "PUBLISHED") return "正式版本已发布。运行版本的部署与启用请到运维中心办理。";
 	if (candidate.status === "ROLLED_BACK") return "本次发布已回滚，可按新修订创建替代发布单。";
 	return "服务端正在推进当前阶段，刷新后查看下一步。";
-};
-
-const onlineText = (candidate: ReleaseCandidate | null, binding: PlanExecutionBinding | null) => {
-	if (candidate?.status !== "PUBLISHED") return "发布登记完成后检查运行计划。";
-	if (!binding) return "发布登记已完成，运行计划尚未生成。";
-	if (binding.state === "ONLINE" && binding.latestRelation?.verified === true && binding.latestRelation.exists === true)
-		return "上线完成：运行计划已生效，关系健康。";
-	if (binding.state === "DEPLOYING") return "发布登记已完成，运行计划部署中。";
-	if (binding.state === "DEGRADED") return "已发布，但运行计划或物理关系异常。";
-	if (binding.state === "DISABLED") return "已发布，运行计划当前停用。";
-	return "已发布，运行状态待平台核验。";
 };
 
 const EVIDENCE_TYPE_LABEL: Record<ReleaseCandidateEvidenceSummary["type"], string> = {
@@ -127,7 +115,6 @@ export function ModelReleaseWorkflowPanel({
 	governanceQualityRerunning = false,
 	onRerunGovernanceQuality,
 	releaseActions,
-	binding,
 }: {
 	candidate: ReleaseCandidate | null;
 	evidence: ReleaseCandidateEvidenceSummary[];
@@ -135,9 +122,7 @@ export function ModelReleaseWorkflowPanel({
 	governanceQualityRerunning?: boolean;
 	onRerunGovernanceQuality?: () => void;
 	releaseActions: ReleaseWorkflowAction[];
-	binding: PlanExecutionBinding | null;
 }) {
-	const online = onlineText(candidate, binding);
 	const governanceRerunnable = Boolean(onRerunGovernanceQuality && canRerunGovernanceQuality(governanceQuality));
 	return (
 		<div className="dmx-release-workflow">
@@ -211,15 +196,7 @@ export function ModelReleaseWorkflowPanel({
 					<span>记录摘要</span>
 					<strong>{evidenceText(evidence)}</strong>
 				</div>
-				<div>
-					<span>运行状态</span>
-					<strong>{online}</strong>
-					{binding ? (
-						<small>
-							{binding.environment} · {binding.scheduleMode} · {binding.airflowDagId || "DAG 待生成"}
-						</small>
-					) : null}
-				</div>
+
 			</div>
 		</div>
 	);

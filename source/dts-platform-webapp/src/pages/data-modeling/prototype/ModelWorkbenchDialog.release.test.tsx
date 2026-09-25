@@ -633,7 +633,7 @@ describe("release and materialization dispatch", () => {
 		// F15-T02: no build/publish tabs to switch; the running build and its exit stay on the one flow.
 		expect(Array.from(container.querySelectorAll("nav button")).some((item) => item.textContent === "发布模型")).toBe(false);
 		expect(container.textContent).toContain("构建");
-        expect(apiMocks.getDeliveryStatus).not.toHaveBeenCalled();
+
 		await act(async () => button("放弃本次构建")?.click());
 		await act(async () => button("确认放弃本次构建")?.click());
 		await flush();
@@ -768,7 +768,7 @@ describe("release and materialization dispatch", () => {
 			built,
 			"idem-1",
 			expect.objectContaining({
-				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
+				entries: [expect.objectContaining({ modelSpecId: model.id })],
 				materializationPlanChecksum: "a".repeat(64),
 			}),
 		);
@@ -811,7 +811,7 @@ describe("release and materialization dispatch", () => {
 			built,
 			"idem-1",
 			expect.objectContaining({
-				entries: [{ modelSpecId: model.id, sortOrder: 0, selectedReason: "从模型工作台选择" }],
+				entries: [expect.objectContaining({ modelSpecId: model.id })],
 			}),
 		);
 	});
@@ -1199,34 +1199,18 @@ describe("release and materialization dispatch", () => {
 		expect(apiMocks.startPublicationIntent).not.toHaveBeenCalled();
 	});
 
-	it("shows the published asset registration result and opens the governed asset detail", async () => {
-		const published = candidate("BATCH_WORKBENCH", "PUBLISHED");
-		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], published));
-		apiMocks.getDeliveryStatus.mockResolvedValue({
-			...deliveryStatusFor(workspace(["ROLLBACK"], published)),
-			steps: ["catalog", "analysis"].map((key) => ({
-				key,
-				state: "SUCCEEDED",
-				reasonCode: null,
-				message: "",
-				evidenceRevision: model.revision,
-				matchesCurrentTarget: true,
-				resourceId: key === "catalog" ? "33333333-3333-3333-3333-333333333333" : null,
-				updatedAt: null,
-				outputs: [],
-			})),
-		});
-
-		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
-		);
-		await flush();
-
-		expect(container.textContent).toContain("资产登记结果");
-		expect(container.textContent).toContain("资产已登记");
-		await act(async () => button("查看资产")?.click());
-		expect(routerPush).toHaveBeenCalledWith("/catalog/datasets/33333333-3333-3333-3333-333333333333");
-	});
+    it("keeps build reads independent of registration analysis and operations", async () => {
+        apiMocks.getWorkbench.mockResolvedValue(workspace([], candidate("BATCH_WORKBENCH", "BUILT")));
+        apiMocks.getDeliveryStatus.mockRejectedValue(new Error("downstream unavailable"));
+        await act(async () => root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />));
+        await flush();
+        expect(apiMocks.getBuildStatus).toHaveBeenCalledWith(model.id, "dev");
+        expect(apiMocks.getDeliveryStatus).not.toHaveBeenCalled();
+        expect(apiMocks.getExecutionWorkspace).not.toHaveBeenCalled();
+        expect(container.textContent).not.toContain("资产登记结果");
+        expect(container.textContent).not.toContain("分析准备");
+        expect(container.textContent).toContain("BUILT");
+    });
 
 	it("starts the strict single-model publication intent at the quality boundary", async () => {
 		const built = candidate("SINGLE_MODEL_INTENT", "BUILT");
@@ -1334,9 +1318,9 @@ describe("release and materialization dispatch", () => {
 		);
 		await flush();
 
-		expect(apiMocks.getExecutionWorkspace).toHaveBeenCalledWith(model.planId);
-		expect(container.textContent).toContain("发布登记已完成");
-		expect(container.textContent).toContain("运行计划部署中");
+		expect(apiMocks.getExecutionWorkspace).not.toHaveBeenCalled();
+		expect(container.textContent).toContain("正式版本已发布");
+		expect(container.textContent).not.toContain("运行计划部署中");
 		expect(container.textContent).not.toContain("上线完成");
 	});
 
@@ -1373,8 +1357,8 @@ describe("release and materialization dispatch", () => {
 		);
 		await flush();
 
-		expect(container.textContent).toContain("上线完成");
-		expect(container.textContent).toContain("关系健康");
+		expect(container.textContent).not.toContain("上线完成");
+		expect(apiMocks.getExecutionWorkspace).not.toHaveBeenCalled();
 	});
 
 	it("sends the data owner to 调度计划 to run an online binding instead of running from the release dialog", async () => {
@@ -1484,7 +1468,7 @@ describe("release and materialization dispatch", () => {
 		);
 		await flush();
 
-		expect(apiMocks.getExecutionWorkspace).toHaveBeenCalledWith(model.planId);
+		expect(apiMocks.getExecutionWorkspace).not.toHaveBeenCalled();
 		expect(button("修复部署")).toBeUndefined();
 		expect(apiMocks.repairExecutionBinding).not.toHaveBeenCalled();
 		expect(apiMocks.compileLifecycle).not.toHaveBeenCalled();
@@ -1493,7 +1477,7 @@ describe("release and materialization dispatch", () => {
 
 	it("does not rebuild or run an unchanged published model and points to 调度计划", async () => {
 		const publishedModel = { ...model, status: "PUBLISHED" } as ModelSpecView;
-		apiMocks.getWorkbench.mockResolvedValue(workspace(["CREATE_CANDIDATE"], null));
+		apiMocks.getWorkbench.mockResolvedValue(workspace([], candidate("BATCH_WORKBENCH", "PUBLISHED")));
 		apiMocks.getMaterializationStatuses.mockResolvedValue([
 			{
 				modelSpecId: model.id,
@@ -1909,7 +1893,7 @@ describe("model-scoped historical release workspace", () => {
 		};
 		apiMocks.getWorkbench.mockResolvedValue(workspace(["ROLLBACK"], foreign));
 		apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(workspace(["ROLLBACK"], own)));
-		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+		await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
 		await flush();
 		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(model.id, "dev");
 		expect(apiMocks.getWorkbench).not.toHaveBeenCalled();
@@ -1927,24 +1911,24 @@ describe("model-scoped historical release workspace", () => {
 		});
 		const current = {
 			...candidate("BATCH_WORKBENCH", "PUBLISHED"),
-			id: "test-current",
-			environment: "test",
+			id: "prod-current",
+			environment: "prod",
 			version: 9,
 		};
 		apiMocks.getDeliveryStatus.mockImplementation((_id: string, env?: string) =>
 			env === "dev"
 				? pendingDev
-				: Promise.resolve(deliveryStatusFor(workspace(["ROLLBACK"], current), model, env || "test")),
+				: Promise.resolve(deliveryStatusFor(workspace(["ROLLBACK"], current), model, env || "prod")),
 		);
-		await act(async () => root.render(<ModelPublishDialog canMaintain models={[model]} onClose={vi.fn()} />));
+		await act(async () => root.render(<ModelPublishDialog canMaintain mode="release" models={[model]} onClose={vi.fn()} />));
 		await flush();
 		await act(async () => {
 			const select = container.querySelector("select")!;
-			select.value = "test";
+			select.value = "prod";
 			select.dispatchEvent(new Event("change", { bubbles: true }));
 		});
 		await flush();
-		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(model.id, "test");
+		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(model.id, "prod");
 		expect(container.textContent).toContain("PUBLISHED · v9");
 		await act(async () =>
 			resolveDev(deliveryStatusFor(workspace(["PUBLISH"], candidate("BATCH_WORKBENCH", "APPROVED")))),

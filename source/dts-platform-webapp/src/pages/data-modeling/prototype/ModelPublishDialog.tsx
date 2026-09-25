@@ -620,7 +620,6 @@ export function ModelPublishDialog({
 			{embedded ? <h3>{batch ? "批量发布流程" : "发布模型"}</h3> : null}
 			{!embedded ? (
 				<ModelReleaseWorkflowPanel
-					binding={null}
 					candidate={scopedCandidate}
 					evidence={candidateContainsSelection ? workspace?.evidence || [] : []}
 					governanceQuality={scopedGovernanceQuality}
@@ -692,7 +691,7 @@ export function ModelPublishDialog({
 		<>
 			<label>
 				<span>{mode === "release" ? "发布环境" : "执行环境"}</span>
-				<select disabled={Boolean(busy)}
+				<select disabled={Boolean(busy) && busy !== "load"}
 					onChange={(event) => {
 						setEnvironment(event.target.value);
 						onEnvironmentChange?.(event.target.value);
