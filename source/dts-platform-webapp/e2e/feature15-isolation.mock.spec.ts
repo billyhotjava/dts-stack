@@ -22,7 +22,7 @@ test("operations discovers a late plan, confirms deployment and separately enabl
         if (route.request().method() === "POST" && (path.endsWith("/deploy") || path.endsWith("/enable"))) {
             writes.push({ path, data: route.request().postDataJSON() });
             if (path.endsWith("/deploy")) deployed = true; else enabled = true;
-            return route.fulfill({ status: 202, body: "" });
+            return route.fulfill({ status: 202, contentType: "application/json", body: JSON.stringify({ status: 200, data: null, message: "OK" }) });
         }
         return respond([]);
     });

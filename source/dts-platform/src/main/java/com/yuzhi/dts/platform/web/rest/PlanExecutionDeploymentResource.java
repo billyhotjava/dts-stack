@@ -30,15 +30,15 @@ public class PlanExecutionDeploymentResource {
     }
     @PostMapping("/deploy")
     @PreAuthorize("hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_RELEASE_OPERATORS)")
-    public ResponseEntity<Void> deploy(@PathVariable UUID planId, @RequestBody DeployRequest request) {
+    public ResponseEntity<ApiResponse<Void>> deploy(@PathVariable UUID planId, @RequestBody DeployRequest request) {
         service.deploy(tenant, actors.currentActor().ownerId(), planId, request);
-        return ResponseEntity.accepted().build();
+        return ResponseEntity.accepted().body(ApiResponses.ok(null));
     }
     @PostMapping("/{bindingId}/enable")
     @PreAuthorize("hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_RELEASE_OPERATORS)")
-    public ResponseEntity<Void> enable(@PathVariable UUID planId, @PathVariable UUID bindingId, @RequestBody EnableRequest request) {
+    public ResponseEntity<ApiResponse<Void>> enable(@PathVariable UUID planId, @PathVariable UUID bindingId, @RequestBody EnableRequest request) {
         service.enable(tenant, actors.currentActor().ownerId(), planId, bindingId, request.version());
-        return ResponseEntity.accepted().build();
+        return ResponseEntity.accepted().body(ApiResponses.ok(null));
     }
     @ExceptionHandler(PlanExecutionException.class)
     public ResponseEntity<Map<String,String>> handle(PlanExecutionException failure) {
