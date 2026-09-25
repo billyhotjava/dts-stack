@@ -1,8 +1,9 @@
-import { Alert, Button, Space, Tag, Typography } from "antd";
+import { Alert, Button, Pagination, Space, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	getPlanExecutionWorkspace,
+	enablePlanExecution,
 	type PlanExecutionBinding,
 	repairPlanExecutionBinding,
 	runPlanExecutionNow,
@@ -11,20 +12,16 @@ import { listWarehousePlans, type WarehousePlanHeader } from "@/api/warehousePla
 import { CompactTable } from "@/components/table";
 import { normalizeModelingRequestFailure } from "@/pages/data-modeling/prototype/services/planningProjectionService";
 
-/**
- * F15 (option 2): running a published version is an operations concern. The run-now and repair-deployment
- * commands that used to sit inside the modeling publish dialog live here, next to task instances. Publication
- * still prepares a manual-only binding as before; this panel only moves where people act on it.
- */
+import { PlanExecutionPublicationPicker } from "./PlanExecutionPublicationPicker";
 
 type ScheduleRow = { plan: WarehousePlanHeader; binding: PlanExecutionBinding };
 
-const MAX_PLANS = 50;
+const PAGE_SIZE = 10;
 const ENVIRONMENT_LABELS: Record<string, string> = { dev: "开发环境", test: "测试环境", prod: "生产环境" };
 const STATE_LABELS: Record<PlanExecutionBinding["state"], { label: string; color: string }> = {
 	ONLINE: { label: "运行正常", color: "green" },
 	DEPLOYING: { label: "部署中", color: "blue" },
-	DISABLED: { label: "已停用", color: "default" },
+	DISABLED: { label: "已部署，未启用", color: "default" },
 	DEGRADED: { label: "异常", color: "red" },
 	UNKNOWN: { label: "待核验", color: "orange" },
 };
@@ -36,7 +33,11 @@ const formatTime = (value?: string | null) => {
 };
 
 export function PlanExecutionSchedulePanel({ focusPlanId }: { focusPlanId?: string }) {
-	const [rows, setRows] = useState<ScheduleRow[]>([]);
+    const [page, setPage] = useState(1);
+    const [total, setTotal] = useState(0);
+    const [visiblePlans, setVisiblePlans] = useState<WarehousePlanHeader[]>([]);
+    const sequence = useRef(0);
+    const [rows, setRows] = useState<ScheduleRow[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [failure, setFailure] = useState("");
 	const [partial, setPartial] = useState(0);
@@ -44,16 +45,18 @@ export function PlanExecutionSchedulePanel({ focusPlanId }: { focusPlanId?: stri
 	const [notice, setNotice] = useState("");
 
 	const load = useCallback(async () => {
+		const current = ++sequence.current;
 		setLoading(true);
 		setFailure("");
 		try {
-			const plans = (await listWarehousePlans()).slice(0, MAX_PLANS);
+			const plans = await listWarehousePlans();
 			const ordered = focusPlanId
 				? [...plans.filter((plan) => plan.id === focusPlanId), ...plans.filter((plan) => plan.id !== focusPlanId)]
 				: plans;
-			const next: ScheduleRow[] = [];
+            const visible = ordered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+            const next: ScheduleRow[] = [];
 			let unreadable = 0;
-			for (const plan of ordered) {
+			for (const plan of visible) {
 				try {
 					const workspace = await getPlanExecutionWorkspace(plan.id);
 					for (const binding of workspace.bindings) next.push({ plan, binding });
@@ -62,17 +65,23 @@ export function PlanExecutionSchedulePanel({ focusPlanId }: { focusPlanId?: stri
 					unreadable++;
 				}
 			}
-			setRows(next);
+            if (current !== sequence.current) return;
+            setTotal(plans.length);
+            setVisiblePlans(visible);
+            setRows(next);
 			setPartial(unreadable);
 		} catch (error) {
+			if (current !== sequence.current) return;
 			setFailure(normalizeModelingRequestFailure(error, "调度计划读取失败。").message);
 		} finally {
-			setLoading(false);
+			if (current === sequence.current) setLoading(false);
 		}
-	}, [focusPlanId]);
+	}, [focusPlanId, page]);
 
+	useEffect(() => { setPage(1); }, [focusPlanId]);
 	useEffect(() => {
 		void load();
+        return () => { sequence.current++; };
 	}, [load]);
 
 	const runNow = useCallback(
@@ -108,6 +117,13 @@ export function PlanExecutionSchedulePanel({ focusPlanId }: { focusPlanId?: stri
 		},
 		[load],
 	);
+
+    const enable = useCallback(async (row: ScheduleRow) => {
+        setBusyBinding(row.binding.id);
+        try { await enablePlanExecution(row.plan.id, row.binding.id, row.binding.version); setNotice("运行计划已启用。"); await load(); }
+        catch (error) { setNotice(normalizeModelingRequestFailure(error, "启用失败。").message); }
+        finally { setBusyBinding(""); }
+    }, [load]);
 
 	const columns = useMemo<ColumnsType<ScheduleRow>>(
 		() => [
@@ -175,6 +191,7 @@ export function PlanExecutionSchedulePanel({ focusPlanId }: { focusPlanId?: stri
 				key: "actions",
 				render: (_, row) => (
 					<Space>
+                        {row.binding.allowedActions.includes("ENABLE") ? <Button size="small" disabled={Boolean(busyBinding)} onClick={() => void enable(row)}>启用运行</Button> : null}
 						{row.binding.allowedActions.includes("RUN_NOW") ? (
 							<Button
 								disabled={Boolean(busyBinding)}
@@ -199,7 +216,7 @@ export function PlanExecutionSchedulePanel({ focusPlanId }: { focusPlanId?: stri
 				),
 			},
 		],
-		[busyBinding, repair, runNow],
+		[busyBinding, repair, runNow, enable],
 	);
 
 	return (
@@ -237,7 +254,10 @@ export function PlanExecutionSchedulePanel({ focusPlanId }: { focusPlanId?: stri
 					style={{ marginBottom: 12 }}
 				/>
 			) : null}
+            <PlanExecutionPublicationPicker plans={visiblePlans} onDeployed={load} refreshKey={rows} />
+            <Pagination current={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} showSizeChanger={false} showTotal={(count) => `共 ${count} 个规划`} />
 			<CompactTable<ScheduleRow>
+				pagination={false}
 				columns={columns}
 				dataSource={rows}
 				loading={loading}

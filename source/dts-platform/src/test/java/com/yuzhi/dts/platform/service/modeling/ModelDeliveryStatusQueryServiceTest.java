@@ -405,6 +405,32 @@ class ModelDeliveryStatusQueryServiceTest {
     }
 
     @Test
+    void buildReadFailurePreservesAnAuthorizedPublishedVersion() {
+        Fixture fixture = new Fixture();
+        var releases = mock(com.yuzhi.dts.platform.repository.modeling.ModelPublishedReleaseReadRepository.class);
+        var release = new com.yuzhi.dts.platform.repository.modeling.ModelPublishedReleaseReadRepository.PublishedRelease(UUID.randomUUID(), fixture.modelId, 3, "prod", Instant.now());
+        when(releases.latestPublished("tenant", java.util.List.of(fixture.modelId))).thenReturn(java.util.Map.of(fixture.modelId, release));
+        when(fixture.authoring.context("tenant", "actor", fixture.modelId, null, null, true)).thenThrow(new IllegalStateException("build unavailable"));
+        var service = new ModelDeliveryStatusQueryService(fixture.models, fixture.candidates, fixture.authoring, fixture.serving, fixture.qualityContexts, releases);
+        var row = service.workbenchSummaries("tenant", "actor", java.util.List.of(fixture.modelId), null).getFirst();
+        assertThat(row.readState()).isEqualTo("FAILED");
+        assertThat(row.publishedReadState()).isEqualTo("OK");
+        assertThat(row.published().releaseId()).isEqualTo(release.releaseId());
+    }
+
+    @Test
+    void buildStatusUsesOnlyTheLocalBuildProjection() {
+        Fixture fixture = new Fixture();
+        fixture.selectDefault("prod", fixture.workspace(null, java.util.List.of()));
+        var result = fixture.service.buildStatus("tenant", "actor", fixture.modelId, "prod", null);
+        assertThat(result.steps()).extracting(ModelDeliveryStatusQueryService.StepView::key).containsExactly("materialization");
+        org.mockito.Mockito.verifyNoInteractions(fixture.serving, fixture.qualityContexts);
+        org.mockito.Mockito.verify(fixture.candidates, org.mockito.Mockito.never()).workspaceForCurrentModel(
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
     void workbenchSummaryRejectsMoreThanOnePage() {
         Fixture fixture = new Fixture();
         var ids = java.util.stream.Stream.generate(UUID::randomUUID).limit(51).toList();
@@ -452,6 +478,7 @@ class ModelDeliveryStatusQueryServiceTest {
         }
 
         void selectDefault(String environment, WorkbenchView workspace) {
+            when(candidates.buildWorkspaceForCurrentModel("tenant", "actor", planId, modelId, modelRevision, checksum, environment)).thenReturn(workspace);
             when(candidates.workspaceForCurrentModel(
                 "tenant", "actor", planId, modelId, modelRevision, checksum, environment
             )).thenReturn(workspace);

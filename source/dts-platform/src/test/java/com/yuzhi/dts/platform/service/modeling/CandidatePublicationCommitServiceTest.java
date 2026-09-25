@@ -277,9 +277,8 @@ class CandidatePublicationCommitServiceTest {
                 target,
                 null
             );
-        order
-            .verify(publicationRepository)
-            .rebuildManualBinding(publishing, List.of(binding), ACTOR, NOW);
+        verify(publicationRepository, org.mockito.Mockito.never())
+            .rebuildManualBinding(any(), any(), any(), any());
         order.verify(outbox).publishInternal(any(PlatformEventRequest.class));
         order
             .verify(candidateCommands)

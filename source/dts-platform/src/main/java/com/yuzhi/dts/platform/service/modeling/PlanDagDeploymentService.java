@@ -97,7 +97,8 @@ public class PlanDagDeploymentService {
                 );
                 return;
             }
-            if (airflow.setDagPaused(binding.dagId(), false).isEmpty()) {
+            boolean paused = bindings.requiresActivation(binding.id());
+            if (airflow.setDagPaused(binding.dagId(), paused).isEmpty()) {
                 bindings.markUnknown(
                     binding,
                     "MODEL_PLAN_DAG_NOT_REGISTERED",
@@ -112,7 +113,7 @@ public class PlanDagDeploymentService {
                 !matchesActual(
                     binding,
                     deployment.deploymentChecksum(),
-                    actual.orElseThrow()
+                    actual.orElseThrow(), paused
                 )
             ) {
                 bindings.markUnknown(
@@ -127,7 +128,7 @@ public class PlanDagDeploymentService {
                 deployment.deploymentChecksum(),
                 schedule,
                 timezone,
-                false,
+                paused,
                 now
             );
         } catch (RuntimeException failure) {
@@ -142,11 +143,12 @@ public class PlanDagDeploymentService {
     private static boolean matchesActual(
         BindingRecord binding,
         String checksum,
-        Map<String, Object> actual
+        Map<String, Object> actual,
+        boolean paused
     ) {
         if (
             !binding.dagId().equals(String.valueOf(actual.get("dag_id"))) ||
-            Boolean.TRUE.equals(actual.get("is_paused"))
+            !Boolean.valueOf(paused).equals(actual.get("is_paused"))
         ) {
             return false;
         }

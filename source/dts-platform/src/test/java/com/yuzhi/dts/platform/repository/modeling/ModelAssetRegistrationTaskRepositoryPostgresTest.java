@@ -43,7 +43,7 @@ class ModelAssetRegistrationTaskRepositoryPostgresTest {
         jdbc = new JdbcTemplate(new DriverManagerDataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword()));
         jdbc.execute(
             "drop table if exists modeling_model_asset_registration_task, modeling_model_release_candidate_command, " +
-            "databasechangelog, databasechangeloglock"
+            "registration_asset_probe, modeling_plan_execution_binding, databasechangelog, databasechangeloglock"
         );
         try (Connection connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
             var database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
@@ -63,8 +63,8 @@ class ModelAssetRegistrationTaskRepositoryPostgresTest {
         UUID candidate = UUID.randomUUID();
         tasks.enqueue(TENANT, candidate, 4, UUID.randomUUID(), "prod", NOW);
         var first = tasks.findByCandidate(TENANT, candidate).orElseThrow();
-        assertThat(tasks.claim(first.id(), NOW, NOW.plus(Duration.ofMinutes(5)))).isTrue();
-        tasks.markFailed(first.id(), "CATALOG_UNAVAILABLE", "目录不可用", NOW.plus(Duration.ofMinutes(1)), NOW);
+        assertThat(tasks.claim(first, NOW, NOW.plus(Duration.ofMinutes(5)))).isTrue();
+        tasks.markFailed(first, 1, "CATALOG_UNAVAILABLE", "目录不可用", NOW.plus(Duration.ofMinutes(1)), NOW);
         assertThat(tasks.findByCandidate(TENANT, candidate).orElseThrow().state()).isEqualTo(State.FAILED);
 
         tasks.enqueue(TENANT, candidate, 9, null, "prod", NOW.plusSeconds(60));
@@ -83,18 +83,97 @@ class ModelAssetRegistrationTaskRepositoryPostgresTest {
         tasks.enqueue(TENANT, candidate, 4, null, "dev", NOW);
         var task = tasks.findDue(NOW, 5, 10).get(0);
 
-        assertThat(tasks.claim(task.id(), NOW, NOW.plus(Duration.ofMinutes(5)))).isTrue();
-        assertThat(tasks.claim(task.id(), NOW, NOW.plus(Duration.ofMinutes(5)))).isFalse();
+        assertThat(tasks.claim(task, NOW, NOW.plus(Duration.ofMinutes(5)))).isTrue();
+        assertThat(tasks.claim(task, NOW, NOW.plus(Duration.ofMinutes(5)))).isFalse();
         assertThat(tasks.findDue(NOW.plus(Duration.ofMinutes(1)), 5, 10)).isEmpty();
         assertThat(tasks.findDue(NOW.plus(Duration.ofMinutes(6)), 5, 10)).hasSize(1);
 
-        tasks.markSucceeded(TENANT, candidate, NOW.plus(Duration.ofMinutes(2)));
-        tasks.markFailed(task.id(), "LATE", "late failure", NOW, NOW);
+        tasks.markSucceeded(task, 1, NOW.plus(Duration.ofMinutes(2)));
+        tasks.markFailed(task, 1, "LATE", "late failure", NOW, NOW);
 
         var done = tasks.findByCandidate(TENANT, candidate).orElseThrow();
         assertThat(done.state()).isEqualTo(State.SUCCEEDED);
         assertThat(done.succeededAt()).isEqualTo(NOW.plus(Duration.ofMinutes(2)));
         assertThat(tasks.findDue(NOW.plus(Duration.ofHours(1)), 5, 10)).isEmpty();
+    }
+
+    @Test
+    void newerBuildFencesLateCompletionFailureAndStaleEnqueue() {
+        UUID candidate = UUID.randomUUID();
+        tasks.enqueue(TENANT, candidate, 6, null, "prod", NOW);
+        var old = tasks.findByCandidate(TENANT, candidate).orElseThrow();
+        assertThat(tasks.claim(old, NOW, NOW.plusSeconds(10))).isTrue();
+        tasks.enqueue(TENANT, candidate, 9, null, "prod", NOW);
+        assertThat(tasks.markSucceeded(old, 1, NOW)).isFalse();
+        tasks.markFailed(old, 1, "LATE", "late", NOW, NOW);
+        tasks.enqueue(TENANT, candidate, 6, null, "prod", NOW);
+        var current = tasks.findByCandidate(TENANT, candidate).orElseThrow();
+        assertThat(current.builtCandidateVersion()).isEqualTo(9);
+        assertThat(current.state()).isEqualTo(State.PENDING);
+        assertThat(current.attempts()).isZero();
+        assertThat(tasks.claim(old, NOW, NOW.plusSeconds(10))).isFalse();
+    }
+
+    @Test
+    void expiredAttemptAndManualRetryFenceLateWorkers() {
+        UUID candidate = UUID.randomUUID();
+        tasks.enqueue(TENANT, candidate, 6, null, "prod", NOW);
+        var first = tasks.findByCandidate(TENANT, candidate).orElseThrow();
+        tasks.claim(first, NOW, NOW.plusSeconds(10));
+        var second = tasks.findByCandidate(TENANT, candidate).orElseThrow();
+        assertThat(tasks.claim(second, NOW.plusSeconds(11), NOW.plusSeconds(30))).isTrue();
+        assertThat(tasks.markSucceeded(first, 1, NOW)).isFalse();
+        assertThat(tasks.lockAttempt(first, 1)).isFalse();
+        assertThat(tasks.retry(second, NOW)).isTrue();
+        assertThat(tasks.markSucceeded(second, 2, NOW)).isFalse();
+        var retried = tasks.findByCandidate(TENANT, candidate).orElseThrow();
+        assertThat(retried.id()).isNotEqualTo(first.id());
+        assertThat(retried.attempts()).isZero();
+    }
+
+    @Test
+    void assetWritesAndTaskCompletionRollbackTogether() {
+        UUID candidateId = UUID.randomUUID();
+        tasks.enqueue(TENANT, candidateId, 6, UUID.randomUUID(), "prod", NOW);
+        var task = tasks.findByCandidate(TENANT, candidateId).orElseThrow();
+        tasks.claim(task, NOW, NOW.plusSeconds(60));
+        jdbc.update("insert into modeling_model_release_candidate_command values (?, ?, 5, 'BUILDING')", TENANT, candidateId);
+        jdbc.execute("create table registration_asset_probe (id uuid primary key)");
+        var candidates = org.mockito.Mockito.mock(ModelReleaseCandidateRepository.class);
+        var registration = org.mockito.Mockito.mock(com.yuzhi.dts.platform.service.modeling.CandidateQualityAssetRegistrationService.class);
+        var authorization = org.mockito.Mockito.mock(com.yuzhi.dts.platform.service.modeling.ModelingExecutionAuthorization.class);
+        var candidate = org.mockito.Mockito.mock(com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView.class);
+        org.mockito.Mockito.when(candidates.find(TENANT, candidateId)).thenReturn(java.util.Optional.of(candidate));
+        org.mockito.Mockito.when(candidate.status()).thenReturn(com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus.BUILT);
+        org.mockito.Mockito.doAnswer(call -> {
+            jdbc.update("insert into registration_asset_probe values (?)", candidateId);
+            throw new IllegalStateException("second asset write failed");
+        }).when(registration).ensureRegistered(candidate);
+        var service = new com.yuzhi.dts.platform.service.modeling.ModelAssetRegistrationAttemptService(tasks, candidates, registration, authorization);
+        var factory = new org.springframework.aop.framework.ProxyFactory(service);
+        factory.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(jdbc.getDataSource()),
+            new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        var proxied = (com.yuzhi.dts.platform.service.modeling.ModelAssetRegistrationAttemptService) factory.getProxy();
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> proxied.register(task, 1)).hasMessageContaining("second asset write failed");
+        assertThat(jdbc.queryForObject("select count(*) from registration_asset_probe", Integer.class)).isZero();
+        assertThat(tasks.findByCandidate(TENANT, candidateId).orElseThrow().state()).isEqualTo(State.PENDING);
+    }
+
+    @Test
+    void activationMigrationPreservesExistingBindingsAndRollsBack() throws Exception {
+        jdbc.execute("create table modeling_plan_execution_binding (id uuid primary key)");
+        UUID id = UUID.randomUUID();
+        jdbc.update("insert into modeling_plan_execution_binding values (?)", id);
+        try (Connection connection = DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+            var database = DatabaseFactory.getInstance().findCorrectDatabaseImplementation(new JdbcConnection(connection));
+            try (Liquibase liquibase = new Liquibase("config/liquibase/changelog/20260925_02_model_execution_activation.xml", new ClassLoaderResourceAccessor(), database)) {
+                liquibase.update(new Contexts(), new LabelExpression());
+                assertThat(jdbc.queryForObject("select activation_required from modeling_plan_execution_binding where id=?", Boolean.class, id)).isFalse();
+                liquibase.rollback(1, new Contexts(), new LabelExpression());
+                assertThat(jdbc.queryForObject("select count(*) from modeling_plan_execution_binding", Integer.class)).isEqualTo(1);
+            }
+        }
     }
 
     @Test

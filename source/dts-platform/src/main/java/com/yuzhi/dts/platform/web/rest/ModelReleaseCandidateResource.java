@@ -93,6 +93,14 @@ public class ModelReleaseCandidateResource {
         return response.body(ApiResponses.ok(view));
     }
 
+    @GetMapping("/build-workspace")
+    @PreAuthorize(RELEASE_DUTY_EXPRESSION)
+    public ResponseEntity<ApiResponse<WorkbenchView>> buildWorkspace(
+        @PathVariable UUID planId, @RequestParam String environment, @RequestParam List<UUID> modelSpecIds
+    ) {
+        return ResponseEntity.ok(ApiResponses.ok(service.buildWorkspaceForScope(serverTenantId, actorId(), planId, environment, modelSpecIds)));
+    }
+
     @GetMapping("/{candidateId}")
     @PreAuthorize(RELEASE_DUTY_EXPRESSION)
     public ResponseEntity<ApiResponse<CandidateView>> get(

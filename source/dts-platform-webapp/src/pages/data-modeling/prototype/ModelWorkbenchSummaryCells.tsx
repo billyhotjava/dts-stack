@@ -79,7 +79,7 @@ export function ModelPublishedSummaryCell({
 	if (!summary) return <span className="dmx-table-muted">—</span>;
 	if (summary.publishedReadState === "FAILED") return <Status tone="danger">发布记录读取失败</Status>;
 	const published = summary.published;
-	if (!published) return <span className="dmx-table-muted">未发布</span>;
+	if (!published) return <span className="dmx-table-muted">{summary.readState === "FAILED" ? "发布状态待确认" : "未发布"}</span>;
 	return (
 		<>
 			<strong>r{published.modelRevision}</strong>

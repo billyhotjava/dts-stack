@@ -18,6 +18,18 @@ export type ModelDataRegistrationStatus = {
 	errorMessage: string | null;
 	attempts: number;
 };
+
+export type ModelRegistrationTask = {
+	id: string; candidateId: string; buildVersion: number; environment: string; models: string[];
+	state: string; attempts: number; errorMessage: string | null; updatedAt: string; canRetry: boolean;
+};
+export const listModelRegistrationTasks = (offset = 0) => api.get<{ items: ModelRegistrationTask[]; nextOffset: number | null }>({
+	url: "/modeling/model-specs/registration-tasks", params: { offset }, _skipErrorToast: true,
+} as any);
+export const retryModelRegistrationTask = (task: ModelRegistrationTask) => api.post<void>({
+	url: `/modeling/model-specs/registration-tasks/${encodeURIComponent(task.id)}/retry`,
+	data: { buildVersion: task.buildVersion }, _skipErrorToast: true,
+} as any);
 export const getModelDataRegistrationStatus = (id: string, candidateId: string) =>
 	api.get<ModelDataRegistrationStatus>({
 		url: `/modeling/model-specs/${encodeURIComponent(id)}/data-registration`,

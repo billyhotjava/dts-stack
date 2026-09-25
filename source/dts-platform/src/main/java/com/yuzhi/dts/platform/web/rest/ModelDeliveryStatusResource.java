@@ -33,6 +33,13 @@ public class ModelDeliveryStatusResource {
     }
     public record WorkbenchSummaryRequest(List<UUID> modelSpecIds, String environment) {}
 
+    @GetMapping("/{id}/build-status")
+    public ApiResponse<ModelDeliveryStatusQueryService.DeliveryStatusView> buildStatus(@PathVariable UUID id,
+        @RequestParam(required = false) String environment, @RequestParam(required = false) UUID candidateId) {
+        var actor = actors.currentActor();
+        return ApiResponses.ok(service.buildStatus(tenantId, actor == null ? null : actor.ownerId(), id, environment, candidateId));
+    }
+
     /** F15 K1: one bounded call per workbench page; reads no quality or serving state. */
     @PostMapping("/workbench-summaries")
     public ApiResponse<List<ModelDeliveryStatusQueryService.WorkbenchSummaryView>> workbenchSummaries(@RequestBody WorkbenchSummaryRequest request) {

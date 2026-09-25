@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
-import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
+import { getModelBuildStatus, getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import {
 	abandonReleaseCandidateBuild,
 	approveReleaseCandidateReview,
@@ -9,14 +9,12 @@ import {
 	createReplacementReleaseCandidate,
 	getModelMaterializationStatuses,
 	getModelLifecycle,
-	getPlanExecutionWorkspace,
+	getModelBuildWorkspace,
 	getReleaseCandidateWorkbench,
 	lockReleaseCandidate,
-	type MaterializationPlanEntry,
 	type MaterializationPlanPreview,
 	type MaterializationPlanStrategy,
 	type ModelMaterializationStatus,
-	type PlanExecutionWorkspace,
 	previewMaterializationPlan,
 	publishReleaseCandidate,
 	type ReleaseCandidateEntryEvidence,
@@ -35,9 +33,9 @@ import {
 } from "@/api/modelSpecApi";
 import { CompactTable } from "@/components/table";
 import type { CanonicalModelSpecView, ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
-import { ModelAssetDeliveryResult } from "./ModelAssetDeliveryResult";
 import { IN_FLIGHT_REFRESH_MS, isCandidateInFlight, ModelBuildProgressNotice } from "./ModelBuildProgressNotice";
 import { type MaterializationBuildAction, ModelMaterializationActions } from "./ModelMaterializationActions";
+import { ModelBuildPlanPreview } from "./ModelBuildPlanPreview";
 import { ModelReleaseWorkflowPanel } from "./ModelReleaseWorkflowPanel";
 import { ModelReleaseScopeNotice, ModelReleaseScopeSummary } from "./ModelReleaseScopeSummary";
 import { materializationScopeEntries, resolveMaterializationBuildAction, resolveReleaseCandidateScope } from "./modelReleaseCandidateScope";
@@ -100,7 +98,7 @@ export function ModelPublishDialog({
 	onChanged?: () => void;
 	onNext?: () => void;
 }) {
-	// Only the embedded wizard still splits build and release; the standalone dialog shows one flow (F15-T02).
+	// Modeling reads only build facts; publication loads its own checks after an explicit entry.
 	const tab = step === "delivery" ? "publish" : "materialize";
 	const [environment, setEnvironment] = useState(initialEnvironment);
 	const [strategy, setStrategy] = useState<MaterializationPlanStrategy>("WITH_MISSING_UPSTREAMS");
@@ -110,7 +108,6 @@ export function ModelPublishDialog({
 	const [materializationPlan, setMaterializationPlan] = useState<MaterializationPlanPreview | null>(null);
 	const [planState, setPlanState] = useState<"idle" | "loading" | "ready" | "blocked" | "error">("idle");
 	const [planFailure, setPlanFailure] = useState("");
-	const [executionWorkspace, setExecutionWorkspace] = useState<PlanExecutionWorkspace | null>(null);
 	const [busy, setBusy] = useState<"load" | "build" | "release" | "governance-quality" | "run" | "">("load");
 	const [activeReleaseAction, setActiveReleaseAction] = useState<ReleaseWorkflowAction | null>(null);
 	const [failure, setFailure] = useState<string>("");
@@ -148,7 +145,6 @@ export function ModelPublishDialog({
 		const sequence = ++loadSequence.current;
 		if (!silent) {
 			setWorkspace(null);
-			setExecutionWorkspace(null);
 			setMaterializations([]);
 		}
 		if (!planId) {
@@ -161,10 +157,10 @@ export function ModelPublishDialog({
 				step
 					? Promise.resolve(deliveryStatus?.workspace || null)
 					: batch
-						? getReleaseCandidateWorkbench(planId, { environment, modelSpecIds: Array.from(selectedIds) })
+						? (mode === "build" ? getModelBuildWorkspace : getReleaseCandidateWorkbench)(planId, { environment, modelSpecIds: Array.from(selectedIds) })
 						: Promise.resolve(null),
 				getModelMaterializationStatuses(planId, Array.from(selectedIds)),
-				!step && !batch && primary ? getModelDeliveryStatus(primary.id, environment) : Promise.resolve(null),
+				!step && !batch && primary ? (mode === "build" ? getModelBuildStatus : getModelDeliveryStatus)(primary.id, environment) : Promise.resolve(null),
 			]);
 			if (sequence !== loadSequence.current) return;
 			const identityMatches =
@@ -183,24 +179,8 @@ export function ModelPublishDialog({
 						status.workspace.candidate.version === status.candidate.version
 					: !status.workspace?.candidate && (!status.environment || status.environment === environment));
 			const scopedWorkspace = !step && !batch ? (aggregateMatches ? status.workspace : null) : releaseWorkspace;
-			let nextExecutionWorkspace: PlanExecutionWorkspace | null = null;
-			if (
-				selectionIsPublished ||
-				scopedWorkspace?.candidate?.status === "PUBLISHED" ||
-				selectedMaterializations.some(
-					(item) => item.candidateStatus === "PUBLISHED" && item.environment === environment,
-				)
-			) {
-				try {
-					nextExecutionWorkspace = await getPlanExecutionWorkspace(planId);
-				} catch {
-					/* The candidate remains readable while execution state is unavailable. */
-				}
-			}
-			if (sequence !== loadSequence.current) return;
 			setWorkspace(scopedWorkspace);
 			setMaterializations(selectedMaterializations);
-			setExecutionWorkspace(nextExecutionWorkspace);
 		} catch (error) {
 			if (sequence !== loadSequence.current || silent) return;
 			setFailure(normalizeModelingRequestFailure(error, "发布单读取失败。").message);
@@ -210,7 +190,7 @@ export function ModelPublishDialog({
 				else setBusy("");
 			}
 		}
-	}, [planId, selectedIds, selectionIsPublished, step, deliveryStatus, batch, primary, environment]);
+	}, [planId, selectedIds, selectionIsPublished, step, deliveryStatus, batch, primary, environment, mode]);
 	useEffect(() => {
 		void load();
 		return () => {
@@ -259,13 +239,7 @@ export function ModelPublishDialog({
 	const releaseActions = RELEASE_WORKFLOW_ACTIONS.filter(
 		(action) => candidateCommandScopeAllowed && workspace?.allowedActions.includes(action),
 	);
-	const executionBinding = executionWorkspace?.bindings.find((binding) => binding.environment === environment) || null;
-	// F15 (option 2): running a published version is handled in 运维中心 › 调度计划, not in these dialogs.
-	// An unchanged published version with a runnable binding is run from 调度计划; this dialog never rebuilds it instead.
-	const runsFromSchedule = Boolean(
-		selectionIsPublished &&
-			executionBinding?.allowedActions.some((action) => action === "RUN_NOW" || action === "REPAIR_DEPLOYMENT"),
-	);
+	const runsFromSchedule = Boolean(selectionIsPublished && scopedCandidate?.status === "PUBLISHED");
 	const schedulePath = planId ? `/ops/instances?tab=schedule&planId=${encodeURIComponent(planId)}` : "/ops/instances?tab=schedule";
 	const materializationRequestEntries = useMemo(
 		() => materializationScopeEntries(candidate, selection, buildAction), [candidate, selection, buildAction],
@@ -274,7 +248,7 @@ export function ModelPublishDialog({
 		() => materializationRequestEntries.map((entry) => entry.modelSpecId), [materializationRequestEntries],
 	);
 	const refreshMaterializationPlan = useCallback(async () => {
-		if (!canMaintain || !planId || !materializationRequestedIds.length) {
+		if ((mode !== "build" && !embedded) || !canMaintain || !planId || !materializationRequestedIds.length) {
 			setMaterializationPlan(null);
 			setPlanState("idle");
 			setPlanFailure("");
@@ -298,7 +272,7 @@ export function ModelPublishDialog({
 			setPlanFailure(normalized.message);
 			return null;
 		}
-	}, [canMaintain, environment, materializationRequestedIds, planId, strategy]);
+	}, [canMaintain, environment, materializationRequestedIds, planId, strategy, mode, embedded]);
 	useEffect(() => {
 		void refreshMaterializationPlan();
 	}, [refreshMaterializationPlan]);
@@ -457,7 +431,7 @@ export function ModelPublishDialog({
 				try {
 					const buildIds = materializationPlan?.orderedEntries.filter((entry) => entry.action === "BUILD").map((entry) => entry.modelSpecId);
 					const modelSpecIds = buildIds?.length ? buildIds : Array.from(selectedIds);
-					const occupied = await getReleaseCandidateWorkbench(planId, { environment, modelSpecIds });
+					const occupied = await getModelBuildWorkspace(planId, { environment, modelSpecIds });
 					if (sequence !== loadSequence.current) return false;
 					if (occupied.candidate?.planId === planId && occupied.candidate.environment === environment &&
 						occupied.candidate.entries.some((entry) => modelSpecIds.includes(entry.modelSpecId)) &&
@@ -566,7 +540,7 @@ export function ModelPublishDialog({
 			setBusy("");
 		}
 	};
-	const { materializationPlanColumns, evidenceColumns } = useModelMaterializationColumns();
+	const { evidenceColumns } = useModelMaterializationColumns();
 	const scopedGovernanceQuality = candidateContainsSelection ? workspace?.governanceQuality || null : null;
 	const materializeContent = (
 		<>
@@ -578,72 +552,9 @@ export function ModelPublishDialog({
 					<p>错误码：{entry.repairCode || "未提供"}；执行编号：{entry.pipelineRunGroupId}</p>
 				</div>
 			))}
-			<label>
-				<span>执行环境</span>
-				<select
-					onChange={(event) => {
-						setEnvironment(event.target.value);
-						onEnvironmentChange?.(event.target.value);
-					}}
-					value={environment}
-				>
-					<option value="dev">开发环境</option>
-					<option value="test">测试环境</option>
-					<option value="prod">生产环境</option>
-				</select>
-			</label>
-			<label>
-				<span>依赖策略</span>
-				<select
-					onChange={(event) => setStrategy(event.target.value as MaterializationPlanStrategy)}
-					value={strategy}
-				>
-					<option value="WITH_MISSING_UPSTREAMS">缺失上游一并构建（推荐）</option>
-					<option disabled={!currentOnlyAvailable} value="CURRENT_ONLY">
-						仅使用当前已验证上游
-					</option>
-				</select>
-			</label>
-			<div className="dmx-materialization-plan-toolbar">
-				<strong>依赖构建计划</strong>
-				<Button
-					disabled={planState === "loading" || Boolean(busy)}
-					onClick={() => void refreshMaterializationPlan()}
-				>
-					{planState === "loading" ? "预览中…" : "刷新计划"}
-				</Button>
-			</div>
-			{planState === "error" ? (
-				<div className="dmx-inline-error" role="alert">
-					{planFailure}
-				</div>
-			) : null}
-			{materializationPlan ? (
-				<>
-					<div className="dmx-table-scroll dmx-materialization-plan-table">
-						<CompactTable<MaterializationPlanEntry>
-							columns={materializationPlanColumns}
-							dataSource={materializationPlan.orderedEntries}
-							pagination={false}
-							rowKey="modelSpecId"
-						/>
-					</div>
-					{materializationPlan.blockers.length ? (
-						<ul className="dmx-materialization-plan-blockers">
-							{materializationPlan.blockers.map((blocker) => (
-								<li key={`${blocker.code}:${blocker.modelSpecId || "plan"}`}>
-									<strong>{blocker.code}</strong>：{blocker.message}
-								</li>
-							))}
-						</ul>
-					) : null}
-					<p className="dmx-materialization-plan-checksum">
-						计划校验码：{materializationPlan.planChecksum.slice(0, 12)}…
-					</p>
-				</>
-			) : planState === "loading" ? (
-				<p className="dmx-capability-note">正在计算 BUILD、REUSE 与阻断项…</p>
-			) : null}
+            <ModelBuildPlanPreview strategy={strategy} setStrategy={setStrategy} currentOnlyAvailable={currentOnlyAvailable}
+                planState={planState} busy={Boolean(busy)} refreshMaterializationPlan={refreshMaterializationPlan}
+                planFailure={planFailure} materializationPlan={materializationPlan} />
 			<dl className="dmx-summary-list">
 				<dt>模型范围</dt>
 				<dd>{selection.map((model) => `${model.name} · r${model.revision}`).join("；")}</dd>
@@ -702,9 +613,6 @@ export function ModelPublishDialog({
 					当前版本已发布且没有改动，无需重新构建。运行已发布版本请到 <Link to={schedulePath}>运维中心 › 调度计划</Link>。
 				</p>
 			) : null}
-			{!embedded && !selectionProblem ? (
-				<ModelAssetDeliveryResult key={workspace?.candidate?.status || "none"} models={selection} />
-			) : null}
 		</>
 	);
 	const publishContent = (
@@ -712,7 +620,7 @@ export function ModelPublishDialog({
 			{embedded ? <h3>{batch ? "批量发布流程" : "发布模型"}</h3> : null}
 			{!embedded ? (
 				<ModelReleaseWorkflowPanel
-					binding={executionBinding}
+					binding={null}
 					candidate={scopedCandidate}
 					evidence={candidateContainsSelection ? workspace?.evidence || [] : []}
 					governanceQuality={scopedGovernanceQuality}
@@ -731,7 +639,7 @@ export function ModelPublishDialog({
 					<input onChange={(event) => setReason(event.target.value)} value={reason} />
 				</label>
 			) : null}
-			{!embedded && executionBinding ? (
+			{!embedded && scopedCandidate?.status === "PUBLISHED" ? (
 				<p className="dmx-capability-note">
 					发布只登记正式版本。已发布版本的运行、部署修复在 <Link to={schedulePath}>运维中心 › 调度计划</Link> 办理，运行失败不会改变发布结果。
 				</p>
@@ -782,6 +690,21 @@ export function ModelPublishDialog({
 	) : null;
 	const sharedNotices = (
 		<>
+			<label>
+				<span>{mode === "release" ? "发布环境" : "执行环境"}</span>
+				<select disabled={Boolean(busy)}
+					onChange={(event) => {
+						setEnvironment(event.target.value);
+						onEnvironmentChange?.(event.target.value);
+					}}
+					value={environment}
+				>
+					<option value="dev">开发环境</option>
+					<option value="test">测试环境</option>
+					<option value="prod">生产环境</option>
+				</select>
+			</label>
+
 			{failure ? (
 				<div className="dmx-inline-error" role="alert">
 					{failure}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getModelDeliveryStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
+import { getModelBuildStatus, type ModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
 import type { ModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
 import { normalizeModelingRequestFailure } from "./services/planningProjectionService";
 
@@ -32,7 +32,7 @@ export function useModelDeliveryStatus(
 				loading: true,
 			}));
 			try {
-				const data = await getModelDeliveryStatus(modelId, environment, candidateId);
+				const data = await getModelBuildStatus(modelId, environment, candidateId || undefined);
 				if (!active) return;
 				if (data.modelSpecId !== modelId || data.modelRevision !== revision || data.modelChecksum !== checksum) {
 					throw new Error("模型版本已变化，请刷新后继续");
@@ -44,7 +44,7 @@ export function useModelDeliveryStatus(
 					setResult({
 						identity,
 						data: null,
-						failure: normalizeModelingRequestFailure(error, "交付状态读取失败").message,
+						failure: normalizeModelingRequestFailure(error, "构建状态读取失败").message,
 						loading: false,
 					});
 			}

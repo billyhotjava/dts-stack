@@ -1000,7 +1000,7 @@ export type PlanExecutionBinding = {
 	latestOperationalRun: PlanOperationalRun;
 	latestRelation: PlanExecutionRelationEvidence;
 	primaryBlocker?: PlanExecutionBlocker | null;
-	allowedActions: ("RUN_NOW" | "REPAIR_DEPLOYMENT")[];
+	allowedActions: ("RUN_NOW" | "REPAIR_DEPLOYMENT" | "ENABLE")[];
 };
 
 export type PlanExecutionWorkspace = {
@@ -1103,6 +1103,10 @@ export const getModelMaterializationStatuses = (planId: string, modelSpecIds: st
 		params: { modelSpecIds: modelSpecIds.join(",") },
 		_skipErrorToast: true,
 	} as any);
+
+export const getModelBuildWorkspace = (planId: string, scope: { environment: string; modelSpecIds: string[] }) =>
+	api.get<ReleaseCandidateWorkbench>({ url: `${releaseCandidateResource(planId)}/build-workspace`,
+		params: { environment: scope.environment, modelSpecIds: scope.modelSpecIds.join(",") }, _skipErrorToast: true } as any);
 
 export const previewMaterializationPlan = (planId: string, data: MaterializationPlanPreviewRequest) =>
 	api.post<MaterializationPlanPreview>({
@@ -1358,3 +1362,19 @@ export const rematerializeReleaseCandidate = (
 		data,
 		_skipErrorToast: true,
 	} as any);
+
+export type PlanExecutionPublication = {
+    candidateId: string; candidateVersion: number; environment: string; models: string[];
+    releaseIds: string[]; bindingVersion: number; canDeploy: boolean;
+};
+export const listPlanExecutionPublications = (planId: string) => api.get<PlanExecutionPublication[]>({
+    url: `${planExecutionBindingResource(planId)}/publications`, _skipErrorToast: true,
+} as any);
+export const deployPlanExecution = (planId: string, publication: PlanExecutionPublication) => api.post<void>({
+    url: `${planExecutionBindingResource(planId)}/deploy`,
+    data: { candidateId: publication.candidateId, candidateVersion: publication.candidateVersion,
+        releaseIds: publication.releaseIds, bindingVersion: publication.bindingVersion }, _skipErrorToast: true,
+} as any);
+export const enablePlanExecution = (planId: string, bindingId: string, version: number) => api.post<void>({
+    url: `${planExecutionBindingResource(planId)}/${encodeURIComponent(bindingId)}/enable`, data: { version }, _skipErrorToast: true,
+} as any);

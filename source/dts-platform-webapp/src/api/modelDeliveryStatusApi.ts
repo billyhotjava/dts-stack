@@ -90,6 +90,10 @@ export const getModelDeliveryStatus = (id: string, environment?: string, candida
 		_skipErrorToast: true,
 	} as any);
 
+export const getModelBuildStatus = (id: string, environment?: string, candidateId?: string) =>
+	api.get<ModelDeliveryStatus>({ url: `/modeling/model-specs/${encodeURIComponent(id)}/build-status`,
+		params: { environment, candidateId: candidateId || undefined }, _skipErrorToast: true } as any);
+
 /** F15 K1: per-row build and publication facts for the modeling workbench; never quality or serving state. */
 export type ModelPublishedRelease = {
 	releaseId: string;

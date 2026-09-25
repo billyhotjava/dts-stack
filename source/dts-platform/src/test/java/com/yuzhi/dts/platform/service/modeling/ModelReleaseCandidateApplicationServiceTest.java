@@ -1366,6 +1366,17 @@ class ModelReleaseCandidateApplicationServiceTest {
     }
 
     @Test
+    void buildProjectionDoesNotEvaluateGovernanceQuality() {
+        CandidateView built = candidate(DeliveryStatus.BUILT, List.of(entry(DeliveryStatus.BUILT)));
+        when(dutyResolver.currentDuties()).thenReturn(Set.of(DeliveryActorRole.MODEL_MAINTAINER));
+        when(repository.listForModelScope(TENANT, PLAN_ID, "prod", List.of(MODEL_ID))).thenReturn(List.of(built));
+        var workspace = service.buildWorkspaceForScope(TENANT, ACTOR, PLAN_ID, "prod", List.of(MODEL_ID));
+        assertThat(workspace.candidate()).isEqualTo(built);
+        assertThat(workspace.allowedActions()).doesNotContain(WorkspaceAction.RUN_QUALITY, WorkspaceAction.PUBLISH);
+        org.mockito.Mockito.verifyNoInteractions(governanceQuality);
+    }
+
+    @Test
     void dataOwnerWorkspacePrefersDirectPublishAfterQualityWithoutReviewActions() {
         CandidateView qualityPassed = candidate(
             DeliveryStatus.QUALITY_PASSED,

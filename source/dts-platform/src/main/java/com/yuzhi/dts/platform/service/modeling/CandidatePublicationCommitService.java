@@ -317,7 +317,7 @@ public class CandidatePublicationCommitService {
                 if (serving.servingNotReady()) servingNotReadyCount++;
             }
         }
-        publications.rebuildManualBinding(candidate, List.copyOf(bindings), actorId, now);
+        // Publication commits version facts only. Operations explicitly chooses and deploys its own scope.
         boolean publicationRetry = candidate.status() == DeliveryStatus.PARTIAL;
         outbox.publishInternal(
             new PlatformEventRequest(

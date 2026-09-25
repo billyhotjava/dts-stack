@@ -2,10 +2,10 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { getModelDeliveryStatus } from "@/api/modelDeliveryStatusApi";
+import { getModelBuildStatus } from "@/api/modelDeliveryStatusApi";
 import { useModelDeliveryStatus } from "./useModelDeliveryStatus";
 
-vi.mock("@/api/modelDeliveryStatusApi", () => ({ getModelDeliveryStatus: vi.fn() }));
+vi.mock("@/api/modelDeliveryStatusApi", () => ({ getModelBuildStatus: vi.fn() }));
 vi.mock("./services/planningProjectionService", () => ({
 	normalizeModelingRequestFailure: (e: any) => ({ message: e.message }),
 }));
@@ -46,7 +46,7 @@ afterEach(() => {
 it("late response from another model never replaces current evidence", async () => {
 	const a = deferred(),
 		b = deferred();
-	vi.mocked(getModelDeliveryStatus).mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
+	vi.mocked(getModelBuildStatus).mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
 	await act(async () => root.render(<Probe id="a" />));
 	await act(async () => root.render(<Probe id="b" />));
 	await act(async () => b.resolve(status("b")));
@@ -55,17 +55,17 @@ it("late response from another model never replaces current evidence", async () 
 	expect(container.textContent).toBe("b");
 });
 it("revision change clears old results and rejects stale evidence", async () => {
-	vi.mocked(getModelDeliveryStatus).mockResolvedValueOnce(status("a"));
+	vi.mocked(getModelBuildStatus).mockResolvedValueOnce(status("a"));
 	await act(async () => root.render(<Probe id="a" />));
 	const late = deferred();
-	vi.mocked(getModelDeliveryStatus).mockReturnValueOnce(late.promise);
+	vi.mocked(getModelBuildStatus).mockReturnValueOnce(late.promise);
 	await act(async () => root.render(<Probe id="a" revision={2} />));
 	expect(container.textContent).toBe("loading");
 	await act(async () => late.resolve(status("a", 1)));
 	expect(container.textContent).toContain("模型版本已变化");
 });
 it("failed reads never present a successful state", async () => {
-	vi.mocked(getModelDeliveryStatus).mockRejectedValueOnce(new Error("读取失败"));
+	vi.mocked(getModelBuildStatus).mockRejectedValueOnce(new Error("读取失败"));
 	await act(async () => root.render(<Probe id="a" />));
 	expect(container.textContent).toBe("读取失败");
 });

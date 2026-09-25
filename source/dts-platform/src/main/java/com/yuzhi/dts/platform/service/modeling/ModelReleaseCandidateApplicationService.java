@@ -196,6 +196,49 @@ public class ModelReleaseCandidateApplicationService {
         return withPersistedEvidence(project(candidate, access.actorId(), access.duties()), workbenchEvidence.findCurrent(candidate));
     }
 
+    @Transactional(readOnly = true)
+    public WorkbenchView buildWorkspaceForCandidate(String tenantId, String actorId, UUID planId, UUID candidateId) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        return buildProjection(candidateForPlan(access.tenantId(), access.planId(), candidateId), access);
+    }
+
+    /** Build-only projection: no governance policy, quality, catalog or serving reads. */
+    @Transactional(readOnly = true)
+    public WorkbenchView buildWorkspaceForCurrentModel(String tenantId, String actorId, UUID planId,
+        UUID modelSpecId, int modelRevision, String modelChecksum, String environment) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        CandidateView candidate = repository.findLatestForModelCurrentRevision(access.tenantId(), access.planId(),
+            modelSpecId, modelRevision, modelChecksum, environment).orElse(null);
+        return buildProjection(candidate, access);
+    }
+
+    @Transactional(readOnly = true)
+    public WorkbenchView buildWorkspaceForScope(String tenantId, String actorId, UUID planId,
+        String environment, List<UUID> modelIds) {
+        Access access = authorizeRead(tenantId, actorId, planId);
+        if (environment == null || environment.isBlank() || modelIds == null || modelIds.isEmpty() ||
+            modelIds.size() > ModelReleaseCandidateContract.MAX_ROOT_ENTRIES || modelIds.stream().anyMatch(Objects::isNull)) {
+            throw badRequest("MODEL_RELEASE_CANDIDATE_SCOPE_INVALID", "Environment and a bounded model scope are required");
+        }
+        List<CandidateView> matches = repository.listForModelScope(access.tenantId(), planId, environment.trim(), modelIds);
+        if (matches.size() > 1 && isActive(matches.get(0)) && isActive(matches.get(1))) {
+            throw new ModelReleaseCandidateException("MODEL_RELEASE_CANDIDATE_SCOPE_SPLIT",
+                "所选模型属于多个活动候选，请分别处理", Kind.CONFLICT);
+        }
+        return buildProjection(matches.isEmpty() ? null : matches.getFirst(), access);
+    }
+
+    private WorkbenchView buildProjection(CandidateView candidate, Access access) {
+        if (candidate == null) return empty(access.planId(), access.duties());
+        WorkbenchView view = project(candidate, access.actorId(), access.duties());
+        List<EntryEvidenceView> entries = workbenchEvidence.findCurrent(candidate);
+        return new WorkbenchView(view.planId(), view.state(), candidate, evidence(candidate, entries), entries,
+            GovernanceQualitySummaryView.notEvaluated(), view.primaryBlocker(), view.allowedActions().stream()
+                .filter(action -> !Set.of(WorkspaceAction.RUN_QUALITY, WorkspaceAction.SUBMIT_REVIEW,
+                    WorkspaceAction.APPROVE, WorkspaceAction.REJECT, WorkspaceAction.PUBLISH,
+                    WorkspaceAction.RETRY_PUBLICATION, WorkspaceAction.ROLLBACK).contains(action)).toList(), view.etag());
+    }
+
     /** Read-only model-scoped candidate projection; never creates a candidate or falls back to another model. */
     @Transactional(readOnly = true)
     public WorkbenchView workspaceForCurrentModel(

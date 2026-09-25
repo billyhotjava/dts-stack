@@ -131,6 +131,24 @@ class PlanDagDeploymentServiceTest {
         );
     }
 
+    @Test
+    void explicitlyDeployedVersionStaysPausedUntilTheOperatorEnablesIt() {
+        var repository = mock(PlanExecutionBindingRepository.class);
+        var dags = mock(DbtDagService.class);
+        var airflow = mock(AirflowClient.class);
+        var binding = binding("DEPLOYING");
+        when(repository.findDeployable(20)).thenReturn(List.of(binding));
+        when(repository.requiresActivation(BINDING_ID)).thenReturn(true);
+        when(dags.ensurePlanDag(any(), any(), any(), any(), any())).thenReturn(
+            new DbtDagService.ManagedDagDeployment(binding.dagId(), "v1", CHECKSUM, Path.of("/tmp/plan.py")));
+        when(airflow.setDagPaused(binding.dagId(), true)).thenReturn(Optional.of(Map.of("is_paused", true)));
+        when(airflow.getDag(binding.dagId())).thenReturn(Optional.of(Map.of("dag_id", binding.dagId(), "is_paused", true,
+            "tags", List.of(Map.of("name", "deployment:" + CHECKSUM)))));
+        new PlanDagDeploymentService(repository, dags, airflow, Clock.fixed(NOW, ZoneOffset.UTC)).reconcilePending();
+        verify(repository).markActive(binding, CHECKSUM, null, "UTC", true, NOW);
+        verify(airflow, org.mockito.Mockito.never()).setDagPaused(binding.dagId(), false);
+    }
+
     private static BindingRecord binding(String status) {
         return new BindingRecord(
             BINDING_ID,

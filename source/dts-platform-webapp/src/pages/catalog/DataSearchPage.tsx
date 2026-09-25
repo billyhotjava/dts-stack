@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { type AssetDirectoryRow, AssetLedgerView } from "./assets/AssetLedgerView";
 import { resolveModelDataManagementFocus, resolveModelingReturnTo } from "@/pages/data-modeling/prototype/modelDataManagementLink";
 import { ModelDataOperationsPanel } from "./assets/ModelDataOperationsPanel";
+import { ModelRegistrationInbox } from "./assets/ModelRegistrationInbox";
 import { AssetTagsWorkspace } from "./assets/AssetTagsWorkspace";
 import { ASSET_PORTAL_V2_ENABLED, LEDGER_PAGE_SIZE } from "./assets/assetPageShared";
 import { buildAssetV2Query } from "./assets/assetV2Query";
@@ -188,7 +189,8 @@ export default function DataSearchPage() {
 					{ key: "catalog-tags", label: "数据标签" },
 				]}
 			/>
-			{activeTab === "asset-directory" && searchParams.get("modelSpecId") ? <ModelDataOperationsPanel
+				{activeTab === "asset-directory" ? <ModelRegistrationInbox /> : null}
+				{activeTab === "asset-directory" && searchParams.get("modelSpecId") ? <ModelDataOperationsPanel
 				key={`${searchParams.get("modelSpecId")}:${searchParams.get("environment") || "dev"}`}
 				modelSpecId={searchParams.get("modelSpecId")!} environment={searchParams.get("environment") || "dev"} candidateId={searchParams.get("candidateId") || undefined}
 				focus={resolveModelDataManagementFocus(searchParams.get("focus"))} returnTo={resolveModelingReturnTo(searchParams.get("returnTo"))} /> : null}

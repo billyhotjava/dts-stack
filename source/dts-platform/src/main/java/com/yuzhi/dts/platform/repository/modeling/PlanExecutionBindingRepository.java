@@ -25,6 +25,11 @@ public class PlanExecutionBindingRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    public boolean requiresActivation(UUID bindingId) {
+        return Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+            "select activation_required from modeling_plan_execution_binding where id = ?", Boolean.class, bindingId));
+    }
+
     @Transactional(readOnly = true)
     public List<BindingRecord> findDeployable(int limit) {
         int safeLimit = Math.max(1, Math.min(limit, 100));

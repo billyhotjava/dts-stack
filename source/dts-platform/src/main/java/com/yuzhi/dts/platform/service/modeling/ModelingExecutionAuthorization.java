@@ -44,7 +44,7 @@ public class ModelingExecutionAuthorization {
         return ModelingSystemExecution.open(run.tenantId(),run.planId());
     }
     private void requireBindingSnapshot(OpenedRun run) {
-        Integer count=jdbc.queryForObject("select count(*) from modeling_plan_execution_binding where tenant_id=? and id=? and plan_id=? and version=? and desired_scope_checksum=? and deployment_status='ACTIVE' and deployed_checksum=desired_deployment_checksum", Integer.class,run.tenantId(),run.bindingId(),run.planId(),run.bindingVersion(),run.scopeChecksum());
+        Integer count=jdbc.queryForObject("select count(*) from modeling_plan_execution_binding where tenant_id=? and id=? and plan_id=? and version=? and desired_scope_checksum=? and deployment_status='ACTIVE' and deployed_checksum=desired_deployment_checksum and coalesce(airflow_paused,false)=false", Integer.class,run.tenantId(),run.bindingId(),run.planId(),run.bindingVersion(),run.scopeChecksum());
         if (count==null || count!=1) throw denied("MODELING_EXECUTION_SCOPE_CHANGED");
     }
     private ModelingIdentityService.Scope openActor(String actor) {

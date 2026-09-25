@@ -153,7 +153,8 @@ public class CandidateQualityAssetRegistrationService {
     /** A registration performed directly (manual retry in the catalog) completes the pending task too. */
     public void recordRegistered(CandidateView candidate) {
         if (tasks == null || candidate == null) return;
-        tasks.markSucceeded(candidate.tenantId(), candidate.id(), clock.instant());
+        tasks.findByCandidate(candidate.tenantId(), candidate.id())
+            .ifPresent(task -> tasks.markSucceeded(task, task.attempts(), clock.instant()));
     }
 
     @Transactional

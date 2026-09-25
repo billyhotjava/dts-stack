@@ -91,8 +91,10 @@ public class ModelDeliveryStatusQueryService {
             PublishedRelease release = published.get(id);
             PublishedReleaseView releaseView = release == null ? null
                 : new PublishedReleaseView(release.releaseId(), release.modelRevision(), release.environment(), release.publishedAt());
+            ModelSpecView readableModel = null;
             try {
-                Selection selection = select(tenantId, actorId, id, environment, null);
+                readableModel = models.get(tenantId, id);
+                Selection selection = selectBuild(tenantId, actorId, readableModel, environment, null);
                 ModelSpecView model = selection.model();
                 rows.add(new WorkbenchSummaryView(model.id(), model.revision(), model.checksum(), "OK", null,
                     modelingResult(model, selection.authoringContext(), selection.candidate(), selection.workspace(), selection.entry(), selection.current(), environment),
@@ -100,10 +102,17 @@ public class ModelDeliveryStatusQueryService {
             } catch (ModelSpecException | ModelReleaseCandidateException failure) {
                 String code = failure instanceof ModelSpecException spec ? spec.code() : ((ModelReleaseCandidateException) failure).code();
                 // A model the actor cannot read must not reveal its release history either.
-                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", code, null, publishedReadState, null));
+                boolean denied = failure instanceof ModelSpecException spec
+                    ? spec.kind() == ModelSpecException.Kind.FORBIDDEN || spec.kind() == ModelSpecException.Kind.NOT_FOUND
+                    : ((ModelReleaseCandidateException) failure).kind() == ModelReleaseCandidateException.Kind.FORBIDDEN ||
+                        ((ModelReleaseCandidateException) failure).kind() == ModelReleaseCandidateException.Kind.NOT_FOUND;
+                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", code, null,
+                    readableModel != null && !denied ? publishedReadState : "FAILED",
+                    readableModel != null && !denied ? releaseView : null));
             } catch (RuntimeException failure) {
                 LOG.warn("event=model_workbench_summary_read_failed modelSpecId={} failureType={}", id, failure.getClass().getSimpleName());
-                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", "MODEL_WORKBENCH_SUMMARY_UNAVAILABLE", null, publishedReadState, null));
+                rows.add(new WorkbenchSummaryView(id, 0, null, "FAILED", "MODEL_WORKBENCH_SUMMARY_UNAVAILABLE", null,
+                    readableModel == null ? "FAILED" : publishedReadState, readableModel == null ? null : releaseView));
             }
         }
         return List.copyOf(rows);
@@ -111,6 +120,40 @@ public class ModelDeliveryStatusQueryService {
 
     private record Selection(ModelSpecView model, AuthoringContextView authoringContext, WorkbenchView workspace,
         CandidateView candidate, EntryView entry, boolean current) {}
+
+    private Selection selectBuild(String tenantId, String actorId, ModelSpecView model, String environment, UUID candidateId) {
+        AuthoringContextView context = authoring.context(tenantId, actorId, model.id(), null, null, true);
+        WorkbenchView workspace = candidateId != null ? candidates.buildWorkspaceForCandidate(tenantId, actorId, model.planId(), candidateId) : candidates.buildWorkspaceForCurrentModel(tenantId, actorId, model.planId(),
+            model.id(), model.revision(), model.checksum(), environment);
+        CandidateView candidate = workspace.candidate();
+        EntryView entry = candidate == null ? null : candidate.entries().stream()
+            .filter(item -> model.id().equals(item.modelSpecId())).findFirst().orElse(null);
+        if (candidate != null && (entry == null || environment != null && !environment.isBlank() && !environment.equals(candidate.environment()))) {
+            throw new ModelReleaseCandidateException("MODEL_BUILD_SCOPE_MISMATCH", "构建批次与请求模型或环境不一致", ModelReleaseCandidateException.Kind.NOT_FOUND);
+        }
+        boolean current = entry != null && entry.revision() == model.revision() && entry.checksum().equals(model.checksum()) &&
+            entry.planId().equals(model.planId()) && implementationMatches(entry, workspace, context);
+        return new Selection(model, context, workspace, candidate, entry, current);
+    }
+
+    /** Same modeling DTO for the existing wizard, with only local build facts and actions. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public DeliveryStatusView buildStatus(String tenantId, String actorId, UUID modelSpecId, String environment, UUID candidateId) {
+        Selection selected = selectBuild(tenantId, actorId, models.get(tenantId, modelSpecId), environment, candidateId);
+        ModelSpecView model = selected.model();
+        CandidateView candidate = selected.candidate();
+        List<ActionView> actions = java.util.stream.Stream.concat(
+            nullSafe(selected.authoringContext().allowedActions()).stream().map(action ->
+                new ActionView(action.name(), true, null, model.id(), model.revision())),
+            nullSafe(selected.workspace().allowedActions()).stream().map(action -> workspaceAction(action, candidate))).toList();
+        return new DeliveryStatusView(model.id(), model.revision(), model.checksum(), model.planId(), environment,
+            candidate == null ? null : new CandidateSummary(candidate.id(), candidate.version(), candidate.status().name(),
+                selected.entry().revision(), selected.entry().checksum(), selected.current(), candidate.lastModifiedAt()),
+            Instant.now(), recommended(candidate, selected.current()), selected.workspace(),
+            wizard(selected.authoringContext(), candidate, selected.workspace(), selected.current(), actions, null, model, selected.entry()),
+            List.of(step("materialization", materialization(candidate, selected.current()), selected.current(), candidate)), actions,
+            modelingResult(model, selected.authoringContext(), candidate, selected.workspace(), selected.entry(), selected.current(), environment), null);
+    }
 
     private Selection select(String tenantId, String actorId, UUID modelSpecId, String environment, UUID candidateId) {
         ModelSpecView model = models.get(tenantId, modelSpecId);

@@ -84,11 +84,16 @@ public class PlanExecutionHealthService {
             deploymentChecksumMatches &&
             "OBSERVED".equals(actual.state()) &&
             !Boolean.TRUE.equals(actual.paused()) &&
+            !Boolean.TRUE.equals(binding.persistedAirflowPaused()) &&
             scheduleMatches;
+        boolean awaitingActivation = operationalDagMatches(binding) && "ACTIVE".equals(binding.deploymentStatus())
+            && deploymentChecksumMatches && "OBSERVED".equals(actual.state()) && scheduleMatches
+            && (Boolean.TRUE.equals(actual.paused()) || Boolean.TRUE.equals(binding.persistedAirflowPaused()));
         List<String> allowedActions = new ArrayList<>();
         if (access.operatorWithPlanAccess() && executionAvailable && !activeRun) {
             allowedActions.add("RUN_NOW");
         }
+        if (access.operatorWithPlanAccess() && awaitingActivation && !activeRun) allowedActions.add("ENABLE");
         BlockerView blocker = blocker(
             binding,
             actual,
@@ -98,7 +103,7 @@ public class PlanExecutionHealthService {
         if (
             access.operatorWithPlanAccess() &&
             !activeRun &&
-            !executionAvailable &&
+            !executionAvailable && !awaitingActivation &&
             Set.of("ACTIVE", "STALE", "FAILED", "UNKNOWN")
                 .contains(Objects.toString(binding.deploymentStatus(), "")) &&
             blocker != null
@@ -266,10 +271,10 @@ public class PlanExecutionHealthService {
                 "RELEASE_OPERATOR"
             );
         }
-        if (Boolean.TRUE.equals(actual.paused())) {
+        if (Boolean.TRUE.equals(actual.paused()) || Boolean.TRUE.equals(binding.persistedAirflowPaused())) {
             return new BlockerView(
                 "MODEL_PLAN_DAG_PAUSED",
-                "Airflow 中的计划 DAG 已暂停",
+                "运行计划已部署，等待启用",
                 "RELEASE_OPERATOR"
             );
         }
@@ -310,6 +315,7 @@ public class PlanExecutionHealthService {
             return "DISABLED";
         }
         if (!"OBSERVED".equals(actual.state())) return "UNKNOWN";
+        if (Boolean.TRUE.equals(actual.paused()) || Boolean.TRUE.equals(binding.persistedAirflowPaused())) return "DISABLED";
         return "DEGRADED";
     }
 
@@ -464,6 +470,9 @@ public class PlanExecutionHealthService {
         OperationalRunView latestOperationalRun,
         RelationEvidenceView latestRelation,
         BlockerView primaryBlocker,
+        boolean awaitingActivation = operationalDagMatches(binding) && "ACTIVE".equals(binding.deploymentStatus())
+            && deploymentChecksumMatches && "OBSERVED".equals(actual.state()) && scheduleMatches
+            && (Boolean.TRUE.equals(actual.paused()) || Boolean.TRUE.equals(binding.persistedAirflowPaused()));
         List<String> allowedActions
     ) {}
 

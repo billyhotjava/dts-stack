@@ -780,6 +780,8 @@
                         <testInclude>**/service/modeling/PlatformModelGovernancePolicyPostgresTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelGovernancePolicyAdministrationPostgresTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelAssetRegistrationWorkerTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelAssetRegistrationAttemptServiceTest.java</testInclude>
+                        <testInclude>**/service/modeling/PlanExecutionDeploymentServiceTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelAssetRegistrationTaskRepositoryPostgresTest.java</testInclude>
                         <testInclude>**/repository/modeling/ModelPublishedReleaseReadRepositoryPostgresTest.java</testInclude>
                         <testInclude>**/service/modeling/CandidateQualityAssetRegistrationTaskStateTest.java</testInclude>

@@ -150,7 +150,7 @@ public class CandidateRollbackCommitService {
             );
             publications.rollbackModel(candidate, observation, model, rollback, actorId, now);
         }
-        publications.rebuildManualBindingAfterRollback(candidate, actorId, now);
+        // Withdrawing publication must not rewrite an independently selected runtime binding.
         outbox.publishInternal(
             new PlatformEventRequest(
                 "model-release-candidate-rolled-back:" + candidate.id() + ":v" + candidate.version(),

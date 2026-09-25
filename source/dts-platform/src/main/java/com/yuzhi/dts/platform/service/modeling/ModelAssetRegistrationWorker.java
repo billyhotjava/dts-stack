@@ -2,9 +2,7 @@ package com.yuzhi.dts.platform.service.modeling;
 
 import com.yuzhi.dts.platform.repository.modeling.ModelAssetRegistrationTaskRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelAssetRegistrationTaskRepository.TaskView;
-import com.yuzhi.dts.platform.repository.modeling.ModelReleaseCandidateRepository;
 import com.yuzhi.dts.platform.security.modeling.ModelingIdentityException;
-import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -37,33 +35,18 @@ public class ModelAssetRegistrationWorker {
     };
 
     private final ModelAssetRegistrationTaskRepository tasks;
-    private final CandidateQualityAssetRegistrationService registration;
-    private final ModelReleaseCandidateRepository candidates;
-    private final ModelingExecutionAuthorization executionAuthorization;
+    private final ModelAssetRegistrationAttemptService registration;
     private final Clock clock;
 
     @Autowired
-    public ModelAssetRegistrationWorker(
-        ModelAssetRegistrationTaskRepository tasks,
-        CandidateQualityAssetRegistrationService registration,
-        ModelReleaseCandidateRepository candidates,
-        ModelingExecutionAuthorization executionAuthorization
-    ) {
-        this(tasks, registration, candidates, executionAuthorization, Clock.systemUTC());
+    public ModelAssetRegistrationWorker(ModelAssetRegistrationTaskRepository tasks, ModelAssetRegistrationAttemptService registration) {
+        this(tasks, registration, Clock.systemUTC());
     }
 
-    ModelAssetRegistrationWorker(
-        ModelAssetRegistrationTaskRepository tasks,
-        CandidateQualityAssetRegistrationService registration,
-        ModelReleaseCandidateRepository candidates,
-        ModelingExecutionAuthorization executionAuthorization,
-        Clock clock
-    ) {
-        this.tasks = Objects.requireNonNull(tasks, "tasks is required");
-        this.registration = Objects.requireNonNull(registration, "registration is required");
-        this.candidates = Objects.requireNonNull(candidates, "candidates is required");
-        this.executionAuthorization = Objects.requireNonNull(executionAuthorization, "executionAuthorization is required");
-        this.clock = Objects.requireNonNull(clock, "clock is required");
+    ModelAssetRegistrationWorker(ModelAssetRegistrationTaskRepository tasks, ModelAssetRegistrationAttemptService registration, Clock clock) {
+        this.tasks = Objects.requireNonNull(tasks);
+        this.registration = Objects.requireNonNull(registration);
+        this.clock = Objects.requireNonNull(clock);
     }
 
     @Scheduled(fixedDelayString = "${dts.modeling.asset-registration.delay-ms:10000}")
@@ -71,7 +54,7 @@ public class ModelAssetRegistrationWorker {
         Instant now = clock.instant();
         List<TaskView> due = tasks.findDue(now, MAX_ATTEMPTS, BATCH_SIZE);
         for (TaskView task : due) {
-            if (!tasks.claim(task.id(), now, now.plus(LEASE))) continue;
+            if (!tasks.claim(task, clock.instant(), clock.instant().plus(LEASE))) continue;
             attempt(task, task.attempts() + 1);
         }
     }
@@ -79,24 +62,7 @@ public class ModelAssetRegistrationWorker {
     void attempt(TaskView task, int attempt) {
         Instant now = clock.instant();
         try {
-            CandidateView candidate = candidates.find(task.tenantId(), task.candidateId()).orElse(null);
-            if (candidate == null || !CandidateGovernanceQualityEvidenceService.supportsQualityEvidence(candidate.status())) {
-                fail(task, attempt, "MODEL_ASSET_REGISTRATION_CANDIDATE_NOT_BUILT", "发布单已不处于可登记的构建状态", now);
-                return;
-            }
-            Integer initiatorVersion = tasks
-                .findBuildInitiatorVersion(task.tenantId(), task.candidateId(), task.builtCandidateVersion())
-                .orElse(null);
-            if (initiatorVersion == null) {
-                fail(task, attempt, "MODELING_EXECUTION_INITIATOR_MISSING", "找不到发起本次构建的用户", now);
-                return;
-            }
-            try (var identity = executionAuthorization.candidate(
-                task.tenantId(), task.candidateId(), initiatorVersion, "BUILDING"
-            )) {
-                registration.ensureRegistered(candidate);
-            }
-            tasks.markSucceeded(task.tenantId(), task.candidateId(), clock.instant());
+            registration.register(task, attempt);
         } catch (ModelReleaseCandidateException failure) {
             fail(task, attempt, failure.code(), failure.getMessage(), now);
         } catch (ModelingIdentityException denied) {
@@ -108,7 +74,7 @@ public class ModelAssetRegistrationWorker {
 
     private void fail(TaskView task, int attempt, String code, String message, Instant now) {
         Duration wait = BACKOFF[Math.min(Math.max(attempt, 1), BACKOFF.length) - 1];
-        tasks.markFailed(task.id(), code, message, now.plus(wait), now);
+        tasks.markFailed(task, attempt, code, message, now.plus(wait), now);
         LOG.warn(
             "event=model_asset_registration_failed candidateId={} attempt={} maxAttempts={} code={}",
             task.candidateId(), attempt, MAX_ATTEMPTS, code

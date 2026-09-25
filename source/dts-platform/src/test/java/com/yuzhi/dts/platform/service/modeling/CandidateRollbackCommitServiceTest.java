@@ -146,7 +146,7 @@ class CandidateRollbackCommitServiceTest {
             .verify(lifecyclePublication)
             .rollback(eq(TENANT), eq(ACTOR), eq(model), any(RollbackCommand.class), eq(NOW));
         order.verify(publications).rollbackModel(published, observed, model, rollback, ACTOR, NOW);
-        order.verify(publications).rebuildManualBindingAfterRollback(published, ACTOR, NOW);
+        verify(publications, org.mockito.Mockito.never()).rebuildManualBindingAfterRollback(any(), any(), any());
         order.verify(outbox).publishInternal(any(PlatformEventRequest.class));
         order
             .verify(candidateCommands)

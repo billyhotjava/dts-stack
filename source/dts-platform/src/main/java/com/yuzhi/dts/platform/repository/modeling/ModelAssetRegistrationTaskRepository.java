@@ -71,6 +71,7 @@ public class ModelAssetRegistrationTaskRepository {
                    next_attempt_at = excluded.next_attempt_at,
                    succeeded_at = null,
                    last_modified_date = excluded.last_modified_date
+             where modeling_model_asset_registration_task.built_candidate_version < excluded.built_candidate_version
             """,
             UUID.randomUUID(), tenantId, candidateId, builtCandidateVersion, planId, environment, at, at, at
         );
@@ -81,6 +82,27 @@ public class ModelAssetRegistrationTaskRepository {
             .query(SELECTION + " where tenant_id = ? and candidate_id = ?", ModelAssetRegistrationTaskRepository::map, tenantId, candidateId)
             .stream()
             .findFirst();
+    }
+
+    public Optional<TaskView> findById(String tenantId, UUID id) {
+        return jdbcTemplate.query(SELECTION + " where tenant_id = ? and id = ?", ModelAssetRegistrationTaskRepository::map, tenantId, id)
+            .stream().findFirst();
+    }
+
+    public List<TaskView> pendingPage(String tenantId, int offset, int size) {
+        return jdbcTemplate.query(SELECTION + " where tenant_id = ? and state <> 'SUCCEEDED' order by created_date desc, id limit ? offset ?",
+            ModelAssetRegistrationTaskRepository::map, tenantId, size, offset);
+    }
+
+    /** A manual retry gets a new attempt identity, so an expired worker cannot complete it. */
+    public boolean retry(TaskView expected, Instant now) {
+        return jdbcTemplate.update("""
+            update modeling_model_asset_registration_task
+               set id = ?, state = 'PENDING', attempts = 0, next_attempt_at = ?, last_modified_date = ?,
+                   last_error_code = null, last_error_message = null
+             where id = ? and tenant_id = ? and built_candidate_version = ? and state <> 'SUCCEEDED'
+            """, UUID.randomUUID(), Timestamp.from(now), Timestamp.from(now), expected.id(), expected.tenantId(),
+            expected.builtCandidateVersion()) == 1;
     }
 
     /**
@@ -113,37 +135,47 @@ public class ModelAssetRegistrationTaskRepository {
      * Claims one attempt by pushing its next attempt out by the lease. Returns false if another worker or a
      * manual registration got there first, so an attempt runs at most once per lease.
      */
-    public boolean claim(UUID id, Instant now, Instant leaseUntil) {
+    public boolean claim(TaskView expected, Instant now, Instant leaseUntil) {
         return jdbcTemplate.update(
             """
             update modeling_model_asset_registration_task
                set attempts = attempts + 1, next_attempt_at = ?, last_modified_date = ?
-             where id = ? and state <> 'SUCCEEDED' and next_attempt_at <= ?
+             where id = ? and built_candidate_version = ? and attempts = ?
+               and state <> 'SUCCEEDED' and attempts < 5 and next_attempt_at <= ?
             """,
-            Timestamp.from(leaseUntil), Timestamp.from(now), id, Timestamp.from(now)
+            Timestamp.from(leaseUntil), Timestamp.from(now), expected.id(), expected.builtCandidateVersion(), expected.attempts(), Timestamp.from(now)
         ) == 1;
     }
 
-    public void markSucceeded(String tenantId, UUID candidateId, Instant now) {
-        jdbcTemplate.update(
+    public boolean markSucceeded(TaskView expected, int attempt, Instant now) {
+        return jdbcTemplate.update(
             """
             update modeling_model_asset_registration_task
                set state = 'SUCCEEDED', succeeded_at = ?, last_error_code = null, last_error_message = null, last_modified_date = ?
-             where tenant_id = ? and candidate_id = ?
+             where id = ? and tenant_id = ? and built_candidate_version = ? and attempts = ?
             """,
-            Timestamp.from(now), Timestamp.from(now), tenantId, candidateId
-        );
+            Timestamp.from(now), Timestamp.from(now), expected.id(), expected.tenantId(), expected.builtCandidateVersion(), attempt
+        ) == 1;
     }
 
-    public void markFailed(UUID id, String errorCode, String errorMessage, Instant nextAttemptAt, Instant now) {
+    public void markFailed(TaskView expected, int attempt, String errorCode, String errorMessage, Instant nextAttemptAt, Instant now) {
         jdbcTemplate.update(
             """
             update modeling_model_asset_registration_task
                set state = 'FAILED', last_error_code = ?, last_error_message = ?, next_attempt_at = ?, last_modified_date = ?
-             where id = ? and state <> 'SUCCEEDED'
+             where id = ? and built_candidate_version = ? and attempts = ? and state <> 'SUCCEEDED'
             """,
-            errorCode, truncate(errorMessage), Timestamp.from(nextAttemptAt), Timestamp.from(now), id
+            errorCode, truncate(errorMessage), Timestamp.from(nextAttemptAt), Timestamp.from(now), expected.id(), expected.builtCandidateVersion(), attempt
         );
+    }
+
+    /** Caller first locks the plan, matching the order used by build finalization and manual retry. */
+    public boolean lockAttempt(TaskView expected, int attempt) {
+        return !jdbcTemplate.queryForList("""
+            select id from modeling_model_asset_registration_task
+             where id = ? and tenant_id = ? and built_candidate_version = ? and attempts = ? and state <> 'SUCCEEDED'
+             for update
+            """, UUID.class, expected.id(), expected.tenantId(), expected.builtCandidateVersion(), attempt).isEmpty();
     }
 
     private static String truncate(String value) {

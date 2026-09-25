@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
 	getPlanExecutionWorkspace: vi.fn(),
 	runPlanExecutionNow: vi.fn(),
 	repairPlanExecutionBinding: vi.fn(),
+    listPlanExecutionPublications: vi.fn(), enablePlanExecution: vi.fn(), deployPlanExecution: vi.fn(),
 }));
 
 vi.mock("@/api/warehousePlanApi", () => ({ listWarehousePlans: api.listWarehousePlans }));
@@ -16,6 +17,7 @@ vi.mock("@/api/modelSpecApi", () => ({
 	getPlanExecutionWorkspace: api.getPlanExecutionWorkspace,
 	runPlanExecutionNow: api.runPlanExecutionNow,
 	repairPlanExecutionBinding: api.repairPlanExecutionBinding,
+    listPlanExecutionPublications: api.listPlanExecutionPublications, enablePlanExecution: api.enablePlanExecution, deployPlanExecution: api.deployPlanExecution,
 }));
 
 import { PlanExecutionSchedulePanel } from "./PlanExecutionSchedulePanel";
@@ -82,7 +84,9 @@ beforeEach(() => {
 						}),
 					],
 	}));
-	api.runPlanExecutionNow.mockResolvedValue({});
+	api.listPlanExecutionPublications.mockResolvedValue([]);
+    api.enablePlanExecution.mockResolvedValue({});
+    api.runPlanExecutionNow.mockResolvedValue({});
 	api.repairPlanExecutionBinding.mockResolvedValue({});
 });
 
@@ -157,4 +161,21 @@ it("shows a retryable error when plans cannot be listed", async () => {
 	await act(async () => retry?.click());
 	await act(async () => Promise.resolve());
 	expect(rows()).toHaveLength(1);
+});
+
+it("locates a focused plan after the former fifty-plan boundary", async () => {
+    api.listWarehousePlans.mockResolvedValue(Array.from({ length: 61 }, (_, i) => plan(`plan-${i}`, `规划${i}`)));
+    await mount("plan-60");
+    expect(api.getPlanExecutionWorkspace).toHaveBeenCalledWith("plan-60");
+    expect(api.getPlanExecutionWorkspace).toHaveBeenCalledTimes(10);
+    expect(container.textContent).toContain("共 61 个规划");
+});
+
+it("enables a deployed plan without submitting a run", async () => {
+    api.getPlanExecutionWorkspace.mockResolvedValue({ planId: "plan-a", state: "READY", bindings: [binding("paused", ["ENABLE"], { state: "DISABLED" })] });
+    await mount();
+    const button = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "启用运行");
+    await act(async () => button?.click());
+    expect(api.enablePlanExecution).toHaveBeenCalledWith("plan-a", "paused", 4);
+    expect(api.runPlanExecutionNow).not.toHaveBeenCalled();
 });

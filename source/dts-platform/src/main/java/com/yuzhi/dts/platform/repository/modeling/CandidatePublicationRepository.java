@@ -475,30 +475,24 @@ public class CandidatePublicationRepository {
                 version, schedule_mode, cron_expression, timezone,
                 desired_scope_checksum, desired_deployment_checksum,
                 dag_id, deployment_status, created_by, created_date,
-                last_modified_by, last_modified_date
+                last_modified_by, last_modified_date, activation_required, airflow_paused
             ) values (
                 ?, ?, ?, ?, ?, 1, 'MANUAL_ONLY', null, null, ?, ?, ?,
-                'DEPLOYING', ?, ?, ?, ?
+                'DEPLOYING', ?, ?, ?, ?, true, true
             )
             on conflict (tenant_id, plan_id, environment, execution_target_key)
             do update
-               set version = case
-                       when modeling_plan_execution_binding.desired_deployment_checksum
-                            <> excluded.desired_deployment_checksum
-                       then modeling_plan_execution_binding.version + 1
-                       else modeling_plan_execution_binding.version
-                   end,
+               set version = modeling_plan_execution_binding.version + 1,
+                   schedule_mode = excluded.schedule_mode,
+                   cron_expression = null, timezone = null,
                    desired_scope_checksum = excluded.desired_scope_checksum,
                    desired_deployment_checksum = excluded.desired_deployment_checksum,
                    dag_id = excluded.dag_id,
-                   deployment_status = case
-                       when modeling_plan_execution_binding.desired_deployment_checksum
-                            <> excluded.desired_deployment_checksum
-                       then 'DEPLOYING'
-                       else modeling_plan_execution_binding.deployment_status
-                   end,
+                   deployment_status = 'DEPLOYING',
                    last_error_code = null,
                    last_error_message = null,
+                   activation_required = true,
+                   airflow_paused = true,
                    last_modified_by = excluded.last_modified_by,
                    last_modified_date = excluded.last_modified_date
             """,
@@ -558,11 +552,11 @@ public class CandidatePublicationRepository {
         }
     }
 
-    private List<PublishedModelBinding> loadPublishedScope(CandidateView candidate) {
+    public List<PublishedModelBinding> loadPublishedScope(CandidateView candidate) {
         return jdbcTemplate.query(
             """
             select s.id as model_spec_id, release.id as release_id,
-                   s.revision as model_revision,
+                   release.model_revision,
                    release.details_json ->> 'dbtUniqueId' as dbt_unique_id,
                    release.details_json ->> 'targetIdentifier' as target_identifier,
                    release.details_json ->> 'artifactChecksum' as artifact_checksum,
@@ -570,12 +564,10 @@ public class CandidatePublicationRepository {
                    cast(release.details_json ->> 'physicalAssetId' as uuid) as physical_asset_id
               from modeling_model_spec s
               join lateral (
-                    select event.id, event.details_json
+                    select event.id, event.details_json, event.model_revision
                       from modeling_model_lifecycle_event event
                      where event.tenant_id = s.tenant_id
                        and event.model_spec_id = s.id
-                       and event.model_revision = s.revision
-                       and event.model_checksum = s.current_checksum
                        and event.event_type = 'RELEASE'
                        and event.status = 'PUBLISHED'
                        and event.details_json ->> 'executionTargetKey' = ?
@@ -586,7 +578,7 @@ public class CandidatePublicationRepository {
              where s.tenant_id = ?
                and s.plan_id = ?
                and s.contract_version = 2
-               and s.status = 'PUBLISHED'
+               and s.status <> 'ARCHIVED'
              order by s.id
             """,
             (row, rowNumber) ->

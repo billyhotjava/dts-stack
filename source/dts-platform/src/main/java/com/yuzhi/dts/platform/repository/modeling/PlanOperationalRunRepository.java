@@ -1053,7 +1053,7 @@ public class PlanOperationalRunRepository {
         List<ScopeEntry> entries = jdbcTemplate.query(
             """
             select e.model_spec_id, e.model_revision,
-                   s.current_checksum as model_checksum,
+                   event.model_checksum as model_checksum,
                    (event.details_json ->> 'implementationRevision')::int
                        as implementation_revision,
                    event.details_json ->> 'implementationChecksum'
@@ -1064,13 +1064,14 @@ public class PlanOperationalRunRepository {
                 on s.tenant_id = e.tenant_id
                and s.id = e.model_spec_id
                and s.plan_id = ?
-               and s.revision = e.model_revision
-               and s.status = 'PUBLISHED'
+               and s.status <> 'ARCHIVED'
               join modeling_model_lifecycle_event event
                 on event.id = e.published_release_id
                and event.model_spec_id = e.model_spec_id
                and event.model_revision = e.model_revision
-               and event.status = 'PUBLISHED'
+               and event.tenant_id = e.tenant_id
+               and event.event_type = 'RELEASE'
+               and event.status in ('PUBLISHED', 'ROLLED_BACK')
              where e.tenant_id = ? and e.binding_id = ?
              order by e.model_spec_id
             """,
@@ -1087,6 +1088,12 @@ public class PlanOperationalRunRepository {
             binding.tenantId(),
             binding.id()
         );
+        Integer expectedCount = jdbcTemplate.queryForObject(
+            "select count(*) from modeling_plan_execution_binding_entry where tenant_id=? and binding_id=?",
+            Integer.class, binding.tenantId(), binding.id());
+        if (expectedCount == null || expectedCount != entries.size()) {
+            throw failure("MODEL_PLAN_BINDING_SCOPE_INVALID", "Deployed scope is incomplete", Kind.CONFLICT);
+        }
         if (
             entries
                 .stream()

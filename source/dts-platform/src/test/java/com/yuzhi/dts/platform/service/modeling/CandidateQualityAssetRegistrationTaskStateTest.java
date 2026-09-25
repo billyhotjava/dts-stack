@@ -94,9 +94,11 @@ class CandidateQualityAssetRegistrationTaskStateTest {
 
     @Test
     void aManualRegistrationCompletesTheTask() {
+        TaskView task = new TaskView(UUID.randomUUID(), "tenant-a", CANDIDATE_ID, 6, PLAN_ID, "prod", State.PENDING, 2, null, null, NOW, null, NOW);
+        when(tasks.findByCandidate("tenant-a", CANDIDATE_ID)).thenReturn(Optional.of(task));
         service(tasks).recordRegistered(candidate);
 
-        verify(tasks).markSucceeded("tenant-a", CANDIDATE_ID, NOW);
+        verify(tasks).markSucceeded(task, 2, NOW);
         verify(tasks, never()).enqueue(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any(), any(), any());
     }
 }

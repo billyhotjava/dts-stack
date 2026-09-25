@@ -284,4 +284,5 @@
     <include file="config/liquibase/changelog/20260912_01_modeling_permission_scope.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260924_01_platform_model_governance_policy_advisory_default.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260925_01_model_asset_registration_task.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260925_02_model_execution_activation.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

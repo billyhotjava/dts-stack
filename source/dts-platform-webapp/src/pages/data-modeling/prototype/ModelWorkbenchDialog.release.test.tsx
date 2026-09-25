@@ -78,6 +78,8 @@ const apiMocks = vi.hoisted(() => ({
 	getStageGates: vi.fn(),
 	getLifecycle: vi.fn(),
 	getDeliveryStatus: vi.fn(),
+	getBuildStatus: vi.fn(),
+	getBuildWorkspace: vi.fn(),
 	compileLifecycle: vi.fn(),
 	getRepresentation: vi.fn(),
 	createDbtDraft: vi.fn(),
@@ -100,6 +102,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 	repairPlanExecutionBinding: apiMocks.repairExecutionBinding,
 	runPlanExecutionNow: apiMocks.runExecutionNow,
 	getReleaseCandidateWorkbench: apiMocks.getWorkbench,
+	getModelBuildWorkspace: apiMocks.getBuildWorkspace,
 	lockReleaseCandidate: apiMocks.lockCandidate,
 	runReleaseCandidateQuality: apiMocks.runQualityCandidate,
 	rerunReleaseCandidateGovernanceQuality: apiMocks.rerunGovernanceQuality,
@@ -122,6 +125,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 vi.mock("@/api/modelDeliveryStatusApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/api/modelDeliveryStatusApi")>()),
 	getModelDeliveryStatus: apiMocks.getDeliveryStatus,
+	getModelBuildStatus: apiMocks.getBuildStatus,
 }));
 
 vi.mock("@/api/modelRepresentationApi", () => ({ getModelRepresentation: apiMocks.getRepresentation }));
@@ -284,6 +288,12 @@ beforeEach(() => {
 		const current = await apiMocks.getWorkbench(model.planId);
 		return deliveryStatusFor(current, selected, environment);
 	});
+    apiMocks.getBuildWorkspace.mockImplementation((...args) => apiMocks.getWorkbench(...args));
+    apiMocks.getBuildStatus.mockImplementation(async (id: string, environment?: string) => {
+        const selected = id === secondModel.id ? secondModel : model;
+        const current = await apiMocks.getBuildWorkspace(model.planId);
+        return deliveryStatusFor(current, selected, environment);
+    });
 	apiMocks.getServingSyncStatuses.mockResolvedValue([]);
 	routerPush.mockReset();
 	apiMocks.getModelSpec.mockImplementation((id: string) =>
@@ -349,7 +359,7 @@ describe("release and materialization dispatch", () => {
 
 	it.each([true, false])("recovers a plan occupancy conflict only through explicit permitted cancellation: %s", async (canCancel) => {
 		const empty = workspace(["CREATE_CANDIDATE"], null);
-		apiMocks.getDeliveryStatus.mockResolvedValue(deliveryStatusFor(empty));
+		apiMocks.getBuildStatus.mockResolvedValue(deliveryStatusFor(empty));
 		const occupied = candidate("BATCH_WORKBENCH", "BUILT");
 		apiMocks.getWorkbench.mockResolvedValue(workspace(canCancel ? ["CANCEL_CANDIDATE"] : [], occupied));
 		apiMocks.createCandidate.mockRejectedValue({ response: { status: 409, data: {
@@ -622,7 +632,8 @@ describe("release and materialization dispatch", () => {
 
 		// F15-T02: no build/publish tabs to switch; the running build and its exit stay on the one flow.
 		expect(Array.from(container.querySelectorAll("nav button")).some((item) => item.textContent === "发布模型")).toBe(false);
-		expect(container.querySelector('[aria-current="step"]')?.textContent).toContain("构建");
+		expect(container.textContent).toContain("构建");
+        expect(apiMocks.getDeliveryStatus).not.toHaveBeenCalled();
 		await act(async () => button("放弃本次构建")?.click());
 		await act(async () => button("确认放弃本次构建")?.click());
 		await flush();
@@ -744,7 +755,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.rematerializeCandidate.mockResolvedValue({ candidate: built });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 
@@ -785,7 +796,7 @@ describe("release and materialization dispatch", () => {
 		apiMocks.rematerializeCandidate.mockResolvedValue({ candidate: built });
 
 		await act(async () =>
-			root.render(<ModelWorkbenchDialog canMaintain dialog="release" model={model} onClose={vi.fn()} />),
+			root.render(<ModelWorkbenchDialog canMaintain dialog="build" model={model} onClose={vi.fn()} />),
 		);
 		await flush();
 		await act(async () => button("重新构建")?.click());
