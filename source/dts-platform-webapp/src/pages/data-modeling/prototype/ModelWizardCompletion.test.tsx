@@ -41,23 +41,23 @@ it("never treats unknown evidence as completion", () => {
 	expect(container.textContent).not.toContain("建模已完成");
 	expect(container.textContent).toContain("构建操作");
 });
-it("keeps old delivery links read-only with an explicit data-module destination", () => {
+it("keeps old delivery links read-only and says the current version is not built", () => {
 	mount("UNKNOWN", "delivery");
 	expect(container.querySelector("h3")?.textContent).toBe("历史交付结果");
 	expect(container.textContent).not.toContain("构建操作");
-	expect(container.querySelector("a")?.textContent).toBe("去数据管理");
+	expect(container.textContent).toContain("当前版本尚未完成构建");
 });
-it("offers one direct jump to the asset quality section with a way back to the model", () => {
+it("offers one link to the data asset catalog with a way back to the model", () => {
 	mount("SUCCEEDED");
-	const quality = Array.from(container.querySelectorAll("a")).find(link => link.textContent === "配置质量规则");
-	expect(quality).toBeDefined();
-	const url = new URL(quality?.getAttribute("href") ?? "", "http://dts.local");
+	const links = Array.from(container.querySelectorAll("a"));
+	expect(links.map(link => link.textContent)).toEqual(["查看数据资产"]);
+	const url = new URL(links[0]?.getAttribute("href") ?? "", "http://dts.local");
 	expect(url.pathname).toBe("/catalog/search");
 	expect(url.searchParams.get("modelSpecId")).toBe("model-1");
-	expect(url.searchParams.get("focus")).toBe("quality");
+	expect(url.searchParams.get("focus")).toBeNull();
 	expect(url.searchParams.get("returnTo")).toBe("/data-modeling/dimensions/workbench?modelSpecId=model-1&step=verification&environment=dev");
 });
-it("does not offer quality configuration before the current version is built", () => {
+it("does not link to other modules before the current version is built", () => {
 	mount("UNKNOWN", "delivery");
-	expect(Array.from(container.querySelectorAll("a")).map(link => link.textContent)).toEqual(["去数据管理"]);
+	expect(container.querySelectorAll("a")).toHaveLength(0);
 });

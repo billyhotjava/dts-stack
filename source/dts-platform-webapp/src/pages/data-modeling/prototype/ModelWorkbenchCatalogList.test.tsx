@@ -30,6 +30,7 @@ beforeAll(() => {
 
 const apiMocks = vi.hoisted(() => ({
 	getDeliveryStatus: vi.fn(),
+	getSummaries: vi.fn(),
 	listWorkbenchCatalogPage: vi.fn(),
 }));
 const accessState = vi.hoisted(() => ({ denied: false, unavailable: false }));
@@ -48,6 +49,7 @@ vi.mock("@/api/modelSpecApi", async (importOriginal) => ({
 vi.mock("@/api/modelDeliveryStatusApi", async (importOriginal) => ({
 	...(await importOriginal<typeof import("@/api/modelDeliveryStatusApi")>()),
 	getModelDeliveryStatus: apiMocks.getDeliveryStatus,
+	getModelWorkbenchSummaries: apiMocks.getSummaries,
 }));
 
 vi.mock("@/routes/hooks", () => ({ useRouter: () => ({ push: routerPush }) }));
@@ -85,6 +87,37 @@ const emptyDeliveryStatus = {
 	],
 } as never;
 
+// F15 K1 summary row: the latest build of the current revision and the latest published version.
+const summaryFor = (id: string, buildState?: string, publishedRevision?: number) => ({
+	modelSpecId: id,
+	modelRevision: 2,
+	modelChecksum: null,
+	readState: "OK",
+	reasonCode: null,
+	build: buildState
+		? {
+				state: buildState,
+				reasonCode: null,
+				modelSpecId: id,
+				modelRevision: 2,
+				modelChecksum: "checksum",
+				implementationRevision: 1,
+				implementationChecksum: null,
+				buildMode: "DATA_BUILD",
+				environment: "dev",
+				candidateId: null,
+				runGroupId: null,
+				targetRelation: "public.orders",
+				matchesCurrentTarget: true,
+				observedAt: null,
+			}
+		: null,
+	publishedReadState: "OK",
+	published: publishedRevision
+		? { releaseId: `release-${id}`, modelRevision: publishedRevision, environment: "prod", publishedAt: "2026-09-20T02:00:00Z" }
+		: null,
+});
+
 const currentDimension = {
 	id: "dimension-current",
 	name: "日期",
@@ -103,6 +136,8 @@ beforeEach(() => {
 	root = createRoot(container);
 	apiMocks.getDeliveryStatus.mockReset();
 	apiMocks.getDeliveryStatus.mockResolvedValue(emptyDeliveryStatus);
+	apiMocks.getSummaries.mockReset();
+	apiMocks.getSummaries.mockImplementation(async (ids: string[]) => ids.map((id) => summaryFor(id)));
 	routerPush.mockReset();
 	apiMocks.listWorkbenchCatalogPage.mockReset();
 	const content = [
@@ -283,13 +318,7 @@ describe("ModelWorkbenchCatalogList", () => {
 
 	it("multi-selects physical models from one plan and opens one batch materialization", async () => {
 		const onMaterialize = vi.fn();
-		apiMocks.getDeliveryStatus.mockResolvedValue({
-			...emptyDeliveryStatus,
-			candidate: { matchesCurrentModel: true },
-			steps: emptyDeliveryStatus.steps.map((step: any) =>
-				step.key === "materialization" ? { ...step, state: "SUCCEEDED", matchesCurrentTarget: true } : step,
-			),
-		});
+		apiMocks.getSummaries.mockImplementation(async (ids: string[]) => ids.map((id) => summaryFor(id, "SUCCEEDED")));
 
 		await act(async () =>
 			root.render(
@@ -317,7 +346,7 @@ describe("ModelWorkbenchCatalogList", () => {
 		);
 		await act(async () => Promise.resolve());
 
-		expect(container.textContent).toContain("已构建");
+		expect(container.textContent).toContain("构建完成");
 		const dateSelection = container.querySelector<HTMLInputElement>('input[aria-label="选择 日期维度表"]');
 		const orderSelection = container.querySelector<HTMLInputElement>('input[aria-label="选择 订单明细表"]');
 		await act(async () => dateSelection?.click());
@@ -330,24 +359,10 @@ describe("ModelWorkbenchCatalogList", () => {
 		expect(onMaterialize).toHaveBeenCalledWith([draftModel, publishedModel]);
 	});
 
-	it("shows one batch-read asset delivery status and deep-links the canonical asset", async () => {
-		apiMocks.getDeliveryStatus.mockImplementation(async (id: string) => ({
-			...emptyDeliveryStatus,
-			modelSpecId: id,
-			candidate: { matchesCurrentModel: true },
-			steps: emptyDeliveryStatus.steps.map((step: any) =>
-				step.key === "catalog"
-					? {
-							...step,
-							state: "SUCCEEDED",
-							matchesCurrentTarget: true,
-							resourceId: "33333333-3333-3333-3333-333333333333",
-						}
-					: step.key === "analysis"
-						? { ...step, state: "FAILED", matchesCurrentTarget: true }
-						: step,
-			),
-		}));
+	it("reads build and published summaries for the page in one request without other modules", async () => {
+		apiMocks.getSummaries.mockImplementation(async (ids: string[]) =>
+			ids.map((id) => (id === publishedModel.id ? summaryFor(id, "SUCCEEDED", 1) : summaryFor(id))),
+		);
 
 		await act(async () =>
 			root.render(
@@ -375,20 +390,20 @@ describe("ModelWorkbenchCatalogList", () => {
 		);
 		await act(async () => Promise.resolve());
 
-		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(2);
-		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledWith(
-			publishedModel.id,
-			undefined,
+		expect(apiMocks.getSummaries).toHaveBeenCalledTimes(1);
+		expect(apiMocks.getSummaries).toHaveBeenCalledWith(
+			[draftModel.id, publishedModel.id],
 			undefined,
 			expect.any(AbortSignal),
 		);
-		const row = Array.from(container.querySelectorAll("tr")).find((item) => item.textContent?.includes("订单明细表"));
-		expect(row?.textContent).toContain("资产已登记");
-		expect(row?.textContent).toContain("分析准备失败");
-		const viewAsset = Array.from(row?.querySelectorAll("button") || []).find((item) => item.textContent === "查看资产");
-		await act(async () => viewAsset?.click());
-
-		expect(routerPush).toHaveBeenCalledWith("/catalog/datasets/33333333-3333-3333-3333-333333333333");
+		expect(apiMocks.getDeliveryStatus).not.toHaveBeenCalled();
+		const row = (name: string) => Array.from(container.querySelectorAll("tr")).find((item) => item.textContent?.includes(name));
+		expect(row("订单明细表")?.textContent).toContain("构建完成");
+		expect(row("订单明细表")?.textContent).toContain("r1");
+		expect(row("日期维度表")?.textContent).toContain("未构建");
+		expect(row("日期维度表")?.textContent).toContain("未发布");
+		expect(container.textContent).not.toContain("资产已登记");
+		expect(container.textContent).not.toContain("分析准备");
 	});
 
 	it("requests a server page and preserves model selection while paging", async () => {
@@ -473,12 +488,13 @@ describe("ModelWorkbenchCatalogList", () => {
 	});
 });
 
-// F4: one failing delivery request must not discard successful rows.
-it("keeps successful delivery rows when another model fails", async () => {
-	apiMocks.getDeliveryStatus.mockImplementation(async (id: string) => {
-		if (id === draftModel.id) throw new Error("timeout");
-		return emptyDeliveryStatus;
-	});
+// F4: one unreadable model must not discard the other rows.
+it("keeps successful summary rows when another model cannot be read", async () => {
+	apiMocks.getSummaries.mockImplementation(async (ids: string[]) =>
+		ids.map((id) =>
+			id === draftModel.id ? { ...summaryFor(id), readState: "FAILED", reasonCode: "MODEL_NOT_VISIBLE" } : summaryFor(id),
+		),
+	);
 	await act(async () =>
 		root.render(
 			<ModelWorkbenchCatalogList
@@ -503,10 +519,11 @@ it("keeps successful delivery rows when another model fails", async () => {
 			/>,
 		),
 	);
+	await act(async () => Promise.resolve());
 	const rows = Array.from(container.querySelectorAll("tr"));
-	expect(rows.find((row) => row.textContent?.includes(draftModel.name))?.textContent).toContain("交付状态读取失败");
+	expect(rows.find((row) => row.textContent?.includes(draftModel.name))?.textContent).toContain("状态读取失败");
 	expect(rows.find((row) => row.textContent?.includes(publishedModel.name))?.textContent).not.toContain(
-		"交付状态读取失败",
+		"状态读取失败",
 	);
 });
 
@@ -538,56 +555,40 @@ async function renderPerformanceList(models: ModelSpecView[], detailsReady = tru
 	);
 }
 
-it("limits delivery reads to two and renders results before the slow row finishes", async () => {
-	const models = [draftModel, publishedModel, { ...draftModel, id: "third", name: "第三模型" }];
-	apiMocks.listWorkbenchCatalogPage.mockRejectedValue({ response: { status: 404 } });
-	const completions: Array<() => void> = [];
-	apiMocks.getDeliveryStatus.mockImplementation(
-		() =>
-			new Promise((resolve) => {
-				completions.push(() => resolve(emptyDeliveryStatus));
-			}),
+it("marks every row unreadable when the summary request fails", async () => {
+	apiMocks.getSummaries.mockRejectedValue(new Error("timeout"));
+	await renderPerformanceList([draftModel, publishedModel]);
+	await act(async () => Promise.resolve());
+	const rows = Array.from(container.querySelectorAll("tr")).filter((row) =>
+		[draftModel.name, publishedModel.name].some((name) => row.textContent?.includes(name)),
 	);
-	await renderPerformanceList(models);
-	expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(2);
-	await act(async () => completions[0]());
-	expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(3);
-	const firstRow = Array.from(container.querySelectorAll("tr")).find((row) =>
-		row.textContent?.includes(draftModel.name),
-	);
-	expect(firstRow?.textContent).not.toContain("读取交付状态中");
-	await act(async () => {
-		completions[1]();
-		completions[2]();
-	});
+	expect(rows).toHaveLength(2);
+	for (const row of rows) expect(row.textContent).toContain("状态读取失败");
 });
 
-it("aborts stale delivery requests on refresh and retries the same model revision", async () => {
+it("aborts a stale summary request on refresh and ignores its late answer", async () => {
 	const signals: AbortSignal[] = [];
 	const completions: Array<() => void> = [];
-	apiMocks.getDeliveryStatus.mockImplementation(
-		(_id, _env, _candidate, signal: AbortSignal) =>
+	apiMocks.getSummaries.mockImplementation(
+		(ids: string[], _environment: string | undefined, signal: AbortSignal) =>
 			new Promise((resolve) => {
 				signals.push(signal);
-				completions.push(() => resolve(emptyDeliveryStatus));
+				completions.push(() => resolve(ids.map((id) => summaryFor(id, "SUCCEEDED"))));
 			}),
 	);
 	await renderPerformanceList([draftModel, publishedModel]);
-	expect(signals).toHaveLength(2);
+	await act(async () => Promise.resolve());
+	expect(signals).toHaveLength(1);
 	await renderPerformanceList([draftModel, publishedModel]);
+	await act(async () => Promise.resolve());
 	expect(signals[0].aborted).toBe(true);
-	expect(signals).toHaveLength(4);
-	await act(async () => {
-		completions[0]();
-		completions[1]();
-	});
-	// Old requests cannot complete the new generation.
-	expect(container.textContent).toContain("读取交付状态中");
-	await act(async () => {
-		completions[2]();
-		completions[3]();
-	});
-	expect(container.textContent).not.toContain("读取交付状态中");
+	expect(signals).toHaveLength(2);
+	await act(async () => completions[0]());
+	// The old request cannot complete the new generation.
+	expect(container.textContent).toContain("读取中…");
+	await act(async () => completions[1]());
+	expect(container.textContent).not.toContain("读取中…");
+	expect(container.textContent).toContain("构建完成");
 });
 
 it("keeps refresh available while editor options are unavailable", async () => {
@@ -615,37 +616,31 @@ it.each(["denied", "unavailable"] as const)("disables model edits when object au
 	expect(writes.every((button) => button.disabled)).toBe(true);
 });
 
-it("re-reads only rows whose delivery is still running until they settle", async () => {
+it("re-reads summaries while a build is running and stops once it settles", async () => {
 	vi.useFakeTimers();
 	try {
-		const running = {
-			...(emptyDeliveryStatus as object),
-			steps: [{ key: "materialization", state: "RUNNING", matchesCurrentTarget: true, resourceId: null }],
-		} as never;
-		const failed = {
-			...(emptyDeliveryStatus as object),
-			steps: [{ key: "materialization", state: "FAILED", matchesCurrentTarget: true, resourceId: null }],
-		} as never;
-		let draftReads = 0;
-		apiMocks.getDeliveryStatus.mockImplementation(async (id: string) => {
-			if (id !== draftModel.id) return emptyDeliveryStatus;
-			draftReads += 1;
-			return draftReads === 1 ? running : failed;
+		let reads = 0;
+		apiMocks.getSummaries.mockImplementation(async (ids: string[]) => {
+			reads += 1;
+			return ids.map((id) => (id === draftModel.id ? summaryFor(id, reads === 1 ? "RUNNING" : "FAILED") : summaryFor(id)));
 		});
 		await renderPerformanceList([draftModel, publishedModel]);
-		await act(async () => Promise.resolve());
-		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(2);
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(0);
+		});
+		expect(apiMocks.getSummaries).toHaveBeenCalledTimes(1);
+		expect(container.textContent).toContain("构建中");
 
 		await act(async () => {
-			await vi.advanceTimersByTimeAsync(10000);
+			await vi.advanceTimersByTimeAsync(20000);
 		});
+		expect(apiMocks.getSummaries).toHaveBeenCalledTimes(2);
+		expect(container.textContent).toContain("构建失败");
 
-		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(3);
-		expect(apiMocks.getDeliveryStatus).toHaveBeenLastCalledWith(draftModel.id, undefined, undefined, expect.anything());
 		await act(async () => {
-			await vi.advanceTimersByTimeAsync(30000);
+			await vi.advanceTimersByTimeAsync(60000);
 		});
-		expect(apiMocks.getDeliveryStatus).toHaveBeenCalledTimes(3);
+		expect(apiMocks.getSummaries).toHaveBeenCalledTimes(2);
 	} finally {
 		vi.useRealTimers();
 	}

@@ -78,11 +78,14 @@ describe("single primary authoring action", () => {
 		async (authoringContext) => {
 			const p = props({ authoringContext });
 			await render(p);
-			const delivery = Array.from(container.querySelectorAll("button")).find(
-				(item) => item.textContent === "构建与交付",
-			)!;
-			expect(delivery.disabled).toBe(true);
-			act(() => delivery.click());
+			const delivery = Array.from(container.querySelectorAll("button")).filter((item) =>
+				["构建", "版本发布"].includes(item.textContent?.replace(/\s/g, "") ?? ""),
+			);
+			expect(delivery.length).toBeGreaterThanOrEqual(2);
+			for (const button of delivery) {
+				expect(button.disabled).toBe(true);
+				act(() => button.click());
+			}
 			expect(p.onDialog).not.toHaveBeenCalled();
 		},
 	);
@@ -107,7 +110,7 @@ describe("single primary authoring action", () => {
 		expect(p.onCommit).not.toHaveBeenCalled();
 		expect(primary().textContent?.replace(/\s/g, "")).toBe("校验");
 	});
-	it("opens delivery without implicitly publishing or rebuilding", async () => {
+	it("opens the build dialog without implicitly publishing or rebuilding", async () => {
 		const p = props({
 			authoringContext: {
 				...context,
@@ -116,9 +119,9 @@ describe("single primary authoring action", () => {
 			},
 		});
 		await render(p);
-		expect(primary().textContent).toBe("构建与交付");
+		expect(primary().textContent?.replace(/\s/g, "")).toBe("构建");
 		act(() => primary().click());
-		expect(p.onDialog).toHaveBeenCalledWith("publish");
+		expect(p.onDialog).toHaveBeenCalledWith("build");
 		expect(p.onCommit).not.toHaveBeenCalled();
 		expect(p.onValidate).not.toHaveBeenCalled();
 	});
