@@ -470,9 +470,6 @@ public class PlanExecutionHealthService {
         OperationalRunView latestOperationalRun,
         RelationEvidenceView latestRelation,
         BlockerView primaryBlocker,
-        boolean awaitingActivation = operationalDagMatches(binding) && "ACTIVE".equals(binding.deploymentStatus())
-            && deploymentChecksumMatches && "OBSERVED".equals(actual.state()) && scheduleMatches
-            && (Boolean.TRUE.equals(actual.paused()) || Boolean.TRUE.equals(binding.persistedAirflowPaused()));
         List<String> allowedActions
     ) {}
 
