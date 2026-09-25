@@ -779,6 +779,8 @@
                         <testInclude>**/service/modeling/PlatformModelGovernancePolicyLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/PlatformModelGovernancePolicyPostgresTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelGovernancePolicyAdministrationPostgresTest.java</testInclude>
+                        <testInclude>**/service/modeling/ModelAssetRegistrationWorkerTest.java</testInclude>
+                        <testInclude>**/repository/modeling/ModelAssetRegistrationTaskRepositoryPostgresTest.java</testInclude>
                         <testInclude>**/web/rest/internal/ModelGovernancePolicyInternalResourceTest.java</testInclude>
                         <testInclude>**/service/modeling/Sprint74ModelingLiquibaseTest.java</testInclude>
                         <testInclude>**/service/modeling/ModelingDbtArtifactImportServiceTest.java</testInclude>

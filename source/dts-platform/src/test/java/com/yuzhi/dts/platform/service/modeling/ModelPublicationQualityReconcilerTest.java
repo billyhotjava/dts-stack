@@ -84,6 +84,10 @@ class ModelPublicationQualityReconcilerTest {
         org.mockito.Mockito.lenient().when(directory.currentModelingUser("publisher-id")).thenReturn(user);
         org.mockito.Mockito.lenient().when(executionAuthorization.candidate(any(), any(), org.mockito.ArgumentMatchers.anyInt(), any()))
             .thenAnswer(invocation -> identities.openCurrentUser("publisher-id"));
+        // Candidates without a registration task keep the inline registration path.
+        org.mockito.Mockito.lenient().when(qualityAssets.registrationStatus(any())).thenReturn(registration(
+            CandidateQualityAssetRegistrationService.RegistrationState.UNTRACKED, null
+        ));
         reconciler = new ModelPublicationQualityReconciler(
             evidence,
             candidates,
@@ -398,5 +402,57 @@ class ModelPublicationQualityReconcilerTest {
                 )
             )
         );
+    }
+
+    @Test
+    void waitsForAPendingRegistrationTaskWithoutRegisteringInline() {
+        CandidateView running = candidate(DeliveryStatus.QUALITY_RUNNING, 8);
+        when(candidates.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(running));
+        when(qualityAssets.registrationStatus(running)).thenReturn(registration(
+            CandidateQualityAssetRegistrationService.RegistrationState.PENDING, null
+        ));
+
+        var result = reconciler.reconcile(work("COMPLETED", null, 1, 1, 1));
+
+        assertThat(result.outcome()).isEqualTo(QualityReconcileOutcome.WAITING);
+        verify(qualityAssets, never()).ensureRegistered(any());
+        verify(governanceQuality, never()).evaluateLive(any());
+    }
+
+    @Test
+    void queuesRegistrationWhenTheBuiltCandidateHasNoTask() {
+        CandidateView running = candidate(DeliveryStatus.QUALITY_RUNNING, 8);
+        when(candidates.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(running));
+        when(qualityAssets.registrationStatus(running)).thenReturn(registration(
+            CandidateQualityAssetRegistrationService.RegistrationState.MISSING, null
+        ));
+
+        var result = reconciler.reconcile(work("COMPLETED", null, 1, 1, 1));
+
+        assertThat(result.outcome()).isEqualTo(QualityReconcileOutcome.WAITING);
+        verify(qualityAssets).requestRegistration(running);
+        verify(qualityAssets, never()).ensureRegistered(any());
+    }
+
+    @Test
+    void blocksWithTheTaskCodeWhenRegistrationFailed() {
+        CandidateView running = candidate(DeliveryStatus.QUALITY_RUNNING, 8);
+        when(candidates.find(TENANT, CANDIDATE_ID)).thenReturn(Optional.of(running));
+        when(qualityAssets.registrationStatus(running)).thenReturn(registration(
+            CandidateQualityAssetRegistrationService.RegistrationState.FAILED, "CATALOG_UNAVAILABLE"
+        ));
+
+        var result = reconciler.reconcile(work("COMPLETED", null, 1, 1, 1));
+
+        assertThat(result.outcome()).isEqualTo(QualityReconcileOutcome.BLOCKED);
+        assertThat(result.blockerCode()).isEqualTo("CATALOG_UNAVAILABLE");
+        verify(governanceQuality, never()).evaluateLive(any());
+    }
+
+    private static CandidateQualityAssetRegistrationService.RegistrationStatus registration(
+        CandidateQualityAssetRegistrationService.RegistrationState state,
+        String errorCode
+    ) {
+        return new CandidateQualityAssetRegistrationService.RegistrationStatus(state, errorCode, null, 0);
     }
 }

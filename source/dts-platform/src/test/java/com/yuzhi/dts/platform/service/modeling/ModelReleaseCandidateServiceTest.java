@@ -699,6 +699,8 @@ class ModelReleaseCandidateServiceTest {
         when(repository.transitionAndAppend(any(), anyInt(), any(), any(), anyString(), any(), any())).thenReturn(1);
         var quality = org.mockito.Mockito.mock(CandidateGovernanceQualityEvidenceService.class);
         var assets = org.mockito.Mockito.mock(CandidateQualityAssetRegistrationService.class);
+        when(assets.registrationStatus(any())).thenReturn(new CandidateQualityAssetRegistrationService.RegistrationStatus(
+            CandidateQualityAssetRegistrationService.RegistrationState.UNTRACKED, null, null, 0));
         if (passed) {
             when(quality.evaluateLive(running)).thenReturn(new GovernanceQualitySummaryView(
                 false, EvidenceState.PASSED, null, null, 300, List.of()));
