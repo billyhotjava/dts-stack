@@ -1,4 +1,4 @@
-import { Alert, Button, Modal, Select, Space, Typography } from "antd";
+import { Alert, Button, Modal, Select, Typography } from "antd";
 import { useEffect, useState } from "react";
 import { deployPlanExecution, listPlanExecutionPublications, type PlanExecutionPublication } from "@/api/modelSpecApi";
 import type { WarehousePlanHeader } from "@/api/warehousePlanApi";
@@ -37,13 +37,13 @@ export function PlanExecutionPublicationPicker({ plans, onDeployed, refreshKey }
         finally { setBusy(false); }
     };
     return <section aria-label="部署已发布版本" style={{ marginBottom: 16 }}>
-        <Space wrap>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
             <Typography.Text strong>部署已发布版本</Typography.Text>
-            <Select aria-label="选择部署版本" value={selected} onChange={setSelected} style={{ width: 320, maxWidth: "100%" }} placeholder="选择规划与环境"
+            <Select aria-label="选择部署版本" value={selected} onChange={setSelected} style={{ width: 320, maxWidth: "100%", minWidth: 0 }} placeholder="选择规划与环境"
                 options={choices.map(({ plan, publication }) => ({ value: publication.candidateId, label: `${plan.name} · ${ENV[publication.environment] || publication.environment}`, disabled: !publication.canDeploy }))} />
             <Button disabled={!choice || busy} onClick={() => setConfirming(true)}>部署版本</Button>
             <Button disabled={busy} onClick={() => void onDeployed()}>刷新</Button>
-        </Space>
+        </div>
         {choice ? <p>{choice.publication.models.join("、")}</p> : null}
         {failure ? <Alert type="error" showIcon message={failure} /> : null}
         <Modal open={confirming && !!choice} title="确认部署范围" okText="确认部署" cancelText="取消" confirmLoading={busy} onOk={() => void deploy()} onCancel={() => !busy && setConfirming(false)}>

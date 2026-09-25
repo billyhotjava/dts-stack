@@ -255,7 +255,7 @@ export function PlanExecutionSchedulePanel({ focusPlanId }: { focusPlanId?: stri
 				/>
 			) : null}
             <PlanExecutionPublicationPicker plans={visiblePlans} onDeployed={load} refreshKey={rows} />
-            <Pagination current={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} showSizeChanger={false} showTotal={(count) => `共 ${count} 个规划`} />
+            <Pagination current={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} showSizeChanger={false} showLessItems responsive style={{ flexWrap: "wrap", rowGap: 8 }} showTotal={(count) => `共 ${count} 个规划`} />
 			<CompactTable<ScheduleRow>
 				pagination={false}
                 scroll={{ x: 900 }}
