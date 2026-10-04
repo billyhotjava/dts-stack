@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0009-01" author="codex">
+        <createTable tableName="analytics_pulse">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creator_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="collection_id" type="bigint"/>
+            <column name="archived" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pulse_json" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_pulse"
+            baseColumnNames="creator_id"
+            referencedTableName="analytics_user"
+            referencedColumnNames="id"
+            constraintName="fk_pulse_creator"/>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_pulse"
+            baseColumnNames="collection_id"
+            referencedTableName="analytics_collection"
+            referencedColumnNames="id"
+            constraintName="fk_pulse_collection"/>
+    </changeSet>
+
+    <changeSet id="0009-02" author="codex">
+        <createTable tableName="analytics_pulse_subscription">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="pulse_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_pulse_subscription"
+            baseColumnNames="pulse_id"
+            referencedTableName="analytics_pulse"
+            referencedColumnNames="id"
+            constraintName="fk_pulse_subscription_pulse"/>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_pulse_subscription"
+            baseColumnNames="user_id"
+            referencedTableName="analytics_user"
+            referencedColumnNames="id"
+            constraintName="fk_pulse_subscription_user"/>
+
+        <addUniqueConstraint
+            tableName="analytics_pulse_subscription"
+            columnNames="pulse_id,user_id"
+            constraintName="uk_pulse_subscription_unique"/>
+    </changeSet>
+
+    <changeSet id="0009-03" author="codex">
+        <createTable tableName="analytics_alert">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="card_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creator_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="archived" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="alert_json" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_alert"
+            baseColumnNames="card_id"
+            referencedTableName="analytics_card"
+            referencedColumnNames="id"
+            constraintName="fk_alert_card"/>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_alert"
+            baseColumnNames="creator_id"
+            referencedTableName="analytics_user"
+            referencedColumnNames="id"
+            constraintName="fk_alert_creator"/>
+    </changeSet>
+
+    <changeSet id="0009-04" author="codex">
+        <createTable tableName="analytics_alert_subscription">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="alert_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_alert_subscription"
+            baseColumnNames="alert_id"
+            referencedTableName="analytics_alert"
+            referencedColumnNames="id"
+            constraintName="fk_alert_subscription_alert"/>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_alert_subscription"
+            baseColumnNames="user_id"
+            referencedTableName="analytics_user"
+            referencedColumnNames="id"
+            constraintName="fk_alert_subscription_user"/>
+
+        <addUniqueConstraint
+            tableName="analytics_alert_subscription"
+            columnNames="alert_id,user_id"
+            constraintName="uk_alert_subscription_unique"/>
+    </changeSet>
+</databaseChangeLog>

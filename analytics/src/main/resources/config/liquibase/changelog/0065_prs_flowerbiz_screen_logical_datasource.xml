@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0065-prs-flowerbiz-screen-logical-datasource" author="codex">
+        <comment>Bind PRS screen assets to a logical datasource alias so local dbt marts and federated-query warehouses can be switched in configuration.</comment>
+        <sql><![CDATA[
+            WITH target_database AS (
+                SELECT id
+                  FROM analytics_database
+                 WHERE lower(name) = lower('DTS dbt模型库')
+                 ORDER BY id
+                 LIMIT 1
+            ),
+            database_alias_update AS (
+                UPDATE analytics_database db
+                   SET details_json = (
+                           SELECT (
+                               base.details || jsonb_build_object(
+                                   'logicalSourceAliases',
+                                   (
+                                       SELECT jsonb_agg(alias ORDER BY alias)
+                                         FROM (
+                                             SELECT DISTINCT alias
+                                               FROM (
+                                                   SELECT jsonb_array_elements_text(
+                                                              CASE
+                                                                  WHEN jsonb_typeof(base.details -> 'logicalSourceAliases') = 'array'
+                                                                      THEN base.details -> 'logicalSourceAliases'
+                                                                  ELSE '[]'::jsonb
+                                                              END
+                                                          ) AS alias
+                                                   UNION ALL
+                                                   SELECT 'prs.flowerbiz.federated'
+                                                   UNION ALL
+                                                   SELECT 'prs.flowerbiz.mart'
+                                               ) source_aliases
+                                              WHERE alias IS NOT NULL AND btrim(alias) <> ''
+                                         ) deduped_aliases
+                                   )
+                               )
+                           )::text
+                             FROM (
+                                 SELECT COALESCE(NULLIF(db.details_json, '')::jsonb, '{}'::jsonb) AS details
+                             ) base
+                       ),
+                       updated_at = ${now}
+                 WHERE db.id = (SELECT id FROM target_database)
+                 RETURNING id
+            ),
+            repaired_screens AS (
+                UPDATE analytics_screen
+                   SET components_json = regexp_replace(
+                           regexp_replace(
+                               regexp_replace(
+                                   components_json,
+                                   '"databaseId"\s*:\s*"\{[0-9]+\}"',
+                                   '"databaseAlias":"prs.flowerbiz.federated"',
+                                   'g'
+                               ),
+                               '"databaseId"\s*:\s*"\{\{DATABASE_ID\}\}"',
+                               '"databaseAlias":"prs.flowerbiz.federated"',
+                               'g'
+                           ),
+                           '"databaseId"\s*:\s*[0-9]+',
+                           '"databaseAlias":"prs.flowerbiz.federated"',
+                           'g'
+                       ),
+                       updated_at = ${now}
+                 WHERE id BETWEEN 290001 AND 290012
+                   AND archived = false
+                   AND components_json IS NOT NULL
+                 RETURNING id
+            ),
+            repaired_versions AS (
+                UPDATE analytics_screen_version
+                   SET components_json = regexp_replace(
+                           regexp_replace(
+                               regexp_replace(
+                                   components_json,
+                                   '"databaseId"\s*:\s*"\{[0-9]+\}"',
+                                   '"databaseAlias":"prs.flowerbiz.federated"',
+                                   'g'
+                               ),
+                               '"databaseId"\s*:\s*"\{\{DATABASE_ID\}\}"',
+                               '"databaseAlias":"prs.flowerbiz.federated"',
+                               'g'
+                           ),
+                           '"databaseId"\s*:\s*[0-9]+',
+                           '"databaseAlias":"prs.flowerbiz.federated"',
+                           'g'
+                       )
+                 WHERE screen_id BETWEEN 290001 AND 290012
+                   AND components_json IS NOT NULL
+                 RETURNING id
+            )
+            SELECT
+                (SELECT COUNT(*) FROM database_alias_update) AS database_alias_count,
+                (SELECT COUNT(*) FROM repaired_screens) AS repaired_screen_count,
+                (SELECT COUNT(*) FROM repaired_versions) AS repaired_version_count;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

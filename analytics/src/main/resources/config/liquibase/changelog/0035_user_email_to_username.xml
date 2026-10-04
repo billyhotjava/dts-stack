@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0035-01" author="copilot">
+        <comment>Rename analytics_user.email to username for username-based login</comment>
+        <renameColumn tableName="analytics_user" oldColumnName="email" newColumnName="username" columnDataType="varchar(254)"/>
+    </changeSet>
+
+    <changeSet id="0035-02" author="copilot">
+        <comment>Drop old email index and create new username index</comment>
+        <dropIndex tableName="analytics_user" indexName="idx_analytics_user_email"/>
+        <createIndex tableName="analytics_user" indexName="idx_analytics_user_username" unique="true">
+            <column name="username"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

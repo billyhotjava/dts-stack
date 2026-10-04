@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0066-trino-federated-query-database" author="codex">
+        <comment>Register the Trino federated query gateway for real cross-database joins between the PG warehouse and legacy MySQL.</comment>
+        <sql><![CDATA[
+            INSERT INTO analytics_database (
+                name,
+                engine,
+                database_role,
+                details_json,
+                description,
+                is_sample,
+                timezone,
+                metadata_sync_schedule,
+                cache_field_values_schedule,
+                auto_run_queries,
+                is_full_sync,
+                is_on_demand,
+                created_at,
+                updated_at
+            )
+            SELECT
+                '联邦查询入口',
+                'trino',
+                'BUSINESS_PRIMARY',
+                '{
+                  "jdbc-url":"jdbc:trino://${DTS_TRINO_HOST:dts-trino}:${DTS_TRINO_PORT:8080}/postgres/public",
+                  "user":"${DTS_TRINO_USER:copilot}",
+                  "logicalSourceAliases":["prs.flowerbiz.federated","prs.flowerbiz.trino"],
+                  "federatedQuery":true,
+                  "queryContract":{
+                    "engine":"trino",
+                    "catalogs":["postgres","mysql"],
+                    "requiresQualifiedTables":true,
+                    "joinRequiresWhereOrLimit":true
+                  }
+                }',
+                'Trino federated gateway for PRS flowerbiz cross-database joins.',
+                false,
+                'Asia/Shanghai',
+                null,
+                null,
+                true,
+                true,
+                false,
+                ${now},
+                ${now}
+            WHERE NOT EXISTS (
+                SELECT 1 FROM analytics_database WHERE lower(name) = lower('联邦查询入口')
+            );
+
+            UPDATE analytics_database
+               SET engine = 'trino',
+                   database_role = 'BUSINESS_PRIMARY',
+                   details_json = '{
+                     "jdbc-url":"jdbc:trino://${DTS_TRINO_HOST:dts-trino}:${DTS_TRINO_PORT:8080}/postgres/public",
+                     "user":"${DTS_TRINO_USER:copilot}",
+                     "logicalSourceAliases":["prs.flowerbiz.federated","prs.flowerbiz.trino"],
+                     "federatedQuery":true,
+                     "queryContract":{
+                       "engine":"trino",
+                       "catalogs":["postgres","mysql"],
+                       "requiresQualifiedTables":true,
+                       "joinRequiresWhereOrLimit":true
+                     }
+                   }',
+                   description = 'Trino federated gateway for PRS flowerbiz cross-database joins.',
+                   is_sample = false,
+                   timezone = 'Asia/Shanghai',
+                   metadata_sync_schedule = null,
+                   cache_field_values_schedule = null,
+                   auto_run_queries = true,
+                   is_full_sync = true,
+                   is_on_demand = false,
+                   updated_at = ${now}
+             WHERE lower(name) = lower('联邦查询入口');
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

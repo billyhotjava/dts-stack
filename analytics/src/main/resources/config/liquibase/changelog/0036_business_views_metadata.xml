@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!-- =======================================================================
+         BG-02: Business View Layer Metadata
+         =======================================================================
+         The 7 business views listed below are created as MySQL VIEWs in the
+         external business database (rs_cloud_flower), NOT as PostgreSQL objects
+         in copilot_analytics.
+
+         Analytics accesses these views through its existing JDBC external data
+         source connection to the business database.
+
+         Views managed in rs_cloud_flower:
+           - v_project_overview      (项目总览)
+           - v_flower_biz_detail     (报花业务明细)
+           - v_project_green_current (当前在摆绿植)
+           - v_monthly_settlement    (月度结算)
+           - v_task_progress         (任务进度)
+           - v_curing_coverage       (养护覆盖)
+           - v_pendulum_progress     (初摆进度)
+
+         SQL source: worklog/v1.0.0/sprint-10/assets/business-views-mysql.sql
+         ======================================================================= -->
+
+    <changeSet id="0036-01-business-views-registry" author="dts-copilot">
+        <comment>
+            Register business view metadata. The actual views live in the external
+            MySQL business database (rs_cloud_flower) and are queried via JDBC.
+            This table documents which views exist and their purpose.
+        </comment>
+        <createTable tableName="business_view_registry">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="view_name" type="varchar(128)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="source_database" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(512)"/>
+            <column name="default_time_field" type="varchar(128)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="current_timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <insert tableName="business_view_registry">
+            <column name="view_name" value="v_project_overview"/>
+            <column name="source_database" value="rs_cloud_flower"/>
+            <column name="description" value="项目总览：预join项目+合同+客户+绿植统计"/>
+            <column name="default_time_field" value="project_start_time"/>
+        </insert>
+        <insert tableName="business_view_registry">
+            <column name="view_name" value="v_flower_biz_detail"/>
+            <column name="source_database" value="rs_cloud_flower"/>
+            <column name="description" value="报花业务明细：业务单+明细项+项目名称"/>
+            <column name="default_time_field" value="apply_time"/>
+        </insert>
+        <insert tableName="business_view_registry">
+            <column name="view_name" value="v_project_green_current"/>
+            <column name="source_database" value="rs_cloud_flower"/>
+            <column name="description" value="当前在摆绿植：status=1的绿植+摆位+项目"/>
+            <column name="default_time_field" value="pose_time"/>
+        </insert>
+        <insert tableName="business_view_registry">
+            <column name="view_name" value="v_monthly_settlement"/>
+            <column name="source_database" value="rs_cloud_flower"/>
+            <column name="description" value="月度结算：结算结果+项目+合同+客户"/>
+            <column name="default_time_field" value="settlement_month"/>
+        </insert>
+        <insert tableName="business_view_registry">
+            <column name="view_name" value="v_task_progress"/>
+            <column name="source_database" value="rs_cloud_flower"/>
+            <column name="description" value="任务进度：日常任务+项目+完成率"/>
+            <column name="default_time_field" value="launch_time"/>
+        </insert>
+        <insert tableName="business_view_registry">
+            <column name="view_name" value="v_curing_coverage"/>
+            <column name="source_database" value="rs_cloud_flower"/>
+            <column name="description" value="养护覆盖：按项目/养护人/月聚合养护覆盖率"/>
+            <column name="default_time_field" value="curing_month"/>
+        </insert>
+        <insert tableName="business_view_registry">
+            <column name="view_name" value="v_pendulum_progress"/>
+            <column name="source_database" value="rs_cloud_flower"/>
+            <column name="description" value="初摆进度：初摆信息+项目+预算"/>
+            <column name="default_time_field" value="applicant_date"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

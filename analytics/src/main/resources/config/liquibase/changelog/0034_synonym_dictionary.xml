@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0034-create-analytics-synonym" author="dts">
+        <createTable tableName="analytics_synonym">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="term" type="varchar(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="column_name" type="varchar(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="table_hint" type="varchar(200)"/>
+            <column name="database_id" type="bigint"/>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="analytics_synonym"
+                             columnNames="term, column_name"
+                             constraintName="ux_synonym_term_col"/>
+    </changeSet>
+
+</databaseChangeLog>

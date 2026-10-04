@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0055-01-add-analytics-database-role" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="analytics_database" columnName="database_role"/>
+            </not>
+        </preConditions>
+
+        <addColumn tableName="analytics_database">
+            <column name="database_role" type="varchar(32)" defaultValue="BUSINESS_PRIMARY"/>
+        </addColumn>
+
+        <sql><![CDATA[
+            UPDATE analytics_database
+            SET database_role = CASE
+                WHEN lower(coalesce(name, '')) IN ('园林业务库', 'copilot业务库')
+                     AND lower(coalesce(engine, '')) IN ('postgres', 'postgresql')
+                    THEN 'SYSTEM_RUNTIME'
+                ELSE 'BUSINESS_PRIMARY'
+            END
+            WHERE database_role IS NULL OR trim(database_role) = '';
+        ]]></sql>
+
+        <addNotNullConstraint
+                tableName="analytics_database"
+                columnName="database_role"
+                columnDataType="varchar(32)"/>
+    </changeSet>
+
+    <changeSet id="0055-02-backfill-authority-report-database-role" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM analytics_report_template
+                        WHERE (spec_json::jsonb -> 'queryContract' ->> 'sourceType') = 'AUTHORITY_SQL'
+                          AND (
+                              (spec_json::jsonb -> 'queryContract' ->> 'databaseName') IS NOT NULL
+                              OR (spec_json::jsonb -> 'queryContract' ->> 'databaseRole') IS NULL
+                          )
+                    ) THEN 1
+                    ELSE 0
+                END
+            ]]></sqlCheck>
+        </preConditions>
+
+        <sql><![CDATA[
+            UPDATE analytics_report_template
+            SET spec_json = jsonb_set(
+                (spec_json::jsonb #- '{queryContract,databaseName}'),
+                '{queryContract,databaseRole}',
+                to_jsonb('BUSINESS_PRIMARY'::text),
+                true
+            )::text
+            WHERE (spec_json::jsonb -> 'queryContract' ->> 'sourceType') = 'AUTHORITY_SQL';
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

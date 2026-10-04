@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0067-trino-federated-agent-datasource" author="codex">
+        <comment>Register the Trino federated gateway as a copilot-ai datasource so Agent chat can resolve database 9 to an executable datasource.</comment>
+        <sql><![CDATA[
+            WITH updated_source AS (
+                UPDATE copilot_ai.data_source
+                   SET db_type = 'trino',
+                       jdbc_url = 'jdbc:trino://${DTS_TRINO_HOST:dts-trino}:${DTS_TRINO_PORT:8080}/postgres/public',
+                       username = '${DTS_TRINO_USER:copilot}',
+                       password = '',
+                       status = 'ACTIVE',
+                       description = 'Trino federated gateway for PRS Agent BI schema lookup and cross-database query execution.',
+                       updated_at = ${now}
+                 WHERE lower(name) = lower('联邦查询入口')
+                 RETURNING id
+            ),
+            inserted_source AS (
+                INSERT INTO copilot_ai.data_source (
+                    name,
+                    db_type,
+                    jdbc_url,
+                    username,
+                    password,
+                    status,
+                    description,
+                    created_at,
+                    updated_at
+                )
+                SELECT
+                    '联邦查询入口',
+                    'trino',
+                    'jdbc:trino://${DTS_TRINO_HOST:dts-trino}:${DTS_TRINO_PORT:8080}/postgres/public',
+                    '${DTS_TRINO_USER:copilot}',
+                    '',
+                    'ACTIVE',
+                    'Trino federated gateway for PRS Agent BI schema lookup and cross-database query execution.',
+                    ${now},
+                    ${now}
+                WHERE NOT EXISTS (SELECT 1 FROM updated_source)
+                RETURNING id
+            ),
+            resolved_source AS (
+                SELECT id FROM updated_source
+                UNION ALL
+                SELECT id FROM inserted_source
+            )
+            UPDATE copilot_analytics.analytics_database db
+               SET details_json = (
+                       COALESCE(NULLIF(db.details_json, '')::jsonb, '{}'::jsonb)
+                       || jsonb_build_object('copilotDataSourceId', (SELECT id FROM resolved_source LIMIT 1))
+                   )::text,
+                   updated_at = ${now}
+             WHERE lower(db.name) = lower('联邦查询入口');
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

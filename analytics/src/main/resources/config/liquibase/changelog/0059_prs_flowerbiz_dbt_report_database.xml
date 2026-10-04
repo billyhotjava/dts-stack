@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0059-prs-flowerbiz-dbt-report-database" author="dts">
+        <comment>Route PRS dbt-backed fixed reports to the dbt mart database instead of ptr_mysql.</comment>
+        <sql><![CDATA[
+            INSERT INTO analytics_database (
+                name,
+                engine,
+                database_role,
+                details_json,
+                description,
+                is_sample,
+                timezone,
+                metadata_sync_schedule,
+                cache_field_values_schedule,
+                auto_run_queries,
+                is_full_sync,
+                is_on_demand,
+                created_at,
+                updated_at
+            )
+            SELECT
+                'DTS dbt模型库',
+                'postgres',
+                'BUSINESS_SECONDARY',
+                '{"jdbc-url":"jdbc:postgresql://${DTS_DBT_DB_HOST:host.docker.internal}:${DTS_DBT_DB_PORT:5432}/${DTS_DBT_DB_NAME:biadmin}","user":"${DTS_DBT_DB_USER:biadmin}","password":"${DTS_DBT_DB_PASSWORD:}"}',
+                'DTS dbt build output database for PRS table-backed fixed reports.',
+                false,
+                'Asia/Shanghai',
+                null,
+                null,
+                true,
+                true,
+                false,
+                ${now},
+                ${now}
+            WHERE NOT EXISTS (
+                SELECT 1 FROM analytics_database WHERE lower(name) = lower('DTS dbt模型库')
+            );
+
+            UPDATE analytics_report_template
+               SET spec_json = jsonb_set(
+                       spec_json::jsonb,
+                       '{queryContract,databaseName}',
+                       to_jsonb('DTS dbt模型库'::text),
+                       true
+                   )::text,
+                   updated_at = ${now}
+             WHERE template_code LIKE 'PRS-FLOWERBIZ-%'
+               AND archived = false;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

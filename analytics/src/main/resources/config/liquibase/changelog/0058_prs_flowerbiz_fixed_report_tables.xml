@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0058-prs-flowerbiz-fixed-report-tables" author="dts">
+        <comment>PRS screen assets are rendered as table-backed fixed reports in Copilot; BI owns visualization rendering.</comment>
+        <sql>
+            UPDATE analytics_report_template
+               SET spec_json = replace(
+                       replace(spec_json, '"reportType":"fixed-screen"', '"reportType":"fixed-table"'),
+                       '"displayType":"screen"',
+                       '"displayType":"table"'
+                   ),
+                   presentation_schema_json = '{"primary":"table","layout":"fixed-report-table","visualization":"bi-only"}',
+                   updated_at = ${now}
+             WHERE template_code LIKE 'PRS-FLOWERBIZ-%'
+               AND archived = false;
+        </sql>
+    </changeSet>
+</databaseChangeLog>

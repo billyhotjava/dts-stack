@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0028-screen-template-asset-center" author="dts">
+        <addColumn tableName="analytics_screen_template">
+            <column name="visibility_scope" type="varchar(32)" defaultValue="team">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_dept" type="varchar(128)"/>
+            <column name="listed" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="theme_pack_json" type="text"/>
+            <column name="source_template_id" type="bigint"/>
+        </addColumn>
+
+        <createIndex tableName="analytics_screen_template" indexName="idx_screen_template_visibility_listed">
+            <column name="visibility_scope"/>
+            <column name="listed"/>
+            <column name="updated_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="0028-create-analytics-screen-template-version" author="dts">
+        <createTable tableName="analytics_screen_template_version">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="template_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_no" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="action" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="snapshot_json" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actor_id" type="bigint"/>
+            <column name="restored_from_version" type="integer"/>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_screen_template_version" indexName="idx_screen_tpl_ver_template_ver">
+            <column name="template_id"/>
+            <column name="version_no"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

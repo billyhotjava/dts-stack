@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0049-promote-procurement-detail-fixed-report" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="name" value="采购明细-执行进度"/>
+            <column name="description" value="对齐现网页面“采购明细”的实时固定报表，按采购人与业务单据查看采购执行明细。"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.procurement.order_execution_progress"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"PROC-ORDER-EXECUTION-PROGRESS",
+  "reportType":"fixed",
+  "displayType":"progress-table",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.procurement.order_execution_progress",
+    "databaseName":"园林业务库"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"projectId","type":"string","label":"项目点"},
+    {"name":"purchaseUserId","type":"string","label":"采购人"},
+    {"name":"payType","type":"select","label":"结算方式","options":[{"label":"现金","value":"1"},{"label":"挂账","value":"2"}]},
+    {"name":"startTime","type":"date","label":"采购开始时间"},
+    {"name":"endTime","type":"date","label":"采购截止时间"},
+    {"name":"goodName","type":"string","label":"物品名称"},
+    {"name":"goodSpecs","type":"string","label":"物品属性"},
+    {"name":"supplyName","type":"string","label":"供应商"},
+    {"name":"bizCode","type":"string","label":"关联单号"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["采购数量","采购总价"],
+  "grain":"采购明细项",
+  "owner":"采购负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"table",
+  "secondary":"progress-table",
+  "layout":"procurement-order-execution-progress"
+}]]></column>
+            <where>template_code = 'PROC-ORDER-EXECUTION-PROGRESS'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!-- ════════════════════════════════════════════════════════════════ -->
+    <!-- Batch 2: 7 fixed reports with real SQL backing                 -->
+    <!-- ════════════════════════════════════════════════════════════════ -->
+
+    <!-- 1. 报花单据汇总 -->
+    <changeSet id="0047-01-flower-biz-doc-summary" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM analytics_report_template WHERE template_code = 'BIZ-FLOWER-DOC-SUMMARY'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="template_code" value="BIZ-FLOWER-DOC-SUMMARY"/>
+            <column name="name" value="报花单据汇总"/>
+            <column name="description" value="对齐现网「统计报表→报花单据」页面，按项目点、业务类型、时间范围查看报花单据明细。"/>
+            <column name="domain" value="报花"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.flowerbiz.biz_document_summary"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"BIZ-FLOWER-DOC-SUMMARY","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"AUTHORITY_SQL","targetObject":"authority.flowerbiz.biz_document_summary","databaseName":"园林业务库"},"placeholderReviewRequired":false}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"projectId","label":"项目点","type":"text"},{"name":"bizType","label":"业务类型","type":"text"},{"name":"status","label":"状态","type":"text"},{"name":"startDate","label":"开始日期","type":"date"},{"name":"endDate","label":"结束日期","type":"date"}]}]]></column>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["单据数量"],"grain":"项目+业务类型+日期","owner":"报花管理"}]]></column>
+        </insert>
+    </changeSet>
+
+    <!-- 2. 配送记录 -->
+    <changeSet id="0047-02-delivery-record" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM analytics_report_template WHERE template_code = 'PROC-DELIVERY-RECORD'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="template_code" value="PROC-DELIVERY-RECORD"/>
+            <column name="name" value="配送记录"/>
+            <column name="description" value="对齐现网「采购管理→配送记录」页面，按状态、时间范围查看物品配送明细。"/>
+            <column name="domain" value="采购"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.procurement.delivery_record"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROC-DELIVERY-RECORD","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"AUTHORITY_SQL","targetObject":"authority.procurement.delivery_record","databaseName":"园林业务库"},"placeholderReviewRequired":false}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"status","label":"状态","type":"text"},{"name":"startDate","label":"开始日期","type":"date"},{"name":"endDate","label":"结束日期","type":"date"}]}]]></column>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["配送单数"],"grain":"配送类型+日期","owner":"采购管理"}]]></column>
+        </insert>
+    </changeSet>
+
+    <!-- 3. 日常报销 (FIN-REIMBURSEMENT-STATUS 已种入，更新为真实 backing) -->
+    <changeSet id="0047-03-promote-reimbursement-list" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1">SELECT COUNT(1) FROM analytics_report_template WHERE template_code = 'FIN-REIMBURSEMENT-STATUS'</sqlCheck>
+        </preConditions>
+        <update tableName="analytics_report_template">
+            <column name="name" value="日常报销"/>
+            <column name="description" value="对齐现网「运营管理→日常报销」页面，按单号、状态、申请人查看报销明细。"/>
+            <column name="target_object" value="authority.finance.reimbursement_list"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-REIMBURSEMENT-STATUS","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"AUTHORITY_SQL","targetObject":"authority.finance.reimbursement_list","databaseName":"园林业务库"},"placeholderReviewRequired":false}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"code","label":"单号","type":"text"},{"name":"status","label":"状态","type":"text"},{"name":"applyUserId","label":"申请人","type":"text"}]}]]></column>
+            <where>template_code = 'FIN-REIMBURSEMENT-STATUS'</where>
+        </update>
+    </changeSet>
+
+    <!-- 4. 出入库记录 -->
+    <changeSet id="0047-04-inout-record" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM analytics_report_template WHERE template_code = 'WH-INOUT-RECORD'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="template_code" value="WH-INOUT-RECORD"/>
+            <column name="name" value="出入库记录"/>
+            <column name="description" value="对齐现网「仓库管理→库存管理→出入库记录」Tab，合并入库和出库记录。"/>
+            <column name="domain" value="仓库"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.inventory.inout_record"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"WH-INOUT-RECORD","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"AUTHORITY_SQL","targetObject":"authority.inventory.inout_record","databaseName":"园林业务库"},"placeholderReviewRequired":false}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"goodName","label":"物品名称","type":"text"},{"name":"startDate","label":"开始日期","type":"date"},{"name":"endDate","label":"结束日期","type":"date"}]}]]></column>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["入库数量","出库数量"],"grain":"库房+物品+日期","owner":"仓库管理"}]]></column>
+        </insert>
+    </changeSet>
+
+    <!-- 5. 合同管理 -->
+    <changeSet id="0047-05-contract-list" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM analytics_report_template WHERE template_code = 'PROJ-CONTRACT-LIST'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="template_code" value="PROJ-CONTRACT-LIST"/>
+            <column name="name" value="合同管理"/>
+            <column name="description" value="对齐现网「项目点管理→合同管理」页面，按客户、状态查看合同列表。"/>
+            <column name="domain" value="项目"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.project.contract_list"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROJ-CONTRACT-LIST","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"AUTHORITY_SQL","targetObject":"authority.project.contract_list","databaseName":"园林业务库"},"placeholderReviewRequired":false}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"customerName","label":"客户名称","type":"text"},{"name":"status","label":"状态","type":"text"}]}]]></column>
+            <column name="creator_id" valueNumeric="1"/></insert>
+    </changeSet>
+
+    <!-- 6. 监管盘点汇总 -->
+    <changeSet id="0047-06-supervision-check" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM analytics_report_template WHERE template_code = 'PROJ-SUPERVISION-CHECK'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="template_code" value="PROJ-SUPERVISION-CHECK"/>
+            <column name="name" value="监管盘点汇总"/>
+            <column name="description" value="对齐现网「项目点管理→监管盘点」页面，按项目点查看盘点进度和完成率。"/>
+            <column name="domain" value="项目"/>
+            <column name="category" value="汇总"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.project.supervision_check_summary"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROJ-SUPERVISION-CHECK","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"AUTHORITY_SQL","targetObject":"authority.project.supervision_check_summary","databaseName":"园林业务库"},"placeholderReviewRequired":false}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"projectId","label":"项目点","type":"text"},{"name":"status","label":"状态","type":"text"}]}]]></column>
+            <column name="creator_id" valueNumeric="1"/></insert>
+    </changeSet>
+
+    <!-- 7. 项目点经营汇总 -->
+    <changeSet id="0047-07-fulfillment-summary" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">SELECT COUNT(1) FROM analytics_report_template WHERE template_code = 'PROJ-FULFILLMENT-SUMMARY'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="template_code" value="PROJ-FULFILLMENT-SUMMARY"/>
+            <column name="name" value="项目点经营汇总"/>
+            <column name="description" value="对齐现网「项目点管理→项目点汇总」页面，按项目查看客户、经理、绿植数、摆位数、已完成报花数。"/>
+            <column name="domain" value="项目"/>
+            <column name="category" value="汇总"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.project.fulfillment_summary"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROJ-FULFILLMENT-SUMMARY","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"AUTHORITY_SQL","targetObject":"authority.project.fulfillment_summary","databaseName":"园林业务库"},"placeholderReviewRequired":false}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"projectId","label":"项目点","type":"text"},{"name":"status","label":"状态","type":"text"}]}]]></column>
+            <column name="creator_id" valueNumeric="1"/></insert>
+    </changeSet>
+
+</databaseChangeLog>

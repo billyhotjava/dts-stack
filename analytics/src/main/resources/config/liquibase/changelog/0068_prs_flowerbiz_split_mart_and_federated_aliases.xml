@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0068-prs-flowerbiz-split-mart-and-federated-aliases" author="codex">
+        <comment>Route PRS dbt-backed screen SQL to the Postgres mart alias and reserve the federated alias for Trino cross-database queries.</comment>
+        <sql><![CDATA[
+            WITH mart_database AS (
+                UPDATE analytics_database db
+                   SET details_json = (
+                           SELECT (
+                               base.details || jsonb_build_object(
+                                   'logicalSourceAliases',
+                                   (
+                                       SELECT jsonb_agg(alias ORDER BY alias)
+                                         FROM (
+                                             SELECT DISTINCT alias
+                                               FROM (
+                                                   SELECT jsonb_array_elements_text(
+                                                              CASE
+                                                                  WHEN jsonb_typeof(base.details -> 'logicalSourceAliases') = 'array'
+                                                                      THEN base.details -> 'logicalSourceAliases'
+                                                                  ELSE '[]'::jsonb
+                                                              END
+                                                          ) AS alias
+                                                   UNION ALL
+                                                   SELECT 'prs.flowerbiz.mart'
+                                               ) source_aliases
+                                              WHERE alias IS NOT NULL
+                                                AND btrim(alias) <> ''
+                                                AND lower(alias) <> lower('prs.flowerbiz.federated')
+                                         ) deduped_aliases
+                                   )
+                               )
+                           )::text
+                             FROM (
+                                 SELECT COALESCE(NULLIF(db.details_json, '')::jsonb, '{}'::jsonb) AS details
+                             ) base
+                       ),
+                       database_role = 'BUSINESS_SECONDARY',
+                       updated_at = ${now}
+                 WHERE lower(db.name) = lower('DTS dbt模型库')
+                 RETURNING id
+            ),
+            repaired_screens AS (
+                UPDATE analytics_screen
+                   SET components_json = regexp_replace(
+                           components_json,
+                           '"databaseAlias"[[:space:]]*:[[:space:]]*"prs\.flowerbiz\.federated"',
+                           '"databaseAlias":"prs.flowerbiz.mart"',
+                           'g'
+                       ),
+                       updated_at = ${now}
+                 WHERE id BETWEEN 290001 AND 290012
+                   AND archived = false
+                   AND components_json LIKE '%prs.flowerbiz.federated%'
+                 RETURNING id
+            ),
+            repaired_versions AS (
+                UPDATE analytics_screen_version
+                   SET components_json = regexp_replace(
+                           components_json,
+                           '"databaseAlias"[[:space:]]*:[[:space:]]*"prs\.flowerbiz\.federated"',
+                           '"databaseAlias":"prs.flowerbiz.mart"',
+                           'g'
+                       )
+                 WHERE screen_id BETWEEN 290001 AND 290012
+                   AND components_json LIKE '%prs.flowerbiz.federated%'
+                 RETURNING id
+            )
+            SELECT
+                (SELECT COUNT(*) FROM mart_database) AS mart_database_count,
+                (SELECT COUNT(*) FROM repaired_screens) AS repaired_screen_count,
+                (SELECT COUNT(*) FROM repaired_versions) AS repaired_version_count;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

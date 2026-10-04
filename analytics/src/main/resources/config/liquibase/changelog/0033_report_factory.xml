@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0033-create-analytics-report-template" author="dts">
+        <createTable tableName="analytics_report_template">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="text"/>
+            <column name="spec_json" type="text"/>
+            <column name="version_no" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="published" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="archived" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creator_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_report_template" indexName="idx_report_template_creator">
+            <column name="creator_id"/>
+        </createIndex>
+        <createIndex tableName="analytics_report_template" indexName="idx_report_template_updated">
+            <column name="updated_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="0033-create-analytics-report-run" author="dts">
+        <createTable tableName="analytics_report_run">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="template_id" type="bigint"/>
+            <column name="source_type" type="varchar(32)"/>
+            <column name="source_id" type="bigint"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="output_format" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="summary_json" type="text"/>
+            <column name="content_markdown" type="text"/>
+            <column name="content_html" type="text"/>
+            <column name="distribution_json" type="text"/>
+            <column name="creator_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_report_run" indexName="idx_report_run_template">
+            <column name="template_id"/>
+        </createIndex>
+        <createIndex tableName="analytics_report_run" indexName="idx_report_run_source">
+            <column name="source_type"/>
+            <column name="source_id"/>
+        </createIndex>
+        <createIndex tableName="analytics_report_run" indexName="idx_report_run_created">
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

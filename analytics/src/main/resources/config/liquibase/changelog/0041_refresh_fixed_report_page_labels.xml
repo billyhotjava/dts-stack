@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0041-refresh-page-aligned-fixed-report-labels" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="name" value="财务结算汇总"/>
+            <column name="description" value="贴合现网页面“财务结算汇总”的固定报表占位模板。"/>
+            <where>template_code = 'FIN-AR-OVERVIEW'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="财务结算汇总-客户欠款排行"/>
+            <column name="description" value="贴合现网页面“财务结算汇总”场景的客户欠款排行占位模板。"/>
+            <where>template_code = 'FIN-CUSTOMER-AR-RANK'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="财务结算列表-项目回款进度"/>
+            <column name="description" value="贴合现网页面“财务结算列表”的项目回款进度占位模板。"/>
+            <where>template_code = 'FIN-PROJECT-COLLECTION-PROGRESS'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="财务结算列表-待收款明细"/>
+            <column name="description" value="贴合现网页面“财务结算列表”的待收款明细占位模板。"/>
+            <where>template_code = 'FIN-PENDING-RECEIPTS-DETAIL'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="支出管理-待付款审批"/>
+            <column name="description" value="贴合现网页面“支出管理”的待付款审批占位模板。"/>
+            <where>template_code = 'FIN-PENDING-PAYMENT-APPROVAL'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="预支申请"/>
+            <column name="description" value="贴合现网页面“预支申请”的固定报表占位模板。"/>
+            <where>template_code = 'FIN-ADVANCE-REQUEST-STATUS'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="日常报销"/>
+            <column name="description" value="贴合现网页面“日常报销”的固定报表占位模板。"/>
+            <where>template_code = 'FIN-REIMBURSEMENT-STATUS'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="开票管理"/>
+            <column name="description" value="贴合现网页面“开票管理”的固定报表占位模板。"/>
+            <where>template_code = 'FIN-INVOICE-RECONCILIATION'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="采购计划明细-待处理"/>
+            <column name="description" value="贴合现网页面“采购计划明细”的待处理占位模板。"/>
+            <where>template_code = 'PROC-PURCHASE-REQUEST-TODO'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="采购明细-执行进度"/>
+            <column name="description" value="贴合现网页面“采购明细”的执行进度占位模板。"/>
+            <where>template_code = 'PROC-ORDER-EXECUTION-PROGRESS'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="采购汇总"/>
+            <column name="description" value="贴合现网页面“采购汇总”的固定报表占位模板。"/>
+            <where>template_code = 'PROC-SUPPLIER-AMOUNT-RANK'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="配送记录-到货及时率"/>
+            <column name="description" value="贴合现网页面“配送记录”的到货及时率占位模板。"/>
+            <where>template_code = 'PROC-ARRIVAL-ONTIME-RATE'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="入库管理-待入库清单"/>
+            <column name="description" value="贴合现网页面“入库管理”的待入库清单占位模板。"/>
+            <where>template_code = 'PROC-PENDING-INBOUND-LIST'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="配送记录-在途采购"/>
+            <column name="description" value="贴合现网页面“配送记录”的在途采购占位模板。"/>
+            <where>template_code = 'PROC-INTRANSIT-BOARD'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="库存现量"/>
+            <column name="description" value="贴合现网页面“库存现量”的固定报表占位模板。"/>
+            <where>template_code = 'WH-STOCK-OVERVIEW'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="库存现量-低库存预警"/>
+            <column name="description" value="贴合现网页面“库存现量”的低库存预警占位模板。"/>
+            <where>template_code = 'WH-LOW-STOCK-ALERT'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

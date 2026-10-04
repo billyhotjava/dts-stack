@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0047-promote-low-stock-alert-fixed-report" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="name" value="库存现量-低库存预警"/>
+            <column name="description" value="对齐现网页面“库存现量”的低库存预警固定报表，按库房和物品输出实时低库存清单。"/>
+            <column name="category" value="预警"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.inventory.low_stock_alert"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"WH-LOW-STOCK-ALERT",
+  "reportType":"fixed",
+  "displayType":"alert-list",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.inventory.low_stock_alert",
+    "databaseName":"园林业务库"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"storehouseInfoId","type":"string","label":"所属库房"},
+    {"name":"goodType","type":"select","label":"物品类型","options":[{"label":"绿植","value":"1"},{"label":"花盆","value":"2"},{"label":"花架","value":"3"},{"label":"辅料","value":"4"}]},
+    {"name":"goodName","type":"string","label":"物品名称"},
+    {"name":"goodSpecs","type":"string","label":"物品属性"},
+    {"name":"underNumber","type":"number","label":"库存预警阈值","defaultValue":"10"},
+    {"name":"status","type":"select","label":"状态","defaultValue":"0","options":[{"label":"已启用","value":"0"},{"label":"已停用","value":"1"}]}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["可用数量"],
+  "grain":"库存物品",
+  "owner":"仓库负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"table",
+  "secondary":"alert-list",
+  "layout":"inventory-low-stock-alert"
+}]]></column>
+            <where>template_code = 'WH-LOW-STOCK-ALERT'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

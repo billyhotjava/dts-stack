@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0013-001-login-history" author="codex">
+        <createTable tableName="analytics_login_history">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ip_address" type="VARCHAR(100)"/>
+            <column name="user_agent" type="VARCHAR(500)"/>
+            <column name="logged_in_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_login_history"
+            baseColumnNames="user_id"
+            referencedTableName="analytics_user"
+            referencedColumnNames="id"
+            constraintName="fk_analytics_login_history__user"/>
+    </changeSet>
+
+</databaseChangeLog>
+

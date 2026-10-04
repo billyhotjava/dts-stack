@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0053-01-remove-hardcoded-fixed-report-database-name" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT CASE
+                    WHEN EXISTS (
+                        SELECT 1
+                        FROM analytics_report_template
+                        WHERE (spec_json::jsonb -> 'queryContract' ->> 'databaseName') = '园林业务库'
+                    ) THEN 1
+                    ELSE 0
+                END
+            ]]></sqlCheck>
+        </preConditions>
+
+        <sql><![CDATA[
+            UPDATE analytics_report_template
+            SET spec_json = (
+                (spec_json::jsonb #- '{queryContract,databaseName}')
+            )::text
+            WHERE (spec_json::jsonb -> 'queryContract' ->> 'databaseName') = '园林业务库';
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!-- =======================================================================
+         BG-05: Semantic Model Baseline & View Metadata Annotation
+         =======================================================================
+         Extends analytics_table, analytics_field, and business_view_registry
+         with semantic metadata columns used by the NL2SQL / copilot layer.
+         ======================================================================= -->
+
+    <!-- Changeset 1: Add semantic columns to analytics_table -->
+    <changeSet id="0037-01-analytics-table-semantic-cols" author="dts-copilot">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="analytics_table" columnName="semantic_domain"/></not>
+        </preConditions>
+        <comment>Add semantic metadata columns to analytics_table for copilot NL2SQL support</comment>
+        <addColumn tableName="analytics_table">
+            <column name="semantic_domain" type="varchar(32)"/>
+            <column name="default_time_field" type="varchar(128)"/>
+            <column name="default_sort_field" type="varchar(128)"/>
+            <column name="semantic_description" type="text"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Changeset 2: Add semantic columns to analytics_field -->
+    <changeSet id="0037-02-analytics-field-semantic-cols" author="dts-copilot">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="analytics_field" columnName="field_role"/></not>
+        </preConditions>
+        <comment>Add field role, filterability, and sample values to analytics_field</comment>
+        <addColumn tableName="analytics_field">
+            <column name="field_role" type="varchar(16)"/>
+            <column name="is_filterable" type="boolean" defaultValueBoolean="false"/>
+            <column name="sample_values" type="varchar(512)"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Changeset 3: Add semantic columns to business_view_registry -->
+    <changeSet id="0037-03-bvr-semantic-cols" author="dts-copilot">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="business_view_registry" columnName="semantic_domain"/></not>
+        </preConditions>
+        <comment>Add semantic_domain and semantic_description to business_view_registry</comment>
+        <addColumn tableName="business_view_registry">
+            <column name="semantic_domain" type="varchar(32)"/>
+            <column name="semantic_description" type="text"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- Changeset 4: Seed semantic metadata for the 7 business views -->
+    <changeSet id="0037-04-seed-bvr-semantic-metadata" author="dts-copilot">
+        <comment>Populate semantic_domain and semantic_description for the 7 business views</comment>
+
+        <update tableName="business_view_registry">
+            <column name="semantic_domain" value="project"/>
+            <column name="semantic_description" value="项目总览视图，包含项目、合同、客户信息及当前绿植和租金统计"/>
+            <where>view_name = 'v_project_overview'</where>
+        </update>
+
+        <update tableName="business_view_registry">
+            <column name="semantic_domain" value="flowerbiz"/>
+            <column name="semantic_description" value="报花业务明细视图，包含所有花卉业务单据及其项目、摆位关联。biz_type_name 为中文业务类型，biz_status_name 为中文状态"/>
+            <where>view_name = 'v_flower_biz_detail'</where>
+        </update>
+
+        <update tableName="business_view_registry">
+            <column name="semantic_domain" value="green"/>
+            <column name="semantic_description" value="当前在摆绿植清单，仅包含状态为摆放中的绿植，已关联摆位和项目信息"/>
+            <where>view_name = 'v_project_green_current'</where>
+        </update>
+
+        <update tableName="business_view_registry">
+            <column name="semantic_domain" value="settlement"/>
+            <column name="semantic_description" value="月度结算视图，包含各项目各月的应收/已收/未收金额。所有金额已由Java结算服务计算完成，不要尝试从绿植数据重算"/>
+            <where>view_name = 'v_monthly_settlement'</where>
+        </update>
+
+        <update tableName="business_view_registry">
+            <column name="semantic_domain" value="task"/>
+            <column name="semantic_description" value="任务进度视图，包含所有日常任务及其完成率。task_type_name 和 task_status_name 均为中文"/>
+            <where>view_name = 'v_task_progress'</where>
+        </update>
+
+        <update tableName="business_view_registry">
+            <column name="semantic_domain" value="curing"/>
+            <column name="semantic_description" value="养护覆盖率视图，按月统计各养护人的养护覆盖情况"/>
+            <where>view_name = 'v_curing_coverage'</where>
+        </update>
+
+        <update tableName="business_view_registry">
+            <column name="semantic_domain" value="pendulum"/>
+            <column name="semantic_description" value="初摆进度视图，包含初摆申请及预算/实际花费"/>
+            <where>view_name = 'v_pendulum_progress'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

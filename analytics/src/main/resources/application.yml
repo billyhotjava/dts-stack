@@ -1,0 +1,73 @@
+server:
+  port: 8092
+
+spring:
+  application:
+    name: dts-stack-analytics
+  mvc:
+    async:
+      request-timeout: ${COPILOT_STREAM_ASYNC_TIMEOUT:10m}
+  datasource:
+    url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DB:dts_stack}?currentSchema=copilot_analytics
+    username: ${PG_USER:copilot}
+    password: ${PG_PASSWORD:copilot_dev}
+    driver-class-name: org.postgresql.Driver
+  liquibase:
+    change-log: classpath:config/liquibase/master.xml
+    default-schema: copilot_analytics
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        default_schema: copilot_analytics
+    open-in-view: false
+
+dts:
+  copilot:
+    ai:
+      base-url: ${COPILOT_AI_BASE_URL:http://localhost:8091}
+  analytics:
+    platform-auth:
+      enabled: ${DTS_ANALYTICS_PLATFORM_AUTH_ENABLED:false}
+    platform-indicators:
+      base-url: ${DTS_PLATFORM_BASE_URL:}
+      token-url: ${DTS_PLATFORM_TOKEN_URL:}
+      client-id: ${DTS_PLATFORM_CLIENT_ID:}
+      client-secret: ${DTS_PLATFORM_CLIENT_SECRET:}
+      auth-token: ${DTS_PLATFORM_AUTH_TOKEN:}
+      service-name: ${DTS_PLATFORM_SERVICE_NAME:dts-copilot}
+      service-token: ${DTS_PLATFORM_SERVICE_TOKEN:${DTS_INBOUND_FROM_COPILOT:${DTS_INBOUND_FROM_ANALYTICS:${DTS_ADMIN_SERVICE_TOKEN:}}}}
+      timeout-seconds: ${DTS_PLATFORM_TIMEOUT_SECONDS:5}
+      value-cache-ttl-seconds: ${DTS_PLATFORM_VALUE_CACHE_TTL_SECONDS:60}
+    default-databases:
+      - name: "园林业务库"
+        role: SYSTEM_RUNTIME
+        engine: postgresql
+        host: ${BIZ_DB_HOST:localhost}
+        port: ${BIZ_DB_PORT:5432}
+        db: ${BIZ_DB_NAME:garden}
+        user: ${BIZ_DB_USER:readonly}
+        password: ${BIZ_DB_PASSWORD:}
+        auto-sync-metadata: true
+  elt:
+    enabled: false
+    cron: "0 0 * * * *"
+    batch-size: 1000
+    business-db:
+      url: ${DTS_BIZ_DB_URL:jdbc:mysql://localhost:3306/rs_cloud_flower}
+      username: ${DTS_BIZ_DB_USER:root}
+      password: ${DTS_BIZ_DB_PASS:}
+
+copilot:
+  admin-secret: ${COPILOT_ADMIN_SECRET:change-me-in-production}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized

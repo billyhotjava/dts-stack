@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0042-01-backfill-fin-fixed-template-placeholder-flags" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-AR-OVERVIEW","reportType":"fixed","displayType":"kpi-table","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.receivable_overview"},"placeholderReviewRequired":true}]]></column>
+            <where>template_code = 'FIN-AR-OVERVIEW'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-CUSTOMER-AR-RANK","reportType":"fixed","displayType":"bar-chart","queryContract":{"sourceType":"MART","targetObject":"mart.finance.customer_ar_rank_daily"},"placeholderReviewRequired":true}]]></column>
+            <where>template_code = 'FIN-CUSTOMER-AR-RANK'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-PROJECT-COLLECTION-PROGRESS","reportType":"fixed","displayType":"funnel-table","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.project_collection_progress"},"placeholderReviewRequired":true}]]></column>
+            <where>template_code = 'FIN-PROJECT-COLLECTION-PROGRESS'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-PENDING-RECEIPTS-DETAIL","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.pending_receipts_detail"},"placeholderReviewRequired":true}]]></column>
+            <where>template_code = 'FIN-PENDING-RECEIPTS-DETAIL'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

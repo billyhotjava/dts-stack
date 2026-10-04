@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0062-1-prs-flowerbiz-unified-report-assets" author="codex">
+        <comment>Merge PRS dbt ADS assets and fixed reports into one grouped catalog, and split wide ADS previews into focused table reports.</comment>
+        <sql><![CDATA[
+            WITH primary_mapping(template_code, group_name, output_columns) AS (
+                VALUES
+                    ('PRS-FLOWERBIZ-OVERVIEW', 'PRS 租赁经营总览', '["年份","业务月份","项目","客户","业务大类","报花单数","在途单数","租金净额","处理成本","销售金额","额外费用"]'::jsonb),
+                    ('PRS-FLOWERBIZ-LEASE-EXECUTION', 'PRS 租赁报花执行', '["年份","业务月份","项目","客户","报花单数","换花单数","加摆单数","撤摆单数","调花单数","租金净额全口径","处理成本全口径"]'::jsonb),
+                    ('PRS-FLOWERBIZ-FINANCE-COST', 'PRS 销售坏账与费用', '["年份","业务月份","项目","客户","销售金额全口径","坏账成本全口径","含税金额合计","成本费用合计"]'::jsonb),
+                    ('PRS-FLOWERBIZ-CURING-WORKLOAD', 'PRS 养护人工作量', '["年份","业务月份","养护人","业务大类","经手单数","已结束单数","在途单数","租金净额全口径","处理成本全口径","销售金额全口径"]'::jsonb),
+                    ('PRS-FLOWERBIZ-PENDING-APPROVAL', 'PRS 在途审批与操作', '["报花单号","标题","业务类型","状态","项目","客户","申请人","养护人","申请时间","已挂起天数","是否超期"]'::jsonb),
+                    ('PRS-FLOWERBIZ-PROJECT-CUSTOMER', 'PRS 项目客户经营', '["年份","业务月份","项目","客户","报花单数","租赁单数","销售单数","租金净额","销售金额","坏账成本","额外费用"]'::jsonb),
+                    ('PRS-FLOWERBIZ-CHANGE-BOARD', 'PRS 变更与租期调整', '["变更单号","报花单号","项目","客户","报花业务类型","变更类型","变更状态","申请人","申请时间","确认人","确认耗时天数","金额差额"]'::jsonb),
+                    ('PRS-FLOWERBIZ-RECOVERY-BOARD', 'PRS 回收撤摆与去向', '["报花单号","项目","客户","回收类型","回收状态","绿植名","实际或计划回收数","回收成本金额","回收人","入库库房","业务月份"]'::jsonb),
+                    ('PRS-FLOWERBIZ-DRILL-LEASE-DETAIL', 'PRS 报花单明细', '["报花单号","业务类型","状态","项目","客户","摆位","绿植名","规格","数量","行租金合计","行成本合计","业务时间","养护人"]'::jsonb),
+                    ('PRS-FLOWERBIZ-DRILL-CHANGE-DETAIL', 'PRS 变更明细', '["变更单号","报花单号","项目","客户","变更类型","变更状态","变更数量","申请人","申请时间","确认人","金额差额","起租期变化天数","是否更换绿植"]'::jsonb),
+                    ('PRS-FLOWERBIZ-DRILL-RECOVERY-DETAIL', 'PRS 回收明细', '["报花单号","项目","客户","回收类型","回收状态","绿植名","计划回收数","实际回收数","回收成本金额","配送人","回收人","入库库房","业务月份"]'::jsonb),
+                    ('PRS-FLOWERBIZ-DRILL-AUDIT-TRAIL', 'PRS 审批操作链路', '["报花单号","业务类型","项目","客户","状态","操作动作","操作分类","操作人","操作时间","距上一步天数"]'::jsonb)
+            )
+            UPDATE analytics_report_template t
+               SET spec_json = jsonb_set(
+                       jsonb_set(
+                           jsonb_set(
+                               COALESCE(NULLIF(t.spec_json, '')::jsonb, '{}'::jsonb),
+                               '{assetKind}',
+                               to_jsonb('DBT_SCREEN_TABLE'::text),
+                               true
+                           ),
+                           '{assetGroup}',
+                           jsonb_build_object('code', m.template_code, 'name', m.group_name, 'role', 'PRIMARY'),
+                           true
+                       ),
+                       '{queryContract,outputColumns}',
+                       m.output_columns,
+                       true
+                   )::text,
+                   updated_at = ${now}
+              FROM primary_mapping m
+             WHERE t.template_code = m.template_code
+               AND t.archived = false;
+        ]]></sql>
+    </changeSet>
+
+    <changeSet id="0062-2-prs-flowerbiz-split-dbt-fixed-reports" author="codex">
+        <comment>Add focused PRS report assets backed by existing dbt ADS models; these replace duplicate dbt-vs-fixed report entries with child reports under one asset group.</comment>
+        <sql><![CDATA[
+            WITH split(
+                template_code,
+                name,
+                description,
+                group_code,
+                group_name,
+                category,
+                primary_model,
+                output_columns,
+                order_column
+            ) AS (
+                VALUES
+                    ('PRS-FLOWERBIZ-OVERVIEW-KPI', 'PRS 经营 KPI 明细', '从租赁经营总览 ADS 拆出的 KPI 表，只保留单量、在途和核心金额。', 'PRS-FLOWERBIZ-OVERVIEW', 'PRS 租赁经营总览', '总览-KPI', 'public.xycyl_ads_flowerbiz_overview', '["年份","业务月份","项目","客户","业务大类","报花单数","已结束单数","在途单数","租金净额","处理成本","销售金额","额外费用"]'::jsonb, '租金净额'),
+                    ('PRS-FLOWERBIZ-LEASE-ORDER-MIX', 'PRS 租赁单量结构', '从租赁汇总 ADS 拆出换花、加摆、撤摆和调花单量结构。', 'PRS-FLOWERBIZ-LEASE-EXECUTION', 'PRS 租赁报花执行', '执行-单量', 'public.xycyl_ads_flowerbiz_lease_summary', '["年份","业务月份","项目","客户","报花单数","已结束单数","在途单数","换花单数","加摆单数","撤摆单数","调花单数"]'::jsonb, '报花单数'),
+                    ('PRS-FLOWERBIZ-LEASE-RENT', 'PRS 租赁租金与成本', '从租赁汇总 ADS 拆出租金净额、处理成本和额外费用。', 'PRS-FLOWERBIZ-LEASE-EXECUTION', 'PRS 租赁报花执行', '执行-金额', 'public.xycyl_ads_flowerbiz_lease_summary', '["年份","业务月份","项目","客户","租金净额全口径","租金净额已结束","处理成本全口径","处理成本已结束","额外费用已结束"]'::jsonb, '租金净额全口径'),
+                    ('PRS-FLOWERBIZ-FINANCE-SALE', 'PRS 销售与赠送明细', '从销售汇总 ADS 拆出销售金额、销售成本和赠送成本。', 'PRS-FLOWERBIZ-FINANCE-COST', 'PRS 销售坏账与费用', '财务-销售', 'public.xycyl_ads_flowerbiz_sale_summary', '["年份","业务月份","项目","客户","总单数","销售单数","赠送单数","销售金额全口径","销售成本全口径","赠送成本全口径"]'::jsonb, '销售金额全口径'),
+                    ('PRS-FLOWERBIZ-FINANCE-BADDEBT', 'PRS 坏账排行', '从坏账 ADS 拆出坏账单数、成本和租金损失，适合 TOP 排行。', 'PRS-FLOWERBIZ-FINANCE-COST', 'PRS 销售坏账与费用', '财务-坏账', 'public.xycyl_ads_flowerbiz_baddebt_summary', '["年份","业务月份","项目","客户","坏账单数","坏账成本全口径","坏账租金损失全口径"]'::jsonb, '坏账成本全口径'),
+                    ('PRS-FLOWERBIZ-FINANCE-EXTRA-COST', 'PRS 额外费用结构', '从额外费用 ADS 拆出运费、人工费、垃圾清理费和其他费用。', 'PRS-FLOWERBIZ-FINANCE-COST', 'PRS 销售坏账与费用', '财务-费用', 'public.xycyl_ads_flowerbiz_extra_cost_summary', '["年份","业务月份","项目","客户","涉及单数","费用条数","含税金额合计","运费合计","人工费合计","垃圾清理费合计","其他费用合计"]'::jsonb, '含税金额合计'),
+                    ('PRS-FLOWERBIZ-CURING-WORKLOAD-RANK', 'PRS 养护人工作量排行', '从养护人工作量 ADS 拆出经手单数、在途单数和收入贡献排行。', 'PRS-FLOWERBIZ-CURING-WORKLOAD', 'PRS 养护人工作量', '养护-排行', 'public.xycyl_ads_flowerbiz_curing_workload', '["年份","业务月份","养护人","业务大类","经手单数","已结束单数","在途单数","租金净额全口径","处理成本全口径","销售金额全口径"]'::jsonb, '经手单数'),
+                    ('PRS-FLOWERBIZ-PENDING-STATUS', 'PRS 在途状态清单', '从待处理 ADS 拆出当前状态、挂起天数和超期标记。', 'PRS-FLOWERBIZ-PENDING-APPROVAL', 'PRS 在途审批与操作', '审批-状态', 'public.xycyl_ads_flowerbiz_pending', '["报花单号","标题","业务类型","状态","项目","客户","申请人","养护人","申请时间","已挂起天数","是否超期"]'::jsonb, '已挂起天数'),
+                    ('PRS-FLOWERBIZ-PROJECT-CUSTOMER-TOP', 'PRS 项目经营 TOP', '从项目客户经营 ADS 拆出项目、客户、租金和销售贡献 TOP。', 'PRS-FLOWERBIZ-PROJECT-CUSTOMER', 'PRS 项目客户经营', '项目客户-TOP', 'public.xycyl_ads_flowerbiz_project_customer', '["年份","业务月份","项目","客户","报花单数","租赁单数","销售单数","租金净额","销售金额","坏账成本","额外费用"]'::jsonb, '租金净额'),
+                    ('PRS-FLOWERBIZ-CHANGE-AMOUNT', 'PRS 变更金额与租期', '从变更日志 ADS 拆出金额差额、租期变化和确认耗时。', 'PRS-FLOWERBIZ-CHANGE-BOARD', 'PRS 变更与租期调整', '变更-金额', 'public.xycyl_ads_flowerbiz_change_log', '["变更单号","报花单号","项目","客户","报花业务类型","变更类型","变更状态","申请人","申请时间","确认人","确认耗时天数","金额差额","起租期变化天数"]'::jsonb, '确认耗时天数'),
+                    ('PRS-FLOWERBIZ-RECOVERY-COST', 'PRS 回收成本与去向', '从回收明细 ADS 拆出回收类型、入库库房、回收数量和成本。', 'PRS-FLOWERBIZ-RECOVERY-BOARD', 'PRS 回收撤摆与去向', '回收-成本', 'public.xycyl_ads_flowerbiz_recovery_detail', '["报花单号","项目","客户","回收类型","回收状态","绿植名","实际或计划回收数","回收成本金额","回收人","入库库房","业务月份"]'::jsonb, '回收成本金额'),
+                    ('PRS-FLOWERBIZ-AUDIT-LAG', 'PRS 审批操作耗时', '从审批操作流水 ADS 拆出操作动作、操作人和距上一步天数。', 'PRS-FLOWERBIZ-PENDING-APPROVAL', 'PRS 在途审批与操作', '审批-耗时', 'public.xycyl_ads_flowerbiz_audit_trail', '["报花单号","业务类型","项目","客户","状态","操作动作","操作分类","操作人","操作时间","距上一步天数"]'::jsonb, '距上一步天数')
+            )
+            INSERT INTO analytics_report_template (
+                name,
+                description,
+                spec_json,
+                template_code,
+                domain,
+                category,
+                data_source_type,
+                target_object,
+                refresh_policy,
+                permission_policy_json,
+                parameter_schema_json,
+                metric_definition_json,
+                presentation_schema_json,
+                certification_status,
+                version_no,
+                published,
+                archived,
+                creator_id,
+                created_at,
+                updated_at
+            )
+            SELECT
+                s.name,
+                s.description,
+                jsonb_build_object(
+                    'templateCode', s.template_code,
+                    'reportType', 'fixed-table',
+                    'displayType', 'table',
+                    'assetKind', 'DBT_SPLIT',
+                    'assetGroup', jsonb_build_object(
+                        'code', s.group_code,
+                        'name', s.group_name,
+                        'parentTemplateCode', s.group_code,
+                        'role', 'DETAIL'
+                    ),
+                    'queryContract', jsonb_build_object(
+                        'sourceType', 'DBT_ADS',
+                        'targetObject', s.primary_model,
+                        'primaryDbtModel', s.primary_model,
+                        'dbtModels', jsonb_build_array(s.primary_model),
+                        'outputColumns', s.output_columns,
+                        'orderBy', jsonb_build_array(jsonb_build_object('column', s.order_column, 'direction', 'desc'))
+                    ),
+                    'placeholderReviewRequired', false
+                )::text,
+                s.template_code,
+                'PRS租赁',
+                s.category,
+                'DBT_ADS',
+                s.primary_model,
+                'DBT_BUILD',
+                '{"scope":"DTS_DBT_ADS","classification":"INTERNAL"}',
+                '{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"projectName","type":"string","label":"项目"},{"name":"customerName","type":"string","label":"客户"}]}',
+                jsonb_build_object(
+                    'metrics', s.output_columns,
+                    'primaryDbtModel', s.primary_model,
+                    'assetGroupCode', s.group_code
+                )::text,
+                '{"primary":"table","layout":"fixed-report-table","visualization":"bi-only","assetKind":"DBT_SPLIT"}',
+                'CERTIFIED',
+                1,
+                true,
+                false,
+                1,
+                ${now},
+                ${now}
+            FROM split s
+            WHERE NOT EXISTS (
+                SELECT 1
+                  FROM analytics_report_template t
+                 WHERE t.template_code = s.template_code
+            );
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

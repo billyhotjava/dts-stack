@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="0045-promote-wh-stock-overview" author="codex">
+        <update tableName="analytics_report_template">
+            <column name="name" value="库存现量"/>
+            <column name="description" value="对齐现网页面“库存现量”的实时固定报表，按库房、物品和库存区间输出当前可用库存。"/>
+            <column name="spec_json"><![CDATA[
+                {
+                  "templateCode":"WH-STOCK-OVERVIEW",
+                  "reportType":"fixed",
+                  "displayType":"table",
+                  "queryContract":{
+                    "sourceType":"AUTHORITY_SQL",
+                    "targetObject":"authority.inventory.stock_overview",
+                    "databaseName":"园林业务库"
+                  },
+                  "placeholderReviewRequired":false
+                }
+            ]]></column>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.inventory.stock_overview"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="parameter_schema_json"><![CDATA[
+                {
+                  "params":[
+                    {"name":"storehouseInfoId","label":"所属库房","type":"text"},
+                    {"name":"status","label":"状态","type":"select","options":[{"label":"已启用","value":"0"},{"label":"已停用","value":"1"}]},
+                    {"name":"goodType","label":"物品类型","type":"select","options":[{"label":"绿植","value":"1"},{"label":"花盆","value":"2"},{"label":"花架","value":"3"},{"label":"辅料","value":"4"}]},
+                    {"name":"goodName","label":"物品名称","type":"text"},
+                    {"name":"goodSpecs","label":"物品属性","type":"text"},
+                    {"name":"passNumber","label":"库存大于","type":"number"},
+                    {"name":"underNumber","label":"库存小于","type":"number"}
+                  ]
+                }
+            ]]></column>
+            <column name="metric_definition_json"><![CDATA[
+                {
+                  "metrics":["可用数量","出库单价","销售单价"],
+                  "owner":"仓库负责人"
+                }
+            ]]></column>
+            <column name="presentation_schema_json"><![CDATA[
+                {
+                  "primary":"table",
+                  "secondary":"kpi",
+                  "layout":"stock-overview"
+                }
+            ]]></column>
+            <where>template_code = 'WH-STOCK-OVERVIEW'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

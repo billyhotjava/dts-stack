@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0051-promote-finance-invoice-fixed-report" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="name" value="开票管理"/>
+            <column name="description" value="对齐现网页面“开票管理”的实时固定报表，直接读取 a_invoice_info 与 a_invoice_item 的开票、回款与账期信息。"/>
+            <column name="category" value="对账"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.finance.invoice_reconciliation"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"FIN-INVOICE-RECONCILIATION",
+  "reportType":"fixed",
+  "displayType":"reconciliation-table",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.finance.invoice_reconciliation",
+    "databaseName":"园林业务库"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"projectId","type":"string","label":"项目点"},
+    {"name":"status","type":"select","label":"状态","options":[
+      {"label":"审核中","value":"1"},
+      {"label":"待开票","value":"2"},
+      {"label":"待领取","value":"3"},
+      {"label":"待回款","value":"4"},
+      {"label":"已结束","value":"10"},
+      {"label":"已驳回","value":"20"},
+      {"label":"已作废","value":"-1"}
+    ]},
+    {"name":"billType","type":"select","label":"类型","options":[
+      {"label":"租摆账单","value":"1"},
+      {"label":"销售账单","value":"2"},
+      {"label":"个人销售账单","value":"3"},
+      {"label":"预收","value":"4"}
+    ]},
+    {"name":"code","type":"string","label":"单号"},
+    {"name":"itemTitle","type":"string","label":"账期/销售单号"},
+    {"name":"applyUserId","type":"string","label":"发起人"},
+    {"name":"applyStartTime","type":"date","label":"申请开始日期"},
+    {"name":"applyEndTime","type":"date","label":"申请结束日期"},
+    {"name":"invoiceStartTime","type":"date","label":"开票开始日期"},
+    {"name":"invoiceEndTime","type":"date","label":"开票结束日期"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["申请开票金额","开票金额","已回款金额"],
+  "grain":"开票申请单",
+  "owner":"财务负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"reconciliation-table",
+  "secondary":"table",
+  "layout":"finance-invoice-reconciliation"
+}]]></column>
+            <where>template_code = 'FIN-INVOICE-RECONCILIATION'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

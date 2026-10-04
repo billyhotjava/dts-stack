@@ -1,0 +1,458 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0040-01-fin-ar-overview" author="dts">
+        <validCheckSum>9:4ea7e3f4eab2fe2e5c8c9f18589ad741</validCheckSum>
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'FIN-AR-OVERVIEW'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="应收总览看板"/>
+            <column name="description" value="财务负责人实时查看客户与项目应收、已收、未收的总览看板。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-AR-OVERVIEW","reportType":"fixed","displayType":"kpi-table","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.receivable_overview"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="FIN-AR-OVERVIEW"/>
+            <column name="domain" value="财务"/>
+            <column name="category" value="看板"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.finance.receivable_overview"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["财务经理","财务专员"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"asOfDate","type":"date"},{"name":"customerId","type":"string"},{"name":"projectId","type":"string"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["应收金额","已收金额","未收金额"],"owner":"财务负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"kpi","secondary":"table","layout":"finance-overview"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-02-fin-customer-ar-rank" author="dts">
+        <validCheckSum>9:f25a58a1fc985825667e61535863c11c</validCheckSum>
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'FIN-CUSTOMER-AR-RANK'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="客户欠款排行"/>
+            <column name="description" value="按客户汇总应收未收金额的准实时排行，用于销售和财务跟进欠款。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-CUSTOMER-AR-RANK","reportType":"fixed","displayType":"bar-chart","queryContract":{"sourceType":"MART","targetObject":"mart.finance.customer_ar_rank_daily"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="FIN-CUSTOMER-AR-RANK"/>
+            <column name="domain" value="财务"/>
+            <column name="category" value="排行"/>
+            <column name="data_source_type" value="MART"/>
+            <column name="target_object" value="mart.finance.customer_ar_rank_daily"/>
+            <column name="refresh_policy" value="NEAR_REALTIME_5M"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["财务经理","销售主管"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"month","type":"month"},{"name":"region","type":"string"},{"name":"topN","type":"int","default":10}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["欠款金额"],"dimension":"客户","owner":"财务负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"bar","secondary":"table","layout":"rank-topn"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-03-fin-project-collection-progress" author="dts">
+        <validCheckSum>9:6c823fed19147109c4a17c4dcc73f6d5</validCheckSum>
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'FIN-PROJECT-COLLECTION-PROGRESS'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="项目回款进度"/>
+            <column name="description" value="项目经理查看合同应收、实际回款和回款节点完成率。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-PROJECT-COLLECTION-PROGRESS","reportType":"fixed","displayType":"funnel-table","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.project_collection_progress"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="FIN-PROJECT-COLLECTION-PROGRESS"/>
+            <column name="domain" value="财务"/>
+            <column name="category" value="进度"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.finance.project_collection_progress"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_PROJECT","roles":["财务经理","项目经理"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"projectId","type":"string"},{"name":"customerId","type":"string"},{"name":"asOfDate","type":"date"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["合同应收","累计回款","回款完成率"],"dimension":"项目","owner":"财务负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"funnel","secondary":"table","layout":"project-progress"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-04-fin-pending-receipts-detail" author="dts">
+        <validCheckSum>9:cfacc5122aa2b2dcc1becb83ebd0769f</validCheckSum>
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'FIN-PENDING-RECEIPTS-DETAIL'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="待收款明细"/>
+            <column name="description" value="财务专员实时查看待收款明细和催收优先级。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-PENDING-RECEIPTS-DETAIL","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.pending_receipts_detail"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="FIN-PENDING-RECEIPTS-DETAIL"/>
+            <column name="domain" value="财务"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.finance.pending_receipts_detail"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["财务专员","财务经理"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"projectId","type":"string"},{"name":"customerId","type":"string"},{"name":"dueWithinDays","type":"int"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["待收金额"],"grain":"收款单据","owner":"财务负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"table","layout":"detail-list"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-05-fin-pending-payment-approval" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'FIN-PENDING-PAYMENT-APPROVAL'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="待付款审批清单"/>
+            <column name="description" value="财务经理查看待付款申请和审批流状态。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-PENDING-PAYMENT-APPROVAL","reportType":"fixed","displayType":"todo-list","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.pending_payment_approval"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="FIN-PENDING-PAYMENT-APPROVAL"/>
+            <column name="domain" value="财务"/>
+            <column name="category" value="待办"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.finance.pending_payment_approval"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["财务经理"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"approverId","type":"string"},{"name":"status","type":"string"},{"name":"bizType","type":"string"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["待付款金额","待审批单数"],"owner":"财务负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"todo","secondary":"table","layout":"approval-queue"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-06-fin-advance-request-status" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'FIN-ADVANCE-REQUEST-STATUS'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="预支申请状态"/>
+            <column name="description" value="跟踪预支单据的申请、审批、付款状态。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-ADVANCE-REQUEST-STATUS","reportType":"fixed","displayType":"status-board","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.advance_request_status"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="FIN-ADVANCE-REQUEST-STATUS"/>
+            <column name="domain" value="财务"/>
+            <column name="category" value="状态"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.finance.advance_request_status"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["财务专员","财务经理"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"requesterId","type":"string"},{"name":"status","type":"string"},{"name":"dateRange","type":"daterange"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["申请金额","已付款金额"],"owner":"财务负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"status-board","secondary":"table","layout":"advance-status"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-07-fin-reimbursement-status" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'FIN-REIMBURSEMENT-STATUS'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="报销单状态跟踪"/>
+            <column name="description" value="跟踪报销单据从提交到支付的状态变化。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-REIMBURSEMENT-STATUS","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.reimbursement_status"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="FIN-REIMBURSEMENT-STATUS"/>
+            <column name="domain" value="财务"/>
+            <column name="category" value="状态"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.finance.reimbursement_status"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["财务专员","财务经理"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"requesterId","type":"string"},{"name":"status","type":"string"},{"name":"month","type":"month"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["报销金额","单据数量"],"owner":"财务负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"table","secondary":"status-chip","layout":"expense-status"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-08-fin-invoice-reconciliation" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'FIN-INVOICE-RECONCILIATION'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="发票收付对账"/>
+            <column name="description" value="校验发票、收款和付款记录的一致性。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"FIN-INVOICE-RECONCILIATION","reportType":"fixed","displayType":"reconciliation-table","queryContract":{"sourceType":"VIEW","targetObject":"authority.finance.invoice_reconciliation"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="FIN-INVOICE-RECONCILIATION"/>
+            <column name="domain" value="财务"/>
+            <column name="category" value="对账"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.finance.invoice_reconciliation"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["财务经理","财务专员"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"invoiceStatus","type":"string"},{"name":"customerId","type":"string"},{"name":"month","type":"month"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["应开票金额","已开票金额","已收金额"],"owner":"财务负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"table","secondary":"kpi","layout":"reconciliation"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-09-proc-purchase-request-todo" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'PROC-PURCHASE-REQUEST-TODO'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="采购申请待办"/>
+            <column name="description" value="采购员实时查看待处理的采购申请清单。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROC-PURCHASE-REQUEST-TODO","reportType":"fixed","displayType":"todo-list","queryContract":{"sourceType":"VIEW","targetObject":"authority.procurement.request_todo"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="PROC-PURCHASE-REQUEST-TODO"/>
+            <column name="domain" value="采购"/>
+            <column name="category" value="待办"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.procurement.request_todo"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["采购员","采购主管"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"requestStatus","type":"string"},{"name":"warehouseId","type":"string"},{"name":"supplierId","type":"string"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["待处理申请数","待采购金额"],"owner":"采购负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"todo","secondary":"table","layout":"procurement-todo"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-10-proc-order-execution-progress" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'PROC-ORDER-EXECUTION-PROGRESS'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="采购单执行进度"/>
+            <column name="description" value="跟踪采购单从下单到到货入库的执行进度。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROC-ORDER-EXECUTION-PROGRESS","reportType":"fixed","displayType":"progress-table","queryContract":{"sourceType":"VIEW","targetObject":"authority.procurement.order_execution_progress"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="PROC-ORDER-EXECUTION-PROGRESS"/>
+            <column name="domain" value="采购"/>
+            <column name="category" value="进度"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.procurement.order_execution_progress"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["采购主管","采购员"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"orderStatus","type":"string"},{"name":"supplierId","type":"string"},{"name":"projectId","type":"string"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["订单金额","到货完成率"],"owner":"采购负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"progress","secondary":"table","layout":"order-progress"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-11-proc-supplier-amount-rank" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'PROC-SUPPLIER-AMOUNT-RANK'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="供应商采购金额排行"/>
+            <column name="description" value="按供应商汇总采购金额的准实时排行。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROC-SUPPLIER-AMOUNT-RANK","reportType":"fixed","displayType":"bar-chart","queryContract":{"sourceType":"FACT","targetObject":"fact.procurement.order_event"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="PROC-SUPPLIER-AMOUNT-RANK"/>
+            <column name="domain" value="采购"/>
+            <column name="category" value="排行"/>
+            <column name="data_source_type" value="FACT"/>
+            <column name="target_object" value="fact.procurement.order_event"/>
+            <column name="refresh_policy" value="NEAR_REALTIME_5M"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["采购主管","运营总监"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"month","type":"month"},{"name":"warehouseId","type":"string"},{"name":"topN","type":"int","default":10}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["采购金额"],"dimension":"供应商","owner":"采购负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"bar","secondary":"table","layout":"rank-topn"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-12-proc-arrival-ontime-rate" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'PROC-ARRIVAL-ONTIME-RATE'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="采购到货及时率"/>
+            <column name="description" value="按日观察采购订单的到货及时率趋势。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROC-ARRIVAL-ONTIME-RATE","reportType":"fixed","displayType":"line-chart","queryContract":{"sourceType":"FACT","targetObject":"fact.procurement.order_event"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="PROC-ARRIVAL-ONTIME-RATE"/>
+            <column name="domain" value="采购"/>
+            <column name="category" value="趋势"/>
+            <column name="data_source_type" value="FACT"/>
+            <column name="target_object" value="fact.procurement.order_event"/>
+            <column name="refresh_policy" value="NEAR_REALTIME_5M"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["采购主管"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateRange","type":"daterange"},{"name":"supplierId","type":"string"},{"name":"warehouseId","type":"string"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["到货及时率"],"dimension":"日期","owner":"采购负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"line","secondary":"table","layout":"trend"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-13-proc-pending-inbound-list" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'PROC-PENDING-INBOUND-LIST'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="待入库采购清单"/>
+            <column name="description" value="仓库管理员查看已到货但尚未完成入库的采购单据。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROC-PENDING-INBOUND-LIST","reportType":"fixed","displayType":"table","queryContract":{"sourceType":"VIEW","targetObject":"authority.procurement.pending_inbound_list"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="PROC-PENDING-INBOUND-LIST"/>
+            <column name="domain" value="采购"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.procurement.pending_inbound_list"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["仓库管理员","采购主管"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"warehouseId","type":"string"},{"name":"supplierId","type":"string"},{"name":"dateRange","type":"daterange"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["待入库数量","待入库金额"],"owner":"采购负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"table","layout":"pending-inbound"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-14-proc-intransit-board" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'PROC-INTRANSIT-BOARD'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="采购在途看板"/>
+            <column name="description" value="监控在途采购单、配送节点和预计到货时间。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PROC-INTRANSIT-BOARD","reportType":"fixed","displayType":"board","queryContract":{"sourceType":"VIEW","targetObject":"authority.procurement.intransit_board"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="PROC-INTRANSIT-BOARD"/>
+            <column name="domain" value="采购"/>
+            <column name="category" value="看板"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.procurement.intransit_board"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["采购主管","仓库主管"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"warehouseId","type":"string"},{"name":"supplierId","type":"string"},{"name":"etaWithinDays","type":"int"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["在途订单数","在途金额"],"owner":"采购负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"board","secondary":"table","layout":"intransit"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-15-wh-stock-overview" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'WH-STOCK-OVERVIEW'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="库存现量看板"/>
+            <column name="description" value="仓库管理员查看当前现量、可用量和冻结量总览。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"WH-STOCK-OVERVIEW","reportType":"fixed","displayType":"kpi-table","queryContract":{"sourceType":"VIEW","targetObject":"authority.inventory.stock_overview"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="WH-STOCK-OVERVIEW"/>
+            <column name="domain" value="仓库"/>
+            <column name="category" value="看板"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.inventory.stock_overview"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["仓库管理员","仓库主管"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"warehouseId","type":"string"},{"name":"skuKeyword","type":"string"},{"name":"categoryId","type":"string"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["现量","可用量","冻结量"],"owner":"仓库负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"kpi","secondary":"table","layout":"stock-overview"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0040-16-wh-low-stock-alert" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">select count(1) from analytics_report_template where template_code = 'WH-LOW-STOCK-ALERT'</sqlCheck>
+        </preConditions>
+        <insert tableName="analytics_report_template">
+            <column name="name" value="低库存预警"/>
+            <column name="description" value="按仓库和物料输出低库存预警清单。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"WH-LOW-STOCK-ALERT","reportType":"fixed","displayType":"alert-list","queryContract":{"sourceType":"VIEW","targetObject":"authority.inventory.low_stock_alert"},"placeholderReviewRequired":true}]]></column>
+            <column name="template_code" value="WH-LOW-STOCK-ALERT"/>
+            <column name="domain" value="仓库"/>
+            <column name="category" value="预警"/>
+            <column name="data_source_type" value="VIEW"/>
+            <column name="target_object" value="authority.inventory.low_stock_alert"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"ROLE_AND_ORG","roles":["仓库管理员","采购主管"]}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"warehouseId","type":"string"},{"name":"thresholdMode","type":"string"},{"name":"categoryId","type":"string"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["低库存SKU数","缺口数量"],"owner":"仓库负责人"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"alert-list","secondary":"table","layout":"warning"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

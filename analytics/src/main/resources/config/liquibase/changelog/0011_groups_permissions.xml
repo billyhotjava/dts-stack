@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0011-001-create-groups" author="codex">
+        <createTable tableName="analytics_group">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="group_type" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="analytics_group" columnNames="name" constraintName="ux_analytics_group__name"/>
+
+        <createTable tableName="analytics_group_membership">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="group_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_group_manager" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_group_membership"
+            baseColumnNames="group_id"
+            referencedTableName="analytics_group"
+            referencedColumnNames="id"
+            constraintName="fk_analytics_group_membership__group"/>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_group_membership"
+            baseColumnNames="user_id"
+            referencedTableName="analytics_user"
+            referencedColumnNames="id"
+            constraintName="fk_analytics_group_membership__user"/>
+
+        <addUniqueConstraint
+            tableName="analytics_group_membership"
+            columnNames="group_id,user_id"
+            constraintName="ux_analytics_group_membership__group_user"/>
+    </changeSet>
+
+    <changeSet id="0011-002-seed-system-groups" author="codex">
+        <insert tableName="analytics_group">
+            <column name="id" valueNumeric="1"/>
+            <column name="name" value="All Users"/>
+            <column name="group_type" value="system"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+        <insert tableName="analytics_group">
+            <column name="id" valueNumeric="2"/>
+            <column name="name" value="Administrators"/>
+            <column name="group_type" value="system"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="0011-003-backfill-memberships" author="codex">
+        <sql>
+            insert into analytics_group_membership (group_id, user_id, is_group_manager, created_at, updated_at)
+            select 1, u.id, false, ${now}, ${now}
+            from analytics_user u
+            where not exists (
+                select 1 from analytics_group_membership m where m.group_id = 1 and m.user_id = u.id
+            );
+        </sql>
+        <sql>
+            insert into analytics_group_membership (group_id, user_id, is_group_manager, created_at, updated_at)
+            select 2, u.id, true, ${now}, ${now}
+            from analytics_user u
+            where u.is_superuser = true
+              and not exists (
+                select 1 from analytics_group_membership m where m.group_id = 2 and m.user_id = u.id
+            );
+        </sql>
+    </changeSet>
+
+    <changeSet id="0011-004-permissions-graph" author="codex">
+        <createTable tableName="analytics_permissions_graph">
+            <column name="id" type="BIGINT">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="revision" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="graph_json" type="CLOB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <insert tableName="analytics_permissions_graph">
+            <column name="id" valueNumeric="1"/>
+            <column name="revision" valueNumeric="0"/>
+            <column name="graph_json" value="{&quot;revision&quot;:0,&quot;groups&quot;:{}}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
+

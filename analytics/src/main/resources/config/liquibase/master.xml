@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+    <property name="now" value="current_timestamp"/>
+
+    <include file="config/liquibase/changelog/0001_initial.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0002_users_sessions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0003_databases.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0004_collections_cards.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0005_dashboards.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0006_metadata_tables_fields.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0007_bookmarks.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0008_activity.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0009_pulses_alerts.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0010_segments_metrics.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0011_groups_permissions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0012_password_reset.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0013_login_history.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0014_sharing_public_links.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0015_revisions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0016_public_links_scope.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0017_screens.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0018_screens_theme.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0019_screen_versions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0020_screen_acl.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0021_public_link_security.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0022_screen_audit_log.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0023_query_trace.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0024_screen_global_variables.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0025_screen_templates.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0026_screen_asset_audit_log.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0027_screen_compliance_policy.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0028_screen_template_asset_center.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0029_screen_edit_lock.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0030_nl2sql_eval_cases.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0031_nl2sql_eval_runs.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0032_explore_sessions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0033_report_factory.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0034_synonym_dictionary.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0035_user_email_to_username.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0036_business_views_metadata.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0037_semantic_extensions.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0038_elt_mart_tables.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0039_report_template_registry.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0040_seed_finance_procurement_templates.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0041_refresh_fixed_report_page_labels.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0042_backfill_placeholder_review_flags.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0043_analysis_drafts.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0044_promote_procurement_summary_fixed_report.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0045_promote_stock_overview_fixed_report.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0046_promote_finance_settlement_summary_fixed_report.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0047_promote_low_stock_alert_fixed_report.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0048_promote_finance_advance_request_fixed_report.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0049_promote_procurement_detail_fixed_report.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0050_promote_finance_reimbursement_fixed_report.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0051_promote_finance_invoice_fixed_report.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0052_promote_batch2_reports.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0053_remove_hardcoded_fixed_report_database_name.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0054_promote_pending_fixed_reports.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0055_database_role_hardening.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0056_analysis_draft_agent_bi_metadata.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0057_prs_flowerbiz_fixed_report_screens.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0058_prs_flowerbiz_fixed_report_tables.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0059_prs_flowerbiz_dbt_report_database.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0061_prs_flowerbiz_fixed_report_primary_models.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0062_prs_flowerbiz_unified_report_assets.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0063_prs_flowerbiz_v1_screen_assets.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0064_prs_flowerbiz_copilot_screen_records.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0065_prs_flowerbiz_screen_logical_datasource.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0066_trino_federated_query_database.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0068_prs_flowerbiz_split_mart_and_federated_aliases.xml" relativeToChangelogFile="false"/>
+</databaseChangeLog>

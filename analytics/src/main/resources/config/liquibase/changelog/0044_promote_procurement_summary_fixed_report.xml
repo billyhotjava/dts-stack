@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0044-01-promote-procurement-summary-fixed-report" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="name" value="采购汇总"/>
+            <column name="description" value="对齐现网页面“采购汇总”的实时固定报表，按采购人和采购日期汇总现金/挂账金额。"/>
+            <column name="spec_json"><![CDATA[
+                {
+                  "templateCode":"PROC-SUPPLIER-AMOUNT-RANK",
+                  "reportType":"fixed",
+                  "displayType":"table",
+                  "queryContract":{
+                    "sourceType":"AUTHORITY_SQL",
+                    "targetObject":"authority.procurement.purchase_summary",
+                    "databaseName":"园林业务库"
+                  },
+                  "placeholderReviewRequired":false
+                }
+            ]]></column>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.procurement.purchase_summary"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="parameter_schema_json"><![CDATA[
+                {
+                  "params":[
+                    {"name":"purchaseUserId","label":"采购人","type":"text"},
+                    {"name":"startDate","label":"开始日期","type":"date"},
+                    {"name":"endDate","label":"结束日期","type":"date"}
+                  ]
+                }
+            ]]></column>
+            <column name="metric_definition_json"><![CDATA[
+                {
+                  "metrics":["总金额","现金总金额","挂账总金额"],
+                  "grain":"采购人+采购日期",
+                  "owner":"采购负责人"
+                }
+            ]]></column>
+            <column name="presentation_schema_json"><![CDATA[
+                {
+                  "primary":"table",
+                  "secondary":"metric-summary",
+                  "layout":"purchase-summary"
+                }
+            ]]></column>
+            <where>template_code = 'PROC-SUPPLIER-AMOUNT-RANK'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

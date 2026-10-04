@@ -1,0 +1,49 @@
+spring:
+  application:
+    name: dts-analytics
+  main:
+    banner-mode: "off"
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${PG_HOST:dts-pg}:${PG_PORT:5432}/${PG_DB_ANALYTICS:dts_analytics}}
+    username: ${SPRING_DATASOURCE_USERNAME:${PG_USER_ANALYTICS:dts_analytics}}
+    password: ${SPRING_DATASOURCE_PASSWORD:${PG_PWD_ANALYTICS:dts_analytics}}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate.jdbc.time_zone: UTC
+      hibernate.id.new_generator_mappings: true
+      hibernate.naming.physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+      hibernate.naming.implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+  liquibase:
+    change-log: classpath:config/liquibase/master.xml
+
+server:
+  port: 3000
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,text/css,application/javascript,text/javascript
+    min-response-size: 1024
+
+application:
+  service:
+    name: dts-analytics
+    version: 0.0.1-SNAPSHOT
+    environment: dev
+
+dts:
+  copilot:
+    ai:
+      base-url: ${DTS_COPILOT_AI_BASE_URL:http://localhost:8091}
+  analytics:
+    jdbc:
+      drivers-dir: ${ANALYTICS_JDBC_DRIVERS_DIR:}
+    oidc:
+      enabled: ${DTS_ANALYTICS_OIDC_ENABLED:false}
+      issuer-uri: ${DTS_ANALYTICS_OIDC_ISSUER_URI:}
+      client-id: ${DTS_ANALYTICS_OIDC_CLIENT_ID:}
+      client-secret: ${DTS_ANALYTICS_OIDC_CLIENT_SECRET:}
+      admin-role: ${DTS_ANALYTICS_OIDC_ADMIN_ROLE:analytics-admin}

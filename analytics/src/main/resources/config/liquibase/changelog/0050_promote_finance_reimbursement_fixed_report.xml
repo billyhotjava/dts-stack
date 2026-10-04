@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0050-promote-finance-reimbursement-fixed-report" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="name" value="日常报销"/>
+            <column name="description" value="对齐现网页面“日常报销”的实时固定报表，直接读取 f_expense_account_info 日常报销状态与付款信息。"/>
+            <column name="category" value="状态"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.finance.reimbursement_status"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"FIN-REIMBURSEMENT-STATUS",
+  "reportType":"fixed",
+  "displayType":"status-board",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.finance.reimbursement_status",
+    "databaseName":"园林业务库"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"code","type":"string","label":"单号"},
+    {"name":"status","type":"select","label":"状态","options":[
+      {"label":"草稿","value":"0"},
+      {"label":"审核中","value":"1"},
+      {"label":"待付款","value":"2"},
+      {"label":"待提供发票","value":"9"},
+      {"label":"已结束","value":"3"},
+      {"label":"已作废","value":"-1"},
+      {"label":"已驳回","value":"20"}
+    ]},
+    {"name":"applyUserId","type":"string","label":"申请人"},
+    {"name":"collectName","type":"string","label":"收款人"},
+    {"name":"payType","type":"select","label":"付款方式","options":[
+      {"label":"转账","value":"1"},
+      {"label":"现金","value":"2"},
+      {"label":"汇款","value":"3"}
+    ]},
+    {"name":"remark","type":"string","label":"关键字"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["报销总金额"],
+  "grain":"报销单",
+  "owner":"财务负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"status-board",
+  "secondary":"table",
+  "layout":"finance-reimbursement-status"
+}]]></column>
+            <where>template_code = 'FIN-REIMBURSEMENT-STATUS'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

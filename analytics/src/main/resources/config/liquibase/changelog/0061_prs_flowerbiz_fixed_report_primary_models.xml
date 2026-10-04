@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0061-1-prs-flowerbiz-fixed-report-primary-dbt-models" author="codex">
+        <comment>Pin PRS fixed reports to table-friendly ADS dbt models for Copilot previews.</comment>
+        <sql><![CDATA[
+            WITH mapping(template_code, primary_model) AS (
+                VALUES
+                    ('PRS-FLOWERBIZ-OVERVIEW', 'public.xycyl_ads_flowerbiz_overview'),
+                    ('PRS-FLOWERBIZ-LEASE-EXECUTION', 'public.xycyl_ads_flowerbiz_lease_summary'),
+                    ('PRS-FLOWERBIZ-FINANCE-COST', 'public.xycyl_ads_flowerbiz_finance_cost'),
+                    ('PRS-FLOWERBIZ-CURING-WORKLOAD', 'public.xycyl_ads_flowerbiz_curing_workload'),
+                    ('PRS-FLOWERBIZ-PENDING-APPROVAL', 'public.xycyl_ads_flowerbiz_pending'),
+                    ('PRS-FLOWERBIZ-PROJECT-CUSTOMER', 'public.xycyl_ads_flowerbiz_project_customer'),
+                    ('PRS-FLOWERBIZ-CHANGE-BOARD', 'public.xycyl_ads_flowerbiz_change_log'),
+                    ('PRS-FLOWERBIZ-RECOVERY-BOARD', 'public.xycyl_ads_flowerbiz_recovery_detail'),
+                    ('PRS-FLOWERBIZ-DRILL-LEASE-DETAIL', 'public.xycyl_ads_flowerbiz_lease_detail'),
+                    ('PRS-FLOWERBIZ-DRILL-CHANGE-DETAIL', 'public.xycyl_ads_flowerbiz_change_log'),
+                    ('PRS-FLOWERBIZ-DRILL-RECOVERY-DETAIL', 'public.xycyl_ads_flowerbiz_recovery_detail'),
+                    ('PRS-FLOWERBIZ-DRILL-AUDIT-TRAIL', 'public.xycyl_ads_flowerbiz_audit_trail')
+            )
+            UPDATE analytics_report_template t
+               SET spec_json = jsonb_set(
+                       COALESCE(NULLIF(t.spec_json, '')::jsonb, '{}'::jsonb),
+                       '{queryContract,primaryDbtModel}',
+                       to_jsonb(m.primary_model::text),
+                       true
+                   )::text,
+                   metric_definition_json = jsonb_set(
+                       COALESCE(NULLIF(t.metric_definition_json, '')::jsonb, '{}'::jsonb),
+                       '{primaryDbtModel}',
+                       to_jsonb(m.primary_model::text),
+                       true
+                   )::text,
+                   updated_at = ${now}
+              FROM mapping m
+             WHERE t.template_code = m.template_code
+               AND t.archived = false;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

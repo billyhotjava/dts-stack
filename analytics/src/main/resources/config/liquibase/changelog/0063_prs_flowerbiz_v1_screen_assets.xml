@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0063-1-remove-temporary-sprint27-dashboard" author="codex">
+        <comment>Remove the temporary Sprint-27 IT08 dashboard data that leaked into the asset library.</comment>
+        <sql><![CDATA[
+            DELETE FROM analytics_dashboard_card
+             WHERE dashboard_id IN (
+                       SELECT id
+                         FROM analytics_dashboard
+                        WHERE name LIKE 'Sprint27 IT08 看板%'
+                           OR description = 'Sprint-27 IT08 live pin dashboard'
+                   );
+
+            DELETE FROM analytics_dashboard
+             WHERE name LIKE 'Sprint27 IT08 看板%'
+                OR description = 'Sprint-27 IT08 live pin dashboard';
+        ]]></sql>
+    </changeSet>
+
+    <changeSet id="0063-2-prs-flowerbiz-v1-screen-assets" author="codex">
+        <comment>Replace temporary PRS report assets with the 12 reviewed v1 screen-backed report prototypes under worklog/prs/v1/screens.</comment>
+        <sql><![CDATA[
+            WITH screen_assets(
+                template_code,
+                name,
+                description,
+                screen_slug,
+                category,
+                primary_model,
+                dbt_models,
+                screen_metrics,
+                component_count,
+                display_order
+            ) AS (
+                VALUES
+                    ('PRS-FLOWERBIZ-OVERVIEW', 'PRS 租赁经营总览', '报花租赁经营总览，覆盖业务规模、状态、项目与客户分布。', 'prs-flowerbiz-overview-v1', '总览', 'public.xycyl_ads_flowerbiz_lease_summary', '["public.xycyl_ads_flowerbiz_lease_summary","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["项目数","客户数","报花单数","销售金额","坏账成本","额外费用"]'::jsonb, 24, 10),
+                    ('PRS-FLOWERBIZ-LEASE-EXECUTION', 'PRS 租赁报花执行看板', '租赁换花、加摆、撤摆、调花执行态势。', 'prs-flowerbiz-lease-execution-v1', '执行', 'public.xycyl_ads_flowerbiz_lease_summary', '["public.xycyl_ads_flowerbiz_lease_summary","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["报花单数","换花单数","加摆单数","撤摆单数","调花单数","租金净额"]'::jsonb, 22, 20),
+                    ('PRS-FLOWERBIZ-FINANCE-COST', 'PRS 销售坏账与费用看板', '销售赠送、坏账、运费、人工费和额外费用业务口径。', 'prs-flowerbiz-finance-cost-v1', '财务', 'public.xycyl_ads_flowerbiz_sale_summary', '["public.xycyl_ads_flowerbiz_baddebt_summary","public.xycyl_ads_flowerbiz_extra_cost_summary","public.xycyl_ads_flowerbiz_sale_summary","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["销售金额","坏账成本","运费","人工费","垃圾清理费","额外费用"]'::jsonb, 22, 30),
+                    ('PRS-FLOWERBIZ-CURING-WORKLOAD', 'PRS 养护人工作量看板', '养护人月度经手单数、在途单数与金额贡献。', 'prs-flowerbiz-curing-workload-v1', '养护', 'public.xycyl_ads_flowerbiz_curing_workload', '["public.xycyl_ads_flowerbiz_curing_workload","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["养护人","经手单数","已结束单数","在途单数","租金净额","销售金额"]'::jsonb, 22, 40),
+                    ('PRS-FLOWERBIZ-PENDING-APPROVAL', 'PRS 在途审批与操作监控', '在途、超期、待结算和审批操作链路监控。', 'prs-flowerbiz-pending-approval-v1', '审批', 'public.xycyl_ads_flowerbiz_pending', '["public.xycyl_ads_flowerbiz_audit_trail","public.xycyl_ads_flowerbiz_pending","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["在途单数","超期单数","待结算","审核中","平均挂起天数","在途金额"]'::jsonb, 22, 50),
+                    ('PRS-FLOWERBIZ-PROJECT-CUSTOMER', 'PRS 项目客户经营看板', '按项目和客户观察租赁、销售、坏账与费用贡献。', 'prs-flowerbiz-project-customer-v1', '项目客户', 'public.xycyl_dwd_flowerbiz_main', '["public.xycyl_ads_flowerbiz_baddebt_summary","public.xycyl_ads_flowerbiz_extra_cost_summary","public.xycyl_ads_flowerbiz_sale_summary","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["项目","客户","报花单数","租金净额","销售金额","坏账成本","额外费用"]'::jsonb, 22, 60),
+                    ('PRS-FLOWERBIZ-CHANGE-BOARD', 'PRS 变更与租期调整看板', '金额变更、货物变更、起租期变化和确认耗时。', 'prs-flowerbiz-change-board-v1', '变更', 'public.xycyl_ads_flowerbiz_change_log', '["public.xycyl_ads_flowerbiz_change_log","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["变更单数","金额差额","起租期变化天数","确认耗时天数","更换绿植单数"]'::jsonb, 22, 70),
+                    ('PRS-FLOWERBIZ-RECOVERY-BOARD', 'PRS 回收撤摆与去向看板', '报损、回购、留用、库房和回收人员监控。', 'prs-flowerbiz-recovery-board-v1', '回收', 'public.xycyl_ads_flowerbiz_recovery_detail', '["public.xycyl_ads_flowerbiz_recovery_detail","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["回收单数","计划回收数","实际回收数","回收成本金额","入库库房","回收人"]'::jsonb, 22, 80),
+                    ('PRS-FLOWERBIZ-DRILL-LEASE-DETAIL', 'PRS 报花单明细钻取', '单据、摆位、绿植和养护人明细钻取。', 'prs-flowerbiz-drill-lease-detail-v1', '钻取-报花', 'public.xycyl_ads_flowerbiz_lease_detail', '["public.xycyl_ads_flowerbiz_lease_detail","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["报花单号","业务类型","状态","项目","客户","摆位","绿植名","养护人"]'::jsonb, 20, 90),
+                    ('PRS-FLOWERBIZ-DRILL-CHANGE-DETAIL', 'PRS 变更明细钻取', '金额、货物和起租期变更明细钻取。', 'prs-flowerbiz-drill-change-detail-v1', '钻取-变更', 'public.xycyl_ads_flowerbiz_change_log', '["public.xycyl_ads_flowerbiz_change_log","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["变更单号","报花单号","变更类型","变更状态","金额差额","起租期变化天数"]'::jsonb, 20, 100),
+                    ('PRS-FLOWERBIZ-DRILL-RECOVERY-DETAIL', 'PRS 回收明细钻取', '回收明细、绿植、库房和回收人员明细钻取。', 'prs-flowerbiz-drill-recovery-detail-v1', '钻取-回收', 'public.xycyl_ads_flowerbiz_recovery_detail', '["public.xycyl_ads_flowerbiz_recovery_detail","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["报花单号","项目","客户","回收类型","回收状态","绿植名","回收成本金额"]'::jsonb, 20, 110),
+                    ('PRS-FLOWERBIZ-DRILL-AUDIT-TRAIL', 'PRS 审批操作链路钻取', '审批、里程碑、物流、关闭和回退操作流水钻取。', 'prs-flowerbiz-drill-audit-trail-v1', '钻取-审批', 'public.xycyl_ads_flowerbiz_audit_trail', '["public.xycyl_ads_flowerbiz_audit_trail","public.xycyl_dwd_flowerbiz_main"]'::jsonb, '["报花单号","业务类型","项目","客户","操作动作","操作人","操作时间","距上一步天数"]'::jsonb, 20, 120)
+            ),
+            deleted_stale AS (
+                DELETE FROM analytics_report_template t
+                 WHERE t.template_code LIKE 'PRS-FLOWERBIZ-%'
+                   AND NOT EXISTS (
+                           SELECT 1
+                             FROM screen_assets s
+                            WHERE s.template_code = t.template_code
+                       )
+                RETURNING t.id
+            ),
+            updated AS (
+                UPDATE analytics_report_template t
+                   SET name = s.name,
+                       description = s.description,
+                       spec_json = jsonb_build_object(
+                           'templateCode', s.template_code,
+                           'reportType', 'fixed-screen',
+                           'displayType', 'screen',
+                           'assetKind', 'DBT_SCREEN',
+                           'screenSlug', s.screen_slug,
+                           'sourcePath', 'worklog/prs/v1/screens/' || s.screen_slug || '.json',
+                           'assetGroup', jsonb_build_object('code', s.template_code, 'name', s.name, 'role', 'PRIMARY'),
+                           'queryContract', jsonb_build_object(
+                               'sourceType', 'DBT_SCREEN',
+                               'targetObject', 'screen.' || s.screen_slug,
+                               'primaryDbtModel', s.primary_model,
+                               'dbtModels', s.dbt_models,
+                               'outputColumns', jsonb_build_array(),
+                               'databaseName', 'DTS dbt模型库',
+                               'screenPrototypePath', 'worklog/prs/v1/screens/' || s.screen_slug || '.json'
+                           ),
+                           'placeholderReviewRequired', false
+                       )::text,
+                       domain = 'PRS租赁',
+                       category = s.category,
+                       data_source_type = 'DBT_SCREEN',
+                       target_object = 'screen.' || s.screen_slug,
+                       refresh_policy = 'DBT_BUILD',
+                       permission_policy_json = '{"scope":"DTS_DBT_SCREEN","classification":"INTERNAL"}',
+                       parameter_schema_json = '{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"projectName","type":"string","label":"项目"},{"name":"customerName","type":"string","label":"客户"},{"name":"bizCategory","type":"string","label":"业务大类"},{"name":"statusName","type":"string","label":"状态"}]}',
+                       metric_definition_json = jsonb_build_object(
+                           'metrics', s.screen_metrics,
+                           'sourceScreenPrototype', 'worklog/prs/v1/screens/' || s.screen_slug || '.json',
+                           'primaryDbtModel', s.primary_model,
+                           'dbtModels', s.dbt_models
+                       )::text,
+                       presentation_schema_json = jsonb_build_object(
+                           'primary', 'screen',
+                           'layout', s.screen_slug,
+                           'source', 'worklog/prs/v1/screens',
+                           'assetKind', 'DBT_SCREEN',
+                           'componentCount', s.component_count,
+                           'displayOrder', s.display_order
+                       )::text,
+                       certification_status = 'CERTIFIED',
+                       version_no = 1,
+                       published = true,
+                       archived = false,
+                       updated_at = ${now}
+                  FROM screen_assets s
+                 WHERE t.template_code = s.template_code
+                RETURNING t.template_code
+            )
+            INSERT INTO analytics_report_template (
+                name,
+                description,
+                spec_json,
+                template_code,
+                domain,
+                category,
+                data_source_type,
+                target_object,
+                refresh_policy,
+                permission_policy_json,
+                parameter_schema_json,
+                metric_definition_json,
+                presentation_schema_json,
+                certification_status,
+                version_no,
+                published,
+                archived,
+                creator_id,
+                created_at,
+                updated_at
+            )
+            SELECT
+                s.name,
+                s.description,
+                jsonb_build_object(
+                    'templateCode', s.template_code,
+                    'reportType', 'fixed-screen',
+                    'displayType', 'screen',
+                    'assetKind', 'DBT_SCREEN',
+                    'screenSlug', s.screen_slug,
+                    'sourcePath', 'worklog/prs/v1/screens/' || s.screen_slug || '.json',
+                    'assetGroup', jsonb_build_object('code', s.template_code, 'name', s.name, 'role', 'PRIMARY'),
+                    'queryContract', jsonb_build_object(
+                        'sourceType', 'DBT_SCREEN',
+                        'targetObject', 'screen.' || s.screen_slug,
+                        'primaryDbtModel', s.primary_model,
+                        'dbtModels', s.dbt_models,
+                        'outputColumns', jsonb_build_array(),
+                        'databaseName', 'DTS dbt模型库',
+                        'screenPrototypePath', 'worklog/prs/v1/screens/' || s.screen_slug || '.json'
+                    ),
+                    'placeholderReviewRequired', false
+                )::text,
+                s.template_code,
+                'PRS租赁',
+                s.category,
+                'DBT_SCREEN',
+                'screen.' || s.screen_slug,
+                'DBT_BUILD',
+                '{"scope":"DTS_DBT_SCREEN","classification":"INTERNAL"}',
+                '{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"projectName","type":"string","label":"项目"},{"name":"customerName","type":"string","label":"客户"},{"name":"bizCategory","type":"string","label":"业务大类"},{"name":"statusName","type":"string","label":"状态"}]}',
+                jsonb_build_object(
+                    'metrics', s.screen_metrics,
+                    'sourceScreenPrototype', 'worklog/prs/v1/screens/' || s.screen_slug || '.json',
+                    'primaryDbtModel', s.primary_model,
+                    'dbtModels', s.dbt_models
+                )::text,
+                jsonb_build_object(
+                    'primary', 'screen',
+                    'layout', s.screen_slug,
+                    'source', 'worklog/prs/v1/screens',
+                    'assetKind', 'DBT_SCREEN',
+                    'componentCount', s.component_count,
+                    'displayOrder', s.display_order
+                )::text,
+                'CERTIFIED',
+                1,
+                true,
+                false,
+                1,
+                ${now},
+                ${now}
+            FROM screen_assets s
+            WHERE NOT EXISTS (
+                SELECT 1
+                  FROM updated u
+                 WHERE u.template_code = s.template_code
+            );
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0054-promote-pending-fixed-reports" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="name" value="采购计划待处理"/>
+            <column name="description" value="对齐现网页面“采购计划明细”的实时固定报表，按项目、采购人与报花单号查看待采购清单。"/>
+            <column name="category" value="待办"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.procurement.request_todo"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"PROC-PURCHASE-REQUEST-TODO",
+  "reportType":"fixed",
+  "displayType":"todo-list",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.procurement.request_todo"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"status","type":"select","label":"状态","options":[{"label":"待采购","value":"1"},{"label":"已采购","value":"2"},{"label":"已配送","value":"3"},{"label":"已作废","value":"-1"}]},
+    {"name":"projectId","type":"string","label":"项目点"},
+    {"name":"purchaseUserId","type":"string","label":"采购人"},
+    {"name":"flowerCode","type":"string","label":"报花单号"},
+    {"name":"goodName","type":"string","label":"采购物品"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["采购数量","已采购数量"],
+  "grain":"采购计划明细",
+  "owner":"采购负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"todo",
+  "secondary":"table",
+  "layout":"procurement-request-todo"
+}]]></column>
+            <where>template_code = 'PROC-PURCHASE-REQUEST-TODO'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="待入库清单"/>
+            <column name="description" value="对齐现网页面“入库管理”的实时固定报表，按库房、单号与业务单据查看待入库记录。"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.procurement.pending_inbound_list"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"PROC-PENDING-INBOUND-LIST",
+  "reportType":"fixed",
+  "displayType":"table",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.procurement.pending_inbound_list"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"status","type":"select","label":"状态","options":[{"label":"待入库","value":"1"},{"label":"已入库","value":"2"},{"label":"已作废","value":"-1"}]},
+    {"name":"storehouseInfoId","type":"string","label":"所属库房"},
+    {"name":"code","type":"string","label":"入库单号"},
+    {"name":"goodName","type":"string","label":"物品名称"},
+    {"name":"goodSpecs","type":"string","label":"物品属性"},
+    {"name":"bizCode","type":"string","label":"业务单据"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["待入库数量"],
+  "grain":"入库单",
+  "owner":"仓库负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"table",
+  "secondary":"status-chip",
+  "layout":"pending-inbound"
+}]]></column>
+            <where>template_code = 'PROC-PENDING-INBOUND-LIST'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="待付款审批"/>
+            <column name="description" value="对齐现网页面“支出管理-待付款审批”的实时固定报表，按付款单号、业务类型和票据状态查看付款记录。"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.finance.pending_payment_approval"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"FIN-PENDING-PAYMENT-APPROVAL",
+  "reportType":"fixed",
+  "displayType":"table",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.finance.pending_payment_approval"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"code","type":"string","label":"付款单号"},
+    {"name":"businessType","type":"select","label":"业务类型","options":[{"label":"报销支出","value":"1"},{"label":"工资支出","value":"2"},{"label":"任务支出","value":"3"},{"label":"备用金支出","value":"4"},{"label":"采购报销支出","value":"7"}]},
+    {"name":"draweeId","type":"string","label":"付款人"},
+    {"name":"payBankName","type":"string","label":"付款银行"},
+    {"name":"invoiceStatus","type":"select","label":"发票","options":[{"label":"无","value":"1"},{"label":"有","value":"2"}]},
+    {"name":"invoiceOffer","type":"select","label":"发票提供","options":[{"label":"未提供","value":"1"},{"label":"已提供","value":"2"}]}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["付款金额"],
+  "grain":"付款单",
+  "owner":"财务负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"table",
+  "secondary":"status-chip",
+  "layout":"finance-pending-payment-approval"
+}]]></column>
+            <where>template_code = 'FIN-PENDING-PAYMENT-APPROVAL'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="待收款明细"/>
+            <column name="description" value="对齐现网页面“财务结算列表-待收款明细”的实时固定报表，按账期、客户和项目查看应收与待收。"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.finance.pending_receipts_detail"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"FIN-PENDING-RECEIPTS-DETAIL",
+  "reportType":"fixed",
+  "displayType":"table",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.finance.pending_receipts_detail"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"projectName","type":"string","label":"项目点"},
+    {"name":"yearAndMonth","type":"month","label":"账期"},
+    {"name":"companyName","type":"string","label":"客户名称"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["应收金额","已收金额","待收金额"],
+  "grain":"项目账期",
+  "owner":"财务负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"table",
+  "secondary":"arrears",
+  "layout":"finance-pending-receipts-detail"
+}]]></column>
+            <where>template_code = 'FIN-PENDING-RECEIPTS-DETAIL'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="项目回款进度"/>
+            <column name="description" value="对齐现网页面“财务结算列表-项目回款进度”的实时固定报表，按项目和账期查看回款进度与收款记录。"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.finance.project_collection_progress"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"FIN-PROJECT-COLLECTION-PROGRESS",
+  "reportType":"fixed",
+  "displayType":"table",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.finance.project_collection_progress"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"projectName","type":"string","label":"项目点"},
+    {"name":"yearAndMonth","type":"month","label":"账期"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["应收金额","已收金额","待收金额","回款进度"],
+  "grain":"项目账期",
+  "owner":"财务负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"table",
+  "secondary":"progress",
+  "layout":"finance-project-collection-progress"
+}]]></column>
+            <where>template_code = 'FIN-PROJECT-COLLECTION-PROGRESS'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="在途采购"/>
+            <column name="description" value="对齐现网页面“配送记录-在途采购”的实时固定报表，按项目、关联单号与配送状态查看在途采购。"/>
+            <column name="category" value="看板"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.procurement.intransit_board"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"PROC-INTRANSIT-BOARD",
+  "reportType":"fixed",
+  "displayType":"board",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.procurement.intransit_board"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"projectId","type":"string","label":"项目点"},
+    {"name":"status","type":"select","label":"状态","options":[{"label":"配送中","value":"1"},{"label":"运费确认中","value":"2"},{"label":"待接收","value":"3"},{"label":"已结束","value":"4"},{"label":"已作废","value":"-1"}]},
+    {"name":"code","type":"string","label":"配送单号"},
+    {"name":"bizCode","type":"string","label":"关联单号"},
+    {"name":"receiveUserId","type":"string","label":"接收人"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["在途数量"],
+  "grain":"配送单",
+  "owner":"采购负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"board",
+  "secondary":"table",
+  "layout":"procurement-intransit-board"
+}]]></column>
+            <where>template_code = 'PROC-INTRANSIT-BOARD'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="到货及时率"/>
+            <column name="description" value="基于配送开始与接收时间实时计算到货及时率趋势。"/>
+            <column name="category" value="趋势"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.procurement.arrival_ontime_rate"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"PROC-ARRIVAL-ONTIME-RATE",
+  "reportType":"fixed",
+  "displayType":"line-chart",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.procurement.arrival_ontime_rate"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"startDate","type":"date","label":"开始日期"},
+    {"name":"endDate","type":"date","label":"结束日期"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["配送单数","准时到货数","到货及时率"],
+  "grain":"日期",
+  "owner":"采购负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"line",
+  "secondary":"table",
+  "layout":"procurement-arrival-ontime-rate"
+}]]></column>
+            <where>template_code = 'PROC-ARRIVAL-ONTIME-RATE'</where>
+        </update>
+
+        <update tableName="analytics_report_template">
+            <column name="name" value="客户欠款排行"/>
+            <column name="description" value="对齐现网页面“财务结算汇总-客户欠款排行”的实时固定报表，按客户汇总欠款金额。"/>
+            <column name="category" value="排行"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.finance.customer_ar_rank"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"FIN-CUSTOMER-AR-RANK",
+  "reportType":"fixed",
+  "displayType":"bar-chart",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.finance.customer_ar_rank"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"yearAndMonth","type":"month","label":"账期"},
+    {"name":"companyName","type":"string","label":"客户名称"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["欠款金额"],
+  "grain":"客户",
+  "owner":"财务负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"bar",
+  "secondary":"table",
+  "layout":"finance-customer-ar-rank"
+}]]></column>
+            <where>template_code = 'FIN-CUSTOMER-AR-RANK'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0057-prs-flowerbiz-fixed-report-screens" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="archived" valueBoolean="true"/>
+            <column name="updated_at" valueComputed="${now}"/>
+            <where>template_code in (
+                'FIN-AR-OVERVIEW',
+                'FIN-CUSTOMER-AR-RANK',
+                'FIN-PROJECT-COLLECTION-PROGRESS',
+                'FIN-PENDING-RECEIPTS-DETAIL',
+                'FIN-PENDING-PAYMENT-APPROVAL',
+                'FIN-ADVANCE-REQUEST-STATUS',
+                'FIN-REIMBURSEMENT-STATUS',
+                'FIN-INVOICE-RECONCILIATION',
+                'PROC-PURCHASE-REQUEST-TODO',
+                'PROC-ORDER-EXECUTION-PROGRESS',
+                'PROC-SUPPLIER-AMOUNT-RANK',
+                'PROC-ARRIVAL-ONTIME-RATE',
+                'PROC-PENDING-INBOUND-LIST',
+                'PROC-INTRANSIT-BOARD',
+                'WH-STOCK-OVERVIEW',
+                'WH-LOW-STOCK-ALERT'
+            )</where>
+        </update>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 租赁经营总览"/>
+            <column name="description" value="对齐 DTS 通过 dbt 模型生成的 PRS 租赁经营总览大屏，汇总收入、单量、项目客户和审批质量。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-OVERVIEW","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-overview-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-overview-v1","dbtModels":["public.xycyl_dws_flowerbiz_project_monthly","public.xycyl_dws_flowerbiz_customer_monthly","public.xycyl_ads_flowerbiz_pending"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-OVERVIEW"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="总览"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-overview-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"projectName","type":"string","label":"项目"},{"name":"customerName","type":"string","label":"客户"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["租赁收入","报花单数","项目数","客户数"],"primaryDbtModel":"public.xycyl_dws_flowerbiz_project_monthly","screenSlug":"prs-flowerbiz-overview-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-overview-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 租赁报花执行看板"/>
+            <column name="description" value="按月跟踪租赁报花执行、加摆、撤摆、换花、调花和租金变化。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-LEASE-EXECUTION","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-lease-execution-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-lease-execution-v1","dbtModels":["public.xycyl_dws_flowerbiz_project_monthly","public.xycyl_ads_flowerbiz_lease_summary"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-LEASE-EXECUTION"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="执行"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-lease-execution-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"projectName","type":"string","label":"项目"},{"name":"bizCategory","type":"string","label":"业务大类"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["租赁收入","加摆单数","撤摆单数","换花调花单数"],"primaryDbtModel":"public.xycyl_dws_flowerbiz_project_monthly","screenSlug":"prs-flowerbiz-lease-execution-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-lease-execution-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 销售坏账与费用看板"/>
+            <column name="description" value="跟踪销售收入、坏账、额外费用和成本，辅助财务核验。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-FINANCE-COST","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-finance-cost-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-finance-cost-v1","dbtModels":["public.xycyl_ads_flowerbiz_baddebt_summary","public.xycyl_ads_flowerbiz_extra_cost_summary","public.xycyl_ads_flowerbiz_sale_summary"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-FINANCE-COST"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="财务"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-finance-cost-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"projectName","type":"string","label":"项目"},{"name":"customerName","type":"string","label":"客户"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["销售收入","坏账金额","额外费用","成本金额"],"primaryDbtModel":"public.xycyl_ads_flowerbiz_baddebt_summary","screenSlug":"prs-flowerbiz-finance-cost-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-finance-cost-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 养护人工作量看板"/>
+            <column name="description" value="按养护人统计经手单量、植物数量、收入贡献和执行负载。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-CURING-WORKLOAD","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-curing-workload-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-curing-workload-v1","dbtModels":["public.xycyl_dws_flowerbiz_curing_user_monthly","public.xycyl_ads_flowerbiz_curing_workload"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-CURING-WORKLOAD"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="养护"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-curing-workload-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"curingUser","type":"string","label":"养护人"},{"name":"projectName","type":"string","label":"项目"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["经手单数","植物数量","收入贡献"],"primaryDbtModel":"public.xycyl_dws_flowerbiz_curing_user_monthly","screenSlug":"prs-flowerbiz-curing-workload-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-curing-workload-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 在途审批与操作监控"/>
+            <column name="description" value="监控待审批、审核中、滞留的报花操作链路和处理状态。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-PENDING-APPROVAL","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-pending-approval-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-pending-approval-v1","dbtModels":["public.xycyl_ads_flowerbiz_pending","public.xycyl_ads_flowerbiz_audit_trail"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-PENDING-APPROVAL"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="审批"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-pending-approval-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"statusName","type":"string","label":"状态"},{"name":"operationKind","type":"string","label":"操作分类"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["待审批单数","审核中单数","滞留单数"],"primaryDbtModel":"public.xycyl_ads_flowerbiz_pending","screenSlug":"prs-flowerbiz-pending-approval-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-pending-approval-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 项目客户经营看板"/>
+            <column name="description" value="按项目和客户观察租赁经营贡献、收入、单量和回款质量。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-PROJECT-CUSTOMER","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-project-customer-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-project-customer-v1","dbtModels":["public.xycyl_dws_flowerbiz_project_monthly","public.xycyl_dws_flowerbiz_customer_monthly"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-PROJECT-CUSTOMER"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="项目客户"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-project-customer-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"projectName","type":"string","label":"项目"},{"name":"customerName","type":"string","label":"客户"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["租赁收入","项目贡献","客户贡献"],"primaryDbtModel":"public.xycyl_dws_flowerbiz_customer_monthly","screenSlug":"prs-flowerbiz-project-customer-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-project-customer-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 变更与租期调整看板"/>
+            <column name="description" value="分析金额变更、货物变更、起租期变化和确认耗时。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-CHANGE-BOARD","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-change-board-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-change-board-v1","dbtModels":["public.xycyl_ads_flowerbiz_change_log","public.xycyl_dwd_flowerbiz_change"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-CHANGE-BOARD"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="变更"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-change-board-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"changeType","type":"string","label":"变更类型"},{"name":"projectName","type":"string","label":"项目"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["变更单数","金额变更","确认耗时"],"primaryDbtModel":"public.xycyl_ads_flowerbiz_change_log","screenSlug":"prs-flowerbiz-change-board-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-change-board-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 回收撤摆与去向看板"/>
+            <column name="description" value="分析回收撤摆、回收类型、去向、报损、回购和留用情况。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-RECOVERY-BOARD","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-recovery-board-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-recovery-board-v1","dbtModels":["public.xycyl_ads_flowerbiz_recovery_detail","public.xycyl_dwd_flowerbiz_recovery"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-RECOVERY-BOARD"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="回收"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-recovery-board-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"recoveryType","type":"string","label":"回收类型"},{"name":"projectName","type":"string","label":"项目"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["回收单数","撤摆数量","回收去向"],"primaryDbtModel":"public.xycyl_ads_flowerbiz_recovery_detail","screenSlug":"prs-flowerbiz-recovery-board-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-recovery-board-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 报花单明细钻取"/>
+            <column name="description" value="报花单级明细钻取，支持项目、客户、业务类型和状态核验。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-DRILL-LEASE-DETAIL","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-drill-lease-detail-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-drill-lease-detail-v1","dbtModels":["public.xycyl_ads_flowerbiz_lease_detail","public.xycyl_dwd_flowerbiz_main","public.xycyl_dwd_flowerbiz_item"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-DRILL-LEASE-DETAIL"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="钻取"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-drill-lease-detail-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"projectName","type":"string","label":"项目"},{"name":"statusName","type":"string","label":"状态"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["报花单数","植物数量","租金金额"],"primaryDbtModel":"public.xycyl_ads_flowerbiz_lease_detail","screenSlug":"prs-flowerbiz-drill-lease-detail-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-drill-lease-detail-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 变更明细钻取"/>
+            <column name="description" value="变更明细钻取，支持租期、金额、货物和确认状态核验。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-DRILL-CHANGE-DETAIL","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-drill-change-detail-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-drill-change-detail-v1","dbtModels":["public.xycyl_ads_flowerbiz_change_log","public.xycyl_dwd_flowerbiz_change"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-DRILL-CHANGE-DETAIL"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="钻取"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-drill-change-detail-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"changeType","type":"string","label":"变更类型"},{"name":"projectName","type":"string","label":"项目"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["变更单数","金额变更","租期调整"],"primaryDbtModel":"public.xycyl_ads_flowerbiz_change_log","screenSlug":"prs-flowerbiz-drill-change-detail-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-drill-change-detail-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 回收明细钻取"/>
+            <column name="description" value="回收撤摆明细钻取，支持回收类型、去向、项目和客户核验。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-DRILL-RECOVERY-DETAIL","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-drill-recovery-detail-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-drill-recovery-detail-v1","dbtModels":["public.xycyl_ads_flowerbiz_recovery_detail","public.xycyl_dwd_flowerbiz_recovery"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-DRILL-RECOVERY-DETAIL"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="钻取"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-drill-recovery-detail-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"recoveryType","type":"string","label":"回收类型"},{"name":"projectName","type":"string","label":"项目"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["回收单数","撤摆数量","回收去向"],"primaryDbtModel":"public.xycyl_ads_flowerbiz_recovery_detail","screenSlug":"prs-flowerbiz-drill-recovery-detail-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-drill-recovery-detail-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+
+        <insert tableName="analytics_report_template">
+            <column name="name" value="PRS 审批操作链路钻取"/>
+            <column name="description" value="审批与操作日志链路钻取，追踪发起、审核、确认和处理耗时。"/>
+            <column name="spec_json"><![CDATA[{"templateCode":"PRS-FLOWERBIZ-DRILL-AUDIT-TRAIL","reportType":"fixed-screen","displayType":"screen","screenSlug":"prs-flowerbiz-drill-audit-trail-v1","queryContract":{"sourceType":"DBT_SCREEN","targetObject":"screen.prs-flowerbiz-drill-audit-trail-v1","dbtModels":["public.xycyl_ads_flowerbiz_audit_trail","public.xycyl_dwd_flowerbiz_log"]},"placeholderReviewRequired":false}]]></column>
+            <column name="template_code" value="PRS-FLOWERBIZ-DRILL-AUDIT-TRAIL"/>
+            <column name="domain" value="PRS租赁"/>
+            <column name="category" value="钻取"/>
+            <column name="data_source_type" value="DBT_SCREEN"/>
+            <column name="target_object" value="screen.prs-flowerbiz-drill-audit-trail-v1"/>
+            <column name="refresh_policy" value="DBT_BUILD"/>
+            <column name="permission_policy_json"><![CDATA[{"scope":"DTS_SCREEN","classification":"INTERNAL"}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{"params":[{"name":"dateFrom","type":"date","label":"开始日期","default":"2025-05-01"},{"name":"dateTo","type":"date","label":"结束日期"},{"name":"operationKind","type":"string","label":"操作分类"},{"name":"projectName","type":"string","label":"项目"}]}]]></column>
+            <column name="metric_definition_json"><![CDATA[{"metrics":["操作次数","审批耗时","滞留单数"],"primaryDbtModel":"public.xycyl_ads_flowerbiz_audit_trail","screenSlug":"prs-flowerbiz-drill-audit-trail-v1"}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{"primary":"screen","layout":"prs-flowerbiz-drill-audit-trail-v1"}]]></column>
+            <column name="certification_status" value="CERTIFIED"/>
+            <column name="version_no" valueNumeric="1"/>
+            <column name="published" valueBoolean="true"/>
+            <column name="archived" valueBoolean="false"/>
+            <column name="creator_id" valueNumeric="1"/>
+            <column name="created_at" valueComputed="${now}"/>
+            <column name="updated_at" valueComputed="${now}"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

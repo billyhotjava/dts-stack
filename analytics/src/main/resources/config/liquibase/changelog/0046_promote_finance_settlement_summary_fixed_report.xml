@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0046-promote-finance-settlement-summary-fixed-report" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="name" value="财务结算汇总"/>
+            <column name="description" value="对齐现网页面“财务结算汇总”的实时固定报表，直接读取 f_settled_items 结算事实。"/>
+            <column name="category" value="明细"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.finance.settlement_summary"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"FIN-AR-OVERVIEW",
+  "reportType":"fixed",
+  "displayType":"table",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.finance.settlement_summary",
+    "databaseName":"园林业务库"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"accountPeriod","type":"month","label":"财务账期"},
+    {"name":"projectId","type":"string","label":"项目点"},
+    {"name":"feeUserId","type":"string","label":"关联人员"},
+    {"name":"status","type":"string","label":"状态"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["金额"],
+  "grain":"结算项",
+  "owner":"财务负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"table",
+  "layout":"finance-settlement-summary"
+}]]></column>
+            <where>template_code = 'FIN-AR-OVERVIEW'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

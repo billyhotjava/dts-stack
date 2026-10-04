@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0039-report-template-registry-expand" author="dts">
+        <addColumn tableName="analytics_report_template">
+            <column name="template_code" type="varchar(128)"/>
+            <column name="domain" type="varchar(128)"/>
+            <column name="category" type="varchar(128)"/>
+            <column name="data_source_type" type="varchar(64)"/>
+            <column name="target_object" type="varchar(255)"/>
+            <column name="refresh_policy" type="varchar(64)"/>
+            <column name="permission_policy_json" type="text"/>
+            <column name="parameter_schema_json" type="text"/>
+            <column name="metric_definition_json" type="text"/>
+            <column name="presentation_schema_json" type="text"/>
+            <column name="certification_status" type="varchar(32)"/>
+        </addColumn>
+
+        <createIndex tableName="analytics_report_template" indexName="idx_report_template_code">
+            <column name="template_code"/>
+        </createIndex>
+        <createIndex tableName="analytics_report_template" indexName="idx_report_template_domain">
+            <column name="domain"/>
+        </createIndex>
+        <createIndex tableName="analytics_report_template" indexName="idx_report_template_category">
+            <column name="category"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

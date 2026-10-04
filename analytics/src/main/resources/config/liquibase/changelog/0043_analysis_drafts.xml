@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0043-01-analysis-draft" author="dts">
+        <createTable tableName="analysis_draft">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" primaryKeyName="pk_analysis_draft" nullable="false"/>
+            </column>
+            <column name="entity_id" type="varchar(32)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_analysis_draft_entity_id"/>
+            </column>
+            <column name="title" type="varchar(255)"/>
+            <column name="source_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="session_id" type="varchar(64)"/>
+            <column name="message_id" type="varchar(64)"/>
+            <column name="question" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="database_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sql_text" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="explanation_text" type="text"/>
+            <column name="suggested_display" type="varchar(64)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="linked_card_id" type="bigint"/>
+            <column name="linked_dashboard_id" type="bigint"/>
+            <column name="linked_screen_id" type="bigint"/>
+            <column name="creator_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analysis_draft" indexName="idx_analysis_draft_creator_status">
+            <column name="creator_id"/>
+            <column name="status"/>
+            <column name="updated_at"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

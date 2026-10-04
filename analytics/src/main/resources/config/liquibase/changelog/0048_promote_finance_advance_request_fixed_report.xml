@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0048-promote-finance-advance-request-fixed-report" author="dts">
+        <update tableName="analytics_report_template">
+            <column name="name" value="预支申请"/>
+            <column name="description" value="对齐现网页面“预支申请”的实时固定报表，直接读取 f_advance_info 申请与付款状态。"/>
+            <column name="category" value="状态"/>
+            <column name="data_source_type" value="SQL"/>
+            <column name="target_object" value="authority.finance.advance_request_status"/>
+            <column name="refresh_policy" value="REALTIME"/>
+            <column name="spec_json"><![CDATA[{
+  "templateCode":"FIN-ADVANCE-REQUEST-STATUS",
+  "reportType":"fixed",
+  "displayType":"status-board",
+  "queryContract":{
+    "sourceType":"AUTHORITY_SQL",
+    "targetObject":"authority.finance.advance_request_status",
+    "databaseName":"园林业务库"
+  },
+  "placeholderReviewRequired":false
+}]]></column>
+            <column name="parameter_schema_json"><![CDATA[{
+  "params":[
+    {"name":"code","type":"string","label":"单号"},
+    {"name":"status","type":"select","label":"状态","options":[
+      {"label":"审批中","value":"2"},
+      {"label":"待付款中","value":"3"},
+      {"label":"待冲抵","value":"4"},
+      {"label":"已结束","value":"10"},
+      {"label":"已作废","value":"-1"}
+    ]},
+    {"name":"applyUserId","type":"string","label":"申请人"}
+  ]
+}]]></column>
+            <column name="metric_definition_json"><![CDATA[{
+  "metrics":["申请金额","付款金额","抵消金额"],
+  "grain":"预支申请单",
+  "owner":"财务负责人"
+}]]></column>
+            <column name="presentation_schema_json"><![CDATA[{
+  "primary":"status-board",
+  "secondary":"table",
+  "layout":"finance-advance-request-status"
+}]]></column>
+            <where>template_code = 'FIN-ADVANCE-REQUEST-STATUS'</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

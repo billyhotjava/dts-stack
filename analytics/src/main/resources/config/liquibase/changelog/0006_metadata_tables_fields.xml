@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0006-01" author="codex">
+        <createTable tableName="analytics_table">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="database_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="schema_name" type="varchar(255)" defaultValue="">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="varchar(255)"/>
+            <column name="description" type="text"/>
+            <column name="active" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="visibility_type" type="varchar(32)" defaultValue="normal">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_table"
+            baseColumnNames="database_id"
+            referencedTableName="analytics_database"
+            referencedColumnNames="id"
+            constraintName="fk_table_database"/>
+
+        <addUniqueConstraint tableName="analytics_table" columnNames="database_id,schema_name,name" constraintName="uq_table_db_schema_name"/>
+
+        <createIndex tableName="analytics_table" indexName="idx_table_database_id">
+            <column name="database_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="0006-02" author="codex">
+        <createTable tableName="analytics_field">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="database_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="table_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="varchar(255)"/>
+            <column name="base_type" type="varchar(64)"/>
+            <column name="effective_type" type="varchar(64)"/>
+            <column name="semantic_type" type="varchar(64)"/>
+            <column name="position" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="active" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="visibility_type" type="varchar(32)" defaultValue="normal">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fingerprint_json" type="text"/>
+            <column name="created_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_field"
+            baseColumnNames="database_id"
+            referencedTableName="analytics_database"
+            referencedColumnNames="id"
+            constraintName="fk_field_database"/>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_field"
+            baseColumnNames="table_id"
+            referencedTableName="analytics_table"
+            referencedColumnNames="id"
+            constraintName="fk_field_table"/>
+
+        <addUniqueConstraint
+            tableName="analytics_field"
+            columnNames="table_id,name"
+            constraintName="uq_field_table_name"/>
+
+        <createIndex tableName="analytics_field" indexName="idx_field_table_id">
+            <column name="table_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
